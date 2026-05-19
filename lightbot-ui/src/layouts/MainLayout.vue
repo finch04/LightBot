@@ -118,16 +118,9 @@ async function loadSessions() {
   }
 }
 
-async function newChat() {
-  try {
-    const res = await createSession()
-    const session = res.data
-    sessions.value.unshift(session)
-    currentSessionId.value = session.id
-    router.push(`/chat/${session.id}`)
-  } catch (e) {
-    router.push('/chat')
-  }
+function newChat() {
+  currentSessionId.value = null
+  router.push('/chat')
 }
 
 function switchSession(session) {
@@ -174,7 +167,12 @@ onMounted(() => {
 watch(() => route.path, (path) => {
   if (path.startsWith('/chat')) {
     const match = path.match(/\/chat\/(\d+)/)
-    currentSessionId.value = match ? Number(match[1]) : null
+    const newId = match ? Number(match[1]) : null
+    if (newId && newId !== currentSessionId.value) {
+      // 新会话创建后刷新侧边栏列表
+      loadSessions()
+    }
+    currentSessionId.value = newId
   }
 })
 </script>

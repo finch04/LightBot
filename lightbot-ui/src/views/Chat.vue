@@ -35,6 +35,26 @@
 
     <!-- 输入区 -->
     <div class="chat-input-wrapper">
+      <!-- Agent 选择器 -->
+      <div class="agent-selector">
+        <span class="agent-label">Agent</span>
+        <a-select
+          v-if="agents.length > 0"
+          v-model:value="selectedAgentId"
+          placeholder="选择 Agent（可选）"
+          allow-clear
+          size="small"
+          class="agent-select"
+        >
+          <a-select-option v-for="a in agents" :key="a.id" :value="a.id">
+            {{ a.name }}
+          </a-select-option>
+        </a-select>
+        <span v-else class="no-agent-tip">
+          还没有 Agent，
+          <router-link to="/agents">去创建一个</router-link>
+        </span>
+      </div>
       <div class="chat-input">
         <textarea
           ref="inputRef"
@@ -61,16 +81,18 @@
 
 <script setup>
 import { ref, nextTick, onMounted, watch, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { SendOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
-import { getSessionMessages } from '../api/chatSession'
+import { getSessionMessages, createSession } from '../api/chatSession'
+import { getAgents } from '../api/agent'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 const input = ref('')
@@ -78,6 +100,8 @@ const loading = ref(false)
 const messages = ref([])
 const messagesRef = ref(null)
 const inputRef = ref(null)
+const agents = ref([])
+const selectedAgentId = ref(null)
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -152,8 +176,18 @@ async function sendMessage() {
   messages.value.push(assistantMsg)
 
   try {
+    let sid = sessionId.value
+
+    // 新对话：先创建会话，再发送消息
+    if (!sid) {
+      const res = await createSession(selectedAgentId.value)
+      sid = res.data.id
+      // 更新 URL 为 /chat/{sessionId}，不触发页面刷新
+      router.replace(`/chat/${sid}`)
+    }
+
     await chatStream(
-      { message: text, sessionId: sessionId.value },
+      { message: text, sessionId: sid, agentId: selectedAgentId.value },
       (chunk) => {
         assistantMsg.content += chunk
         scrollToBottom()
@@ -175,8 +209,18 @@ function scrollToBottom() {
   })
 }
 
+async function loadAgents() {
+  try {
+    const res = await getAgents({ pageNum: 1, pageSize: 100 })
+    agents.value = res.data.records || []
+  } catch (e) {
+    // ignore
+  }
+}
+
 onMounted(() => {
   loadHistory()
+  loadAgents()
 })
 
 watch(() => route.params.sessionId, () => {
@@ -356,6 +400,33 @@ watch(() => route.params.sessionId, () => {
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
+}
+.agent-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.agent-label {
+  font-size: 12px;
+  color: #71717a;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.agent-select {
+  flex: 1;
+  max-width: 280px;
+}
+.no-agent-tip {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.no-agent-tip a {
+  color: #0070f3;
+  text-decoration: none;
+}
+.no-agent-tip a:hover {
+  text-decoration: underline;
 }
 .chat-input {
   display: flex;
