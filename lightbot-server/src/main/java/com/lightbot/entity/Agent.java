@@ -21,7 +21,7 @@ public class Agent {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** 创建者ID，关联 t_user.id */
+    /** 创建者ID */
     private Long userId;
 
     /** Agent 名称 */

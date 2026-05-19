@@ -12,5 +12,6 @@ public class LightBotApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(LightBotApplication.class, args);
+        System.out.println("LightBot started successfully.");
     }
 }

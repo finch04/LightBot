@@ -1,10 +1,12 @@
-package com.lightbot.service;
+package com.lightbot.util;
 
+import com.lightbot.common.BizException;
+import com.lightbot.enums.ErrorCode;
 import io.minio.*;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -12,21 +14,22 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * MinIO 文件存储服务
+ * MinIO 文件存储工具类
+ * <p>封装 MinIO 客户端操作，供业务层调用</p>
  *
  * @author finch
  * @since 2026-05-19
  */
 @Slf4j
-@Service
-public class MinioService {
+@Component
+public class MinioUtil {
 
     private final MinioClient minioClient;
 
     @Value("${minio.bucket}")
     private String bucket;
 
-    public MinioService(
+    public MinioUtil(
             @Value("${minio.endpoint}") String endpoint,
             @Value("${minio.access-key}") String accessKey,
             @Value("${minio.secret-key}") String secretKey) {
@@ -55,7 +58,7 @@ public class MinioService {
             return filePath;
         } catch (Exception e) {
             log.error("[MinIO] 上传失败, path={}", filePath, e);
-            throw new RuntimeException("文件上传失败", e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }
 
@@ -80,7 +83,7 @@ public class MinioService {
             return filePath;
         } catch (Exception e) {
             log.error("[MinIO] 上传失败, path={}", filePath, e);
-            throw new RuntimeException("文件上传失败", e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }
 
@@ -98,7 +101,7 @@ public class MinioService {
                     .build());
         } catch (Exception e) {
             log.error("[MinIO] 下载失败, path={}", filePath, e);
-            throw new RuntimeException("文件下载失败", e);
+            throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
         }
     }
 
@@ -134,7 +137,7 @@ public class MinioService {
                     .build());
         } catch (Exception e) {
             log.error("[MinIO] 获取预签名URL失败, path={}", filePath, e);
-            throw new RuntimeException("获取文件URL失败", e);
+            throw new BizException(ErrorCode.FILE_URL_FAILED);
         }
     }
 

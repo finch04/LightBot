@@ -5,20 +5,30 @@ spring:
   application:
     name: lightbot
 
-  # PostgreSQL
+  # ========================================
+  # PostgreSQL 数据库配置
+  # 驱动：org.postgresql.Driver
+  # 需要安装 pgvector 扩展用于向量存储
+  # ========================================
   datasource:
     url: jdbc:postgresql://localhost:5432/lightbot
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
 
-  # Redis
+  # ========================================
+  # Redis 配置（用于缓存、会话等）
+  # ========================================
   data:
     redis:
       host: localhost
       port: 6379
 
-  # DashScope
+  # ========================================
+  # SpringAI + DashScope（通义千问）配置
+  # api-key 通过环境变量 DASHSCOPE_API_KEY 注入
+  # 支持的模型：qwen-plus / qwen-turbo / qwen-max 等
+  # ========================================
   ai:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY}
@@ -26,7 +36,12 @@ spring:
         options:
           model: qwen-plus
 
-# MyBatis-Plus
+# ========================================
+# MyBatis-Plus 配置
+# type-enums-package：枚举类包路径，自动映射枚举值
+# default-enum-type-handler：MyBatis-Plus 枚举处理器
+# map-underscore-to-camel-case：下划线转驼峰
+# ========================================
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   type-enums-package: com.lightbot.enums
@@ -35,7 +50,16 @@ mybatis-plus:
     default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
-# Sa-Token
+# ========================================
+# Sa-Token 认证配置
+# 官方文档：https://sa-token.cc
+# token-name：前端传递 Token 的请求头名称
+# timeout：Token 有效期（秒），默认86400（24小时）
+# active-timeout：Token 最长无操作时间（秒），-1表示不限
+# is-concurrent：是否允许同一账号并发登录
+# is-share：多人登录同一账号时是否共用同一个 Token
+# token-style：Token 样式（uuid/simple-uuid/random-32 等）
+# ========================================
 sa-token:
   token-name: Authorization
   timeout: 86400
@@ -45,14 +69,23 @@ sa-token:
   token-style: uuid
   is-log: false
 
-# MinIO
+# ========================================
+# MinIO 对象存储配置
+# 官方文档：https://min.io
+# endpoint：MinIO 服务地址（本地默认 9000 端口）
+# access-key / secret-key：MinIO 访问凭证
+# bucket：存储桶名称，首次使用时自动创建
+# ========================================
 minio:
   endpoint: http://localhost:9000
   access-key: minioadmin
   secret-key: minioadmin
   bucket: lightbot
 
-# SpringDoc
+# ========================================
+# SpringDoc / Swagger 配置
+# 访问地址：http://localhost:8080/swagger-ui.html
+# ========================================
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

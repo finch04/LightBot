@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * @since 2026-05-19
  */
 @Data
-@TableName("user")
+@TableName("users")
 public class User {
 
     /** 主键ID，雪花算法生成 */

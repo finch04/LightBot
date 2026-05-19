@@ -1,91 +1,54 @@
 package com.lightbot.service;
 
-import cn.dev33.satoken.stp.StpUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.lightbot.common.BizException;
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.ChatSession;
-import com.lightbot.enums.SessionStatus;
-import com.lightbot.mapper.ChatSessionMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
 
 /**
- * 对话会话服务
+ * 对话会话服务接口
  *
  * @author finch
  * @since 2026-05-19
  */
-@Service
-@RequiredArgsConstructor
-public class ChatSessionService extends ServiceImpl<ChatSessionMapper, ChatSession> {
+public interface ChatSessionService extends IService<ChatSession> {
 
     /**
      * 创建新会话
+     *
+     * @param agentId AgentID
+     * @return 会话
      */
-    public ChatSession createSession(Long agentId) {
-        long userId = StpUtil.getLoginIdAsLong();
-        ChatSession session = new ChatSession();
-        session.setUserId(userId);
-        session.setAgentId(agentId);
-        session.setTitle("新对话");
-        session.setStatus(SessionStatus.ACTIVE);
-        session.setMessageCount(0);
-        session.setTotalTokens(0L);
-        save(session);
-        return session;
-    }
+    ChatSession createSession(Long agentId);
 
     /**
      * 分页查询当前用户的会话列表
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页数量
+     * @return 分页结果
      */
-    public Page<ChatSession> listMySessions(int pageNum, int pageSize) {
-        long userId = StpUtil.getLoginIdAsLong();
-        return page(new Page<>(pageNum, pageSize),
-                new LambdaQueryWrapper<ChatSession>()
-                        .eq(ChatSession::getUserId, userId)
-                        .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
-                        .orderByDesc(ChatSession::getLastMessageAt));
-    }
+    Page<ChatSession> listMySessions(int pageNum, int pageSize);
 
     /**
      * 更新会话标题
+     *
+     * @param sessionId 会话ID
+     * @param title     新标题
      */
-    public void updateTitle(Long sessionId, String title) {
-        ChatSession session = getById(sessionId);
-        if (session == null) {
-            throw new BizException("会话不存在");
-        }
-        session.setTitle(title);
-        updateById(session);
-    }
+    void updateTitle(Long sessionId, String title);
 
     /**
      * 归档会话
+     *
+     * @param sessionId 会话ID
      */
-    public void archiveSession(Long sessionId) {
-        ChatSession session = getById(sessionId);
-        if (session == null) {
-            throw new BizException("会话不存在");
-        }
-        session.setStatus(SessionStatus.ARCHIVED);
-        updateById(session);
-    }
+    void archiveSession(Long sessionId);
 
     /**
      * 更新会话统计（消息数、token数、最后消息时间）
+     *
+     * @param sessionId  会话ID
+     * @param tokenCount 本次token消耗
      */
-    public void updateStats(Long sessionId, int tokenCount) {
-        ChatSession session = getById(sessionId);
-        if (session == null) {
-            return;
-        }
-        session.setMessageCount(session.getMessageCount() + 1);
-        session.setTotalTokens(session.getTotalTokens() + tokenCount);
-        session.setLastMessageAt(LocalDateTime.now());
-        updateById(session);
-    }
+    void updateStats(Long sessionId, int tokenCount);
 }

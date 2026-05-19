@@ -7,9 +7,9 @@ CREATE DATABASE lightbot ENCODING 'UTF8';
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ========================================
--- 用户表
+-- 用户表（user 为PG保留字，使用 users）
 -- ========================================
-CREATE TABLE t_user (
+CREATE TABLE users (
     id              BIGINT          NOT NULL,
     username        VARCHAR(64)     NOT NULL,
     email           VARCHAR(128)    NOT NULL,
@@ -26,16 +26,16 @@ CREATE TABLE t_user (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX uk_user_username ON t_user (username) WHERE deleted = 0;
-CREATE UNIQUE INDEX uk_user_email ON t_user (email) WHERE deleted = 0;
-CREATE INDEX idx_user_status ON t_user (status);
-CREATE INDEX idx_user_create_time ON t_user (create_time);
-COMMENT ON TABLE t_user IS '用户表';
+CREATE UNIQUE INDEX uk_user_username ON users (username) WHERE deleted = 0;
+CREATE UNIQUE INDEX uk_user_email ON users (email) WHERE deleted = 0;
+CREATE INDEX idx_user_status ON users (status);
+CREATE INDEX idx_user_create_time ON users (create_time);
+COMMENT ON TABLE users IS '用户表';
 
 -- ========================================
 -- 模型提供商表
 -- ========================================
-CREATE TABLE t_model_provider (
+CREATE TABLE model_provider (
     id              BIGINT          NOT NULL,
     name            VARCHAR(64)     NOT NULL,
     type            VARCHAR(32)     NOT NULL,
@@ -48,14 +48,14 @@ CREATE TABLE t_model_provider (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_model_provider_type ON t_model_provider (type);
-CREATE INDEX idx_model_provider_status ON t_model_provider (status);
-COMMENT ON TABLE t_model_provider IS '模型提供商表';
+CREATE INDEX idx_model_provider_type ON model_provider (type);
+CREATE INDEX idx_model_provider_status ON model_provider (status);
+COMMENT ON TABLE model_provider IS '模型提供商表';
 
 -- ========================================
 -- Agent 表
 -- ========================================
-CREATE TABLE t_agent (
+CREATE TABLE agent (
     id              BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     name            VARCHAR(128)    NOT NULL,
@@ -72,15 +72,15 @@ CREATE TABLE t_agent (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_agent_user_id ON t_agent (user_id);
-CREATE INDEX idx_agent_status ON t_agent (status);
-CREATE INDEX idx_agent_create_time ON t_agent (create_time);
-COMMENT ON TABLE t_agent IS 'Agent表';
+CREATE INDEX idx_agent_user_id ON agent (user_id);
+CREATE INDEX idx_agent_status ON agent (status);
+CREATE INDEX idx_agent_create_time ON agent (create_time);
+COMMENT ON TABLE agent IS 'Agent表';
 
 -- ========================================
 -- 对话会话表
 -- ========================================
-CREATE TABLE t_chat_session (
+CREATE TABLE chat_session (
     id              BIGINT          NOT NULL,
     agent_id        BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
@@ -95,16 +95,16 @@ CREATE TABLE t_chat_session (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_chat_session_agent_id ON t_chat_session (agent_id);
-CREATE INDEX idx_chat_session_user_id ON t_chat_session (user_id);
-CREATE INDEX idx_chat_session_status ON t_chat_session (status);
-CREATE INDEX idx_chat_session_last_message ON t_chat_session (last_message_at DESC);
-COMMENT ON TABLE t_chat_session IS '对话会话表';
+CREATE INDEX idx_chat_session_agent_id ON chat_session (agent_id);
+CREATE INDEX idx_chat_session_user_id ON chat_session (user_id);
+CREATE INDEX idx_chat_session_status ON chat_session (status);
+CREATE INDEX idx_chat_session_last_message ON chat_session (last_message_at DESC);
+COMMENT ON TABLE chat_session IS '对话会话表';
 
 -- ========================================
 -- 消息表
 -- ========================================
-CREATE TABLE t_message (
+CREATE TABLE message (
     id              BIGINT          NOT NULL,
     session_id      BIGINT          NOT NULL,
     role            VARCHAR(20)     NOT NULL,
@@ -118,15 +118,15 @@ CREATE TABLE t_message (
     create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_message_session_id ON t_message (session_id);
-CREATE INDEX idx_message_create_time ON t_message (session_id, create_time);
-CREATE INDEX idx_message_role ON t_message (session_id, role);
-COMMENT ON TABLE t_message IS '消息表';
+CREATE INDEX idx_message_session_id ON message (session_id);
+CREATE INDEX idx_message_create_time ON message (session_id, create_time);
+CREATE INDEX idx_message_role ON message (session_id, role);
+COMMENT ON TABLE message IS '消息表';
 
 -- ========================================
 -- 知识库表
 -- ========================================
-CREATE TABLE t_knowledge (
+CREATE TABLE knowledge (
     id              BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     name            VARCHAR(128)    NOT NULL,
@@ -144,14 +144,30 @@ CREATE TABLE t_knowledge (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_knowledge_user_id ON t_knowledge (user_id);
-CREATE INDEX idx_knowledge_status ON t_knowledge (status);
-COMMENT ON TABLE t_knowledge IS '知识库表';
+CREATE INDEX idx_knowledge_user_id ON knowledge (user_id);
+CREATE INDEX idx_knowledge_status ON knowledge (status);
+COMMENT ON TABLE knowledge IS '知识库表';
+
+-- ========================================
+-- 知识库成员表（权限控制）
+-- ========================================
+CREATE TABLE knowledge_member (
+    id              BIGINT          NOT NULL,
+    knowledge_id    BIGINT          NOT NULL,
+    user_id         BIGINT          NOT NULL,
+    role            VARCHAR(20)     NOT NULL DEFAULT 'viewer',
+    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX uk_knowledge_member ON knowledge_member (knowledge_id, user_id);
+CREATE INDEX idx_knowledge_member_user_id ON knowledge_member (user_id);
+COMMENT ON TABLE knowledge_member IS '知识库成员表';
 
 -- ========================================
 -- 文档表
 -- ========================================
-CREATE TABLE t_document (
+CREATE TABLE document (
     id              BIGINT          NOT NULL,
     knowledge_id    BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
@@ -170,16 +186,16 @@ CREATE TABLE t_document (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_document_knowledge_id ON t_document (knowledge_id);
-CREATE INDEX idx_document_user_id ON t_document (user_id);
-CREATE INDEX idx_document_status ON t_document (status);
-CREATE INDEX idx_document_file_hash ON t_document (file_hash);
-COMMENT ON TABLE t_document IS '文档表';
+CREATE INDEX idx_document_knowledge_id ON document (knowledge_id);
+CREATE INDEX idx_document_user_id ON document (user_id);
+CREATE INDEX idx_document_status ON document (status);
+CREATE INDEX idx_document_file_hash ON document (file_hash);
+COMMENT ON TABLE document IS '文档表';
 
 -- ========================================
 -- 文档分块表
 -- ========================================
-CREATE TABLE t_chunk (
+CREATE TABLE chunk (
     id              BIGINT          NOT NULL,
     document_id     BIGINT          NOT NULL,
     knowledge_id    BIGINT          NOT NULL,
@@ -191,14 +207,14 @@ CREATE TABLE t_chunk (
     update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_chunk_document_id ON t_chunk (document_id);
-CREATE INDEX idx_chunk_knowledge_id ON t_chunk (knowledge_id);
-COMMENT ON TABLE t_chunk IS '文档分块表';
+CREATE INDEX idx_chunk_document_id ON chunk (document_id);
+CREATE INDEX idx_chunk_knowledge_id ON chunk (knowledge_id);
+COMMENT ON TABLE chunk IS '文档分块表';
 
 -- ========================================
 -- 向量表
 -- ========================================
-CREATE TABLE t_embedding (
+CREATE TABLE embedding (
     id              BIGINT          NOT NULL,
     chunk_id        BIGINT          NOT NULL,
     model_name      VARCHAR(64)     NOT NULL,
@@ -207,16 +223,16 @@ CREATE TABLE t_embedding (
     create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX uk_embedding_chunk_id ON t_embedding (chunk_id);
-CREATE INDEX idx_embedding_vector ON t_embedding
+CREATE UNIQUE INDEX uk_embedding_chunk_id ON embedding (chunk_id);
+CREATE INDEX idx_embedding_vector ON embedding
     USING hnsw (vector vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
-COMMENT ON TABLE t_embedding IS '向量表';
+COMMENT ON TABLE embedding IS '向量表';
 
 -- ========================================
 -- Tool 表
 -- ========================================
-CREATE TABLE t_tool (
+CREATE TABLE tool (
     id              BIGINT          NOT NULL,
     user_id         BIGINT,
     name            VARCHAR(64)     NOT NULL,
@@ -235,15 +251,15 @@ CREATE TABLE t_tool (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX uk_tool_name ON t_tool (name) WHERE deleted = 0;
-CREATE INDEX idx_tool_type ON t_tool (tool_type);
-CREATE INDEX idx_tool_status ON t_tool (status);
-COMMENT ON TABLE t_tool IS 'Tool表';
+CREATE UNIQUE INDEX uk_tool_name ON tool (name) WHERE deleted = 0;
+CREATE INDEX idx_tool_type ON tool (tool_type);
+CREATE INDEX idx_tool_status ON tool (status);
+COMMENT ON TABLE tool IS 'Tool表';
 
 -- ========================================
 -- Skill 表
 -- ========================================
-CREATE TABLE t_skill (
+CREATE TABLE skill (
     id              BIGINT          NOT NULL,
     agent_id        BIGINT          NOT NULL,
     tool_id         BIGINT,
@@ -258,14 +274,14 @@ CREATE TABLE t_skill (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_skill_agent_id ON t_skill (agent_id);
-CREATE INDEX idx_skill_tool_id ON t_skill (tool_id);
-COMMENT ON TABLE t_skill IS 'Skill表';
+CREATE INDEX idx_skill_agent_id ON skill (agent_id);
+CREATE INDEX idx_skill_tool_id ON skill (tool_id);
+COMMENT ON TABLE skill IS 'Skill表';
 
 -- ========================================
 -- Workflow 表
 -- ========================================
-CREATE TABLE t_workflow (
+CREATE TABLE workflow (
     id              BIGINT          NOT NULL,
     agent_id        BIGINT,
     user_id         BIGINT          NOT NULL,
@@ -280,15 +296,15 @@ CREATE TABLE t_workflow (
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
-CREATE INDEX idx_workflow_user_id ON t_workflow (user_id);
-CREATE INDEX idx_workflow_agent_id ON t_workflow (agent_id);
-CREATE INDEX idx_workflow_status ON t_workflow (status);
-COMMENT ON TABLE t_workflow IS 'Workflow表';
+CREATE INDEX idx_workflow_user_id ON workflow (user_id);
+CREATE INDEX idx_workflow_agent_id ON workflow (agent_id);
+CREATE INDEX idx_workflow_status ON workflow (status);
+COMMENT ON TABLE workflow IS 'Workflow表';
 
 -- ========================================
 -- Workflow 节点表
 -- ========================================
-CREATE TABLE t_workflow_node (
+CREATE TABLE workflow_node (
     id              BIGINT          NOT NULL,
     workflow_id     BIGINT          NOT NULL,
     node_key        VARCHAR(64)     NOT NULL,
@@ -304,6 +320,6 @@ CREATE TABLE t_workflow_node (
     update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX uk_workflow_node_key ON t_workflow_node (workflow_id, node_key);
-CREATE INDEX idx_workflow_node_type ON t_workflow_node (workflow_id, node_type);
-COMMENT ON TABLE t_workflow_node IS 'Workflow节点表';
+CREATE UNIQUE INDEX uk_workflow_node_key ON workflow_node (workflow_id, node_key);
+CREATE INDEX idx_workflow_node_type ON workflow_node (workflow_id, node_type);
+COMMENT ON TABLE workflow_node IS 'Workflow节点表';

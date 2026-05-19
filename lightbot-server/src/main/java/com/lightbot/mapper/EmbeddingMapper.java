@@ -2,8 +2,70 @@ package com.lightbot.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.lightbot.entity.Embedding;
-import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.*;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 向量 Mapper
+ * <p>pgvector 的 vector 类型和余弦距离运算符(&lt;=&gt;)无法通过 MyBatis-Plus 映射，
+ * 因此向量相关操作使用 @Select/@Insert/@Delete 注解编写原生SQL</p>
+ *
+ * @author finch
+ * @since 2026-05-19
+ */
 @Mapper
 public interface EmbeddingMapper extends BaseMapper<Embedding> {
+
+    /**
+     * 存储向量（pgvector ::vector 类型转换需原生SQL）
+     *
+     * @param id        主键ID
+     * @param chunkId   分块ID
+     * @param modelName 模型名称
+     * @param dimension 向量维度
+     * @param vector    向量字符串 "[0.1,0.2,...]"
+     */
+    @Insert("INSERT INTO embedding (id, chunk_id, model_name, dimension, vector, create_time) " +
+            "VALUES (#{id}, #{chunkId}, #{modelName}, #{dimension}, #{vector}::vector, NOW())")
+    void insertVector(@Param("id") Long id, @Param("chunkId") Long chunkId,
+                      @Param("modelName") String modelName, @Param("dimension") int dimension,
+                      @Param("vector") String vector);
+
+    /**
+     * 余弦相似度检索 Top-K
+     * <p>使用 pgvector 的 <=> 运算符计算余弦距离</p>
+     *
+     * @param vector      查询向量字符串
+     * @param knowledgeId 知识库ID
+     * @param topK        返回数量
+     * @return 检索结果（chunk_id, content, document_name, score）
+     */
+    @Select("SELECT c.id AS chunk_id, c.content, d.name AS document_name, " +
+            "1 - (e.vector <=> #{vector}::vector) AS score " +
+            "FROM embedding e " +
+            "JOIN chunk c ON e.chunk_id = c.id " +
+            "JOIN document d ON c.document_id = d.id " +
+            "WHERE c.knowledge_id = #{knowledgeId} AND d.deleted = 0 " +
+            "ORDER BY e.vector <=> #{vector}::vector LIMIT #{topK}")
+    List<Map<String, Object>> searchSimilar(@Param("vector") String vector,
+                                             @Param("knowledgeId") Long knowledgeId,
+                                             @Param("topK") int topK);
+
+    /**
+     * 删除指定知识库的所有向量
+     *
+     * @param knowledgeId 知识库ID
+     */
+    @Delete("DELETE FROM embedding WHERE chunk_id IN (SELECT id FROM chunk WHERE knowledge_id = #{knowledgeId})")
+    void deleteByKnowledgeId(@Param("knowledgeId") Long knowledgeId);
+
+    /**
+     * 删除指定文档的所有向量
+     *
+     * @param documentId 文档ID
+     */
+    @Delete("DELETE FROM embedding WHERE chunk_id IN (SELECT id FROM chunk WHERE document_id = #{documentId})")
+    void deleteByDocumentId(@Param("documentId") Long documentId);
 }

@@ -1,60 +1,47 @@
 package com.lightbot.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.lightbot.common.BizException;
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.ModelProviderRequest;
 import com.lightbot.entity.ModelProvider;
-import com.lightbot.enums.CommonStatus;
-import com.lightbot.mapper.ModelProviderMapper;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
- * 模型提供商服务
+ * 模型提供商服务接口
  *
  * @author finch
  * @since 2026-05-19
  */
-@Service
-@RequiredArgsConstructor
-public class ModelProviderService extends ServiceImpl<ModelProviderMapper, ModelProvider> {
+public interface ModelProviderService extends IService<ModelProvider> {
 
-    public ModelProvider create(ModelProviderRequest request) {
-        ModelProvider provider = new ModelProvider();
-        provider.setName(request.getName());
-        provider.setType(request.getType());
-        provider.setApiKey(request.getApiKey());
-        provider.setBaseUrl(request.getBaseUrl());
-        provider.setConfig(request.getConfig());
-        provider.setStatus(CommonStatus.ACTIVE);
-        save(provider);
-        return provider;
-    }
+    /**
+     * 创建模型提供商
+     *
+     * @param request 创建请求
+     * @return 模型提供商
+     */
+    ModelProvider create(ModelProviderRequest request);
 
-    public ModelProvider update(ModelProviderRequest request) {
-        ModelProvider provider = getById(request.getId());
-        if (provider == null) {
-            throw new BizException("模型提供商不存在");
-        }
-        provider.setName(request.getName());
-        provider.setType(request.getType());
-        provider.setApiKey(request.getApiKey());
-        provider.setBaseUrl(request.getBaseUrl());
-        provider.setConfig(request.getConfig());
-        updateById(provider);
-        return provider;
-    }
+    /**
+     * 更新模型提供商
+     *
+     * @param request 更新请求
+     * @return 模型提供商
+     */
+    ModelProvider update(ModelProviderRequest request);
 
-    public Page<ModelProvider> listPage(int pageNum, int pageSize) {
-        return page(new Page<>(pageNum, pageSize),
-                new LambdaQueryWrapper<ModelProvider>().orderByDesc(ModelProvider::getCreateTime));
-    }
+    /**
+     * 分页查询
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页数量
+     * @return 分页结果
+     */
+    Page<ModelProvider> listPage(int pageNum, int pageSize);
 
-    public void deleteById(Long id) {
-        if (!removeById(id)) {
-            throw new BizException("模型提供商不存在");
-        }
-    }
+    /**
+     * 删除模型提供商
+     *
+     * @param id 主键ID
+     */
+    void deleteById(Long id);
 }

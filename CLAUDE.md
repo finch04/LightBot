@@ -29,6 +29,8 @@
 ❌ 禁止硬编码 Prompt
 ❌ 禁止直接依赖 OpenAI SDK / DashScope SDK
 ❌ 禁止在业务代码中直接 new RestTemplate 调用模型
+❌ 禁止使用拼接SQL语句操作数据库（必须使用 MyBatis-Plus）
+❌ 禁止在 Service 中直接操作中间件客户端（必须通过 Util 类）
 ```
 
 ### 必须遵守
@@ -38,6 +40,9 @@
 ✅ 所有跨模块调用必须通过 Facade 接口
 ✅ 所有 Prompt 必须模板化，存储于配置或数据库
 ✅ 所有外部依赖通过依赖注入，禁止静态方法调用
+✅ 所有数据库操作必须使用 MyBatis-Plus（LambdaQueryWrapper / ServiceImpl）
+✅ 所有中间件操作（MinIO/Redis/MQ等）必须封装为 Util 类
+✅ 业务核心逻辑必须有注释说明意图
 ```
 
 ### 模块结构
@@ -76,15 +81,12 @@ lightbot-tool   → lightbot-common
 ```
 com.lightbot.{module}/
 ├── controller/        # 接口层，只做参数校验和返回
-├── service/           # 业务逻辑
-│   ├── impl/          # 实现类
-│   └── facade/        # 对外暴露的接口
-├── model/
-│   ├── entity/        # 数据库实体
-│   ├── dto/           # 服务间传输对象
-│   ├── vo/            # 前端展示对象
-│   └── bo/            # 业务对象
-├── repository/        # 数据访问
+├── service/           # 业务接口定义
+│   └── impl/          # 业务实现类
+├── entity/            # 数据库实体
+├── dto/               # 数据传输对象
+├── mapper/            # MyBatis-Plus Mapper 接口
+├── util/              # 工具类（中间件封装：MinIO/Redis/MQ等）
 ├── config/            # 配置类
 ├── constant/          # 常量
 ├── enums/             # 枚举
@@ -137,70 +139,104 @@ public class AgentVO {
 
 ```java
 /**
- * 命名：数据库表名驼峰化
- * 表名：t_agent
+ * 命名：数据库表名驼峰化，不加 t_ 前缀
+ * 表名：agent
+ * 注意：PG保留字（如 user）需换名（如 users）
  */
 @Data
-@TableName("t_agent")
-public class AgentEntity {
+@TableName("agent")
+public class Agent {
+    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
-    
+
+    /** Agent名称 */
     private String name;
-    
+
+    /** 系统提示词 */
     private String systemPrompt;
-    
-    private String modelId;
-    
+
+    /** 创建时间 */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-    
+
+    /** 更新时间 */
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
-    
+
+    /** 逻辑删除: 0-未删除 1-已删除 */
     @TableLogic
     private Integer deleted;
 }
 ```
 
 - 主键统一使用雪花算法 `IdType.ASSIGN_ID`
+- **表名不加 `t_` 前缀**，直接使用业务名（如 `user`、`agent`、`knowledge`）
+- **每个字段必须有 Javadoc 注释**，说明字段含义和业务约束
+- **type/status 字段必须使用 Java 枚举**（配合 `@EnumValue` + `@JsonValue`），不使用数据库枚举
 - 必须包含 `createTime`、`updateTime`、`deleted` 字段
 - 使用 `@TableLogic` 实现逻辑删除
 
 ### Service 规范
 
+**必须遵循 Interface + ServiceImpl 模式：**
+
 ```java
 /**
- * 接口定义
+ * 接口定义（放在 service/ 包）
+ * 继承 IService<Entity> 可获得 MyBatis-Plus 内置 CRUD 方法
  */
-public interface AgentService {
-    AgentVO create(AgentCreateDTO dto);
-    AgentVO getById(Long id);
-    PageVO<AgentVO> list(AgentQueryDTO query);
+public interface AgentService extends IService<Agent> {
+    Agent create(AgentCreateDTO dto);
+    Page<Agent> listMyAgents(int pageNum, int pageSize);
 }
 
 /**
- * 实现类
+ * 实现类（放在 service/impl/ 包）
  * 命名：{业务名}ServiceImpl
  */
 @Service
 @RequiredArgsConstructor
-public class AgentServiceImpl implements AgentService {
-    
-    private final AgentRepository agentRepository;
-    
+public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
+        implements AgentService {
+
     @Override
-    public AgentVO create(AgentCreateDTO dto) {
+    public Agent create(AgentCreateDTO dto) {
         // 1. 参数校验
-        // 2. 业务处理
+        // 2. 业务处理（核心逻辑必须有注释）
         // 3. 返回结果
     }
 }
 ```
 
-- 接口与实现分离
+- **接口与实现必须分离**：接口在 `service/`，实现在 `service/impl/`
+- 需要 MyBatis-Plus 内置方法的 Service，接口继承 `IService<Entity>`，实现继承 `ServiceImpl<Mapper, Entity>`
 - 一个 Service 只处理一个业务域
-- 禁止在 Service 中直接调用其他模块的 Repository
+- 禁止在 Service 中直接调用其他模块的 Mapper
+
+### Util 规范（中间件封装）
+
+```java
+/**
+ * 中间件工具类（放在 util/ 包）
+ * 命名：{中间件名}Util
+ * 用途：封装 MinIO/Redis/MQ 等中间件的客户端操作
+ */
+@Slf4j
+@Component
+public class MinioUtil {
+    private final MinioClient minioClient;
+
+    public String upload(MultipartFile file, String filePath) { ... }
+    public InputStream download(String filePath) { ... }
+    public void delete(String filePath) { ... }
+}
+```
+
+- **所有中间件操作必须封装为 Util 类**，禁止在 Service 中直接操作中间件客户端
+- Util 类只做技术封装，不包含业务逻辑
+- 业务逻辑（如路径生成、权限校验）放在 Service 层
+- 常见 Util：`MinioUtil`、`RedisUtil`、`OssUtil` 等
 
 ### Repository 规范
 
@@ -435,31 +471,71 @@ class AgentServiceTest {
 }
 ```
 
-### 如何生成数据库
+### 数据库规范
 
 ```text
-1. 使用 Flyway 管理数据库版本
-2. 迁移文件命名：V{版本号}__{描述}.sql
-3. 新增表必须包含 id, create_time, update_time, deleted 字段
-4. 索引命名：idx_{表名}_{字段名}
-5. 禁止在代码中直接执行 DDL
+1. 表名不加 t_ 前缀，直接使用业务名（agent、knowledge 等）
+2. PostgreSQL 保留字不能用作表名/列名（如 user → users，order → orders，group → groups）
+3. 索引命名：idx_{表名}_{字段名}，唯一索引：uk_{表名}_{字段名}
+4. 所有表必须包含 id、create_time、update_time、deleted 字段（关联表可省略 deleted）
+5. type/status 字段使用 VARCHAR 存储 Java 枚举的 code 值
+6. 禁止使用数据库枚举类型
 ```
 
-迁移模板：
+建表模板（PostgreSQL）：
 
 ```sql
--- V0.1__create_agent_table.sql
-CREATE TABLE t_agent (
-    id          BIGINT       NOT NULL COMMENT '主键',
-    name        VARCHAR(128) NOT NULL COMMENT 'Agent名称',
-    system_prompt TEXT       COMMENT '系统提示词',
-    model_id    VARCHAR(64)  COMMENT '模型ID',
-    create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
-    PRIMARY KEY (id),
-    INDEX idx_agent_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Agent表';
+CREATE TABLE agent (
+    id              BIGINT          NOT NULL,
+    name            VARCHAR(128)    NOT NULL,
+    status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
+    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT        NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_agent_status ON agent (status);
+COMMENT ON TABLE agent IS 'Agent表';
+```
+
+### 数据库操作规范（MyBatis-Plus）
+
+```text
+1. 优先使用 MyBatis-Plus 提供的方法（LambdaQueryWrapper / ServiceImpl）
+2. 禁止在 Service 中手动拼接 SQL 字符串
+3. 复杂查询使用 MyBatis-Plus 的 LambdaQueryWrapper 链式调用
+4. 分页查询使用 MyBatis-Plus 的 Page 对象
+5. 当 SQL 过于复杂或 MyBatis-Plus 无法表达时（如 pgvector 向量操作、多表联查），
+   必须在 Mapper 接口中使用 @Select/@Update 注解或 XML 映射文件编写 SQL
+6. 禁止在 Service 中使用 JdbcTemplate 拼接 SQL
+```
+
+```java
+// ✅ 正确：使用 LambdaQueryWrapper
+List<Agent> agents = list(new LambdaQueryWrapper<Agent>()
+        .eq(Agent::getUserId, userId)
+        .eq(Agent::getStatus, AgentStatus.PUBLISHED)
+        .orderByDesc(Agent::getCreateTime));
+
+// ✅ 正确：复杂SQL放在 Mapper 中
+@Mapper
+public interface EmbeddingMapper extends BaseMapper<Embedding> {
+    @Select("SELECT c.id, c.content FROM embedding e JOIN chunk c ON e.chunk_id = c.id WHERE ...")
+    List<Map<String, Object>> searchSimilar(@Param("vector") String vector, @Param("knowledgeId") Long knowledgeId);
+}
+
+// ❌ 错误：在 Service 中拼接 SQL
+String sql = "SELECT * FROM agent WHERE user_id = " + userId;
+jdbcTemplate.queryForList(sql);
+```
+
+### 业务注释规范
+
+```text
+1. Service 实现类中的核心业务逻辑必须有注释，说明"做什么"和"为什么"
+2. 注释使用编号步骤：// 1. 参数校验、// 2. 核心处理、// 3. 返回结果
+3. 主步骤间空一行，步骤内紧凑无空行
+4. 不注释显而易见的代码（如 getter/setter），只注释业务意图
 ```
 
 ### 如何新增模块
