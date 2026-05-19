@@ -3,7 +3,10 @@ package com.lightbot.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.ContentType;
 import com.lightbot.enums.MessageRole;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -15,40 +18,50 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("message")
+@Schema(description = "消息表")
 public class Message {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 所属会话ID */
+    @TableField("session_id")
+    @Schema(description = "会话ID")
     private Long sessionId;
 
-    /** 角色: user-用户, assistant-助手, system-系统, tool-工具 */
+    @TableField("role")
+    @Schema(description = "角色")
     private MessageRole role;
 
-    /** 消息内容 */
+    @TableField("content")
+    @Schema(description = "消息内容")
     private String content;
 
-    /** 内容类型: text-文本, image-图片, file-文件 */
+    @TableField("content_type")
+    @Schema(description = "内容类型")
     private ContentType contentType;
 
-    /** 工具调用列表(JSON) */
+    @TableField(value = "tool_calls", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "工具调用列表")
     private String toolCalls;
 
-    /** 工具调用ID，用于tool角色消息 */
+    @TableField("tool_call_id")
+    @Schema(description = "工具调用ID")
     private String toolCallId;
 
-    /** Token数量 */
+    @TableField("token_count")
+    @Schema(description = "Token数量")
     private Integer tokenCount;
 
-    /** 元数据(JSON)，含模型名、耗时等 */
+    @TableField(value = "metadata", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "元数据")
     private String metadata;
 
-    /** 父消息ID，用于分支对话 */
+    @TableField("parent_id")
+    @Schema(description = "父消息ID")
     private Long parentId;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 }

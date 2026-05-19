@@ -3,7 +3,10 @@ package com.lightbot.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.UserRole;
 import com.lightbot.enums.UserStatus;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -15,51 +18,63 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("users")
+@Schema(description = "用户表")
 public class User {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 用户名，唯一，用于登录 */
+    @TableField("username")
+    @Schema(description = "用户名")
     private String username;
 
-    /** 邮箱，唯一 */
+    @TableField("email")
+    @Schema(description = "邮箱")
     private String email;
 
-    /** 密码，BCrypt加密存储 */
+    @TableField("password")
+    @Schema(description = "密码")
     private String password;
 
-    /** 昵称 */
+    @TableField("nickname")
+    @Schema(description = "昵称")
     private String nickname;
 
-    /** 头像URL */
+    @TableField("avatar")
+    @Schema(description = "头像URL")
     private String avatar;
 
-    /** 手机号 */
+    @TableField("phone")
+    @Schema(description = "手机号")
     private String phone;
 
-    /** 角色: admin-管理员, user-普通用户 */
+    @TableField("role")
+    @Schema(description = "角色")
     private UserRole role;
 
-    /** 状态: active-正常, disabled-禁用 */
+    @TableField("status")
+    @Schema(description = "状态")
     private UserStatus status;
 
-    /** 最后登录时间 */
+    @TableField("last_login_at")
+    @Schema(description = "最后登录时间")
     private LocalDateTime lastLoginAt;
 
-    /** 扩展配置(JSON) */
+    @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "扩展配置")
     private String config;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }

@@ -2,7 +2,10 @@ package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.DocumentStatus;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -14,57 +17,71 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("document")
+@Schema(description = "文档表")
 public class Document {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 所属知识库ID */
+    @TableField("knowledge_id")
+    @Schema(description = "知识库ID")
     private Long knowledgeId;
 
-    /** 上传者ID */
+    @TableField("user_id")
+    @Schema(description = "上传者ID")
     private Long userId;
 
-    /** 文档名称 */
+    @TableField("name")
+    @Schema(description = "文档名称")
     private String name;
 
-    /** 文件存储路径 */
+    @TableField("file_path")
+    @Schema(description = "文件存储路径")
     private String filePath;
 
-    /** 文件类型: pdf/txt/md/docx */
+    @TableField("file_type")
+    @Schema(description = "文件类型")
     private String fileType;
 
-    /** 文件大小(字节) */
+    @TableField("file_size")
+    @Schema(description = "文件大小")
     private Long fileSize;
 
-    /** 文件哈希，用于去重 */
+    @TableField("file_hash")
+    @Schema(description = "文件哈希")
     private String fileHash;
 
-    /** 分块数量 */
+    @TableField("chunk_count")
+    @Schema(description = "分块数量")
     private Integer chunkCount;
 
-    /** Token数量 */
+    @TableField("token_count")
+    @Schema(description = "Token数量")
     private Long tokenCount;
 
-    /** 状态: pending-待处理, processing-处理中, completed-已完成, failed-失败 */
+    @TableField("status")
+    @Schema(description = "状态")
     private DocumentStatus status;
 
-    /** 处理错误信息 */
+    @TableField("error_message")
+    @Schema(description = "错误信息")
     private String errorMessage;
 
-    /** 文档元数据(JSON) */
+    @TableField(value = "metadata", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "文档元数据")
     private String metadata;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }

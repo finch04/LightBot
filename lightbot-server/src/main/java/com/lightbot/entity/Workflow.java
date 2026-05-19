@@ -2,7 +2,10 @@ package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.WorkflowStatus;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -14,45 +17,55 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("workflow")
+@Schema(description = "Workflow表")
 public class Workflow {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 关联AgentID，可独立存在 */
+    @TableField("agent_id")
+    @Schema(description = "AgentID")
     private Long agentId;
 
-    /** 创建者ID */
+    @TableField("user_id")
+    @Schema(description = "创建者ID")
     private Long userId;
 
-    /** 工作流名称 */
+    @TableField("name")
+    @Schema(description = "工作流名称")
     private String name;
 
-    /** 工作流描述 */
+    @TableField("description")
+    @Schema(description = "工作流描述")
     private String description;
 
-    /** 图数据(JSON)，存储节点、边、布局信息 */
+    @TableField(value = "graph_data", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "图数据")
     private String graphData;
 
-    /** 扩展配置(JSON) */
+    @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "扩展配置")
     private String config;
 
-    /** 状态: draft-草稿, published-已发布, archived-已归档 */
+    @TableField("status")
+    @Schema(description = "状态")
     private WorkflowStatus status;
 
-    /** 版本号 */
+    @TableField("version")
+    @Schema(description = "版本号")
     private Integer version;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }

@@ -3,7 +3,10 @@ package com.lightbot.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ModelProviderType;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -15,39 +18,47 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("model_provider")
+@Schema(description = "模型提供商表")
 public class ModelProvider {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 提供商名称，如 "OpenAI"、"通义千问" */
+    @TableField("name")
+    @Schema(description = "提供商名称")
     private String name;
 
-    /** 类型: openai/dashscope/deepseek/ollama */
+    @TableField("type")
+    @Schema(description = "类型")
     private ModelProviderType type;
 
-    /** API密钥，加密存储 */
+    @TableField("api_key")
+    @Schema(description = "API密钥")
     private String apiKey;
 
-    /** API基础地址 */
+    @TableField("base_url")
+    @Schema(description = "API基础地址")
     private String baseUrl;
 
-    /** 扩展配置(JSON) */
+    @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "扩展配置")
     private String config;
 
-    /** 状态: active-启用, disabled-禁用 */
+    @TableField("status")
+    @Schema(description = "状态")
     private CommonStatus status;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }

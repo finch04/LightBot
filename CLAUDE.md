@@ -145,34 +145,45 @@ public class AgentVO {
  */
 @Data
 @TableName("agent")
+@Schema(description = "Agent表")
 public class Agent {
-    /** 主键ID，雪花算法生成 */
+
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** Agent名称 */
+    @TableField("name")
+    @Schema(description = "Agent名称")
     private String name;
 
-    /** 系统提示词 */
+    @TableField("system_prompt")
+    @Schema(description = "系统提示词")
     private String systemPrompt;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "config", typeHandler = JsonNodeTypeHandler.class)
+    @Schema(description = "扩展配置")
+    private String config;
+
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }
 ```
 
 - 主键统一使用雪花算法 `IdType.ASSIGN_ID`
 - **表名不加 `t_` 前缀**，直接使用业务名（如 `user`、`agent`、`knowledge`）
-- **每个字段必须有 Javadoc 注释**，说明字段含义和业务约束
+- **每个字段必须加 `@TableField`**：明确指定数据库列名
+- **每个字段必须加 `@Schema`**：使用 OpenAPI 3 注解，替代 Javadoc 注释
+- **JSONB 字段**：使用 `String` 类型 + `@TableField(value = "xxx", typeHandler = JsonNodeTypeHandler.class)`
 - **type/status 字段必须使用 Java 枚举**（配合 `@EnumValue` + `@JsonValue`），不使用数据库枚举
 - 必须包含 `createTime`、`updateTime`、`deleted` 字段
 - 使用 `@TableLogic` 实现逻辑删除

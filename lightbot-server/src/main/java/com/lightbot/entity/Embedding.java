@@ -1,39 +1,43 @@
 package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 /**
  * 向量表
- * <p>向量字段(vector)通过原生SQL操作，不映射到实体</p>
  *
  * @author finch
  * @since 2026-05-19
  */
 @Data
 @TableName("embedding")
+@Schema(description = "向量表")
 public class Embedding {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 关联分块ID，一对一 */
+    @TableField("chunk_id")
+    @Schema(description = "分块ID")
     private Long chunkId;
 
-    /** 向量化模型名称 */
+    @TableField("model_name")
+    @Schema(description = "模型名称")
     private String modelName;
 
-    /** 向量维度 */
+    @TableField("dimension")
+    @Schema(description = "向量维度")
     private Integer dimension;
 
-    /** 向量数据，通过原生SQL操作 */
     @TableField(exist = false)
+    @Schema(description = "向量数据")
     private String vector;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 }

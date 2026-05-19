@@ -1,7 +1,10 @@
 package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -13,35 +16,42 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("chunk")
+@Schema(description = "文档分块表")
 public class Chunk {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 所属文档ID */
+    @TableField("document_id")
+    @Schema(description = "文档ID")
     private Long documentId;
 
-    /** 所属知识库ID，冗余字段便于查询 */
+    @TableField("knowledge_id")
+    @Schema(description = "知识库ID")
     private Long knowledgeId;
 
-    /** 分块文本内容 */
+    @TableField("content")
+    @Schema(description = "分块内容")
     private String content;
 
-    /** 在文档中的分块序号 */
+    @TableField("chunk_index")
+    @Schema(description = "分块序号")
     private Integer chunkIndex;
 
-    /** Token数量 */
+    @TableField("token_count")
+    @Schema(description = "Token数量")
     private Integer tokenCount;
 
-    /** 分块元数据(JSON)，如页码、章节标题 */
+    @TableField(value = "metadata", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "分块元数据")
     private String metadata;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 }

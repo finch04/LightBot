@@ -2,7 +2,10 @@ package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.SessionStatus;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -14,45 +17,55 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("chat_session")
+@Schema(description = "对话会话表")
 public class ChatSession {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** AgentID */
+    @TableField("agent_id")
+    @Schema(description = "AgentID")
     private Long agentId;
 
-    /** 用户ID */
+    @TableField("user_id")
+    @Schema(description = "用户ID")
     private Long userId;
 
-    /** 会话标题 */
+    @TableField("title")
+    @Schema(description = "会话标题")
     private String title;
 
-    /** 状态: active-活跃, archived-已归档 */
+    @TableField("status")
+    @Schema(description = "状态")
     private SessionStatus status;
 
-    /** 会话上下文(JSON)，含变量、记忆窗口等 */
+    @TableField(value = "context", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "会话上下文")
     private String context;
 
-    /** 消息数量，冗余字段 */
+    @TableField("message_count")
+    @Schema(description = "消息数量")
     private Integer messageCount;
 
-    /** 总Token消耗 */
+    @TableField("total_tokens")
+    @Schema(description = "总Token消耗")
     private Long totalTokens;
 
-    /** 最后消息时间 */
+    @TableField("last_message_at")
+    @Schema(description = "最后消息时间")
     private LocalDateTime lastMessageAt;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }

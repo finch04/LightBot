@@ -2,7 +2,10 @@ package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.NodeType;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -14,47 +17,58 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("workflow_node")
+@Schema(description = "Workflow节点表")
 public class WorkflowNode {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 所属工作流ID */
+    @TableField("workflow_id")
+    @Schema(description = "工作流ID")
     private Long workflowId;
 
-    /** 节点标识，Workflow内唯一 */
+    @TableField("node_key")
+    @Schema(description = "节点标识")
     private String nodeKey;
 
-    /** 节点类型: start/end/llm/tool/condition/code */
+    @TableField("node_type")
+    @Schema(description = "节点类型")
     private NodeType nodeType;
 
-    /** 节点名称 */
+    @TableField("name")
+    @Schema(description = "节点名称")
     private String name;
 
-    /** 节点描述 */
+    @TableField("description")
+    @Schema(description = "节点描述")
     private String description;
 
-    /** 节点配置(JSON) */
+    @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "节点配置")
     private String config;
 
-    /** 输入端口定义(JSON) */
+    @TableField(value = "inputs", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "输入端口定义")
     private String inputs;
 
-    /** 输出端口定义(JSON) */
+    @TableField(value = "outputs", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "输出端口定义")
     private String outputs;
 
-    /** 画布X坐标 */
+    @TableField("position_x")
+    @Schema(description = "画布X坐标")
     private Double positionX;
 
-    /** 画布Y坐标 */
+    @TableField("position_y")
+    @Schema(description = "画布Y坐标")
     private Double positionY;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 }

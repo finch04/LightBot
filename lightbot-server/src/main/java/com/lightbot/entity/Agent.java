@@ -3,7 +3,10 @@ package com.lightbot.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.AgentType;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
@@ -15,51 +18,63 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("agent")
+@Schema(description = "Agent表")
 public class Agent {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 创建者ID */
+    @TableField("user_id")
+    @Schema(description = "创建者ID")
     private Long userId;
 
-    /** Agent 名称 */
+    @TableField("name")
+    @Schema(description = "Agent名称")
     private String name;
 
-    /** Agent 描述 */
+    @TableField("description")
+    @Schema(description = "Agent描述")
     private String description;
 
-    /** 系统提示词 */
+    @TableField("system_prompt")
+    @Schema(description = "系统提示词")
     private String systemPrompt;
 
-    /** 头像URL */
+    @TableField("avatar")
+    @Schema(description = "头像URL")
     private String avatar;
 
-    /** 类型: chat-对话型, workflow-工作流型, assistant-助手型 */
+    @TableField("agent_type")
+    @Schema(description = "类型")
     private AgentType agentType;
 
-    /** 扩展配置(JSON)，含 model_id、temperature、tools 等 */
+    @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "扩展配置")
     private String config;
 
-    /** 状态: draft-草稿, published-已发布, archived-已归档 */
+    @TableField("status")
+    @Schema(description = "状态")
     private AgentStatus status;
 
-    /** 发布时间 */
+    @TableField("publish_time")
+    @Schema(description = "发布时间")
     private LocalDateTime publishTime;
 
-    /** 版本号，每次发布递增 */
+    @TableField("version")
+    @Schema(description = "版本号")
     private Integer version;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }

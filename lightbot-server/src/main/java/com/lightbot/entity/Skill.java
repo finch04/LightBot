@@ -2,57 +2,70 @@ package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.lightbot.enums.CommonStatus;
+import com.lightbot.handler.JsonbTypeHandler;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
 
 /**
- * Skill表(Agent技能)
+ * Skill表
  *
  * @author finch
  * @since 2026-05-19
  */
 @Data
 @TableName("skill")
+@Schema(description = "Skill表")
 public class Skill {
 
-    /** 主键ID，雪花算法生成 */
     @TableId(type = IdType.ASSIGN_ID)
+    @Schema(description = "主键ID")
     private Long id;
 
-    /** 所属AgentID */
+    @TableField("agent_id")
+    @Schema(description = "AgentID")
     private Long agentId;
 
-    /** 关联ToolID，可为空表示纯Prompt技能 */
+    @TableField("tool_id")
+    @Schema(description = "ToolID")
     private Long toolId;
 
-    /** 技能名称 */
+    @TableField("name")
+    @Schema(description = "技能名称")
     private String name;
 
-    /** 技能描述 */
+    @TableField("description")
+    @Schema(description = "技能描述")
     private String description;
 
-    /** 技能提示词模板 */
+    @TableField("prompt_template")
+    @Schema(description = "提示词模板")
     private String promptTemplate;
 
-    /** 扩展配置(JSON) */
+    @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "扩展配置")
     private String config;
 
-    /** 排序序号 */
+    @TableField("sort_order")
+    @Schema(description = "排序序号")
     private Integer sortOrder;
 
-    /** 状态: active-启用, disabled-禁用 */
+    @TableField("status")
+    @Schema(description = "状态")
     private CommonStatus status;
 
-    /** 创建时间 */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @Schema(description = "更新时间")
     private LocalDateTime updateTime;
 
-    /** 逻辑删除: 0-未删除 1-已删除 */
+    @TableField("deleted")
     @TableLogic
+    @Schema(description = "逻辑删除标记")
     private Integer deleted;
 }
