@@ -28,6 +28,10 @@ public class JsonbTypeHandler extends BaseTypeHandler<String> {
 
     @Override
     public void setNonNullParameter(PreparedStatement ps, int i, String parameter, JdbcType jdbcType) throws SQLException {
+        if (parameter == null || parameter.isBlank()) {
+            ps.setNull(i, JdbcType.OTHER.TYPE_CODE);
+            return;
+        }
         PGobject pgObject = new PGobject();
         pgObject.setType("jsonb");
         pgObject.setValue(parameter);

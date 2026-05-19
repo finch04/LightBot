@@ -14,6 +14,7 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,7 +40,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     private final MinioUtil minioUtil;
     private final ChunkService chunkService;
-    private final KnowledgeService knowledgeService;
+    /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
+    private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
 
     @Override
     public Document uploadDocument(Long knowledgeId, MultipartFile file) {
@@ -124,7 +126,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             updateById(doc);
 
             // 6. 更新知识库统计
-            knowledgeService.updateStats(doc.getKnowledgeId(), 1, chunks.size(), totalTokens);
+            knowledgeServiceProvider.getObject().updateStats(doc.getKnowledgeId(), 1, chunks.size(), totalTokens);
 
             log.info("[文档处理] 完成, documentId={}, chunks={}", documentId, chunks.size());
 

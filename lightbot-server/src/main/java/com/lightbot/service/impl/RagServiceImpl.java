@@ -3,6 +3,7 @@ package com.lightbot.service.impl;
 import com.lightbot.common.BizException;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.model.ModelFactory;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.RagService;
@@ -38,8 +39,8 @@ public class RagServiceImpl implements RagService {
 
     private final EmbeddingService embeddingService;
     private final KnowledgeService knowledgeService;
-    private final ChatModel chatModel;
     private final EmbeddingModel embeddingModel;
+    private final ModelFactory modelFactory;
 
     private static final String RAG_SYSTEM_PROMPT = """
             你是 LightBot 智能助手。请基于以下参考资料回答用户的问题。
@@ -50,12 +51,15 @@ public class RagServiceImpl implements RagService {
             """;
 
     @Override
-    public String ask(Long knowledgeId, String question) {
+    public String ask(Long knowledgeId, String question, Long providerId) {
         // 1. 校验知识库存在性
         Knowledge knowledge = knowledgeService.getById(knowledgeId);
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+
+        // 1.1 解析providerId（为空时使用默认提供商）
+        Long actualProviderId = resolveProviderId(providerId);
 
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
@@ -73,12 +77,13 @@ public class RagServiceImpl implements RagService {
                 .map(row -> String.format("【%s】\n%s", row.get("document_name"), row.get("content")))
                 .collect(Collectors.joining("\n\n---\n\n"));
 
-        // 5. 调用模型生成回答
+        // 5. 通过 ModelFactory 获取 ChatModel 并调用
         String systemPrompt = RAG_SYSTEM_PROMPT.replace("{context}", context);
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemPrompt));
         messages.add(new UserMessage(question));
 
+        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
         ChatResponse response = chatModel.call(new Prompt(messages));
         return response.getResult().getOutput().getText();
     }
@@ -90,5 +95,19 @@ public class RagServiceImpl implements RagService {
         EmbeddingResponse response = embeddingModel.call(
                 new EmbeddingRequest(List.of(text), null));
         return response.getResult().getOutput();
+    }
+
+    /**
+     * 解析providerId，为空时使用默认提供商（第一个可用的）
+     */
+    private Long resolveProviderId(Long providerId) {
+        if (providerId != null) {
+            return providerId;
+        }
+        var providers = modelFactory.getAvailableProviderIds();
+        if (providers.isEmpty()) {
+            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+        }
+        return providers.get(0);
     }
 }

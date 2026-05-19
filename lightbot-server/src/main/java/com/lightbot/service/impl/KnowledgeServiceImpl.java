@@ -14,6 +14,7 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.mapper.ChunkMapper;
 import com.lightbot.mapper.KnowledgeMapper;
+import com.lightbot.model.ModelFactory;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
@@ -29,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 知识库服务实现类
@@ -46,7 +46,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     private final KnowledgeMemberService knowledgeMemberService;
     private final DocumentService documentService;
     private final ChunkMapper chunkMapper;
-    private final ChatModel chatModel;
+    private final ModelFactory modelFactory;
 
     private static final String MINDMAP_SYSTEM_PROMPT = "你是一个思维导图生成助手，只输出JSON，不要任何其他文字。";
 
@@ -176,12 +176,15 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     // ========== 思维导图 ==========
 
     @Override
-    public String generateMindmap(Long knowledgeId) {
+    public String generateMindmap(Long knowledgeId, Long providerId) {
         // 1. 校验知识库存在性
         Knowledge knowledge = getById(knowledgeId);
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+
+        // 1.1 解析providerId（为空时使用默认提供商）
+        Long actualProviderId = resolveProviderId(providerId);
 
         // 2. 收集知识库内容摘要
         String contentSummary = collectContentSummary(knowledgeId);
@@ -192,7 +195,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
                 .replace("{description}", knowledge.getDescription() != null ? knowledge.getDescription() : "暂无描述")
                 .replace("{content}", contentSummary);
 
-        // 4. 调用模型生成思维导图
+        // 4. 通过 ModelFactory 获取 ChatModel 并调用
+        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
         List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(MINDMAP_SYSTEM_PROMPT));
         messages.add(new UserMessage(userMessage));
@@ -291,5 +295,19 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         if (!knowledgeMemberService.hasPermission(knowledgeId, userId, requiredRole)) {
             throw new BizException(ErrorCode.KNOWLEDGE_ROLE_INSUFFICIENT, requiredRole.getDesc());
         }
+    }
+
+    /**
+     * 解析providerId，为空时使用默认提供商（第一个可用的）
+     */
+    private Long resolveProviderId(Long providerId) {
+        if (providerId != null) {
+            return providerId;
+        }
+        var providers = modelFactory.getAvailableProviderIds();
+        if (providers.isEmpty()) {
+            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+        }
+        return providers.get(0);
     }
 }

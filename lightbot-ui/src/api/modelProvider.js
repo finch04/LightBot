@@ -19,3 +19,7 @@ export function updateModelProvider(data) {
 export function deleteModelProvider(id) {
   return request.delete(`/model-providers/${id}`)
 }
+
+export function getProviderConfigFields(id) {
+  return request.get(`/model-providers/${id}/config-fields`)
+}

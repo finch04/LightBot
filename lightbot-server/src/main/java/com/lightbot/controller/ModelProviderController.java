@@ -4,12 +4,16 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ModelProviderRequest;
 import com.lightbot.entity.ModelProvider;
+import com.lightbot.model.ConfigField;
+import com.lightbot.model.ModelFactory;
 import com.lightbot.service.ModelProviderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "模型提供商管理", description = "模型提供商的增删改查")
 @RestController
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class ModelProviderController {
 
     private final ModelProviderService modelProviderService;
+    private final ModelFactory modelFactory;
 
     @Operation(summary = "新增模型提供商")
     @PostMapping
@@ -50,5 +55,11 @@ public class ModelProviderController {
     @GetMapping("/{id}")
     public Result<ModelProvider> getById(@PathVariable Long id) {
         return Result.ok(modelProviderService.getById(id));
+    }
+
+    @Operation(summary = "获取提供商的配置字段定义（用于前端动态渲染表单）")
+    @GetMapping("/{id}/config-fields")
+    public Result<List<ConfigField>> getConfigFields(@PathVariable Long id) {
+        return Result.ok(modelFactory.getConfigFields(id));
     }
 }

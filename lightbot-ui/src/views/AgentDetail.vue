@@ -43,40 +43,33 @@
       <div class="panel">
         <div class="panel-header">
           <h3>模型参数调优</h3>
-          <span class="panel-tip">调整参数以优化 Agent 表现</span>
+          <span class="panel-tip">根据提供商动态显示可用配置</span>
         </div>
-        <a-form :model="agent" :label-col="{ span: 8 }">
-          <a-form-item label="模型">
-            <a-select v-model:value="agent.modelId" placeholder="选择模型" style="width: 100%">
-              <a-select-option v-for="m in models" :key="m.value" :value="m.value">
-                {{ m.label }}
+        <a-form :model="agentConfig" :label-col="{ span: 8 }">
+          <a-form-item label="提供商">
+            <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" @change="onProviderChange">
+              <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
+                {{ p.name }} ({{ p.type?.code || p.type }})
               </a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item label="温度 (Temperature)">
-            <div class="param-row">
-              <a-slider v-model:value="agent.temperature" :min="0" :max="2" :step="0.1" style="flex: 1" />
-              <span class="param-value">{{ agent.temperature }}</span>
+          <a-form-item v-for="field in configFields" :key="field.key" :label="field.label">
+            <!-- select -->
+            <a-select v-if="field.type === 'select'" v-model:value="agentConfig[field.key]" placeholder="请选择" style="width: 100%">
+              <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </a-select-option>
+            </a-select>
+            <!-- slider -->
+            <div v-else-if="field.type === 'slider'" class="param-row">
+              <a-slider v-model:value="agentConfig[field.key]" :min="field.min" :max="field.max" :step="field.step" style="flex: 1" />
+              <span class="param-value">{{ agentConfig[field.key] }}</span>
             </div>
-            <div class="param-hint">值越高回答越随机创造性，值越低回答越确定</div>
-          </a-form-item>
-          <a-form-item label="核采样 (Top P)">
-            <div class="param-row">
-              <a-slider v-model:value="agent.topP" :min="0" :max="1" :step="0.05" style="flex: 1" />
-              <span class="param-value">{{ agent.topP }}</span>
-            </div>
-            <div class="param-hint">控制词汇选择的多样性，建议与温度二选一调整</div>
-          </a-form-item>
-          <a-form-item label="最大 Token">
-            <a-input-number v-model:value="agent.maxTokens" :min="256" :max="8192" :step="256" style="width: 100%" />
-            <div class="param-hint">单次回答的最大长度</div>
-          </a-form-item>
-          <a-form-item label="重复惩罚 (Repetition Penalty)">
-            <div class="param-row">
-              <a-slider v-model:value="agent.repetitionPenalty" :min="0" :max="2" :step="0.1" style="flex: 1" />
-              <span class="param-value">{{ agent.repetitionPenalty }}</span>
-            </div>
-            <div class="param-hint">值越高越不容易重复，通义千问模型参数</div>
+            <!-- number -->
+            <a-input-number v-else-if="field.type === 'number'" v-model:value="agentConfig[field.key]" :min="field.min" :max="field.max" :step="field.step" style="width: 100%" />
+            <!-- text -->
+            <a-input v-else v-model:value="agentConfig[field.key]" placeholder="请输入" />
+            <div v-if="field.hint" class="param-hint">{{ field.hint }}</div>
           </a-form-item>
         </a-form>
       </div>
@@ -145,6 +138,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getAgentDetail, updateAgent, updateAgentKnowledge } from '../api/agent'
+import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getKnowledgeList } from '../api/knowledge'
 
 const route = useRoute()
@@ -157,29 +151,19 @@ const agent = reactive({
   description: '',
   systemPrompt: '',
   agentType: 'CHAT',
-  modelId: null,
-  temperature: 0.7,
-  topP: 0.9,
-  maxTokens: 2048,
-  repetitionPenalty: 1.0,
 })
 
+// 模型配置（存储在 config JSONB 中）
+const agentConfig = reactive({
+  providerId: null,
+})
+
+const providerList = ref([])
+const configFields = ref([])
 const selectedKnowledgeIds = ref(new Set())
 const knowledgeList = ref([])
 const searchText = ref('')
 const saving = ref(false)
-
-const models = [
-  { value: 'qwen-turbo', label: '通义千问 Turbo' },
-  { value: 'qwen-plus', label: '通义千问 Plus' },
-  { value: 'qwen-max', label: '通义千问 Max' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  { value: 'gpt-4', label: 'GPT-4' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-  { value: 'claude-3-opus', label: 'Claude 3 Opus' },
-  { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-]
 
 const selectedKnowledge = computed(() => {
   return knowledgeList.value.filter(k => selectedKnowledgeIds.value.has(k.id))
@@ -194,15 +178,70 @@ const filteredKnowledgeList = computed(() => {
   )
 })
 
+async function loadProviders() {
+  try {
+    const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
+    providerList.value = res.data.records || []
+  } catch (e) {
+    // ignore
+  }
+}
+
+async function loadConfigFields(providerId) {
+  if (!providerId) return
+  try {
+    const res = await getProviderConfigFields(providerId)
+    configFields.value = res.data || []
+    // 为缺失的字段设置默认值
+    for (const field of configFields.value) {
+      if (agentConfig[field.key] === undefined && field.defaultValue !== undefined) {
+        agentConfig[field.key] = field.defaultValue
+      }
+    }
+  } catch (e) {
+    configFields.value = []
+  }
+}
+
+async function onProviderChange(providerId) {
+  // 切换提供商时，清除非 providerId 的配置项
+  const keepKeys = new Set(['providerId', ...configFields.value.map(f => f.key)])
+  for (const key of Object.keys(agentConfig)) {
+    if (!keepKeys.has(key) && key !== 'providerId') {
+      delete agentConfig[key]
+    }
+  }
+  await loadConfigFields(providerId)
+}
+
 async function loadAgent() {
   try {
     const res = await getAgentDetail(agentId)
     const { agent: agentData, knowledgeIds } = res.data
-    Object.assign(agent, agentData)
-    // agentType 可能是枚举对象
-    if (agent.agentType?.code) {
-      agent.agentType = agent.agentType.code
+
+    // 分离基本信息和配置
+    const { config, agentType, ...basicInfo } = agentData
+    Object.assign(agent, basicInfo)
+    if (agentType?.code) {
+      agent.agentType = agentType.code
+    } else if (agentType) {
+      agent.agentType = agentType
     }
+
+    // 解析 config JSONB
+    if (config) {
+      try {
+        const parsed = typeof config === 'string' ? JSON.parse(config) : config
+        Object.assign(agentConfig, parsed)
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // 加载提供商列表和配置字段
+    await loadProviders()
+    await loadConfigFields(agentConfig.providerId)
+
     selectedKnowledgeIds.value = new Set(knowledgeIds || [])
   } catch (e) {
     message.error('加载 Agent 详情失败')
@@ -241,13 +280,18 @@ async function handleSave() {
   }
   saving.value = true
   try {
-    // 1. 更新 Agent 基本信息和参数
+    // 1. 构建 config JSONB（包含 provider + 所有配置项）
+    const configObj = { ...agentConfig }
+    const configStr = JSON.stringify(configObj)
+
+    // 2. 更新 Agent
     await updateAgent({
       ...agent,
       agentType: agent.agentType?.code || agent.agentType,
+      config: configStr,
     })
 
-    // 2. 更新知识库绑定
+    // 3. 更新知识库绑定
     await updateAgentKnowledge(agentId, Array.from(selectedKnowledgeIds.value))
 
     message.success('保存成功')

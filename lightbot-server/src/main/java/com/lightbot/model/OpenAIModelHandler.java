@@ -1,0 +1,134 @@
+package com.lightbot.model;
+
+import com.lightbot.entity.ModelProvider;
+import com.lightbot.enums.ModelProviderType;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * OpenAI 模型处理器
+ * <p>同时兼容 DeepSeek 等 OpenAI 兼容 API</p>
+ *
+ * @author finch
+ * @since 2026-05-19
+ */
+@Component
+public class OpenAIModelHandler implements ModelProviderHandler {
+
+    @Override
+    public ModelProviderType getProviderType() {
+        return ModelProviderType.OPENAI;
+    }
+
+    @Override
+    public ChatModel createChatModel(ModelProvider provider) {
+        OpenAiApi.Builder apiBuilder = OpenAiApi.builder()
+                .apiKey(provider.getApiKey());
+        if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
+            apiBuilder.baseUrl(provider.getBaseUrl());
+        }
+        OpenAiApi api = apiBuilder.build();
+        return OpenAiChatModel.builder()
+                .openAiApi(api)
+                .build();
+    }
+
+    @Override
+    public ChatOptions buildChatOptions(Map<String, Object> config) {
+        OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
+
+        if (config.containsKey("modelId")) {
+            builder.model(config.get("modelId").toString());
+        }
+        if (config.containsKey("temperature")) {
+            builder.temperature(toDouble(config.get("temperature")));
+        }
+        if (config.containsKey("topP")) {
+            builder.topP(toDouble(config.get("topP")));
+        }
+        if (config.containsKey("maxTokens")) {
+            builder.maxTokens(toInt(config.get("maxTokens")));
+        }
+        if (config.containsKey("presencePenalty")) {
+            builder.presencePenalty(toDouble(config.get("presencePenalty")));
+        }
+        if (config.containsKey("frequencyPenalty")) {
+            builder.frequencyPenalty(toDouble(config.get("frequencyPenalty")));
+        }
+
+        return builder.build();
+    }
+
+    @Override
+    public List<ConfigField> getConfigFields() {
+        return List.of(
+                ConfigField.builder()
+                        .key("modelId")
+                        .label("模型")
+                        .type("select")
+                        .options(List.of(
+                                ConfigField.Option.builder().value("gpt-3.5-turbo").label("GPT-3.5 Turbo").build(),
+                                ConfigField.Option.builder().value("gpt-4").label("GPT-4").build(),
+                                ConfigField.Option.builder().value("gpt-4o").label("GPT-4o").build(),
+                                ConfigField.Option.builder().value("gpt-4o-mini").label("GPT-4o Mini").build()
+                        ))
+                        .defaultValue("gpt-4o-mini")
+                        .build(),
+                ConfigField.builder()
+                        .key("temperature")
+                        .label("温度 (Temperature)")
+                        .type("slider")
+                        .min(0.0).max(2.0).step(0.1)
+                        .defaultValue(0.7)
+                        .hint("值越高回答越随机创造性，值越低回答越确定")
+                        .build(),
+                ConfigField.builder()
+                        .key("topP")
+                        .label("核采样 (Top P)")
+                        .type("slider")
+                        .min(0.0).max(1.0).step(0.05)
+                        .defaultValue(1.0)
+                        .hint("控制词汇选择的多样性")
+                        .build(),
+                ConfigField.builder()
+                        .key("maxTokens")
+                        .label("最大 Token")
+                        .type("number")
+                        .min(256.0).max(8192.0).step(256.0)
+                        .defaultValue(2048)
+                        .hint("单次回答的最大长度")
+                        .build(),
+                ConfigField.builder()
+                        .key("presencePenalty")
+                        .label("存在惩罚 (Presence Penalty)")
+                        .type("slider")
+                        .min(-2.0).max(2.0).step(0.1)
+                        .defaultValue(0.0)
+                        .hint("正值降低重复话题的概率")
+                        .build(),
+                ConfigField.builder()
+                        .key("frequencyPenalty")
+                        .label("频率惩罚 (Frequency Penalty)")
+                        .type("slider")
+                        .min(-2.0).max(2.0).step(0.1)
+                        .defaultValue(0.0)
+                        .hint("正值降低重复用词的概率")
+                        .build()
+        );
+    }
+
+    private double toDouble(Object val) {
+        return val instanceof Number ? ((Number) val).doubleValue() : Double.parseDouble(val.toString());
+    }
+
+    private int toInt(Object val) {
+        return val instanceof Number ? ((Number) val).intValue() : Integer.parseInt(val.toString());
+    }
+}

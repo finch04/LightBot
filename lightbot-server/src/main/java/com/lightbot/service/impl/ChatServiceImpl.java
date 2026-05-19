@@ -1,6 +1,5 @@
 package com.lightbot.service.impl;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +11,7 @@ import com.lightbot.entity.Message;
 import com.lightbot.enums.ContentType;
 import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
+import com.lightbot.model.ModelFactory;
 import com.lightbot.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +20,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
@@ -44,13 +45,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    private final ChatModel chatModel;
     private final MessageMapper messageMapper;
     private final ChatSessionService chatSessionService;
     private final AgentService agentService;
     private final AgentKnowledgeService agentKnowledgeService;
     private final EmbeddingService embeddingService;
     private final EmbeddingModel embeddingModel;
+    private final ModelFactory modelFactory;
     private final TaskExecutor taskExecutor;
 
     private static final String DEFAULT_SYSTEM_PROMPT = "你是 LightBot 智能助手，基于通义千问大模型，请用中文回答用户问题。";
@@ -73,21 +74,26 @@ public class ChatServiceImpl implements ChatService {
         // 2. 加载Agent配置
         Agent agent = loadAgent(request.getAgentId());
 
-        // 3. 构建消息列表（含系统提示词 + RAG上下文 + 历史消息）
+        // 3. 解析config获取providerId和配置
+        Map<String, Object> configMap = parseConfig(agent != null ? agent.getConfig() : null);
+        Long providerId = getProviderId(configMap);
+
+        // 4. 构建消息列表（含系统提示词 + RAG上下文 + 历史消息）
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(sessionId, request.getMessage(), agent);
 
-        // 4. 构建ChatOptions
-        DashScopeChatOptions options = buildChatOptions(agent);
+        // 5. 通过 ModelFactory 获取 ChatModel 和 ChatOptions
+        ChatModel chatModel = modelFactory.getChatModel(providerId);
+        ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
 
-        // 5. 调用模型获取回复
+        // 6. 调用模型获取回复
         ChatResponse response = chatModel.call(new Prompt(messages, options));
         String reply = response.getResult().getOutput().getText();
 
-        // 6. 持久化用户消息和AI回复
+        // 7. 持久化用户消息和AI回复
         saveMessage(sessionId, MessageRole.USER, request.getMessage());
         saveMessage(sessionId, MessageRole.ASSISTANT, reply);
 
-        // 7. 异步生成标题
+        // 8. 异步生成标题
         taskExecutor.execute(() -> generateTitle(sessionId));
 
         return reply;
@@ -101,16 +107,21 @@ public class ChatServiceImpl implements ChatService {
         // 2. 加载Agent配置
         Agent agent = loadAgent(request.getAgentId());
 
-        // 3. 构建消息列表
+        // 3. 解析config获取providerId和配置
+        Map<String, Object> configMap = parseConfig(agent != null ? agent.getConfig() : null);
+        Long providerId = getProviderId(configMap);
+
+        // 4. 构建消息列表
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(sessionId, request.getMessage(), agent);
 
-        // 4. 构建ChatOptions
-        DashScopeChatOptions options = buildChatOptions(agent);
+        // 5. 通过 ModelFactory 获取 ChatModel 和 ChatOptions
+        ChatModel chatModel = modelFactory.getChatModel(providerId);
+        ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
 
-        // 5. 先保存用户消息
+        // 6. 先保存用户消息
         saveMessage(sessionId, MessageRole.USER, request.getMessage());
 
-        // 6. 流式调用模型，收集完整回复后持久化
+        // 7. 流式调用模型，收集完整回复后持久化
         Flux<ChatResponse> stream = chatModel.stream(new Prompt(messages, options));
 
         StringBuilder fullReply = new StringBuilder();
@@ -120,7 +131,6 @@ public class ChatServiceImpl implements ChatService {
             return delta;
         }).doOnComplete(() -> {
             saveMessage(sessionId, MessageRole.ASSISTANT, fullReply.toString());
-            // 异步生成标题
             taskExecutor.execute(() -> generateTitle(sessionId));
         });
     }
@@ -140,65 +150,29 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 从Agent配置构建DashScopeChatOptions
+     * 解析config JSONB字符串为Map
      */
-    private DashScopeChatOptions buildChatOptions(Agent agent) {
-        if (agent == null) {
-            return null;
+    private Map<String, Object> parseConfig(String config) {
+        if (config == null || config.isBlank()) {
+            return Map.of();
         }
-
-        DashScopeChatOptions.DashscopeChatOptionsBuilder builder = DashScopeChatOptions.builder();
-
-        // 1. 从Agent实体字段构建基础配置
-        if (agent.getModelId() != null) {
-            builder.withModel(agent.getModelId());
+        try {
+            return OBJECT_MAPPER.readValue(config, new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("[Chat] 解析Agent config失败: {}", e.getMessage());
+            return Map.of();
         }
-        if (agent.getTemperature() != null) {
-            builder.withTemperature(agent.getTemperature());
-        }
-        if (agent.getTopP() != null) {
-            builder.withTopP(agent.getTopP());
-        }
-        if (agent.getMaxTokens() != null) {
-            builder.withMaxToken(agent.getMaxTokens());
-        }
-        if (agent.getRepetitionPenalty() != null) {
-            builder.withRepetitionPenalty(agent.getRepetitionPenalty());
-        }
-
-        // 2. config JSONB字段可覆盖实体字段值
-        applyConfigOverrides(agent.getConfig(), builder);
-
-        return builder.build();
     }
 
     /**
-     * 解析config JSONB，覆盖ChatOptions中的值
+     * 从config Map中获取providerId
      */
-    private void applyConfigOverrides(String config, DashScopeChatOptions.DashscopeChatOptionsBuilder builder) {
-        if (config == null || config.isBlank()) {
-            return;
+    private Long getProviderId(Map<String, Object> configMap) {
+        Object providerId = configMap.get(ConfigKeys.Agent.PROVIDER_ID);
+        if (providerId == null) {
+            throw new IllegalArgumentException("Agent config中缺少providerId配置");
         }
-        try {
-            Map<String, Object> map = OBJECT_MAPPER.readValue(config, new TypeReference<>() {});
-            if (map.containsKey(ConfigKeys.Agent.MODEL_ID)) {
-                builder.withModel(map.get(ConfigKeys.Agent.MODEL_ID).toString());
-            }
-            if (map.containsKey(ConfigKeys.Agent.TEMPERATURE)) {
-                builder.withTemperature(Double.parseDouble(map.get(ConfigKeys.Agent.TEMPERATURE).toString()));
-            }
-            if (map.containsKey(ConfigKeys.Agent.TOP_P)) {
-                builder.withTopP(Double.parseDouble(map.get(ConfigKeys.Agent.TOP_P).toString()));
-            }
-            if (map.containsKey(ConfigKeys.Agent.MAX_TOKENS)) {
-                builder.withMaxToken(Integer.parseInt(map.get(ConfigKeys.Agent.MAX_TOKENS).toString()));
-            }
-            if (map.containsKey(ConfigKeys.Agent.REPETITION_PENALTY)) {
-                builder.withRepetitionPenalty(Double.parseDouble(map.get(ConfigKeys.Agent.REPETITION_PENALTY).toString()));
-            }
-        } catch (Exception e) {
-            log.warn("[Chat] 解析Agent config失败: {}", e.getMessage());
-        }
+        return providerId instanceof Number ? ((Number) providerId).longValue() : Long.parseLong(providerId.toString());
     }
 
     /**
@@ -331,12 +305,12 @@ public class ChatServiceImpl implements ChatService {
                 conversationText.append(role).append("：").append(msg.getContent()).append("\n");
             }
 
-            // 4. 调用模型生成标题
+            // 4. 使用默认提供商调用模型生成标题
             List<org.springframework.ai.chat.messages.Message> promptMessages = new ArrayList<>();
             promptMessages.add(new SystemMessage("你是一个标题生成助手，只输出标题，不要任何其他内容。"));
             promptMessages.add(new UserMessage("请根据以下对话内容生成一个简短的标题（不超过20个字，不要加引号）：\n" + conversationText));
 
-            ChatResponse response = chatModel.call(new Prompt(promptMessages));
+            ChatResponse response = modelFactory.getChatModel(getDefaultProviderId()).call(new Prompt(promptMessages));
             String title = response.getResult().getOutput().getText().trim();
 
             // 5. 清理标题
@@ -353,5 +327,18 @@ public class ChatServiceImpl implements ChatService {
         } catch (Exception e) {
             log.warn("[Chat] 标题生成失败: sessionId={}, error={}", sessionId, e.getMessage());
         }
+    }
+
+    /**
+     * 获取默认providerId（用于标题生成等不需要指定provider的场景）
+     * 优先使用第一个可用的 ModelProvider
+     */
+    private Long getDefaultProviderId() {
+        // 从 ModelProviderService 获取第一个可用的 provider
+        var providers = modelFactory.getAvailableProviderIds();
+        if (providers.isEmpty()) {
+            throw new IllegalStateException("没有可用的模型提供商，请先在模型提供商管理页面配置");
+        }
+        return providers.get(0);
     }
 }

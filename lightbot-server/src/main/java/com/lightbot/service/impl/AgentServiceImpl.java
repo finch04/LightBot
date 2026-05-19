@@ -59,12 +59,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         existing.setAvatar(agent.getAvatar());
         existing.setAgentType(agent.getAgentType());
         existing.setConfig(agent.getConfig());
-        // 3. 更新模型配置字段
-        existing.setModelId(agent.getModelId());
-        existing.setTemperature(agent.getTemperature());
-        existing.setTopP(agent.getTopP());
-        existing.setMaxTokens(agent.getMaxTokens());
-        existing.setRepetitionPenalty(agent.getRepetitionPenalty());
         updateById(existing);
         return existing;
     }

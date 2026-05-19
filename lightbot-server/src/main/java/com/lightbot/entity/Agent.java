@@ -57,26 +57,6 @@ public class Agent {
     @Schema(description = "扩展配置")
     private String config;
 
-    @TableField("model_id")
-    @Schema(description = "模型ID（如 gpt-4、qwen-turbo）")
-    private String modelId;
-
-    @TableField("temperature")
-    @Schema(description = "温度参数，控制随机性（0.0-2.0）")
-    private Double temperature;
-
-    @TableField("top_p")
-    @Schema(description = "核采样参数（0.0-1.0）")
-    private Double topP;
-
-    @TableField("max_tokens")
-    @Schema(description = "最大输出 Token 数")
-    private Integer maxTokens;
-
-    @TableField("repetition_penalty")
-    @Schema(description = "重复惩罚（0.0-2.0），DashScope模型参数")
-    private Double repetitionPenalty;
-
     @TableField("status")
     @Schema(description = "状态")
     private AgentStatus status;

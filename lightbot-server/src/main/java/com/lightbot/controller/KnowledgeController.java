@@ -147,8 +147,9 @@ public class KnowledgeController {
 
     @Operation(summary = "生成知识库思维导图（AI总结）")
     @PostMapping("/{id}/mindmap")
-    public Result<String> generateMindmap(@PathVariable Long id) {
-        return Result.ok(knowledgeService.generateMindmap(id));
+    public Result<String> generateMindmap(@PathVariable Long id,
+                                          @RequestParam(required = false) Long providerId) {
+        return Result.ok(knowledgeService.generateMindmap(id, providerId));
     }
 
     @Operation(summary = "获取知识库思维导图数据")
@@ -161,7 +162,9 @@ public class KnowledgeController {
 
     @Operation(summary = "基于知识库RAG问答（需要VIEWER及以上权限）")
     @PostMapping("/{id}/ask")
-    public Result<String> ask(@PathVariable Long id, @RequestParam String question) {
-        return Result.ok(ragService.ask(id, question));
+    public Result<String> ask(@PathVariable Long id,
+                              @RequestParam String question,
+                              @RequestParam(required = false) Long providerId) {
+        return Result.ok(ragService.ask(id, question, providerId));
     }
 }

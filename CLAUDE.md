@@ -193,7 +193,7 @@ public class Agent {
 - **type/status 字段必须使用 Java 枚举**（配合 `@EnumValue` + `@JsonValue`），不使用数据库枚举
 - 必须包含 `createTime`、`updateTime`、`deleted` 字段
 - 使用 `@TableLogic` 实现逻辑删除
-- 如果遇到SQL更新，要放到整个项目根目录下的sql文件下，并且以日期-001.sql文件命名，如果存在则编号递增
+- 如果遇到SQL更新，要放到整个文件夹根目录下的sql文件夹下，并且以日期-001.sql文件命名，如果存在则编号递增,再次注意！不是docs文件夹下！
 - **Long ID 字段必须加 `@JsonSerialize(using = ToStringSerializer.class)`**：包括主键和所有外键字段（如 `userId`、`agentId`、`knowledgeId` 等），防止前端 JavaScript 精度丢失
 
 ### Service 规范

@@ -13,7 +13,8 @@ public interface RagService {
      *
      * @param knowledgeId 知识库ID
      * @param question    用户问题
+     * @param providerId  模型提供商ID
      * @return 回答
      */
-    String ask(Long knowledgeId, String question);
+    String ask(Long knowledgeId, String question, Long providerId);
 }
