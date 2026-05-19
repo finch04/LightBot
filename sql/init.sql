@@ -82,7 +82,7 @@ COMMENT ON TABLE agent IS 'Agent表';
 -- ========================================
 CREATE TABLE chat_session (
     id              BIGINT          NOT NULL,
-    agent_id        BIGINT          NOT NULL,
+    agent_id        BIGINT,
     user_id         BIGINT          NOT NULL,
     title           VARCHAR(256),
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',

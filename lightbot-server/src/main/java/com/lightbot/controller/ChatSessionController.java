@@ -4,9 +4,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.Message;
-import com.lightbot.mapper.MessageMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lightbot.service.ChatSessionService;
+import com.lightbot.service.MessageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +13,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 对话会话管理接口
+ *
+ * @author finch
+ * @since 2026-05-19
+ */
 @Tag(name = "对话会话管理", description = "对话会话的增删改查")
 @RestController
 @RequestMapping("/api/chat/sessions")
@@ -21,7 +26,7 @@ import java.util.List;
 public class ChatSessionController {
 
     private final ChatSessionService chatSessionService;
-    private final MessageMapper messageMapper;
+    private final MessageService messageService;
 
     @Operation(summary = "创建新会话")
     @PostMapping
@@ -46,11 +51,7 @@ public class ChatSessionController {
     @Operation(summary = "获取会话的消息历史")
     @GetMapping("/{id}/messages")
     public Result<List<Message>> getMessages(@PathVariable Long id) {
-        List<Message> messages = messageMapper.selectList(
-                new LambdaQueryWrapper<Message>()
-                        .eq(Message::getSessionId, id)
-                        .orderByAsc(Message::getCreateTime));
-        return Result.ok(messages);
+        return Result.ok(messageService.listBySessionId(id));
     }
 
     @Operation(summary = "更新会话标题")

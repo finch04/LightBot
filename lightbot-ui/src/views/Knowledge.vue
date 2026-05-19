@@ -6,7 +6,7 @@
         <p class="page-desc">管理知识库，上传文档，基于 RAG 进行问答</p>
       </div>
       <button class="btn-primary" @click="showCreate = true">
-        <el-icon><Plus /></el-icon> 新建知识库
+        <PlusOutlined /> 新建知识库
       </button>
     </div>
 
@@ -36,34 +36,30 @@
     </div>
 
     <!-- 创建弹窗 -->
-    <el-dialog v-model="showCreate" title="新建知识库" width="480px">
-      <el-form :model="form" label-width="80px">
-        <el-form-item label="名称" required>
-          <el-input v-model="form.name" placeholder="知识库名称" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="知识库描述（可选）" />
-        </el-form-item>
-        <el-form-item label="Embed模型">
-          <el-input v-model="form.embeddingModel" placeholder="text-embedding-3-small" />
-        </el-form-item>
-        <el-form-item label="分块大小">
-          <el-input-number v-model="form.chunkSize" :min="100" :max="2000" :step="100" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreate = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleCreate">创建</el-button>
-      </template>
-    </el-dialog>
+    <a-modal v-model:open="showCreate" title="新建知识库" :width="480" @ok="handleCreate" :confirm-loading="submitting">
+      <a-form :model="form" :label-col="{ span: 6 }">
+        <a-form-item label="名称" required>
+          <a-input v-model:value="form.name" placeholder="知识库名称" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" />
+        </a-form-item>
+        <a-form-item label="Embed模型">
+          <a-input v-model:value="form.embeddingModel" placeholder="text-embedding-3-small" />
+        </a-form-item>
+        <a-form-item label="分块大小">
+          <a-input-number v-model:value="form.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { PlusOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge } from '../api/knowledge'
 
 const router = useRouter()
@@ -86,13 +82,13 @@ async function loadData() {
 
 async function handleCreate() {
   if (!form.name.trim()) {
-    ElMessage.warning('请输入名称')
+    message.warning('请输入名称')
     return
   }
   submitting.value = true
   try {
     await createKnowledge({ ...form })
-    ElMessage.success('创建成功')
+    message.success('创建成功')
     showCreate.value = false
     form.name = ''
     form.description = ''
@@ -136,7 +132,7 @@ onMounted(loadData)
   background: #171717;
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 100px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -153,7 +149,7 @@ onMounted(loadData)
 }
 .knowledge-card {
   background: #fff;
-  border: 1px solid #e4e4e7;
+  border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
@@ -161,7 +157,7 @@ onMounted(loadData)
 }
 .knowledge-card:hover {
   border-color: #0070f3;
-  box-shadow: 0 4px 12px rgba(0, 112, 243, 0.1);
+  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 .card-header {
   display: flex;

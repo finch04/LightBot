@@ -32,4 +32,12 @@ public interface ChunkService extends IService<Chunk> {
      * @param content     分块内容
      */
     void saveChunk(Long documentId, Long knowledgeId, int index, String content);
+
+    /**
+     * 查询文档的分块列表
+     *
+     * @param documentId 文档ID
+     * @return 分块列表
+     */
+    List<Chunk> listByDocumentId(Long documentId);
 }

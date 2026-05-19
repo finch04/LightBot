@@ -50,7 +50,7 @@
           :disabled="!input.trim() || loading"
           @click="sendMessage"
         >
-          <el-icon v-if="!loading"><Promotion /></el-icon>
+          <SendOutlined v-if="!loading" />
           <span v-else class="sending-dot">...</span>
         </button>
       </div>
@@ -65,7 +65,7 @@ import { useRoute } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { Promotion } from '@element-plus/icons-vue'
+import { SendOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages } from '../api/chatSession'
 import { useUserStore } from '../stores/user'

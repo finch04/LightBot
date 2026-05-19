@@ -47,6 +47,14 @@ public interface KnowledgeService extends IService<Knowledge> {
     void deleteById(Long id);
 
     /**
+     * 获取知识库详情（需要成员权限）
+     *
+     * @param id 知识库ID
+     * @return 知识库
+     */
+    Knowledge getByIdWithPermission(Long id);
+
+    /**
      * 更新知识库统计信息
      *
      * @param knowledgeId 知识库ID

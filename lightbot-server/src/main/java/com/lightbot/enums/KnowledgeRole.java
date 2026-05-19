@@ -1,6 +1,7 @@
 package com.lightbot.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -33,6 +34,17 @@ public enum KnowledgeRole {
 
     @JsonValue
     private final String desc;
+
+    @JsonCreator
+    public static KnowledgeRole fromValue(String value) {
+        for (KnowledgeRole role : values()) {
+            if (role.code.equalsIgnoreCase(value) || role.desc.equalsIgnoreCase(value)
+                    || role.name().equalsIgnoreCase(value)) {
+                return role;
+            }
+        }
+        throw new IllegalArgumentException("未知的角色类型: " + value);
+    }
 
     /**
      * 判断当前角色是否高于或等于目标角色

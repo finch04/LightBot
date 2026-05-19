@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.Document;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * 文档服务接口
  *
@@ -35,4 +37,19 @@ public interface DocumentService extends IService<Document> {
      * @return 文档内容
      */
     String previewDocument(Long documentId);
+
+    /**
+     * 查询知识库下的文档列表
+     *
+     * @param knowledgeId 知识库ID
+     * @return 文档列表
+     */
+    List<Document> listByKnowledgeId(Long knowledgeId);
+
+    /**
+     * 删除文档
+     *
+     * @param documentId 文档ID
+     */
+    void deleteDocument(Long documentId);
 }

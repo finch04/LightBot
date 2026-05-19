@@ -1,6 +1,7 @@
 package com.lightbot.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,4 +28,14 @@ public enum NodeType {
 
     @JsonValue
     private final String desc;
+
+    @JsonCreator
+    public static NodeType fromValue(String value) {
+        for (NodeType e : values()) {
+            if (e.code.equalsIgnoreCase(value) || e.desc.equalsIgnoreCase(value) || e.name().equalsIgnoreCase(value)) {
+                return e;
+            }
+        }
+        throw new IllegalArgumentException("未知的节点类型: " + value);
+    }
 }

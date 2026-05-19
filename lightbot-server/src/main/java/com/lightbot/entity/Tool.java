@@ -1,6 +1,8 @@
 package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.AuthType;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ToolType;
@@ -24,6 +26,7 @@ public class Tool {
 
     @TableId(type = IdType.ASSIGN_ID)
     @Schema(description = "主键ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     @TableField("user_id")

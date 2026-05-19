@@ -1,5 +1,6 @@
 package com.lightbot.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
@@ -54,7 +55,10 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
 
     @Override
     public void addMember(Long knowledgeId, Long userId, KnowledgeRole role) {
-        // 检查是否已是成员
+        // 1. 权限校验：需要MANAGER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.MANAGER);
+
+        // 2. 检查是否已是成员
         KnowledgeMember existing = getOne(new LambdaQueryWrapper<KnowledgeMember>()
                 .eq(KnowledgeMember::getKnowledgeId, knowledgeId)
                 .eq(KnowledgeMember::getUserId, userId));
@@ -62,6 +66,7 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
             throw new BizException(ErrorCode.KNOWLEDGE_MEMBER_EXISTS);
         }
 
+        // 3. 添加成员
         KnowledgeMember member = new KnowledgeMember();
         member.setKnowledgeId(knowledgeId);
         member.setUserId(userId);
@@ -71,32 +76,46 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
 
     @Override
     public void updateMemberRole(Long knowledgeId, Long userId, KnowledgeRole role) {
+        // 1. 权限校验：需要MANAGER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.MANAGER);
+
+        // 2. 查找成员
         KnowledgeMember member = getOne(new LambdaQueryWrapper<KnowledgeMember>()
                 .eq(KnowledgeMember::getKnowledgeId, knowledgeId)
                 .eq(KnowledgeMember::getUserId, userId));
         if (member == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_MEMBER_NOT_FOUND);
         }
-        // 不允许修改创建者角色
+
+        // 3. 不允许修改创建者角色
         if (member.getRole() == KnowledgeRole.CREATOR) {
             throw new BizException(ErrorCode.KNOWLEDGE_CREATOR_ROLE_IMMUTABLE);
         }
+
+        // 4. 更新角色
         member.setRole(role);
         updateById(member);
     }
 
     @Override
     public void removeMember(Long knowledgeId, Long userId) {
+        // 1. 权限校验：需要MANAGER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.MANAGER);
+
+        // 2. 查找成员
         KnowledgeMember member = getOne(new LambdaQueryWrapper<KnowledgeMember>()
                 .eq(KnowledgeMember::getKnowledgeId, knowledgeId)
                 .eq(KnowledgeMember::getUserId, userId));
         if (member == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_MEMBER_NOT_FOUND);
         }
-        // 不允许移除创建者
+
+        // 3. 不允许移除创建者
         if (member.getRole() == KnowledgeRole.CREATOR) {
             throw new BizException(ErrorCode.KNOWLEDGE_CREATOR_CANNOT_REMOVE);
         }
+
+        // 4. 移除成员
         removeById(member.getId());
     }
 
@@ -108,7 +127,34 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
 
     @Override
     public List<KnowledgeMember> listMembers(Long knowledgeId) {
+        // 1. 权限校验：需要成员权限
+        checkMember(knowledgeId);
+
+        // 2. 查询成员列表
         return list(new LambdaQueryWrapper<KnowledgeMember>()
                 .eq(KnowledgeMember::getKnowledgeId, knowledgeId));
+    }
+
+    // ========== 权限校验 ==========
+
+    /**
+     * 校验当前用户是否为知识库成员
+     */
+    private void checkMember(Long knowledgeId) {
+        long userId = StpUtil.getLoginIdAsLong();
+        KnowledgeRole role = getMemberRole(knowledgeId, userId);
+        if (role == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NO_PERMISSION);
+        }
+    }
+
+    /**
+     * 校验当前用户是否具有指定等级的角色
+     */
+    private void checkPermission(Long knowledgeId, KnowledgeRole requiredRole) {
+        long userId = StpUtil.getLoginIdAsLong();
+        if (!hasPermission(knowledgeId, userId, requiredRole)) {
+            throw new BizException(ErrorCode.KNOWLEDGE_ROLE_INSUFFICIENT, requiredRole.getDesc());
+        }
     }
 }

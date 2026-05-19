@@ -1,6 +1,8 @@
 package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -21,6 +23,7 @@ public class Chunk {
 
     @TableId(type = IdType.ASSIGN_ID)
     @Schema(description = "主键ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     @TableField("document_id")

@@ -44,6 +44,11 @@ const routes = [
         component: () => import('../views/ModelProviderManage.vue'),
       },
       {
+        path: 'agents',
+        name: 'Agents',
+        component: () => import('../views/AgentManage.vue'),
+      },
+      {
         path: 'mcp',
         name: 'MCP',
         component: () => import('../views/Placeholder.vue'),

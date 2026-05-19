@@ -67,7 +67,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import { useUserStore } from '../stores/user'
 import { UserOutlined, LockOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 
@@ -79,13 +79,13 @@ const form = reactive({ username: '', password: '' })
 
 async function handleLogin() {
   if (!form.username || !form.password) {
-    ElMessage.warning('请填写用户名和密码')
+    message.warning('请填写用户名和密码')
     return
   }
   loading.value = true
   try {
     await userStore.login(form)
-    ElMessage.success('登录成功')
+    message.success('登录成功')
     router.push('/')
   } finally {
     loading.value = false
@@ -97,12 +97,12 @@ async function handleLogin() {
 .login-wrapper {
   height: 100vh;
   overflow: hidden;
-  background: #f0f2f5;
+  background: #fafafa;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* 顶部栏 */
@@ -135,8 +135,8 @@ async function handleLogin() {
   display: flex;
   width: 800px;
   background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: 0px 1px 1px rgba(0,0,0,0.02), 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
   overflow: hidden;
   margin-top: 20px;
 }
@@ -211,12 +211,12 @@ async function handleLogin() {
 }
 
 .input-wrapper:hover {
-  border-color: #4096ff;
+  border-color: #a1a1aa;
 }
 
 .input-wrapper:focus-within {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+  border-color: #171717;
+  box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
 }
 
 .input-icon {
@@ -245,28 +245,28 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 36px;
-  background: #1677ff;
+  height: 40px;
+  background: #171717;
   color: #ffffff;
   border: none;
-  border-radius: 6px;
+  border-radius: 100px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   margin-top: 4px;
 }
 
 .btn-login:hover:not(:disabled) {
-  background: #4096ff;
+  background: #27272a;
 }
 
 .btn-login:active:not(:disabled) {
-  background: #0958d9;
+  background: #0a0a0a;
 }
 
 .btn-login:disabled {
-  background: #bae0ff;
+  background: #d4d4d8;
   cursor: not-allowed;
 }
 
@@ -279,13 +279,13 @@ async function handleLogin() {
 }
 
 .form-footer .link {
-  color: #1677ff;
+  color: #0070f3;
   text-decoration: none;
   margin-left: 4px;
 }
 
 .form-footer .link:hover {
-  color: #4096ff;
+  color: #0761d1;
 }
 
 /* 响应式 */

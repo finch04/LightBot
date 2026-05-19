@@ -10,7 +10,7 @@
 
       <!-- 新建对话按钮 -->
       <button class="btn-new-chat" @click="newChat">
-        <el-icon><Plus /></el-icon>
+        <PlusOutlined />
         新建对话
       </button>
 
@@ -22,7 +22,7 @@
           :to="item.path"
           :class="['nav-item', { active: isActive(item.path) }]"
         >
-          <el-icon><component :is="item.icon" /></el-icon>
+          <component :is="item.icon" />
           <span>{{ item.label }}</span>
         </router-link>
       </nav>
@@ -38,7 +38,7 @@
             @click="switchSession(s)"
           >
             <span class="session-title" @dblclick="startRename(s)">{{ s.title || '新对话' }}</span>
-            <el-icon class="session-delete" @click.stop="archiveSession(s.id)"><Close /></el-icon>
+            <CloseOutlined class="session-delete" @click.stop="archiveSession(s.id)" />
           </div>
           <div v-if="sessions.length === 0" class="session-empty">暂无对话</div>
         </div>
@@ -46,19 +46,19 @@
 
       <!-- 用户信息 -->
       <div class="sidebar-footer">
-        <el-dropdown @command="handleCommand" trigger="click">
+        <a-dropdown :trigger="['click']">
           <div class="user-info">
             <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
             <span class="user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
-            <el-icon><ArrowDown /></el-icon>
+            <DownOutlined />
           </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="model-providers">模型管理</el-dropdown-item>
-              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
-            </el-dropdown-menu>
+          <template #overlay>
+            <a-menu @click="handleCommand">
+              <a-menu-item key="model-providers">模型管理</a-menu-item>
+              <a-menu-item key="logout">退出登录</a-menu-item>
+            </a-menu>
           </template>
-        </el-dropdown>
+        </a-dropdown>
       </div>
     </aside>
 
@@ -70,9 +70,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus, Close, ArrowDown, ChatDotRound, Collection, Connection, MagicStick, Box, DataLine, Document } from '@element-plus/icons-vue'
+import {
+  PlusOutlined,
+  CloseOutlined,
+  DownOutlined,
+  RobotOutlined,
+  DatabaseOutlined,
+  ApiOutlined,
+  ThunderboltOutlined,
+  ToolOutlined,
+  DashboardOutlined,
+  FileTextOutlined,
+} from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { getSessions, createSession, archiveSession as archiveSessionApi, updateSessionTitle } from '../api/chatSession'
 
@@ -85,12 +96,13 @@ const currentSessionId = ref(null)
 const sessionListRef = ref(null)
 
 const navItems = [
-  { path: '/knowledge', label: '知识库', icon: 'Collection' },
-  { path: '/mcp', label: 'MCP', icon: 'Connection' },
-  { path: '/skills', label: 'Skill', icon: 'MagicStick' },
-  { path: '/tools', label: '工具', icon: 'Box' },
-  { path: '/dashboard', label: 'Dashboard', icon: 'DataLine' },
-  { path: '/logs', label: '日志监控', icon: 'Document' },
+  { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
+  { path: '/knowledge', label: '知识库', icon: markRaw(DatabaseOutlined) },
+  { path: '/mcp', label: 'MCP', icon: markRaw(ApiOutlined) },
+  { path: '/skills', label: 'Skill', icon: markRaw(ThunderboltOutlined) },
+  { path: '/tools', label: '工具', icon: markRaw(ToolOutlined) },
+  { path: '/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
+  { path: '/logs', label: '日志监控', icon: markRaw(FileTextOutlined) },
 ]
 
 function isActive(path) {
@@ -143,11 +155,11 @@ function startRename(session) {
   }
 }
 
-async function handleCommand(cmd) {
-  if (cmd === 'logout') {
-    await userStore.logout()
+function handleCommand({ key }) {
+  if (key === 'logout') {
+    userStore.logout()
     router.push('/login')
-  } else if (cmd === 'model-providers') {
+  } else if (key === 'model-providers') {
     router.push('/model-providers')
   }
 }
@@ -309,6 +321,7 @@ watch(() => route.path, (path) => {
   color: #71717a;
   font-size: 14px;
   transition: opacity 0.15s;
+  cursor: pointer;
 }
 .session-item:hover .session-delete {
   opacity: 1;

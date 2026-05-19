@@ -22,6 +22,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.security.MessageDigest;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -148,6 +149,23 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         } catch (Exception e) {
             throw new BizException(ErrorCode.DOCUMENT_READ_FAILED);
         }
+    }
+
+    @Override
+    public List<Document> listByKnowledgeId(Long knowledgeId) {
+        return list(new LambdaQueryWrapper<Document>()
+                .eq(Document::getKnowledgeId, knowledgeId)
+                .eq(Document::getDeleted, 0)
+                .orderByDesc(Document::getCreateTime));
+    }
+
+    @Override
+    public void deleteDocument(Long documentId) {
+        Document doc = getById(documentId);
+        if (doc == null) {
+            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+        removeById(documentId);
     }
 
     private String extractFileType(String fileName) {

@@ -1,5 +1,6 @@
 package com.lightbot.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.entity.Chunk;
 import com.lightbot.mapper.ChunkMapper;
@@ -59,6 +60,13 @@ public class ChunkServiceImpl extends ServiceImpl<ChunkMapper, Chunk>
         chunk.setContent(content);
         chunk.setTokenCount((int) (content.length() * 1.2));
         save(chunk);
+    }
+
+    @Override
+    public List<Chunk> listByDocumentId(Long documentId) {
+        return list(new LambdaQueryWrapper<Chunk>()
+                .eq(Chunk::getDocumentId, documentId)
+                .orderByAsc(Chunk::getChunkIndex));
     }
 
     /**

@@ -58,12 +58,16 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     @Override
     public Knowledge update(Knowledge knowledge) {
-        // 1. 校验存在性
+        // 1. 权限校验：需要MANAGER及以上权限
+        checkPermission(knowledge.getId(), KnowledgeRole.MANAGER);
+
+        // 2. 校验存在性
         Knowledge existing = getById(knowledge.getId());
         if (existing == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
-        // 2. 更新允许修改的字段
+
+        // 3. 更新允许修改的字段
         existing.setName(knowledge.getName());
         existing.setDescription(knowledge.getDescription());
         existing.setEmbeddingModel(knowledge.getEmbeddingModel());
@@ -95,14 +99,29 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteById(Long id) {
+        // 1. 权限校验：仅CREATOR可删除
+        checkPermission(id, KnowledgeRole.CREATOR);
+
+        // 2. 校验存在性
         Knowledge knowledge = getById(id);
         if (knowledge == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
-        // 逻辑删除知识库
+
+        // 3. 逻辑删除知识库
         removeById(id);
-        // 同时删除所有成员关系
+
+        // 4. 同时删除所有成员关系
         knowledgeMemberService.removeByKnowledgeId(id);
+    }
+
+    @Override
+    public Knowledge getByIdWithPermission(Long id) {
+        // 1. 权限校验：需要成员权限
+        checkMember(id);
+
+        // 2. 返回知识库详情
+        return getById(id);
     }
 
     @Override
@@ -116,5 +135,28 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         knowledge.setChunkCount(knowledge.getChunkCount() + chunkDelta);
         knowledge.setTotalTokens(knowledge.getTotalTokens() + tokenDelta);
         updateById(knowledge);
+    }
+
+    // ========== 权限校验 ==========
+
+    /**
+     * 校验当前用户是否为知识库成员
+     */
+    private void checkMember(Long knowledgeId) {
+        long userId = StpUtil.getLoginIdAsLong();
+        KnowledgeRole role = knowledgeMemberService.getMemberRole(knowledgeId, userId);
+        if (role == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NO_PERMISSION);
+        }
+    }
+
+    /**
+     * 校验当前用户是否具有指定等级的角色
+     */
+    private void checkPermission(Long knowledgeId, KnowledgeRole requiredRole) {
+        long userId = StpUtil.getLoginIdAsLong();
+        if (!knowledgeMemberService.hasPermission(knowledgeId, userId, requiredRole)) {
+            throw new BizException(ErrorCode.KNOWLEDGE_ROLE_INSUFFICIENT, requiredRole.getDesc());
+        }
     }
 }

@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="docs/assets/lightbot-logo.svg" alt="LightBot" width="200">
+    <img src="docs/assets/lightbot-logo.png" alt="LightBot" width="200">
 </p>
 
 <h1 align="center">LightBot</h1>

@@ -150,6 +150,7 @@ public class Agent {
 
     @TableId(type = IdType.ASSIGN_ID)
     @Schema(description = "主键ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     @TableField("name")
@@ -224,6 +225,50 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 - 需要 MyBatis-Plus 内置方法的 Service，接口继承 `IService<Entity>`，实现继承 `ServiceImpl<Mapper, Entity>`
 - 一个 Service 只处理一个业务域
 - 禁止在 Service 中直接调用其他模块的 Mapper
+
+### Controller 规范（纯透传）
+
+```text
+❌ 禁止在 Controller 中写业务逻辑（包括权限校验、数据查询、状态变更）
+❌ 禁止在 Controller 中注入 Mapper（包括 BaseMapper、自定义Mapper）
+❌ 禁止在 Controller 中构建 LambdaQueryWrapper / QueryWrapper
+✅ Controller 只做参数接收 + 调用 Service + 返回 Result
+✅ 权限校验、业务判断、数据操作一律放在 ServiceImpl 中
+```
+
+**正确示例：**
+```java
+@GetMapping("/{id}/documents")
+public Result<List<Document>> listDocuments(@PathVariable Long id) {
+    return Result.ok(documentService.listByKnowledgeId(id));
+}
+```
+
+**错误示例：**
+```java
+// ❌ Controller 中直接构建查询
+@GetMapping("/{id}/documents")
+public Result<List<Document>> listDocuments(@PathVariable Long id) {
+    checkMember(id);
+    List<Document> docs = documentService.list(
+        new LambdaQueryWrapper<Document>().eq(Document::getKnowledgeId, id));
+    return Result.ok(docs);
+}
+```
+
+### Long ID 序列化规范
+
+```text
+所有 Entity 的主键 ID 字段必须添加 @JsonSerialize(using = ToStringSerializer.class)
+原因：雪花算法生成的 Long 类型 ID 超过 JavaScript Number.MAX_SAFE_INTEGER (2^53)
+```
+
+```java
+@TableId(type = IdType.ASSIGN_ID)
+@Schema(description = "主键ID")
+@JsonSerialize(using = ToStringSerializer.class)
+private Long id;
+```
 
 ### Util 规范（中间件封装）
 
@@ -457,7 +502,7 @@ public class LightBotMcpServer {
 - 使用 **pnpm** 管理前端依赖
 - 图标优先使用 **lucide-vue-next**（注意尺寸）
 - 样式使用 CSS 变量统一管理颜色
-- 界面 logo 统一使用 `public/lightbot-logo.svg`
+- 界面 logo 统一使用 `public/lightbot-logo.png`
 
 ### 5. 后端开发
 

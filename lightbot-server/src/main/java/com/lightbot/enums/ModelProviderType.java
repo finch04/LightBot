@@ -1,6 +1,7 @@
 package com.lightbot.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -25,4 +26,15 @@ public enum ModelProviderType {
 
     @JsonValue
     private final String desc;
+
+    @JsonCreator
+    public static ModelProviderType fromValue(String value) {
+        for (ModelProviderType type : values()) {
+            if (type.code.equalsIgnoreCase(value) || type.desc.equalsIgnoreCase(value)
+                    || type.name().equalsIgnoreCase(value)) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("未知的模型提供商类型: " + value);
+    }
 }

@@ -6,7 +6,7 @@
         <p class="page-desc">管理 AI 模型提供商的 API 配置</p>
       </div>
       <button class="btn-primary" @click="openDialog()">
-        <el-icon><Plus /></el-icon> 新增提供商
+        <PlusOutlined /> 新增提供商
       </button>
     </div>
 
@@ -19,8 +19,8 @@
             <span class="card-type">{{ p.type?.code || p.type }}</span>
           </div>
           <div class="card-actions">
-            <button class="btn-icon" @click="openDialog(p)"><el-icon><Edit /></el-icon></button>
-            <button class="btn-icon danger" @click="handleDelete(p.id)"><el-icon><Delete /></el-icon></button>
+            <button class="btn-icon" @click="openDialog(p)"><EditOutlined /></button>
+            <button class="btn-icon danger" @click="handleDelete(p.id)"><DeleteOutlined /></button>
           </div>
         </div>
         <div class="card-detail">
@@ -30,38 +30,34 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" width="480px">
-      <el-form :model="form" label-width="80px">
-        <el-form-item label="名称" required>
-          <el-input v-model="form.name" placeholder="如：通义千问" />
-        </el-form-item>
-        <el-form-item label="类型" required>
-          <el-select v-model="form.type" style="width: 100%">
-            <el-option label="通义千问 (DashScope)" value="DASHSCOPE" />
-            <el-option label="OpenAI" value="OPENAI" />
-            <el-option label="DeepSeek" value="DEEPSEEK" />
-            <el-option label="Ollama" value="OLLAMA" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="API Key">
-          <el-input v-model="form.apiKey" placeholder="sk-..." show-password />
-        </el-form-item>
-        <el-form-item label="Base URL">
-          <el-input v-model="form.baseUrl" placeholder="可选" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" @ok="handleSubmit" :confirm-loading="submitting">
+      <a-form :model="form" :label-col="{ span: 6 }">
+        <a-form-item label="名称" required>
+          <a-input v-model:value="form.name" placeholder="如：通义千问" />
+        </a-form-item>
+        <a-form-item label="类型" required>
+          <a-select v-model:value="form.type" style="width: 100%">
+            <a-select-option value="DASHSCOPE">通义千问 (DashScope)</a-select-option>
+            <a-select-option value="OPENAI">OpenAI</a-select-option>
+            <a-select-option value="DEEPSEEK">DeepSeek</a-select-option>
+            <a-select-option value="OLLAMA">Ollama</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="API Key">
+          <a-input-password v-model:value="form.apiKey" placeholder="sk-..." />
+        </a-form-item>
+        <a-form-item label="Base URL">
+          <a-input v-model:value="form.baseUrl" placeholder="可选" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Edit, Delete } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider } from '../api/modelProvider'
 
 const list = ref([])
@@ -84,15 +80,15 @@ function openDialog(row) {
 }
 
 async function handleSubmit() {
-  if (!form.name.trim()) return ElMessage.warning('请输入名称')
+  if (!form.name.trim()) return message.warning('请输入名称')
   submitting.value = true
   try {
     if (form.id) {
       await updateModelProvider(form)
-      ElMessage.success('更新成功')
+      message.success('更新成功')
     } else {
       await createModelProvider(form)
-      ElMessage.success('创建成功')
+      message.success('创建成功')
     }
     dialogVisible.value = false
     loadData()
@@ -103,7 +99,7 @@ async function handleSubmit() {
 
 async function handleDelete(id) {
   await deleteModelProvider(id)
-  ElMessage.success('删除成功')
+  message.success('删除成功')
   loadData()
 }
 
@@ -146,8 +142,9 @@ onMounted(loadData)
   background: #171717;
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 100px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
 }
 .btn-primary:hover {
@@ -161,7 +158,7 @@ onMounted(loadData)
 }
 .provider-card {
   background: #fff;
-  border: 1px solid #e4e4e7;
+  border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
 }
@@ -194,9 +191,9 @@ onMounted(loadData)
 .card-type {
   font-size: 12px;
   color: #71717a;
-  background: #f4f4f5;
+  background: #f5f5f5;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 100px;
 }
 .card-actions {
   display: flex;
@@ -215,11 +212,11 @@ onMounted(loadData)
   color: #71717a;
 }
 .btn-icon:hover {
-  background: #f4f4f5;
+  background: #f5f5f5;
 }
 .btn-icon.danger:hover {
-  color: #dc2626;
-  background: #fee2e2;
+  color: #ee0000;
+  background: #f7d4d6;
 }
 .card-detail {
   display: flex;

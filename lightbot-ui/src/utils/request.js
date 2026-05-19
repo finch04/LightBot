@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import router from '../router'
 
 const request = axios.create({
@@ -19,7 +19,7 @@ request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code && res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
+      message.error(res.message || '请求失败')
       if (res.code === 401) {
         localStorage.removeItem('token')
         router.push('/login')
@@ -33,7 +33,7 @@ request.interceptors.response.use(
       localStorage.removeItem('token')
       router.push('/login')
     }
-    ElMessage.error(error.response?.data?.message || error.message || '网络异常')
+    message.error(error.response?.data?.message || error.message || '网络异常')
     return Promise.reject(error)
   }
 )

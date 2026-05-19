@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <button class="btn-back" @click="router.push('/knowledge')">
-          <el-icon><ArrowLeft /></el-icon> 返回
+          <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ knowledge.name }}</h1>
         <p class="page-desc">{{ knowledge.description || '暂无描述' }}</p>
@@ -15,13 +15,9 @@
       <div class="panel">
         <div class="panel-header">
           <h3>文档列表</h3>
-          <el-upload
-            :show-file-list="false"
-            :before-upload="handleUpload"
-            accept=".md"
-          >
+          <a-upload :show-upload-list="false" :before-upload="handleUpload" accept=".md">
             <button class="btn-primary-sm">上传文档</button>
-          </el-upload>
+          </a-upload>
         </div>
         <div class="doc-list">
           <div v-for="doc in documents" :key="doc.id" class="doc-item">
@@ -43,14 +39,14 @@
 
       <!-- 预览 / RAG 问答 -->
       <div class="panel">
-        <el-tabs v-model="activeTab">
-          <el-tab-pane label="文档预览" name="preview">
+        <a-tabs v-model:activeKey="activeTab">
+          <a-tab-pane key="preview" tab="文档预览">
             <div class="preview-content" v-if="previewContent">
               <pre>{{ previewContent }}</pre>
             </div>
             <div v-else class="preview-empty">选择一个文档进行预览</div>
-          </el-tab-pane>
-          <el-tab-pane label="RAG 问答" name="ask">
+          </a-tab-pane>
+          <a-tab-pane key="ask" tab="RAG 问答">
             <div class="rag-section">
               <div class="rag-messages" ref="ragRef">
                 <div v-for="(msg, i) in ragMessages" :key="i" :class="['rag-msg', msg.role]">
@@ -68,8 +64,8 @@
                 </button>
               </div>
             </div>
-          </el-tab-pane>
-        </el-tabs>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </div>
   </div>
@@ -78,8 +74,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ArrowLeftOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { getKnowledge, getDocuments, uploadDocument, deleteDocument, previewDocument, askKnowledge } from '../api/knowledge'
 
 const route = useRoute()
@@ -108,10 +104,10 @@ async function loadDocuments() {
 async function handleUpload(file) {
   try {
     await uploadDocument(knowledgeId, file)
-    ElMessage.success('上传成功，正在处理...')
+    message.success('上传成功，正在处理...')
     setTimeout(loadDocuments, 1000)
   } catch (e) {
-    ElMessage.error('上传失败')
+    message.error('上传失败')
   }
   return false
 }
@@ -122,17 +118,17 @@ async function previewDoc(doc) {
     previewContent.value = res.data
     activeTab.value = 'preview'
   } catch (e) {
-    ElMessage.error('预览失败')
+    message.error('预览失败')
   }
 }
 
 async function deleteDoc(docId) {
   try {
     await deleteDocument(docId)
-    ElMessage.success('删除成功')
+    message.success('删除成功')
     loadDocuments()
   } catch (e) {
-    ElMessage.error('删除失败')
+    message.error('删除失败')
   }
 }
 
@@ -205,7 +201,7 @@ onMounted(() => {
 }
 .panel {
   background: #fff;
-  border: 1px solid #e4e4e7;
+  border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
 }
@@ -225,8 +221,9 @@ onMounted(() => {
   background: #171717;
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 100px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
 }
 .btn-primary-sm:hover:not(:disabled) {
@@ -247,7 +244,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 12px;
-  border: 1px solid #f4f4f5;
+  border: 1px solid #f5f5f5;
   border-radius: 8px;
 }
 .doc-info {
@@ -262,7 +259,7 @@ onMounted(() => {
 .doc-status {
   font-size: 12px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 100px;
 }
 .doc-status.completed {
   background: #dcfce7;
@@ -292,7 +289,7 @@ onMounted(() => {
   font-size: 13px;
 }
 .btn-link.danger {
-  color: #dc2626;
+  color: #ee0000;
 }
 .doc-empty {
   text-align: center;
@@ -301,7 +298,7 @@ onMounted(() => {
 }
 
 .preview-content pre {
-  background: #f4f4f5;
+  background: #f5f5f5;
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -331,7 +328,7 @@ onMounted(() => {
 }
 .rag-msg.user {
   align-self: flex-end;
-  background: #f4f4f5;
+  background: #f5f5f5;
   padding: 8px 12px;
   border-radius: 8px;
   max-width: 80%;
@@ -349,17 +346,17 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #e4e4e7;
+  border-top: 1px solid #ebebeb;
 }
 .rag-input input {
   flex: 1;
-  border: 1px solid #e4e4e7;
+  border: 1px solid #ebebeb;
   border-radius: 6px;
   padding: 8px 12px;
   font-size: 14px;
   outline: none;
 }
 .rag-input input:focus {
-  border-color: #0070f3;
+  border-color: #171717;
 }
 </style>
