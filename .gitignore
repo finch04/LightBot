@@ -1,0 +1,33 @@
+# Backend
+*.class
+*.jar
+*.war
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+lightbot-ui/node_modules/
+lightbot-ui/dist/
+lightbot-ui/.env.local
+
+# Logs
+*.log
+logs/
+
+# Claude Code
+.claude/

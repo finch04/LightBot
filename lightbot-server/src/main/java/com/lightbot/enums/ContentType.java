@@ -1,0 +1,27 @@
+package com.lightbot.enums;
+
+import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonValue;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+/**
+ * 消息内容类型
+ *
+ * @author finch
+ * @since 2026-05-19
+ */
+@Getter
+@AllArgsConstructor
+public enum ContentType {
+
+    TEXT("text", "文本"),
+    IMAGE("image", "图片"),
+    FILE("file", "文件");
+
+    @EnumValue
+    private final String code;
+
+    @JsonValue
+    private final String desc;
+}

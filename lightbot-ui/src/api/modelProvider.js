@@ -1,0 +1,21 @@
+import request from '../utils/request'
+
+export function getModelProviders(params) {
+  return request.get('/model-providers', { params })
+}
+
+export function getModelProvider(id) {
+  return request.get(`/model-providers/${id}`)
+}
+
+export function createModelProvider(data) {
+  return request.post('/model-providers', data)
+}
+
+export function updateModelProvider(data) {
+  return request.put('/model-providers', data)
+}
+
+export function deleteModelProvider(id) {
+  return request.delete(`/model-providers/${id}`)
+}
