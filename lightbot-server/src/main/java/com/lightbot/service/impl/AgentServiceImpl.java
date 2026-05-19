@@ -9,9 +9,14 @@ import com.lightbot.entity.Agent;
 import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.AgentMapper;
+import com.lightbot.service.AgentKnowledgeService;
 import com.lightbot.service.AgentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Agent服务实现类
@@ -23,6 +28,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         implements AgentService {
+
+    private final AgentKnowledgeService agentKnowledgeService;
 
     @Override
     public Agent create(Agent agent) {
@@ -52,6 +59,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         existing.setAvatar(agent.getAvatar());
         existing.setAgentType(agent.getAgentType());
         existing.setConfig(agent.getConfig());
+        // 3. 更新模型配置字段
+        existing.setModelId(agent.getModelId());
+        existing.setTemperature(agent.getTemperature());
+        existing.setTopP(agent.getTopP());
+        existing.setMaxTokens(agent.getMaxTokens());
+        existing.setRepetitionPenalty(agent.getRepetitionPenalty());
         updateById(existing);
         return existing;
     }
@@ -63,6 +76,24 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 new LambdaQueryWrapper<Agent>()
                         .eq(Agent::getUserId, userId)
                         .orderByDesc(Agent::getCreateTime));
+    }
+
+    @Override
+    public Map<String, Object> getAgentDetail(Long id) {
+        // 1. 获取 Agent 信息
+        Agent agent = getById(id);
+        if (agent == null) {
+            throw new BizException(ErrorCode.AGENT_NOT_FOUND);
+        }
+
+        // 2. 获取绑定的知识库 ID 列表
+        List<Long> knowledgeIds = agentKnowledgeService.getKnowledgeIds(id);
+
+        // 3. 组装返回结果
+        Map<String, Object> result = new HashMap<>();
+        result.put("agent", agent);
+        result.put("knowledgeIds", knowledgeIds);
+        return result;
     }
 
     @Override

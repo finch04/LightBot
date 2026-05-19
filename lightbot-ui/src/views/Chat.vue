@@ -4,7 +4,7 @@
     <div class="chat-messages" ref="messagesRef">
       <!-- 空状态 -->
       <div v-if="messages.length === 0" class="empty-state">
-        <img src="/lightbot-logo.svg" alt="LightBot" class="empty-logo" />
+        <img src="/lightbot-logo.png" alt="LightBot" class="empty-logo" />
         <h2 class="empty-title">你好，我是 LightBot</h2>
         <p class="empty-desc">基于通义千问大模型的智能助手，有什么可以帮你的？</p>
       </div>
@@ -109,8 +109,7 @@ const userInitial = computed(() => {
 })
 
 const sessionId = computed(() => {
-  const id = route.params.sessionId
-  return id ? Number(id) : null
+  return route.params.sessionId || null
 })
 
 // 配置 marked
@@ -194,6 +193,10 @@ async function sendMessage() {
       },
       () => {
         loading.value = false
+        // 通知侧边栏刷新会话标题（异步生成）
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('session-title-updated'))
+        }, 2000)
       }
     )
   } catch (e) {

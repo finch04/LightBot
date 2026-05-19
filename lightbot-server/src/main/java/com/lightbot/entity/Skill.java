@@ -29,10 +29,12 @@ public class Skill {
 
     @TableField("agent_id")
     @Schema(description = "AgentID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long agentId;
 
     @TableField("tool_id")
     @Schema(description = "ToolID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long toolId;
 
     @TableField("name")

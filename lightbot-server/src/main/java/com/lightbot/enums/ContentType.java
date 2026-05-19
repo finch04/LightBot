@@ -23,8 +23,12 @@ public enum ContentType {
     @EnumValue
     private final String code;
 
-    @JsonValue
     private final String desc;
+
+    @JsonValue
+    public String getCode() {
+        return code;
+    }
 
     @JsonCreator
     public static ContentType fromValue(String value) {

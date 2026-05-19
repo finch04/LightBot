@@ -31,6 +31,7 @@ public class Tool {
 
     @TableField("user_id")
     @Schema(description = "创建者ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     @TableField("name")

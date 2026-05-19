@@ -63,4 +63,20 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @param tokenDelta  Token增量
      */
     void updateStats(Long knowledgeId, int docDelta, int chunkDelta, long tokenDelta);
+
+    /**
+     * AI生成思维导图
+     *
+     * @param knowledgeId 知识库ID
+     * @return 思维导图JSON数据
+     */
+    String generateMindmap(Long knowledgeId);
+
+    /**
+     * 获取已有思维导图数据
+     *
+     * @param knowledgeId 知识库ID
+     * @return 思维导图JSON数据，未生成返回null
+     */
+    String getMindmap(Long knowledgeId);
 }

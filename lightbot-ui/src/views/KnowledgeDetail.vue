@@ -65,6 +65,24 @@
               </div>
             </div>
           </a-tab-pane>
+          <a-tab-pane key="mindmap" tab="思维导图">
+            <div class="mindmap-section">
+              <div v-if="mindmapData" class="mindmap-container">
+                <svg ref="mindmapSvgRef" class="mindmap-svg"></svg>
+                <div class="mindmap-actions">
+                  <button class="btn-primary-sm" :disabled="mindmapLoading" @click="handleGenerateMindmap">
+                    {{ mindmapLoading ? '生成中...' : '重新生成' }}
+                  </button>
+                </div>
+              </div>
+              <div v-else class="mindmap-empty">
+                <p>暂无思维导图，点击下方按钮AI自动生成</p>
+                <button class="btn-primary-sm" :disabled="mindmapLoading" @click="handleGenerateMindmap">
+                  {{ mindmapLoading ? '生成中...' : '生成思维导图' }}
+                </button>
+              </div>
+            </div>
+          </a-tab-pane>
         </a-tabs>
       </div>
     </div>
@@ -72,15 +90,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getKnowledge, getDocuments, uploadDocument, deleteDocument, previewDocument, askKnowledge } from '../api/knowledge'
+import { getKnowledge, getDocuments, uploadDocument, deleteDocument, previewDocument, askKnowledge, generateMindmap, getMindmap } from '../api/knowledge'
+import { Transformer } from 'markmap-lib'
+import { Markmap } from 'markmap-view'
 
 const route = useRoute()
 const router = useRouter()
-const knowledgeId = Number(route.params.id)
+const knowledgeId = route.params.id
 
 const knowledge = ref({})
 const documents = ref([])
@@ -90,6 +110,9 @@ const ragQuestion = ref('')
 const ragMessages = ref([])
 const ragLoading = ref(false)
 const ragRef = ref(null)
+const mindmapData = ref(null)
+const mindmapLoading = ref(false)
+const mindmapSvgRef = ref(null)
 
 async function loadKnowledge() {
   const res = await getKnowledge(knowledgeId)
@@ -153,9 +176,63 @@ function statusText(s) {
   return map[s] || s
 }
 
+async function loadMindmap() {
+  try {
+    const res = await getMindmap(knowledgeId)
+    if (res.data) {
+      mindmapData.value = res.data
+      await nextTick()
+      renderMindmap()
+    }
+  } catch (e) {
+    // 未生成过思维导图，忽略
+  }
+}
+
+async function handleGenerateMindmap() {
+  mindmapLoading.value = true
+  try {
+    const res = await generateMindmap(knowledgeId)
+    mindmapData.value = res.data
+    message.success('思维导图生成成功')
+    await nextTick()
+    renderMindmap()
+  } catch (e) {
+    message.error('生成失败：' + (e.message || '未知错误'))
+  } finally {
+    mindmapLoading.value = false
+  }
+}
+
+function renderMindmap() {
+  if (!mindmapSvgRef.value || !mindmapData.value) return
+  try {
+    const tree = typeof mindmapData.value === 'string' ? JSON.parse(mindmapData.value) : mindmapData.value
+    const md = jsonToMarkdown(tree, 0)
+    const transformer = new Transformer()
+    const { root } = transformer.transform(md)
+    mindmapSvgRef.value.innerHTML = ''
+    Markmap.create(mindmapSvgRef.value, null, root)
+  } catch (e) {
+    console.error('[Mindmap] 渲染失败:', e)
+  }
+}
+
+function jsonToMarkdown(node, level) {
+  const prefix = '#'.repeat(level + 1)
+  let md = `${prefix} ${node.content}\n`
+  if (node.children) {
+    for (const child of node.children) {
+      md += jsonToMarkdown(child, level + 1)
+    }
+  }
+  return md
+}
+
 onMounted(() => {
   loadKnowledge()
   loadDocuments()
+  loadMindmap()
 })
 </script>
 
@@ -358,5 +435,35 @@ onMounted(() => {
 }
 .rag-input input:focus {
   border-color: #171717;
+}
+
+.mindmap-section {
+  min-height: 400px;
+}
+.mindmap-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mindmap-svg {
+  width: 100%;
+  height: 420px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+}
+.mindmap-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.mindmap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #a1a1aa;
+}
+.mindmap-empty p {
+  margin-bottom: 16px;
 }
 </style>

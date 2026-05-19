@@ -22,8 +22,12 @@ public enum UserStatus {
     @EnumValue
     private final String code;
 
-    @JsonValue
     private final String desc;
+
+    @JsonValue
+    public String getCode() {
+        return code;
+    }
 
     @JsonCreator
     public static UserStatus fromValue(String value) {

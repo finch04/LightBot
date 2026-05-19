@@ -29,10 +29,12 @@ public class Document {
 
     @TableField("knowledge_id")
     @Schema(description = "知识库ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeId;
 
     @TableField("user_id")
     @Schema(description = "上传者ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     @TableField("name")

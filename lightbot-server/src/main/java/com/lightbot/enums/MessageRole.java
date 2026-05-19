@@ -24,8 +24,12 @@ public enum MessageRole {
     @EnumValue
     private final String code;
 
-    @JsonValue
     private final String desc;
+
+    @JsonValue
+    public String getCode() {
+        return code;
+    }
 
     @JsonCreator
     public static MessageRole fromValue(String value) {

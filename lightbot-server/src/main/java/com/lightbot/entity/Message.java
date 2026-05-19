@@ -30,6 +30,7 @@ public class Message {
 
     @TableField("session_id")
     @Schema(description = "会话ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long sessionId;
 
     @TableField("role")
@@ -62,6 +63,7 @@ public class Message {
 
     @TableField("parent_id")
     @Schema(description = "父消息ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long parentId;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)

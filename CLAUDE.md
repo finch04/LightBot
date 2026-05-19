@@ -153,6 +153,11 @@ public class Agent {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
+    @TableField("user_id")
+    @Schema(description = "创建者ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long userId;
+
     @TableField("name")
     @Schema(description = "Agent名称")
     private String name;
@@ -188,6 +193,8 @@ public class Agent {
 - **type/status 字段必须使用 Java 枚举**（配合 `@EnumValue` + `@JsonValue`），不使用数据库枚举
 - 必须包含 `createTime`、`updateTime`、`deleted` 字段
 - 使用 `@TableLogic` 实现逻辑删除
+- 如果遇到SQL更新，要放到整个项目根目录下的sql文件下，并且以日期-001.sql文件命名，如果存在则编号递增
+- **Long ID 字段必须加 `@JsonSerialize(using = ToStringSerializer.class)`**：包括主键和所有外键字段（如 `userId`、`agentId`、`knowledgeId` 等），防止前端 JavaScript 精度丢失
 
 ### Service 规范
 
@@ -591,6 +598,10 @@ class AgentServiceTest {
 4. 所有表必须包含 id、create_time、update_time、deleted 字段（关联表可省略 deleted）
 5. type/status 字段使用 VARCHAR 存储 Java 枚举的 code 值
 6. 禁止使用数据库枚举类型
+7. 数据库变更 SQL 文件统一放在项目 `docs/sql/` 目录，命名格式：`YYYY-MM-DD-NNN.sql`（如 `2026-05-19-001.sql`）
+   - 同一天多个变更：001、002、003 依次递增
+   - 写入前先检查目录中是否已有当天文件，序号顺延
+8. SQL 文件中必须用注释说明变更内容（CREATE TABLE / ALTER TABLE / 新增索引等）
 ```
 
 建表模板（PostgreSQL）：

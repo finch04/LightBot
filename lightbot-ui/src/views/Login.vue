@@ -3,7 +3,7 @@
     <!-- 顶部 Logo -->
     <div class="top-bar">
       <div class="top-logo">
-        <img src="/lightbot-logo.svg" alt="LightBot" class="top-logo-img" />
+        <img src="/lightbot-logo.png" alt="LightBot" class="top-logo-img" />
         <span class="top-logo-text">LightBot</span>
       </div>
     </div>

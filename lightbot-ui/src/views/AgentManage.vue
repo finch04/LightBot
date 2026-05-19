@@ -11,14 +11,14 @@
     </div>
 
     <div class="agent-grid">
-      <div v-for="a in list" :key="a.id" class="agent-card">
+      <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/agents/${a.id}`)">
         <div class="card-top">
           <div class="card-icon">{{ (a.name || 'A')[0] }}</div>
           <div class="card-info">
             <h3>{{ a.name }}</h3>
             <span class="card-type">{{ a.agentType?.code || a.agentType || 'CHAT' }}</span>
           </div>
-          <div class="card-actions">
+          <div class="card-actions" @click.stop>
             <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
             <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
           </div>
@@ -70,10 +70,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent } from '../api/agent'
 
+const router = useRouter()
 const list = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -186,6 +188,7 @@ onMounted(loadData)
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .agent-card:hover {

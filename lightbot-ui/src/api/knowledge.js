@@ -51,3 +51,11 @@ export function getChunks(docId) {
 export function askKnowledge(knowledgeId, question) {
   return request.post(`/knowledge/${knowledgeId}/ask`, null, { params: { question } })
 }
+
+export function generateMindmap(knowledgeId) {
+  return request.post(`/knowledge/${knowledgeId}/mindmap`)
+}
+
+export function getMindmap(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/mindmap`)
+}

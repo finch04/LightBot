@@ -28,10 +28,12 @@ public class Chunk {
 
     @TableField("document_id")
     @Schema(description = "文档ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long documentId;
 
     @TableField("knowledge_id")
     @Schema(description = "知识库ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeId;
 
     @TableField("content")

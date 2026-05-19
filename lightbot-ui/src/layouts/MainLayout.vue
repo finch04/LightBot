@@ -4,7 +4,7 @@
     <aside class="sidebar">
       <!-- Logo -->
       <div class="sidebar-logo" @click="router.push('/chat')">
-        <img src="/lightbot-logo.svg" alt="LightBot" class="logo-img" />
+        <img src="/lightbot-logo.png" alt="LightBot" class="logo-img" />
         <span class="logo-text">LightBot</span>
       </div>
 
@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, markRaw } from 'vue'
+import { ref, onMounted, onUnmounted, watch, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   PlusOutlined,
@@ -162,6 +162,12 @@ onMounted(() => {
     userStore.fetchUser().catch(() => router.push('/login'))
   }
   loadSessions()
+  // 监听对话标题更新事件（异步生成完成后刷新侧边栏）
+  window.addEventListener('session-title-updated', loadSessions)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('session-title-updated', loadSessions)
 })
 
 watch(() => route.path, (path) => {

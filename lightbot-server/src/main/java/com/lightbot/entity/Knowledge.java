@@ -29,6 +29,7 @@ public class Knowledge {
 
     @TableField("user_id")
     @Schema(description = "创建者ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     @TableField("name")
@@ -54,6 +55,10 @@ public class Knowledge {
     @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "扩展配置")
     private String config;
+
+    @TableField(value = "mindmap_data", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "思维导图数据（JSON格式树状结构）")
+    private String mindmapData;
 
     @TableField("document_count")
     @Schema(description = "文档总数")

@@ -29,6 +29,7 @@ public class WorkflowNode {
 
     @TableField("workflow_id")
     @Schema(description = "工作流ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long workflowId;
 
     @TableField("node_key")

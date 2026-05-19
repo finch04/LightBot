@@ -26,6 +26,7 @@ public class Embedding {
 
     @TableField("chunk_id")
     @Schema(description = "分块ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long chunkId;
 
     @TableField("model_name")

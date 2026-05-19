@@ -143,6 +143,20 @@ public class KnowledgeController {
         return Result.ok(chunkService.listByDocumentId(docId));
     }
 
+    // ========== 思维导图 ==========
+
+    @Operation(summary = "生成知识库思维导图（AI总结）")
+    @PostMapping("/{id}/mindmap")
+    public Result<String> generateMindmap(@PathVariable Long id) {
+        return Result.ok(knowledgeService.generateMindmap(id));
+    }
+
+    @Operation(summary = "获取知识库思维导图数据")
+    @GetMapping("/{id}/mindmap")
+    public Result<String> getMindmap(@PathVariable Long id) {
+        return Result.ok(knowledgeService.getMindmap(id));
+    }
+
     // ========== RAG 问答 ==========
 
     @Operation(summary = "基于知识库RAG问答（需要VIEWER及以上权限）")

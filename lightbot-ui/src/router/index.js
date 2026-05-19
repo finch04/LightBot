@@ -49,6 +49,11 @@ const routes = [
         component: () => import('../views/AgentManage.vue'),
       },
       {
+        path: 'agents/:id',
+        name: 'AgentDetail',
+        component: () => import('../views/AgentDetail.vue'),
+      },
+      {
         path: 'mcp',
         name: 'MCP',
         component: () => import('../views/Placeholder.vue'),

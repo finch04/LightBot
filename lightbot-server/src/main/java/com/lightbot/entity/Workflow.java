@@ -29,10 +29,12 @@ public class Workflow {
 
     @TableField("agent_id")
     @Schema(description = "AgentID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long agentId;
 
     @TableField("user_id")
     @Schema(description = "创建者ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     @TableField("name")
