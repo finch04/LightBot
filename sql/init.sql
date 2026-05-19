@@ -19,10 +19,10 @@ CREATE TABLE users (
     phone           VARCHAR(20),
     role            VARCHAR(20)     NOT NULL DEFAULT 'user',
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    last_login_at   TIMESTAMPTZ,
+    last_login_at   TIMESTAMP,
     config          JSONB           DEFAULT '{}',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -43,8 +43,8 @@ CREATE TABLE model_provider (
     base_url        VARCHAR(256),
     config          JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -65,10 +65,10 @@ CREATE TABLE agent (
     agent_type      VARCHAR(32)     NOT NULL DEFAULT 'chat',
     config          JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
-    publish_time    TIMESTAMPTZ,
+    publish_time    TIMESTAMP,
     version         INT             NOT NULL DEFAULT 1,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -89,9 +89,9 @@ CREATE TABLE chat_session (
     context         JSONB           DEFAULT '{}',
     message_count   INT             NOT NULL DEFAULT 0,
     total_tokens    BIGINT          NOT NULL DEFAULT 0,
-    last_message_at TIMESTAMPTZ,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_message_at TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -115,7 +115,7 @@ CREATE TABLE message (
     token_count     INT             NOT NULL DEFAULT 0,
     metadata        JSONB           DEFAULT '{}',
     parent_id       BIGINT,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_message_session_id ON message (session_id);
@@ -139,8 +139,8 @@ CREATE TABLE knowledge (
     chunk_count     INT             NOT NULL DEFAULT 0,
     total_tokens    BIGINT          NOT NULL DEFAULT 0,
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -156,8 +156,8 @@ CREATE TABLE knowledge_member (
     knowledge_id    BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     role            VARCHAR(20)     NOT NULL DEFAULT 'viewer',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX uk_knowledge_member ON knowledge_member (knowledge_id, user_id);
@@ -181,8 +181,8 @@ CREATE TABLE document (
     status          VARCHAR(20)     NOT NULL DEFAULT 'pending',
     error_message   TEXT,
     metadata        JSONB           DEFAULT '{}',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -203,8 +203,8 @@ CREATE TABLE chunk (
     chunk_index     INT             NOT NULL,
     token_count     INT             NOT NULL DEFAULT 0,
     metadata        JSONB           DEFAULT '{}',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 CREATE INDEX idx_chunk_document_id ON chunk (document_id);
@@ -220,7 +220,7 @@ CREATE TABLE embedding (
     model_name      VARCHAR(64)     NOT NULL,
     dimension       INT             NOT NULL DEFAULT 1536,
     vector          vector(1536)    NOT NULL,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX uk_embedding_chunk_id ON embedding (chunk_id);
@@ -246,8 +246,8 @@ CREATE TABLE tool (
     auth_type       VARCHAR(32),
     auth_config     JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -269,8 +269,8 @@ CREATE TABLE skill (
     config          JSONB           DEFAULT '{}',
     sort_order      INT             NOT NULL DEFAULT 0,
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -291,8 +291,8 @@ CREATE TABLE workflow (
     config          JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
     version         INT             NOT NULL DEFAULT 1,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -316,8 +316,8 @@ CREATE TABLE workflow_node (
     outputs         JSONB           DEFAULT '[]',
     position_x      FLOAT           NOT NULL DEFAULT 0,
     position_y      FLOAT           NOT NULL DEFAULT 0,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX uk_workflow_node_key ON workflow_node (workflow_id, node_key);

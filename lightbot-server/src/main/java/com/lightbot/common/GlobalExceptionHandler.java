@@ -45,7 +45,6 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(BizException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleBiz(BizException e) {
         log.warn("业务异常: {}", e.getMessage());
         return Result.fail(e.getCode(), e.getMessage());
