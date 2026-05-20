@@ -47,8 +47,8 @@
         </div>
       </div>
 
-      <!-- 加载中 -->
-      <div v-if="loading" class="message assistant">
+      <!-- 加载中（等待第一个 chunk） -->
+      <div v-if="loading && !streaming" class="message assistant">
         <div class="message-avatar"><span class="bot-avatar">LB</span></div>
         <div class="message-body">
           <div class="message-meta">LightBot</div>
@@ -118,6 +118,7 @@ const userStore = useUserStore()
 
 const input = ref('')
 const loading = ref(false)
+const streaming = ref(false)
 const messages = ref([])
 const messagesRef = ref(null)
 const inputRef = ref(null)
@@ -188,6 +189,9 @@ function autoResize() {
 }
 
 async function loadHistory() {
+  // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
+  if (streaming.value) return
+
   if (!sessionId.value) {
     messages.value = []
     currentAgent.value = null
@@ -240,11 +244,13 @@ async function sendMessage() {
   messages.value.push({ role: 'user', content: text })
   input.value = ''
   loading.value = true
+  streaming.value = true
   autoResize()
   scrollToBottom()
 
-  const assistantMsg = { role: 'assistant', content: '' }
-  messages.value.push(assistantMsg)
+  // 延迟创建 assistant 消息，等第一个 chunk 到达时再 push，避免空头像
+  let assistantMsg = null
+  let pushed = false
 
   try {
     let sid = sessionId.value
@@ -261,11 +267,17 @@ async function sendMessage() {
     await chatStream(
       { message: text, sessionId: sid, agentId: selectedAgentId.value },
       (chunk) => {
+        if (!pushed) {
+          assistantMsg = { role: 'assistant', content: '' }
+          messages.value.push(assistantMsg)
+          pushed = true
+        }
         assistantMsg.content += chunk
         scrollToBottom()
       },
       () => {
         loading.value = false
+        streaming.value = false
         // 通知侧边栏刷新会话标题（异步生成）
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('session-title-updated'))
@@ -273,8 +285,13 @@ async function sendMessage() {
       }
     )
   } catch (e) {
+    if (!assistantMsg) {
+      assistantMsg = { role: 'assistant', content: '' }
+      messages.value.push(assistantMsg)
+    }
     assistantMsg.content = '请求失败：' + (e.message || '未知错误')
     loading.value = false
+    streaming.value = false
   }
 }
 
@@ -318,6 +335,8 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
     skipNextWatch.value = false
     return
   }
+  // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
+  if (streaming.value) return
   loadHistory()
 })
 

@@ -166,15 +166,25 @@ public class ModelFactory {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
         }
         ModelProviderHandler handler = getHandler(provider.getType());
-        return handler.fetchModels(provider);
+        // 按 modelId 去重，保留首次出现的
+        return handler.fetchModels(provider).stream()
+                .filter(distinctByKey(FetchedModel::getModelId))
+                .collect(Collectors.toList());
+    }
+
+    private static <T> java.util.function.Predicate<T> distinctByKey(java.util.function.Function<? super T, ?> keyExtractor) {
+        java.util.concurrent.ConcurrentHashMap<Object, Boolean> seen = new java.util.concurrent.ConcurrentHashMap<>();
+        return t -> seen.putIfAbsent(keyExtractor.apply(t), Boolean.TRUE) == null;
     }
 
     private String doCheckConnectivity(ModelProvider provider) {
         try {
             ModelProviderHandler handler = getHandler(provider.getType());
             ChatModel chatModel = handler.createChatModel(provider);
-            ChatResponse response = chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT)));
-            log.info("[ModelFactory] 连通性检查通过: type={}", provider.getType());
+            // 使用最便宜的模型进行连通性检查，避免消耗高价值配额
+            ChatOptions options = handler.buildChatOptions(Map.of("modelId", handler.getCheapestModel()));
+            ChatResponse response = chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT), options));
+            log.info("[ModelFactory] 连通性检查通过: type={}, model={}", provider.getType(), handler.getCheapestModel());
             return "连接成功，API Key 有效";
         } catch (Exception e) {
             log.warn("[ModelFactory] 连通性检查失败: type={}, error={}", provider.getType(), e.getMessage());

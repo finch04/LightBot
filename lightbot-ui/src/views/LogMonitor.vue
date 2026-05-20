@@ -242,7 +242,7 @@ onUnmounted(() => {
 <style scoped>
 .page {
   padding: 32px;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: #fafafa;
@@ -343,6 +343,7 @@ onUnmounted(() => {
 
 .log-table-wrapper {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: #fff;

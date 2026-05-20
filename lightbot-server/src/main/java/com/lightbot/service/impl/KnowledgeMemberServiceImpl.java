@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.KnowledgeMemberVO;
 import com.lightbot.entity.KnowledgeMember;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.KnowledgeRole;
@@ -133,6 +134,15 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
         // 2. 查询成员列表
         return list(new LambdaQueryWrapper<KnowledgeMember>()
                 .eq(KnowledgeMember::getKnowledgeId, knowledgeId));
+    }
+
+    @Override
+    public List<KnowledgeMemberVO> listMemberVOs(Long knowledgeId) {
+        // 1. 权限校验：需要成员权限
+        checkMember(knowledgeId);
+
+        // 2. 连表查询成员列表（含用户昵称、头像）
+        return baseMapper.listMemberVOs(knowledgeId);
     }
 
     // ========== 权限校验 ==========

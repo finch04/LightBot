@@ -141,7 +141,7 @@
         <a-form-item label="描述">
           <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" />
         </a-form-item>
-        <a-form-item label="Embed模型">
+        <a-form-item label="Embed模型" required>
           <a-select v-model:value="editForm.embeddingModel" placeholder="选择嵌入模型" allow-clear style="width: 100%">
             <a-select-option v-for="m in embeddingModels" :key="m.id" :value="m.modelId">
               {{ m.name }} ({{ m.modelId }})
@@ -252,7 +252,7 @@ import {
   previewDocument, getChunks, askKnowledge, generateMindmap, getMindmap,
   getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole, removeKnowledgeMember,
 } from '../api/knowledge'
-import { getUsersByIds, searchUsers } from '../api/auth'
+import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
 import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
@@ -393,6 +393,7 @@ async function openEditDialog() {
 
 async function handleEdit() {
   if (!editForm.name.trim()) return message.warning('请输入名称')
+  if (!editForm.embeddingModel) return message.warning('请选择 Embed 模型')
   editSubmitting.value = true
   try {
     const config = JSON.stringify({ ragTopK: editForm.ragTopK, ragThreshold: editForm.ragThreshold })
@@ -544,19 +545,8 @@ async function loadMembers() {
   try {
     const res = await getKnowledgeMembers(knowledgeId)
     members.value = res.data || []
-    // 解析用户信息
-    const userIds = members.value.map(m => m.userId)
-    if (userIds.length > 0) {
-      const userRes = await getUsersByIds(userIds)
-      const userMap = new Map((userRes.data || []).map(u => [String(u.id), u]))
-      membersWithInfo.value = members.value.map(m => ({
-        ...m,
-        username: userMap.get(String(m.userId))?.username,
-        nickname: userMap.get(String(m.userId))?.nickname,
-      }))
-    } else {
-      membersWithInfo.value = []
-    }
+    // 后端已连表查询返回用户昵称、头像，直接使用
+    membersWithInfo.value = members.value
     // 判断当前用户角色
     const userId = userStore.user?.id
     const myMember = members.value.find(m => String(m.userId) === String(userId))

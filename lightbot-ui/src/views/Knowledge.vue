@@ -5,7 +5,7 @@
         <h1 class="page-title">知识库</h1>
         <p class="page-desc">管理知识库，上传文档，基于 RAG 进行问答</p>
       </div>
-      <button class="btn-primary" @click="showCreate = true">
+      <button class="btn-primary" @click="openCreateModal">
         <PlusOutlined /> 新建知识库
       </button>
     </div>
@@ -47,8 +47,12 @@
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" />
         </a-form-item>
-        <a-form-item label="Embed模型">
-          <a-input v-model:value="form.embeddingModel" placeholder="text-embedding-3-small" />
+        <a-form-item label="Embed模型" required>
+          <a-select v-model:value="form.embeddingModel" placeholder="选择嵌入模型" style="width: 100%">
+            <a-select-option v-for="m in embeddingModels" :key="m.id" :value="m.modelId">
+              {{ m.name }} ({{ m.modelId }})
+            </a-select-option>
+          </a-select>
         </a-form-item>
         <a-form-item label="分块大小">
           <a-input-number v-model:value="form.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
@@ -70,21 +74,31 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
+import { getModelsByType } from '../api/model'
 
 const router = useRouter()
 const list = ref([])
 const showCreate = ref(false)
 const submitting = ref(false)
+const embeddingModels = ref([])
 
 const form = reactive({
   name: '',
   description: '',
-  embeddingModel: 'text-embedding-3-small',
+  embeddingModel: null,
   chunkSize: 512,
   chunkOverlap: 50,
   ragTopK: 5,
   ragThreshold: 0.7,
 })
+
+async function openCreateModal() {
+  showCreate.value = true
+  try {
+    const res = await getModelsByType('embedding')
+    embeddingModels.value = res.data || []
+  } catch { /* ignore */ }
+}
 
 async function loadData() {
   const res = await getKnowledgeList({ pageNum: 1, pageSize: 50 })
@@ -109,6 +123,10 @@ function handleDelete(id) {
 async function handleCreate() {
   if (!form.name.trim()) {
     message.warning('请输入名称')
+    return
+  }
+  if (!form.embeddingModel) {
+    message.warning('请选择 Embed 模型')
     return
   }
   submitting.value = true

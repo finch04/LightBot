@@ -222,7 +222,7 @@ onMounted(loadAll)
 <style scoped>
 .dashboard {
   padding: 24px 32px;
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
   background: #fafafa;
 }

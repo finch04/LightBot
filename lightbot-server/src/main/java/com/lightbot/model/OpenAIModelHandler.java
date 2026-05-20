@@ -72,6 +72,11 @@ public class OpenAIModelHandler implements ModelProviderHandler {
     }
 
     @Override
+    public String getCheapestModel() {
+        return "gpt-4o-mini";
+    }
+
+    @Override
     public List<ConfigField> getConfigFields() {
         return List.of(
                 ConfigField.builder()

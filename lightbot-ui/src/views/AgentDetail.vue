@@ -456,6 +456,18 @@ async function handleSave() {
     message.warning('请输入 Agent 名称')
     return
   }
+  if (!agent.agentType) {
+    message.warning('请选择类型')
+    return
+  }
+  if (!agentConfig.providerId) {
+    message.warning('请选择模型提供商')
+    return
+  }
+  if (!agentConfig.modelId) {
+    message.warning('请选择模型')
+    return
+  }
 
   // 2. 过滤空的推荐问题并校验
   const questions = recommendedQuestions.value.filter(q => q && q.trim())

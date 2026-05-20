@@ -56,4 +56,11 @@ public interface ModelProviderHandler {
     default List<FetchedModel> fetchModels(ModelProvider provider) {
         return List.of();
     }
+
+    /**
+     * 获取最便宜的模型ID，用于连通性检查
+     *
+     * @return 模型ID
+     */
+    String getCheapestModel();
 }

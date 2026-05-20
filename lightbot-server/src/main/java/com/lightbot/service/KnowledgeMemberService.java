@@ -1,6 +1,7 @@
 package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.KnowledgeMemberVO;
 import com.lightbot.entity.KnowledgeMember;
 import com.lightbot.enums.KnowledgeRole;
 
@@ -81,4 +82,12 @@ public interface KnowledgeMemberService extends IService<KnowledgeMember> {
      * @return 成员列表
      */
     List<KnowledgeMember> listMembers(Long knowledgeId);
+
+    /**
+     * 查询知识库的所有成员（含用户昵称、头像）
+     *
+     * @param knowledgeId 知识库ID
+     * @return 成员VO列表
+     */
+    List<KnowledgeMemberVO> listMemberVOs(Long knowledgeId);
 }

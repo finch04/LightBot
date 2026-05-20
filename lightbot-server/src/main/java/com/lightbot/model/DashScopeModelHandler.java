@@ -67,6 +67,11 @@ public class DashScopeModelHandler implements ModelProviderHandler {
     }
 
     @Override
+    public String getCheapestModel() {
+        return "qwen-turbo";
+    }
+
+    @Override
     public List<ConfigField> getConfigFields() {
         return List.of(
                 ConfigField.builder()

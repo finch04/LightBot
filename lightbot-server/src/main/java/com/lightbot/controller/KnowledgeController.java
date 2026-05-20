@@ -2,10 +2,10 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import com.lightbot.dto.KnowledgeMemberVO;
 import com.lightbot.entity.Chunk;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
-import com.lightbot.entity.KnowledgeMember;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -98,8 +98,8 @@ public class KnowledgeController {
 
     @Operation(summary = "获取知识库成员列表（需要成员权限）")
     @GetMapping("/{id}/members")
-    public Result<List<KnowledgeMember>> listMembers(@PathVariable Long id) {
-        return Result.ok(knowledgeMemberService.listMembers(id));
+    public Result<List<KnowledgeMemberVO>> listMembers(@PathVariable Long id) {
+        return Result.ok(knowledgeMemberService.listMemberVOs(id));
     }
 
     // ========== 文档管理 ==========
