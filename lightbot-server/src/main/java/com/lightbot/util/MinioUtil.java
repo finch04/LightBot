@@ -162,6 +162,25 @@ public class MinioUtil {
             boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
             if (!exists) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                // 设置公开读取策略，允许匿名访问
+                String policy = """
+                        {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Principal": {"AWS": ["*"]},
+                                    "Action": ["s3:GetObject"],
+                                    "Resource": ["arn:aws:s3:::%s/*"]
+                                }
+                            ]
+                        }
+                        """.formatted(bucket);
+                minioClient.setBucketPolicy(SetBucketPolicyArgs.builder()
+                        .bucket(bucket)
+                        .config(policy)
+                        .build());
+                log.info("[MinIO] Bucket已创建并设置公开读取策略: {}", bucket);
             }
         } catch (Exception e) {
             log.error("[MinIO] 检查/创建Bucket失败", e);

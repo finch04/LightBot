@@ -72,7 +72,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent } from '../api/agent'
 
 const router = useRouter()
@@ -119,10 +119,19 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(id) {
-  await deleteAgent(id)
-  message.success('删除成功')
-  loadData()
+function handleDelete(id) {
+  Modal.confirm({
+    title: '确认删除',
+    content: '删除后该 Agent 将无法恢复，是否继续？',
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await deleteAgent(id)
+      message.success('删除成功')
+      loadData()
+    },
+  })
 }
 
 function statusText(s) {

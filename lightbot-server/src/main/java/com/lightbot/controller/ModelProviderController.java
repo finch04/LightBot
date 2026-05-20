@@ -62,4 +62,10 @@ public class ModelProviderController {
     public Result<List<ConfigField>> getConfigFields(@PathVariable Long id) {
         return Result.ok(modelFactory.getConfigFields(id));
     }
+
+    @Operation(summary = "检查模型提供商连通性")
+    @GetMapping("/{id}/check")
+    public Result<String> checkConnectivity(@PathVariable Long id) {
+        return Result.ok(modelProviderService.checkConnectivity(id));
+    }
 }

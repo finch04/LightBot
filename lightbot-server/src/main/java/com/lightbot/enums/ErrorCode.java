@@ -36,6 +36,7 @@ public enum ErrorCode {
 
     // ========== 模型提供商模块 ==========
     MODEL_PROVIDER_NOT_FOUND(40001, "模型提供商不存在", HttpStatus.BAD_REQUEST),
+    MODEL_PROVIDER_CHECK_FAILED(40002, "模型连通性检查失败: %s", HttpStatus.BAD_REQUEST),
 
     // ========== 知识库模块 ==========
     KNOWLEDGE_NOT_FOUND(50001, "知识库不存在", HttpStatus.BAD_REQUEST),
@@ -45,6 +46,7 @@ public enum ErrorCode {
     KNOWLEDGE_MEMBER_NOT_FOUND(50005, "该用户不是知识库成员", HttpStatus.BAD_REQUEST),
     KNOWLEDGE_CREATOR_ROLE_IMMUTABLE(50006, "不能修改创建者角色", HttpStatus.BAD_REQUEST),
     KNOWLEDGE_CREATOR_CANNOT_REMOVE(50007, "不能移除创建者", HttpStatus.BAD_REQUEST),
+    KNOWLEDGE_NO_DOCUMENT(50008, "知识库暂无文档，无法生成思维导图", HttpStatus.BAD_REQUEST),
 
     // ========== 文档模块 ==========
     DOCUMENT_UNSUPPORTED_TYPE(60001, "目前仅支持 Markdown 文件", HttpStatus.BAD_REQUEST),

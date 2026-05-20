@@ -23,6 +23,9 @@
             <h3 class="card-title">{{ k.name }}</h3>
             <p class="card-desc">{{ k.description || '暂无描述' }}</p>
           </div>
+          <button class="btn-icon danger" title="删除知识库" @click.stop="handleDelete(k.id)">
+            <DeleteOutlined />
+          </button>
         </div>
         <div class="card-stats">
           <span>{{ k.documentCount || 0 }} 文档</span>
@@ -50,6 +53,12 @@
         <a-form-item label="分块大小">
           <a-input-number v-model:value="form.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
         </a-form-item>
+        <a-form-item label="RAG Top K">
+          <a-input-number v-model:value="form.ragTopK" :min="1" :max="20" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="RAG 相似度阈值">
+          <a-input-number v-model:value="form.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -58,9 +67,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { getKnowledgeList, createKnowledge } from '../api/knowledge'
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 
 const router = useRouter()
 const list = ref([])
@@ -73,11 +82,28 @@ const form = reactive({
   embeddingModel: 'text-embedding-3-small',
   chunkSize: 512,
   chunkOverlap: 50,
+  ragTopK: 5,
+  ragThreshold: 0.7,
 })
 
 async function loadData() {
   const res = await getKnowledgeList({ pageNum: 1, pageSize: 50 })
   list.value = res.data.records || []
+}
+
+function handleDelete(id) {
+  Modal.confirm({
+    title: '确认删除知识库',
+    content: '删除后知识库及其所有文档将无法恢复，是否继续？',
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await deleteKnowledge(id)
+      message.success('删除成功')
+      loadData()
+    },
+  })
 }
 
 async function handleCreate() {
@@ -87,7 +113,8 @@ async function handleCreate() {
   }
   submitting.value = true
   try {
-    await createKnowledge({ ...form })
+    const config = JSON.stringify({ ragTopK: form.ragTopK, ragThreshold: form.ragThreshold })
+    await createKnowledge({ ...form, config })
     message.success('创建成功')
     showCreate.value = false
     form.name = ''
@@ -161,6 +188,7 @@ onMounted(loadData)
 }
 .card-header {
   display: flex;
+  align-items: center;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -180,6 +208,25 @@ onMounted(loadData)
 .card-info {
   flex: 1;
   min-width: 0;
+}
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+}
+.btn-icon:hover {
+  background: #f5f5f5;
+}
+.btn-icon.danger:hover {
+  color: #ee0000;
+  background: #f7d4d6;
 }
 .card-title {
   font-size: 16px;

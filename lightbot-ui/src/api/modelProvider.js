@@ -23,3 +23,7 @@ export function deleteModelProvider(id) {
 export function getProviderConfigFields(id) {
   return request.get(`/model-providers/${id}/config-fields`)
 }
+
+export function checkModelProvider(id) {
+  return request.get(`/model-providers/${id}/check`)
+}

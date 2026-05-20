@@ -69,15 +69,15 @@ public interface KnowledgeService extends IService<Knowledge> {
      *
      * @param knowledgeId 知识库ID
      * @param providerId  模型提供商ID
-     * @return 思维导图JSON数据
+     * @return 思维导图JSON对象
      */
-    String generateMindmap(Long knowledgeId, Long providerId);
+    Object generateMindmap(Long knowledgeId, Long providerId);
 
     /**
      * 获取已有思维导图数据
      *
      * @param knowledgeId 知识库ID
-     * @return 思维导图JSON数据，未生成返回null
+     * @return 思维导图JSON对象，未生成返回null
      */
-    String getMindmap(Long knowledgeId);
+    Object getMindmap(Long knowledgeId);
 }

@@ -30,7 +30,8 @@
       </div>
     </div>
 
-    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" @ok="handleSubmit" :confirm-loading="submitting">
+    <!-- 新增/编辑弹窗 -->
+    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" :footer="null">
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="form.name" placeholder="如：通义千问" />
@@ -50,6 +51,17 @@
           <a-input v-model:value="form.baseUrl" placeholder="可选" />
         </a-form-item>
       </a-form>
+      <div class="dialog-footer">
+        <button class="btn-check" :disabled="checking" @click="handleCheck">
+          {{ checking ? '检查中...' : '检查连通性' }}
+        </button>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="dialogVisible = false">取消</button>
+          <button class="btn-primary-sm" :disabled="submitting" @click="handleSubmit">
+            {{ submitting ? '提交中...' : '确定' }}
+          </button>
+        </div>
+      </div>
     </a-modal>
   </div>
 </template>
@@ -57,12 +69,13 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider } from '../api/modelProvider'
+import { message, Modal } from 'ant-design-vue'
+import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProvider } from '../api/modelProvider'
 
 const list = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const checking = ref(false)
 const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', config: '' })
 
 async function loadData() {
@@ -97,10 +110,35 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(id) {
-  await deleteModelProvider(id)
-  message.success('删除成功')
-  loadData()
+function handleDelete(id) {
+  Modal.confirm({
+    title: '确认删除',
+    content: '删除后该模型提供商将无法恢复，关联的 Agent 将无法使用，是否继续？',
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await deleteModelProvider(id)
+      message.success('删除成功')
+      loadData()
+    },
+  })
+}
+
+async function handleCheck() {
+  if (!form.id) {
+    message.warning('请先保存提供商后再检查')
+    return
+  }
+  checking.value = true
+  try {
+    const res = await checkModelProvider(form.id)
+    message.success(res.data || '连接成功')
+  } catch (e) {
+    message.error('检查失败：' + (e.message || '连通性检查失败'))
+  } finally {
+    checking.value = false
+  }
 }
 
 function maskKey(key) {
@@ -224,5 +262,67 @@ onMounted(loadData)
   gap: 4px;
   font-size: 13px;
   color: #a1a1aa;
+}
+
+/* 弹窗底部 */
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 8px;
+}
+.dialog-footer-right {
+  display: flex;
+  gap: 8px;
+}
+.btn-check {
+  padding: 6px 14px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.btn-check:hover:not(:disabled) {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-check:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-cancel {
+  padding: 6px 14px;
+  background: #fff;
+  color: #71717a;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-cancel:hover {
+  border-color: #171717;
+  color: #171717;
+}
+.btn-primary-sm {
+  padding: 6px 14px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-primary-sm:hover:not(:disabled) {
+  background: #27272a;
+}
+.btn-primary-sm:disabled {
+  background: #d4d4d8;
+  cursor: not-allowed;
 }
 </style>

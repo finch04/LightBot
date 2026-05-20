@@ -85,6 +85,7 @@ import {
   FileTextOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
+import { Modal } from 'ant-design-vue'
 import { getSessions, createSession, archiveSession as archiveSessionApi, updateSessionTitle } from '../api/chatSession'
 
 const route = useRoute()
@@ -128,16 +129,24 @@ function switchSession(session) {
   router.push(`/chat/${session.id}`)
 }
 
-async function archiveSession(id) {
-  try {
-    await archiveSessionApi(id)
-    sessions.value = sessions.value.filter(s => s.id !== id)
-    if (currentSessionId.value === id) {
-      router.push('/chat')
-    }
-  } catch (e) {
-    // ignore
-  }
+function archiveSession(id) {
+  Modal.confirm({
+    title: '确认归档',
+    content: '归档后该对话将不再显示，是否继续？',
+    okText: '确认',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await archiveSessionApi(id)
+        sessions.value = sessions.value.filter(s => s.id !== id)
+        if (currentSessionId.value === id) {
+          router.push('/chat')
+        }
+      } catch (e) {
+        // ignore
+      }
+    },
+  })
 }
 
 function startRename(session) {

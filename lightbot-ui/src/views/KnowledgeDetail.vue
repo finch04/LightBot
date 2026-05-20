@@ -8,6 +8,9 @@
         <h1 class="page-title">{{ knowledge.name }}</h1>
         <p class="page-desc">{{ knowledge.description || '暂无描述' }}</p>
       </div>
+      <button class="btn-primary-sm" @click="openEditDialog">
+        <EditOutlined /> 编辑
+      </button>
     </div>
 
     <div class="content-grid">
@@ -20,7 +23,7 @@
           </a-upload>
         </div>
         <div class="doc-list">
-          <div v-for="doc in documents" :key="doc.id" class="doc-item">
+          <div v-for="doc in documents" :key="doc.id" class="doc-item" @click="openDocModal(doc)">
             <div class="doc-info">
               <span class="doc-name">{{ doc.name }}</span>
               <span class="doc-status" :class="doc.status?.code || doc.status">
@@ -29,23 +32,16 @@
             </div>
             <div class="doc-meta">
               {{ doc.chunkCount || 0 }} 分块
-              <button class="btn-link" @click="previewDoc(doc)">预览</button>
-              <button class="btn-link danger" @click="deleteDoc(doc.id)">删除</button>
+              <button class="btn-link danger" @click.stop="deleteDoc(doc.id)">删除</button>
             </div>
           </div>
           <div v-if="documents.length === 0" class="doc-empty">暂无文档</div>
         </div>
       </div>
 
-      <!-- 预览 / RAG 问答 -->
+      <!-- RAG 问答 + 思维导图 -->
       <div class="panel">
         <a-tabs v-model:activeKey="activeTab">
-          <a-tab-pane key="preview" tab="文档预览">
-            <div class="preview-content" v-if="previewContent">
-              <pre>{{ previewContent }}</pre>
-            </div>
-            <div v-else class="preview-empty">选择一个文档进行预览</div>
-          </a-tab-pane>
           <a-tab-pane key="ask" tab="RAG 问答">
             <div class="rag-section">
               <div class="rag-messages" ref="ragRef">
@@ -76,8 +72,9 @@
                 </div>
               </div>
               <div v-else class="mindmap-empty">
-                <p>暂无思维导图，点击下方按钮AI自动生成</p>
-                <button class="btn-primary-sm" :disabled="mindmapLoading" @click="handleGenerateMindmap">
+                <p v-if="documents.length === 0">请先上传文档后再生成思维导图</p>
+                <p v-else>暂无思维导图，点击下方按钮AI自动生成</p>
+                <button class="btn-primary-sm" :disabled="mindmapLoading || documents.length === 0" @click="handleGenerateMindmap">
                   {{ mindmapLoading ? '生成中...' : '生成思维导图' }}
                 </button>
               </div>
@@ -86,15 +83,71 @@
         </a-tabs>
       </div>
     </div>
+
+    <!-- 文档预览/分块弹窗 -->
+    <a-modal
+      v-model:open="docModalVisible"
+      :title="currentDoc?.name || '文档详情'"
+      :width="720"
+      :footer="null"
+    >
+      <a-tabs v-model:activeKey="docModalTab">
+        <a-tab-pane key="preview" tab="文档预览">
+          <div class="modal-preview" v-if="previewContent">
+            <pre>{{ previewContent }}</pre>
+          </div>
+          <div v-else class="modal-empty">加载中...</div>
+        </a-tab-pane>
+        <a-tab-pane key="chunks" tab="分块列表">
+          <div class="chunk-list" v-if="chunks.length > 0">
+            <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item">
+              <div class="chunk-header">
+                <span class="chunk-index">#{{ chunk.chunkIndex ?? i + 1 }}</span>
+                <span class="chunk-meta">{{ chunk.tokenCount || 0 }} tokens</span>
+              </div>
+              <pre class="chunk-content">{{ chunk.content }}</pre>
+            </div>
+          </div>
+          <div v-else class="modal-empty">暂无分块数据</div>
+        </a-tab-pane>
+      </a-tabs>
+    </a-modal>
+
+    <!-- 编辑知识库弹窗 -->
+    <a-modal v-model:open="editVisible" title="编辑知识库" :width="480" @ok="handleEdit" :confirm-loading="editSubmitting">
+      <a-form :model="editForm" :label-col="{ span: 6 }">
+        <a-form-item label="名称" required>
+          <a-input v-model:value="editForm.name" placeholder="知识库名称" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" />
+        </a-form-item>
+        <a-form-item label="Embed模型">
+          <a-input v-model:value="editForm.embeddingModel" />
+        </a-form-item>
+        <a-form-item label="分块大小">
+          <a-input-number v-model:value="editForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="RAG Top K">
+          <a-input-number v-model:value="editForm.ragTopK" :min="1" :max="20" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="RAG 相似度阈值">
+          <a-input-number v-model:value="editForm.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, reactive, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { getKnowledge, getDocuments, uploadDocument, deleteDocument, previewDocument, askKnowledge, generateMindmap, getMindmap } from '../api/knowledge'
+import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import {
+  getKnowledge, updateKnowledge, getDocuments, uploadDocument, deleteDocument,
+  previewDocument, getChunks, askKnowledge, generateMindmap, getMindmap,
+} from '../api/knowledge'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 
@@ -104,8 +157,7 @@ const knowledgeId = route.params.id
 
 const knowledge = ref({})
 const documents = ref([])
-const activeTab = ref('preview')
-const previewContent = ref('')
+const activeTab = ref('ask')
 const ragQuestion = ref('')
 const ragMessages = ref([])
 const ragLoading = ref(false)
@@ -113,6 +165,26 @@ const ragRef = ref(null)
 const mindmapData = ref(null)
 const mindmapLoading = ref(false)
 const mindmapSvgRef = ref(null)
+
+// 文档弹窗
+const docModalVisible = ref(false)
+const docModalTab = ref('preview')
+const currentDoc = ref(null)
+const previewContent = ref('')
+const chunks = ref([])
+
+// 编辑弹窗
+const editVisible = ref(false)
+const editSubmitting = ref(false)
+const editForm = reactive({
+  name: '',
+  description: '',
+  embeddingModel: '',
+  chunkSize: 512,
+  chunkOverlap: 50,
+  ragTopK: 5,
+  ragThreshold: 0.7,
+})
 
 async function loadKnowledge() {
   const res = await getKnowledge(knowledgeId)
@@ -135,25 +207,94 @@ async function handleUpload(file) {
   return false
 }
 
-async function previewDoc(doc) {
-  try {
-    const res = await previewDocument(doc.id)
-    previewContent.value = res.data
-    activeTab.value = 'preview'
-  } catch (e) {
-    message.error('预览失败')
+// ========== 文档弹窗 ==========
+
+async function openDocModal(doc) {
+  currentDoc.value = doc
+  docModalTab.value = 'preview'
+  previewContent.value = ''
+  chunks.value = []
+  docModalVisible.value = true
+
+  // 并行加载预览和分块
+  const [previewRes, chunksRes] = await Promise.allSettled([
+    previewDocument(doc.id),
+    getChunks(doc.id),
+  ])
+  if (previewRes.status === 'fulfilled') {
+    previewContent.value = previewRes.value.data
+  }
+  if (chunksRes.status === 'fulfilled') {
+    chunks.value = chunksRes.value.data || []
   }
 }
 
-async function deleteDoc(docId) {
+// ========== 编辑知识库 ==========
+
+function openEditDialog() {
+  const k = knowledge.value
+  // 解析已有的config JSONB
+  let config = {}
   try {
-    await deleteDocument(docId)
-    message.success('删除成功')
-    loadDocuments()
-  } catch (e) {
-    message.error('删除失败')
+    config = typeof k.config === 'string' ? JSON.parse(k.config) : (k.config || {})
+  } catch { config = {} }
+
+  Object.assign(editForm, {
+    name: k.name || '',
+    description: k.description || '',
+    embeddingModel: k.embeddingModel || '',
+    chunkSize: k.chunkSize || 512,
+    chunkOverlap: k.chunkOverlap || 50,
+    ragTopK: config.ragTopK ?? 5,
+    ragThreshold: config.ragThreshold ?? 0.7,
+  })
+  editVisible.value = true
+}
+
+async function handleEdit() {
+  if (!editForm.name.trim()) return message.warning('请输入名称')
+  editSubmitting.value = true
+  try {
+    const config = JSON.stringify({ ragTopK: editForm.ragTopK, ragThreshold: editForm.ragThreshold })
+    await updateKnowledge({
+      id: knowledgeId,
+      name: editForm.name,
+      description: editForm.description,
+      embeddingModel: editForm.embeddingModel,
+      chunkSize: editForm.chunkSize,
+      chunkOverlap: editForm.chunkOverlap,
+      config,
+    })
+    message.success('更新成功')
+    editVisible.value = false
+    loadKnowledge()
+  } finally {
+    editSubmitting.value = false
   }
 }
+
+// ========== 删除文档 ==========
+
+function deleteDoc(docId) {
+  Modal.confirm({
+    title: '确认删除',
+    content: '删除后文档将无法恢复，是否继续？',
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await deleteDocument(docId)
+        message.success('删除成功')
+        loadDocuments()
+      } catch (e) {
+        message.error('删除失败')
+      }
+    },
+  })
+}
+
+// ========== RAG 问答 ==========
 
 async function askRag() {
   const q = ragQuestion.value.trim()
@@ -176,11 +317,13 @@ function statusText(s) {
   return map[s] || s
 }
 
+// ========== 思维导图 ==========
+
 async function loadMindmap() {
   try {
     const res = await getMindmap(knowledgeId)
     if (res.data) {
-      mindmapData.value = res.data
+      mindmapData.value = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
       await nextTick()
       renderMindmap()
     }
@@ -190,10 +333,14 @@ async function loadMindmap() {
 }
 
 async function handleGenerateMindmap() {
+  if (documents.value.length === 0) {
+    message.warning('请先上传文档后再生成思维导图')
+    return
+  }
   mindmapLoading.value = true
   try {
     const res = await generateMindmap(knowledgeId)
-    mindmapData.value = res.data
+    mindmapData.value = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
     message.success('思维导图生成成功')
     await nextTick()
     renderMindmap()
@@ -207,7 +354,12 @@ async function handleGenerateMindmap() {
 function renderMindmap() {
   if (!mindmapSvgRef.value || !mindmapData.value) return
   try {
-    const tree = typeof mindmapData.value === 'string' ? JSON.parse(mindmapData.value) : mindmapData.value
+    const tree = mindmapData.value
+    if (!tree || !tree.content) {
+      message.error('思维导图数据结构异常，请重新生成')
+      mindmapData.value = null
+      return
+    }
     const md = jsonToMarkdown(tree, 0)
     const transformer = new Transformer()
     const { root } = transformer.transform(md)
@@ -215,6 +367,8 @@ function renderMindmap() {
     Markmap.create(mindmapSvgRef.value, null, root)
   } catch (e) {
     console.error('[Mindmap] 渲染失败:', e)
+    message.error('思维导图渲染失败，请重新生成')
+    mindmapData.value = null
   }
 }
 
@@ -244,6 +398,9 @@ onMounted(() => {
   background: #fafafa;
 }
 .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 24px;
 }
 .btn-back {
@@ -294,6 +451,9 @@ onMounted(() => {
   color: #171717;
 }
 .btn-primary-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 6px 14px;
   background: #171717;
   color: #fff;
@@ -323,6 +483,11 @@ onMounted(() => {
   padding: 10px 12px;
   border: 1px solid #f5f5f5;
   border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.doc-item:hover {
+  border-color: #0070f3;
 }
 .doc-info {
   display: flex;
@@ -374,22 +539,7 @@ onMounted(() => {
   color: #a1a1aa;
 }
 
-.preview-content pre {
-  background: #f5f5f5;
-  padding: 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.6;
-  overflow-x: auto;
-  max-height: 500px;
-  white-space: pre-wrap;
-}
-.preview-empty {
-  text-align: center;
-  padding: 60px;
-  color: #a1a1aa;
-}
-
+/* RAG */
 .rag-section {
   display: flex;
   flex-direction: column;
@@ -437,6 +587,7 @@ onMounted(() => {
   border-color: #171717;
 }
 
+/* 思维导图 */
 .mindmap-section {
   min-height: 400px;
 }
@@ -465,5 +616,66 @@ onMounted(() => {
 }
 .mindmap-empty p {
   margin-bottom: 16px;
+}
+
+/* 文档弹窗 */
+.modal-preview {
+  max-height: 500px;
+  overflow-y: auto;
+}
+.modal-preview pre {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.modal-empty {
+  text-align: center;
+  padding: 40px;
+  color: #a1a1aa;
+}
+
+/* 分块列表 */
+.chunk-list {
+  max-height: 500px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chunk-item {
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.chunk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f9f9f9;
+  border-bottom: 1px solid #ebebeb;
+}
+.chunk-index {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+}
+.chunk-meta {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.chunk-content {
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
 }
 </style>

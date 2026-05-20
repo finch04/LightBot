@@ -17,6 +17,8 @@ import com.lightbot.mapper.KnowledgeMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.KnowledgeMemberService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.service.KnowledgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,25 +49,31 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     private final DocumentService documentService;
     private final ChunkMapper chunkMapper;
     private final ModelFactory modelFactory;
+    private final ObjectMapper objectMapper;
 
-    private static final String MINDMAP_SYSTEM_PROMPT = "你是一个思维导图生成助手，只输出JSON，不要任何其他文字。";
+    private static final String MINDMAP_SYSTEM_PROMPT = """
+            你是一个思维导图生成助手。你的唯一任务是根据提供的知识库文档内容，提取关键主题并输出JSON格式的思维导图结构。
+            严格规则：
+            - 只输出JSON，不要任何其他文字、解释或markdown标记
+            - 所有节点内容必须严格来自文档，禁止凭空捏造或推测文档中不存在的内容
+            - 如果文档内容不足以支撑有意义的思维导图，输出 {"content": "知识库名称", "children": []}
+            - 根节点content必须是知识库名称
+            - children数组中每个子节点必须有content字段，可选children字段
+            - 层级不超过3层
+            - 可以使用emoji图标增强可读性
+            """;
 
     private static final String MINDMAP_USER_TEMPLATE = """
-            请根据以下知识库内容，生成一个思维导图的 JSON 结构。
-            要求：
-            1. 根节点的 content 为知识库名称
-            2. children 数组包含子节点，每个子节点有 content 和可选的 children
-            3. 层级不超过 3 层，每个节点的内容简洁明了
-            4. 可以使用emoji图标增强可读性
-            5. 只输出 JSON，不要任何其他文字
+            请严格根据以下知识库文档内容，生成思维导图的 JSON 结构。
+            注意：只能使用文档中实际出现的主题和关键词，禁止添加文档中没有的内容。
 
             知识库名称：{name}
             知识库描述：{description}
 
-            知识库内容摘要：
+            知识库文档内容摘要：
             {content}
 
-            输出格式示例：
+            输出格式（只输出JSON，不要任何其他文字）：
             {{"content": "知识库名称", "children": [{{"content": "主题1", "children": [{{"content": "子主题1"}}]}}, {{"content": "主题2"}}]}}
             """;
 
@@ -176,7 +184,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     // ========== 思维导图 ==========
 
     @Override
-    public String generateMindmap(Long knowledgeId, Long providerId) {
+    public Object generateMindmap(Long knowledgeId, Long providerId) {
         // 1. 校验知识库存在性
         Knowledge knowledge = getById(knowledgeId);
         if (knowledge == null) {
@@ -186,8 +194,11 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
 
-        // 2. 收集知识库内容摘要
+        // 2. 收集知识库内容摘要（无文档时拒绝生成）
         String contentSummary = collectContentSummary(knowledgeId);
+        if (contentSummary.isEmpty()) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NO_DOCUMENT);
+        }
 
         // 3. 构建提示词
         String userMessage = MINDMAP_USER_TEMPLATE
@@ -207,21 +218,26 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         // 5. 清理AI返回的JSON（去除可能的markdown代码块标记）
         json = cleanJsonResponse(json);
 
-        // 6. 保存到知识库
+        // 6. 解析为JSON对象后保存和返回（避免前端二次转义）
+        Object jsonObj = parseJson(json);
         knowledge.setMindmapData(json);
         updateById(knowledge);
 
         log.info("[Knowledge] 思维导图已生成: knowledgeId={}", knowledgeId);
-        return json;
+        return jsonObj;
     }
 
     @Override
-    public String getMindmap(Long knowledgeId) {
+    public Object getMindmap(Long knowledgeId) {
         Knowledge knowledge = getById(knowledgeId);
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
-        return knowledge.getMindmapData();
+        String data = knowledge.getMindmapData();
+        if (data == null || data.isBlank()) {
+            return null;
+        }
+        return parseJson(data);
     }
 
     /**
@@ -230,7 +246,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     private String collectContentSummary(Long knowledgeId) {
         List<Document> documents = documentService.listByKnowledgeId(knowledgeId);
         if (documents.isEmpty()) {
-            return "暂无文档内容";
+            return "";
         }
 
         StringBuilder summary = new StringBuilder();
@@ -272,6 +288,18 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
         json = json.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
         return json.trim();
+    }
+
+    /**
+     * 将JSON字符串解析为Object（Map/List），供Jackson直接序列化
+     */
+    private Object parseJson(String json) {
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("[Knowledge] JSON解析失败: {}", e.getMessage());
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
+        }
     }
 
     // ========== 权限校验 ==========
