@@ -13,10 +13,13 @@
     <div class="agent-grid">
       <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/agents/${a.id}`)">
         <div class="card-top">
-          <div class="card-icon">{{ (a.name || 'A')[0] }}</div>
+          <div class="card-icon" :class="{ 'has-avatar': a.avatar }">
+            <img v-if="a.avatar" :src="`http://localhost:9000/lightbot/${a.avatar}`" alt="" class="card-avatar-img" @error="a.avatar = ''" />
+            <span v-else>{{ (a.name || 'A')[0] }}</span>
+          </div>
           <div class="card-info">
             <h3>{{ a.name }}</h3>
-            <span class="card-type">{{ a.agentType?.code || a.agentType || 'CHAT' }}</span>
+            <span class="card-type">{{ agentTypeLabel(a.agentType) }}</span>
           </div>
           <div class="card-actions" @click.stop>
             <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
@@ -55,13 +58,20 @@
         </a-form-item>
         <a-form-item label="类型">
           <a-select v-model:value="form.agentType" style="width: 100%">
-            <a-select-option value="CHAT">对话型</a-select-option>
-            <a-select-option value="TASK">任务型</a-select-option>
-            <a-select-option value="WORKFLOW">工作流</a-select-option>
+            <a-select-option value="chat">对话型</a-select-option>
+            <a-select-option value="assistant">助手型</a-select-option>
+            <a-select-option value="workflow">工作流型</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="系统提示词">
           <a-textarea v-model:value="form.systemPrompt" :rows="4" placeholder="定义 Agent 的行为和角色..." />
+        </a-form-item>
+        <a-form-item v-if="!form.id" label="模型提供商" required>
+          <a-select v-model:value="form.providerId" placeholder="选择模型提供商" style="width: 100%">
+            <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.type?.code || p.type }})
+            </a-select-option>
+          </a-select>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -74,16 +84,25 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent } from '../api/agent'
+import { getModelProviders } from '../api/modelProvider'
 
 const router = useRouter()
 const list = ref([])
+const providerList = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const form = reactive({ id: null, name: '', description: '', agentType: 'CHAT', systemPrompt: '' })
+const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', providerId: null })
 
 async function loadData() {
   const res = await getAgents({ pageNum: 1, pageSize: 50 })
   list.value = res.data.records || []
+}
+
+async function loadProviders() {
+  try {
+    const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
+    providerList.value = res.data.records || []
+  } catch { /* ignore */ }
 }
 
 function openDialog(row) {
@@ -92,24 +111,27 @@ function openDialog(row) {
       id: row.id,
       name: row.name || '',
       description: row.description || '',
-      agentType: row.agentType?.code || row.agentType || 'CHAT',
+      agentType: row.agentType?.code || row.agentType || 'chat',
       systemPrompt: row.systemPrompt || '',
+      providerId: null,
     })
   } else {
-    Object.assign(form, { id: null, name: '', description: '', agentType: 'CHAT', systemPrompt: '' })
+    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', providerId: null })
   }
   dialogVisible.value = true
 }
 
 async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入名称')
+  if (!form.id && !form.providerId) return message.warning('请选择模型提供商')
   submitting.value = true
   try {
     if (form.id) {
       await updateAgent(form)
       message.success('更新成功')
     } else {
-      await createAgent(form)
+      const config = JSON.stringify({ providerId: form.providerId })
+      await createAgent({ ...form, config })
       message.success('创建成功')
     }
     dialogVisible.value = false
@@ -134,6 +156,12 @@ function handleDelete(id) {
   })
 }
 
+function agentTypeLabel(t) {
+  const code = t?.code || t || ''
+  const map = { chat: '对话型', assistant: '助手型', workflow: '工作流型' }
+  return map[code] || code || '对话型'
+}
+
 function statusText(s) {
   const map = { draft: '草稿', published: '已发布', archived: '已归档' }
   return map[s] || s || '草稿'
@@ -144,7 +172,10 @@ function formatTime(t) {
   return new Date(t).toLocaleDateString('zh-CN')
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  loadProviders()
+})
 </script>
 
 <style scoped>
@@ -221,6 +252,16 @@ onMounted(loadData)
   justify-content: center;
   font-weight: 700;
   font-size: 16px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.card-icon.has-avatar {
+  background: #f4f4f5;
+}
+.card-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .card-info {
   flex: 1;

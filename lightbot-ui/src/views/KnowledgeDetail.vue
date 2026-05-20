@@ -8,9 +8,14 @@
         <h1 class="page-title">{{ knowledge.name }}</h1>
         <p class="page-desc">{{ knowledge.description || '暂无描述' }}</p>
       </div>
-      <button class="btn-primary-sm" @click="openEditDialog">
-        <EditOutlined /> 编辑
-      </button>
+      <div class="header-actions">
+        <button class="btn-outline-sm" @click="openMembersModal">
+          <TeamOutlined /> 成员
+        </button>
+        <button class="btn-primary-sm" @click="openEditDialog">
+          <EditOutlined /> 编辑
+        </button>
+      </div>
     </div>
 
     <div class="content-grid">
@@ -154,24 +159,108 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 成员管理弹窗 -->
+    <a-modal v-model:open="membersVisible" title="成员管理" :width="560" :footer="null">
+      <div class="members-section">
+        <div class="member-list">
+          <div v-for="member in membersWithInfo" :key="member.userId" class="member-item">
+            <div class="member-info">
+              <div class="member-avatar">{{ (member.nickname || member.username || 'U')[0] }}</div>
+              <div class="member-detail">
+                <span class="member-name">{{ member.nickname || member.username || '用户' }}</span>
+              </div>
+              <a-tag :color="roleColor(member.role)">{{ roleText(member.role) }}</a-tag>
+            </div>
+            <div class="member-actions" v-if="isManagerOrCreator">
+              <a-select
+                v-if="member.role !== 'creator'"
+                :value="member.role"
+                size="small"
+                style="width: 100px"
+                @change="(val) => handleChangeRole(member.userId, val)"
+              >
+                <a-select-option value="manager">管理者</a-select-option>
+                <a-select-option value="developer">开发者</a-select-option>
+                <a-select-option value="viewer">查看者</a-select-option>
+              </a-select>
+              <button
+                v-if="member.role !== 'creator'"
+                class="btn-icon-sm danger"
+                @click="handleRemoveMember(member.userId)"
+              >
+                <CloseOutlined />
+              </button>
+            </div>
+          </div>
+          <div v-if="membersWithInfo.length === 0" class="empty-tip">暂无成员</div>
+        </div>
+        <div v-if="isManagerOrCreator" class="add-member-form">
+          <button class="btn-primary-sm" @click="openInviteModal">
+            <PlusOutlined /> 添加成员
+          </button>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 邀请成员弹窗 -->
+    <a-modal v-model:open="inviteVisible" title="邀请成员" :width="480" :footer="null">
+      <div class="invite-section">
+        <a-input
+          v-model:value="inviteKeyword"
+          placeholder="搜索用户名或昵称..."
+          allow-clear
+          @input="onInviteSearch"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <div class="invite-results">
+          <div v-for="u in inviteResults" :key="u.id" class="invite-item">
+            <div class="invite-user">
+              <div class="member-avatar">{{ (u.nickname || u.username || 'U')[0] }}</div>
+              <div class="invite-info">
+                <span class="invite-name">{{ u.nickname || u.username }}</span>
+                <span class="invite-username">@{{ u.username }}</span>
+              </div>
+            </div>
+            <a-select
+              v-model:value="inviteRole"
+              size="small"
+              style="width: 90px"
+            >
+              <a-select-option value="manager">管理者</a-select-option>
+              <a-select-option value="developer">开发者</a-select-option>
+              <a-select-option value="viewer">查看者</a-select-option>
+            </a-select>
+            <button class="btn-primary-sm" @click="handleInvite(u.id)">邀请</button>
+          </div>
+          <div v-if="inviteKeyword && inviteResults.length === 0" class="empty-tip">未找到用户</div>
+          <div v-if="!inviteKeyword" class="empty-tip">输入关键词搜索用户</div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getKnowledge, updateKnowledge, getDocuments, uploadDocument, deleteDocument,
   previewDocument, getChunks, askKnowledge, generateMindmap, getMindmap,
+  getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole, removeKnowledgeMember,
 } from '../api/knowledge'
+import { getUsersByIds, searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
+import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const knowledgeId = route.params.id
 
 const knowledge = ref({})
@@ -209,6 +298,21 @@ const editForm = reactive({
   chunkOverlap: 50,
   ragTopK: 5,
   ragThreshold: 0.7,
+})
+
+// 成员管理
+const members = ref([])
+const membersWithInfo = ref([])
+const currentMemberRole = ref(null)
+const membersVisible = ref(false)
+const inviteVisible = ref(false)
+const inviteKeyword = ref('')
+const inviteResults = ref([])
+const inviteRole = ref('viewer')
+let inviteSearchTimer = null
+
+const isManagerOrCreator = computed(() => {
+  return currentMemberRole.value === 'creator' || currentMemberRole.value === 'manager'
 })
 
 async function loadKnowledge() {
@@ -434,9 +538,117 @@ function jsonToMarkdown(node, level) {
   return md
 }
 
+// ========== 成员管理 ==========
+
+async function loadMembers() {
+  try {
+    const res = await getKnowledgeMembers(knowledgeId)
+    members.value = res.data || []
+    // 解析用户信息
+    const userIds = members.value.map(m => m.userId)
+    if (userIds.length > 0) {
+      const userRes = await getUsersByIds(userIds)
+      const userMap = new Map((userRes.data || []).map(u => [String(u.id), u]))
+      membersWithInfo.value = members.value.map(m => ({
+        ...m,
+        username: userMap.get(String(m.userId))?.username,
+        nickname: userMap.get(String(m.userId))?.nickname,
+      }))
+    } else {
+      membersWithInfo.value = []
+    }
+    // 判断当前用户角色
+    const userId = userStore.user?.id
+    const myMember = members.value.find(m => String(m.userId) === String(userId))
+    currentMemberRole.value = myMember?.role || null
+  } catch (e) {
+    // interceptor已处理错误提示
+  }
+}
+
+function openMembersModal() {
+  membersVisible.value = true
+  loadMembers()
+}
+
+function openInviteModal() {
+  inviteKeyword.value = ''
+  inviteResults.value = []
+  inviteRole.value = 'viewer'
+  inviteVisible.value = true
+}
+
+function onInviteSearch() {
+  clearTimeout(inviteSearchTimer)
+  const kw = inviteKeyword.value.trim()
+  if (!kw) {
+    inviteResults.value = []
+    return
+  }
+  inviteSearchTimer = setTimeout(async () => {
+    try {
+      const res = await searchUsers(kw)
+      // 过滤掉已经是成员的用户
+      const memberIds = new Set(members.value.map(m => String(m.userId)))
+      inviteResults.value = (res.data || []).filter(u => !memberIds.has(String(u.id)))
+    } catch { /* ignore */ }
+  }, 300)
+}
+
+async function handleInvite(userId) {
+  try {
+    await addKnowledgeMember(knowledgeId, String(userId), inviteRole.value)
+    message.success('邀请成功')
+    inviteVisible.value = false
+    loadMembers()
+  } catch (e) {
+    // interceptor已处理错误提示
+  }
+}
+
+async function handleChangeRole(userId, role) {
+  try {
+    await updateKnowledgeMemberRole(knowledgeId, userId, role)
+    message.success('角色更新成功')
+    loadMembers()
+  } catch (e) {
+    // interceptor已处理错误提示
+  }
+}
+
+async function handleRemoveMember(userId) {
+  Modal.confirm({
+    title: '确认移除',
+    content: '确定要移除该成员吗？',
+    okText: '确认',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await removeKnowledgeMember(knowledgeId, userId)
+        message.success('成员已移除')
+        loadMembers()
+      } catch (e) {
+        // interceptor已处理错误提示
+      }
+    },
+  })
+}
+
+function roleText(role) {
+  const map = { creator: '创建者', manager: '管理者', developer: '开发者', viewer: '查看者' }
+  return map[role] || role
+}
+
+function roleColor(role) {
+  const map = { creator: 'red', manager: 'orange', developer: 'blue', viewer: 'green' }
+  return map[role] || 'default'
+}
+
 onMounted(() => {
   loadKnowledge()
   loadDocuments()
+  loadMembers()
 })
 </script>
 
@@ -499,6 +711,27 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #171717;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-outline-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-outline-sm:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 .btn-primary-sm {
   display: inline-flex;
@@ -760,5 +993,136 @@ onMounted(() => {
   margin: 0;
   max-height: 500px;
   overflow-y: auto;
+}
+
+/* 成员管理 */
+.members-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.member-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #f5f5f5;
+  border-radius: 8px;
+}
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.member-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #0070f3;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.member-detail {
+  display: flex;
+  flex-direction: column;
+}
+.member-name {
+  font-size: 14px;
+  color: #171717;
+  font-weight: 500;
+}
+.member-id {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-icon-sm {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  font-size: 12px;
+}
+.btn-icon-sm:hover {
+  background: #f5f5f5;
+}
+.btn-icon-sm.danger:hover {
+  color: #ee0000;
+  background: #f7d4d6;
+}
+.add-member-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #ebebeb;
+}
+.empty-tip {
+  text-align: center;
+  padding: 24px;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+
+/* 邀请弹窗 */
+.invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.invite-results {
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.invite-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid #f5f5f5;
+  border-radius: 8px;
+}
+.invite-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.invite-info {
+  display: flex;
+  flex-direction: column;
+}
+.invite-name {
+  font-size: 14px;
+  color: #171717;
+  font-weight: 500;
+}
+.invite-username {
+  font-size: 12px;
+  color: #a1a1aa;
 }
 </style>

@@ -15,3 +15,22 @@ export function logout() {
 export function getMe() {
   return request.get('/auth/me')
 }
+
+export function getUsersByIds(ids) {
+  return request.get('/auth/users/batch', {
+    params: { ids },
+    paramsSerializer: params => params.ids.map(id => `ids=${id}`).join('&'),
+  })
+}
+
+export function searchUsers(keyword) {
+  return request.get('/auth/users/search', { params: { keyword } })
+}
+
+export function updateProfile(data) {
+  return request.put('/auth/profile', data)
+}
+
+export function changePassword(data) {
+  return request.put('/auth/password', data)
+}

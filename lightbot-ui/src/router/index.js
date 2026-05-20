@@ -71,12 +71,17 @@ const routes = [
       {
         path: 'dashboard',
         name: 'Dashboard',
-        component: () => import('../views/Placeholder.vue'),
+        component: () => import('../views/DashboardView.vue'),
       },
       {
         path: 'logs',
         name: 'Logs',
         component: () => import('../views/LogMonitor.vue'),
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('../views/ProfileView.vue'),
       },
     ],
   },

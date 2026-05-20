@@ -59,3 +59,21 @@ export function generateMindmap(knowledgeId) {
 export function getMindmap(knowledgeId) {
   return request.get(`/knowledge/${knowledgeId}/mindmap`)
 }
+
+// ========== 成员管理 ==========
+
+export function getKnowledgeMembers(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/members`)
+}
+
+export function addKnowledgeMember(knowledgeId, userId, role) {
+  return request.post(`/knowledge/${knowledgeId}/members`, null, { params: { userId, role } })
+}
+
+export function updateKnowledgeMemberRole(knowledgeId, userId, role) {
+  return request.put(`/knowledge/${knowledgeId}/members/${userId}`, null, { params: { role } })
+}
+
+export function removeKnowledgeMember(knowledgeId, userId) {
+  return request.delete(`/knowledge/${knowledgeId}/members/${userId}`)
+}

@@ -82,7 +82,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("temperature")
-                        .label("温度 (Temperature)")
+                        .label("温度")
                         .type("slider")
                         .min(0.0).max(2.0).step(0.1)
                         .defaultValue(0.7)
@@ -90,7 +90,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("topP")
-                        .label("核采样 (Top P)")
+                        .label("核采样")
                         .type("slider")
                         .min(0.0).max(1.0).step(0.05)
                         .defaultValue(0.9)
@@ -106,7 +106,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("repetitionPenalty")
-                        .label("重复惩罚 (Repetition Penalty)")
+                        .label("重复惩罚")
                         .type("slider")
                         .min(0.0).max(2.0).step(0.1)
                         .defaultValue(1.0)

@@ -37,12 +37,29 @@
             :class="['session-item', { active: currentSessionId === s.id }]"
             @click="switchSession(s)"
           >
-            <span class="session-title" @dblclick="startRename(s)">{{ s.title || '新对话' }}</span>
+            <span class="session-title">{{ s.title || '新对话' }}</span>
+            <EditOutlined class="session-edit" @click.stop="startRename(s)" />
             <CloseOutlined class="session-delete" @click.stop="archiveSession(s.id)" />
           </div>
           <div v-if="sessions.length === 0" class="session-empty">暂无对话</div>
         </div>
       </div>
+
+      <!-- 重命名弹窗 -->
+      <a-modal
+        v-model:open="renameVisible"
+        title="重命名对话"
+        :width="400"
+        @ok="confirmRename"
+        @cancel="renameVisible = false"
+      >
+        <a-input
+          v-model:value="renameValue"
+          placeholder="请输入新名称"
+          @press-enter="confirmRename"
+          :maxlength="50"
+        />
+      </a-modal>
 
       <!-- 用户信息 -->
       <div class="sidebar-footer">
@@ -54,7 +71,9 @@
           </div>
           <template #overlay>
             <a-menu @click="handleCommand">
+              <a-menu-item key="profile">个人信息</a-menu-item>
               <a-menu-item key="model-providers">模型管理</a-menu-item>
+              <a-menu-divider />
               <a-menu-item key="logout">退出登录</a-menu-item>
             </a-menu>
           </template>
@@ -75,6 +94,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   PlusOutlined,
   CloseOutlined,
+  EditOutlined,
   DownOutlined,
   RobotOutlined,
   DatabaseOutlined,
@@ -95,6 +115,9 @@ const userStore = useUserStore()
 const sessions = ref([])
 const currentSessionId = ref(null)
 const sessionListRef = ref(null)
+const renameVisible = ref(false)
+const renameValue = ref('')
+const renameTarget = ref(null)
 
 const navItems = [
   { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
@@ -102,8 +125,8 @@ const navItems = [
   { path: '/mcp', label: 'MCP', icon: markRaw(ApiOutlined) },
   { path: '/skills', label: 'Skill', icon: markRaw(ThunderboltOutlined) },
   { path: '/tools', label: '工具', icon: markRaw(ToolOutlined) },
-  { path: '/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
-  { path: '/logs', label: '日志监控', icon: markRaw(FileTextOutlined) },
+  { path: '/dashboard', label: '监控', icon: markRaw(DashboardOutlined) },
+  { path: '/logs', label: '日志', icon: markRaw(FileTextOutlined) },
 ]
 
 function isActive(path) {
@@ -150,17 +173,27 @@ function archiveSession(id) {
 }
 
 function startRename(session) {
-  const newTitle = prompt('请输入新名称', session.title)
-  if (newTitle && newTitle.trim()) {
-    updateSessionTitle(session.id, newTitle.trim())
-    session.title = newTitle.trim()
+  renameTarget.value = session
+  renameValue.value = session.title || ''
+  renameVisible.value = true
+}
+
+function confirmRename() {
+  const val = renameValue.value.trim()
+  if (!val) return
+  if (renameTarget.value) {
+    updateSessionTitle(renameTarget.value.id, val)
+    renameTarget.value.title = val
   }
+  renameVisible.value = false
 }
 
 function handleCommand({ key }) {
   if (key === 'logout') {
     userStore.logout()
     router.push('/login')
+  } else if (key === 'profile') {
+    router.push('/profile')
   } else if (key === 'model-providers') {
     router.push('/model-providers')
   }
@@ -328,6 +361,17 @@ watch(() => route.path, (path) => {
   white-space: nowrap;
   font-size: 13px;
   color: #d4d4d8;
+}
+.session-edit {
+  opacity: 0;
+  color: #71717a;
+  font-size: 12px;
+  transition: opacity 0.15s;
+  cursor: pointer;
+  margin-right: 2px;
+}
+.session-item:hover .session-edit {
+  opacity: 1;
 }
 .session-delete {
   opacity: 0;

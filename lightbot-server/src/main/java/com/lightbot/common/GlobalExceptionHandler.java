@@ -16,6 +16,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NotLoginException.class)
     public ResponseEntity<Result<Void>> handleNotLogin(NotLoginException e) {
+        log.info("未登录访问: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Result.fail(401, "未登录或登录已过期"));
     }
@@ -25,6 +26,7 @@ public class GlobalExceptionHandler {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .findFirst().orElse("参数校验失败");
+        log.info("参数校验失败: {}", message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.fail(400, message));
     }
@@ -34,12 +36,14 @@ public class GlobalExceptionHandler {
         String message = e.getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .findFirst().orElse("参数绑定失败");
+        log.info("参数绑定失败: {}", message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.fail(400, message));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Result<Void>> handleConstraint(ConstraintViolationException e) {
+        log.info("约束校验失败: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.fail(400, e.getMessage()));
     }

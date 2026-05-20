@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.Agent;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -54,4 +55,29 @@ public interface AgentService extends IService<Agent> {
      * @param id 主键ID
      */
     void deleteById(Long id);
+
+    /**
+     * AI生成系统提示词
+     *
+     * @param id Agent ID
+     * @return 生成的系统提示词
+     */
+    String generateSystemPrompt(Long id);
+
+    /**
+     * AI生成推荐问题
+     *
+     * @param id Agent ID
+     * @return 推荐问题列表（JSON数组字符串）
+     */
+    String generateRecommendedQuestions(Long id);
+
+    /**
+     * 上传Agent头像到MinIO，返回头像URL
+     *
+     * @param id   Agent ID
+     * @param file 头像文件
+     * @return 头像访问URL
+     */
+    String uploadAvatar(Long id, MultipartFile file);
 }

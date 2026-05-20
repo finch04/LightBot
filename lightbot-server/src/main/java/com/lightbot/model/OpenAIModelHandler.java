@@ -88,7 +88,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("temperature")
-                        .label("温度 (Temperature)")
+                        .label("温度")
                         .type("slider")
                         .min(0.0).max(2.0).step(0.1)
                         .defaultValue(0.7)
@@ -96,7 +96,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("topP")
-                        .label("核采样 (Top P)")
+                        .label("核采样")
                         .type("slider")
                         .min(0.0).max(1.0).step(0.05)
                         .defaultValue(1.0)
@@ -112,7 +112,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("presencePenalty")
-                        .label("存在惩罚 (Presence Penalty)")
+                        .label("存在惩罚")
                         .type("slider")
                         .min(-2.0).max(2.0).step(0.1)
                         .defaultValue(0.0)
@@ -120,7 +120,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                         .build(),
                 ConfigField.builder()
                         .key("frequencyPenalty")
-                        .label("频率惩罚 (Frequency Penalty)")
+                        .label("频率惩罚")
                         .type("slider")
                         .min(-2.0).max(2.0).step(0.1)
                         .defaultValue(0.0)

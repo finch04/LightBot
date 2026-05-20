@@ -210,6 +210,10 @@ function connectSSE() {
     sseConnected.value = false
     eventSource?.close()
     eventSource = null
+    // 自动重连（延迟3秒避免频繁重试）
+    setTimeout(() => {
+      if (!eventSource) connectSSE()
+    }, 3000)
   }
 }
 

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -80,5 +81,24 @@ public class AgentController {
     public Result<Void> delete(@PathVariable Long id) {
         agentService.deleteById(id);
         return Result.ok();
+    }
+
+    @Operation(summary = "AI生成系统提示词")
+    @PostMapping("/{id}/generate-prompt")
+    public Result<String> generatePrompt(@PathVariable Long id) {
+        return Result.ok(agentService.generateSystemPrompt(id));
+    }
+
+    @Operation(summary = "AI生成推荐问题")
+    @PostMapping("/{id}/generate-questions")
+    public Result<String> generateQuestions(@PathVariable Long id) {
+        return Result.ok(agentService.generateRecommendedQuestions(id));
+    }
+
+    @Operation(summary = "上传Agent头像")
+    @PostMapping("/{id}/avatar")
+    public Result<String> uploadAvatar(@PathVariable Long id,
+                                       @RequestParam("file") MultipartFile file) {
+        return Result.ok(agentService.uploadAvatar(id, file));
     }
 }

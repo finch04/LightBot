@@ -2,22 +2,48 @@
   <div class="chat-container">
     <!-- 消息列表 -->
     <div class="chat-messages" ref="messagesRef">
-      <!-- 空状态 -->
-      <div v-if="messages.length === 0" class="empty-state">
+      <!-- 欢迎状态（新对话 + 无消息） -->
+      <div v-if="!sessionId && messages.length === 0 && !loadingHistory" class="empty-state">
         <img src="/lightbot-logo.png" alt="LightBot" class="empty-logo" />
-        <h2 class="empty-title">你好，我是 LightBot</h2>
-        <p class="empty-desc">基于通义千问大模型的智能助手，有什么可以帮你的？</p>
+        <div class="welcome-content" v-html="renderMarkdown(currentWelcomeMessage)"></div>
+        <!-- 推荐问题 -->
+        <div v-if="currentRecommendedQuestions.length > 0" class="recommended-questions">
+          <button
+            v-for="(q, i) in currentRecommendedQuestions"
+            :key="i"
+            class="btn-question"
+            @click="input = q; $nextTick(() => $refs.inputRef?.focus())"
+          >
+            {{ q }}
+          </button>
+        </div>
       </div>
 
       <!-- 消息列表 -->
       <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
         <div class="message-avatar">
           <span v-if="msg.role === 'user'">{{ userInitial }}</span>
+          <img v-else-if="currentAgent?.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
           <span v-else class="bot-avatar">LB</span>
         </div>
         <div class="message-body">
-          <div class="message-meta">{{ msg.role === 'user' ? '你' : 'LightBot' }}</div>
-          <div class="message-content" v-html="renderMarkdown(msg.content)" />
+          <div class="message-meta">
+            {{ msg.role === 'user' ? '你' : 'LightBot' }}
+          </div>
+          <div class="message-content-wrapper">
+            <div class="message-content" v-html="renderMarkdown(msg.content)" />
+            <!-- 复制按钮（仅AI消息） -->
+            <button
+              v-if="msg.role === 'assistant' && msg.content"
+              class="btn-copy"
+              :class="{ copied: msg._copied }"
+              @click="copyMessage(msg)"
+              :title="msg._copied ? '已复制' : '复制'"
+            >
+              <CheckOutlined v-if="msg._copied" />
+              <CopyOutlined v-else />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -39,9 +65,8 @@
       <div class="agent-selector">
         <span class="agent-label">Agent</span>
         <a-select
-          v-if="agents.length > 0"
           v-model:value="selectedAgentId"
-          placeholder="选择 Agent（可选）"
+          placeholder="默认 Agent"
           allow-clear
           size="small"
           class="agent-select"
@@ -50,10 +75,6 @@
             {{ a.name }}
           </a-select-option>
         </a-select>
-        <span v-else class="no-agent-tip">
-          还没有 Agent，
-          <router-link to="/agents">去创建一个</router-link>
-        </span>
       </div>
       <div class="chat-input">
         <textarea
@@ -85,10 +106,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { SendOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
-import { getSessionMessages, createSession } from '../api/chatSession'
-import { getAgents } from '../api/agent'
+import { getSessionMessages, getSession, createSession } from '../api/chatSession'
+import { getAgents, getAgent } from '../api/agent'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
@@ -102,6 +123,9 @@ const messagesRef = ref(null)
 const inputRef = ref(null)
 const agents = ref([])
 const selectedAgentId = ref(null)
+const skipNextWatch = ref(false)
+const loadingHistory = ref(false)
+const currentAgent = ref(null)
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -110,6 +134,25 @@ const userInitial = computed(() => {
 
 const sessionId = computed(() => {
   return route.params.sessionId || null
+})
+
+const currentWelcomeMessage = computed(() => {
+  if (currentAgent.value?.welcomeMessage) {
+    return currentAgent.value.welcomeMessage
+  }
+  return '## 你好，我是 LightBot\n有什么可以帮你的？'
+})
+
+const currentRecommendedQuestions = computed(() => {
+  if (currentAgent.value?.recommendedQuestions) {
+    try {
+      const questions = typeof currentAgent.value.recommendedQuestions === 'string'
+        ? JSON.parse(currentAgent.value.recommendedQuestions)
+        : currentAgent.value.recommendedQuestions
+      return Array.isArray(questions) ? questions : []
+    } catch { return [] }
+  }
+  return []
 })
 
 // 配置 marked
@@ -147,17 +190,46 @@ function autoResize() {
 async function loadHistory() {
   if (!sessionId.value) {
     messages.value = []
+    currentAgent.value = null
     return
   }
+  loadingHistory.value = true
   try {
-    const res = await getSessionMessages(sessionId.value)
-    messages.value = (res.data || []).map(m => ({
+    // 并行加载消息和会话详情
+    const [msgRes, sessionRes] = await Promise.all([
+      getSessionMessages(sessionId.value),
+      getSession(sessionId.value),
+    ])
+    messages.value = (msgRes.data || []).map(m => ({
       role: m.role?.code || m.role,
       content: m.content,
     }))
+
+    // 从会话中恢复 agentId
+    const session = sessionRes.data
+    if (session?.agentId) {
+      selectedAgentId.value = session.agentId
+      // 加载 agent 详情以获取欢迎语和推荐问题
+      loadCurrentAgent(session.agentId)
+    }
     scrollToBottom()
   } catch (e) {
     messages.value = []
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+async function loadCurrentAgent(agentId) {
+  if (!agentId) {
+    currentAgent.value = null
+    return
+  }
+  try {
+    const res = await getAgent(agentId)
+    currentAgent.value = res.data
+  } catch {
+    currentAgent.value = null
   }
 }
 
@@ -181,7 +253,8 @@ async function sendMessage() {
     if (!sid) {
       const res = await createSession(selectedAgentId.value)
       sid = res.data.id
-      // 更新 URL 为 /chat/{sessionId}，不触发页面刷新
+      // 更新 URL 为 /chat/{sessionId}，跳过 watcher 避免重新加载消息
+      skipNextWatch.value = true
       router.replace(`/chat/${sid}`)
     }
 
@@ -205,6 +278,13 @@ async function sendMessage() {
   }
 }
 
+function copyMessage(msg) {
+  navigator.clipboard.writeText(msg.content).then(() => {
+    msg._copied = true
+    setTimeout(() => { msg._copied = false }, 2000)
+  })
+}
+
 function scrollToBottom() {
   nextTick(() => {
     const el = messagesRef.value
@@ -222,12 +302,32 @@ async function loadAgents() {
 }
 
 onMounted(() => {
+  // 处理从 AgentDetail 带过来的 agentId 查询参数
+  const queryAgentId = route.query.agentId
+  if (queryAgentId) {
+    selectedAgentId.value = Number(queryAgentId)
+    loadCurrentAgent(Number(queryAgentId))
+  }
   loadHistory()
   loadAgents()
 })
 
-watch(() => route.params.sessionId, () => {
+watch(() => route.params.sessionId, (newVal, oldVal) => {
+  // sendMessage 内部 router.replace 触发的 watcher，跳过避免重新加载消息
+  if (skipNextWatch.value) {
+    skipNextWatch.value = false
+    return
+  }
   loadHistory()
+})
+
+// 切换 Agent 时更新欢迎语
+watch(selectedAgentId, (newId) => {
+  if (newId && !sessionId.value) {
+    loadCurrentAgent(newId)
+  } else if (!newId) {
+    currentAgent.value = null
+  }
 })
 </script>
 
@@ -267,15 +367,46 @@ watch(() => route.params.sessionId, () => {
   margin-bottom: 24px;
   opacity: 0.6;
 }
-.empty-title {
+.welcome-content {
+  text-align: center;
+  max-width: 600px;
+  margin-bottom: 24px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #171717;
+}
+.welcome-content :deep(h1),
+.welcome-content :deep(h2) {
   font-size: 24px;
   font-weight: 600;
   color: #171717;
   margin-bottom: 8px;
 }
-.empty-desc {
-  font-size: 15px;
+.welcome-content :deep(p) {
+  margin: 0 0 8px;
   color: #71717a;
+}
+.recommended-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 600px;
+}
+.btn-question {
+  padding: 8px 16px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 100px;
+  font-size: 13px;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-question:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+  background: #f0f7ff;
 }
 
 /* 消息 */
@@ -315,6 +446,12 @@ watch(() => route.params.sessionId, () => {
   font-size: 11px;
   font-weight: 700;
 }
+.bot-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
 .message-body {
   flex: 1;
   min-width: 0;
@@ -326,6 +463,9 @@ watch(() => route.params.sessionId, () => {
   font-size: 12px;
   color: #a1a1aa;
   margin-bottom: 4px;
+}
+.message-content-wrapper {
+  position: relative;
 }
 .message-content {
   font-size: 15px;
@@ -340,6 +480,33 @@ watch(() => route.params.sessionId, () => {
   border-radius: 12px 12px 2px 12px;
   text-align: left;
   max-width: 80%;
+}
+
+/* 复制按钮 */
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #a1a1aa;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.message:hover .btn-copy {
+  opacity: 1;
+}
+.btn-copy:hover {
+  color: #52525b;
+}
+.btn-copy.copied {
+  color: #16a34a;
+  opacity: 1;
 }
 
 /* Markdown 渲染 */
@@ -419,17 +586,6 @@ watch(() => route.params.sessionId, () => {
 .agent-select {
   flex: 1;
   max-width: 280px;
-}
-.no-agent-tip {
-  font-size: 12px;
-  color: #a1a1aa;
-}
-.no-agent-tip a {
-  color: #0070f3;
-  text-decoration: none;
-}
-.no-agent-tip a:hover {
-  text-decoration: underline;
 }
 .chat-input {
   display: flex;

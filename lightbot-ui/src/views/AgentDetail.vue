@@ -8,9 +8,14 @@
         <h1 class="page-title">{{ agent.name || 'Agent 详情' }}</h1>
         <p class="page-desc">{{ agent.description || '暂无描述' }}</p>
       </div>
-      <button class="btn-primary" @click="handleSave" :disabled="saving">
-        <SaveOutlined /> 保存配置
-      </button>
+      <div class="header-actions">
+        <button class="btn-outline" @click="startChat">
+          <MessageOutlined /> 对话
+        </button>
+        <button class="btn-primary" @click="handleSave" :disabled="saving">
+          <SaveOutlined /> 保存配置
+        </button>
+      </div>
     </div>
 
     <div class="content-grid">
@@ -23,18 +28,58 @@
           <a-form-item label="名称">
             <a-input v-model:value="agent.name" placeholder="Agent 名称" />
           </a-form-item>
+          <a-form-item label="头像">
+            <div class="avatar-upload">
+              <div class="avatar-preview" :class="{ 'has-avatar': avatarUrl }">
+                <img v-if="avatarUrl" :src="avatarUrl" alt="avatar" class="avatar-img" @error="agent.avatar = ''" />
+                <span v-else class="avatar-placeholder">{{ (agent.name || 'A')[0] }}</span>
+                <div class="avatar-overlay" @click="triggerAvatarUpload">
+                  <UploadOutlined />
+                </div>
+              </div>
+              <input ref="avatarInputRef" type="file" accept="image/*" style="display: none" @change="onAvatarFileChange" />
+              <span class="avatar-tip">支持 jpg/png，建议 200x200</span>
+            </div>
+          </a-form-item>
           <a-form-item label="描述">
             <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" />
           </a-form-item>
           <a-form-item label="系统提示词">
-            <a-textarea v-model:value="agent.systemPrompt" :rows="6" placeholder="定义 Agent 的行为和角色..." />
+            <div class="prompt-wrapper">
+              <a-textarea v-model:value="agent.systemPrompt" :rows="6" placeholder="定义 Agent 的行为和角色..." />
+              <button class="btn-ai-icon" :disabled="generatingPrompt" @click="handleGeneratePrompt" :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
+                <ThunderboltOutlined :spin="generatingPrompt" />
+              </button>
+            </div>
           </a-form-item>
           <a-form-item label="类型">
             <a-select v-model:value="agent.agentType" style="width: 100%">
-              <a-select-option value="CHAT">对话型</a-select-option>
-              <a-select-option value="TASK">任务型</a-select-option>
-              <a-select-option value="WORKFLOW">工作流</a-select-option>
+              <a-select-option value="chat">对话型</a-select-option>
+              <a-select-option value="assistant">助手型</a-select-option>
+              <a-select-option value="workflow">工作流型</a-select-option>
             </a-select>
+          </a-form-item>
+          <a-form-item label="欢迎语">
+            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" />
+          </a-form-item>
+          <a-form-item label="推荐问题">
+            <div class="questions-header">
+              <button class="btn-ai-sm" :disabled="generatingQuestions" @click="handleGenerateQuestions">
+                <ThunderboltOutlined :spin="generatingQuestions" />
+                {{ generatingQuestions ? '生成中...' : 'AI生成推荐问题' }}
+              </button>
+            </div>
+            <div class="recommended-questions">
+              <div v-for="(q, i) in recommendedQuestions" :key="i" class="question-row">
+                <a-input v-model:value="recommendedQuestions[i]" placeholder="推荐问题" size="small" />
+                <button class="btn-icon-sm danger" @click="recommendedQuestions.splice(i, 1)">
+                  <CloseOutlined />
+                </button>
+              </div>
+              <button v-if="recommendedQuestions.length < 3" class="btn-add-question" @click="recommendedQuestions.push('')">
+                <PlusOutlined /> 添加推荐问题
+              </button>
+            </div>
           </a-form-item>
         </a-form>
       </div>
@@ -43,9 +88,14 @@
       <div class="panel">
         <div class="panel-header">
           <h3>模型参数调优</h3>
-          <span class="panel-tip">根据提供商动态显示可用配置</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn-ai-sm" @click="restoreDefaults" :disabled="!agentConfig.providerId">
+              <UndoOutlined /> 恢复默认
+            </button>
+            <span class="panel-tip">根据提供商动态显示可用配置</span>
+          </div>
         </div>
-        <a-form :model="agentConfig" :label-col="{ span: 8 }">
+        <a-form :model="agentConfig" :label-col="{ span: 6 }">
           <a-form-item label="提供商">
             <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" @change="onProviderChange">
               <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
@@ -53,7 +103,28 @@
               </a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item v-for="field in configFields" :key="field.key" :label="field.label">
+          <a-form-item label="模型">
+            <a-select
+              v-model:value="agentConfig.modelId"
+              placeholder="选择模型"
+              show-search
+              :filter-option="false"
+              @search="val => modelSearchText = val"
+              style="width: 100%"
+              allow-clear
+            >
+              <a-select-option v-for="m in filteredModels" :key="m.modelId" :value="m.modelId">
+                {{ m.name || m.modelId }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item v-for="field in configFields.filter(f => f.key !== 'modelId')" :key="field.key">
+            <template #label>
+              <div class="config-label-wrap">
+                <span class="config-label">{{ field.label }}</span>
+                <span class="config-key">{{ field.key }}</span>
+              </div>
+            </template>
             <!-- select -->
             <a-select v-if="field.type === 'select'" v-model:value="agentConfig[field.key]" placeholder="请选择" style="width: 100%">
               <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">
@@ -135,15 +206,17 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar } from '../api/agent'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
+import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
 
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
+const avatarInputRef = ref(null)
 
 const agent = reactive({
   id: null,
@@ -151,6 +224,7 @@ const agent = reactive({
   description: '',
   systemPrompt: '',
   agentType: 'CHAT',
+  icon: '',
 })
 
 // 模型配置（存储在 config JSONB 中）
@@ -160,10 +234,30 @@ const agentConfig = reactive({
 
 const providerList = ref([])
 const configFields = ref([])
+const modelList = ref([])
+const modelSearchText = ref('')
 const selectedKnowledgeIds = ref(new Set())
 const knowledgeList = ref([])
 const searchText = ref('')
 const saving = ref(false)
+const recommendedQuestions = ref([])
+const generatingPrompt = ref(false)
+const generatingQuestions = ref(false)
+const avatarUploading = ref(false)
+
+const avatarUrl = computed(() => {
+  if (!agent.avatar) return ''
+  return `http://localhost:9000/lightbot/${agent.avatar}`
+})
+
+const filteredModels = computed(() => {
+  if (!modelSearchText.value) return modelList.value
+  const keyword = modelSearchText.value.toLowerCase()
+  return modelList.value.filter(m =>
+    m.modelId?.toLowerCase().includes(keyword) ||
+    m.name?.toLowerCase().includes(keyword)
+  )
+})
 
 const selectedKnowledge = computed(() => {
   return knowledgeList.value.filter(k => selectedKnowledgeIds.value.has(k.id))
@@ -203,15 +297,42 @@ async function loadConfigFields(providerId) {
   }
 }
 
+async function loadModels(providerId) {
+  if (!providerId) {
+    modelList.value = []
+    return
+  }
+  try {
+    const res = await getModelsByProvider(providerId)
+    // 只显示对话模型
+    modelList.value = (res.data || []).filter(m => {
+      const type = m.type?.code || m.type
+      return type === 'llm'
+    })
+  } catch (e) {
+    modelList.value = []
+  }
+}
+
 async function onProviderChange(providerId) {
-  // 切换提供商时，清除非 providerId 的配置项
-  const keepKeys = new Set(['providerId', ...configFields.value.map(f => f.key)])
+  // 切换提供商时，清空模型和旧配置项
+  agentConfig.modelId = undefined
   for (const key of Object.keys(agentConfig)) {
-    if (!keepKeys.has(key) && key !== 'providerId') {
+    if (key !== 'providerId' && key !== 'modelId') {
       delete agentConfig[key]
     }
   }
-  await loadConfigFields(providerId)
+  modelSearchText.value = ''
+  await Promise.all([loadConfigFields(providerId), loadModels(providerId)])
+}
+
+function restoreDefaults() {
+  for (const field of configFields.value) {
+    if (field.defaultValue !== undefined) {
+      agentConfig[field.key] = field.defaultValue
+    }
+  }
+  message.success('已恢复默认配置')
 }
 
 async function loadAgent() {
@@ -238,9 +359,18 @@ async function loadAgent() {
       }
     }
 
-    // 加载提供商列表和配置字段
+    // 解析推荐问题
+    if (agentData.recommendedQuestions) {
+      try {
+        recommendedQuestions.value = typeof agentData.recommendedQuestions === 'string'
+          ? JSON.parse(agentData.recommendedQuestions)
+          : agentData.recommendedQuestions
+      } catch { recommendedQuestions.value = [] }
+    }
+
+    // 加载提供商列表、配置字段和模型列表
     await loadProviders()
-    await loadConfigFields(agentConfig.providerId)
+    await Promise.all([loadConfigFields(agentConfig.providerId), loadModels(agentConfig.providerId)])
 
     selectedKnowledgeIds.value = new Set(knowledgeIds || [])
   } catch (e) {
@@ -273,11 +403,73 @@ function removeKnowledge(id) {
   selectedKnowledgeIds.value = ids
 }
 
+async function handleGeneratePrompt() {
+  generatingPrompt.value = true
+  try {
+    const res = await generateAgentPrompt(agentId)
+    agent.systemPrompt = res.data
+    message.success('提示词生成成功')
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    generatingPrompt.value = false
+  }
+}
+
+async function handleGenerateQuestions() {
+  generatingQuestions.value = true
+  try {
+    const res = await generateAgentQuestions(agentId)
+    const questions = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+    recommendedQuestions.value = questions
+    message.success('推荐问题生成成功')
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    generatingQuestions.value = false
+  }
+}
+
+function triggerAvatarUpload() {
+  avatarInputRef.value?.click()
+}
+
+async function onAvatarFileChange(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  avatarUploading.value = true
+  try {
+    const res = await uploadAgentAvatar(agentId, file)
+    agent.avatar = res.data
+    message.success('头像上传成功')
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    avatarUploading.value = false
+    // 清空 input 以允许重新选择同一文件
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+  }
+}
+
 async function handleSave() {
   if (!agent.name?.trim()) {
     message.warning('请输入 Agent 名称')
     return
   }
+
+  // 2. 过滤空的推荐问题并校验
+  const questions = recommendedQuestions.value.filter(q => q && q.trim())
+  if (questions.length > 3) {
+    message.warning('推荐问题最多3个')
+    return
+  }
+  for (const q of questions) {
+    if (q.length > 30) {
+      message.warning('每个推荐问题不超过30字')
+      return
+    }
+  }
+
   saving.value = true
   try {
     // 1. 构建 config JSONB（包含 provider + 所有配置项）
@@ -289,6 +481,7 @@ async function handleSave() {
       ...agent,
       agentType: agent.agentType?.code || agent.agentType,
       config: configStr,
+      recommendedQuestions: JSON.stringify(questions),
     })
 
     // 3. 更新知识库绑定
@@ -300,6 +493,10 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+function startChat() {
+  router.push({ path: '/chat', query: { agentId: agentId } })
 }
 
 onMounted(() => {
@@ -357,6 +554,149 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #27272a;
+}
+.btn-primary:disabled {
+  background: #d4d4d8;
+  cursor: not-allowed;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-icon-sm {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  font-size: 12px;
+}
+.btn-icon-sm:hover {
+  background: #f5f5f5;
+}
+.btn-icon-sm.danger:hover {
+  color: #ee0000;
+  background: #f7d4d6;
+}
+.prompt-wrapper {
+  position: relative;
+}
+.btn-ai-icon {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(0, 112, 243, 0.1);
+  border-radius: 6px;
+  color: #0070f3;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s;
+  z-index: 1;
+}
+.btn-ai-icon:hover:not(:disabled) {
+  background: rgba(0, 112, 243, 0.2);
+}
+.btn-ai-icon:disabled {
+  color: #a1a1aa;
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+.questions-header {
+  margin-bottom: 8px;
+}
+.btn-ai-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #0070f3;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-ai-sm:hover:not(:disabled) {
+  border-color: #0070f3;
+  background: #f0f7ff;
+}
+.btn-ai-sm:disabled {
+  color: #a1a1aa;
+  border-color: #e4e4e7;
+  cursor: not-allowed;
+}
+.config-label-wrap {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.config-label {
+  font-size: 14px;
+}
+.config-key {
+  font-size: 11px;
+  color: #a1a1aa;
+  font-weight: normal;
+}
+.recommended-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.question-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-add-question {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: none;
+  border: 1px dashed #d4d4d8;
+  border-radius: 6px;
+  color: #71717a;
+  font-size: 13px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.btn-add-question:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 .btn-primary:hover:not(:disabled) {
   background: #27272a;
@@ -524,5 +864,59 @@ onMounted(() => {
   padding: 24px;
   color: #a1a1aa;
   font-size: 13px;
+}
+
+/* 头像上传 */
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.avatar-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7928ca, #ff0080);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.avatar-preview.has-avatar {
+  background: #f4f4f5;
+}
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-placeholder {
+  font-size: 28px;
+  font-weight: 700;
+}
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #fff;
+  font-size: 20px;
+}
+.avatar-preview:hover .avatar-overlay {
+  opacity: 1;
+}
+.avatar-tip {
+  font-size: 12px;
+  color: #a1a1aa;
 }
 </style>

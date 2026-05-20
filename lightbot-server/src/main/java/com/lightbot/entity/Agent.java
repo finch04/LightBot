@@ -45,9 +45,21 @@ public class Agent {
     @Schema(description = "系统提示词")
     private String systemPrompt;
 
+    @TableField("welcome_message")
+    @Schema(description = "欢迎语")
+    private String welcomeMessage;
+
+    @TableField(value = "recommended_questions", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "推荐问题列表")
+    private String recommendedQuestions;
+
     @TableField("avatar")
-    @Schema(description = "头像URL")
+    @Schema(description = "头像存储路径（MinIO对象路径）")
     private String avatar;
+
+    @TableField("icon")
+    @Schema(description = "Agent图标（emoji或图标标识）")
+    private String icon;
 
     @TableField("agent_type")
     @Schema(description = "类型")

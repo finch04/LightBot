@@ -31,3 +31,19 @@ export function updateAgentKnowledge(id, knowledgeIds) {
 export function getAgentKnowledgeIds(id) {
   return request.get(`/agents/${id}/knowledge`)
 }
+
+export function generateAgentPrompt(id) {
+  return request.post(`/agents/${id}/generate-prompt`)
+}
+
+export function generateAgentQuestions(id) {
+  return request.post(`/agents/${id}/generate-questions`)
+}
+
+export function uploadAgentAvatar(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/agents/${id}/avatar`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

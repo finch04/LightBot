@@ -4,33 +4,27 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
-import com.lightbot.entity.Chunk;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.KnowledgeMember;
 import com.lightbot.enums.CommonStatus;
+import com.lightbot.enums.DocumentStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.KnowledgeRole;
-import com.lightbot.mapper.ChunkMapper;
 import com.lightbot.mapper.KnowledgeMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.KnowledgeMemberService;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.util.MindmapUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -47,35 +41,9 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     private final KnowledgeMemberService knowledgeMemberService;
     private final DocumentService documentService;
-    private final ChunkMapper chunkMapper;
     private final ModelFactory modelFactory;
     private final ObjectMapper objectMapper;
-
-    private static final String MINDMAP_SYSTEM_PROMPT = """
-            你是一个思维导图生成助手。你的唯一任务是根据提供的知识库文档内容，提取关键主题并输出JSON格式的思维导图结构。
-            严格规则：
-            - 只输出JSON，不要任何其他文字、解释或markdown标记
-            - 所有节点内容必须严格来自文档，禁止凭空捏造或推测文档中不存在的内容
-            - 如果文档内容不足以支撑有意义的思维导图，输出 {"content": "知识库名称", "children": []}
-            - 根节点content必须是知识库名称
-            - children数组中每个子节点必须有content字段，可选children字段
-            - 层级不超过3层
-            - 可以使用emoji图标增强可读性
-            """;
-
-    private static final String MINDMAP_USER_TEMPLATE = """
-            请严格根据以下知识库文档内容，生成思维导图的 JSON 结构。
-            注意：只能使用文档中实际出现的主题和关键词，禁止添加文档中没有的内容。
-
-            知识库名称：{name}
-            知识库描述：{description}
-
-            知识库文档内容摘要：
-            {content}
-
-            输出格式（只输出JSON，不要任何其他文字）：
-            {{"content": "知识库名称", "children": [{{"content": "主题1", "children": [{{"content": "子主题1"}}]}}, {{"content": "主题2"}}]}}
-            """;
+    private final MindmapUtil mindmapUtil;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -194,33 +162,23 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
 
-        // 2. 收集知识库内容摘要（无文档时拒绝生成）
-        String contentSummary = collectContentSummary(knowledgeId);
-        if (contentSummary.isEmpty()) {
+        // 2. 获取已完成的文档列表（只取文件名和类型，不需要内容）
+        List<Document> documents = documentService.listByKnowledgeId(knowledgeId).stream()
+                .filter(doc -> doc.getStatus() == DocumentStatus.COMPLETED)
+                .toList();
+        if (documents.isEmpty()) {
             throw new BizException(ErrorCode.KNOWLEDGE_NO_DOCUMENT);
         }
 
-        // 3. 构建提示词
-        String userMessage = MINDMAP_USER_TEMPLATE
-                .replace("{name}", knowledge.getName())
-                .replace("{description}", knowledge.getDescription() != null ? knowledge.getDescription() : "暂无描述")
-                .replace("{content}", contentSummary);
+        // 3. 委托MindmapUtil基于文件列表生成思维导图
+        Object jsonObj = mindmapUtil.generateFromFiles(knowledge.getName(), documents, actualProviderId);
 
-        // 4. 通过 ModelFactory 获取 ChatModel 并调用
-        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-        List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(MINDMAP_SYSTEM_PROMPT));
-        messages.add(new UserMessage(userMessage));
-
-        ChatResponse response = chatModel.call(new Prompt(messages));
-        String json = response.getResult().getOutput().getText().trim();
-
-        // 5. 清理AI返回的JSON（去除可能的markdown代码块标记）
-        json = cleanJsonResponse(json);
-
-        // 6. 解析为JSON对象后保存和返回（避免前端二次转义）
-        Object jsonObj = parseJson(json);
-        knowledge.setMindmapData(json);
+        // 4. 保存并返回
+        try {
+            knowledge.setMindmapData(objectMapper.writeValueAsString(jsonObj));
+        } catch (Exception e) {
+            log.warn("[Knowledge] 思维导图序列化失败: {}", e.getMessage());
+        }
         updateById(knowledge);
 
         log.info("[Knowledge] 思维导图已生成: knowledgeId={}", knowledgeId);
@@ -237,67 +195,10 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         if (data == null || data.isBlank()) {
             return null;
         }
-        return parseJson(data);
-    }
-
-    /**
-     * 收集知识库内容摘要：遍历文档，每个文档取前3个chunk，总长度限制3000字符
-     */
-    private String collectContentSummary(Long knowledgeId) {
-        List<Document> documents = documentService.listByKnowledgeId(knowledgeId);
-        if (documents.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder summary = new StringBuilder();
-        for (Document doc : documents) {
-            if (summary.length() > 3000) {
-                break;
-            }
-            summary.append("【文档：").append(doc.getName()).append("】\n");
-
-            // 取前3个chunk
-            List<Chunk> chunks = chunkMapper.selectList(
-                    new LambdaQueryWrapper<Chunk>()
-                            .eq(Chunk::getDocumentId, doc.getId())
-                            .orderByAsc(Chunk::getChunkIndex)
-                            .last("LIMIT 3"));
-
-            for (Chunk chunk : chunks) {
-                if (summary.length() > 3000) {
-                    break;
-                }
-                // 每个chunk截取前500字符
-                String content = chunk.getContent();
-                if (content != null) {
-                    summary.append(content, 0, Math.min(content.length(), 500)).append("\n");
-                }
-            }
-            summary.append("\n");
-        }
-
-        return summary.length() > 3000 ? summary.substring(0, 3000) : summary.toString();
-    }
-
-    /**
-     * 清理AI返回的JSON（去除markdown代码块标记）
-     */
-    private String cleanJsonResponse(String json) {
-        if (json == null) {
-            return null;
-        }
-        json = json.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
-        return json.trim();
-    }
-
-    /**
-     * 将JSON字符串解析为Object（Map/List），供Jackson直接序列化
-     */
-    private Object parseJson(String json) {
         try {
-            return objectMapper.readValue(json, new TypeReference<>() {});
+            return objectMapper.readValue(data, new TypeReference<>() {});
         } catch (Exception e) {
-            log.warn("[Knowledge] JSON解析失败: {}", e.getMessage());
+            log.warn("[Knowledge] 思维导图JSON解析失败: {}", e.getMessage());
             throw new BizException(ErrorCode.INTERNAL_ERROR);
         }
     }

@@ -136,17 +136,33 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 加载Agent配置，agentId为空时返回null
+     * 加载Agent配置。
+     * agentId非空时加载指定Agent；为空时自动使用当前用户的第一个Agent（默认Agent）。
      */
     private Agent loadAgent(Long agentId) {
-        if (agentId == null) {
-            return null;
+        // 1. 指定了agentId，直接加载
+        if (agentId != null) {
+            Agent agent = agentService.getById(agentId);
+            if (agent == null) {
+                log.warn("[Chat] Agent不存在，agentId={}", agentId);
+            }
+            return agent;
         }
-        Agent agent = agentService.getById(agentId);
-        if (agent == null) {
-            log.warn("[Chat] Agent不存在，agentId={}", agentId);
+
+        // 2. 未指定agentId，使用当前用户的第一个Agent作为默认Agent
+        try {
+            var page = agentService.listMyAgents(1, 1);
+            if (page != null && !page.getRecords().isEmpty()) {
+                Agent defaultAgent = page.getRecords().get(0);
+                log.info("[Chat] 使用默认Agent: id={}, name={}", defaultAgent.getId(), defaultAgent.getName());
+                return defaultAgent;
+            }
+        } catch (Exception e) {
+            log.warn("[Chat] 获取默认Agent失败: {}", e.getMessage());
         }
-        return agent;
+
+        log.warn("[Chat] 无可用Agent，请先创建一个Agent并配置模型提供商");
+        return null;
     }
 
     /**
@@ -170,7 +186,7 @@ public class ChatServiceImpl implements ChatService {
     private Long getProviderId(Map<String, Object> configMap) {
         Object providerId = configMap.get(ConfigKeys.Agent.PROVIDER_ID);
         if (providerId == null) {
-            throw new IllegalArgumentException("Agent config中缺少providerId配置");
+            throw new IllegalArgumentException("请先创建Agent并在「模型参数调优」中选择模型提供商");
         }
         return providerId instanceof Number ? ((Number) providerId).longValue() : Long.parseLong(providerId.toString());
     }

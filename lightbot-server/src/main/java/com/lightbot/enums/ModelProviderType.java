@@ -16,10 +16,10 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ModelProviderType {
 
-    OPENAI("openai", "OpenAI"),
-    DASHSCOPE("dashscope", "通义千问"),
-    DEEPSEEK("deepseek", "DeepSeek"),
-    OLLAMA("ollama", "Ollama");
+    OPENAI("OPENAI", "OpenAI"),
+    DASHSCOPE("DASHSCOPE", "通义千问"),
+    DEEPSEEK("DEEPSEEK", "DeepSeek"),
+    OLLAMA("OLLAMA", "Ollama");
 
     @EnumValue
     private final String code;

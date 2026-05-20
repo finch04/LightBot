@@ -1,7 +1,9 @@
 package com.lightbot.controller;
 
 import com.lightbot.common.Result;
+import com.lightbot.dto.ChangePasswordRequest;
 import com.lightbot.dto.LoginRequest;
+import com.lightbot.dto.ProfileUpdateRequest;
 import com.lightbot.dto.RegisterRequest;
 import com.lightbot.dto.UserDTO;
 import com.lightbot.service.UserService;
@@ -12,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "认证管理", description = "用户注册、登录、登出")
@@ -50,5 +53,30 @@ public class AuthController {
     @GetMapping("/me")
     public Result<UserDTO> me() {
         return Result.ok(userService.getCurrentUser());
+    }
+
+    @Operation(summary = "批量获取用户信息（按ID列表）")
+    @GetMapping("/users/batch")
+    public Result<List<UserDTO>> getUsersByIds(@RequestParam List<Long> ids) {
+        return Result.ok(userService.getUsersByIds(ids));
+    }
+
+    @Operation(summary = "搜索用户（按用户名或昵称）")
+    @GetMapping("/users/search")
+    public Result<List<UserDTO>> searchUsers(@RequestParam String keyword) {
+        return Result.ok(userService.searchUsers(keyword));
+    }
+
+    @Operation(summary = "更新个人信息")
+    @PutMapping("/profile")
+    public Result<UserDTO> updateProfile(@Valid @RequestBody ProfileUpdateRequest request) {
+        return Result.ok(userService.updateProfile(request));
+    }
+
+    @Operation(summary = "修改密码")
+    @PutMapping("/password")
+    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(request);
+        return Result.ok();
     }
 }
