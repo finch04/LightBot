@@ -1,13 +1,18 @@
 package com.lightbot.model;
 
+import com.lightbot.common.BizException;
 import com.lightbot.entity.ModelProvider;
+import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.service.ModelProviderService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -30,6 +35,8 @@ public class ModelFactory {
 
     private final List<ModelProviderHandler> handlers;
     private final ModelProviderService modelProviderService;
+
+    private static final String CONNECTIVITY_CHECK_PROMPT = "你好，请回复OK";
 
     private Map<ModelProviderType, ModelProviderHandler> handlerMap;
     private final ConcurrentHashMap<Long, ChatModel> chatModelCache = new ConcurrentHashMap<>();
@@ -106,6 +113,34 @@ public class ModelFactory {
     public void invalidateAllCache() {
         chatModelCache.clear();
         log.info("[ModelFactory] 所有缓存已清除");
+    }
+
+    /**
+     * 检查模型提供商连通性
+     *
+     * @param providerId 模型提供商ID
+     * @return 检查结果消息
+     */
+    public String checkConnectivity(Long providerId) {
+        // 1. 校验提供商存在性
+        ModelProvider provider = modelProviderService.getById(providerId);
+        if (provider == null) {
+            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+        }
+
+        // 2. 清除缓存后重新创建ChatModel（确保使用最新凭证）
+        invalidateCache(providerId);
+
+        // 3. 发送简单请求测试连通性
+        try {
+            ChatModel chatModel = getChatModel(providerId);
+            ChatResponse response = chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT)));
+            log.info("[ModelFactory] 连通性检查通过: providerId={}, name={}", providerId, provider.getName());
+            return "连接成功，API Key 有效";
+        } catch (Exception e) {
+            log.warn("[ModelFactory] 连通性检查失败: providerId={}, name={}, error={}", providerId, provider.getName(), e.getMessage());
+            throw new BizException(ErrorCode.MODEL_PROVIDER_CHECK_FAILED, e.getMessage());
+        }
     }
 
     /**

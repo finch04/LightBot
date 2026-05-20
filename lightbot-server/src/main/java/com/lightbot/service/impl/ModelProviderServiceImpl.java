@@ -9,17 +9,14 @@ import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.ModelProviderMapper;
-import com.lightbot.model.ModelFactory;
 import com.lightbot.service.ModelProviderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
 /**
  * 模型提供商服务实现类
+ * <p>纯数据层 CRUD，不依赖 ModelFactory，避免循环依赖</p>
  *
  * @author finch
  * @since 2026-05-19
@@ -29,10 +26,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, ModelProvider>
         implements ModelProviderService {
-
-    private final ModelFactory modelFactory;
-
-    private static final String CONNECTIVITY_CHECK_PROMPT = "你好，请回复OK";
 
     @Override
     public ModelProvider create(ModelProviderRequest request) {
@@ -62,9 +55,6 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         provider.setBaseUrl(request.getBaseUrl());
         provider.setConfig(request.getConfig());
         updateById(provider);
-
-        // 3. 清除缓存，下次使用时重新创建ChatModel
-        modelFactory.invalidateCache(request.getId());
         return provider;
     }
 
@@ -78,30 +68,6 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
     public void deleteById(Long id) {
         if (!removeById(id)) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
-        }
-    }
-
-    @Override
-    public String checkConnectivity(Long id) {
-        // 1. 校验提供商存在性
-        ModelProvider provider = getById(id);
-        if (provider == null) {
-            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
-        }
-
-        // 2. 清除缓存后重新创建ChatModel（确保使用最新凭证）
-        modelFactory.invalidateCache(id);
-
-        // 3. 发送简单请求测试连通性
-        try {
-            ChatModel chatModel = modelFactory.getChatModel(id);
-            UserMessage userMessage = new UserMessage(CONNECTIVITY_CHECK_PROMPT);
-            chatModel.call(new Prompt(userMessage));
-            log.info("[ModelProvider] 连通性检查通过: id={}, name={}", id, provider.getName());
-            return "连接成功，API Key 有效";
-        } catch (Exception e) {
-            log.warn("[ModelProvider] 连通性检查失败: id={}, name={}, error={}", id, provider.getName(), e.getMessage());
-            throw new BizException(ErrorCode.MODEL_PROVIDER_CHECK_FAILED, e.getMessage());
         }
     }
 }

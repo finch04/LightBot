@@ -33,7 +33,10 @@ public class ModelProviderController {
     @Operation(summary = "更新模型提供商")
     @PutMapping
     public Result<ModelProvider> update(@Valid @RequestBody ModelProviderRequest request) {
-        return Result.ok(modelProviderService.update(request));
+        ModelProvider provider = modelProviderService.update(request);
+        // 凭证变更后清除缓存，下次调用时重新创建ChatModel
+        modelFactory.invalidateCache(request.getId());
+        return Result.ok(provider);
     }
 
     @Operation(summary = "删除模型提供商")
@@ -66,6 +69,6 @@ public class ModelProviderController {
     @Operation(summary = "检查模型提供商连通性")
     @GetMapping("/{id}/check")
     public Result<String> checkConnectivity(@PathVariable Long id) {
-        return Result.ok(modelProviderService.checkConnectivity(id));
+        return Result.ok(modelFactory.checkConnectivity(id));
     }
 }

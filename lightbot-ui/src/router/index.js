@@ -56,7 +56,7 @@ const routes = [
       {
         path: 'mcp',
         name: 'MCP',
-        component: () => import('../views/Placeholder.vue'),
+        component: () => import('../views/McpManage.vue'),
       },
       {
         path: 'skills',

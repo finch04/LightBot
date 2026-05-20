@@ -44,12 +44,4 @@ public interface ModelProviderService extends IService<ModelProvider> {
      * @param id 主键ID
      */
     void deleteById(Long id);
-
-    /**
-     * 检查模型提供商连通性（发送一个简单请求测试API Key是否有效）
-     *
-     * @param id 主键ID
-     * @return 检查结果消息
-     */
-    String checkConnectivity(Long id);
 }
