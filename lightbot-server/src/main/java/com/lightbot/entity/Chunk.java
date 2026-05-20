@@ -3,6 +3,7 @@ package com.lightbot.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.lightbot.enums.ChunkStatus;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -51,6 +52,10 @@ public class Chunk {
     @TableField(value = "metadata", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "分块元数据")
     private String metadata;
+
+    @TableField("status")
+    @Schema(description = "向量化状态")
+    private ChunkStatus status;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     @Schema(description = "创建时间")

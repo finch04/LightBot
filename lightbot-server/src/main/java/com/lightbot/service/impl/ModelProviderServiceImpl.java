@@ -35,6 +35,9 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         provider.setType(request.getType());
         provider.setApiKey(request.getApiKey());
         provider.setBaseUrl(request.getBaseUrl());
+        provider.setModelsEndpoint(request.getModelsEndpoint());
+        provider.setHeadersJson(request.getHeadersJson());
+        provider.setExtraJson(request.getExtraJson());
         provider.setConfig(request.getConfig());
         provider.setStatus(CommonStatus.ACTIVE);
         save(provider);
@@ -53,6 +56,9 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         provider.setType(request.getType());
         provider.setApiKey(request.getApiKey());
         provider.setBaseUrl(request.getBaseUrl());
+        provider.setModelsEndpoint(request.getModelsEndpoint());
+        provider.setHeadersJson(request.getHeadersJson());
+        provider.setExtraJson(request.getExtraJson());
         provider.setConfig(request.getConfig());
         updateById(provider);
         return provider;

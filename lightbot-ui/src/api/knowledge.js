@@ -20,10 +20,20 @@ export function deleteKnowledge(id) {
   return request.delete(`/knowledge/${id}`)
 }
 
-export function uploadDocument(knowledgeId, file) {
+export function uploadDocument(knowledgeId, file, chunkStrategy = 'general') {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('chunkStrategy', chunkStrategy)
   return request.post(`/knowledge/${knowledgeId}/documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function uploadDocuments(knowledgeId, files, chunkStrategy = 'general') {
+  const formData = new FormData()
+  files.forEach(file => formData.append('files', file))
+  formData.append('chunkStrategy', chunkStrategy)
+  return request.post(`/knowledge/${knowledgeId}/documents/batch`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }

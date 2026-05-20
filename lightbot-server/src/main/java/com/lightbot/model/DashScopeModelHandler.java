@@ -3,6 +3,8 @@ package com.lightbot.model;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 public class DashScopeModelHandler implements ModelProviderHandler {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
     public ModelProviderType getProviderType() {
@@ -122,14 +126,16 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
     @Override
     public List<FetchedModel> fetchModels(ModelProvider provider) {
-        // 1. 调用 DashScope compatible-mode API 拉取在线模型
-        String url = "https://dashscope.aliyuncs.com/compatible-mode/v1/models";
+        // 1. 优先使用 modelsEndpoint，否则使用默认地址
+        String url = resolveModelsEndpoint(provider);
         List<FetchedModel> result = new ArrayList<>();
 
         try {
-            RestClient restClient = RestClient.builder()
-                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey())
-                    .build();
+            // 2. 构建 RestClient，添加额外请求头
+            RestClient.Builder clientBuilder = RestClient.builder()
+                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey());
+            addExtraHeaders(clientBuilder, provider.getHeadersJson());
+            RestClient restClient = clientBuilder.build();
 
             Map<String, Object> response = restClient.get()
                     .uri(url)
@@ -143,15 +149,41 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                         .collect(Collectors.toList()));
             }
         } catch (Exception e) {
-            log.warn("[DashScopeHandler] compatible-mode 拉取失败: error={}", e.getMessage());
+            log.warn("[DashScopeHandler] 模型列表拉取失败: url={}, error={}", url, e.getMessage());
         }
 
-        // 2. 补充 DashScope 常用模型（compatible-mode 可能不返回 embedding/rerank 等）
+        // 3. 补充 DashScope 常用模型（API 可能不返回 embedding/rerank 等类型）
         addWellKnownModels(result);
 
         return result.stream()
                 .sorted(Comparator.comparing(FetchedModel::getModelId))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 解析模型列表获取地址
+     * <p>优先使用 modelsEndpoint，否则使用默认地址</p>
+     */
+    private String resolveModelsEndpoint(ModelProvider provider) {
+        if (provider.getModelsEndpoint() != null && !provider.getModelsEndpoint().isBlank()) {
+            return provider.getModelsEndpoint();
+        }
+        return "https://dashscope.aliyuncs.com/compatible-mode/v1/models";
+    }
+
+    /**
+     * 添加额外请求头
+     */
+    private void addExtraHeaders(RestClient.Builder builder, String headersJson) {
+        if (headersJson == null || headersJson.isBlank()) {
+            return;
+        }
+        try {
+            Map<String, String> headers = OBJECT_MAPPER.readValue(headersJson, new TypeReference<>() {});
+            headers.forEach(builder::defaultHeader);
+        } catch (Exception e) {
+            log.warn("[DashScopeHandler] 解析额外请求头失败: {}", e.getMessage());
+        }
     }
 
     /**

@@ -44,8 +44,20 @@ public class ModelProvider {
     @Schema(description = "API基础地址")
     private String baseUrl;
 
+    @TableField("models_endpoint")
+    @Schema(description = "模型列表获取地址（为空时使用默认地址）")
+    private String modelsEndpoint;
+
+    @TableField(value = "headers_json", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "额外请求头（JSON格式）")
+    private String headersJson;
+
+    @TableField(value = "extra_json", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "扩展配置（JSON格式）")
+    private String extraJson;
+
     @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
-    @Schema(description = "扩展配置")
+    @Schema(description = "模型参数配置")
     private String config;
 
     @TableField("status")

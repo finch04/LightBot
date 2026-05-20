@@ -55,10 +55,11 @@ public enum ErrorCode {
     KNOWLEDGE_NO_DOCUMENT(50008, "知识库暂无文档，无法生成思维导图", HttpStatus.BAD_REQUEST),
 
     // ========== 文档模块 ==========
-    DOCUMENT_UNSUPPORTED_TYPE(60001, "目前仅支持 Markdown 文件", HttpStatus.BAD_REQUEST),
+    DOCUMENT_UNSUPPORTED_TYPE(60001, "不支持的文件类型，支持: md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html", HttpStatus.BAD_REQUEST),
     DOCUMENT_ALREADY_EXISTS(60002, "该文件已上传过", HttpStatus.BAD_REQUEST),
     DOCUMENT_NOT_FOUND(60003, "文档不存在", HttpStatus.BAD_REQUEST),
     DOCUMENT_READ_FAILED(60004, "读取文档内容失败", HttpStatus.INTERNAL_SERVER_ERROR),
+    DOCUMENT_PARSE_FAILED(60005, "文档解析失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // ========== RAG 模块 ==========
     RAG_KNOWLEDGE_NOT_FOUND(70001, "知识库不存在", HttpStatus.BAD_REQUEST),

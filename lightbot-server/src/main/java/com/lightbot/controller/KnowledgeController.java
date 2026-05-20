@@ -2,8 +2,8 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import com.lightbot.dto.ChunkVO;
 import com.lightbot.dto.KnowledgeMemberVO;
-import com.lightbot.entity.Chunk;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.KnowledgeRole;
@@ -106,8 +106,18 @@ public class KnowledgeController {
 
     @Operation(summary = "上传文档到知识库（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/documents")
-    public Result<Document> uploadDocument(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
-        return Result.ok(documentService.uploadDocument(id, file));
+    public Result<Document> uploadDocument(@PathVariable Long id,
+                                            @RequestParam("file") MultipartFile file,
+                                            @RequestParam(defaultValue = "general") String chunkStrategy) {
+        return Result.ok(documentService.uploadDocument(id, file, chunkStrategy));
+    }
+
+    @Operation(summary = "批量上传文档到知识库（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/documents/batch")
+    public Result<List<Document>> uploadDocuments(@PathVariable Long id,
+                                                   @RequestParam("files") List<MultipartFile> files,
+                                                   @RequestParam(defaultValue = "general") String chunkStrategy) {
+        return Result.ok(documentService.uploadDocuments(id, files, chunkStrategy));
     }
 
     @Operation(summary = "获取知识库下的文档列表（需要成员权限）")
@@ -137,10 +147,10 @@ public class KnowledgeController {
 
     // ========== 分块查看 ==========
 
-    @Operation(summary = "获取文档的分块列表（需要成员权限）")
+    @Operation(summary = "获取文档的分块列表（含向量化状态）")
     @GetMapping("/documents/{docId}/chunks")
-    public Result<List<Chunk>> listChunks(@PathVariable Long docId) {
-        return Result.ok(chunkService.listByDocumentId(docId));
+    public Result<List<ChunkVO>> listChunks(@PathVariable Long docId) {
+        return Result.ok(chunkService.listChunkVOsByDocumentId(docId));
     }
 
     // ========== 思维导图 ==========

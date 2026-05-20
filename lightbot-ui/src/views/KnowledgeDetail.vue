@@ -23,9 +23,7 @@
       <div class="panel">
         <div class="panel-header">
           <h3>文档列表</h3>
-          <a-upload :show-upload-list="false" :before-upload="handleUpload" accept=".md">
-            <button class="btn-primary-sm">上传文档</button>
-          </a-upload>
+          <button class="btn-primary-sm" @click="openUploadModal">上传文档</button>
         </div>
         <div class="doc-list">
           <div v-for="doc in documents" :key="doc.id" class="doc-item" @click="openDocModal(doc)">
@@ -109,7 +107,12 @@
             <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item" @click="openChunkDetail(chunk)">
               <div class="chunk-header">
                 <span class="chunk-index">#{{ chunk.chunkIndex ?? i + 1 }}</span>
-                <span class="chunk-meta">{{ chunk.tokenCount || 0 }} tokens</span>
+                <div class="chunk-header-right">
+                  <a-tag v-if="chunk.status" :color="chunkStatusColor(chunk.status)" size="small">
+                    {{ chunkStatusText(chunk.status) }}
+                  </a-tag>
+                  <span class="chunk-meta">{{ chunk.tokenCount || 0 }} tokens</span>
+                </div>
               </div>
               <div class="chunk-preview">{{ chunk.content?.length > 100 ? chunk.content.substring(0, 100) + '...' : chunk.content }}</div>
             </div>
@@ -128,8 +131,55 @@
     >
       <div class="chunk-detail-meta">
         <span>{{ currentChunk?.tokenCount || 0 }} tokens</span>
+        <a-tag v-if="currentChunk?.status" :color="chunkStatusColor(currentChunk.status)" style="margin-left: 8px">
+          {{ chunkStatusText(currentChunk.status) }}
+        </a-tag>
       </div>
       <pre class="chunk-detail-content">{{ currentChunk?.content }}</pre>
+    </a-modal>
+
+    <!-- 上传文档弹窗 -->
+    <a-modal
+      v-model:open="uploadVisible"
+      title="上传文档"
+      :width="520"
+      :footer="null"
+    >
+      <div class="upload-section">
+        <div class="upload-form-item">
+          <label class="upload-label">分块策略</label>
+          <a-select v-model:value="uploadForm.chunkStrategy" style="width: 100%">
+            <a-select-option value="general">通用分块 - 按分隔符和长度切分</a-select-option>
+            <a-select-option value="book">书籍分块 - 按章节标题切分</a-select-option>
+            <a-select-option value="separator">严格分隔 - 遇分隔符即切分</a-select-option>
+          </a-select>
+        </div>
+
+        <div class="upload-dropzone" @click="triggerFileInput" @drop.prevent="onDrop" @dragover.prevent>
+          <input ref="fileInputRef" type="file" multiple accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.html,.htm" style="display: none" @change="onFileSelect" />
+          <p class="dropzone-text">拖拽文件到此处，或点击选择</p>
+          <p class="dropzone-hint">支持 md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html</p>
+        </div>
+
+        <div class="upload-file-list" v-if="uploadFiles.length > 0">
+          <div v-for="(file, i) in uploadFiles" :key="i" class="upload-file-item">
+            <span class="upload-file-name">{{ file.name }}</span>
+            <span class="upload-file-status" :class="file._status">
+              {{ file._status === 'uploading' ? '上传中...' : file._status === 'success' ? '上传成功' : file._status === 'error' ? '上传失败' : '' }}
+            </span>
+            <button class="btn-icon-sm danger" @click="removeUploadFile(i)">
+              <CloseOutlined />
+            </button>
+          </div>
+        </div>
+
+        <div class="upload-actions">
+          <button class="btn-outline-sm" @click="uploadVisible = false">取消</button>
+          <button class="btn-primary-sm" :disabled="uploadFiles.length === 0 || uploadSubmitting" @click="handleBatchUpload">
+            {{ uploadSubmitting ? '上传中...' : '开始上传' }}
+          </button>
+        </div>
+      </div>
     </a-modal>
 
     <!-- 编辑知识库弹窗 -->
@@ -248,7 +298,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
-  getKnowledge, updateKnowledge, getDocuments, uploadDocument, deleteDocument,
+  getKnowledge, updateKnowledge, getDocuments, uploadDocument, uploadDocuments, deleteDocument,
   previewDocument, getChunks, askKnowledge, generateMindmap, getMindmap,
   getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole, removeKnowledgeMember,
 } from '../api/knowledge'
@@ -285,6 +335,15 @@ const chunks = ref([])
 // 分块详情弹窗
 const chunkDetailVisible = ref(false)
 const currentChunk = ref(null)
+
+// 上传弹窗
+const uploadVisible = ref(false)
+const uploadSubmitting = ref(false)
+const uploadFiles = ref([])
+const fileInputRef = ref(null)
+const uploadForm = reactive({
+  chunkStrategy: 'general',
+})
 
 // 编辑弹窗
 const editVisible = ref(false)
@@ -327,13 +386,67 @@ async function loadDocuments() {
 
 async function handleUpload(file) {
   try {
-    await uploadDocument(knowledgeId, file)
+    await uploadDocument(knowledgeId, file, uploadForm.chunkStrategy)
     message.success('上传成功，正在处理...')
     setTimeout(loadDocuments, 1000)
   } catch (e) {
     // interceptor已处理错误提示
   }
   return false
+}
+
+// ========== 上传弹窗 ==========
+
+function openUploadModal() {
+  uploadFiles.value = []
+  uploadForm.chunkStrategy = 'general'
+  uploadVisible.value = true
+}
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function onFileSelect(e) {
+  const files = Array.from(e.target.files || [])
+  addUploadFiles(files)
+  e.target.value = ''
+}
+
+function onDrop(e) {
+  const files = Array.from(e.dataTransfer?.files || [])
+  addUploadFiles(files)
+}
+
+function addUploadFiles(files) {
+  for (const file of files) {
+    const exists = uploadFiles.value.some(f => f.name === file.name && f.size === file.size)
+    if (!exists) {
+      uploadFiles.value.push(Object.assign(file, { _status: 'pending' }))
+    }
+  }
+}
+
+function removeUploadFile(index) {
+  uploadFiles.value.splice(index, 1)
+}
+
+async function handleBatchUpload() {
+  if (uploadFiles.value.length === 0 || uploadSubmitting.value) return
+  uploadSubmitting.value = true
+
+  try {
+    const files = uploadFiles.value.map(f => f)
+    await uploadDocuments(knowledgeId, files, uploadForm.chunkStrategy)
+    message.success(`批量上传成功，共 ${files.length} 个文件正在处理...`)
+    uploadVisible.value = false
+    uploadFiles.value = []
+    setTimeout(loadDocuments, 1000)
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    uploadSubmitting.value = false
+  }
 }
 
 // ========== 文档弹窗 ==========
@@ -456,6 +569,18 @@ async function askRag() {
 function statusText(s) {
   const map = { pending: '待处理', processing: '处理中', completed: '已完成', failed: '失败' }
   return map[s] || s
+}
+
+function chunkStatusText(s) {
+  const code = s?.code || s
+  const map = { chunked: '已分块', vectorizing: '向量化中', vectorized: '已向量化', failed: '失败' }
+  return map[code] || code
+}
+
+function chunkStatusColor(s) {
+  const code = s?.code || s
+  const map = { chunked: 'default', vectorizing: 'processing', vectorized: 'success', failed: 'error' }
+  return map[code] || 'default'
 }
 
 // ========== 思维导图 ==========
@@ -1072,6 +1197,91 @@ onMounted(() => {
   padding: 24px;
   color: #a1a1aa;
   font-size: 13px;
+}
+
+/* 上传弹窗 */
+.upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.upload-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.upload-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #171717;
+}
+.upload-dropzone {
+  border: 2px dashed #d4d4d8;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.upload-dropzone:hover {
+  border-color: #0070f3;
+}
+.dropzone-text {
+  font-size: 14px;
+  color: #52525b;
+  margin-bottom: 4px;
+}
+.dropzone-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.upload-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.upload-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #f5f5f5;
+  border-radius: 6px;
+}
+.upload-file-name {
+  flex: 1;
+  font-size: 13px;
+  color: #171717;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-file-status {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.upload-file-status.uploading {
+  color: #d97706;
+}
+.upload-file-status.success {
+  color: #16a34a;
+}
+.upload-file-status.error {
+  color: #dc2626;
+}
+.upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #ebebeb;
+}
+.chunk-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* 邀请弹窗 */

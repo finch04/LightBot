@@ -223,7 +223,9 @@ onMounted(loadAll)
 .dashboard {
   padding: 24px 32px;
   height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #fafafa;
 }
 
@@ -233,6 +235,7 @@ onMounted(loadAll)
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 .stat-card {
   display: flex;
@@ -273,8 +276,10 @@ onMounted(loadAll)
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
 }
-.grid-item { min-height: 300px; }
+.grid-item { min-height: 0; }
 
 /* ===== 面板通用 ===== */
 .panel {
@@ -285,6 +290,8 @@ onMounted(loadAll)
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 .panel-header {
   display: flex;
@@ -309,7 +316,7 @@ onMounted(loadAll)
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  min-height: 180px;
+  min-height: 0;
   padding-bottom: 8px;
 }
 .bar-col {

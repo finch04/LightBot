@@ -73,6 +73,10 @@ public class Document {
     @Schema(description = "错误信息")
     private String errorMessage;
 
+    @TableField("chunk_strategy")
+    @Schema(description = "分块策略: general/book/separator")
+    private String chunkStrategy;
+
     @TableField(value = "metadata", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "文档元数据")
     private String metadata;

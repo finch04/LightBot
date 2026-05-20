@@ -1,5 +1,7 @@
 package com.lightbot.model;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 public class OpenAIModelHandler implements ModelProviderHandler {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
     public ModelProviderType getProviderType() {
@@ -136,21 +140,22 @@ public class OpenAIModelHandler implements ModelProviderHandler {
 
     @Override
     public List<FetchedModel> fetchModels(ModelProvider provider) {
-        // 1. 构建模型列表URL（兼容 baseUrl 末尾有/无 /v1 的情况）
-        String baseUrl = resolveBaseUrl(provider);
-        String url = baseUrl + "/v1/models";
+        // 1. 优先使用 modelsEndpoint，否则使用默认地址
+        String url = resolveModelsEndpoint(provider);
 
         try {
-            RestClient restClient = RestClient.builder()
-                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey())
-                    .build();
+            // 2. 构建 RestClient，添加额外请求头
+            RestClient.Builder clientBuilder = RestClient.builder()
+                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey());
+            addExtraHeaders(clientBuilder, provider.getHeadersJson());
+            RestClient restClient = clientBuilder.build();
 
             Map<String, Object> response = restClient.get()
                     .uri(url)
                     .retrieve()
                     .body(Map.class);
 
-            // 2. 解析响应，提取模型ID并推断类型
+            // 3. 解析响应，提取模型ID
             List<Map<String, Object>> data = (List<Map<String, Object>>) response.get("data");
             if (data == null) return List.of();
 
@@ -161,6 +166,32 @@ public class OpenAIModelHandler implements ModelProviderHandler {
         } catch (Exception e) {
             log.warn("[OpenAIHandler] 拉取模型列表失败: url={}, error={}", url, e.getMessage());
             throw new RuntimeException("拉取模型列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 解析模型列表获取地址
+     * <p>优先使用 modelsEndpoint，否则基于 baseUrl 构建默认地址</p>
+     */
+    private String resolveModelsEndpoint(ModelProvider provider) {
+        if (provider.getModelsEndpoint() != null && !provider.getModelsEndpoint().isBlank()) {
+            return provider.getModelsEndpoint();
+        }
+        return resolveBaseUrl(provider) + "/v1/models";
+    }
+
+    /**
+     * 添加额外请求头
+     */
+    private void addExtraHeaders(RestClient.Builder builder, String headersJson) {
+        if (headersJson == null || headersJson.isBlank()) {
+            return;
+        }
+        try {
+            Map<String, String> headers = OBJECT_MAPPER.readValue(headersJson, new TypeReference<>() {});
+            headers.forEach(builder::defaultHeader);
+        } catch (Exception e) {
+            log.warn("[OpenAIHandler] 解析额外请求头失败: {}", e.getMessage());
         }
     }
 

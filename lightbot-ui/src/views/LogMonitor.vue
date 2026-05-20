@@ -186,7 +186,8 @@ async function loadHistory() {
 
 function connectSSE() {
   if (eventSource) return
-  eventSource = new EventSource('/api/logs/stream')
+  const token = localStorage.getItem('token') || ''
+  eventSource = new EventSource(`/api/logs/stream?token=${encodeURIComponent(token)}`)
 
   eventSource.addEventListener('log', (e) => {
     try {

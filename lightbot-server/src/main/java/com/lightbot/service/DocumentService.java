@@ -17,11 +17,22 @@ public interface DocumentService extends IService<Document> {
     /**
      * 上传文档并处理
      *
-     * @param knowledgeId 知识库ID
-     * @param file        上传的文件
+     * @param knowledgeId   知识库ID
+     * @param file          上传的文件
+     * @param chunkStrategy 分块策略（general/book/separator）
      * @return 文档记录
      */
-    Document uploadDocument(Long knowledgeId, MultipartFile file);
+    Document uploadDocument(Long knowledgeId, MultipartFile file, String chunkStrategy);
+
+    /**
+     * 批量上传文档
+     *
+     * @param knowledgeId   知识库ID
+     * @param files         上传的文件列表
+     * @param chunkStrategy 分块策略（general/book/separator）
+     * @return 文档记录列表
+     */
+    List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, String chunkStrategy);
 
     /**
      * 异步处理文档：读取内容 -> 分块 -> 存储

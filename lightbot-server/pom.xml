@@ -69,6 +69,18 @@
             <artifactId>minio</artifactId>
         </dependency>
 
+        <!-- Apache Tika 全格式文档解析 -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>2.9.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>2.9.2</version>
+        </dependency>
+
         <!-- Sa-Token -->
         <dependency>
             <groupId>cn.dev33</groupId>

@@ -2,8 +2,11 @@ package com.lightbot.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lightbot.dto.ChunkVO;
 import com.lightbot.entity.Chunk;
+import com.lightbot.enums.ChunkStatus;
 import com.lightbot.mapper.ChunkMapper;
+import com.lightbot.model.chunking.TokenUtil;
 import com.lightbot.service.ChunkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -53,12 +56,18 @@ public class ChunkServiceImpl extends ServiceImpl<ChunkMapper, Chunk>
 
     @Override
     public void saveChunk(Long documentId, Long knowledgeId, int index, String content) {
+        saveChunk(documentId, knowledgeId, index, content, null);
+    }
+
+    @Override
+    public void saveChunk(Long documentId, Long knowledgeId, int index, String content, ChunkStatus status) {
         Chunk chunk = new Chunk();
         chunk.setDocumentId(documentId);
         chunk.setKnowledgeId(knowledgeId);
         chunk.setChunkIndex(index);
         chunk.setContent(content);
-        chunk.setTokenCount((int) (content.length() * 1.2));
+        chunk.setTokenCount(TokenUtil.countTokens(content));
+        chunk.setStatus(status);
         save(chunk);
     }
 
@@ -67,6 +76,23 @@ public class ChunkServiceImpl extends ServiceImpl<ChunkMapper, Chunk>
         return list(new LambdaQueryWrapper<Chunk>()
                 .eq(Chunk::getDocumentId, documentId)
                 .orderByAsc(Chunk::getChunkIndex));
+    }
+
+    @Override
+    public List<ChunkVO> listChunkVOsByDocumentId(Long documentId) {
+        List<Chunk> chunks = listByDocumentId(documentId);
+        return chunks.stream().map(chunk -> {
+            ChunkVO vo = new ChunkVO();
+            vo.setId(chunk.getId());
+            vo.setDocumentId(chunk.getDocumentId());
+            vo.setContent(chunk.getContent());
+            vo.setChunkIndex(chunk.getChunkIndex());
+            vo.setTokenCount(chunk.getTokenCount());
+            vo.setStatus(chunk.getStatus());
+            vo.setMetadata(chunk.getMetadata());
+            vo.setCreateTime(chunk.getCreateTime());
+            return vo;
+        }).toList();
     }
 
     /**
