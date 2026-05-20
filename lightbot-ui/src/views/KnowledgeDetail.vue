@@ -62,7 +62,7 @@
             </div>
           </a-tab-pane>
           <a-tab-pane key="mindmap" tab="思维导图">
-            <div class="mindmap-section">
+            <div v-if="activeTab === 'mindmap'" class="mindmap-section">
               <div v-if="mindmapData" class="mindmap-container">
                 <svg ref="mindmapSvgRef" class="mindmap-svg"></svg>
                 <div class="mindmap-actions">
@@ -73,7 +73,8 @@
               </div>
               <div v-else class="mindmap-empty">
                 <p v-if="documents.length === 0">请先上传文档后再生成思维导图</p>
-                <p v-else>暂无思维导图，点击下方按钮AI自动生成</p>
+                <p v-else-if="mindmapLoaded">暂无思维导图，点击下方按钮AI自动生成</p>
+                <p v-else>加载中...</p>
                 <button class="btn-primary-sm" :disabled="mindmapLoading || documents.length === 0" @click="handleGenerateMindmap">
                   {{ mindmapLoading ? '生成中...' : '生成思维导图' }}
                 </button>
@@ -88,7 +89,7 @@
     <a-modal
       v-model:open="docModalVisible"
       :title="currentDoc?.name || '文档详情'"
-      :width="720"
+      :width="860"
       :footer="null"
     >
       <a-tabs v-model:activeKey="docModalTab">
@@ -100,17 +101,30 @@
         </a-tab-pane>
         <a-tab-pane key="chunks" tab="分块列表">
           <div class="chunk-list" v-if="chunks.length > 0">
-            <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item">
+            <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item" @click="openChunkDetail(chunk)">
               <div class="chunk-header">
                 <span class="chunk-index">#{{ chunk.chunkIndex ?? i + 1 }}</span>
                 <span class="chunk-meta">{{ chunk.tokenCount || 0 }} tokens</span>
               </div>
-              <pre class="chunk-content">{{ chunk.content }}</pre>
+              <div class="chunk-preview">{{ chunk.content?.length > 100 ? chunk.content.substring(0, 100) + '...' : chunk.content }}</div>
             </div>
           </div>
           <div v-else class="modal-empty">暂无分块数据</div>
         </a-tab-pane>
       </a-tabs>
+    </a-modal>
+
+    <!-- 分块详情弹窗 -->
+    <a-modal
+      v-model:open="chunkDetailVisible"
+      :title="`分块 #${currentChunk?.chunkIndex ?? ''}`"
+      :width="720"
+      :footer="null"
+    >
+      <div class="chunk-detail-meta">
+        <span>{{ currentChunk?.tokenCount || 0 }} tokens</span>
+      </div>
+      <pre class="chunk-detail-content">{{ currentChunk?.content }}</pre>
     </a-modal>
 
     <!-- 编辑知识库弹窗 -->
@@ -123,7 +137,11 @@
           <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" />
         </a-form-item>
         <a-form-item label="Embed模型">
-          <a-input v-model:value="editForm.embeddingModel" />
+          <a-select v-model:value="editForm.embeddingModel" placeholder="选择嵌入模型" allow-clear style="width: 100%">
+            <a-select-option v-for="m in embeddingModels" :key="m.id" :value="m.modelId">
+              {{ m.name }} ({{ m.modelId }})
+            </a-select-option>
+          </a-select>
         </a-form-item>
         <a-form-item label="分块大小">
           <a-input-number v-model:value="editForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
@@ -140,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted } from 'vue'
+import { ref, reactive, nextTick, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
@@ -148,6 +166,7 @@ import {
   getKnowledge, updateKnowledge, getDocuments, uploadDocument, deleteDocument,
   previewDocument, getChunks, askKnowledge, generateMindmap, getMindmap,
 } from '../api/knowledge'
+import { getModelsByType } from '../api/model'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 
@@ -165,6 +184,7 @@ const ragRef = ref(null)
 const mindmapData = ref(null)
 const mindmapLoading = ref(false)
 const mindmapSvgRef = ref(null)
+const mindmapLoaded = ref(false)
 
 // 文档弹窗
 const docModalVisible = ref(false)
@@ -173,9 +193,14 @@ const currentDoc = ref(null)
 const previewContent = ref('')
 const chunks = ref([])
 
+// 分块详情弹窗
+const chunkDetailVisible = ref(false)
+const currentChunk = ref(null)
+
 // 编辑弹窗
 const editVisible = ref(false)
 const editSubmitting = ref(false)
+const embeddingModels = ref([])
 const editForm = reactive({
   name: '',
   description: '',
@@ -202,7 +227,7 @@ async function handleUpload(file) {
     message.success('上传成功，正在处理...')
     setTimeout(loadDocuments, 1000)
   } catch (e) {
-    message.error('上传失败')
+    // interceptor已处理错误提示
   }
   return false
 }
@@ -225,13 +250,18 @@ async function openDocModal(doc) {
     previewContent.value = previewRes.value.data
   }
   if (chunksRes.status === 'fulfilled') {
-    chunks.value = chunksRes.value.data || []
+    chunks.value = (chunksRes.value.data || []).sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0))
   }
+}
+
+function openChunkDetail(chunk) {
+  currentChunk.value = chunk
+  chunkDetailVisible.value = true
 }
 
 // ========== 编辑知识库 ==========
 
-function openEditDialog() {
+async function openEditDialog() {
   const k = knowledge.value
   // 解析已有的config JSONB
   let config = {}
@@ -249,6 +279,12 @@ function openEditDialog() {
     ragThreshold: config.ragThreshold ?? 0.7,
   })
   editVisible.value = true
+
+  // 加载嵌入模型列表
+  try {
+    const res = await getModelsByType('embedding')
+    embeddingModels.value = res.data || []
+  } catch { /* ignore */ }
 }
 
 async function handleEdit() {
@@ -288,7 +324,7 @@ function deleteDoc(docId) {
         message.success('删除成功')
         loadDocuments()
       } catch (e) {
-        message.error('删除失败')
+        // interceptor已处理错误提示
       }
     },
   })
@@ -320,6 +356,8 @@ function statusText(s) {
 // ========== 思维导图 ==========
 
 async function loadMindmap() {
+  if (mindmapLoaded.value) return
+  mindmapLoaded.value = true
   try {
     const res = await getMindmap(knowledgeId)
     if (res.data) {
@@ -331,6 +369,19 @@ async function loadMindmap() {
     // 未生成过思维导图，忽略
   }
 }
+
+// 切换到思维导图tab时才加载/重新渲染
+watch(activeTab, (tab) => {
+  if (tab === 'mindmap') {
+    nextTick(() => {
+      if (mindmapData.value) {
+        renderMindmap()
+      } else {
+        loadMindmap()
+      }
+    })
+  }
+})
 
 async function handleGenerateMindmap() {
   if (documents.value.length === 0) {
@@ -345,7 +396,7 @@ async function handleGenerateMindmap() {
     await nextTick()
     renderMindmap()
   } catch (e) {
-    message.error('生成失败：' + (e.message || '未知错误'))
+    // interceptor已处理错误提示
   } finally {
     mindmapLoading.value = false
   }
@@ -386,7 +437,6 @@ function jsonToMarkdown(node, level) {
 onMounted(() => {
   loadKnowledge()
   loadDocuments()
-  loadMindmap()
 })
 </script>
 
@@ -640,24 +690,40 @@ onMounted(() => {
 
 /* 分块列表 */
 .chunk-list {
-  max-height: 500px;
+  height: 500px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  overflow-x: hidden;
+}
+.chunk-list::-webkit-scrollbar {
+  width: 6px;
+}
+.chunk-list::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+.chunk-list::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
 }
 .chunk-item {
   border: 1px solid #ebebeb;
-  border-radius: 8px;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  margin-bottom: 8px;
   overflow: hidden;
 }
+.chunk-item:hover {
+  border-color: #0070f3;
+}
 .chunk-header {
+  height: 30px;
+  line-height: 30px;
+  padding: 0 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #ebebeb;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  background: #f9f9f9;
-  border-bottom: 1px solid #ebebeb;
 }
 .chunk-index {
   font-size: 13px;
@@ -668,14 +734,31 @@ onMounted(() => {
   font-size: 12px;
   color: #a1a1aa;
 }
-.chunk-content {
-  padding: 12px;
+.chunk-preview {
+  height: 50px;
+  line-height: 20px;
+  padding: 5px 12px;
   font-size: 13px;
-  line-height: 1.6;
+  color: #52525b;
+  overflow: hidden;
+}
+
+/* 分块详情弹窗 */
+.chunk-detail-meta {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-bottom: 12px;
+}
+.chunk-detail-content {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  max-height: 200px;
+  max-height: 500px;
   overflow-y: auto;
 }
 </style>

@@ -112,10 +112,10 @@ CREATE TABLE t_user (
     phone           VARCHAR(20),
     role            VARCHAR(20)     NOT NULL DEFAULT 'user',
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    last_login_at   TIMESTAMPTZ,
+    last_login_at   TIMESTAMP,
     config          JSONB           DEFAULT '{}',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -170,8 +170,8 @@ CREATE TABLE t_model_provider (
     base_url        VARCHAR(256),
     config          JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -226,10 +226,10 @@ CREATE TABLE t_agent (
     agent_type      VARCHAR(32)     NOT NULL DEFAULT 'chat',
     config          JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
-    publish_time    TIMESTAMPTZ,
+    publish_time    TIMESTAMP,
     version         INT             NOT NULL DEFAULT 1,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -294,8 +294,8 @@ CREATE TABLE t_workflow (
     config          JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
     version         INT             NOT NULL DEFAULT 1,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -368,8 +368,8 @@ CREATE TABLE t_workflow_node (
     outputs         JSONB           DEFAULT '[]',
     position_x      FLOAT           NOT NULL DEFAULT 0,
     position_y      FLOAT           NOT NULL DEFAULT 0,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
@@ -455,8 +455,8 @@ CREATE TABLE t_tool (
     auth_type       VARCHAR(32),
     auth_config     JSONB           DEFAULT '{}',
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -535,8 +535,8 @@ CREATE TABLE t_skill (
     config          JSONB           DEFAULT '{}',
     sort_order      INT             NOT NULL DEFAULT 0,
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -597,8 +597,8 @@ CREATE TABLE t_knowledge (
     chunk_count     INT             NOT NULL DEFAULT 0,
     total_tokens    BIGINT          NOT NULL DEFAULT 0,
     status          VARCHAR(20)     NOT NULL DEFAULT 'active',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -664,8 +664,8 @@ CREATE TABLE t_document (
     status          VARCHAR(20)     NOT NULL DEFAULT 'pending',
     error_message   TEXT,
     metadata        JSONB           DEFAULT '{}',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -721,8 +721,8 @@ CREATE TABLE t_chunk (
     chunk_index     INT             NOT NULL,
     token_count     INT             NOT NULL DEFAULT 0,
     metadata        JSONB           DEFAULT '{}',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
@@ -775,7 +775,7 @@ CREATE TABLE t_embedding (
     model_name      VARCHAR(64)     NOT NULL,
     dimension       INT             NOT NULL DEFAULT 1536,
     vector          vector(1536)    NOT NULL,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
@@ -836,9 +836,9 @@ CREATE TABLE t_chat_session (
     context         JSONB           DEFAULT '{}',
     message_count   INT             NOT NULL DEFAULT 0,
     total_tokens    BIGINT          NOT NULL DEFAULT 0,
-    last_message_at TIMESTAMPTZ,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_message_at TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
@@ -900,7 +900,7 @@ CREATE TABLE t_message (
     token_count     INT             NOT NULL DEFAULT 0,
     metadata        JSONB           DEFAULT '{}',
     parent_id       BIGINT,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 

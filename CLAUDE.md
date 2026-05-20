@@ -611,8 +611,8 @@ CREATE TABLE agent (
     id              BIGINT          NOT NULL,
     name            VARCHAR(128)    NOT NULL,
     status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted         SMALLINT        NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );

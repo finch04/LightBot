@@ -61,12 +61,12 @@ const routes = [
       {
         path: 'skills',
         name: 'Skills',
-        component: () => import('../views/Placeholder.vue'),
+        component: () => import('../views/SkillManage.vue'),
       },
       {
         path: 'tools',
         name: 'Tools',
-        component: () => import('../views/Placeholder.vue'),
+        component: () => import('../views/ToolManage.vue'),
       },
       {
         path: 'dashboard',
@@ -76,7 +76,7 @@ const routes = [
       {
         path: 'logs',
         name: 'Logs',
-        component: () => import('../views/Placeholder.vue'),
+        component: () => import('../views/LogMonitor.vue'),
       },
     ],
   },

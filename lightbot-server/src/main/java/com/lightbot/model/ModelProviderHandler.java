@@ -46,4 +46,14 @@ public interface ModelProviderHandler {
      * @return 配置字段列表
      */
     List<ConfigField> getConfigFields();
+
+    /**
+     * 联网拉取提供商下可用的模型列表
+     *
+     * @param provider 提供商实体（含 apiKey / baseUrl）
+     * @return 模型信息列表（含类型推断）
+     */
+    default List<FetchedModel> fetchModels(ModelProvider provider) {
+        return List.of();
+    }
 }

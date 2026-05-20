@@ -244,7 +244,7 @@ async function loadAgent() {
 
     selectedKnowledgeIds.value = new Set(knowledgeIds || [])
   } catch (e) {
-    message.error('加载 Agent 详情失败')
+    // interceptor已处理错误提示
   }
 }
 
@@ -296,7 +296,7 @@ async function handleSave() {
 
     message.success('保存成功')
   } catch (e) {
-    message.error('保存失败')
+    // interceptor已处理错误提示
   } finally {
     saving.value = false
   }

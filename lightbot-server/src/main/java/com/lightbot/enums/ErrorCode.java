@@ -38,6 +38,10 @@ public enum ErrorCode {
     MODEL_PROVIDER_NOT_FOUND(40001, "模型提供商不存在", HttpStatus.BAD_REQUEST),
     MODEL_PROVIDER_CHECK_FAILED(40002, "模型连通性检查失败: %s", HttpStatus.BAD_REQUEST),
 
+    // ========== 模型模块 ==========
+    MODEL_NOT_FOUND(40003, "模型不存在", HttpStatus.BAD_REQUEST),
+    MODEL_ALREADY_EXISTS(40004, "该提供商下已存在相同标识的模型", HttpStatus.BAD_REQUEST),
+
     // ========== 知识库模块 ==========
     KNOWLEDGE_NOT_FOUND(50001, "知识库不存在", HttpStatus.BAD_REQUEST),
     KNOWLEDGE_NO_PERMISSION(50002, "无权访问该知识库", HttpStatus.FORBIDDEN),
@@ -56,6 +60,13 @@ public enum ErrorCode {
 
     // ========== RAG 模块 ==========
     RAG_KNOWLEDGE_NOT_FOUND(70001, "知识库不存在", HttpStatus.BAD_REQUEST),
+
+    // ========== Tool模块 ==========
+    TOOL_NOT_FOUND(91001, "工具不存在", HttpStatus.BAD_REQUEST),
+    TOOL_NAME_EXISTS(91002, "工具标识已存在", HttpStatus.BAD_REQUEST),
+
+    // ========== Skill模块 ==========
+    SKILL_NOT_FOUND(92001, "Skill不存在", HttpStatus.BAD_REQUEST),
 
     // ========== MCP模块 ==========
     MCP_SERVER_NOT_FOUND(90001, "MCP Server不存在", HttpStatus.BAD_REQUEST),

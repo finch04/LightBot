@@ -4,7 +4,7 @@ CREATE TABLE agent_knowledge (
     id              BIGINT          NOT NULL,
     agent_id        BIGINT          NOT NULL,
     knowledge_id    BIGINT          NOT NULL,
-    create_time     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    create_time     TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 

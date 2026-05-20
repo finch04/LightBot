@@ -2,9 +2,11 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import com.lightbot.dto.ModelProviderCheckRequest;
 import com.lightbot.dto.ModelProviderRequest;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.model.ConfigField;
+import com.lightbot.model.FetchedModel;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.ModelProviderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -66,9 +68,21 @@ public class ModelProviderController {
         return Result.ok(modelFactory.getConfigFields(id));
     }
 
-    @Operation(summary = "检查模型提供商连通性")
+    @Operation(summary = "检查模型提供商连通性（已保存的提供商）")
     @GetMapping("/{id}/check")
     public Result<String> checkConnectivity(@PathVariable Long id) {
         return Result.ok(modelFactory.checkConnectivity(id));
+    }
+
+    @Operation(summary = "检查模型提供商连通性（表单实时数据）")
+    @PostMapping("/check")
+    public Result<String> checkConnectivityByForm(@Valid @RequestBody ModelProviderCheckRequest request) {
+        return Result.ok(modelFactory.checkConnectivityByForm(request.getType(), request.getApiKey(), request.getBaseUrl()));
+    }
+
+    @Operation(summary = "联网拉取提供商下的可用模型列表")
+    @GetMapping("/{id}/fetch-models")
+    public Result<List<FetchedModel>> fetchModels(@PathVariable Long id) {
+        return Result.ok(modelFactory.fetchModels(id));
     }
 }

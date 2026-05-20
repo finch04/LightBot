@@ -5,12 +5,18 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 通义千问（DashScope）模型处理器
@@ -18,6 +24,7 @@ import java.util.Map;
  * @author finch
  * @since 2026-05-19
  */
+@Slf4j
 @Component
 public class DashScopeModelHandler implements ModelProviderHandler {
 
@@ -106,6 +113,63 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                         .hint("值越高越不容易重复")
                         .build()
         );
+    }
+
+    @Override
+    public List<FetchedModel> fetchModels(ModelProvider provider) {
+        // 1. 调用 DashScope compatible-mode API 拉取在线模型
+        String url = "https://dashscope.aliyuncs.com/compatible-mode/v1/models";
+        List<FetchedModel> result = new ArrayList<>();
+
+        try {
+            RestClient restClient = RestClient.builder()
+                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey())
+                    .build();
+
+            Map<String, Object> response = restClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .body(Map.class);
+
+            List<Map<String, Object>> data = (List<Map<String, Object>>) response.get("data");
+            if (data != null) {
+                result.addAll(data.stream()
+                        .map(m -> FetchedModel.of(m.get("id").toString()))
+                        .collect(Collectors.toList()));
+            }
+        } catch (Exception e) {
+            log.warn("[DashScopeHandler] compatible-mode 拉取失败: error={}", e.getMessage());
+        }
+
+        // 2. 补充 DashScope 常用模型（compatible-mode 可能不返回 embedding/rerank 等）
+        addWellKnownModels(result);
+
+        return result.stream()
+                .sorted(Comparator.comparing(FetchedModel::getModelId))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 补充 DashScope 常用模型（API 可能不返回 embedding/rerank 等类型）
+     */
+    private void addWellKnownModels(List<FetchedModel> list) {
+        Set<String> existing = list.stream()
+                .map(FetchedModel::getModelId).collect(Collectors.toSet());
+
+        // 对话模型
+        for (String id : List.of("qwen-turbo", "qwen-plus", "qwen-max", "qwen-long",
+                "qwen-turbo-latest", "qwen-plus-latest", "qwen-max-latest")) {
+            if (!existing.contains(id)) list.add(FetchedModel.of(id));
+        }
+        // 嵌入模型
+        for (String id : List.of("text-embedding-v1", "text-embedding-v2", "text-embedding-v3",
+                "text-embedding-async-v1", "text-embedding-async-v2")) {
+            if (!existing.contains(id)) list.add(FetchedModel.of(id));
+        }
+        // 重排模型
+        for (String id : List.of("gte-rerank", "gte-rerank-v2")) {
+            if (!existing.contains(id)) list.add(FetchedModel.of(id));
+        }
     }
 
     private double toDouble(Object val) {

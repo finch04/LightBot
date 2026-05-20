@@ -40,10 +40,22 @@ request.interceptors.request.use((config) => {
   return config
 })
 
+/** HTTP状态码对应的用户友好提示 */
+const HTTP_STATUS_MSG = {
+  400: '请求参数错误',
+  401: '未登录或登录已过期',
+  403: '无权访问',
+  404: '请求的资源不存在',
+  500: '服务器内部错误',
+  502: '服务暂时不可用',
+  503: '服务暂时不可用',
+}
+
 request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code && res.code !== 200) {
+      // 业务错误：使用后端返回的 message（已经是用户友好的中文提示）
       message.error(res.message || '请求失败')
       if (res.code === 401) {
         localStorage.removeItem('token')
@@ -54,12 +66,15 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    if (status === 401) {
       localStorage.removeItem('token')
       router.push('/login')
     }
-    message.error(error.response?.data?.message || error.message || '网络异常')
-    return Promise.reject(error)
+    // HTTP错误：使用状态码映射，不暴露后端技术信息
+    const msg = HTTP_STATUS_MSG[status] || '网络异常，请稍后重试'
+    message.error(msg)
+    return Promise.reject(new Error(msg))
   }
 )
 

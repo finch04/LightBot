@@ -27,3 +27,11 @@ export function getProviderConfigFields(id) {
 export function checkModelProvider(id) {
   return request.get(`/model-providers/${id}/check`)
 }
+
+export function checkModelProviderByForm(data) {
+  return request.post('/model-providers/check', data)
+}
+
+export function fetchProviderModels(id) {
+  return request.get(`/model-providers/${id}/fetch-models`)
+}

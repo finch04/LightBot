@@ -27,6 +27,9 @@
           <span>API Key: {{ maskKey(p.apiKey) }}</span>
           <span v-if="p.baseUrl">URL: {{ p.baseUrl }}</span>
         </div>
+        <div class="card-footer">
+          <button class="btn-link" @click="openModelModal(p)">管理模型</button>
+        </div>
       </div>
     </div>
 
@@ -63,20 +66,158 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 模型管理弹窗 -->
+    <a-modal v-model:open="modelModalVisible" :title="`${currentProvider?.name || ''} - 模型管理`" :width="640" :footer="null">
+      <div class="model-modal-header">
+        <span class="model-count">共 {{ modelList.length }} 个模型</span>
+        <div class="model-modal-actions">
+          <button class="btn-fetch" :disabled="fetching" @click="handleFetchModels">
+            {{ fetching ? '拉取中...' : '联网拉取' }}
+          </button>
+          <button class="btn-primary-sm" @click="showAddModel = true; showFetchPanel = false">
+            <PlusOutlined /> 手动添加
+          </button>
+        </div>
+      </div>
+
+      <!-- 联网拉取面板 -->
+      <div v-if="showFetchPanel" class="fetch-panel">
+        <div class="fetch-panel-header">
+          <span>从 {{ currentProvider?.name }} 拉取到 {{ fetchedModels.length }} 个模型，请勾选需要添加的：</span>
+        </div>
+        <!-- 搜索 + 类型筛选 -->
+        <div class="fetch-filter-bar">
+          <a-input v-model:value="fetchSearchText" placeholder="搜索模型..." allow-clear size="small" style="width: 200px">
+            <template #prefix><SearchOutlined /></template>
+          </a-input>
+          <div class="fetch-type-tabs">
+            <button
+              v-for="t in fetchTypeTabs"
+              :key="t.value"
+              :class="['type-tab', { active: fetchTypeFilter === t.value }]"
+              @click="fetchTypeFilter = t.value"
+            >{{ t.label }}{{ t.count > 0 ? ` (${t.count})` : '' }}</button>
+          </div>
+        </div>
+        <a-checkbox-group v-model:value="selectedFetchedModels" class="fetch-model-grid">
+          <div v-for="m in filteredFetchedModels" :key="m.modelId" class="fetch-model-item">
+            <a-checkbox :value="m.modelId">
+              <span class="fetch-model-id">{{ m.modelId }}</span>
+              <span class="fetch-model-type">{{ modelTypeText(m.type) }}</span>
+            </a-checkbox>
+          </div>
+          <div v-if="filteredFetchedModels.length === 0" class="fetch-empty">无匹配模型</div>
+        </a-checkbox-group>
+        <div class="add-model-actions">
+          <button class="btn-cancel" @click="showFetchPanel = false">取消</button>
+          <button class="btn-link" @click="selectAllFiltered">全选当前筛选</button>
+          <button class="btn-primary-sm" :disabled="selectedFetchedModels.length === 0 || modelSubmitting" @click="handleBatchAddModels">
+            {{ modelSubmitting ? '添加中...' : `确认添加 (${selectedFetchedModels.length})` }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 手动添加模型表单 -->
+      <div v-if="showAddModel" class="add-model-form">
+        <a-form :model="modelForm" :label-col="{ span: 6 }" size="small">
+          <a-form-item label="模型标识" required>
+            <a-input v-model:value="modelForm.modelId" placeholder="如：qwen-max" />
+          </a-form-item>
+          <a-form-item label="显示名称" required>
+            <a-input v-model:value="modelForm.name" placeholder="如：通义千问 Max" />
+          </a-form-item>
+          <a-form-item label="模型类型" required>
+            <a-select v-model:value="modelForm.type" style="width: 100%">
+              <a-select-option value="llm">对话模型</a-select-option>
+              <a-select-option value="embedding">嵌入模型</a-select-option>
+              <a-select-option value="rerank">重排模型</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-form>
+        <div class="add-model-actions">
+          <button class="btn-cancel" @click="showAddModel = false">取消</button>
+          <button class="btn-primary-sm" :disabled="modelSubmitting" @click="handleAddModel">
+            {{ modelSubmitting ? '添加中...' : '确认添加' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 模型列表 -->
+      <div class="model-list" v-if="modelList.length > 0">
+        <div v-for="m in modelList" :key="m.id" class="model-item">
+          <div class="model-info">
+            <span class="model-id">{{ m.modelId }}</span>
+            <span class="model-name">{{ m.name }}</span>
+            <span class="model-type-tag">{{ modelTypeText(m.type?.code || m.type) }}</span>
+          </div>
+          <button class="btn-icon danger" @click="handleDeleteModel(m.id)"><DeleteOutlined /></button>
+        </div>
+      </div>
+      <div v-else-if="!showFetchPanel && !showAddModel" class="model-empty">暂无模型，点击上方按钮添加</div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProvider } from '../api/modelProvider'
+import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels } from '../api/modelProvider'
+import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 
 const list = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
 const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', config: '' })
+
+// 模型管理
+const modelModalVisible = ref(false)
+const currentProvider = ref(null)
+const modelList = ref([])
+const showAddModel = ref(false)
+const modelSubmitting = ref(false)
+const modelForm = reactive({ modelId: '', name: '', type: 'llm' })
+
+// 联网拉取
+const fetching = ref(false)
+const showFetchPanel = ref(false)
+const fetchedModels = ref([])
+const selectedFetchedModels = ref([])
+const fetchSearchText = ref('')
+const fetchTypeFilter = ref('all')
+
+const filteredFetchedModels = computed(() => {
+  let result = fetchedModels.value
+  if (fetchTypeFilter.value !== 'all') {
+    result = result.filter(m => m.type === fetchTypeFilter.value)
+  }
+  if (fetchSearchText.value) {
+    const keyword = fetchSearchText.value.toLowerCase()
+    result = result.filter(m => m.modelId.toLowerCase().includes(keyword))
+  }
+  return result
+})
+
+const fetchTypeTabs = computed(() => {
+  const counts = { all: fetchedModels.value.length }
+  for (const m of fetchedModels.value) {
+    counts[m.type] = (counts[m.type] || 0) + 1
+  }
+  return [
+    { value: 'all', label: '全部', count: counts.all },
+    { value: 'llm', label: '对话', count: counts.llm || 0 },
+    { value: 'embedding', label: '嵌入', count: counts.embedding || 0 },
+    { value: 'rerank', label: '重排', count: counts.rerank || 0 },
+    { value: 'tts', label: '语音合成', count: counts.tts || 0 },
+    { value: 'stt', label: '语音识别', count: counts.stt || 0 },
+  ].filter(t => t.count > 0 || t.value === 'all')
+})
+
+function selectAllFiltered() {
+  selectedFetchedModels.value = filteredFetchedModels.value.map(m => m.modelId)
+}
 
 async function loadData() {
   const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
@@ -126,16 +267,20 @@ function handleDelete(id) {
 }
 
 async function handleCheck() {
-  if (!form.id) {
-    message.warning('请先保存提供商后再检查')
+  if (!form.apiKey?.trim() && form.type !== 'ollama') {
+    message.warning('请先填写 API Key')
     return
   }
   checking.value = true
   try {
-    const res = await checkModelProvider(form.id)
+    const res = await checkModelProviderByForm({
+      type: form.type,
+      apiKey: form.apiKey,
+      baseUrl: form.baseUrl,
+    })
     message.success(res.data || '连接成功')
   } catch (e) {
-    message.error('检查失败：' + (e.message || '连通性检查失败'))
+    // interceptor已处理错误提示
   } finally {
     checking.value = false
   }
@@ -144,6 +289,113 @@ async function handleCheck() {
 function maskKey(key) {
   if (!key || key.length < 10) return '***'
   return key.substring(0, 6) + '****' + key.substring(key.length - 4)
+}
+
+// ========== 模型管理 ==========
+
+async function openModelModal(provider) {
+  currentProvider.value = provider
+  showAddModel.value = false
+  showFetchPanel.value = false
+  Object.assign(modelForm, { modelId: '', name: '', type: 'llm' })
+  modelModalVisible.value = true
+  await loadModels(provider.id)
+}
+
+async function loadModels(providerId) {
+  const res = await getModelsByProvider(providerId)
+  modelList.value = res.data || []
+}
+
+async function handleAddModel() {
+  if (!modelForm.modelId.trim()) return message.warning('请输入模型标识')
+  if (!modelForm.name.trim()) return message.warning('请输入显示名称')
+  modelSubmitting.value = true
+  try {
+    await createModel({
+      providerId: currentProvider.value.id,
+      modelId: modelForm.modelId,
+      name: modelForm.name,
+      type: modelForm.type,
+    })
+    message.success('添加成功')
+    showAddModel.value = false
+    Object.assign(modelForm, { modelId: '', name: '', type: 'llm' })
+    await loadModels(currentProvider.value.id)
+  } finally {
+    modelSubmitting.value = false
+  }
+}
+
+function handleDeleteModel(id) {
+  Modal.confirm({
+    title: '确认删除',
+    content: '删除后该模型将无法恢复，是否继续？',
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await deleteModel(id)
+      message.success('删除成功')
+      await loadModels(currentProvider.value.id)
+    },
+  })
+}
+
+async function handleFetchModels() {
+  fetching.value = true
+  showAddModel.value = false
+  try {
+    const res = await fetchProviderModels(currentProvider.value.id)
+    fetchedModels.value = res.data || []
+    selectedFetchedModels.value = []
+    showFetchPanel.value = true
+    if (fetchedModels.value.length === 0) {
+      message.info('该提供商下未找到可用模型')
+    }
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    fetching.value = false
+  }
+}
+
+async function handleBatchAddModels() {
+  if (selectedFetchedModels.value.length === 0) return
+  modelSubmitting.value = true
+  try {
+    // 建立 modelId → type 映射
+    const typeMap = {}
+    for (const m of fetchedModels.value) {
+      typeMap[m.modelId] = m.type
+    }
+    let successCount = 0
+    for (const modelId of selectedFetchedModels.value) {
+      try {
+        await createModel({
+          providerId: currentProvider.value.id,
+          modelId,
+          name: modelId,
+          type: typeMap[modelId] || 'llm',
+        })
+        successCount++
+      } catch {
+        // 跳过已存在的模型
+      }
+    }
+    message.success(`成功添加 ${successCount} 个模型`)
+    showFetchPanel.value = false
+    fetchSearchText.value = ''
+    fetchTypeFilter.value = 'all'
+    await loadModels(currentProvider.value.id)
+  } finally {
+    modelSubmitting.value = false
+  }
+}
+
+function modelTypeText(type) {
+  const map = { llm: '对话', embedding: '嵌入', rerank: '重排', tts: '语音合成', stt: '语音识别' }
+  return map[type] || type
 }
 
 onMounted(loadData)
@@ -262,6 +514,195 @@ onMounted(loadData)
   gap: 4px;
   font-size: 13px;
   color: #a1a1aa;
+  margin-bottom: 12px;
+}
+.card-footer {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
+}
+.btn-link {
+  background: none;
+  border: none;
+  color: #0070f3;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+/* 模型管理弹窗 */
+.model-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.model-count {
+  font-size: 13px;
+  color: #71717a;
+}
+.add-model-form {
+  background: #f9f9f9;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.add-model-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.model-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+}
+.model-item:hover {
+  border-color: #d4d4d8;
+}
+.model-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.model-id {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  font-family: monospace;
+}
+.model-name {
+  font-size: 13px;
+  color: #71717a;
+}
+.model-type-tag {
+  font-size: 11px;
+  color: #71717a;
+  background: #f5f5f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.model-empty {
+  text-align: center;
+  padding: 32px;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+.model-modal-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-fetch {
+  padding: 6px 14px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.btn-fetch:hover:not(:disabled) {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-fetch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 联网拉取面板 */
+.fetch-panel {
+  background: #f9f9f9;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.fetch-panel-header {
+  font-size: 13px;
+  color: #52525b;
+  margin-bottom: 12px;
+}
+.fetch-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.fetch-type-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.type-tab {
+  padding: 3px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  color: #71717a;
+  transition: all 0.15s;
+}
+.type-tab:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.type-tab.active {
+  background: #171717;
+  border-color: #171717;
+  color: #fff;
+}
+.fetch-model-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.fetch-model-item {
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 6px;
+}
+.fetch-model-item:hover {
+  border-color: #d4d4d8;
+}
+.fetch-model-id {
+  font-family: monospace;
+  font-size: 13px;
+  color: #171717;
+}
+.fetch-model-type {
+  font-size: 11px;
+  color: #71717a;
+  background: #f5f5f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.fetch-empty {
+  text-align: center;
+  padding: 24px;
+  color: #a1a1aa;
+  font-size: 13px;
 }
 
 /* 弹窗底部 */

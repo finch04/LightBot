@@ -2,15 +2,19 @@ package com.lightbot.model;
 
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * OpenAI 模型处理器
@@ -19,6 +23,7 @@ import java.util.Map;
  * @author finch
  * @since 2026-05-19
  */
+@Slf4j
 @Component
 public class OpenAIModelHandler implements ModelProviderHandler {
 
@@ -122,6 +127,48 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                         .hint("正值降低重复用词的概率")
                         .build()
         );
+    }
+
+    @Override
+    public List<FetchedModel> fetchModels(ModelProvider provider) {
+        // 1. 构建模型列表URL（兼容 baseUrl 末尾有/无 /v1 的情况）
+        String baseUrl = resolveBaseUrl(provider);
+        String url = baseUrl + "/v1/models";
+
+        try {
+            RestClient restClient = RestClient.builder()
+                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey())
+                    .build();
+
+            Map<String, Object> response = restClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .body(Map.class);
+
+            // 2. 解析响应，提取模型ID并推断类型
+            List<Map<String, Object>> data = (List<Map<String, Object>>) response.get("data");
+            if (data == null) return List.of();
+
+            return data.stream()
+                    .map(m -> FetchedModel.of(m.get("id").toString()))
+                    .sorted(Comparator.comparing(FetchedModel::getModelId))
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("[OpenAIHandler] 拉取模型列表失败: url={}, error={}", url, e.getMessage());
+            throw new RuntimeException("拉取模型列表失败: " + e.getMessage());
+        }
+    }
+
+    private String resolveBaseUrl(ModelProvider provider) {
+        if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
+            String url = provider.getBaseUrl().replaceAll("/+$", "");
+            // 如果已包含 /v1 结尾，去掉避免重复
+            if (url.endsWith("/v1")) {
+                url = url.substring(0, url.length() - 3);
+            }
+            return url;
+        }
+        return "https://api.openai.com";
     }
 
     private double toDouble(Object val) {

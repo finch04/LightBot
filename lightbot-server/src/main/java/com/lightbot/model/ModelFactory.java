@@ -116,7 +116,7 @@ public class ModelFactory {
     }
 
     /**
-     * 检查模型提供商连通性
+     * 检查模型提供商连通性（通过已保存的提供商ID）
      *
      * @param providerId 模型提供商ID
      * @return 检查结果消息
@@ -132,13 +132,52 @@ public class ModelFactory {
         invalidateCache(providerId);
 
         // 3. 发送简单请求测试连通性
+        return doCheckConnectivity(provider);
+    }
+
+    /**
+     * 检查模型提供商连通性（通过表单实时数据，不依赖数据库）
+     *
+     * @param type    提供商类型
+     * @param apiKey  API密钥
+     * @param baseUrl 基础地址
+     * @return 检查结果消息
+     */
+    public String checkConnectivityByForm(ModelProviderType type, String apiKey, String baseUrl) {
+        // 1. 构建临时提供商对象
+        ModelProvider provider = new ModelProvider();
+        provider.setType(type);
+        provider.setApiKey(apiKey);
+        provider.setBaseUrl(baseUrl);
+
+        // 2. 使用表单数据测试连通性
+        return doCheckConnectivity(provider);
+    }
+
+    /**
+     * 联网拉取提供商下可用的模型列表
+     *
+     * @param providerId 模型提供商ID
+     * @return 模型信息列表（含类型推断）
+     */
+    public List<FetchedModel> fetchModels(Long providerId) {
+        ModelProvider provider = modelProviderService.getById(providerId);
+        if (provider == null) {
+            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+        }
+        ModelProviderHandler handler = getHandler(provider.getType());
+        return handler.fetchModels(provider);
+    }
+
+    private String doCheckConnectivity(ModelProvider provider) {
         try {
-            ChatModel chatModel = getChatModel(providerId);
+            ModelProviderHandler handler = getHandler(provider.getType());
+            ChatModel chatModel = handler.createChatModel(provider);
             ChatResponse response = chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT)));
-            log.info("[ModelFactory] 连通性检查通过: providerId={}, name={}", providerId, provider.getName());
+            log.info("[ModelFactory] 连通性检查通过: type={}", provider.getType());
             return "连接成功，API Key 有效";
         } catch (Exception e) {
-            log.warn("[ModelFactory] 连通性检查失败: providerId={}, name={}, error={}", providerId, provider.getName(), e.getMessage());
+            log.warn("[ModelFactory] 连通性检查失败: type={}, error={}", provider.getType(), e.getMessage());
             throw new BizException(ErrorCode.MODEL_PROVIDER_CHECK_FAILED, e.getMessage());
         }
     }
