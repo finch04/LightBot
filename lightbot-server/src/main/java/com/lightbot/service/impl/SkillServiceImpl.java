@@ -7,6 +7,7 @@ import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
+import org.springframework.util.StringUtils;
 import com.lightbot.mapper.SkillMapper;
 import com.lightbot.service.SkillService;
 import lombok.extern.slf4j.Slf4j;
@@ -57,9 +58,10 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     }
 
     @Override
-    public List<Skill> listByAgentId(Long agentId) {
+    public List<Skill> listByAgentId(Long agentId, String name) {
         return list(new LambdaQueryWrapper<Skill>()
                 .eq(Skill::getAgentId, agentId)
+                .like(StringUtils.hasText(name), Skill::getName, name)
                 .orderByAsc(Skill::getSortOrder)
                 .orderByDesc(Skill::getCreateTime));
     }

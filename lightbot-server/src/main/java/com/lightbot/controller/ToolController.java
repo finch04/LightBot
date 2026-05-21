@@ -42,8 +42,9 @@ public class ToolController {
     @GetMapping
     public Result<Page<Tool>> list(
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        return Result.ok(toolService.listPage(pageNum, pageSize));
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String name) {
+        return Result.ok(toolService.listPage(pageNum, pageSize, name));
     }
 
     @Operation(summary = "获取单个Tool")

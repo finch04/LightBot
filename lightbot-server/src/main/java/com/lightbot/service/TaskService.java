@@ -53,7 +53,7 @@ public interface TaskService extends IService<Task> {
     /**
      * 分页查询用户任务
      */
-    Page<Task> listByUserId(Long userId, int pageNum, int pageSize);
+    Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status);
 
     /**
      * 获取任务详情（校验用户归属）

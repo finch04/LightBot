@@ -5,9 +5,22 @@
         <h1 class="page-title">MCP Server</h1>
         <p class="page-desc">管理 MCP (Model Context Protocol) 服务</p>
       </div>
-      <button class="btn-primary" @click="openDialog()">
-        <PlusOutlined /> 新增 Server
-      </button>
+      <div class="page-header-actions">
+        <a-input
+          v-model:value="searchText"
+          placeholder="搜索 Server 名称..."
+          allow-clear
+          style="width: 220px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <button class="btn-outline" @click="loadData">
+          <ReloadOutlined /> 刷新
+        </button>
+        <button class="btn-primary" @click="openDialog()">
+          <PlusOutlined /> 新增 Server
+        </button>
+      </div>
     </div>
 
     <div class="provider-grid">
@@ -84,21 +97,26 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, watch, onMounted } from 'vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer } from '../api/mcp'
 
 const list = ref([])
+const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, name: '', description: '', installType: 'npx', host: '' })
 const deployForm = reactive({ packageName: '', args: '', env: '', headers: '' })
 
 async function loadData() {
-  const res = await getMcpServers({ pageNum: 1, pageSize: 50 })
+  const params = { pageNum: 1, pageSize: 50 }
+  if (searchText.value) params.name = searchText.value
+  const res = await getMcpServers(params)
   list.value = res.data.records || []
 }
+
+watch(searchText, () => loadData())
 
 function parseDeployConfig(configStr) {
   if (!configStr) return
@@ -225,6 +243,27 @@ onMounted(loadData)
 }
 .btn-primary:hover {
   background: #27272a;
+}
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 
 .provider-grid {

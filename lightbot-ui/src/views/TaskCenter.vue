@@ -3,14 +3,27 @@
     <div class="page-header">
       <div class="page-header-left">
         <h2>任务中心</h2>
-        <a-badge :count="pendingCount" :number-style="{ fontSize: '11px' }" title="待处理任务数">
-          <span class="pending-label">待处理</span>
-        </a-badge>
+        <span
+          :class="['pending-badge', { active: onlyPending }]"
+          @click="onlyPending = !onlyPending"
+        >
+          待处理 {{ pendingCount }}
+        </span>
       </div>
-      <button class="btn-outline" @click="loadTasks">
-        <ReloadOutlined />
-        刷新
-      </button>
+      <div class="page-header-right">
+        <a-input
+          v-model:value="searchText"
+          placeholder="搜索任务名称..."
+          allow-clear
+          style="width: 220px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <button class="btn-outline" @click="loadTasks">
+          <ReloadOutlined />
+          刷新
+        </button>
+      </div>
     </div>
 
     <a-table
@@ -97,15 +110,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { ReloadOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTaskList, cancelTask } from '../api/task'
 
 const loading = ref(false)
 const tasks = ref([])
+const searchText = ref('')
+const onlyPending = ref(false)
+const pendingCount = ref(0)
 
-const pendingCount = computed(() => tasks.value.filter(t => t.status === 'pending' || t.status === 'running').length)
 const detailVisible = ref(false)
 const detailTask = ref(null)
 const pagination = reactive({
@@ -151,10 +166,10 @@ let pollTimer = null
 async function loadTasks() {
   loading.value = true
   try {
-    const res = await getTaskList({
-      pageNum: pagination.current,
-      pageSize: pagination.pageSize,
-    })
+    const params = { pageNum: pagination.current, pageSize: pagination.pageSize }
+    if (searchText.value) params.name = searchText.value
+    if (onlyPending.value) params.status = 'pending'
+    const res = await getTaskList(params)
     tasks.value = res.data.records || []
     pagination.total = res.data.total || 0
   } catch (e) {
@@ -164,11 +179,28 @@ async function loadTasks() {
   }
 }
 
+async function loadPendingCount() {
+  try {
+    const res = await getTaskList({ pageNum: 1, pageSize: 1, status: 'pending' })
+    pendingCount.value = res.data.total || 0
+  } catch { /* ignore */ }
+}
+
 function handleTableChange(pag) {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
   loadTasks()
 }
+
+watch(searchText, () => {
+  pagination.current = 1
+  loadTasks()
+})
+
+watch(onlyPending, () => {
+  pagination.current = 1
+  loadTasks()
+})
 
 function openDetail(record) {
   detailTask.value = record
@@ -207,7 +239,11 @@ function formatTime(time) {
 
 onMounted(() => {
   loadTasks()
-  pollTimer = setInterval(loadTasks, 5000)
+  loadPendingCount()
+  pollTimer = setInterval(() => {
+    loadTasks()
+    loadPendingCount()
+  }, 5000)
 })
 
 onUnmounted(() => {
@@ -243,6 +279,31 @@ onUnmounted(() => {
 .pending-label {
   font-size: 13px;
   color: #8c8c8c;
+}
+.pending-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+  background: #f5f5f5;
+  color: #8c8c8c;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+.pending-badge:hover {
+  background: #e6e6e6;
+}
+.pending-badge.active {
+  background: #e6f4ff;
+  color: #1677ff;
+  border-color: #91caff;
+}
+.page-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .btn-outline {
   display: flex;

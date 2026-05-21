@@ -38,7 +38,7 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    Page<Knowledge> listMyKnowledge(int pageNum, int pageSize);
+    Page<Knowledge> listMyKnowledge(int pageNum, int pageSize, String name);
 
     /**
      * 删除知识库（逻辑删除）

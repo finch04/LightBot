@@ -73,6 +73,10 @@ public class Agent {
     @Schema(description = "状态")
     private AgentStatus status;
 
+    @TableField("is_default")
+    @Schema(description = "是否默认Agent")
+    private Boolean isDefault;
+
     @TableField("publish_time")
     @Schema(description = "发布时间")
     private LocalDateTime publishTime;

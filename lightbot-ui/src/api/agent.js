@@ -47,3 +47,7 @@ export function uploadAgentAvatar(id, file) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+export function setDefaultAgent(id) {
+  return request.put(`/agents/${id}/default`)
+}

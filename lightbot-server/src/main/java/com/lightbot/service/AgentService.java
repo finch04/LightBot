@@ -39,7 +39,22 @@ public interface AgentService extends IService<Agent> {
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    Page<Agent> listMyAgents(int pageNum, int pageSize);
+    Page<Agent> listMyAgents(int pageNum, int pageSize, String name);
+
+    /**
+     * 查询用户的默认Agent
+     *
+     * @param userId 用户ID
+     * @return 默认Agent，不存在返回null
+     */
+    Agent getDefaultAgent(long userId);
+
+    /**
+     * 设置指定Agent为用户的默认Agent（同时清除该用户其他默认标记）
+     *
+     * @param agentId Agent ID
+     */
+    void setDefaultAgent(long agentId);
 
     /**
      * 获取 Agent 详情（包含绑定的知识库 ID 列表）

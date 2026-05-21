@@ -41,7 +41,8 @@ public class SkillController {
 
     @Operation(summary = "获取Agent下的Skill列表")
     @GetMapping("/by-agent/{agentId}")
-    public Result<List<Skill>> listByAgent(@PathVariable Long agentId) {
-        return Result.ok(skillService.listByAgentId(agentId));
+    public Result<List<Skill>> listByAgent(@PathVariable Long agentId,
+                                           @RequestParam(required = false) String name) {
+        return Result.ok(skillService.listByAgentId(agentId, name));
     }
 }

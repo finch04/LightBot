@@ -9,6 +9,7 @@ import com.lightbot.entity.ChatSession;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.SessionStatus;
 import com.lightbot.mapper.ChatSessionMapper;
+import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,15 +27,21 @@ import java.time.LocalDateTime;
 public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatSession>
         implements ChatSessionService {
 
-    private static final long DEFAULT_AGENT_ID = 1L;
+    private final AgentService agentService;
 
     @Override
     public ChatSession createSession(Long agentId) {
         // 1. 获取当前用户ID
         long userId = StpUtil.getLoginIdAsLong();
 
-        // 2. agentId为空时使用默认Agent
-        Long finalAgentId = agentId != null ? agentId : DEFAULT_AGENT_ID;
+        // 2. agentId为空时查询用户的默认Agent
+        Long finalAgentId = agentId;
+        if (finalAgentId == null) {
+            var defaultAgent = agentService.getDefaultAgent(userId);
+            if (defaultAgent != null) {
+                finalAgentId = defaultAgent.getId();
+            }
+        }
 
         // 3. 创建会话，初始化统计数据
         ChatSession session = new ChatSession();

@@ -6,17 +6,20 @@
       <div v-if="!sessionId && messages.length === 0 && !loadingHistory" class="empty-state">
         <img src="/lightbot-logo-single.png" alt="LightBot" class="empty-logo" />
         <div class="welcome-content" v-html="renderMarkdown(currentWelcomeMessage)"></div>
-        <!-- 推荐问题轮播 -->
+        <!-- 推荐问题：全部展示 -->
         <div v-if="currentRecommendedQuestions.length > 0" class="recommended-questions">
-          <transition name="fade" mode="out-in">
-            <button
-              :key="currentQuestionIndex"
-              class="btn-question"
-              @click="input = currentRecommendedQuestions[currentQuestionIndex]; $nextTick(() => $refs.inputRef?.focus())"
-            >
-              {{ currentRecommendedQuestions[currentQuestionIndex] }}
-            </button>
-          </transition>
+          <button
+            v-for="(q, qi) in currentRecommendedQuestions"
+            :key="qi"
+            class="btn-question"
+            @click="input = q; $nextTick(() => $refs.inputRef?.focus())"
+          >
+            {{ q }}
+          </button>
+        </div>
+        <!-- 无默认Agent提示 -->
+        <div v-if="!selectedAgentId && agents.length > 0" class="no-default-hint">
+          没有默认Agent，<router-link to="/agents">去创建</router-link>
         </div>
       </div>
 
@@ -71,7 +74,7 @@
       <div class="chat-input">
         <!-- Agent 选择按钮 -->
         <a-dropdown :trigger="['click']" placement="topLeft">
-          <a-tooltip :title="currentAgent?.name || '默认 Agent'">
+          <a-tooltip :title="currentAgent?.name || '选择 Agent'">
             <button class="btn-agent">
               <RobotOutlined v-if="!currentAgent" />
               <img v-else-if="currentAgent.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="btn-agent-avatar" />
@@ -79,19 +82,13 @@
             </button>
           </a-tooltip>
           <template #overlay>
-            <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : ['__default__']">
-              <a-menu-item key="__default__">
-                <div class="agent-menu-item">
-                  <span class="agent-menu-icon default-icon">LB</span>
-                  <span>默认 Agent</span>
-                </div>
-              </a-menu-item>
-              <a-menu-divider />
+            <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : []">
               <a-menu-item v-for="a in agents" :key="String(a.id)">
                 <div class="agent-menu-item">
                   <img v-if="a.avatar" :src="`http://localhost:9000/lightbot/${a.avatar}`" alt="" class="agent-menu-icon" />
                   <span v-else class="agent-menu-icon">{{ a.name[0] }}</span>
                   <span>{{ a.name }}</span>
+                  <span v-if="a.isDefault" class="agent-default-tag">默认</span>
                 </div>
               </a-menu-item>
             </a-menu>
@@ -123,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, nextTick, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
@@ -149,8 +146,6 @@ const selectedAgentId = ref(null)
 const skipNextWatch = ref(false)
 const loadingHistory = ref(false)
 const currentAgent = ref(null)
-const currentQuestionIndex = ref(0)
-let questionTimer = null
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -220,13 +215,8 @@ function autoResize() {
 }
 
 function handleAgentSelect({ key }) {
-  if (key === '__default__') {
-    selectedAgentId.value = null
-    currentAgent.value = null
-  } else {
-    selectedAgentId.value = key
-    loadCurrentAgent(key)
-  }
+  selectedAgentId.value = key
+  loadCurrentAgent(key)
 }
 
 async function loadHistory() {
@@ -357,6 +347,15 @@ async function loadAgents() {
   try {
     const res = await getAgents({ pageNum: 1, pageSize: 100 })
     agents.value = res.data.records || []
+
+    // 新对话且未选中Agent时，自动选中默认Agent
+    if (!sessionId.value && !selectedAgentId.value) {
+      const defaultAgent = agents.value.find(a => a.isDefault)
+      if (defaultAgent) {
+        selectedAgentId.value = String(defaultAgent.id)
+        loadCurrentAgent(defaultAgent.id)
+      }
+    }
   } catch (e) {
     // ignore
   }
@@ -395,21 +394,6 @@ watch(selectedAgentId, (newId) => {
     currentAgent.value = null
   }
 })
-
-// 推荐问题轮播：每 2 秒切换下一个
-watch(currentRecommendedQuestions, (questions) => {
-  currentQuestionIndex.value = 0
-  clearInterval(questionTimer)
-  if (questions.length > 1) {
-    questionTimer = setInterval(() => {
-      currentQuestionIndex.value = (currentQuestionIndex.value + 1) % questions.length
-    }, 2000)
-  }
-}, { immediate: true })
-
-onUnmounted(() => {
-  clearInterval(questionTimer)
-})
 </script>
 
 <style scoped>
@@ -445,7 +429,6 @@ onUnmounted(() => {
 .empty-logo {
   height: 64px;
   margin-bottom: 24px;
-  opacity: 0.6;
   object-fit: contain;
 }
 .welcome-content {
@@ -488,6 +471,18 @@ onUnmounted(() => {
   border-color: #0070f3;
   color: #0070f3;
   background: #f0f7ff;
+}
+.no-default-hint {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin-top: 8px;
+}
+.no-default-hint a {
+  color: #0070f3;
+  text-decoration: none;
+}
+.no-default-hint a:hover {
+  text-decoration: underline;
 }
 
 /* 消息 */
@@ -721,6 +716,14 @@ onUnmounted(() => {
   background: #0070f3;
   color: #fff;
 }
+.agent-default-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 100px;
+  margin-left: auto;
+}
 
 .input-textarea {
   flex: 1;
@@ -786,15 +789,5 @@ onUnmounted(() => {
   color: var(--primary-color, #6366f1);
   font-weight: bold;
   margin-left: 1px;
-}
-
-/* 推荐问题轮播过渡 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.4s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
 }
 </style>

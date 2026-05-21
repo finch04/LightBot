@@ -5,9 +5,22 @@
         <h1 class="page-title">工具管理</h1>
         <p class="page-desc">管理 Agent 可使用的工具（Tool）</p>
       </div>
-      <button class="btn-primary" @click="openDialog()">
-        <PlusOutlined /> 新增工具
-      </button>
+      <div class="page-header-actions">
+        <a-input
+          v-model:value="searchText"
+          placeholder="搜索工具名称..."
+          allow-clear
+          style="width: 220px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <button class="btn-outline" @click="loadData">
+          <ReloadOutlined /> 刷新
+        </button>
+        <button class="btn-primary" @click="openDialog()">
+          <PlusOutlined /> 新增工具
+        </button>
+      </div>
     </div>
 
     <div class="provider-grid">
@@ -31,7 +44,9 @@
           <span v-if="t.endpointUrl">端点: {{ t.endpointUrl }}</span>
         </div>
       </div>
-      <div v-if="list.length === 0" class="empty-tip">暂无工具，点击右上角新增</div>
+      <div v-if="list.length === 0" class="empty-tip">
+        {{ searchText ? '没有匹配的工具' : '暂无工具，点击右上角新增' }}
+      </div>
     </div>
 
     <!-- 新增/编辑弹窗 -->
@@ -92,8 +107,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, watch, onMounted } from 'vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool } from '../api/tool'
 
@@ -101,6 +116,7 @@ const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用
 const typeColors = { builtin: '#171717', custom: '#0070f3', api: '#10b981', mcp: '#8b5cf6' }
 
 const list = ref([])
+const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({
@@ -111,12 +127,16 @@ const form = reactive({
 
 async function loadData() {
   try {
-    const res = await getTools({ pageNum: 1, pageSize: 50 })
+    const params = { pageNum: 1, pageSize: 50 }
+    if (searchText.value) params.name = searchText.value
+    const res = await getTools(params)
     list.value = res.data.records || []
   } catch (e) {
     // interceptor handles error
   }
 }
+
+watch(searchText, () => loadData())
 
 function openDialog(row) {
   if (row) {
@@ -210,6 +230,27 @@ onMounted(loadData)
 }
 .btn-primary:hover {
   background: #27272a;
+}
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 
 .provider-grid {

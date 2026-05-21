@@ -27,9 +27,11 @@ public class TaskController {
     @Operation(summary = "分页查询当前用户的任务列表")
     @GetMapping
     public Result<Page<Task>> list(@RequestParam(defaultValue = "1") int pageNum,
-                                    @RequestParam(defaultValue = "10") int pageSize) {
+                                    @RequestParam(defaultValue = "10") int pageSize,
+                                    @RequestParam(required = false) String name,
+                                    @RequestParam(required = false) String status) {
         long userId = StpUtil.getLoginIdAsLong();
-        return Result.ok(taskService.listByUserId(userId, pageNum, pageSize));
+        return Result.ok(taskService.listByUserId(userId, pageNum, pageSize, name, status));
     }
 
     @Operation(summary = "统计当前用户的运行中+待处理任务数")

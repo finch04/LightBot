@@ -18,7 +18,7 @@ public interface SkillService extends IService<Skill> {
 
     Skill update(SkillRequest request);
 
-    List<Skill> listByAgentId(Long agentId);
+    List<Skill> listByAgentId(Long agentId, String name);
 
     void deleteById(Long id);
 }

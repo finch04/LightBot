@@ -45,8 +45,9 @@ public class AgentController {
     @GetMapping
     public Result<Page<Agent>> list(
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "50") int pageSize) {
-        return Result.ok(agentService.listMyAgents(pageNum, pageSize));
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String name) {
+        return Result.ok(agentService.listMyAgents(pageNum, pageSize, name));
     }
 
     @Operation(summary = "获取Agent详情（含绑定的知识库ID列表）")
@@ -93,6 +94,13 @@ public class AgentController {
     @PostMapping("/{id}/generate-questions")
     public Result<String> generateQuestions(@PathVariable Long id) {
         return Result.ok(agentService.generateRecommendedQuestions(id));
+    }
+
+    @Operation(summary = "设置为默认Agent")
+    @PutMapping("/{id}/default")
+    public Result<Void> setDefault(@PathVariable Long id) {
+        agentService.setDefaultAgent(id);
+        return Result.ok();
     }
 
     @Operation(summary = "上传Agent头像")

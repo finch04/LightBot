@@ -17,7 +17,7 @@ public interface ToolService extends IService<Tool> {
 
     Tool update(ToolRequest request);
 
-    Page<Tool> listPage(int pageNum, int pageSize);
+    Page<Tool> listPage(int pageNum, int pageSize, String name);
 
     void deleteById(Long id);
 }

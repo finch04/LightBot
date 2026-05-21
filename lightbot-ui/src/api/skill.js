@@ -1,7 +1,9 @@
 import request from '../utils/request'
 
-export function getSkillsByAgent(agentId) {
-  return request.get(`/skills/by-agent/${agentId}`)
+export function getSkillsByAgent(agentId, name) {
+  const params = {}
+  if (name) params.name = name
+  return request.get(`/skills/by-agent/${agentId}`, { params })
 }
 
 export function createSkill(data) {

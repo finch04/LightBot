@@ -36,7 +36,7 @@ public interface McpServerService extends IService<McpServer> {
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    Page<McpServer> listPage(int pageNum, int pageSize);
+    Page<McpServer> listPage(int pageNum, int pageSize, String name);
 
     /**
      * 删除 MCP Server

@@ -56,8 +56,6 @@ public class ChatServiceImpl implements ChatService {
 
     private static final String DEFAULT_SYSTEM_PROMPT = "你是 LightBot 智能助手，请用中文回答用户问题。回答应简洁准确，遇到不确定的信息请如实告知。";
 
-    private static final long DEFAULT_AGENT_ID = 1L;
-
     private static final String RAG_CONTEXT_TEMPLATE = """
             请基于以下参考资料回答用户的问题。
             如果参考资料中没有相关信息，请如实告知用户。
@@ -161,7 +159,7 @@ public class ChatServiceImpl implements ChatService {
 
     /**
      * 加载Agent配置。
-     * agentId非空时加载指定Agent；为空时使用内置默认Agent（id=1）。
+     * agentId非空时加载指定Agent；为空时查询用户的默认Agent。
      */
     private Agent loadAgent(Long agentId) {
         // 1. 指定了agentId，直接加载
@@ -173,39 +171,9 @@ public class ChatServiceImpl implements ChatService {
             return agent;
         }
 
-        // 2. 未指定agentId，使用内置默认Agent
-        Agent defaultAgent = agentService.getById(DEFAULT_AGENT_ID);
-        if (defaultAgent != null) {
-            return defaultAgent;
-        }
-
-        // 3. 默认Agent不存在（未执行初始化SQL），尝试自动创建
-        return createDefaultAgent();
-    }
-
-    /**
-     * 创建内置默认Agent（兜底，正常应由SQL初始化脚本创建）
-     */
-    private Agent createDefaultAgent() {
-        try {
-            long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
-            Agent agent = new Agent();
-            agent.setId(DEFAULT_AGENT_ID);
-            agent.setUserId(userId);
-            agent.setName("LightBot 助手");
-            agent.setDescription("默认AI助手");
-            agent.setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
-            agent.setWelcomeMessage("## 你好，我是 LightBot\n有什么可以帮你的？");
-            agent.setAgentType(com.lightbot.enums.AgentType.CHAT);
-            agent.setStatus(com.lightbot.enums.AgentStatus.PUBLISHED);
-            agent.setVersion(1);
-            agentService.save(agent);
-            log.info("[Chat] 已创建内置默认Agent: id={}", DEFAULT_AGENT_ID);
-            return agent;
-        } catch (Exception e) {
-            log.warn("[Chat] 创建默认Agent失败: {}", e.getMessage());
-            return null;
-        }
+        // 2. 未指定agentId，查询用户的默认Agent
+        long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
+        return agentService.getDefaultAgent(userId);
     }
 
     /**

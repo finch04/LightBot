@@ -8,6 +8,7 @@ import com.lightbot.dto.ToolRequest;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
+import org.springframework.util.StringUtils;
 import com.lightbot.mapper.ToolMapper;
 import com.lightbot.service.ToolService;
 import lombok.extern.slf4j.Slf4j;
@@ -71,9 +72,11 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
-    public Page<Tool> listPage(int pageNum, int pageSize) {
+    public Page<Tool> listPage(int pageNum, int pageSize, String name) {
         return page(new Page<>(pageNum, pageSize),
-                new LambdaQueryWrapper<Tool>().orderByDesc(Tool::getCreateTime));
+                new LambdaQueryWrapper<Tool>()
+                        .like(StringUtils.hasText(name), Tool::getName, name)
+                        .orderByDesc(Tool::getCreateTime));
     }
 
     @Override

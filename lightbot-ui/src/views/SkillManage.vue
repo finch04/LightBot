@@ -5,9 +5,22 @@
         <h1 class="page-title">Skill 管理</h1>
         <p class="page-desc">管理 Agent 的技能（Skill），每个 Skill 绑定一个工具并定义提示词模板</p>
       </div>
-      <button class="btn-primary" @click="openDialog()">
-        <PlusOutlined /> 新增 Skill
-      </button>
+      <div class="page-header-actions">
+        <a-input
+          v-model:value="searchText"
+          placeholder="搜索 Skill 名称..."
+          allow-clear
+          style="width: 220px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <button class="btn-outline" @click="loadData">
+          <ReloadOutlined /> 刷新
+        </button>
+        <button class="btn-primary" @click="openDialog()">
+          <PlusOutlined /> 新增 Skill
+        </button>
+      </div>
     </div>
 
     <!-- Agent 筛选 -->
@@ -39,7 +52,9 @@
           <span v-if="s.promptTemplate" class="prompt-preview">{{ s.promptTemplate }}</span>
         </div>
       </div>
-      <div v-if="list.length === 0" class="empty-tip">暂无 Skill，点击右上角新增</div>
+      <div v-if="list.length === 0" class="empty-tip">
+        {{ searchText ? '没有匹配的 Skill' : '暂无 Skill，点击右上角新增' }}
+      </div>
     </div>
 
     <!-- 新增/编辑弹窗 -->
@@ -87,14 +102,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, watch, onMounted } from 'vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSkillsByAgent, createSkill, updateSkill, deleteSkill } from '../api/skill'
 import { getAgents } from '../api/agent'
 import { getTools } from '../api/tool'
 
 const list = ref([])
+const searchText = ref('')
 const agentList = ref([])
 const toolList = ref([])
 const filterAgentId = ref(null)
@@ -123,6 +139,8 @@ async function loadTools() {
   }
 }
 
+watch(searchText, () => loadData())
+
 async function loadData() {
   if (!filterAgentId.value) {
     // 无筛选时加载第一个 Agent 的 Skills
@@ -134,7 +152,7 @@ async function loadData() {
     }
   }
   try {
-    const res = await getSkillsByAgent(filterAgentId.value)
+    const res = await getSkillsByAgent(filterAgentId.value, searchText.value || undefined)
     list.value = res.data || []
   } catch (e) {
     // interceptor handles error
@@ -233,6 +251,27 @@ onMounted(async () => {
 }
 .btn-primary:hover {
   background: #27272a;
+}
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 
 .filter-bar {

@@ -8,6 +8,7 @@ import com.lightbot.common.BizException;
 import com.lightbot.controller.TaskEventController;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.ErrorCode;
+import org.springframework.util.StringUtils;
 import com.lightbot.enums.TaskStatus;
 import com.lightbot.enums.TaskType;
 import com.lightbot.mapper.TaskMapper;
@@ -112,10 +113,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     }
 
     @Override
-    public Page<Task> listByUserId(Long userId, int pageNum, int pageSize) {
+    public Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status) {
         return page(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Task>()
                         .eq(Task::getUserId, userId)
+                        .like(StringUtils.hasText(name), Task::getName, name)
+                        .eq(StringUtils.hasText(status), Task::getStatus, status)
                         .orderByDesc(Task::getCreateTime));
     }
 

@@ -8,6 +8,7 @@ import com.lightbot.dto.McpServerRequest;
 import com.lightbot.entity.McpServer;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
+import org.springframework.util.StringUtils;
 import com.lightbot.mapper.McpServerMapper;
 import com.lightbot.service.McpServerService;
 import lombok.extern.slf4j.Slf4j;
@@ -58,9 +59,11 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
     }
 
     @Override
-    public Page<McpServer> listPage(int pageNum, int pageSize) {
+    public Page<McpServer> listPage(int pageNum, int pageSize, String name) {
         return page(new Page<>(pageNum, pageSize),
-                new LambdaQueryWrapper<McpServer>().orderByDesc(McpServer::getCreateTime));
+                new LambdaQueryWrapper<McpServer>()
+                        .like(StringUtils.hasText(name), McpServer::getName, name)
+                        .orderByDesc(McpServer::getCreateTime));
     }
 
     @Override

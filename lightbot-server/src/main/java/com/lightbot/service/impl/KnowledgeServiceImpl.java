@@ -10,6 +10,7 @@ import com.lightbot.common.BizException;
 import com.lightbot.dto.IngestRequest;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
+import org.springframework.util.StringUtils;
 import com.lightbot.entity.KnowledgeMember;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.DocumentStatus;
@@ -96,7 +97,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     }
 
     @Override
-    public Page<Knowledge> listMyKnowledge(int pageNum, int pageSize) {
+    public Page<Knowledge> listMyKnowledge(int pageNum, int pageSize, String name) {
         long userId = StpUtil.getLoginIdAsLong();
 
         // 1. 查询用户加入的所有知识库ID
@@ -110,6 +111,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
                 new LambdaQueryWrapper<Knowledge>()
                         .in(Knowledge::getId, knowledgeIds)
                         .eq(Knowledge::getStatus, CommonStatus.ACTIVE)
+                        .like(StringUtils.hasText(name), Knowledge::getName, name)
                         .orderByDesc(Knowledge::getCreateTime));
     }
 

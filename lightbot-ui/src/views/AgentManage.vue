@@ -5,9 +5,22 @@
         <h1 class="page-title">Agent 管理</h1>
         <p class="page-desc">创建和管理 AI Agent，配置系统提示词和行为</p>
       </div>
-      <button class="btn-primary" @click="openDialog()">
-        <PlusOutlined /> 新建 Agent
-      </button>
+      <div class="page-header-actions">
+        <a-input
+          v-model:value="searchText"
+          placeholder="搜索 Agent 名称..."
+          allow-clear
+          style="width: 220px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <button class="btn-outline" @click="loadData">
+          <ReloadOutlined /> 刷新
+        </button>
+        <button class="btn-primary" @click="openDialog()">
+          <PlusOutlined /> 新建 Agent
+        </button>
+      </div>
     </div>
 
     <div class="agent-grid">
@@ -18,10 +31,11 @@
             <span v-else>{{ (a.name || 'A')[0] }}</span>
           </div>
           <div class="card-info">
-            <h3>{{ a.name }}</h3>
+            <h3>{{ a.name }} <span v-if="a.isDefault" class="card-default-tag">默认</span></h3>
             <span class="card-type">{{ agentTypeLabel(a.agentType) }}</span>
           </div>
           <div class="card-actions" @click.stop>
+            <button v-if="!a.isDefault" class="btn-icon" title="设为默认" @click="handleSetDefault(a.id)"><StarOutlined /></button>
             <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
             <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
           </div>
@@ -37,7 +51,8 @@
 
       <div v-if="list.length === 0" class="empty-state">
         <RobotOutlined class="empty-icon" />
-        <p>还没有 Agent，点击右上角创建一个吧</p>
+        <p v-if="searchText">没有匹配的 Agent</p>
+        <p v-else>还没有 Agent，点击右上角创建一个吧</p>
       </div>
     </div>
 
@@ -80,24 +95,29 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getAgents, createAgent, updateAgent, deleteAgent } from '../api/agent'
+import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent } from '../api/agent'
 import { getModelProviders } from '../api/modelProvider'
 
 const router = useRouter()
 const list = ref([])
+const searchText = ref('')
 const providerList = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', providerId: null })
 
 async function loadData() {
-  const res = await getAgents({ pageNum: 1, pageSize: 50 })
+  const params = { pageNum: 1, pageSize: 50 }
+  if (searchText.value) params.name = searchText.value
+  const res = await getAgents(params)
   list.value = res.data.records || []
 }
+
+watch(searchText, () => loadData())
 
 async function loadProviders() {
   try {
@@ -155,6 +175,16 @@ function handleDelete(id) {
       loadData()
     },
   })
+}
+
+async function handleSetDefault(id) {
+  try {
+    await setDefaultAgent(id)
+    message.success('已设为默认')
+    loadData()
+  } catch {
+    // ignore
+  }
 }
 
 function agentTypeLabel(t) {
@@ -218,6 +248,27 @@ onMounted(() => {
 .btn-primary:hover {
   background: #27272a;
 }
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
 
 .agent-grid {
   display: grid;
@@ -278,6 +329,14 @@ onMounted(() => {
   background: #f5f5f5;
   padding: 2px 8px;
   border-radius: 100px;
+}
+.card-default-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 100px;
+  font-weight: 500;
 }
 .card-actions {
   display: flex;

@@ -5,9 +5,22 @@
         <h1 class="page-title">知识库</h1>
         <p class="page-desc">管理知识库，上传文档，基于 RAG 进行问答</p>
       </div>
-      <button class="btn-primary" @click="openCreateModal">
-        <PlusOutlined /> 新建知识库
-      </button>
+      <div class="page-header-actions">
+        <a-input
+          v-model:value="searchText"
+          placeholder="搜索知识库名称..."
+          allow-clear
+          style="width: 220px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <button class="btn-outline" @click="loadData">
+          <ReloadOutlined /> 刷新
+        </button>
+        <button class="btn-primary" @click="openCreateModal">
+          <PlusOutlined /> 新建知识库
+        </button>
+      </div>
     </div>
 
     <div class="knowledge-grid">
@@ -36,7 +49,8 @@
       </div>
 
       <div v-if="list.length === 0" class="empty-state">
-        <p>还没有知识库，点击右上角创建一个吧</p>
+        <p v-if="searchText">没有匹配的知识库</p>
+        <p v-else>还没有知识库，点击右上角创建一个吧</p>
       </div>
     </div>
 
@@ -71,15 +85,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 import { getModelsByType } from '../api/model'
 
 const router = useRouter()
 const list = ref([])
+const searchText = ref('')
 const showCreate = ref(false)
 const submitting = ref(false)
 const embeddingModels = ref([])
@@ -103,9 +118,13 @@ async function openCreateModal() {
 }
 
 async function loadData() {
-  const res = await getKnowledgeList({ pageNum: 1, pageSize: 50 })
+  const params = { pageNum: 1, pageSize: 50 }
+  if (searchText.value) params.name = searchText.value
+  const res = await getKnowledgeList(params)
   list.value = res.data.records || []
 }
+
+watch(searchText, () => loadData())
 
 function handleDelete(id) {
   Modal.confirm({
@@ -187,6 +206,27 @@ onMounted(loadData)
 }
 .btn-primary:hover {
   background: #27272a;
+}
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 
 .knowledge-grid {

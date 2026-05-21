@@ -260,14 +260,19 @@ function disconnectTaskSSE() {
   taskSSE = null
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!userStore.user) {
-    userStore.fetchUser().catch(() => router.push('/login'))
+    try {
+      await userStore.fetchUser()
+    } catch {
+      router.push('/login')
+      return
+    }
   }
   loadSessions()
   // 监听对话标题更新事件（异步生成完成后刷新侧边栏，带重试）
   window.addEventListener('session-title-updated', refreshSessionsWithRetry)
-  // SSE 实时监听任务计数
+  // SSE 实时监听任务计数（需等 user 加载完成后才有 userId）
   connectTaskSSE()
 })
 

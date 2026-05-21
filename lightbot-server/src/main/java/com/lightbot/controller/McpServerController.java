@@ -42,8 +42,9 @@ public class McpServerController {
     @GetMapping
     public Result<Page<McpServer>> list(
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        return Result.ok(mcpServerService.listPage(pageNum, pageSize));
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String name) {
+        return Result.ok(mcpServerService.listPage(pageNum, pageSize, name));
     }
 
     @Operation(summary = "获取单个MCP Server")

@@ -10,6 +10,7 @@ import com.lightbot.common.BizException;
 import com.lightbot.entity.Agent;
 import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.ErrorCode;
+import org.springframework.util.StringUtils;
 import com.lightbot.mapper.AgentMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.AgentKnowledgeService;
@@ -101,11 +102,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
-    public Page<Agent> listMyAgents(int pageNum, int pageSize) {
+    public Page<Agent> listMyAgents(int pageNum, int pageSize, String name) {
         long userId = StpUtil.getLoginIdAsLong();
         return page(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Agent>()
                         .eq(Agent::getUserId, userId)
+                        .like(StringUtils.hasText(name), Agent::getName, name)
                         .orderByDesc(Agent::getCreateTime));
     }
 
@@ -236,6 +238,37 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
         log.info("[Agent] 头像上传成功: agentId={}, path={}", id, filePath);
         return filePath;
+    }
+
+    @Override
+    public Agent getDefaultAgent(long userId) {
+        return getOne(new LambdaQueryWrapper<Agent>()
+                .eq(Agent::getUserId, userId)
+                .eq(Agent::getIsDefault, true)
+                .last("LIMIT 1"));
+    }
+
+    @Override
+    public void setDefaultAgent(long agentId) {
+        // 1. 校验Agent存在性
+        Agent agent = getById(agentId);
+        if (agent == null) {
+            throw new BizException(ErrorCode.AGENT_NOT_FOUND);
+        }
+
+        // 2. 清除该用户其他Agent的默认标记
+        long userId = agent.getUserId();
+        List<Agent> currentDefaults = list(new LambdaQueryWrapper<Agent>()
+                .eq(Agent::getUserId, userId)
+                .eq(Agent::getIsDefault, true));
+        for (Agent defaultAgent : currentDefaults) {
+            defaultAgent.setIsDefault(false);
+            updateById(defaultAgent);
+        }
+
+        // 3. 设置当前Agent为默认
+        agent.setIsDefault(true);
+        updateById(agent);
     }
 
     /**
