@@ -27,14 +27,22 @@
         </div>
         <div class="doc-list">
           <div v-for="doc in documents" :key="doc.id" class="doc-item" @click="openDocModal(doc)">
-            <div class="doc-info">
-              <span class="doc-name">{{ doc.name }}</span>
-              <span class="doc-status" :class="doc.status?.code || doc.status">
-                {{ statusText(doc.status?.code || doc.status) }}
+            <a-tooltip :title="statusText(doc.status?.code || doc.status)">
+              <span class="doc-status-icon" :class="doc.status?.code || doc.status">
+                <CheckCircleOutlined v-if="(doc.status?.code || doc.status) === 'completed'" />
+                <SyncOutlined v-else-if="(doc.status?.code || doc.status) === 'pending' || (doc.status?.code || doc.status) === 'processing'" spin />
+                <CloseCircleOutlined v-else-if="(doc.status?.code || doc.status) === 'failed'" />
+                <ExclamationCircleOutlined v-else />
               </span>
-            </div>
+            </a-tooltip>
+            <span class="doc-name">{{ doc.name }}</span>
             <div class="doc-meta">
-              {{ doc.chunkCount || 0 }} 分块
+              <span v-if="doc.chunkCount" class="doc-chunk-count">{{ doc.chunkCount }} 分块</span>
+              <button
+                v-if="(doc.status?.code || doc.status) === 'uploaded' || (doc.status?.code || doc.status) === 'failed'"
+                class="btn-link"
+                @click.stop="openIngestModal(doc)"
+              >入库</button>
               <button class="btn-link danger" @click.stop="deleteDoc(doc.id)">删除</button>
             </div>
           </div>
@@ -49,7 +57,8 @@
             <div class="rag-section">
               <div class="rag-messages" ref="ragRef">
                 <div v-for="(msg, i) in ragMessages" :key="i" :class="['rag-msg', msg.role]">
-                  <div class="rag-content">{{ msg.content }}</div>
+                  <div v-if="msg.role === 'user'" class="rag-content">{{ msg.content }}</div>
+                  <div v-else class="rag-content markdown-body" v-html="renderMarkdown(msg.content)"></div>
                 </div>
               </div>
               <div class="rag-input">
@@ -65,7 +74,7 @@
             </div>
           </a-tab-pane>
           <a-tab-pane key="mindmap" tab="思维导图">
-            <div v-if="activeTab === 'mindmap'" class="mindmap-section">
+            <div v-if="activeTab === 'mindmap'" class="rag-section">
               <div v-if="mindmapData" class="mindmap-container">
                 <svg ref="mindmapSvgRef" class="mindmap-svg"></svg>
                 <div class="mindmap-actions">
@@ -92,32 +101,64 @@
     <a-modal
       v-model:open="docModalVisible"
       :title="currentDoc?.name || '文档详情'"
-      :width="860"
+      :width="900"
       :footer="null"
+      centered
+      :bodyStyle="{ padding: '0' }"
     >
-      <a-tabs v-model:activeKey="docModalTab">
-        <a-tab-pane key="preview" tab="文档预览">
-          <div class="modal-preview" v-if="previewContent">
-            <pre>{{ previewContent }}</pre>
+      <template #extra>
+        <span v-if="previewContent" class="doc-char-count">{{ previewContent.length }} 字符</span>
+        <button class="btn-outline-sm" @click="handleDownload">
+          <DownloadOutlined /> 下载
+        </button>
+      </template>
+      <a-tabs v-model:activeKey="docModalTab" class="doc-modal-tabs">
+        <a-tab-pane v-if="hasSourcePreview" key="source" tab="源文件预览">
+          <div class="tab-pane-body">
+            <FilePreview
+              :fileUrl="downloadUrl"
+              :fileName="currentDoc?.name"
+              :fileType="currentDoc?.fileType"
+              :content="previewContent"
+              :loading="!previewLoaded"
+            />
           </div>
-          <div v-else class="modal-empty">加载中...</div>
         </a-tab-pane>
-        <a-tab-pane key="chunks" tab="分块列表">
-          <div class="chunk-list" v-if="chunks.length > 0">
-            <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item" @click="openChunkDetail(chunk)">
-              <div class="chunk-header">
-                <span class="chunk-index">#{{ chunk.chunkIndex ?? i + 1 }}</span>
-                <div class="chunk-header-right">
-                  <a-tag v-if="chunk.status" :color="chunkStatusColor(chunk.status)" size="small">
-                    {{ chunkStatusText(chunk.status) }}
-                  </a-tag>
-                  <span class="chunk-meta">{{ chunk.tokenCount || 0 }} tokens</span>
+        <a-tab-pane key="text" tab="文本预览">
+          <div class="tab-pane-body">
+            <div v-if="currentDoc?.errorMessage" class="error-message">
+              <ExclamationCircleOutlined /> {{ currentDoc.errorMessage }}
+            </div>
+            <div v-if="previewLoaded && !previewContent" class="modal-empty">
+              <p>文档解析失败，无法预览文本内容</p>
+              <button class="btn-primary-sm" @click="handleDownload">
+                <DownloadOutlined /> 下载文件查看
+              </button>
+            </div>
+            <div v-else-if="previewContent" class="text-content-preview">
+              <div v-if="isMarkdownFile" class="markdown-content" v-html="renderedMarkdown"></div>
+              <pre v-else class="plain-text">{{ previewContent }}</pre>
+            </div>
+            <div v-else class="modal-empty">加载中...</div>
+          </div>
+        </a-tab-pane>
+        <a-tab-pane v-if="chunks.length > 0" key="chunks" tab="分块列表">
+          <div class="tab-pane-body chunk-list-pane">
+            <div class="chunk-list">
+              <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item" @click="openChunkDetail(chunk)">
+                <div class="chunk-header">
+                  <span class="chunk-index">#{{ chunk.chunkIndex ?? i + 1 }}</span>
+                  <div class="chunk-header-right">
+                    <span class="chunk-meta">{{ chunk.tokenCount || 0 }} tokens</span>
+                    <a-tag v-if="chunk.status" :color="chunkStatusColor(chunk.status)" size="small" style="flex-shrink:0">
+                      {{ chunkStatusText(chunk.status) }}
+                    </a-tag>
+                  </div>
                 </div>
+                <div class="chunk-preview">{{ chunk.content?.length > 100 ? chunk.content.substring(0, 100) + '...' : chunk.content }}</div>
               </div>
-              <div class="chunk-preview">{{ chunk.content?.length > 100 ? chunk.content.substring(0, 100) + '...' : chunk.content }}</div>
             </div>
           </div>
-          <div v-else class="modal-empty">暂无分块数据</div>
         </a-tab-pane>
       </a-tabs>
     </a-modal>
@@ -144,17 +185,9 @@
       title="上传文档"
       :width="520"
       :footer="null"
+      :maskClosable="false"
     >
       <div class="upload-section">
-        <div class="upload-form-item">
-          <label class="upload-label">分块策略</label>
-          <a-select v-model:value="uploadForm.chunkStrategy" style="width: 100%">
-            <a-select-option value="general">通用分块 - 按分隔符和长度切分</a-select-option>
-            <a-select-option value="book">书籍分块 - 按章节标题切分</a-select-option>
-            <a-select-option value="separator">严格分隔 - 遇分隔符即切分</a-select-option>
-          </a-select>
-        </div>
-
         <div class="upload-dropzone" @click="triggerFileInput" @drop.prevent="onDrop" @dragover.prevent>
           <input ref="fileInputRef" type="file" multiple accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.html,.htm" style="display: none" @change="onFileSelect" />
           <p class="dropzone-text">拖拽文件到此处，或点击选择</p>
@@ -182,8 +215,60 @@
       </div>
     </a-modal>
 
+    <!-- 入库弹窗 -->
+    <a-modal
+      v-model:open="ingestVisible"
+      :title="`文档入库 - ${ingestDoc?.name || ''}`"
+      :width="560"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="ingest-section">
+        <a-form :model="ingestForm" :label-col="{ span: 6 }">
+          <a-form-item label="分块策略" required>
+            <a-select v-model:value="ingestForm.chunkStrategy" style="width: 100%">
+              <a-select-option value="general">通用分块 - 按分隔符和长度切分</a-select-option>
+              <a-select-option value="book">书籍分块 - 按章节标题切分</a-select-option>
+              <a-select-option value="separator">严格分隔 - 遇分隔符即切分</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="分块大小" required>
+            <a-input-number v-model:value="ingestForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
+          </a-form-item>
+          <a-form-item label="重叠百分比" required>
+            <a-input-number v-model:value="ingestForm.chunkOverlap" :min="0" :max="99" :step="5" style="width: 100%" />
+          </a-form-item>
+          <a-form-item label="分块分隔符">
+            <a-input v-model:value="ingestForm.chunkDelimiter" placeholder="默认按换行符分隔" allow-clear />
+          </a-form-item>
+        </a-form>
+
+        <!-- 预览分块 -->
+        <div v-if="previewChunksList.length > 0" class="preview-chunks">
+          <div class="preview-header">分块预览（共 {{ previewChunksList.length }} 块）</div>
+          <div class="preview-list">
+            <div v-for="(chunk, i) in previewChunksList" :key="i" class="preview-item">
+              <div class="preview-item-header">#{{ i + 1 }} (约 {{ Math.round(chunk.length * 1.2) }} tokens)</div>
+              <div class="preview-item-content">{{ chunk.length > 200 ? chunk.substring(0, 200) + '...' : chunk }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ingest-actions">
+          <button class="btn-outline-sm" :disabled="ingestPreviewing" @click="handlePreviewChunks">
+            {{ ingestPreviewing ? '预览中...' : '预览分块' }}
+          </button>
+          <div style="flex:1"></div>
+          <button class="btn-outline-sm" @click="ingestVisible = false">取消</button>
+          <button class="btn-primary-sm" :disabled="ingestSubmitting" @click="handleIngest">
+            {{ ingestSubmitting ? '入库中...' : '确认入库' }}
+          </button>
+        </div>
+      </div>
+    </a-modal>
+
     <!-- 编辑知识库弹窗 -->
-    <a-modal v-model:open="editVisible" title="编辑知识库" :width="480" @ok="handleEdit" :confirm-loading="editSubmitting">
+    <a-modal v-model:open="editVisible" title="编辑知识库" :width="480" @ok="handleEdit" :confirm-loading="editSubmitting" :maskClosable="false">
       <a-form :model="editForm" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="editForm.name" placeholder="知识库名称" />
@@ -197,9 +282,6 @@
               {{ m.name }} ({{ m.modelId }})
             </a-select-option>
           </a-select>
-        </a-form-item>
-        <a-form-item label="分块大小">
-          <a-input-number v-model:value="editForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
         </a-form-item>
         <a-form-item label="RAG Top K">
           <a-input-number v-model:value="editForm.ragTopK" :min="1" :max="20" style="width: 100%" />
@@ -254,7 +336,7 @@
     </a-modal>
 
     <!-- 邀请成员弹窗 -->
-    <a-modal v-model:open="inviteVisible" title="邀请成员" :width="480" :footer="null">
+    <a-modal v-model:open="inviteVisible" title="邀请成员" :width="480" :footer="null" :maskClosable="false">
       <div class="invite-section">
         <a-input
           v-model:value="inviteKeyword"
@@ -294,19 +376,26 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, watch } from 'vue'
+import { marked } from 'marked'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import {
+  ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
+  CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
+  DownloadOutlined,
+} from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getKnowledge, updateKnowledge, getDocuments, uploadDocument, uploadDocuments, deleteDocument,
-  previewDocument, getChunks, askKnowledge, generateMindmap, getMindmap,
-  getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole, removeKnowledgeMember,
+  previewDocument, getDocumentDownloadUrl, getChunks, askKnowledge, askKnowledgeStream,
+  generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
+  removeKnowledgeMember, ingestDocument, previewChunks,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
 import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
+import FilePreview from '../components/FilePreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -327,9 +416,11 @@ const mindmapLoaded = ref(false)
 
 // 文档弹窗
 const docModalVisible = ref(false)
-const docModalTab = ref('preview')
+const docModalTab = ref('source')
 const currentDoc = ref(null)
 const previewContent = ref('')
+const previewLoaded = ref(false)
+const downloadUrl = ref('')
 const chunks = ref([])
 
 // 分块详情弹窗
@@ -341,8 +432,18 @@ const uploadVisible = ref(false)
 const uploadSubmitting = ref(false)
 const uploadFiles = ref([])
 const fileInputRef = ref(null)
-const uploadForm = reactive({
+
+// 入库弹窗
+const ingestVisible = ref(false)
+const ingestDoc = ref(null)
+const ingestSubmitting = ref(false)
+const ingestPreviewing = ref(false)
+const previewChunksList = ref([])
+const ingestForm = reactive({
   chunkStrategy: 'general',
+  chunkSize: 512,
+  chunkOverlap: 10,
+  chunkDelimiter: '',
 })
 
 // 编辑弹窗
@@ -353,8 +454,6 @@ const editForm = reactive({
   name: '',
   description: '',
   embeddingModel: '',
-  chunkSize: 512,
-  chunkOverlap: 50,
   ragTopK: 5,
   ragThreshold: 0.7,
 })
@@ -386,9 +485,9 @@ async function loadDocuments() {
 
 async function handleUpload(file) {
   try {
-    await uploadDocument(knowledgeId, file, uploadForm.chunkStrategy)
-    message.success('上传成功，正在处理...')
-    setTimeout(loadDocuments, 1000)
+    await uploadDocument(knowledgeId, file)
+    message.success('上传成功')
+    setTimeout(loadDocuments, 500)
   } catch (e) {
     // interceptor已处理错误提示
   }
@@ -399,7 +498,6 @@ async function handleUpload(file) {
 
 function openUploadModal() {
   uploadFiles.value = []
-  uploadForm.chunkStrategy = 'general'
   uploadVisible.value = true
 }
 
@@ -437,11 +535,11 @@ async function handleBatchUpload() {
 
   try {
     const files = uploadFiles.value.map(f => f)
-    await uploadDocuments(knowledgeId, files, uploadForm.chunkStrategy)
-    message.success(`批量上传成功，共 ${files.length} 个文件正在处理...`)
+    await uploadDocuments(knowledgeId, files)
+    message.success(`批量上传成功，共 ${files.length} 个文件`)
     uploadVisible.value = false
     uploadFiles.value = []
-    setTimeout(loadDocuments, 1000)
+    setTimeout(loadDocuments, 500)
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -449,25 +547,99 @@ async function handleBatchUpload() {
   }
 }
 
+// ========== 入库弹窗 ==========
+
+function openIngestModal(doc) {
+  ingestDoc.value = doc
+  previewChunksList.value = []
+  Object.assign(ingestForm, {
+    chunkStrategy: 'general',
+    chunkSize: 512,
+    chunkOverlap: 10,
+    chunkDelimiter: '',
+  })
+  ingestVisible.value = true
+}
+
+async function handlePreviewChunks() {
+  if (!ingestDoc.value) return
+  ingestPreviewing.value = true
+  try {
+    const data = {
+      chunkStrategy: ingestForm.chunkStrategy,
+      chunkSize: ingestForm.chunkSize,
+      chunkOverlap: ingestForm.chunkOverlap,
+      chunkDelimiter: ingestForm.chunkDelimiter || null,
+    }
+    const res = await previewChunks(ingestDoc.value.id, data)
+    previewChunksList.value = res.data || []
+    if (previewChunksList.value.length === 0) {
+      message.info('未产生分块，请检查文档内容')
+    }
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    ingestPreviewing.value = false
+  }
+}
+
+async function handleIngest() {
+  if (!ingestDoc.value) return
+  ingestSubmitting.value = true
+  try {
+    const data = {
+      chunkStrategy: ingestForm.chunkStrategy,
+      chunkSize: ingestForm.chunkSize,
+      chunkOverlap: ingestForm.chunkOverlap,
+      chunkDelimiter: ingestForm.chunkDelimiter || null,
+    }
+    await ingestDocument(ingestDoc.value.id, data)
+    message.success('入库任务已提交，正在处理...')
+    ingestVisible.value = false
+    setTimeout(loadDocuments, 500)
+  } catch (e) {
+    // interceptor已处理错误提示
+  } finally {
+    ingestSubmitting.value = false
+  }
+}
+
 // ========== 文档弹窗 ==========
 
 async function openDocModal(doc) {
   currentDoc.value = doc
-  docModalTab.value = 'preview'
+  // Office文档默认展示文本预览，其他默认展示源文件预览
+  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
+  docModalTab.value = officeTypes.includes(doc.fileType) ? 'text' : 'source'
   previewContent.value = ''
+  previewLoaded.value = false
+  downloadUrl.value = ''
   chunks.value = []
   docModalVisible.value = true
 
-  // 并行加载预览和分块
-  const [previewRes, chunksRes] = await Promise.allSettled([
+  // 并行加载预览、下载链接和分块
+  const [previewRes, downloadRes, chunksRes] = await Promise.allSettled([
     previewDocument(doc.id),
+    getDocumentDownloadUrl(doc.id),
     getChunks(doc.id),
   ])
   if (previewRes.status === 'fulfilled') {
-    previewContent.value = previewRes.value.data
+    previewContent.value = previewRes.value.data || ''
+  }
+  previewLoaded.value = true
+  if (downloadRes.status === 'fulfilled') {
+    downloadUrl.value = downloadRes.value.data?.url || ''
   }
   if (chunksRes.status === 'fulfilled') {
     chunks.value = (chunksRes.value.data || []).sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0))
+  }
+}
+
+function handleDownload() {
+  if (downloadUrl.value) {
+    window.open(downloadUrl.value, '_blank')
+  } else {
+    message.warning('下载链接获取中，请稍后重试')
   }
 }
 
@@ -490,8 +662,6 @@ async function openEditDialog() {
     name: k.name || '',
     description: k.description || '',
     embeddingModel: k.embeddingModel || '',
-    chunkSize: k.chunkSize || 512,
-    chunkOverlap: k.chunkOverlap || 50,
     ragTopK: config.ragTopK ?? 5,
     ragThreshold: config.ragThreshold ?? 0.7,
   })
@@ -515,8 +685,6 @@ async function handleEdit() {
       name: editForm.name,
       description: editForm.description,
       embeddingModel: editForm.embeddingModel,
-      chunkSize: editForm.chunkSize,
-      chunkOverlap: editForm.chunkOverlap,
       config,
     })
     message.success('更新成功')
@@ -550,24 +718,63 @@ function deleteDoc(docId) {
 
 // ========== RAG 问答 ==========
 
+function renderMarkdown(text) {
+  if (!text) return ''
+  return marked(text)
+}
+
 async function askRag() {
   const q = ragQuestion.value.trim()
   if (!q || ragLoading.value) return
   ragMessages.value.push({ role: 'user', content: q })
   ragQuestion.value = ''
   ragLoading.value = true
+
+  // 添加空的assistant消息，用于流式填充
+  const assistantIndex = ragMessages.value.length
+  ragMessages.value.push({ role: 'assistant', content: '' })
+
   try {
-    const res = await askKnowledge(knowledgeId, q)
-    ragMessages.value.push({ role: 'assistant', content: res.data })
+    await askKnowledgeStream(knowledgeId, q,
+      (chunk) => {
+        // 流式追加内容
+        ragMessages.value[assistantIndex].content += chunk
+        // 自动滚动到底部
+        nextTick(() => {
+          if (ragRef.value) {
+            ragRef.value.scrollTop = ragRef.value.scrollHeight
+          }
+        })
+      },
+      () => {
+        // 流式完成
+        ragLoading.value = false
+      }
+    )
   } catch (e) {
-    ragMessages.value.push({ role: 'assistant', content: '查询失败：' + (e.message || '未知错误') })
-  } finally {
+    ragMessages.value[assistantIndex].content = '查询失败：' + (e.message || '未知错误')
     ragLoading.value = false
   }
 }
 
+// 文件类型判断（用于文本预览tab）
+// Excel/CSV/Word 转为 Markdown 表格，MD 文件本身是 Markdown
+const isMarkdownFile = computed(() => ['md', 'xlsx', 'xls', 'csv', 'doc', 'docx'].includes(currentDoc.value?.fileType))
+// Office文档（doc/docx/xls/xlsx/ppt/pptx）不支持源文件预览，只展示文本化后的内容
+const hasSourcePreview = computed(() => {
+  const ft = currentDoc.value?.fileType
+  if (!ft) return false
+  return !['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ft)
+})
+
+// Markdown渲染
+const renderedMarkdown = computed(() => {
+  if (!previewContent.value) return ''
+  return marked(previewContent.value)
+})
+
 function statusText(s) {
-  const map = { pending: '待处理', processing: '处理中', completed: '已完成', failed: '失败' }
+  const map = { uploaded: '待入库', pending: '分块中', processing: '向量化中', completed: '已完成', failed: '失败' }
   return map[s] || s
 }
 
@@ -769,7 +976,7 @@ onMounted(() => {
 
 <style scoped>
 .page {
-  padding: 32px;
+  padding: 20px 24px;
   height: 100vh;
   overflow-y: auto;
   background: #fafafa;
@@ -778,7 +985,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .btn-back {
   background: none;
@@ -813,14 +1020,14 @@ onMounted(() => {
 .panel {
   background: #fff;
   border: 1px solid #ebebeb;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 8px;
+  padding: 16px;
 }
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .panel-header h3 {
   font-size: 16px;
@@ -876,8 +1083,8 @@ onMounted(() => {
 }
 .doc-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid #f5f5f5;
   border-radius: 8px;
@@ -887,32 +1094,30 @@ onMounted(() => {
 .doc-item:hover {
   border-color: #0070f3;
 }
-.doc-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.doc-status-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
 }
+.doc-status-icon.uploaded { color: #a1a1aa; }
+.doc-status-icon.pending { color: #2563eb; }
+.doc-status-icon.processing { color: #d97706; }
+.doc-status-icon.completed { color: #16a34a; }
+.doc-status-icon.failed { color: #dc2626; }
 .doc-name {
+  flex: 1;
   font-size: 14px;
   color: #171717;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
-.doc-status {
+.doc-chunk-count {
   font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 100px;
-}
-.doc-status.completed {
-  background: #dcfce7;
-  color: #16a34a;
-}
-.doc-status.pending,
-.doc-status.processing {
-  background: #fef3c7;
-  color: #d97706;
-}
-.doc-status.failed {
-  background: #fee2e2;
-  color: #dc2626;
+  color: #a1a1aa;
+  flex-shrink: 0;
 }
 .doc-meta {
   display: flex;
@@ -920,6 +1125,7 @@ onMounted(() => {
   gap: 12px;
   font-size: 13px;
   color: #a1a1aa;
+  flex-shrink: 0;
 }
 .btn-link {
   background: none;
@@ -937,11 +1143,11 @@ onMounted(() => {
   color: #a1a1aa;
 }
 
-/* RAG */
+/* RAG & 思维导图共用 */
 .rag-section {
   display: flex;
   flex-direction: column;
-  height: 400px;
+  height: calc(100vh - 220px);
 }
 .rag-messages {
   flex: 1;
@@ -962,10 +1168,11 @@ onMounted(() => {
 .rag-msg.assistant {
   align-self: flex-start;
   background: #eff6ff;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border-radius: 8px;
-  max-width: 80%;
+  max-width: 85%;
   font-size: 14px;
+  line-height: 1.6;
 }
 .rag-input {
   display: flex;
@@ -985,18 +1192,56 @@ onMounted(() => {
   border-color: #171717;
 }
 
-/* 思维导图 */
-.mindmap-section {
-  min-height: 400px;
+/* RAG消息中的markdown样式 */
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
+.markdown-body :deep(p) {
+  margin-bottom: 8px;
+}
+.markdown-body :deep(code) {
+  background: rgba(0,0,0,0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.markdown-body :deep(pre) {
+  background: rgba(0,0,0,0.04);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.markdown-body :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  padding-left: 20px;
+  margin-bottom: 8px;
+}
+.markdown-body :deep(li) {
+  margin-bottom: 4px;
+}
+.markdown-body :deep(strong) {
+  font-weight: 600;
+}
+
+/* 思维导图 */
 .mindmap-container {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .mindmap-svg {
+  flex: 1;
   width: 100%;
-  height: 420px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
 }
@@ -1005,11 +1250,11 @@ onMounted(() => {
   justify-content: flex-end;
 }
 .mindmap-empty {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 400px;
   color: #a1a1aa;
 }
 .mindmap-empty p {
@@ -1017,18 +1262,141 @@ onMounted(() => {
 }
 
 /* 文档弹窗 */
-.modal-preview {
-  max-height: 500px;
-  overflow-y: auto;
+.doc-char-count {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-right: 8px;
 }
-.modal-preview pre {
-  background: #f5f5f5;
-  padding: 16px;
-  border-radius: 8px;
+.doc-modal-tabs {
+  margin-top: -12px;
+}
+.doc-modal-tabs :deep(.ant-tabs-nav) {
+  margin: 0;
+  padding: 0 24px;
+  background: #fafafa;
+  border-bottom: 1px solid #ebebeb;
+}
+.doc-modal-tabs :deep(.ant-tabs-content-holder) {
+  padding: 0;
+}
+.tab-pane-body {
+  height: 520px;
+  overflow: auto;
+}
+.chunk-list-pane {
+  height: 520px;
+  overflow: hidden;
+}
+.text-content-preview {
+  padding: 20px 24px;
+}
+.plain-text {
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+  margin: 0;
+  color: #3f3f46;
+}
+.markdown-content {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #27272a;
+}
+.markdown-content h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 24px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e4e4e7;
+}
+.markdown-content h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 20px 0 10px;
+}
+.markdown-content h3,
+.markdown-content h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+}
+.markdown-content p {
+  margin: 0 0 12px;
+}
+.markdown-content code {
+  background: #f4f4f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #e11d48;
+}
+.markdown-content pre {
+  background: #f8f9fa;
+  padding: 14px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 12px 0;
+  border: 1px solid #e4e4e7;
+}
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 24px;
+  margin: 0 0 12px;
+}
+.markdown-content li {
+  margin-bottom: 4px;
+}
+.markdown-content blockquote {
+  border-left: 3px solid #a1a1aa;
+  padding: 4px 0 4px 16px;
+  margin: 12px 0;
+  color: #71717a;
+  background: #fafafa;
+}
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #e4e4e7;
+  padding: 8px 12px;
+  text-align: left;
+}
+.markdown-content th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #27272a;
+}
+.markdown-content tr:hover td {
+  background: #fafafa;
+}
+.markdown-content img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+.markdown-content hr {
+  border: none;
+  border-top: 1px solid #e4e4e7;
+  margin: 16px 0;
+}
+.error-message {
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  padding: 10px 16px;
+  color: #dc2626;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .modal-empty {
   text-align: center;
@@ -1274,6 +1642,62 @@ onMounted(() => {
 .upload-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #ebebeb;
+}
+.form-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 2px;
+}
+
+/* 入库弹窗 */
+.ingest-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.preview-chunks {
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.preview-header {
+  background: #f9fafb;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #52525b;
+  border-bottom: 1px solid #ebebeb;
+}
+.preview-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.preview-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f5f5f5;
+}
+.preview-item:last-child {
+  border-bottom: none;
+}
+.preview-item-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #71717a;
+  margin-bottom: 4px;
+}
+.preview-item-content {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ingest-actions {
+  display: flex;
+  align-items: center;
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid #ebebeb;

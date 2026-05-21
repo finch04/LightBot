@@ -20,6 +20,8 @@ import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.stereotype.Service;
 
+import reactor.core.publisher.Flux;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +88,44 @@ public class RagServiceImpl implements RagService {
         ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
         ChatResponse response = chatModel.call(new Prompt(messages));
         return response.getResult().getOutput().getText();
+    }
+
+    @Override
+    public Flux<String> askStream(Long knowledgeId, String question, Long providerId) {
+        // 1. 校验知识库存在性
+        Knowledge knowledge = knowledgeService.getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
+        }
+
+        // 1.1 解析providerId（为空时使用默认提供商）
+        Long actualProviderId = resolveProviderId(providerId);
+
+        // 2. 将问题文本向量化
+        float[] queryVector = embedText(question);
+
+        // 3. 在知识库中检索相似内容（Top-5，相似度阈值0.5）
+        List<Map<String, Object>> results = embeddingService.searchSimilar(
+                knowledgeId, queryVector, 5, 0.5);
+
+        if (results.isEmpty()) {
+            return Flux.just("抱歉，在知识库中没有找到相关信息。");
+        }
+
+        // 4. 构建参考资料上下文
+        String context = results.stream()
+                .map(row -> String.format("【%s】\n%s", row.get("document_name"), row.get("content")))
+                .collect(Collectors.joining("\n\n---\n\n"));
+
+        // 5. 通过 ModelFactory 获取 ChatModel 并流式调用
+        String systemPrompt = RAG_SYSTEM_PROMPT.replace("{context}", context);
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(systemPrompt));
+        messages.add(new UserMessage(question));
+
+        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
+        return chatModel.stream(new Prompt(messages))
+                .map(response -> response.getResult().getOutput().getText());
     }
 
     /**

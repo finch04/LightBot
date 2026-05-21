@@ -44,14 +44,6 @@ public class Knowledge {
     @Schema(description = "向量化模型名称")
     private String embeddingModel;
 
-    @TableField("chunk_size")
-    @Schema(description = "分块大小")
-    private Integer chunkSize;
-
-    @TableField("chunk_overlap")
-    @Schema(description = "分块重叠")
-    private Integer chunkOverlap;
-
     @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "扩展配置")
     private String config;

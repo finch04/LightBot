@@ -6,6 +6,11 @@ spring:
     allow-circular-references: true
   application:
     name: lightbot
+  # 文件上传大小限制
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
   autoconfigure:
     exclude:
       # Chat 由 ModelFactory 按数据库配置动态创建，禁用全局自动装配

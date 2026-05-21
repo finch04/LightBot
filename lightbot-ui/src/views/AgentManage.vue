@@ -48,6 +48,7 @@
       :width="560"
       @ok="handleSubmit"
       :confirm-loading="submitting"
+      :maskClosable="false"
     >
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="名称" required>

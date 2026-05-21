@@ -34,7 +34,7 @@
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" :footer="null">
+    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="form.name" placeholder="如：通义千问" />
@@ -53,6 +53,28 @@
         <a-form-item label="Base URL">
           <a-input v-model:value="form.baseUrl" placeholder="可选" />
         </a-form-item>
+
+        <!-- 高级选项 -->
+        <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
+          <span>高级选项</span>
+          <DownOutlined :class="['toggle-icon', { expanded: showAdvanced }]" />
+        </div>
+        <template v-if="showAdvanced">
+          <a-form-item label="模型列表URL">
+            <a-input v-model:value="form.modelsEndpoint" placeholder="为空时使用默认地址" />
+            <div class="form-hint">自定义获取模型列表的接口地址</div>
+          </a-form-item>
+          <a-form-item label="额外请求头">
+            <a-textarea v-model:value="form.headersJson" placeholder='{"Authorization": "Bearer xxx"}' :rows="3" />
+            <div class="form-hint">JSON 格式，为空时不添加额外请求头</div>
+            <div v-if="form.headersJson && !isValidJson(form.headersJson)" class="form-error">JSON 格式不正确</div>
+          </a-form-item>
+          <a-form-item label="扩展配置">
+            <a-textarea v-model:value="form.extraJson" placeholder='{"timeout": 30000}' :rows="3" />
+            <div class="form-hint">JSON 格式的扩展配置</div>
+            <div v-if="form.extraJson && !isValidJson(form.extraJson)" class="form-error">JSON 格式不正确</div>
+          </a-form-item>
+        </template>
       </a-form>
       <div class="dialog-footer">
         <button class="btn-check" :disabled="checking" @click="handleCheck">
@@ -68,7 +90,7 @@
     </a-modal>
 
     <!-- 模型管理弹窗 -->
-    <a-modal v-model:open="modelModalVisible" :title="`${currentProvider?.name || ''} - 模型管理`" :width="640" :footer="null">
+    <a-modal v-model:open="modelModalVisible" :title="`${currentProvider?.name || ''} - 模型管理`" :width="640" :footer="null" :maskClosable="false">
       <div class="model-modal-header">
         <span class="model-count">共 {{ modelList.length }} 个模型</span>
         <div class="model-modal-actions">
@@ -161,7 +183,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels } from '../api/modelProvider'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
@@ -170,7 +192,8 @@ const list = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
-const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', config: '' })
+const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '', extraJson: '' })
+const showAdvanced = ref(false)
 
 // 模型管理
 const modelModalVisible = ref(false)
@@ -226,15 +249,28 @@ async function loadData() {
 
 function openDialog(row) {
   if (row) {
-    Object.assign(form, { ...row, type: row.type?.code || row.type })
+    Object.assign(form, {
+      id: row.id,
+      name: row.name || '',
+      type: row.type?.code || row.type,
+      apiKey: row.apiKey || '',
+      baseUrl: row.baseUrl || '',
+      modelsEndpoint: row.modelsEndpoint || '',
+      headersJson: row.headersJson || '',
+      extraJson: row.extraJson || '',
+    })
+    showAdvanced.value = false
   } else {
-    Object.assign(form, { id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', config: '' })
+    Object.assign(form, { id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '', extraJson: '' })
+    showAdvanced.value = false
   }
   dialogVisible.value = true
 }
 
 async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入名称')
+  if (form.headersJson && !isValidJson(form.headersJson)) return message.warning('额外请求头 JSON 格式不正确')
+  if (form.extraJson && !isValidJson(form.extraJson)) return message.warning('扩展配置 JSON 格式不正确')
   submitting.value = true
   try {
     if (form.id) {
@@ -289,6 +325,16 @@ async function handleCheck() {
 function maskKey(key) {
   if (!key || key.length < 10) return '***'
   return key.substring(0, 6) + '****' + key.substring(key.length - 4)
+}
+
+function isValidJson(str) {
+  if (!str || !str.trim()) return true
+  try {
+    const parsed = JSON.parse(str)
+    return typeof parsed === 'object' && parsed !== null
+  } catch {
+    return false
+  }
 }
 
 // ========== 模型管理 ==========
@@ -451,6 +497,8 @@ onMounted(loadData)
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 .card-top {
   display: flex;
@@ -515,6 +563,7 @@ onMounted(loadData)
   font-size: 13px;
   color: #a1a1aa;
   margin-bottom: 12px;
+  flex: 1;
 }
 .card-footer {
   border-top: 1px solid #f0f0f0;
@@ -765,5 +814,39 @@ onMounted(loadData)
 .btn-primary-sm:disabled {
   background: #d4d4d8;
   cursor: not-allowed;
+}
+
+/* 高级选项 */
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: #71717a;
+  user-select: none;
+  border-top: 1px dashed #ebebeb;
+  margin-top: 4px;
+}
+.advanced-toggle:hover {
+  color: #0070f3;
+}
+.toggle-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+.form-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 2px;
+}
+.form-error {
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 2px;
 }
 </style>

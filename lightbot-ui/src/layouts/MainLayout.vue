@@ -63,11 +63,12 @@
 
       <!-- 用户信息 -->
       <div class="sidebar-footer">
-        <a-dropdown :trigger="['click']">
+        <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']">
           <div class="user-info">
             <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
             <span class="user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
-            <DownOutlined />
+            <UpOutlined v-if="userDropdownOpen" />
+            <DownOutlined v-else />
           </div>
           <template #overlay>
             <a-menu @click="handleCommand">
@@ -83,7 +84,7 @@
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <router-view :key="route.fullPath" />
+      <router-view :key="route.path.startsWith('/chat') ? '/chat' : route.path" />
     </main>
   </div>
 </template>
@@ -96,6 +97,7 @@ import {
   CloseOutlined,
   EditOutlined,
   DownOutlined,
+  UpOutlined,
   RobotOutlined,
   DatabaseOutlined,
   ApiOutlined,
@@ -118,6 +120,7 @@ const sessionListRef = ref(null)
 const renameVisible = ref(false)
 const renameValue = ref('')
 const renameTarget = ref(null)
+const userDropdownOpen = ref(false)
 
 const navItems = [
   { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },

@@ -83,8 +83,6 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         existing.setName(knowledge.getName());
         existing.setDescription(knowledge.getDescription());
         existing.setEmbeddingModel(knowledge.getEmbeddingModel());
-        existing.setChunkSize(knowledge.getChunkSize());
-        existing.setChunkOverlap(knowledge.getChunkOverlap());
         existing.setConfig(knowledge.getConfig());
         updateById(existing);
         return existing;

@@ -43,7 +43,7 @@
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑 Skill' : '新增 Skill'" :width="600" :footer="null">
+    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑 Skill' : '新增 Skill'" :width="600" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="所属 Agent" required>
           <a-select v-model:value="form.agentId" placeholder="选择 Agent" style="width: 100%">

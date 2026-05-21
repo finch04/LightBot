@@ -45,6 +45,10 @@ public class Document {
     @Schema(description = "文件存储路径")
     private String filePath;
 
+    @TableField("markdown_path")
+    @Schema(description = "Markdown文件存储路径")
+    private String markdownPath;
+
     @TableField("file_type")
     @Schema(description = "文件类型")
     private String fileType;
@@ -73,9 +77,9 @@ public class Document {
     @Schema(description = "错误信息")
     private String errorMessage;
 
-    @TableField("chunk_strategy")
-    @Schema(description = "分块策略: general/book/separator")
-    private String chunkStrategy;
+    @TableField(value = "embedding_json", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "入库配置（chunkStrategy/chunkSize/chunkOverlap/chunkDelimiter）")
+    private String embeddingJson;
 
     @TableField(value = "metadata", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "文档元数据")

@@ -3,9 +3,13 @@ package com.lightbot.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.IngestRequest;
 import com.lightbot.entity.Chunk;
 import com.lightbot.entity.Document;
+import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ChunkStatus;
 import com.lightbot.enums.DocumentStatus;
 import com.lightbot.enums.ErrorCode;
@@ -26,7 +30,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,11 +56,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final ChunkStrategyFactory chunkStrategyFactory;
     private final EmbeddingService embeddingService;
     private final EmbeddingModel embeddingModel;
+    private final ObjectMapper objectMapper;
     /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
 
     @Override
-    public Document uploadDocument(Long knowledgeId, MultipartFile file, String chunkStrategy) {
+    public Document uploadDocument(Long knowledgeId, MultipartFile file) {
         long userId = StpUtil.getLoginIdAsLong();
         String fileName = file.getOriginalFilename();
 
@@ -79,54 +87,111 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         String filePath = minioUtil.generatePath(knowledgeId, fileName);
         minioUtil.upload(file, filePath);
 
-        // 5. 创建文档记录
+        // 5. 转换为Markdown并上传
+        String markdownPath = null;
+        try {
+            String markdownContent = tikaUtil.parseToMarkdown(file.getInputStream(), fileName);
+            if (markdownContent != null) {
+                markdownPath = filePath.replaceFirst("\\.[^.]+$", ".md");
+                minioUtil.uploadString(markdownContent, markdownPath, "text/markdown");
+            }
+        } catch (Exception e) {
+            log.warn("[文档上传] Markdown转换失败，不影响上传, fileName={}", fileName, e);
+        }
+
+        // 6. 创建文档记录（状态为 UPLOADED，不触发处理）
         Document doc = new Document();
         doc.setKnowledgeId(knowledgeId);
         doc.setUserId(userId);
         doc.setName(fileName);
         doc.setFilePath(filePath);
+        doc.setMarkdownPath(markdownPath);
         doc.setFileType(fileType);
         doc.setFileSize(file.getSize());
         doc.setFileHash(fileHash);
-        doc.setChunkStrategy(chunkStrategy);
-        doc.setStatus(DocumentStatus.PENDING);
+        doc.setStatus(DocumentStatus.UPLOADED);
         save(doc);
-
-        // 6. 异步处理文档（解析 -> 分块 -> 向量化）
-        processDocumentAsync(doc.getId());
 
         return doc;
     }
 
     @Override
-    public List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, String chunkStrategy) {
+    public List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files) {
         List<Document> results = new ArrayList<>();
         for (MultipartFile file : files) {
-            results.add(uploadDocument(knowledgeId, file, chunkStrategy));
+            results.add(uploadDocument(knowledgeId, file));
         }
         return results;
     }
 
     @Override
+    public void ingestDocument(Long documentId, String embeddingJson) {
+        Document doc = getById(documentId);
+        if (doc == null) {
+            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+        if (doc.getStatus() != DocumentStatus.UPLOADED && doc.getStatus() != DocumentStatus.FAILED) {
+            throw new BizException(ErrorCode.DOCUMENT_INVALID_STATUS);
+        }
+
+        // 1. 保存入库配置到文档
+        doc.setEmbeddingJson(embeddingJson);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setErrorMessage(null);
+        updateById(doc);
+
+        // 2. 异步执行分块 + 向量化
+        processDocumentAsync(documentId, embeddingJson);
+    }
+
+    @Override
+    public List<String> previewChunks(Long documentId, String embeddingJson) {
+        Document doc = getById(documentId);
+        if (doc == null) {
+            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+
+        // 1. 解析文件内容
+        InputStream is = minioUtil.download(doc.getFilePath());
+        String content = tikaUtil.parse(is, doc.getName());
+
+        // 2. 解析入库配置
+        ChunkParams params = parseChunkParams(embeddingJson);
+        String strategyName = parseChunkStrategy(embeddingJson);
+
+        // 3. 分块
+        ChunkStrategy strategy = chunkStrategyFactory.getStrategy(strategyName);
+        return strategy.split(content, params);
+    }
+
     @Async
-    public void processDocumentAsync(Long documentId) {
+    public void processDocumentAsync(Long documentId, String embeddingJson) {
         Document doc = getById(documentId);
         if (doc == null) {
             return;
         }
 
         try {
-            // 1. 更新状态为处理中
-            doc.setStatus(DocumentStatus.PROCESSING);
+            // 1. 更新状态为分块中
+            doc.setStatus(DocumentStatus.PENDING);
             updateById(doc);
 
             // 2. 从MinIO读取文件，使用Tika解析为纯文本
             InputStream is = minioUtil.download(doc.getFilePath());
             String content = tikaUtil.parse(is, doc.getName());
 
-            // 3. 使用分块策略拆分
-            ChunkStrategy strategy = chunkStrategyFactory.getStrategy(doc.getChunkStrategy());
-            ChunkParams params = new ChunkParams();
+            // 2.1 解析失败（返回null）时标记失败
+            if (content == null) {
+                doc.setStatus(DocumentStatus.FAILED);
+                doc.setErrorMessage("文档解析失败，可能是扫描版PDF或文件损坏");
+                updateById(doc);
+                return;
+            }
+
+            // 3. 解析入库配置，执行分块
+            ChunkParams params = parseChunkParams(embeddingJson);
+            String strategyName = parseChunkStrategy(embeddingJson);
+            ChunkStrategy strategy = chunkStrategyFactory.getStrategy(strategyName);
             List<String> chunks = strategy.split(content, params);
 
             // 4. 保存分块到数据库，状态为 CHUNKED
@@ -137,8 +202,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 totalTokens += estimateTokens(chunkContent);
             }
 
-            // 5. 更新文档状态和统计
-            doc.setStatus(DocumentStatus.COMPLETED);
+            // 5. 更新文档状态为向量化中
+            doc.setStatus(DocumentStatus.PROCESSING);
             doc.setChunkCount(chunks.size());
             doc.setTokenCount(totalTokens);
             updateById(doc);
@@ -146,32 +211,27 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             // 6. 更新知识库统计
             knowledgeServiceProvider.getObject().updateStats(doc.getKnowledgeId(), 1, chunks.size(), (int) totalTokens);
 
-            log.info("[文档处理] 分块完成, documentId={}, chunks={}, strategy={}", documentId, chunks.size(), doc.getChunkStrategy());
+            log.info("[文档入库] 分块完成, documentId={}, chunks={}, strategy={}", documentId, chunks.size(), strategyName);
 
             // 7. 异步向量化
             vectorizeChunks(doc.getId(), doc.getKnowledgeId());
 
         } catch (Exception e) {
-            log.error("[文档处理] 失败, documentId={}", documentId, e);
+            log.error("[文档入库] 失败, documentId={}", documentId, e);
             doc.setStatus(DocumentStatus.FAILED);
             doc.setErrorMessage(e.getMessage());
             updateById(doc);
         }
     }
 
-    /**
-     * 异步向量化：逐个将分块转为向量并存储
-     *
-     * @param documentId  文档ID
-     * @param knowledgeId 知识库ID
-     */
     @Async
     public void vectorizeChunks(Long documentId, Long knowledgeId) {
         // 1. 查询知识库的 Embedding 模型名称
         KnowledgeService knowledgeService = knowledgeServiceProvider.getObject();
-        var knowledge = knowledgeService.getById(knowledgeId);
+        Knowledge knowledge = knowledgeService.getById(knowledgeId);
         if (knowledge == null || knowledge.getEmbeddingModel() == null) {
             log.warn("[向量化] 知识库未配置Embedding模型, knowledgeId={}", knowledgeId);
+            completeDocument(documentId);
             return;
         }
         String modelName = knowledge.getEmbeddingModel();
@@ -211,11 +271,20 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         }
 
         log.info("[向量化] 完成, documentId={}, success={}, failed={}", documentId, success, failed);
+        completeDocument(documentId);
     }
 
     /**
-     * 文本向量化
+     * 向量化完成后更新文档状态为 COMPLETED
      */
+    private void completeDocument(Long documentId) {
+        Document doc = getById(documentId);
+        if (doc != null) {
+            doc.setStatus(DocumentStatus.COMPLETED);
+            updateById(doc);
+        }
+    }
+
     private float[] embedText(String text) {
         EmbeddingResponse response = embeddingModel.call(
                 new EmbeddingRequest(List.of(text), null));
@@ -226,13 +295,22 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     public String previewDocument(Long documentId) {
         Document doc = getById(documentId);
         if (doc == null) {
-            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+            return null;
         }
-        try {
-            InputStream is = minioUtil.download(doc.getFilePath());
-            return tikaUtil.parse(is, doc.getName());
+        // 1. 优先读取已转换的Markdown文件
+        if (doc.getMarkdownPath() != null) {
+            try (InputStream is = minioUtil.download(doc.getMarkdownPath())) {
+                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                log.warn("[文档预览] 读取Markdown文件失败，回退到实时转换, documentId={}", documentId, e);
+            }
+        }
+        // 2. 回退：实时转换
+        try (InputStream is = minioUtil.download(doc.getFilePath())) {
+            return tikaUtil.parseToMarkdown(is, doc.getName());
         } catch (Exception e) {
-            throw new BizException(ErrorCode.DOCUMENT_READ_FAILED);
+            log.warn("[文档预览] 解析失败, documentId={}", documentId, e);
+            return null;
         }
     }
 
@@ -250,9 +328,64 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
-        // 删除文档关联的向量
+        // 1. 删除MinIO中的文件
+        try {
+            minioUtil.delete(doc.getFilePath());
+        } catch (Exception e) {
+            log.warn("[文档删除] MinIO文件删除失败, filePath={}, error={}", doc.getFilePath(), e.getMessage());
+        }
+        // 2. 删除文档关联的向量
         embeddingService.deleteByDocumentId(documentId);
+        // 3. 删除文档记录
         removeById(documentId);
+    }
+
+    @Override
+    public DocumentDownloadVO getDocumentDownloadUrl(Long documentId) {
+        Document doc = getById(documentId);
+        if (doc == null) {
+            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+        String url = minioUtil.getPresignedUrl(doc.getFilePath());
+        String contentType = getContentType(doc.getFileType());
+        return new DocumentDownloadVO(url, doc.getFileType(), doc.getName(), contentType);
+    }
+
+    /**
+     * 从 embeddingJson 解析分块参数
+     */
+    private ChunkParams parseChunkParams(String embeddingJson) {
+        ChunkParams params = new ChunkParams();
+        try {
+            var node = objectMapper.readTree(embeddingJson);
+            if (node.has("chunkSize")) {
+                params.setChunkTokenNum(node.get("chunkSize").asInt(512));
+            }
+            if (node.has("chunkOverlap")) {
+                params.setOverlappedPercent(node.get("chunkOverlap").asInt(10));
+            }
+            if (node.has("chunkDelimiter") && !node.get("chunkDelimiter").asText("").isBlank()) {
+                params.setDelimiter(node.get("chunkDelimiter").asText("\n"));
+            }
+        } catch (Exception e) {
+            log.warn("[DocumentService] 解析embeddingJson失败, 使用默认参数", e);
+        }
+        return params;
+    }
+
+    /**
+     * 从 embeddingJson 解析分块策略名称
+     */
+    private String parseChunkStrategy(String embeddingJson) {
+        try {
+            var node = objectMapper.readTree(embeddingJson);
+            if (node.has("chunkStrategy")) {
+                return node.get("chunkStrategy").asText("general");
+            }
+        } catch (Exception e) {
+            log.warn("[DocumentService] 解析chunkStrategy失败", e);
+        }
+        return "general";
     }
 
     private String extractFileType(String fileName) {
@@ -278,5 +411,28 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     private int estimateTokens(String text) {
         return (int) (text.length() * 1.2);
+    }
+
+    /**
+     * 根据文件扩展名获取MIME类型
+     */
+    private String getContentType(String fileType) {
+        if (fileType == null) {
+            return "application/octet-stream";
+        }
+        return switch (fileType.toLowerCase()) {
+            case "pdf" -> "application/pdf";
+            case "doc" -> "application/msword";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "ppt" -> "application/vnd.ms-powerpoint";
+            case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "xls" -> "application/vnd.ms-excel";
+            case "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "csv" -> "text/csv";
+            case "html", "htm" -> "text/html";
+            case "md" -> "text/markdown";
+            case "txt" -> "text/plain";
+            default -> "application/octet-stream";
+        };
     }
 }

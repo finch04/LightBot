@@ -31,7 +31,7 @@
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑 MCP Server' : '新增 MCP Server'" :width="560" :footer="null">
+    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑 MCP Server' : '新增 MCP Server'" :width="560" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="form.name" placeholder="如：filesystem-server" />

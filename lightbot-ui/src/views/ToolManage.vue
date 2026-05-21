@@ -35,7 +35,7 @@
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑工具' : '新增工具'" :width="640" :footer="null">
+    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑工具' : '新增工具'" :width="640" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="工具标识" required>
           <a-input v-model:value="form.name" placeholder="如：http_request（英文，唯一标识）" />

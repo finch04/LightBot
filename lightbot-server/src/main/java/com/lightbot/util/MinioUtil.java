@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -83,6 +85,24 @@ public class MinioUtil {
             return filePath;
         } catch (Exception e) {
             log.error("[MinIO] 上传失败, path={}", filePath, e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
+    /**
+     * 上传字符串内容
+     *
+     * @param content     字符串内容
+     * @param filePath    存储路径
+     * @param contentType 内容类型
+     * @return 文件路径
+     */
+    public String uploadString(String content, String filePath, String contentType) {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+            return upload(bais, filePath, bytes.length, contentType);
+        } catch (Exception e) {
+            log.error("[MinIO] 上传字符串失败, path={}", filePath, e);
             throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }

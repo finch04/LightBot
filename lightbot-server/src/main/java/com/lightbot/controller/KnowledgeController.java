@@ -3,16 +3,21 @@ package com.lightbot.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChunkVO;
+import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.KnowledgeMemberVO;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -33,6 +38,7 @@ public class KnowledgeController {
     private final ChunkService chunkService;
     private final RagService ragService;
     private final KnowledgeMemberService knowledgeMemberService;
+    private final ObjectMapper objectMapper;
 
     // ========== 知识库 CRUD ==========
 
@@ -107,17 +113,15 @@ public class KnowledgeController {
     @Operation(summary = "上传文档到知识库（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/documents")
     public Result<Document> uploadDocument(@PathVariable Long id,
-                                            @RequestParam("file") MultipartFile file,
-                                            @RequestParam(defaultValue = "general") String chunkStrategy) {
-        return Result.ok(documentService.uploadDocument(id, file, chunkStrategy));
+                                            @RequestParam("file") MultipartFile file) {
+        return Result.ok(documentService.uploadDocument(id, file));
     }
 
     @Operation(summary = "批量上传文档到知识库（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/documents/batch")
     public Result<List<Document>> uploadDocuments(@PathVariable Long id,
-                                                   @RequestParam("files") List<MultipartFile> files,
-                                                   @RequestParam(defaultValue = "general") String chunkStrategy) {
-        return Result.ok(documentService.uploadDocuments(id, files, chunkStrategy));
+                                                   @RequestParam("files") List<MultipartFile> files) {
+        return Result.ok(documentService.uploadDocuments(id, files));
     }
 
     @Operation(summary = "获取知识库下的文档列表（需要成员权限）")
@@ -139,10 +143,33 @@ public class KnowledgeController {
         return Result.ok();
     }
 
+    @Operation(summary = "文档入库：分块+向量化（需要DEVELOPER及以上权限）")
+    @PostMapping("/documents/{docId}/ingest")
+    public Result<Void> ingestDocument(@PathVariable Long docId,
+                                        @RequestBody @jakarta.validation.Valid IngestRequest request) throws Exception {
+        String embeddingJson = objectMapper.writeValueAsString(request);
+        documentService.ingestDocument(docId, embeddingJson);
+        return Result.ok();
+    }
+
+    @Operation(summary = "预览分块结果（不入库）")
+    @PostMapping("/documents/{docId}/preview-chunks")
+    public Result<List<String>> previewChunks(@PathVariable Long docId,
+                                               @RequestBody @jakarta.validation.Valid IngestRequest request) throws Exception {
+        String embeddingJson = objectMapper.writeValueAsString(request);
+        return Result.ok(documentService.previewChunks(docId, embeddingJson));
+    }
+
     @Operation(summary = "预览文档内容（需要成员权限）")
     @GetMapping("/documents/{docId}/preview")
     public Result<String> previewDocument(@PathVariable Long docId) {
         return Result.ok(documentService.previewDocument(docId));
+    }
+
+    @Operation(summary = "获取文档下载信息（预签名URL+文件类型）")
+    @GetMapping("/documents/{docId}/download")
+    public Result<DocumentDownloadVO> getDocumentDownloadUrl(@PathVariable Long docId) {
+        return Result.ok(documentService.getDocumentDownloadUrl(docId));
     }
 
     // ========== 分块查看 ==========
@@ -170,11 +197,19 @@ public class KnowledgeController {
 
     // ========== RAG 问答 ==========
 
-    @Operation(summary = "基于知识库RAG问答（需要VIEWER及以上权限）")
+    @Operation(summary = "基于知识库RAG问答（同步）")
     @PostMapping("/{id}/ask")
     public Result<String> ask(@PathVariable Long id,
                               @RequestParam String question,
                               @RequestParam(required = false) Long providerId) {
         return Result.ok(ragService.ask(id, question, providerId));
+    }
+
+    @Operation(summary = "基于知识库RAG问答（流式）")
+    @PostMapping(value = "/{id}/ask-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> askStream(@PathVariable Long id,
+                                   @RequestParam String question,
+                                   @RequestParam(required = false) Long providerId) {
+        return ragService.askStream(id, question, providerId);
     }
 }
