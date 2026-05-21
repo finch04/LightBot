@@ -55,9 +55,10 @@ public class DashScopeModelHandler implements ModelProviderHandler {
     public ChatOptions buildChatOptions(Map<String, Object> config) {
         DashScopeChatOptions.DashScopeChatOptionsBuilder builder = DashScopeChatOptions.builder();
 
-        if (config.containsKey("modelId")) {
-            builder.withModel(config.get("modelId").toString());
-        }
+        // modelId 未配置时使用默认模型，避免 SDK 使用不兼容的默认值
+        String modelId = config.containsKey("modelId") ? config.get("modelId").toString() : getCheapestModel();
+        builder.withModel(modelId);
+
         if (config.containsKey("temperature")) {
             builder.withTemperature(toDouble(config.get("temperature")));
         }

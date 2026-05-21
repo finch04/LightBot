@@ -21,6 +21,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
         registry.addInterceptor(new SaInterceptor(handle -> {
             // 排除不需要认证的路径
             SaRouter.match("/api/logs/**").stop();
+            SaRouter.match("/api/tasks/stream").stop();
             SaRouter.match("/api/auth/login").stop();
             SaRouter.match("/api/auth/register").stop();
             // 其余接口需要登录

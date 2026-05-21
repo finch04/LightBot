@@ -1,7 +1,12 @@
 <template>
   <div class="task-center">
     <div class="page-header">
-      <h2>任务中心</h2>
+      <div class="page-header-left">
+        <h2>任务中心</h2>
+        <a-badge :count="pendingCount" :number-style="{ fontSize: '11px' }" title="待处理任务数">
+          <span class="pending-label">待处理</span>
+        </a-badge>
+      </div>
       <button class="btn-outline" @click="loadTasks">
         <ReloadOutlined />
         刷新
@@ -25,11 +30,15 @@
           <a-badge :status="statusBadge[record.status]" :text="statusMap[record.status] || record.status" />
         </template>
         <template v-else-if="column.key === 'progress'">
-          <a-progress
-            :percent="record.progress"
-            :status="record.status === 'failed' ? 'exception' : record.status === 'success' ? 'success' : 'active'"
-            size="small"
-          />
+          <div class="progress-cell">
+            <a-progress
+              :percent="record.progress"
+              :status="record.status === 'failed' ? 'exception' : record.status === 'success' ? 'success' : 'active'"
+              :show-info="false"
+              size="small"
+            />
+            <span class="progress-text">{{ record.progress || 0 }}%</span>
+          </div>
         </template>
         <template v-else-if="column.key === 'action'">
           <a-button
@@ -63,11 +72,15 @@
             <a-badge :status="statusBadge[detailTask.status]" :text="statusMap[detailTask.status] || detailTask.status" />
           </a-descriptions-item>
           <a-descriptions-item label="进度">
-            <a-progress
-              :percent="detailTask.progress"
-              :status="detailTask.status === 'failed' ? 'exception' : detailTask.status === 'success' ? 'success' : 'active'"
-              size="small"
-            />
+            <div class="progress-cell">
+              <a-progress
+                :percent="detailTask.progress"
+                :status="detailTask.status === 'failed' ? 'exception' : detailTask.status === 'success' ? 'success' : 'active'"
+                :show-info="false"
+                size="small"
+              />
+              <span class="progress-text">{{ detailTask.progress || 0 }}%</span>
+            </div>
           </a-descriptions-item>
           <a-descriptions-item label="进度信息">{{ detailTask.message || '-' }}</a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ formatTime(detailTask.createTime) }}</a-descriptions-item>
@@ -84,13 +97,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTaskList, cancelTask } from '../api/task'
 
 const loading = ref(false)
 const tasks = ref([])
+
+const pendingCount = computed(() => tasks.value.filter(t => t.status === 'pending' || t.status === 'running').length)
 const detailVisible = ref(false)
 const detailTask = ref(null)
 const pagination = reactive({
@@ -215,10 +230,19 @@ onUnmounted(() => {
   justify-content: space-between;
   margin-bottom: 20px;
 }
+.page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .page-header h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
+}
+.pending-label {
+  font-size: 13px;
+  color: #8c8c8c;
 }
 .btn-outline {
   display: flex;
@@ -245,5 +269,33 @@ onUnmounted(() => {
 }
 .error-text {
   color: #dc2626;
+}
+.progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-cell :deep(.ant-progress) {
+  flex: 1;
+  min-width: 0;
+}
+.progress-text {
+  font-size: 12px;
+  color: #52525b;
+  min-width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.task-center :deep(.ant-descriptions-view) {
+  table-layout: fixed;
+}
+.task-center :deep(.ant-descriptions-item-content) {
+  word-break: break-word;
+  white-space: normal;
+}
+.task-center :deep(.ant-descriptions-item-label) {
+  width: 90px;
+  min-width: 90px;
+  white-space: nowrap;
 }
 </style>

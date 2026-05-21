@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.controller.TaskEventController;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.TaskStatus;
@@ -14,6 +15,7 @@ import com.lightbot.service.TaskService;
 import com.lightbot.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -31,6 +33,8 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
         implements TaskService {
 
     private final RedisUtil redisUtil;
+    /** 延迟获取，避免与 TaskEventController 循环依赖 */
+    private final ObjectProvider<TaskEventController> taskEventProvider;
 
     @Override
     public Task createTask(TaskType type, String name, Long userId, Long refId, String payload) {
@@ -48,6 +52,9 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
         // 推入Redis队列
         redisUtil.pushTask(task.getId().toString());
         log.info("[任务] 创建成功, taskId={}, type={}, name={}", task.getId(), type, name);
+
+        // 推送任务计数变更
+        broadcastTaskCount(userId);
         return task;
     }
 
@@ -79,6 +86,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .set(Task::getCompletedAt, LocalDateTime.now())
                 .update();
         log.info("[任务] 执行成功, taskId={}", taskId);
+        broadcastTaskCountByTaskId(taskId);
     }
 
     @Override
@@ -90,6 +98,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .set(Task::getCompletedAt, LocalDateTime.now())
                 .update();
         log.warn("[任务] 执行失败, taskId={}, error={}", taskId, error);
+        broadcastTaskCountByTaskId(taskId);
     }
 
     @Override
@@ -117,5 +126,29 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
             throw new BizException(ErrorCode.TASK_NOT_FOUND);
         }
         return task;
+    }
+
+    @Override
+    public Long countByStatus(Long userId, String status) {
+        return count(new LambdaQueryWrapper<Task>()
+                .eq(Task::getUserId, userId)
+                .eq(Task::getStatus, status));
+    }
+
+    /** 推送任务计数变更给指定用户 */
+    private void broadcastTaskCount(Long userId) {
+        try {
+            taskEventProvider.getObject().pushToUser(userId);
+        } catch (Exception e) {
+            // 推送失败不影响主流程
+        }
+    }
+
+    /** 通过 taskId 查询 userId 后推送 */
+    private void broadcastTaskCountByTaskId(Long taskId) {
+        Task task = getById(taskId);
+        if (task != null) {
+            broadcastTaskCount(task.getUserId());
+        }
     }
 }

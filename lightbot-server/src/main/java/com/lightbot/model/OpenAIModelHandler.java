@@ -53,9 +53,10 @@ public class OpenAIModelHandler implements ModelProviderHandler {
     public ChatOptions buildChatOptions(Map<String, Object> config) {
         OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
 
-        if (config.containsKey("modelId")) {
-            builder.model(config.get("modelId").toString());
-        }
+        // modelId 未配置时使用默认模型
+        String modelId = config.containsKey("modelId") ? config.get("modelId").toString() : getCheapestModel();
+        builder.model(modelId);
+
         if (config.containsKey("temperature")) {
             builder.temperature(toDouble(config.get("temperature")));
         }

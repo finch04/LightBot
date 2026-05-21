@@ -1,13 +1,5 @@
 <template>
   <div class="login-wrapper">
-    <!-- 顶部 Logo -->
-    <div class="top-bar">
-      <div class="top-logo">
-        <img src="/lightbot-logo.png" alt="LightBot" class="top-logo-img" />
-        <span class="top-logo-text">LightBot</span>
-      </div>
-    </div>
-
     <!-- 登录卡片 -->
     <div class="login-card">
       <!-- 左侧背景图 -->
@@ -18,6 +10,7 @@
       <!-- 右侧表单 -->
       <div class="card-right">
         <div class="form-header">
+          <img src="/lightbot-logo-single.png" alt="LightBot" class="form-logo" />
           <h2>欢迎回来</h2>
           <p>登录你的 LightBot 账号</p>
         </div>
@@ -99,51 +92,25 @@ async function handleLogin() {
   overflow: hidden;
   background: #fafafa;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* 顶部栏 */
-.top-bar {
-  width: 100%;
-  padding: 20px 0;
-  display: flex;
-  justify-content: center;
-}
-
-.top-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.top-logo-img {
-  width: 32px;
-  height: 32px;
-}
-
-.top-logo-text {
-  font-size: 20px;
-  font-weight: 600;
-  color: #141414;
-}
-
 /* 登录卡片 */
 .login-card {
   display: flex;
-  width: 800px;
+  width: 900px;
+  height: 500px;
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0px 1px 1px rgba(0,0,0,0.02), 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
   overflow: hidden;
-  margin-top: 20px;
 }
 
 /* 左侧背景图 */
 .card-left {
-  width: 360px;
+  width: 380px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -157,21 +124,28 @@ async function handleLogin() {
 /* 右侧表单 */
 .card-right {
   flex: 1;
-  padding: 40px;
+  padding: 40px 48px;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
 .form-header {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.form-logo {
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: 16px;
 }
 
 .form-header h2 {
   font-size: 24px;
   font-weight: 600;
   color: #141414;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
 
 .form-header p {
@@ -184,7 +158,7 @@ async function handleLogin() {
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .form-item {
@@ -272,7 +246,7 @@ async function handleLogin() {
 
 /* 底部链接 */
 .form-footer {
-  margin-top: 20px;
+  margin-top: 16px;
   text-align: center;
   font-size: 14px;
   color: #8c8c8c;
@@ -289,16 +263,17 @@ async function handleLogin() {
 }
 
 /* 响应式 */
-@media (max-width: 860px) {
+@media (max-width: 960px) {
   .login-card {
     width: 90%;
-    margin: 20px;
+    height: auto;
+    min-height: 400px;
   }
   .card-left {
     display: none;
   }
   .card-right {
-    padding: 24px;
+    padding: 32px 24px;
   }
 }
 </style>

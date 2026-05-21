@@ -32,6 +32,15 @@ public class TaskController {
         return Result.ok(taskService.listByUserId(userId, pageNum, pageSize));
     }
 
+    @Operation(summary = "统计当前用户的运行中+待处理任务数")
+    @GetMapping("/running-count")
+    public Result<Long> runningCount() {
+        long userId = StpUtil.getLoginIdAsLong();
+        Long running = taskService.countByStatus(userId, "running");
+        Long pending = taskService.countByStatus(userId, "pending");
+        return Result.ok(running + pending);
+    }
+
     @Operation(summary = "获取任务详情")
     @GetMapping("/{taskId}")
     public Result<Task> getById(@PathVariable Long taskId) {

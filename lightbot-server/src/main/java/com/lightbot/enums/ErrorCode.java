@@ -62,6 +62,7 @@ public enum ErrorCode {
     DOCUMENT_PARSE_FAILED(60005, "文档解析失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
     DOCUMENT_INVALID_STATUS(60006, "文档状态不允许此操作", HttpStatus.BAD_REQUEST),
     DOCUMENT_FILE_TOO_LARGE(60007, "文件大小超过100MB限制", HttpStatus.BAD_REQUEST),
+    DOCUMENT_CHUNK_FAILED(60008, "文档分块失败", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // ========== 任务模块 ==========
     TASK_NOT_FOUND(61001, "任务不存在", HttpStatus.BAD_REQUEST),

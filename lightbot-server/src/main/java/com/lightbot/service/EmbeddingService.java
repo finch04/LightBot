@@ -35,6 +35,16 @@ public interface EmbeddingService extends IService<Embedding> {
     List<Map<String, Object>> searchSimilar(Long knowledgeId, float[] queryVector, int topK, double threshold);
 
     /**
+     * 余弦相似度检索 Top-K（不过滤阈值，返回原始结果）
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param topK        返回数量
+     * @return 原始检索结果（chunk_id, content, document_name, score）
+     */
+    List<Map<String, Object>> searchSimilarRaw(Long knowledgeId, float[] queryVector, int topK);
+
+    /**
      * 删除指定知识库的所有向量
      *
      * @param knowledgeId 知识库ID

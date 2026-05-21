@@ -59,4 +59,13 @@ public interface TaskService extends IService<Task> {
      * 获取任务详情（校验用户归属）
      */
     Task getTaskById(Long taskId, Long userId);
+
+    /**
+     * 统计用户指定状态的任务数量
+     *
+     * @param userId 用户ID
+     * @param status 任务状态
+     * @return 任务数量
+     */
+    Long countByStatus(Long userId, String status);
 }

@@ -1,5 +1,6 @@
 package com.lightbot.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.DocumentDownloadVO;
 import com.lightbot.entity.Document;
@@ -79,6 +80,17 @@ public interface DocumentService extends IService<Document> {
      * @return 文档列表
      */
     List<Document> listByKnowledgeId(Long knowledgeId);
+
+    /**
+     * 分页查询知识库下的文档列表（支持名称搜索）
+     *
+     * @param knowledgeId 知识库ID
+     * @param keyword     搜索关键词（按文档名称模糊匹配）
+     * @param pageNum     页码
+     * @param pageSize    每页数量
+     * @return 分页文档列表
+     */
+    Page<Document> listByKnowledgeIdWithPage(Long knowledgeId, String keyword, int pageNum, int pageSize);
 
     /**
      * 删除文档

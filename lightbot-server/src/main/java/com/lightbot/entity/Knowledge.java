@@ -52,6 +52,10 @@ public class Knowledge {
     @Schema(description = "思维导图数据（JSON格式树状结构）")
     private String mindmapData;
 
+    @TableField(value = "example_questions", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "示例问题列表（JSON数组）")
+    private String exampleQuestions;
+
     @TableField("document_count")
     @Schema(description = "文档总数")
     private Integer documentCount;

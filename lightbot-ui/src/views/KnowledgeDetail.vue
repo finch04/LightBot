@@ -23,7 +23,25 @@
       <div class="panel">
         <div class="panel-header">
           <h3>文档列表</h3>
-          <button class="btn-primary-sm" @click="openUploadModal">上传文档</button>
+          <div class="panel-header-actions">
+            <a-input
+              v-model:value="docSearch"
+              placeholder="搜索文档名称..."
+              allow-clear
+              size="small"
+              class="doc-search-input"
+              @input="onDocSearchInput"
+              @clear="docPagination.current = 1; loadDocuments()"
+            >
+              <template #prefix><SearchOutlined /></template>
+            </a-input>
+            <a-tooltip title="刷新">
+              <button class="btn-outline-sm" @click="loadDocuments">
+                <ReloadOutlined />
+              </button>
+            </a-tooltip>
+            <button class="btn-primary-sm" @click="openUploadModal">上传文档</button>
+          </div>
         </div>
         <div class="doc-list">
           <div v-for="doc in documents" :key="doc.id" class="doc-item" @click="openDocModal(doc)">
@@ -43,10 +61,27 @@
                 class="btn-link"
                 @click.stop="openIngestModal(doc)"
               >入库</button>
+              <button
+                v-if="(doc.status?.code || doc.status) === 'completed'"
+                class="btn-link"
+                @click.stop="openIngestModal(doc)"
+              >重新入库</button>
               <button class="btn-link danger" @click.stop="deleteDoc(doc.id)">删除</button>
             </div>
           </div>
-          <div v-if="documents.length === 0" class="doc-empty">暂无文档</div>
+          <div v-if="documents.length === 0" class="doc-empty">
+            {{ docSearch.trim() ? '未找到匹配文档' : '暂无文档' }}
+          </div>
+        </div>
+        <div v-if="docPagination.total > docPagination.pageSize" class="doc-pagination">
+          <a-pagination
+            v-model:current="docPagination.current"
+            :page-size="docPagination.pageSize"
+            :total="docPagination.total"
+            size="small"
+            show-less-items
+            @change="loadDocuments"
+          />
         </div>
       </div>
 
@@ -70,6 +105,18 @@
                 <button class="btn-primary-sm" :disabled="!ragQuestion.trim() || ragLoading" @click="askRag">
                   提问
                 </button>
+              </div>
+              <!-- 示例问题轮播 -->
+              <div v-if="ragMessages.length === 0 && exampleQuestions.length > 0" class="example-questions">
+                <transition name="fade" mode="out-in">
+                  <button
+                    :key="questionRotateIndex"
+                    class="btn-example-question"
+                    @click="ragQuestion = exampleQuestions[questionRotateIndex]"
+                  >
+                    {{ exampleQuestions[questionRotateIndex] }}
+                  </button>
+                </transition>
               </div>
             </div>
           </a-tab-pane>
@@ -313,6 +360,10 @@
         <a-form-item label="RAG 相似度阈值">
           <a-input-number v-model:value="editForm.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
         </a-form-item>
+        <a-form-item label="自动生成问题">
+          <a-switch v-model:checked="editForm.autoGenerateQuestions" />
+          <span class="form-hint" style="margin-left: 8px">入库文档时AI自动生成示例问题</span>
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -399,13 +450,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { marked } from 'marked'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
-  DownloadOutlined, LoadingOutlined,
+  DownloadOutlined, LoadingOutlined, ReloadOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -413,6 +464,7 @@ import {
   previewDocument, getDocumentDownloadUrl, getChunks, askKnowledge, askKnowledgeStream,
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
+  generateExampleQuestions,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
@@ -428,6 +480,21 @@ const knowledgeId = route.params.id
 
 const knowledge = ref({})
 const documents = ref([])
+const docSearch = ref('')
+const docPagination = reactive({
+  current: 1,
+  pageSize: 50,
+  total: 0,
+})
+
+let docSearchTimer = null
+function onDocSearchInput() {
+  clearTimeout(docSearchTimer)
+  docSearchTimer = setTimeout(() => {
+    docPagination.current = 1
+    loadDocuments()
+  }, 300)
+}
 
 const strategyLabelMap = {
   general: '通用分块', book: '书籍分块', separator: '严格分隔', qa: '问答对分块', laws: '法规分块',
@@ -493,7 +560,13 @@ const editForm = reactive({
   embeddingModel: '',
   ragTopK: 5,
   ragThreshold: 0.7,
+  autoGenerateQuestions: false,
 })
+
+const exampleQuestions = ref([])
+const exampleQuestionsLoaded = ref(false)
+const questionRotateIndex = ref(0)
+let questionRotateTimer = null
 
 // 成员管理
 const members = ref([])
@@ -513,11 +586,30 @@ const isManagerOrCreator = computed(() => {
 async function loadKnowledge() {
   const res = await getKnowledge(knowledgeId)
   knowledge.value = res.data
+
+  // 解析示例问题
+  try {
+    const eq = res.data.exampleQuestions
+    if (eq) {
+      const parsed = typeof eq === 'string' ? JSON.parse(eq) : eq
+      exampleQuestions.value = Array.isArray(parsed) ? parsed : []
+    } else {
+      exampleQuestions.value = []
+    }
+  } catch {
+    exampleQuestions.value = []
+  }
+  exampleQuestionsLoaded.value = true
 }
 
 async function loadDocuments() {
-  const res = await getDocuments(knowledgeId)
-  documents.value = res.data || []
+  const res = await getDocuments(knowledgeId, {
+    keyword: docSearch.value.trim() || undefined,
+    pageNum: docPagination.current,
+    pageSize: docPagination.pageSize,
+  })
+  documents.value = res.data?.records || []
+  docPagination.total = res.data?.total || 0
 }
 
 async function handleUpload(file) {
@@ -740,6 +832,7 @@ async function openEditDialog() {
     embeddingModel: k.embeddingModel || '',
     ragTopK: config.ragTopK ?? 5,
     ragThreshold: config.ragThreshold ?? 0.7,
+    autoGenerateQuestions: config.autoGenerateQuestions ?? false,
   })
   editVisible.value = true
 
@@ -755,7 +848,11 @@ async function handleEdit() {
   if (!editForm.embeddingModel) return message.warning('请选择 Embed 模型')
   editSubmitting.value = true
   try {
-    const config = JSON.stringify({ ragTopK: editForm.ragTopK, ragThreshold: editForm.ragThreshold })
+    const config = JSON.stringify({
+      ragTopK: editForm.ragTopK,
+      ragThreshold: editForm.ragThreshold,
+      autoGenerateQuestions: editForm.autoGenerateQuestions,
+    })
     await updateKnowledge({
       id: knowledgeId,
       name: editForm.name,
@@ -794,9 +891,15 @@ function deleteDoc(docId) {
 
 // ========== RAG 问答 ==========
 
+const mdRenderer = new marked.Renderer()
+mdRenderer.link = function ({ href, title, text }) {
+  const titleAttr = title ? ` title="${title}"` : ''
+  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+}
+
 function renderMarkdown(text) {
   if (!text) return ''
-  return marked(text)
+  return marked.parse(text, { renderer: mdRenderer })
 }
 
 async function askRag() {
@@ -1047,6 +1150,19 @@ onMounted(() => {
   loadKnowledge()
   loadDocuments()
   loadMembers()
+  // 示例问题轮播：每 2 秒切换下一个
+  questionRotateTimer = setInterval(() => {
+    if (exampleQuestions.value.length > 0) {
+      questionRotateIndex.value = (questionRotateIndex.value + 1) % exampleQuestions.value.length
+    }
+  }, 2000)
+})
+
+onUnmounted(() => {
+  if (questionRotateTimer) {
+    clearInterval(questionRotateTimer)
+    questionRotateTimer = null
+  }
 })
 </script>
 
@@ -1109,6 +1225,15 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #171717;
+  flex-shrink: 0;
+}
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.doc-search-input {
+  width: 180px;
 }
 .header-actions {
   display: flex;
@@ -1219,6 +1344,11 @@ onMounted(() => {
   padding: 40px;
   color: #a1a1aa;
 }
+.doc-pagination {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
 
 /* RAG & 思维导图共用 */
 .rag-section {
@@ -1267,6 +1397,43 @@ onMounted(() => {
 }
 .rag-input input:focus {
   border-color: #171717;
+}
+
+/* 示例问题 */
+.example-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+}
+.btn-example-question {
+  padding: 6px 14px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 100px;
+  font-size: 13px;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-example-question:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+  background: #f0f7ff;
+}
+
+/* 示例问题轮播过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 /* RAG消息中的markdown样式 */
@@ -1345,11 +1512,11 @@ onMounted(() => {
   margin-right: 8px;
 }
 .doc-modal-tabs {
-  margin-top: -12px;
+  margin-top: 4px;
 }
 .doc-modal-tabs :deep(.ant-tabs-nav) {
   margin: 0;
-  padding: 0 24px;
+  padding: 8px 24px 0;
   background: #fafafa;
   border-bottom: 1px solid #ebebeb;
 }

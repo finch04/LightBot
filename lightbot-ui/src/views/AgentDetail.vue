@@ -47,9 +47,11 @@
           <a-form-item label="系统提示词">
             <div class="prompt-wrapper">
               <a-textarea v-model:value="agent.systemPrompt" :rows="6" placeholder="定义 Agent 的行为和角色..." />
-              <button class="btn-ai-icon" :disabled="generatingPrompt" @click="handleGeneratePrompt" :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
-                <ThunderboltOutlined :spin="generatingPrompt" />
-              </button>
+              <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
+                <button class="btn-ai-icon" :disabled="generatingPrompt" @click="handleGeneratePrompt">
+                  <ThunderboltOutlined :spin="generatingPrompt" />
+                </button>
+              </a-tooltip>
             </div>
           </a-form-item>
           <a-form-item label="类型">

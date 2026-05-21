@@ -1,5 +1,6 @@
 package com.lightbot.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ErrorCode;
@@ -44,6 +45,10 @@ public class RagServiceImpl implements RagService {
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final int DEFAULT_TOP_K = 5;
+    private static final double DEFAULT_THRESHOLD = 0.5;
+
     private static final String RAG_SYSTEM_PROMPT = """
             你是 LightBot 智能助手。请基于以下参考资料回答用户的问题。
             如果参考资料中没有相关信息，请如实告知用户。
@@ -63,12 +68,34 @@ public class RagServiceImpl implements RagService {
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
 
+        // 1.2 从知识库配置中读取检索参数
+        int topK = parseRagTopK(knowledge);
+        double threshold = parseRagThreshold(knowledge);
+        log.info("[RAG] 问答开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
+                knowledgeId, actualProviderId, topK, threshold, question);
+
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 3. 在知识库中检索相似内容（Top-5，相似度阈值0.5）
-        List<Map<String, Object>> results = embeddingService.searchSimilar(
-                knowledgeId, queryVector, 5, 0.5);
+        // 3. 在知识库中检索相似内容（先获取原始结果用于日志）
+        List<Map<String, Object>> rawResults = embeddingService.searchSimilarRaw(
+                knowledgeId, queryVector, topK);
+        log.info("[RAG] 向量检索原始结果数={}", rawResults.size());
+        for (int i = 0; i < rawResults.size(); i++) {
+            Map<String, Object> row = rawResults.get(i);
+            String content = String.valueOf(row.get("content"));
+            String preview = content.length() > 100 ? content.substring(0, 100) + "..." : content;
+            log.info("[RAG] 原始分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
+        }
+
+        // 3.1 过滤低于阈值的结果
+        List<Map<String, Object>> results = rawResults.stream()
+                .filter(row -> {
+                    Object score = row.get("score");
+                    return score != null && ((Number) score).doubleValue() >= threshold;
+                })
+                .toList();
+        log.info("[RAG] 阈值过滤后: threshold={}, 命中分块数={}", threshold, results.size());
 
         if (results.isEmpty()) {
             return "抱歉，在知识库中没有找到相关信息。";
@@ -87,7 +114,9 @@ public class RagServiceImpl implements RagService {
 
         ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
         ChatResponse response = chatModel.call(new Prompt(messages));
-        return response.getResult().getOutput().getText();
+        String answer = response.getResult().getOutput().getText();
+        log.info("[RAG] 问答完成: answerLength={}", answer != null ? answer.length() : 0);
+        return answer;
     }
 
     @Override
@@ -101,12 +130,34 @@ public class RagServiceImpl implements RagService {
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
 
+        // 1.2 从知识库配置中读取检索参数
+        int topK = parseRagTopK(knowledge);
+        double threshold = parseRagThreshold(knowledge);
+        log.info("[RAG] 流式问答开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
+                knowledgeId, actualProviderId, topK, threshold, question);
+
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 3. 在知识库中检索相似内容（Top-5，相似度阈值0.5）
-        List<Map<String, Object>> results = embeddingService.searchSimilar(
-                knowledgeId, queryVector, 5, 0.5);
+        // 3. 在知识库中检索相似内容（先获取原始结果用于日志）
+        List<Map<String, Object>> rawResults = embeddingService.searchSimilarRaw(
+                knowledgeId, queryVector, topK);
+        log.info("[RAG] 向量检索原始结果数={}", rawResults.size());
+        for (int i = 0; i < rawResults.size(); i++) {
+            Map<String, Object> row = rawResults.get(i);
+            String content = String.valueOf(row.get("content"));
+            String preview = content.length() > 100 ? content.substring(0, 100) + "..." : content;
+            log.info("[RAG] 原始分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
+        }
+
+        // 3.1 过滤低于阈值的结果
+        List<Map<String, Object>> results = rawResults.stream()
+                .filter(row -> {
+                    Object score = row.get("score");
+                    return score != null && ((Number) score).doubleValue() >= threshold;
+                })
+                .toList();
+        log.info("[RAG] 阈值过滤后: threshold={}, 命中分块数={}", threshold, results.size());
 
         if (results.isEmpty()) {
             return Flux.just("抱歉，在知识库中没有找到相关信息。");
@@ -125,7 +176,9 @@ public class RagServiceImpl implements RagService {
 
         ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
         return chatModel.stream(new Prompt(messages))
-                .map(response -> response.getResult().getOutput().getText());
+                .map(response -> response.getResult().getOutput().getText())
+                .doOnComplete(() -> log.info("[RAG] 流式问答完成: knowledgeId={}", knowledgeId))
+                .doOnError(e -> log.error("[RAG] 流式问答异常: knowledgeId={}, error={}", knowledgeId, e.getMessage()));
     }
 
     /**
@@ -149,5 +202,35 @@ public class RagServiceImpl implements RagService {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
         }
         return providers.get(0);
+    }
+
+    /**
+     * 从知识库配置中解析 RAG Top K（默认5）
+     */
+    private int parseRagTopK(Knowledge knowledge) {
+        Map<String, Object> config = parseConfig(knowledge.getConfig());
+        Object val = config.get("ragTopK");
+        return val instanceof Number ? ((Number) val).intValue() : DEFAULT_TOP_K;
+    }
+
+    /**
+     * 从知识库配置中解析 RAG 相似度阈值（默认0.5）
+     */
+    private double parseRagThreshold(Knowledge knowledge) {
+        Map<String, Object> config = parseConfig(knowledge.getConfig());
+        Object val = config.get("ragThreshold");
+        return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_THRESHOLD;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseConfig(String configJson) {
+        if (configJson == null || configJson.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(configJson, Map.class);
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 }

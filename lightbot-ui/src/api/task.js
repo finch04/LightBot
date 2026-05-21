@@ -4,6 +4,10 @@ export function getTaskList(params) {
   return request.get('/tasks', { params })
 }
 
+export function getRunningTaskCount() {
+  return request.get('/tasks/running-count')
+}
+
 export function getTask(taskId) {
   return request.get(`/tasks/${taskId}`)
 }

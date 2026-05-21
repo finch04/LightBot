@@ -135,8 +135,11 @@ public class KnowledgeController {
 
     @Operation(summary = "获取知识库下的文档列表（需要成员权限）")
     @GetMapping("/{id}/documents")
-    public Result<List<Document>> listDocuments(@PathVariable Long id) {
-        return Result.ok(documentService.listByKnowledgeId(id));
+    public Result<?> listDocuments(@PathVariable Long id,
+                                   @RequestParam(required = false) String keyword,
+                                   @RequestParam(defaultValue = "1") int pageNum,
+                                   @RequestParam(defaultValue = "50") int pageSize) {
+        return Result.ok(documentService.listByKnowledgeIdWithPage(id, keyword, pageNum, pageSize));
     }
 
     @Operation(summary = "获取文档详情（需要成员权限）")
@@ -201,6 +204,21 @@ public class KnowledgeController {
     @GetMapping("/{id}/mindmap")
     public Result<Object> getMindmap(@PathVariable Long id) {
         return Result.ok(knowledgeService.getMindmap(id));
+    }
+
+    // ========== 示例问题 ==========
+
+    @Operation(summary = "为知识库所有已完成文档生成示例问题")
+    @PostMapping("/{id}/generate-questions")
+    public Result<Void> generateQuestions(@PathVariable Long id) {
+        // 遍历所有已完成文档，逐个生成问题
+        List<Document> documents = documentService.listByKnowledgeId(id).stream()
+                .filter(doc -> doc.getStatus() == com.lightbot.enums.DocumentStatus.COMPLETED)
+                .toList();
+        for (Document doc : documents) {
+            knowledgeService.generateExampleQuestions(id, doc.getId());
+        }
+        return Result.ok();
     }
 
     // ========== RAG 问答 ==========

@@ -23,9 +23,11 @@
             <h3 class="card-title">{{ k.name }}</h3>
             <p class="card-desc">{{ k.description || '暂无描述' }}</p>
           </div>
-          <button class="btn-icon danger" title="删除知识库" @click.stop="handleDelete(k.id)">
-            <DeleteOutlined />
-          </button>
+          <a-tooltip title="删除知识库">
+            <button class="btn-icon danger" @click.stop="handleDelete(k.id)">
+              <DeleteOutlined />
+            </button>
+          </a-tooltip>
         </div>
         <div class="card-stats">
           <span>{{ k.documentCount || 0 }} 文档</span>

@@ -26,15 +26,20 @@ import java.time.LocalDateTime;
 public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatSession>
         implements ChatSessionService {
 
+    private static final long DEFAULT_AGENT_ID = 1L;
+
     @Override
     public ChatSession createSession(Long agentId) {
         // 1. 获取当前用户ID
         long userId = StpUtil.getLoginIdAsLong();
 
-        // 2. 创建会话，初始化统计数据
+        // 2. agentId为空时使用默认Agent
+        Long finalAgentId = agentId != null ? agentId : DEFAULT_AGENT_ID;
+
+        // 3. 创建会话，初始化统计数据
         ChatSession session = new ChatSession();
         session.setUserId(userId);
-        session.setAgentId(agentId);
+        session.setAgentId(finalAgentId);
         session.setTitle("新对话");
         session.setStatus(SessionStatus.ACTIVE);
         session.setMessageCount(0);

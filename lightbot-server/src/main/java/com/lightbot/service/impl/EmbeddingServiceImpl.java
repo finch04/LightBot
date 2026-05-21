@@ -49,6 +49,12 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     }
 
     @Override
+    public List<Map<String, Object>> searchSimilarRaw(Long knowledgeId, float[] queryVector, int topK) {
+        String vectorStr = toVectorString(queryVector);
+        return embeddingMapper.searchSimilar(vectorStr, knowledgeId, topK);
+    }
+
+    @Override
     public void deleteByKnowledgeId(Long knowledgeId) {
         embeddingMapper.deleteByKnowledgeId(knowledgeId);
     }

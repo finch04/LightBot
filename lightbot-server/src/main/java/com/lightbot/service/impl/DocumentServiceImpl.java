@@ -2,6 +2,7 @@ package com.lightbot.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
@@ -150,7 +151,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
-        if (doc.getStatus() != DocumentStatus.UPLOADED && doc.getStatus() != DocumentStatus.FAILED) {
+        if (doc.getStatus() != DocumentStatus.UPLOADED && doc.getStatus() != DocumentStatus.FAILED
+                && doc.getStatus() != DocumentStatus.COMPLETED) {
             throw new BizException(ErrorCode.DOCUMENT_INVALID_STATUS);
         }
 
@@ -173,9 +175,22 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
 
-        // 1. 解析文件内容
-        InputStream is = minioUtil.download(doc.getFilePath());
-        String content = tikaUtil.parse(is, doc.getName());
+        // 1. 优先使用上传阶段生成的解析文本（含OCR结果），否则解析原文件
+        String content = null;
+        if (doc.getMarkdownPath() != null && !doc.getMarkdownPath().isEmpty()) {
+            try (InputStream mdIs = minioUtil.download(doc.getMarkdownPath())) {
+                content = new String(mdIs.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                log.warn("[文档预览] 读取Markdown文件失败，回退到实时转换, documentId={}", documentId, e);
+            }
+        }
+        if (content == null || content.isBlank()) {
+            try (InputStream is = minioUtil.download(doc.getFilePath())) {
+                content = tikaUtil.parse(is, doc.getName());
+            } catch (Exception e) {
+                log.warn("[文档预览] 解析原文件失败, documentId={}", documentId, e);
+            }
+        }
 
         // 2. 解析入库配置
         ChunkParams params = parseChunkParams(embeddingJson);
@@ -187,20 +202,35 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     @Override
-    public void processDocumentWithProgress(Long documentId, String embeddingJson, BiConsumer<Integer, String> progressCallback) {
+    public void processDocumentWithProgress(Long documentId, String embeddingJson, BiConsumer<Integer, String> progressCallback)  {
         Document doc = getById(documentId);
         if (doc == null) {
             return;
         }
 
         try {
-            // 1. 从MinIO读取文件，使用Tika解析为纯文本
+            // 0. 重新入库时清理旧的分块和向量
+            if (doc.getStatus() == DocumentStatus.COMPLETED) {
+                embeddingService.deleteByDocumentId(documentId);
+                chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
+            }
+
+            // 1. 优先使用上传阶段生成的解析文本（含OCR结果），否则重新解析原文件
             progressCallback.accept(5, "正在解析文档...");
-            InputStream is = minioUtil.download(doc.getFilePath());
-            String content = tikaUtil.parse(is, doc.getName());
+            String content = null;
+            if (doc.getMarkdownPath() != null && !doc.getMarkdownPath().isEmpty()) {
+                try (InputStream mdIs = minioUtil.download(doc.getMarkdownPath())) {
+                    content = new String(mdIs.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                }
+            }
+            if (content == null || content.isBlank()) {
+                try (InputStream is = minioUtil.download(doc.getFilePath())) {
+                    content = tikaUtil.parse(is, doc.getName());
+                }
+            }
 
             // 1.1 解析失败（返回null）时标记失败
-            if (content == null) {
+            if (content == null || content.isBlank()) {
                 doc.setStatus(DocumentStatus.FAILED);
                 doc.setErrorMessage("文档解析失败，可能是扫描版PDF、文件损坏或格式不支持");
                 updateById(doc);
@@ -246,7 +276,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             doc.setStatus(DocumentStatus.FAILED);
             doc.setErrorMessage(buildErrorMessage(e));
             updateById(doc);
-            throw e;
+            throw new BizException(ErrorCode.DOCUMENT_CHUNK_FAILED);
         }
     }
 
@@ -306,13 +336,21 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     /**
-     * 向量化完成后更新文档状态为 COMPLETED
+     * 向量化完成后更新文档状态为 COMPLETED，并触发示例问题生成
      */
     private void completeDocument(Long documentId) {
         Document doc = getById(documentId);
         if (doc != null) {
             doc.setStatus(DocumentStatus.COMPLETED);
             updateById(doc);
+
+            // 异步触发示例问题生成（失败不影响主流程）
+            try {
+                knowledgeServiceProvider.getObject()
+                        .generateExampleQuestions(doc.getKnowledgeId(), documentId);
+            } catch (Exception e) {
+                log.warn("[文档入库] 示例问题生成失败, documentId={}", documentId, e);
+            }
         }
     }
 
@@ -351,6 +389,18 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getDeleted, 0)
                 .orderByDesc(Document::getCreateTime));
+    }
+
+    @Override
+    public Page<Document> listByKnowledgeIdWithPage(Long knowledgeId, String keyword, int pageNum, int pageSize) {
+        LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<Document>()
+                .eq(Document::getKnowledgeId, knowledgeId)
+                .eq(Document::getDeleted, 0);
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like(Document::getName, keyword);
+        }
+        wrapper.orderByDesc(Document::getCreateTime);
+        return page(new Page<>(pageNum, pageSize), wrapper);
     }
 
     @Override

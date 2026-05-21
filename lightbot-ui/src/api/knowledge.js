@@ -46,8 +46,8 @@ export function previewChunks(docId, data) {
   return request.post(`/knowledge/documents/${docId}/preview-chunks`, data)
 }
 
-export function getDocuments(knowledgeId) {
-  return request.get(`/knowledge/${knowledgeId}/documents`)
+export function getDocuments(knowledgeId, params) {
+  return request.get(`/knowledge/${knowledgeId}/documents`, { params })
 }
 
 export function getDocument(docId) {
@@ -150,6 +150,12 @@ export function updateKnowledgeMemberRole(knowledgeId, userId, role) {
 
 export function removeKnowledgeMember(knowledgeId, userId) {
   return request.delete(`/knowledge/${knowledgeId}/members/${userId}`)
+}
+
+// ========== 示例问题 ==========
+
+export function generateExampleQuestions(knowledgeId) {
+  return request.post(`/knowledge/${knowledgeId}/generate-questions`)
 }
 
 // ========== OCR ==========

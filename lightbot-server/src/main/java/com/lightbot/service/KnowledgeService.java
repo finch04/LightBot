@@ -89,4 +89,12 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @return 默认入库配置
      */
     IngestRequest getDefaultIngestConfig(Long knowledgeId);
+
+    /**
+     * 为指定文档生成示例问题并追加到知识库
+     *
+     * @param knowledgeId 知识库ID
+     * @param documentId  文档ID
+     */
+    void generateExampleQuestions(Long knowledgeId, Long documentId);
 }

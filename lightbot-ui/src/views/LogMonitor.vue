@@ -203,6 +203,9 @@ function connectSSE() {
     }
   })
 
+  // 心跳事件仅用于保持连接活跃，无需处理
+  eventSource.addEventListener('heartbeat', () => {})
+
   eventSource.onopen = () => {
     sseConnected.value = true
   }
@@ -211,10 +214,10 @@ function connectSSE() {
     sseConnected.value = false
     eventSource?.close()
     eventSource = null
-    // 自动重连（延迟3秒避免频繁重试）
+    // 自动重连（延迟2秒避免频繁重试）
     setTimeout(() => {
       if (!eventSource) connectSSE()
-    }, 3000)
+    }, 2000)
   }
 }
 

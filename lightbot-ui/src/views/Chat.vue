@@ -4,18 +4,19 @@
     <div class="chat-messages" ref="messagesRef">
       <!-- 欢迎状态（新对话 + 无消息） -->
       <div v-if="!sessionId && messages.length === 0 && !loadingHistory" class="empty-state">
-        <img src="/lightbot-logo.png" alt="LightBot" class="empty-logo" />
+        <img src="/lightbot-logo-single.png" alt="LightBot" class="empty-logo" />
         <div class="welcome-content" v-html="renderMarkdown(currentWelcomeMessage)"></div>
-        <!-- 推荐问题 -->
+        <!-- 推荐问题轮播 -->
         <div v-if="currentRecommendedQuestions.length > 0" class="recommended-questions">
-          <button
-            v-for="(q, i) in currentRecommendedQuestions"
-            :key="i"
-            class="btn-question"
-            @click="input = q; $nextTick(() => $refs.inputRef?.focus())"
-          >
-            {{ q }}
-          </button>
+          <transition name="fade" mode="out-in">
+            <button
+              :key="currentQuestionIndex"
+              class="btn-question"
+              @click="input = currentRecommendedQuestions[currentQuestionIndex]; $nextTick(() => $refs.inputRef?.focus())"
+            >
+              {{ currentRecommendedQuestions[currentQuestionIndex] }}
+            </button>
+          </transition>
         </div>
       </div>
 
@@ -38,16 +39,17 @@
             <!-- 流式结束后：渲染 Markdown -->
             <div v-else class="message-content" v-html="renderMarkdown(msg.content)" />
             <!-- 复制按钮（仅AI消息） -->
-            <button
-              v-if="msg.role === 'assistant' && msg.content"
-              class="btn-copy"
-              :class="{ copied: msg._copied }"
-              @click="copyMessage(msg)"
-              :title="msg._copied ? '已复制' : '复制'"
-            >
-              <CheckOutlined v-if="msg._copied" />
-              <CopyOutlined v-else />
-            </button>
+            <a-tooltip :title="msg._copied ? '已复制' : '复制'">
+              <button
+                v-if="msg.role === 'assistant' && msg.content"
+                class="btn-copy"
+                :class="{ copied: msg._copied }"
+                @click="copyMessage(msg)"
+              >
+                <CheckOutlined v-if="msg._copied" />
+                <CopyOutlined v-else />
+              </button>
+            </a-tooltip>
           </div>
         </div>
       </div>
@@ -69,11 +71,13 @@
       <div class="chat-input">
         <!-- Agent 选择按钮 -->
         <a-dropdown :trigger="['click']" placement="topLeft">
-          <button class="btn-agent" :title="currentAgent?.name || '默认 Agent'">
-            <RobotOutlined v-if="!currentAgent" />
-            <img v-else-if="currentAgent.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="btn-agent-avatar" />
-            <span v-else class="btn-agent-initial">{{ currentAgent.name[0] }}</span>
-          </button>
+          <a-tooltip :title="currentAgent?.name || '默认 Agent'">
+            <button class="btn-agent">
+              <RobotOutlined v-if="!currentAgent" />
+              <img v-else-if="currentAgent.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="btn-agent-avatar" />
+              <span v-else class="btn-agent-initial">{{ currentAgent.name[0] }}</span>
+            </button>
+          </a-tooltip>
           <template #overlay>
             <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : ['__default__']">
               <a-menu-item key="__default__">
@@ -119,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, watch, computed } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
@@ -145,6 +149,8 @@ const selectedAgentId = ref(null)
 const skipNextWatch = ref(false)
 const loadingHistory = ref(false)
 const currentAgent = ref(null)
+const currentQuestionIndex = ref(0)
+let questionTimer = null
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -175,7 +181,14 @@ const currentRecommendedQuestions = computed(() => {
 })
 
 // 配置 marked
+const renderer = new marked.Renderer()
+renderer.link = function ({ href, title, text }) {
+  const titleAttr = title ? ` title="${title}"` : ''
+  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+}
+
 marked.setOptions({
+  renderer,
   highlight: (code, lang) => {
     if (lang && hljs.getLanguage(lang)) {
       return hljs.highlight(code, { language: lang }).value
@@ -222,6 +235,7 @@ async function loadHistory() {
 
   if (!sessionId.value) {
     messages.value = []
+    selectedAgentId.value = null
     currentAgent.value = null
     return
   }
@@ -285,7 +299,7 @@ async function sendMessage() {
 
     // 新对话：先创建会话，再发送消息
     if (!sid) {
-      const res = await createSession(selectedAgentId.value)
+      const res = await createSession(selectedAgentId.value || undefined)
       sid = res.data.id
       // 更新 URL 为 /chat/{sessionId}，跳过 watcher 避免重新加载消息
       skipNextWatch.value = true
@@ -293,7 +307,7 @@ async function sendMessage() {
     }
 
     await chatStream(
-      { message: text, sessionId: sid, agentId: selectedAgentId.value },
+      { message: text, sessionId: sid, agentId: selectedAgentId.value || undefined },
       (chunk) => {
         if (!pushed) {
           assistantMsg = { role: 'assistant', content: '', _streaming: true }
@@ -318,8 +332,8 @@ async function sendMessage() {
       assistantMsg = { role: 'assistant', content: '' }
       messages.value.push(assistantMsg)
     }
-    assistantMsg.content = '请求失败：' + (e.message || '未知错误')
-    if (assistantMsg) assistantMsg._streaming = false
+    assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
+    assistantMsg._streaming = false
     loading.value = false
     streaming.value = false
   }
@@ -352,8 +366,11 @@ onMounted(() => {
   // 处理从 AgentDetail 带过来的 agentId 查询参数
   const queryAgentId = route.query.agentId
   if (queryAgentId) {
-    selectedAgentId.value = queryAgentId
+    // 仅加载 Agent 详情用于展示欢迎语，不设置 selectedAgentId
+    // 新对话创建会话时由后端决定默认 Agent
     loadCurrentAgent(queryAgentId)
+    // 清除 URL 中的 agentId 参数，避免刷新页面时重复加载
+    router.replace({ path: '/chat' })
   }
   loadHistory()
   loadAgents()
@@ -377,6 +394,21 @@ watch(selectedAgentId, (newId) => {
   } else if (!newId) {
     currentAgent.value = null
   }
+})
+
+// 推荐问题轮播：每 2 秒切换下一个
+watch(currentRecommendedQuestions, (questions) => {
+  currentQuestionIndex.value = 0
+  clearInterval(questionTimer)
+  if (questions.length > 1) {
+    questionTimer = setInterval(() => {
+      currentQuestionIndex.value = (currentQuestionIndex.value + 1) % questions.length
+    }, 2000)
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  clearInterval(questionTimer)
 })
 </script>
 
@@ -411,10 +443,10 @@ watch(selectedAgentId, (newId) => {
   padding: 40px;
 }
 .empty-logo {
-  width: 64px;
   height: 64px;
   margin-bottom: 24px;
   opacity: 0.6;
+  object-fit: contain;
 }
 .welcome-content {
   text-align: center;
@@ -754,5 +786,15 @@ watch(selectedAgentId, (newId) => {
   color: var(--primary-color, #6366f1);
   font-weight: bold;
   margin-left: 1px;
+}
+
+/* 推荐问题轮播过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

@@ -5,7 +5,6 @@
       <!-- Logo -->
       <div class="sidebar-logo" @click="router.push('/chat')">
         <img src="/lightbot-logo.png" alt="LightBot" class="logo-img" />
-        <span class="logo-text">LightBot</span>
       </div>
 
       <!-- 新建对话按钮 -->
@@ -29,8 +28,12 @@
 
       <!-- 对话历史 -->
       <div class="session-section">
-        <div class="section-title">最近对话</div>
-        <div class="session-list" ref="sessionListRef">
+        <div class="section-title" @click="sessionsCollapsed = !sessionsCollapsed">
+          <span>最近对话</span>
+          <DownOutlined v-if="sessionsCollapsed" class="collapse-icon" />
+          <UpOutlined v-else class="collapse-icon" />
+        </div>
+        <div v-show="!sessionsCollapsed" class="session-list" ref="sessionListRef">
           <div
             v-for="s in sessions"
             :key="s.id"
@@ -67,14 +70,20 @@
           <div class="user-info">
             <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
             <span class="user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
+            <a-badge v-if="taskBadgeCount" :count="taskBadgeCount" :number-style="{ fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }" />
             <UpOutlined v-if="userDropdownOpen" />
             <DownOutlined v-else />
           </div>
           <template #overlay>
             <a-menu @click="handleCommand">
               <a-menu-item key="profile">个人信息</a-menu-item>
+              <a-menu-item key="tasks">
+                <div class="menu-item-with-badge">
+                  <span>任务中心</span>
+                  <a-badge v-if="taskBadgeCount" :count="taskBadgeCount" :number-style="{ fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }" />
+                </div>
+              </a-menu-item>
               <a-menu-item key="model-providers">模型管理</a-menu-item>
-              <a-menu-item key="tasks">任务中心</a-menu-item>
               <a-menu-divider />
               <a-menu-item key="logout">退出登录</a-menu-item>
             </a-menu>
@@ -91,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   PlusOutlined,
@@ -122,6 +131,14 @@ const renameVisible = ref(false)
 const renameValue = ref('')
 const renameTarget = ref(null)
 const userDropdownOpen = ref(false)
+const sessionsCollapsed = ref(false)
+const runningTaskCount = ref(0)
+let taskSSE = null
+
+const taskBadgeCount = computed(() => {
+  if (runningTaskCount.value <= 0) return 0
+  return runningTaskCount.value > 10 ? '10+' : runningTaskCount.value
+})
 
 const navItems = [
   { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
@@ -212,11 +229,35 @@ function handleCommand({ key }) {
     router.push('/login')
   } else if (key === 'profile') {
     router.push('/profile')
-  } else if (key === 'model-providers') {
-    router.push('/model-providers')
   } else if (key === 'tasks') {
     router.push('/tasks')
+  } else if (key === 'model-providers') {
+    router.push('/model-providers')
   }
+}
+
+function connectTaskSSE() {
+  if (taskSSE) return
+  const userId = userStore.user?.id
+  if (!userId) return
+
+  taskSSE = new EventSource(`/api/tasks/stream?userId=${userId}`)
+
+  taskSSE.addEventListener('count', (e) => {
+    runningTaskCount.value = Number(e.data) || 0
+  })
+
+  taskSSE.onerror = () => {
+    taskSSE?.close()
+    taskSSE = null
+    // 断线重连
+    setTimeout(connectTaskSSE, 3000)
+  }
+}
+
+function disconnectTaskSSE() {
+  taskSSE?.close()
+  taskSSE = null
 }
 
 onMounted(() => {
@@ -226,10 +267,13 @@ onMounted(() => {
   loadSessions()
   // 监听对话标题更新事件（异步生成完成后刷新侧边栏，带重试）
   window.addEventListener('session-title-updated', refreshSessionsWithRetry)
+  // SSE 实时监听任务计数
+  connectTaskSSE()
 })
 
 onUnmounted(() => {
   window.removeEventListener('session-title-updated', refreshSessionsWithRetry)
+  disconnectTaskSSE()
 })
 
 watch(() => route.path, (path) => {
@@ -267,21 +311,14 @@ watch(() => route.path, (path) => {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   padding: 16px 16px 12px;
   cursor: pointer;
 }
 .logo-img {
-  width: 28px;
-  height: 28px;
+  height: 56px;
+  object-fit: contain;
 }
-.logo-text {
-  font-size: 18px;
-  font-weight: 600;
-  color: #fafafa;
-  letter-spacing: -0.3px;
-}
-
 .btn-new-chat {
   display: flex;
   align-items: center;
@@ -338,12 +375,24 @@ watch(() => route.path, (path) => {
   padding: 0 8px;
 }
 .section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 12px;
   font-weight: 500;
   color: #71717a;
   padding: 8px 12px 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+}
+.section-title:hover {
+  color: #a1a1aa;
+}
+.collapse-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
 }
 .session-list {
   flex: 1;
@@ -446,6 +495,12 @@ watch(() => route.path, (path) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.menu-item-with-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 /* ===== 主内容区 ===== */

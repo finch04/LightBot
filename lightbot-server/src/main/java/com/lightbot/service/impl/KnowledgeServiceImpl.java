@@ -23,9 +23,15 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.util.MindmapUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -199,6 +205,134 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         } catch (Exception e) {
             log.warn("[Knowledge] 思维导图JSON解析失败: {}", e.getMessage());
             throw new BizException(ErrorCode.INTERNAL_ERROR);
+        }
+    }
+
+    // ========== 示例问题 ==========
+
+    private static final String QUESTION_GEN_SYSTEM_PROMPT = """
+            你是知识库测试专家。根据文档内容生成1个用户可能会问的具体问题。
+            要求：10-30个字，具体明确，能通过知识库检索找到答案。
+            只返回JSON格式，不要有其他内容：{"question": "..."}
+            """;
+
+    private static final int MAX_QUESTIONS = 20;
+
+    @Override
+    public void generateExampleQuestions(Long knowledgeId, Long documentId) {
+        // 1. 读取知识库配置，检查是否开启自动生成
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            return;
+        }
+        if (!isAutoGenerateEnabled(knowledge.getConfig())) {
+            return;
+        }
+
+        // 2. 读取文档 Markdown 内容
+        String content = documentService.previewDocument(documentId);
+        if (content == null || content.isBlank()) {
+            log.warn("[示例问题] 文档内容为空, documentId={}", documentId);
+            return;
+        }
+
+        // 3. 截取前3000字符
+        String truncated = content.length() > 3000 ? content.substring(0, 3000) : content;
+
+        // 4. 获取文档名称
+        Document doc = documentService.getById(documentId);
+        String docName = doc != null ? doc.getName() : "未知文档";
+
+        // 5. 调用AI生成问题
+        try {
+            Long providerId = resolveProviderId(null);
+            ChatModel chatModel = modelFactory.getChatModel(providerId);
+
+            String userPrompt = String.format("文档名称：%s\n\n文档内容（前3000字）：\n%s", docName, truncated);
+            List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
+            messages.add(new SystemMessage(QUESTION_GEN_SYSTEM_PROMPT));
+            messages.add(new UserMessage(userPrompt));
+
+            ChatResponse response = chatModel.call(new Prompt(messages));
+            String reply = response.getResult().getOutput().getText();
+
+            // 6. 解析JSON提取问题
+            String question = parseQuestionFromJson(reply);
+            if (question == null || question.isBlank()) {
+                log.warn("[示例问题] AI返回格式异常, reply={}", reply);
+                return;
+            }
+
+            // 7. 追加到知识库的 exampleQuestions
+            appendQuestion(knowledge, question);
+            log.info("[示例问题] 已生成: knowledgeId={}, documentId={}, question={}", knowledgeId, documentId, question);
+
+        } catch (Exception e) {
+            log.error("[示例问题] 生成失败: knowledgeId={}, documentId={}", knowledgeId, documentId, e);
+        }
+    }
+
+    /**
+     * 解析知识库配置，检查是否开启自动生成问题
+     */
+    private boolean isAutoGenerateEnabled(String configJson) {
+        if (configJson == null || configJson.isBlank()) {
+            return false;
+        }
+        try {
+            var node = objectMapper.readTree(configJson);
+            return node.has("autoGenerateQuestions") && node.get("autoGenerateQuestions").asBoolean(false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 从AI回复中解析问题JSON
+     */
+    private String parseQuestionFromJson(String reply) {
+        if (reply == null) return null;
+        try {
+            // 处理可能的markdown代码块包裹
+            String json = reply.strip();
+            if (json.startsWith("```")) {
+                json = json.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
+            }
+            var node = objectMapper.readTree(json.strip());
+            return node.has("question") ? node.get("question").asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 将问题追加到知识库的 exampleQuestions 数组，限制最多20个
+     */
+    @SuppressWarnings("unchecked")
+    private void appendQuestion(Knowledge knowledge, String question) {
+        try {
+            List<String> questions = new ArrayList<>();
+            String existing = knowledge.getExampleQuestions();
+            if (existing != null && !existing.isBlank() && !"[]".equals(existing)) {
+                questions = objectMapper.readValue(existing, new TypeReference<>() {});
+            }
+
+            // 避免重复
+            if (questions.contains(question)) {
+                return;
+            }
+
+            questions.add(question);
+
+            // 超出限制时移除最早的
+            while (questions.size() > MAX_QUESTIONS) {
+                questions.remove(0);
+            }
+
+            knowledge.setExampleQuestions(objectMapper.writeValueAsString(questions));
+            updateById(knowledge);
+        } catch (Exception e) {
+            log.warn("[示例问题] 保存失败: {}", e.getMessage());
         }
     }
 
