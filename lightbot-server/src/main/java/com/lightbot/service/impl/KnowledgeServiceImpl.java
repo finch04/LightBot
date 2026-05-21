@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.IngestRequest;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.KnowledgeMember;
@@ -236,5 +237,52 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
         }
         return providers.get(0);
+    }
+
+    @Override
+    public IngestRequest getDefaultIngestConfig(Long knowledgeId) {
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
+        }
+
+        IngestRequest config = new IngestRequest();
+
+        // 从 config JSONB 中解析默认分块配置
+        try {
+            String configJson = knowledge.getConfig();
+            if (configJson != null && !configJson.isBlank()) {
+                var node = objectMapper.readTree(configJson);
+                if (node.has("defaultChunkStrategy")) {
+                    config.setChunkStrategy(node.get("defaultChunkStrategy").asText("general"));
+                } else {
+                    config.setChunkStrategy("general");
+                }
+                if (node.has("defaultChunkSize")) {
+                    config.setChunkSize(node.get("defaultChunkSize").asInt(512));
+                } else {
+                    config.setChunkSize(512);
+                }
+                if (node.has("defaultChunkOverlap")) {
+                    config.setChunkOverlap(node.get("defaultChunkOverlap").asInt(10));
+                } else {
+                    config.setChunkOverlap(10);
+                }
+                if (node.has("defaultChunkDelimiter")) {
+                    config.setChunkDelimiter(node.get("defaultChunkDelimiter").asText(""));
+                }
+            } else {
+                config.setChunkStrategy("general");
+                config.setChunkSize(512);
+                config.setChunkOverlap(10);
+            }
+        } catch (Exception e) {
+            log.warn("[Knowledge] 解析默认分块配置失败, knowledgeId={}", knowledgeId, e);
+            config.setChunkStrategy("general");
+            config.setChunkSize(512);
+            config.setChunkOverlap(10);
+        }
+
+        return config;
     }
 }

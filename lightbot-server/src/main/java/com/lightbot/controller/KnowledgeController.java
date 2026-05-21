@@ -108,20 +108,28 @@ public class KnowledgeController {
         return Result.ok(knowledgeMemberService.listMemberVOs(id));
     }
 
+    @Operation(summary = "获取知识库默认入库配置")
+    @GetMapping("/{id}/default-ingest-config")
+    public Result<IngestRequest> getDefaultIngestConfig(@PathVariable Long id) {
+        return Result.ok(knowledgeService.getDefaultIngestConfig(id));
+    }
+
     // ========== 文档管理 ==========
 
     @Operation(summary = "上传文档到知识库（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/documents")
     public Result<Document> uploadDocument(@PathVariable Long id,
-                                            @RequestParam("file") MultipartFile file) {
-        return Result.ok(documentService.uploadDocument(id, file));
+                                            @RequestParam("file") MultipartFile file,
+                                            @RequestParam(defaultValue = "false") boolean ocrEnabled) {
+        return Result.ok(documentService.uploadDocument(id, file, ocrEnabled));
     }
 
     @Operation(summary = "批量上传文档到知识库（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/documents/batch")
     public Result<List<Document>> uploadDocuments(@PathVariable Long id,
-                                                   @RequestParam("files") List<MultipartFile> files) {
-        return Result.ok(documentService.uploadDocuments(id, files));
+                                                   @RequestParam("files") List<MultipartFile> files,
+                                                   @RequestParam(defaultValue = "false") boolean ocrEnabled) {
+        return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled));
     }
 
     @Operation(summary = "获取知识库下的文档列表（需要成员权限）")

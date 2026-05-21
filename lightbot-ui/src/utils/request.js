@@ -55,7 +55,7 @@ request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code && res.code !== 200) {
-      // 业务错误：使用后端返回的 message（已经是用户友好的中文提示）
+      // 业务错误（HTTP 200 但 code !== 200）：使用后端返回的 message
       message.error(res.message || '请求失败')
       if (res.code === 401) {
         localStorage.removeItem('token')
@@ -71,8 +71,11 @@ request.interceptors.response.use(
       localStorage.removeItem('token')
       router.push('/login')
     }
-    // HTTP错误：使用状态码映射，不暴露后端技术信息
-    const msg = HTTP_STATUS_MSG[status] || '网络异常，请稍后重试'
+    // 优先从 response body 中提取业务错误信息（GlobalExceptionHandler 返回的 Result）
+    const res = error.response?.data
+    const msg = (res?.code && res?.message)
+      ? res.message
+      : HTTP_STATUS_MSG[status] || '网络异常，请稍后重试'
     message.error(msg)
     return Promise.reject(new Error(msg))
   }

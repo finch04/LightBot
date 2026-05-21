@@ -106,7 +106,7 @@ const submitting = ref(false)
 const form = reactive({
   id: null, name: '', displayName: '', description: '',
   toolType: 'custom', endpointUrl: '', authType: 'none',
-  inputSchema: '', outputSchema: '', authConfig: '', config: '',
+  inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
 })
 
 async function loadData() {
@@ -129,7 +129,7 @@ function openDialog(row) {
     Object.assign(form, {
       id: null, name: '', displayName: '', description: '',
       toolType: 'custom', endpointUrl: '', authType: 'none',
-      inputSchema: '', outputSchema: '', authConfig: '', config: '',
+      inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
     })
   }
   dialogVisible.value = true

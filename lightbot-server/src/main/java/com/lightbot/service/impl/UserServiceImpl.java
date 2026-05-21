@@ -47,7 +47,7 @@ public class UserServiceImpl implements UserService {
         user.setUsername(request.getUsername());
         user.setPassword(cn.dev33.satoken.secure.BCrypt.hashpw(request.getPassword(), cn.dev33.satoken.secure.BCrypt.gensalt()));
         user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
-        user.setEmail(request.getEmail());
+        user.setEmail(request.getEmail() != null ? request.getEmail() : "");
         user.setRole(UserRole.USER);
         user.setStatus(UserStatus.ACTIVE);
         userMapper.insert(user);

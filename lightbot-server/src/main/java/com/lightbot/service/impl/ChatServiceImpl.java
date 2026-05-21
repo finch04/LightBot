@@ -56,6 +56,8 @@ public class ChatServiceImpl implements ChatService {
 
     private static final String DEFAULT_SYSTEM_PROMPT = "你是 LightBot 智能助手，基于通义千问大模型，请用中文回答用户问题。";
 
+    private static final long DEFAULT_AGENT_ID = 1L;
+
     private static final String RAG_CONTEXT_TEMPLATE = """
             请基于以下参考资料回答用户的问题。
             如果参考资料中没有相关信息，请如实告知用户。
@@ -138,6 +140,7 @@ public class ChatServiceImpl implements ChatService {
     /**
      * 加载Agent配置。
      * agentId非空时加载指定Agent；为空时自动使用当前用户的第一个Agent（默认Agent）。
+     * 若用户无任何Agent，自动创建一个内置默认Agent。
      */
     private Agent loadAgent(Long agentId) {
         // 1. 指定了agentId，直接加载
@@ -161,8 +164,41 @@ public class ChatServiceImpl implements ChatService {
             log.warn("[Chat] 获取默认Agent失败: {}", e.getMessage());
         }
 
-        log.warn("[Chat] 无可用Agent，请先创建一个Agent并配置模型提供商");
-        return null;
+        // 3. 用户无Agent，创建内置默认Agent
+        return createDefaultAgent();
+    }
+
+    /**
+     * 创建内置默认Agent。
+     * 使用固定ID，确保全局唯一；若已存在则直接返回。
+     */
+    private Agent createDefaultAgent() {
+        try {
+            // 检查是否已存在
+            Agent existing = agentService.getById(DEFAULT_AGENT_ID);
+            if (existing != null) {
+                log.info("[Chat] 使用已存在的默认Agent: id={}", DEFAULT_AGENT_ID);
+                return existing;
+            }
+
+            long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
+            Agent agent = new Agent();
+            agent.setId(DEFAULT_AGENT_ID);
+            agent.setUserId(userId);
+            agent.setName("LightBot 助手");
+            agent.setDescription("默认AI助手，基于大模型回答问题");
+            agent.setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+            agent.setWelcomeMessage("## 你好，我是 LightBot\n有什么可以帮你的？");
+            agent.setAgentType(com.lightbot.enums.AgentType.CHAT);
+            agent.setStatus(com.lightbot.enums.AgentStatus.PUBLISHED);
+            agent.setVersion(1);
+            agentService.save(agent);
+            log.info("[Chat] 已创建内置默认Agent: id={}", DEFAULT_AGENT_ID);
+            return agent;
+        } catch (Exception e) {
+            log.warn("[Chat] 创建默认Agent失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -181,14 +217,22 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 从config Map中获取providerId
+     * 从config Map中获取providerId。
+     * 若Agent未配置providerId，自动使用第一个可用的模型提供商。
      */
     private Long getProviderId(Map<String, Object> configMap) {
         Object providerId = configMap.get(ConfigKeys.Agent.PROVIDER_ID);
-        if (providerId == null) {
-            throw new IllegalArgumentException("请先创建Agent并在「模型参数调优」中选择模型提供商");
+        if (providerId != null) {
+            return providerId instanceof Number ? ((Number) providerId).longValue() : Long.parseLong(providerId.toString());
         }
-        return providerId instanceof Number ? ((Number) providerId).longValue() : Long.parseLong(providerId.toString());
+
+        // 自动使用第一个可用的模型提供商
+        var providers = modelFactory.getAvailableProviderIds();
+        if (providers.isEmpty()) {
+            throw new IllegalArgumentException("请先在「模型提供商管理」中配置至少一个模型提供商");
+        }
+        log.info("[Chat] Agent未配置providerId，使用默认提供商: id={}", providers.get(0));
+        return providers.get(0);
     }
 
     /**

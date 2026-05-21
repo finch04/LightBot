@@ -20,19 +20,21 @@ export function deleteKnowledge(id) {
   return request.delete(`/knowledge/${id}`)
 }
 
-export function uploadDocument(knowledgeId, file) {
+export function uploadDocument(knowledgeId, file, ocrEnabled = false) {
   const formData = new FormData()
   formData.append('file', file)
   return request.post(`/knowledge/${knowledgeId}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    params: { ocrEnabled },
   })
 }
 
-export function uploadDocuments(knowledgeId, files) {
+export function uploadDocuments(knowledgeId, files, ocrEnabled = false) {
   const formData = new FormData()
   files.forEach(file => formData.append('files', file))
   return request.post(`/knowledge/${knowledgeId}/documents/batch`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    params: { ocrEnabled },
   })
 }
 
@@ -66,6 +68,10 @@ export function getChunks(docId) {
 
 export function getDocumentDownloadUrl(docId) {
   return request.get(`/knowledge/documents/${docId}/download`)
+}
+
+export function getDefaultIngestConfig(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/default-ingest-config`)
 }
 
 export function askKnowledge(knowledgeId, question) {
@@ -144,4 +150,10 @@ export function updateKnowledgeMemberRole(knowledgeId, userId, role) {
 
 export function removeKnowledgeMember(knowledgeId, userId) {
   return request.delete(`/knowledge/${knowledgeId}/members/${userId}`)
+}
+
+// ========== OCR ==========
+
+export function checkOcrHealth() {
+  return request.get('/ocr/health')
 }

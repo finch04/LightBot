@@ -92,6 +92,7 @@ sa-token:
   is-share: true
   token-style: uuid
   is-log: false
+  is-read-param: true
 
 # ========================================
 # MinIO 对象存储配置
@@ -105,6 +106,18 @@ minio:
   access-key: minioadmin
   secret-key: minioadmin
   bucket: lightbot
+
+# ========================================
+# OCR 配置（RapidOCR）
+# enabled：是否启用 OCR 功能
+# model-path：模型存放路径（仅用于健康检查展示，实际使用内置 PP-OCRv4 模型）
+# auto-download：是否自动下载（内置模型无需下载，此配置预留）
+# ========================================
+lightbot:
+  ocr:
+    enabled: false
+    model-path: D:\models\RapidOCR\PP-OCRv4
+    auto-download: true
 
 # ========================================
 # SpringDoc / Swagger 配置

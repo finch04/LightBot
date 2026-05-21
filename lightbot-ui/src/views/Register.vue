@@ -61,18 +61,6 @@
             </div>
           </div>
 
-          <div class="form-item">
-            <label class="form-label">邮箱 <span class="optional">可选</span></label>
-            <div class="input-wrapper">
-              <MailOutlined class="input-icon" />
-              <input
-                v-model="form.email"
-                type="email"
-                placeholder="your@email.com"
-              />
-            </div>
-          </div>
-
           <button class="btn-register" type="submit" :disabled="loading">
             <LoadingOutlined v-if="loading" />
             <span>{{ loading ? '注册中...' : '注册' }}</span>
@@ -93,12 +81,12 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { register } from '../api/auth'
-import { UserOutlined, LockOutlined, SmileOutlined, MailOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { UserOutlined, LockOutlined, SmileOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
 const loading = ref(false)
 
-const form = reactive({ username: '', password: '', nickname: '', email: '' })
+const form = reactive({ username: '', password: '', nickname: '' })
 
 async function handleRegister() {
   if (!form.username || form.username.length < 3) {

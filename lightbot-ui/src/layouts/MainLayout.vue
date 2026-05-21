@@ -218,7 +218,7 @@ onUnmounted(() => {
 watch(() => route.path, (path) => {
   if (path.startsWith('/chat')) {
     const match = path.match(/\/chat\/(\d+)/)
-    const newId = match ? Number(match[1]) : null
+    const newId = match ? match[1] : null
     if (newId && newId !== currentSessionId.value) {
       // 新会话创建后刷新侧边栏列表
       loadSessions()

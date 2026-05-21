@@ -31,7 +31,12 @@
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
           <div class="message-content-wrapper">
-            <div class="message-content" v-html="renderMarkdown(msg.content)" />
+            <!-- 流式阶段：显示原始文本 + 闪烁光标 -->
+            <div v-if="msg._streaming" class="message-content streaming-content">
+              <span class="streaming-text">{{ msg.content }}</span><span class="typing-cursor">▊</span>
+            </div>
+            <!-- 流式结束后：渲染 Markdown -->
+            <div v-else class="message-content" v-html="renderMarkdown(msg.content)" />
             <!-- 复制按钮（仅AI消息） -->
             <button
               v-if="msg.role === 'assistant' && msg.content"
@@ -61,22 +66,34 @@
 
     <!-- 输入区 -->
     <div class="chat-input-wrapper">
-      <!-- Agent 选择器 -->
-      <div class="agent-selector">
-        <span class="agent-label">Agent</span>
-        <a-select
-          v-model:value="selectedAgentId"
-          placeholder="默认 Agent"
-          allow-clear
-          size="small"
-          class="agent-select"
-        >
-          <a-select-option v-for="a in agents" :key="a.id" :value="a.id">
-            {{ a.name }}
-          </a-select-option>
-        </a-select>
-      </div>
       <div class="chat-input">
+        <!-- Agent 选择按钮 -->
+        <a-dropdown :trigger="['click']" placement="topLeft">
+          <button class="btn-agent" :title="currentAgent?.name || '默认 Agent'">
+            <RobotOutlined v-if="!currentAgent" />
+            <img v-else-if="currentAgent.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="btn-agent-avatar" />
+            <span v-else class="btn-agent-initial">{{ currentAgent.name[0] }}</span>
+          </button>
+          <template #overlay>
+            <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : ['__default__']">
+              <a-menu-item key="__default__">
+                <div class="agent-menu-item">
+                  <span class="agent-menu-icon default-icon">LB</span>
+                  <span>默认 Agent</span>
+                </div>
+              </a-menu-item>
+              <a-menu-divider />
+              <a-menu-item v-for="a in agents" :key="String(a.id)">
+                <div class="agent-menu-item">
+                  <img v-if="a.avatar" :src="`http://localhost:9000/lightbot/${a.avatar}`" alt="" class="agent-menu-icon" />
+                  <span v-else class="agent-menu-icon">{{ a.name[0] }}</span>
+                  <span>{{ a.name }}</span>
+                </div>
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+
         <textarea
           ref="inputRef"
           v-model="input"
@@ -106,7 +123,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { SendOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent } from '../api/agent'
@@ -185,6 +202,16 @@ function autoResize() {
   if (el) {
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+  }
+}
+
+function handleAgentSelect({ key }) {
+  if (key === '__default__') {
+    selectedAgentId.value = null
+    currentAgent.value = null
+  } else {
+    selectedAgentId.value = key
+    loadCurrentAgent(key)
   }
 }
 
@@ -268,7 +295,7 @@ async function sendMessage() {
       { message: text, sessionId: sid, agentId: selectedAgentId.value },
       (chunk) => {
         if (!pushed) {
-          assistantMsg = { role: 'assistant', content: '' }
+          assistantMsg = { role: 'assistant', content: '', _streaming: true }
           messages.value.push(assistantMsg)
           pushed = true
         }
@@ -276,6 +303,7 @@ async function sendMessage() {
         scrollToBottom()
       },
       () => {
+        if (assistantMsg) assistantMsg._streaming = false
         loading.value = false
         streaming.value = false
         // 通知侧边栏刷新会话标题（异步生成）
@@ -322,8 +350,8 @@ onMounted(() => {
   // 处理从 AgentDetail 带过来的 agentId 查询参数
   const queryAgentId = route.query.agentId
   if (queryAgentId) {
-    selectedAgentId.value = Number(queryAgentId)
-    loadCurrentAgent(Number(queryAgentId))
+    selectedAgentId.value = queryAgentId
+    loadCurrentAgent(queryAgentId)
   }
   loadHistory()
   loadAgents()
@@ -590,35 +618,76 @@ watch(selectedAgentId, (newId) => {
   margin: 0 auto;
   width: 100%;
 }
-.agent-selector {
+.chat-input {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
-}
-.agent-label {
-  font-size: 12px;
-  color: #71717a;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-.agent-select {
-  flex: 1;
-  max-width: 280px;
-}
-.chat-input {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
   border: 1px solid #e4e4e7;
   border-radius: 12px;
-  padding: 8px 8px 8px 16px;
+  padding: 8px 8px 8px 4px;
   background: #fff;
   transition: border-color 0.15s;
 }
 .chat-input:focus-within {
   border-color: #0070f3;
 }
+
+/* Agent 选择按钮 */
+.btn-agent {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: #f4f4f5;
+  color: #52525b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  transition: background 0.15s;
+  overflow: hidden;
+}
+.btn-agent:hover {
+  background: #e4e4e7;
+}
+.btn-agent-avatar {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+}
+.btn-agent-initial {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Agent 下拉菜单项 */
+.agent-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+}
+.agent-menu-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f4f4f5;
+  color: #52525b;
+  flex-shrink: 0;
+}
+.agent-menu-icon.default-icon {
+  background: #0070f3;
+  color: #fff;
+}
+
 .input-textarea {
   flex: 1;
   border: none;
@@ -630,6 +699,9 @@ watch(selectedAgentId, (newId) => {
   color: #171717;
   background: transparent;
   max-height: 200px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
 }
 .input-textarea::placeholder {
   color: #a1a1aa;
@@ -667,5 +739,18 @@ watch(selectedAgentId, (newId) => {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+.streaming-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
+}
+.streaming-text {
+  /* 保持与 .message-content 一致的样式 */
+}
+.streaming-content .typing-cursor {
+  color: var(--primary-color, #6366f1);
+  font-weight: bold;
+  margin-left: 1px;
 }
 </style>

@@ -20,18 +20,20 @@ public interface DocumentService extends IService<Document> {
      *
      * @param knowledgeId 知识库ID
      * @param file        上传的文件
+     * @param ocrEnabled  是否启用OCR识别
      * @return 文档记录
      */
-    Document uploadDocument(Long knowledgeId, MultipartFile file);
+    Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled);
 
     /**
      * 批量上传文档
      *
      * @param knowledgeId 知识库ID
      * @param files       上传的文件列表
+     * @param ocrEnabled  是否启用OCR识别
      * @return 文档记录列表
      */
-    List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files);
+    List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled);
 
     /**
      * 入库：分块 + 向量化

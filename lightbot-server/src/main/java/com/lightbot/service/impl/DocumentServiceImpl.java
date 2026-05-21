@@ -19,6 +19,7 @@ import com.lightbot.model.chunking.ChunkStrategy;
 import com.lightbot.model.chunking.ChunkStrategyFactory;
 import com.lightbot.service.*;
 import com.lightbot.util.MinioUtil;
+import com.lightbot.util.OcrUtil;
 import com.lightbot.util.TikaUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
+    private final OcrUtil ocrUtil;
     private final ChunkService chunkService;
     private final ChunkStrategyFactory chunkStrategyFactory;
     private final EmbeddingService embeddingService;
@@ -61,7 +63,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
 
     @Override
-    public Document uploadDocument(Long knowledgeId, MultipartFile file) {
+    public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled) {
         long userId = StpUtil.getLoginIdAsLong();
         String fileName = file.getOriginalFilename();
 
@@ -74,25 +76,35 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         // 2. 计算文件MD5哈希，用于去重
         String fileHash = calculateHash(file);
 
-        // 3. 检查同一知识库下是否已上传过相同文件
+        // 3. 检查同一知识库下是否已上传过相同文件（秒传）
         Document existing = getOne(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getFileHash, fileHash)
                 .eq(Document::getDeleted, 0));
         if (existing != null) {
-            throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS);
+            throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS, existing.getName());
         }
 
         // 4. 上传文件到MinIO
         String filePath = minioUtil.generatePath(knowledgeId, fileName);
         minioUtil.upload(file, filePath);
 
-        // 5. 转换为Markdown并上传
+        // 5. 转换为Markdown并上传到parsed目录
         String markdownPath = null;
         try {
             String markdownContent = tikaUtil.parseToMarkdown(file.getInputStream(), fileName);
+
+            // 5.1 OCR增强：如果启用OCR且内容为空或过短，尝试OCR识别
+            if (ocrEnabled && isContentTooShort(markdownContent, fileType)) {
+                String ocrContent = tryOcr(file.getInputStream(), fileType);
+                if (ocrContent != null && !ocrContent.isBlank()) {
+                    markdownContent = mergeOcrContent(markdownContent, ocrContent);
+                    log.info("[文档上传] OCR识别完成, fileName={}, ocrLength={}", fileName, ocrContent.length());
+                }
+            }
+
             if (markdownContent != null) {
-                markdownPath = filePath.replaceFirst("\\.[^.]+$", ".md");
+                markdownPath = generateMarkdownPath(knowledgeId, filePath);
                 minioUtil.uploadString(markdownContent, markdownPath, "text/markdown");
             }
         } catch (Exception e) {
@@ -116,10 +128,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     @Override
-    public List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files) {
+    public List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled) {
         List<Document> results = new ArrayList<>();
         for (MultipartFile file : files) {
-            results.add(uploadDocument(knowledgeId, file));
+            results.add(uploadDocument(knowledgeId, file, ocrEnabled));
         }
         return results;
     }
@@ -183,7 +195,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             // 2.1 解析失败（返回null）时标记失败
             if (content == null) {
                 doc.setStatus(DocumentStatus.FAILED);
-                doc.setErrorMessage("文档解析失败，可能是扫描版PDF或文件损坏");
+                doc.setErrorMessage("文档解析失败，可能是扫描版PDF、文件损坏或格式不支持");
                 updateById(doc);
                 return;
             }
@@ -219,7 +231,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         } catch (Exception e) {
             log.error("[文档入库] 失败, documentId={}", documentId, e);
             doc.setStatus(DocumentStatus.FAILED);
-            doc.setErrorMessage(e.getMessage());
+            doc.setErrorMessage(buildErrorMessage(e));
             updateById(doc);
         }
     }
@@ -395,6 +407,19 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         return fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
     }
 
+    /**
+     * 生成Markdown文件存储路径（存放在知识库的parsed子目录）
+     *
+     * @param knowledgeId 知识库ID
+     * @param filePath    原文件路径
+     * @return Markdown文件路径
+     */
+    private String generateMarkdownPath(Long knowledgeId, String filePath) {
+        String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
+        String baseName = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+        return String.format("knowledge/%d/parsed/%s.md", knowledgeId, baseName);
+    }
+
     private String calculateHash(MultipartFile file) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -434,5 +459,70 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             case "txt" -> "text/plain";
             default -> "application/octet-stream";
         };
+    }
+
+    /**
+     * 构建错误消息，包含具体异常类型和原因
+     */
+    private String buildErrorMessage(Exception e) {
+        String msg = e.getMessage();
+        if (msg == null || msg.isBlank()) {
+            msg = e.getClass().getSimpleName();
+        }
+        // 截取堆栈前3行作为定位信息
+        StackTraceElement[] stack = e.getStackTrace();
+        if (stack.length > 0) {
+            StringBuilder sb = new StringBuilder(msg);
+            sb.append(" [at ");
+            for (int i = 0; i < Math.min(3, stack.length); i++) {
+                if (i > 0) sb.append(" <- ");
+                sb.append(stack[i].getClassName()).append(".").append(stack[i].getMethodName());
+                sb.append(":").append(stack[i].getLineNumber());
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+        return msg;
+    }
+
+    /**
+     * 判断内容是否过短（可能是扫描件或图片文档）
+     */
+    private boolean isContentTooShort(String content, String fileType) {
+        if (content == null || content.isBlank()) {
+            return true;
+        }
+        // 对于PDF和图片类型，内容少于50个字符认为过短
+        if ("pdf".equals(fileType) || "jpg".equals(fileType) || "jpeg".equals(fileType) || "png".equals(fileType)) {
+            return content.trim().length() < 50;
+        }
+        return false;
+    }
+
+    /**
+     * 尝试OCR识别
+     */
+    private String tryOcr(InputStream inputStream, String fileType) {
+        try {
+            if ("pdf".equals(fileType)) {
+                return ocrUtil.recognizePdf(inputStream);
+            } else if ("jpg".equals(fileType) || "jpeg".equals(fileType) || "png".equals(fileType)
+                    || "bmp".equals(fileType) || "tiff".equals(fileType) || "tif".equals(fileType)) {
+                return ocrUtil.recognizeImage(inputStream);
+            }
+        } catch (Exception e) {
+            log.warn("[OCR] 识别失败, fileType={}", fileType, e);
+        }
+        return null;
+    }
+
+    /**
+     * 合并OCR内容到Markdown
+     */
+    private String mergeOcrContent(String originalContent, String ocrContent) {
+        if (originalContent == null || originalContent.isBlank()) {
+            return ocrContent;
+        }
+        return originalContent + "\n\n---\n\n## OCR 识别内容\n\n" + ocrContent;
     }
 }

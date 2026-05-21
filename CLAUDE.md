@@ -266,16 +266,60 @@ public Result<List<Document>> listDocuments(@PathVariable Long id) {
 ### Long ID 序列化规范
 
 ```text
-所有 Entity 的主键 ID 字段必须添加 @JsonSerialize(using = ToStringSerializer.class)
-原因：雪花算法生成的 Long 类型 ID 超过 JavaScript Number.MAX_SAFE_INTEGER (2^53)
+【后端】所有 Entity 的主键 ID 和外键 ID 字段必须添加 @JsonSerialize(using = ToStringSerializer.class)
+【前端】所有 Long ID 字段禁止使用 Number() 转换，统一作为字符串处理
+原因：雪花算法生成的 Long 类型 ID 超过 JavaScript Number.MAX_SAFE_INTEGER (2^53)，Number() 会导致精度丢失
+示例：2056961707612393473 → Number() → 2056961707612393500（精度丢失！）
 ```
 
+后端 Entity：
 ```java
 @TableId(type = IdType.ASSIGN_ID)
 @Schema(description = "主键ID")
 @JsonSerialize(using = ToStringSerializer.class)
 private Long id;
+
+@TableField("agent_id")
+@Schema(description = "AgentID")
+@JsonSerialize(using = ToStringSerializer.class)
+private Long agentId;
 ```
+
+前端 Vue：
+```javascript
+// ❌ 错误：Number() 会丢失精度
+const id = Number(route.query.agentId)
+selectedAgentId.value = Number(key)
+
+// ✅ 正确：直接使用字符串
+const id = route.query.agentId
+selectedAgentId.value = key  // key 已经是 String(a.id)
+
+// ✅ 正确：URL 路径中的 ID 也是字符串
+const match = path.match(/\/chat\/(\d+)/)
+const sessionId = match ? match[1] : null  // 不要 Number(match[1])
+```
+
+### JSONB 字段默认值规范
+
+```text
+所有 JSONB/JSON 类型字段的前端表单默认值必须为 '{}'（空JSON对象），禁止使用空字符串 ''
+原因：空字符串会导致 JSON 解析失败，数据库无法存储
+```
+
+```javascript
+// ❌ 错误：空字符串会导致 JSON.parse 报错
+const form = reactive({ config: '', inputSchema: '', authConfig: '' })
+
+// ✅ 正确：使用空 JSON 对象
+const form = reactive({ config: '{}', inputSchema: '{}', authConfig: '{}' })
+```
+
+涉及的 JSONB 字段（前端表单必须用 `'{}'`）：
+- `config` — 扩展配置
+- `inputSchema` / `outputSchema` — 工具输入输出 Schema
+- `authConfig` — 认证配置
+- `headersJson` / `extraJson` — HTTP 头和额外配置
 
 ### Util 规范（中间件封装）
 

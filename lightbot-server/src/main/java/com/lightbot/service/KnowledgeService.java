@@ -2,6 +2,7 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.IngestRequest;
 import com.lightbot.entity.Knowledge;
 
 import java.util.List;
@@ -80,4 +81,12 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @return 思维导图JSON对象，未生成返回null
      */
     Object getMindmap(Long knowledgeId);
+
+    /**
+     * 获取知识库默认入库配置
+     *
+     * @param knowledgeId 知识库ID
+     * @return 默认入库配置
+     */
+    IngestRequest getDefaultIngestConfig(Long knowledgeId);
 }

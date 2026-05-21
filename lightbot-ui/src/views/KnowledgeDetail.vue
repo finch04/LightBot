@@ -185,13 +185,32 @@
       title="上传文档"
       :width="520"
       :footer="null"
-      :maskClosable="false"
     >
       <div class="upload-section">
         <div class="upload-dropzone" @click="triggerFileInput" @drop.prevent="onDrop" @dragover.prevent>
           <input ref="fileInputRef" type="file" multiple accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.html,.htm" style="display: none" @change="onFileSelect" />
           <p class="dropzone-text">拖拽文件到此处，或点击选择</p>
           <p class="dropzone-hint">支持 md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html</p>
+        </div>
+
+        <!-- OCR 开关 -->
+        <div class="ocr-section">
+          <div class="ocr-toggle">
+            <a-switch v-model:checked="ocrEnabled" size="small" @change="handleOcrToggle" />
+            <span class="ocr-label">启用 OCR 识别</span>
+          </div>
+          <div v-if="ocrEnabled" class="ocr-status">
+            <div v-if="ocrChecking" class="ocr-status-text checking">
+              <LoadingOutlined spin /> 检测中...
+            </div>
+            <div v-else-if="ocrHealth?.healthy" class="ocr-status-text success">
+              <CheckCircleOutlined /> OCR服务正常
+              <div class="ocr-model-info">{{ ocrHealth.modelPath }}</div>
+            </div>
+            <div v-else-if="ocrHealth" class="ocr-status-text error">
+              <CloseCircleOutlined /> {{ ocrHealth.message }}
+            </div>
+          </div>
         </div>
 
         <div class="upload-file-list" v-if="uploadFiles.length > 0">
@@ -230,7 +249,12 @@
               <a-select-option value="general">通用分块 - 按分隔符和长度切分</a-select-option>
               <a-select-option value="book">书籍分块 - 按章节标题切分</a-select-option>
               <a-select-option value="separator">严格分隔 - 遇分隔符即切分</a-select-option>
+              <a-select-option value="qa">问答对分块 - 适合FAQ/客服对话</a-select-option>
+              <a-select-option value="laws">法规分块 - 按条款结构切分</a-select-option>
             </a-select>
+            <div v-if="ingestForm.chunkStrategy === 'general' && knowledgeDefaultStrategy" class="default-strategy-hint">
+              <a-tag color="blue">使用知识库配置: {{ strategyLabelMap[knowledgeDefaultStrategy] || knowledgeDefaultStrategy }}</a-tag>
+            </div>
           </a-form-item>
           <a-form-item label="分块大小" required>
             <a-input-number v-model:value="ingestForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
@@ -268,7 +292,7 @@
     </a-modal>
 
     <!-- 编辑知识库弹窗 -->
-    <a-modal v-model:open="editVisible" title="编辑知识库" :width="480" @ok="handleEdit" :confirm-loading="editSubmitting" :maskClosable="false">
+    <a-modal v-model:open="editVisible" title="编辑知识库" :width="480" @ok="handleEdit" :confirm-loading="editSubmitting">
       <a-form :model="editForm" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="editForm.name" placeholder="知识库名称" />
@@ -381,14 +405,14 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
-  DownloadOutlined,
+  DownloadOutlined, LoadingOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getKnowledge, updateKnowledge, getDocuments, uploadDocument, uploadDocuments, deleteDocument,
   previewDocument, getDocumentDownloadUrl, getChunks, askKnowledge, askKnowledgeStream,
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
-  removeKnowledgeMember, ingestDocument, previewChunks,
+  removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
@@ -404,6 +428,16 @@ const knowledgeId = route.params.id
 
 const knowledge = ref({})
 const documents = ref([])
+
+const strategyLabelMap = {
+  general: '通用分块', book: '书籍分块', separator: '严格分隔', qa: '问答对分块', laws: '法规分块',
+}
+const knowledgeDefaultStrategy = computed(() => {
+  try {
+    const cfg = typeof knowledge.value.config === 'string' ? JSON.parse(knowledge.value.config) : (knowledge.value.config || {})
+    return cfg.defaultChunkStrategy || ''
+  } catch { return '' }
+})
 const activeTab = ref('ask')
 const ragQuestion = ref('')
 const ragMessages = ref([])
@@ -432,6 +466,9 @@ const uploadVisible = ref(false)
 const uploadSubmitting = ref(false)
 const uploadFiles = ref([])
 const fileInputRef = ref(null)
+const ocrEnabled = ref(false)
+const ocrChecking = ref(false)
+const ocrHealth = ref(null)
 
 // 入库弹窗
 const ingestVisible = ref(false)
@@ -498,6 +535,8 @@ async function handleUpload(file) {
 
 function openUploadModal() {
   uploadFiles.value = []
+  ocrEnabled.value = false
+  ocrHealth.value = null
   uploadVisible.value = true
 }
 
@@ -529,13 +568,30 @@ function removeUploadFile(index) {
   uploadFiles.value.splice(index, 1)
 }
 
+async function handleOcrToggle(checked) {
+  if (checked) {
+    ocrChecking.value = true
+    ocrHealth.value = null
+    try {
+      const res = await checkOcrHealth()
+      ocrHealth.value = res.data
+    } catch (e) {
+      ocrHealth.value = { healthy: false, message: 'OCR服务检测失败' }
+    } finally {
+      ocrChecking.value = false
+    }
+  } else {
+    ocrHealth.value = null
+  }
+}
+
 async function handleBatchUpload() {
   if (uploadFiles.value.length === 0 || uploadSubmitting.value) return
   uploadSubmitting.value = true
 
   try {
     const files = uploadFiles.value.map(f => f)
-    await uploadDocuments(knowledgeId, files)
+    await uploadDocuments(knowledgeId, files, ocrEnabled.value)
     message.success(`批量上传成功，共 ${files.length} 个文件`)
     uploadVisible.value = false
     uploadFiles.value = []
@@ -549,15 +605,29 @@ async function handleBatchUpload() {
 
 // ========== 入库弹窗 ==========
 
-function openIngestModal(doc) {
+async function openIngestModal(doc) {
   ingestDoc.value = doc
   previewChunksList.value = []
-  Object.assign(ingestForm, {
-    chunkStrategy: 'general',
-    chunkSize: 512,
-    chunkOverlap: 10,
-    chunkDelimiter: '',
-  })
+
+  // 加载知识库默认配置
+  try {
+    const res = await getDefaultIngestConfig(route.params.id)
+    const defaults = res.data || {}
+    Object.assign(ingestForm, {
+      chunkStrategy: defaults.chunkStrategy || 'general',
+      chunkSize: defaults.chunkSize || 512,
+      chunkOverlap: defaults.chunkOverlap || 10,
+      chunkDelimiter: defaults.chunkDelimiter || '',
+    })
+  } catch {
+    Object.assign(ingestForm, {
+      chunkStrategy: 'general',
+      chunkSize: 512,
+      chunkOverlap: 10,
+      chunkDelimiter: '',
+    })
+  }
+
   ingestVisible.value = true
 }
 
@@ -1639,6 +1709,48 @@ onMounted(() => {
 .upload-file-status.error {
   color: #dc2626;
 }
+
+/* OCR 开关 */
+.ocr-section {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 12px;
+}
+.ocr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ocr-label {
+  font-size: 13px;
+  color: #52525b;
+}
+.ocr-status {
+  margin-top: 8px;
+}
+.ocr-status-text {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ocr-status-text.success {
+  color: #16a34a;
+}
+.ocr-status-text.error {
+  color: #dc2626;
+}
+.ocr-status-text.checking {
+  color: #d97706;
+}
+.ocr-model-info {
+  margin-top: 4px;
+  padding-left: 18px;
+  font-size: 12px;
+  white-space: pre-line;
+  line-height: 1.6;
+}
+
 .upload-actions {
   display: flex;
   justify-content: flex-end;
@@ -1657,6 +1769,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+.default-strategy-hint {
+  margin-top: -8px;
 }
 .preview-chunks {
   border: 1px solid #ebebeb;

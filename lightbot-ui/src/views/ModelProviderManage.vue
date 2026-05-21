@@ -192,7 +192,7 @@ const list = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
-const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '', extraJson: '' })
+const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
 const showAdvanced = ref(false)
 
 // 模型管理
@@ -256,12 +256,12 @@ function openDialog(row) {
       apiKey: row.apiKey || '',
       baseUrl: row.baseUrl || '',
       modelsEndpoint: row.modelsEndpoint || '',
-      headersJson: row.headersJson || '',
-      extraJson: row.extraJson || '',
+      headersJson: row.headersJson || '{}',
+      extraJson: row.extraJson || '{}',
     })
     showAdvanced.value = false
   } else {
-    Object.assign(form, { id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '', extraJson: '' })
+    Object.assign(form, { id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
     showAdvanced.value = false
   }
   dialogVisible.value = true

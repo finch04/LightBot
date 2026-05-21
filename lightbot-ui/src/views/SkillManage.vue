@@ -102,7 +102,7 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({
   id: null, agentId: null, toolId: null, name: '',
-  description: '', promptTemplate: '', config: '', sortOrder: 0,
+  description: '', promptTemplate: '', config: '{}', sortOrder: 0,
 })
 
 async function loadAgents() {
@@ -147,7 +147,7 @@ function openDialog(row) {
   } else {
     Object.assign(form, {
       id: null, agentId: filterAgentId.value, toolId: null, name: '',
-      description: '', promptTemplate: '', config: '', sortOrder: 0,
+      description: '', promptTemplate: '', config: '{}', sortOrder: 0,
     })
   }
   dialogVisible.value = true
