@@ -67,6 +67,11 @@ import zhCN from 'ant-design-vue/es/locale/zh_CN'
   box-sizing: border-box;
 }
 
+/* 禁用浏览器拼写检查波浪线 */
+::spelling-error {
+  text-decoration: none;
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--color-ink);

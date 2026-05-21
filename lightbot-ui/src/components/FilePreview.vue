@@ -14,6 +14,15 @@
       frameborder="0"
     ></iframe>
 
+    <!-- HTML 预览 -->
+    <iframe
+      v-else-if="isHtml && fileUrl"
+      :src="fileUrl"
+      class="preview-iframe"
+      frameborder="0"
+      sandbox="allow-same-origin"
+    ></iframe>
+
     <!-- 图片预览 -->
     <div v-else-if="isImage" class="preview-image-wrapper">
       <img :src="fileUrl" class="preview-image" :alt="fileName" />
@@ -95,7 +104,8 @@ const extension = computed(() => {
 const isPdf = computed(() => extension.value === 'pdf')
 const isImage = computed(() => ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension.value))
 const isMarkdown = computed(() => ['md', 'markdown'].includes(extension.value))
-const isText = computed(() => ['txt', 'csv', 'json', 'xml', 'html', 'htm', 'log'].includes(extension.value))
+const isHtml = computed(() => ['html', 'htm'].includes(extension.value))
+const isText = computed(() => ['txt', 'csv', 'json', 'xml', 'log'].includes(extension.value))
 // Microsoft Online Preview 只支持新格式（docx/pptx/xlsx）
 const isOfficeOnline = computed(() => ['docx', 'pptx', 'xlsx'].includes(extension.value))
 

@@ -17,6 +17,8 @@ import com.lightbot.mapper.DocumentMapper;
 import com.lightbot.model.chunking.ChunkParams;
 import com.lightbot.model.chunking.ChunkStrategy;
 import com.lightbot.model.chunking.ChunkStrategyFactory;
+import com.lightbot.entity.Task;
+import com.lightbot.enums.TaskType;
 import com.lightbot.service.*;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
@@ -27,7 +29,6 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,9 +36,13 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.BiConsumer;
 
 /**
  * 文档服务实现类
@@ -51,6 +56,9 @@ import java.util.List;
 public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         implements DocumentService {
 
+    /** 单文件大小上限 100MB */
+    private static final long MAX_FILE_SIZE = 100L * 1024 * 1024;
+
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
     private final OcrUtil ocrUtil;
@@ -59,6 +67,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final EmbeddingService embeddingService;
     private final EmbeddingModel embeddingModel;
     private final ObjectMapper objectMapper;
+    private final TaskService taskService;
     /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
 
@@ -73,10 +82,15 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             throw new BizException(ErrorCode.DOCUMENT_UNSUPPORTED_TYPE);
         }
 
-        // 2. 计算文件MD5哈希，用于去重
+        // 2. 校验文件大小
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new BizException(ErrorCode.DOCUMENT_FILE_TOO_LARGE);
+        }
+
+        // 3. 计算文件MD5哈希，用于去重
         String fileHash = calculateHash(file);
 
-        // 3. 检查同一知识库下是否已上传过相同文件（秒传）
+        // 4. 检查同一知识库下是否已上传过相同文件
         Document existing = getOne(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getFileHash, fileHash)
@@ -85,44 +99,38 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS, existing.getName());
         }
 
-        // 4. 上传文件到MinIO
-        String filePath = minioUtil.generatePath(knowledgeId, fileName);
-        minioUtil.upload(file, filePath);
-
-        // 5. 转换为Markdown并上传到parsed目录
-        String markdownPath = null;
+        // 5. 保存文件到临时目录
+        String tempFileName = UUID.randomUUID() + "." + fileType;
+        Path tempDir = Path.of(System.getProperty("java.io.tmpdir"), "lightbot", "upload");
+        Path tempFile = tempDir.resolve(tempFileName);
         try {
-            String markdownContent = tikaUtil.parseToMarkdown(file.getInputStream(), fileName);
-
-            // 5.1 OCR增强：如果启用OCR且内容为空或过短，尝试OCR识别
-            if (ocrEnabled && isContentTooShort(markdownContent, fileType)) {
-                String ocrContent = tryOcr(file.getInputStream(), fileType);
-                if (ocrContent != null && !ocrContent.isBlank()) {
-                    markdownContent = mergeOcrContent(markdownContent, ocrContent);
-                    log.info("[文档上传] OCR识别完成, fileName={}, ocrLength={}", fileName, ocrContent.length());
-                }
-            }
-
-            if (markdownContent != null) {
-                markdownPath = generateMarkdownPath(knowledgeId, filePath);
-                minioUtil.uploadString(markdownContent, markdownPath, "text/markdown");
-            }
-        } catch (Exception e) {
-            log.warn("[文档上传] Markdown转换失败，不影响上传, fileName={}", fileName, e);
+            Files.createDirectories(tempDir);
+            file.transferTo(tempFile.toFile());
+        } catch (IOException e) {
+            log.error("[文档上传] 临时文件保存失败, fileName={}", fileName, e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
 
-        // 6. 创建文档记录（状态为 UPLOADED，不触发处理）
+        // 6. 生成 MinIO 存储路径（任务执行器会用此路径上传）
+        String filePath = minioUtil.generatePath(knowledgeId, fileName);
+
+        // 7. 创建文档记录（状态为 UPLOADING）
         Document doc = new Document();
         doc.setKnowledgeId(knowledgeId);
         doc.setUserId(userId);
         doc.setName(fileName);
         doc.setFilePath(filePath);
-        doc.setMarkdownPath(markdownPath);
         doc.setFileType(fileType);
         doc.setFileSize(file.getSize());
         doc.setFileHash(fileHash);
-        doc.setStatus(DocumentStatus.UPLOADED);
+        doc.setStatus(DocumentStatus.UPLOADING);
         save(doc);
+
+        // 8. 创建上传任务并推入Redis队列
+        String payload = String.format("{\"documentId\":%d,\"tempPath\":\"%s\",\"ocrEnabled\":%s}",
+                doc.getId(), tempFile.toAbsolutePath().toString().replace("\\", "\\\\"), ocrEnabled);
+        taskService.createTask(TaskType.DOCUMENT_UPLOAD, "文档上传 - " + fileName,
+                userId, doc.getId(), payload);
 
         return doc;
     }
@@ -137,7 +145,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     @Override
-    public void ingestDocument(Long documentId, String embeddingJson) {
+    public Task ingestDocument(Long documentId, String embeddingJson) {
         Document doc = getById(documentId);
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
@@ -152,8 +160,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         doc.setErrorMessage(null);
         updateById(doc);
 
-        // 2. 异步执行分块 + 向量化
-        processDocumentAsync(documentId, embeddingJson);
+        // 2. 创建任务并推入Redis队列
+        String payload = String.format("{\"documentId\":%d,\"embeddingJson\":%s}", documentId, embeddingJson);
+        return taskService.createTask(TaskType.DOCUMENT_INGEST, "文档入库 - " + doc.getName(),
+                doc.getUserId(), documentId, payload);
     }
 
     @Override
@@ -176,23 +186,20 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         return strategy.split(content, params);
     }
 
-    @Async
-    public void processDocumentAsync(Long documentId, String embeddingJson) {
+    @Override
+    public void processDocumentWithProgress(Long documentId, String embeddingJson, BiConsumer<Integer, String> progressCallback) {
         Document doc = getById(documentId);
         if (doc == null) {
             return;
         }
 
         try {
-            // 1. 更新状态为分块中
-            doc.setStatus(DocumentStatus.PENDING);
-            updateById(doc);
-
-            // 2. 从MinIO读取文件，使用Tika解析为纯文本
+            // 1. 从MinIO读取文件，使用Tika解析为纯文本
+            progressCallback.accept(5, "正在解析文档...");
             InputStream is = minioUtil.download(doc.getFilePath());
             String content = tikaUtil.parse(is, doc.getName());
 
-            // 2.1 解析失败（返回null）时标记失败
+            // 1.1 解析失败（返回null）时标记失败
             if (content == null) {
                 doc.setStatus(DocumentStatus.FAILED);
                 doc.setErrorMessage("文档解析失败，可能是扫描版PDF、文件损坏或格式不支持");
@@ -200,13 +207,15 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 return;
             }
 
-            // 3. 解析入库配置，执行分块
+            // 2. 解析入库配置，执行分块
+            progressCallback.accept(20, "正在分块...");
             ChunkParams params = parseChunkParams(embeddingJson);
             String strategyName = parseChunkStrategy(embeddingJson);
             ChunkStrategy strategy = chunkStrategyFactory.getStrategy(strategyName);
             List<String> chunks = strategy.split(content, params);
 
-            // 4. 保存分块到数据库，状态为 CHUNKED
+            // 3. 保存分块到数据库，状态为 CHUNKED
+            progressCallback.accept(30, "正在保存分块...");
             long totalTokens = 0;
             for (int i = 0; i < chunks.size(); i++) {
                 String chunkContent = chunks.get(i);
@@ -214,30 +223,34 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 totalTokens += estimateTokens(chunkContent);
             }
 
-            // 5. 更新文档状态为向量化中
+            // 4. 更新文档状态为向量化中
             doc.setStatus(DocumentStatus.PROCESSING);
             doc.setChunkCount(chunks.size());
             doc.setTokenCount(totalTokens);
             updateById(doc);
 
-            // 6. 更新知识库统计
+            // 5. 更新知识库统计
             knowledgeServiceProvider.getObject().updateStats(doc.getKnowledgeId(), 1, chunks.size(), (int) totalTokens);
-
             log.info("[文档入库] 分块完成, documentId={}, chunks={}, strategy={}", documentId, chunks.size(), strategyName);
 
-            // 7. 异步向量化
-            vectorizeChunks(doc.getId(), doc.getKnowledgeId());
+            // 6. 向量化
+            vectorizeChunksWithProgress(doc.getId(), doc.getKnowledgeId(), (vectorProgress, msg) -> {
+                // 向量化进度占 40%-95%
+                int overallProgress = 40 + (int) (vectorProgress * 0.55);
+                progressCallback.accept(overallProgress, msg);
+            });
 
+            progressCallback.accept(100, "入库完成");
         } catch (Exception e) {
             log.error("[文档入库] 失败, documentId={}", documentId, e);
             doc.setStatus(DocumentStatus.FAILED);
             doc.setErrorMessage(buildErrorMessage(e));
             updateById(doc);
+            throw e;
         }
     }
 
-    @Async
-    public void vectorizeChunks(Long documentId, Long knowledgeId) {
+    public void vectorizeChunksWithProgress(Long documentId, Long knowledgeId, BiConsumer<Integer, String> progressCallback) {
         // 1. 查询知识库的 Embedding 模型名称
         KnowledgeService knowledgeService = knowledgeServiceProvider.getObject();
         Knowledge knowledge = knowledgeService.getById(knowledgeId);
@@ -255,10 +268,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
         log.info("[向量化] 开始, documentId={}, chunks={}", documentId, chunks.size());
 
+        int total = chunks.size();
         int success = 0;
         int failed = 0;
 
-        for (Chunk chunk : chunks) {
+        for (int i = 0; i < total; i++) {
+            Chunk chunk = chunks.get(i);
             try {
                 // 3. 更新状态为向量化中
                 chunk.setStatus(ChunkStatus.VECTORIZING);
@@ -274,6 +289,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 chunk.setStatus(ChunkStatus.VECTORIZED);
                 chunkService.updateById(chunk);
                 success++;
+
+                // 7. 报告进度
+                int progress = (int) ((i + 1.0) / total * 100);
+                progressCallback.accept(progress, "向量化中 " + (i + 1) + "/" + total);
             } catch (Exception e) {
                 log.error("[向量化] 分块失败, chunkId={}", chunk.getId(), e);
                 chunk.setStatus(ChunkStatus.FAILED);
@@ -358,8 +377,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
-        String url = minioUtil.getPresignedUrl(doc.getFilePath());
         String contentType = getContentType(doc.getFileType());
+        // 预签名URL中携带正确的Content-Type，浏览器才能内联展示而非下载
+        String url = minioUtil.getPresignedUrl(doc.getFilePath(), contentType);
         return new DocumentDownloadVO(url, doc.getFileType(), doc.getName(), contentType);
     }
 

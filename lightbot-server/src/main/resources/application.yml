@@ -72,7 +72,7 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 # ========================================
 # Sa-Token 认证配置
@@ -118,6 +118,9 @@ lightbot:
     enabled: false
     model-path: D:\models\RapidOCR\PP-OCRv4
     auto-download: true
+  task:
+    consumer:
+      pool-size: 2
 
 # ========================================
 # SpringDoc / Swagger 配置

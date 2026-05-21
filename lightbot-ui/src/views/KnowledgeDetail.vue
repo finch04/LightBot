@@ -30,7 +30,7 @@
             <a-tooltip :title="statusText(doc.status?.code || doc.status)">
               <span class="doc-status-icon" :class="doc.status?.code || doc.status">
                 <CheckCircleOutlined v-if="(doc.status?.code || doc.status) === 'completed'" />
-                <SyncOutlined v-else-if="(doc.status?.code || doc.status) === 'pending' || (doc.status?.code || doc.status) === 'processing'" spin />
+                <SyncOutlined v-else-if="(doc.status?.code || doc.status) === 'uploading' || (doc.status?.code || doc.status) === 'pending' || (doc.status?.code || doc.status) === 'processing'" spin />
                 <CloseCircleOutlined v-else-if="(doc.status?.code || doc.status) === 'failed'" />
                 <ExclamationCircleOutlined v-else />
               </span>
@@ -190,7 +190,7 @@
         <div class="upload-dropzone" @click="triggerFileInput" @drop.prevent="onDrop" @dragover.prevent>
           <input ref="fileInputRef" type="file" multiple accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.html,.htm" style="display: none" @change="onFileSelect" />
           <p class="dropzone-text">拖拽文件到此处，或点击选择</p>
-          <p class="dropzone-hint">支持 md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html</p>
+          <p class="dropzone-hint">支持 md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html，单文件最大 100MB</p>
         </div>
 
         <!-- OCR 开关 -->
@@ -555,8 +555,14 @@ function onDrop(e) {
   addUploadFiles(files)
 }
 
+const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+
 function addUploadFiles(files) {
   for (const file of files) {
+    if (file.size > MAX_FILE_SIZE) {
+      message.warning(`${file.name} 超过100MB限制，已跳过`)
+      continue
+    }
     const exists = uploadFiles.value.some(f => f.name === file.name && f.size === file.size)
     if (!exists) {
       uploadFiles.value.push(Object.assign(file, { _status: 'pending' }))
@@ -592,7 +598,7 @@ async function handleBatchUpload() {
   try {
     const files = uploadFiles.value.map(f => f)
     await uploadDocuments(knowledgeId, files, ocrEnabled.value)
-    message.success(`批量上传成功，共 ${files.length} 个文件`)
+    message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
     uploadFiles.value = []
     setTimeout(loadDocuments, 500)
@@ -664,7 +670,7 @@ async function handleIngest() {
       chunkDelimiter: ingestForm.chunkDelimiter || null,
     }
     await ingestDocument(ingestDoc.value.id, data)
-    message.success('入库任务已提交，正在处理...')
+    message.success('入库任务已提交，可在「任务中心」查看进度')
     ingestVisible.value = false
     setTimeout(loadDocuments, 500)
   } catch (e) {
@@ -844,7 +850,7 @@ const renderedMarkdown = computed(() => {
 })
 
 function statusText(s) {
-  const map = { uploaded: '待入库', pending: '分块中', processing: '向量化中', completed: '已完成', failed: '失败' }
+  const map = { uploading: '上传中', uploaded: '待入库', pending: '分块中', processing: '向量化中', completed: '已完成', failed: '失败' }
   return map[s] || s
 }
 
@@ -1170,6 +1176,7 @@ onMounted(() => {
   width: 20px;
   text-align: center;
 }
+.doc-status-icon.uploading { color: #d97706; }
 .doc-status-icon.uploaded { color: #a1a1aa; }
 .doc-status-icon.pending { color: #2563eb; }
 .doc-status-icon.processing { color: #d97706; }

@@ -54,7 +54,7 @@ public class ChatServiceImpl implements ChatService {
     private final ModelFactory modelFactory;
     private final TaskExecutor taskExecutor;
 
-    private static final String DEFAULT_SYSTEM_PROMPT = "你是 LightBot 智能助手，基于通义千问大模型，请用中文回答用户问题。";
+    private static final String DEFAULT_SYSTEM_PROMPT = "你是 LightBot 智能助手，请用中文回答用户问题。回答应简洁准确，遇到不确定的信息请如实告知。";
 
     private static final long DEFAULT_AGENT_ID = 1L;
 
@@ -87,9 +87,14 @@ public class ChatServiceImpl implements ChatService {
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
 
+        log.info("[Chat] 用户消息: sessionId={}, agentId={}, message={}", sessionId,
+                agent != null ? agent.getId() : null, request.getMessage());
+
         // 6. 调用模型获取回复
         ChatResponse response = chatModel.call(new Prompt(messages, options));
         String reply = response.getResult().getOutput().getText();
+
+        log.info("[Chat] AI回复: sessionId={}, length={}", sessionId, reply != null ? reply.length() : 0);
 
         // 7. 持久化用户消息和AI回复
         saveMessage(sessionId, MessageRole.USER, request.getMessage());
@@ -120,6 +125,9 @@ public class ChatServiceImpl implements ChatService {
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
 
+        log.info("[Chat] 流式对话开始: sessionId={}, agentId={}, providerId={}, message={}",
+                sessionId, agent != null ? agent.getId() : null, providerId, request.getMessage());
+
         // 6. 先保存用户消息
         saveMessage(sessionId, MessageRole.USER, request.getMessage());
 
@@ -128,19 +136,32 @@ public class ChatServiceImpl implements ChatService {
 
         StringBuilder fullReply = new StringBuilder();
         return stream.map(response -> {
+            // 流式元数据chunk可能无result，需判空
+            if (response.getResult() == null || response.getResult().getOutput() == null) {
+                return "";
+            }
             String delta = response.getResult().getOutput().getText();
+            if (delta == null) {
+                return "";
+            }
             fullReply.append(delta);
             return delta;
+        }).doOnNext(chunk -> {
+            if (!chunk.isEmpty()) {
+                log.debug("[Chat] 流式chunk: sessionId={}, chunk={}", sessionId, chunk);
+            }
         }).doOnComplete(() -> {
+            log.info("[Chat] 流式对话完成: sessionId={}, replyLength={}", sessionId, fullReply.length());
             saveMessage(sessionId, MessageRole.ASSISTANT, fullReply.toString());
             taskExecutor.execute(() -> generateTitle(sessionId));
+        }).doOnError(e -> {
+            log.error("[Chat] 流式对话异常: sessionId={}, error={}", sessionId, e.getMessage(), e);
         });
     }
 
     /**
      * 加载Agent配置。
-     * agentId非空时加载指定Agent；为空时自动使用当前用户的第一个Agent（默认Agent）。
-     * 若用户无任何Agent，自动创建一个内置默认Agent。
+     * agentId非空时加载指定Agent；为空时使用内置默认Agent（id=1）。
      */
     private Agent loadAgent(Long agentId) {
         // 1. 指定了agentId，直接加载
@@ -152,41 +173,27 @@ public class ChatServiceImpl implements ChatService {
             return agent;
         }
 
-        // 2. 未指定agentId，使用当前用户的第一个Agent作为默认Agent
-        try {
-            var page = agentService.listMyAgents(1, 1);
-            if (page != null && !page.getRecords().isEmpty()) {
-                Agent defaultAgent = page.getRecords().get(0);
-                log.info("[Chat] 使用默认Agent: id={}, name={}", defaultAgent.getId(), defaultAgent.getName());
-                return defaultAgent;
-            }
-        } catch (Exception e) {
-            log.warn("[Chat] 获取默认Agent失败: {}", e.getMessage());
+        // 2. 未指定agentId，使用内置默认Agent
+        Agent defaultAgent = agentService.getById(DEFAULT_AGENT_ID);
+        if (defaultAgent != null) {
+            return defaultAgent;
         }
 
-        // 3. 用户无Agent，创建内置默认Agent
+        // 3. 默认Agent不存在（未执行初始化SQL），尝试自动创建
         return createDefaultAgent();
     }
 
     /**
-     * 创建内置默认Agent。
-     * 使用固定ID，确保全局唯一；若已存在则直接返回。
+     * 创建内置默认Agent（兜底，正常应由SQL初始化脚本创建）
      */
     private Agent createDefaultAgent() {
         try {
-            // 检查是否已存在
-            Agent existing = agentService.getById(DEFAULT_AGENT_ID);
-            if (existing != null) {
-                log.info("[Chat] 使用已存在的默认Agent: id={}", DEFAULT_AGENT_ID);
-                return existing;
-            }
-
             long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
             Agent agent = new Agent();
             agent.setId(DEFAULT_AGENT_ID);
             agent.setUserId(userId);
             agent.setName("LightBot 助手");
-            agent.setDescription("默认AI助手，基于大模型回答问题");
+            agent.setDescription("默认AI助手");
             agent.setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
             agent.setWelcomeMessage("## 你好，我是 LightBot\n有什么可以帮你的？");
             agent.setAgentType(com.lightbot.enums.AgentType.CHAT);

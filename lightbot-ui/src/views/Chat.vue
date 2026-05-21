@@ -100,6 +100,7 @@
           class="input-textarea"
           placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
           rows="1"
+          spellcheck="false"
           @keydown="handleKeydown"
           @input="autoResize"
         />
@@ -306,10 +307,10 @@ async function sendMessage() {
         if (assistantMsg) assistantMsg._streaming = false
         loading.value = false
         streaming.value = false
-        // 通知侧边栏刷新会话标题（异步生成）
+        // 通知侧边栏刷新会话标题（异步生成，侧边栏会重试刷新）
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('session-title-updated'))
-        }, 2000)
+        }, 1000)
       }
     )
   } catch (e) {
@@ -318,6 +319,7 @@ async function sendMessage() {
       messages.value.push(assistantMsg)
     }
     assistantMsg.content = '请求失败：' + (e.message || '未知错误')
+    if (assistantMsg) assistantMsg._streaming = false
     loading.value = false
     streaming.value = false
   }

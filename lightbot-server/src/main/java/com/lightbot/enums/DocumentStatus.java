@@ -16,6 +16,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum DocumentStatus {
 
+    UPLOADING("uploading", "上传中"),
     UPLOADED("uploaded", "已上传"),
     PENDING("pending", "分块中"),
     PROCESSING("processing", "向量化中"),

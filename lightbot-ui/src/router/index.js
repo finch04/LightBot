@@ -83,6 +83,11 @@ const routes = [
         name: 'Profile',
         component: () => import('../views/ProfileView.vue'),
       },
+      {
+        path: 'tasks',
+        name: 'Tasks',
+        component: () => import('../views/TaskCenter.vue'),
+      },
     ],
   },
 ]

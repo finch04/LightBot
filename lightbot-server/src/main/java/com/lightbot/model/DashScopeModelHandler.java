@@ -39,9 +39,13 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
     @Override
     public ChatModel createChatModel(ModelProvider provider) {
-        DashScopeApi api = DashScopeApi.builder()
-                .apiKey(provider.getApiKey())
-                .build();
+        DashScopeApi.Builder apiBuilder = DashScopeApi.builder()
+                .apiKey(provider.getApiKey());
+        // 支持自定义 baseUrl（如私有化部署或兼容模式端点）
+        if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
+            apiBuilder.baseUrl(provider.getBaseUrl());
+        }
+        DashScopeApi api = apiBuilder.build();
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .build();

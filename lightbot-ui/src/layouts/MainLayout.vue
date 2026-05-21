@@ -74,6 +74,7 @@
             <a-menu @click="handleCommand">
               <a-menu-item key="profile">个人信息</a-menu-item>
               <a-menu-item key="model-providers">模型管理</a-menu-item>
+              <a-menu-item key="tasks">任务中心</a-menu-item>
               <a-menu-divider />
               <a-menu-item key="logout">退出登录</a-menu-item>
             </a-menu>
@@ -145,6 +146,20 @@ async function loadSessions() {
   }
 }
 
+// 标题异步生成完成后刷新侧边栏（重试3次，间隔2秒，覆盖AI生成标题的延迟）
+function refreshSessionsWithRetry() {
+  let count = 0
+  const maxRetries = 3
+  const interval = 2000
+  const timer = setInterval(() => {
+    loadSessions()
+    count++
+    if (count >= maxRetries) clearInterval(timer)
+  }, interval)
+  // 立即刷新一次
+  loadSessions()
+}
+
 function newChat() {
   currentSessionId.value = null
   router.push('/chat')
@@ -199,6 +214,8 @@ function handleCommand({ key }) {
     router.push('/profile')
   } else if (key === 'model-providers') {
     router.push('/model-providers')
+  } else if (key === 'tasks') {
+    router.push('/tasks')
   }
 }
 
@@ -207,12 +224,12 @@ onMounted(() => {
     userStore.fetchUser().catch(() => router.push('/login'))
   }
   loadSessions()
-  // 监听对话标题更新事件（异步生成完成后刷新侧边栏）
-  window.addEventListener('session-title-updated', loadSessions)
+  // 监听对话标题更新事件（异步生成完成后刷新侧边栏，带重试）
+  window.addEventListener('session-title-updated', refreshSessionsWithRetry)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('session-title-updated', loadSessions)
+  window.removeEventListener('session-title-updated', refreshSessionsWithRetry)
 })
 
 watch(() => route.path, (path) => {

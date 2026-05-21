@@ -328,6 +328,8 @@ async function onProviderChange(providerId) {
 
 function restoreDefaults() {
   for (const field of configFields.value) {
+    // 恢复默认不切换模型
+    if (field.key === 'modelId') continue
     if (field.defaultValue !== undefined) {
       agentConfig[field.key] = field.defaultValue
     }

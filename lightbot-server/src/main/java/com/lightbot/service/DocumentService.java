@@ -3,9 +3,11 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.DocumentDownloadVO;
 import com.lightbot.entity.Document;
+import com.lightbot.entity.Task;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.function.BiConsumer;
 
 /**
  * 文档服务接口
@@ -36,12 +38,22 @@ public interface DocumentService extends IService<Document> {
     List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled);
 
     /**
-     * 入库：分块 + 向量化
+     * 入库：创建任务并推入队列
      *
      * @param documentId   文档ID
      * @param embeddingJson 入库配置JSON（chunkStrategy/chunkSize/chunkOverlap/chunkDelimiter）
+     * @return 创建的任务
      */
-    void ingestDocument(Long documentId, String embeddingJson);
+    Task ingestDocument(Long documentId, String embeddingJson);
+
+    /**
+     * 同步执行文档入库（分块 + 向量化），由任务消费者调用
+     *
+     * @param documentId    文档ID
+     * @param embeddingJson 入库配置JSON
+     * @param progressCallback 进度回调 (progress 0-100, message)
+     */
+    void processDocumentWithProgress(Long documentId, String embeddingJson, BiConsumer<Integer, String> progressCallback);
 
     /**
      * 预览分块结果（不入库）

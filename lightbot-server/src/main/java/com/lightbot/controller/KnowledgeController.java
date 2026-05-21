@@ -8,6 +8,7 @@ import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.KnowledgeMemberVO;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
+import com.lightbot.entity.Task;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -81,8 +82,8 @@ public class KnowledgeController {
     @PostMapping("/{id}/members")
     public Result<Void> addMember(@PathVariable Long id,
                                    @RequestParam Long userId,
-                                   @RequestParam(defaultValue = "viewer") KnowledgeRole role) {
-        knowledgeMemberService.addMember(id, userId, role);
+                                   @RequestParam(defaultValue = "viewer") String role) {
+        knowledgeMemberService.addMember(id, userId, KnowledgeRole.fromValue(role));
         return Result.ok();
     }
 
@@ -90,8 +91,8 @@ public class KnowledgeController {
     @PutMapping("/{id}/members/{userId}")
     public Result<Void> updateMemberRole(@PathVariable Long id,
                                           @PathVariable Long userId,
-                                          @RequestParam KnowledgeRole role) {
-        knowledgeMemberService.updateMemberRole(id, userId, role);
+                                          @RequestParam String role) {
+        knowledgeMemberService.updateMemberRole(id, userId, KnowledgeRole.fromValue(role));
         return Result.ok();
     }
 
@@ -153,11 +154,10 @@ public class KnowledgeController {
 
     @Operation(summary = "文档入库：分块+向量化（需要DEVELOPER及以上权限）")
     @PostMapping("/documents/{docId}/ingest")
-    public Result<Void> ingestDocument(@PathVariable Long docId,
+    public Result<Task> ingestDocument(@PathVariable Long docId,
                                         @RequestBody @jakarta.validation.Valid IngestRequest request) throws Exception {
         String embeddingJson = objectMapper.writeValueAsString(request);
-        documentService.ingestDocument(docId, embeddingJson);
-        return Result.ok();
+        return Result.ok(documentService.ingestDocument(docId, embeddingJson));
     }
 
     @Operation(summary = "预览分块结果（不入库）")

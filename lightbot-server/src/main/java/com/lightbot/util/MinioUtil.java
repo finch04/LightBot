@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -148,12 +149,29 @@ public class MinioUtil {
      * @return 预签名URL
      */
     public String getPresignedUrl(String filePath) {
+        return getPresignedUrl(filePath, null);
+    }
+
+    /**
+     * 获取文件预签名URL（7天有效，可指定Content-Type）
+     *
+     * @param filePath    文件路径
+     * @param contentType 文件MIME类型，为null时不覆盖
+     * @return 预签名URL
+     */
+    public String getPresignedUrl(String filePath, String contentType) {
         try {
+            Map<String, String> extraParams = new java.util.HashMap<>();
+            extraParams.put("response-content-disposition", "inline");
+            if (contentType != null && !contentType.isBlank()) {
+                extraParams.put("response-content-type", contentType);
+            }
             return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.GET)
                     .bucket(bucket)
                     .object(filePath)
                     .expiry(7, TimeUnit.DAYS)
+                    .extraQueryParams(extraParams)
                     .build());
         } catch (Exception e) {
             log.error("[MinIO] 获取预签名URL失败, path={}", filePath, e);
