@@ -37,14 +37,14 @@
           <div class="message-content-wrapper">
             <!-- 流式阶段：显示原始文本 + 闪烁光标 -->
             <div v-if="msg._streaming" class="message-content streaming-content">
-              <span class="streaming-text">{{ msg.content }}</span><span class="typing-cursor">▊</span>
+              <span class="streaming-text">{{ msg.content }}</span><span class="typing-cursor">|</span>
             </div>
             <!-- 流式结束后：渲染 Markdown -->
             <div v-else class="message-content" v-html="renderMarkdown(msg.content)" />
-            <!-- 复制按钮（仅AI消息） -->
+            <!-- 复制按钮（所有消息） -->
             <a-tooltip :title="msg._copied ? '已复制' : '复制'">
               <button
-                v-if="msg.role === 'assistant' && msg.content"
+                v-if="msg.content"
                 class="btn-copy"
                 :class="{ copied: msg._copied }"
                 @click="copyMessage(msg)"
@@ -54,16 +54,61 @@
               </button>
             </a-tooltip>
           </div>
+          <!-- RAG引用列表（从消息metadata中解析） -->
+          <div v-if="msg.role === 'assistant' && getMsgRagRefs(msg).length > 0 && !msg._streaming" class="rag-references">
+            <div class="rag-header">
+              <FileTextOutlined />
+              <span>参考文献 ({{ getMsgRagRefs(msg).length }})</span>
+            </div>
+            <div class="rag-list">
+              <div v-for="(ref, ri) in getMsgRagRefs(msg)" :key="ri" class="rag-item">
+                <div class="rag-item-header" @click="toggleReference(msg, ri)">
+                  <RightOutlined :class="{ expanded: isReferenceExpanded(msg, ri) }" />
+                  <span class="rag-doc-name">{{ ref.documentName }}</span>
+                  <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
+                </div>
+                <div v-if="isReferenceExpanded(msg, ri)" class="rag-item-content">
+                  {{ ref.contentPreview }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 耗时显示（仅最后一条AI消息且流式结束后显示） -->
+          <div v-if="msg.role === 'assistant' && i === messages.length - 1 && !msg._streaming && lastReplyElapsed !== null" class="reply-elapsed">
+            {{ formatElapsed(lastReplyElapsed) }}
+          </div>
         </div>
       </div>
 
-      <!-- 加载中（等待第一个 chunk） -->
+      <!-- 加载中（等待第一个 chunk）- 显示AI头像和加载动画 -->
       <div v-if="loading && !streaming" class="message assistant">
-        <div class="message-avatar"><span class="bot-avatar">LB</span></div>
+        <div class="message-avatar">
+          <img v-if="currentAgent?.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
+          <span v-else class="bot-avatar">LB</span>
+        </div>
         <div class="message-body">
           <div class="message-meta">LightBot</div>
-          <div class="message-content">
-            <span class="typing-cursor">|</span>
+          <div class="message-content status-content">
+            <div class="status-loading">
+              <span class="status-spinner"></span>
+              <span class="status-text">{{ currentStatus || '正在思考...' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 流式输出中但还没有内容时，也显示加载动画 -->
+      <div v-if="loading && streaming && !hasStreamContent" class="message assistant">
+        <div class="message-avatar">
+          <img v-if="currentAgent?.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
+          <span v-else class="bot-avatar">LB</span>
+        </div>
+        <div class="message-body">
+          <div class="message-meta">LightBot</div>
+          <div class="message-content status-content">
+            <div class="status-loading">
+              <span class="status-spinner"></span>
+              <span class="status-text">{{ currentStatus || '正在思考...' }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -125,7 +170,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent } from '../api/agent'
@@ -146,6 +191,11 @@ const selectedAgentId = ref(null)
 const skipNextWatch = ref(false)
 const loadingHistory = ref(false)
 const currentAgent = ref(null)
+const currentStatus = ref('')
+const lastReplyElapsed = ref(null)
+const hasStreamContent = ref(false)
+// 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
+const expandedRefsMap = ref(new Map())
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -219,6 +269,43 @@ function handleAgentSelect({ key }) {
   loadCurrentAgent(key)
 }
 
+/**
+ * 从消息metadata中解析RAG引用
+ */
+function getMsgRagRefs(msg) {
+  if (!msg.metadata) return []
+  try {
+    const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata
+    return metadata.ragReferences || []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 判断某个引用是否展开
+ */
+function isReferenceExpanded(msg, index) {
+  const msgIndex = messages.value.indexOf(msg)
+  const key = `${msgIndex}-${index}`
+  return expandedRefsMap.value.has(key)
+}
+
+/**
+ * 切换引用展开状态
+ */
+function toggleReference(msg, index) {
+  const msgIndex = messages.value.indexOf(msg)
+  const key = `${msgIndex}-${index}`
+  const newMap = new Map(expandedRefsMap.value)
+  if (newMap.has(key)) {
+    newMap.delete(key)
+  } else {
+    newMap.set(key, true)
+  }
+  expandedRefsMap.value = newMap
+}
+
 async function loadHistory() {
   // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
   if (streaming.value) return
@@ -239,6 +326,7 @@ async function loadHistory() {
     messages.value = (msgRes.data || []).map(m => ({
       role: m.role?.code || m.role,
       content: m.content,
+      metadata: m.metadata,
     }))
 
     // 从会话中恢复 agentId
@@ -277,6 +365,10 @@ async function sendMessage() {
   input.value = ''
   loading.value = true
   streaming.value = true
+  hasStreamContent.value = false
+  lastReplyElapsed.value = null
+  currentStatus.value = '正在思考...'
+  const sendStartTime = Date.now()
   autoResize()
   scrollToBottom()
 
@@ -286,10 +378,11 @@ async function sendMessage() {
 
   try {
     let sid = sessionId.value
+    const currentAgentId = selectedAgentId.value
 
     // 新对话：先创建会话，再发送消息
     if (!sid) {
-      const res = await createSession(selectedAgentId.value || undefined)
+      const res = await createSession(currentAgentId || undefined)
       sid = res.data.id
       // 更新 URL 为 /chat/{sessionId}，跳过 watcher 避免重新加载消息
       skipNextWatch.value = true
@@ -297,20 +390,41 @@ async function sendMessage() {
     }
 
     await chatStream(
-      { message: text, sessionId: sid, agentId: selectedAgentId.value || undefined },
+      { message: text, sessionId: sid, agentId: currentAgentId || undefined },
+      // onChunk: 文本内容
       (chunk) => {
         if (!pushed) {
           assistantMsg = { role: 'assistant', content: '', _streaming: true }
           messages.value.push(assistantMsg)
           pushed = true
+          hasStreamContent.value = true
         }
         assistantMsg.content += chunk
         scrollToBottom()
       },
+      // onStatus: 状态消息
+      (status) => {
+        currentStatus.value = status
+        scrollToBottom()
+      },
+      // onMetadata: metadata消息（包含RAG引用等）
+      (metadataStr) => {
+        if (assistantMsg) {
+          try {
+            assistantMsg.metadata = JSON.parse(metadataStr)
+          } catch (e) {
+            console.warn('解析metadata失败:', e)
+          }
+        }
+      },
+      // onDone: 完成
       () => {
         if (assistantMsg) assistantMsg._streaming = false
         loading.value = false
         streaming.value = false
+        hasStreamContent.value = false
+        currentStatus.value = ''
+        lastReplyElapsed.value = Date.now() - sendStartTime
         // 通知侧边栏刷新会话标题（异步生成，侧边栏会重试刷新）
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('session-title-updated'))
@@ -326,6 +440,8 @@ async function sendMessage() {
     assistantMsg._streaming = false
     loading.value = false
     streaming.value = false
+    hasStreamContent.value = false
+    currentStatus.value = ''
   }
 }
 
@@ -334,6 +450,11 @@ function copyMessage(msg) {
     msg._copied = true
     setTimeout(() => { msg._copied = false }, 2000)
   })
+}
+
+function formatElapsed(ms) {
+  if (ms < 1000) return `耗时 ${ms}ms`
+  return `耗时 ${(ms / 1000).toFixed(1)}s`
 }
 
 function scrollToBottom() {
@@ -348,12 +469,16 @@ async function loadAgents() {
     const res = await getAgents({ pageNum: 1, pageSize: 100 })
     agents.value = res.data.records || []
 
-    // 新对话且未选中Agent时，自动选中默认Agent
-    if (!sessionId.value && !selectedAgentId.value) {
+    // 新对话时，自动选中默认Agent
+    if (!sessionId.value) {
       const defaultAgent = agents.value.find(a => a.isDefault)
       if (defaultAgent) {
         selectedAgentId.value = String(defaultAgent.id)
         loadCurrentAgent(defaultAgent.id)
+      } else if (agents.value.length > 0) {
+        // 没有默认Agent时，选中第一个
+        selectedAgentId.value = String(agents.value[0].id)
+        loadCurrentAgent(agents.value[0].id)
       }
     }
   } catch (e) {
@@ -383,6 +508,8 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
   }
   // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
   if (streaming.value) return
+  // 切换对话时清空展开状态
+  expandedRefsMap.value = new Map()
   loadHistory()
 })
 
@@ -789,5 +916,119 @@ watch(selectedAgentId, (newId) => {
   color: var(--primary-color, #6366f1);
   font-weight: bold;
   margin-left: 1px;
+}
+
+/* RAG 引用样式 */
+.rag-references {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e4e4e7;
+}
+.rag-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #52525b;
+  margin-bottom: 8px;
+}
+.rag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rag-item {
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e4e4e7;
+  overflow: hidden;
+}
+.rag-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.rag-item-header:hover {
+  background: #f4f4f5;
+}
+.rag-item-header .anticon {
+  font-size: 10px;
+  color: #71717a;
+  transition: transform 0.2s;
+}
+.rag-item-header .anticon.expanded {
+  transform: rotate(90deg);
+}
+.rag-doc-name {
+  flex: 1;
+  font-size: 13px;
+  color: #3f3f46;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rag-score {
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 500;
+}
+.rag-item-content {
+  padding: 12px;
+  background: #f9fafb;
+  border-top: 1px solid #e4e4e7;
+  font-size: 12px;
+  color: #71717a;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* 状态加载样式 */
+.status-content {
+  display: flex;
+  align-items: center;
+}
+.status-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f4f4f5;
+  border-radius: 12px;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.status-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e4e4e7;
+  border-top-color: #0070f3;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.status-text {
+  font-size: 13px;
+  color: #52525b;
+}
+
+/* 耗时显示 */
+.reply-elapsed {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #a1a1aa;
 }
 </style>

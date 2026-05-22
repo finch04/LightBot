@@ -30,6 +30,7 @@ public enum ErrorCode {
 
     // ========== Agent模块 ==========
     AGENT_NOT_FOUND(30000, "Agent不存在", HttpStatus.BAD_REQUEST),
+    AGENT_KNOWLEDGE_LIMIT(30003, "每个Agent最多绑定3个知识库", HttpStatus.BAD_REQUEST),
     AI_NO_PROVIDER(30001, "未配置模型提供商，请先添加一个模型提供商", HttpStatus.BAD_REQUEST),
     AI_GENERATE_FAILED(30002, "AI生成失败，请重试", HttpStatus.INTERNAL_SERVER_ERROR),
 

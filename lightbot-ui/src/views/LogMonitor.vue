@@ -6,12 +6,14 @@
         <p class="page-desc">实时查看系统日志，支持按级别过滤</p>
       </div>
       <div class="header-actions">
-        <div class="connection-status" :class="{ connected: sseConnected }">
+        <div class="connection-status" :class="{ connected: sseConnected, connecting: connecting }">
           <span class="status-dot"></span>
-          {{ sseConnected ? '已连接' : '未连接' }}
+          {{ sseConnected ? '已连接' : connecting ? '连接中...' : '未连接' }}
         </div>
-        <button v-if="!sseConnected" class="btn-primary" @click="connectSSE">
-          <LinkOutlined /> 连接
+        <button v-if="!sseConnected" class="btn-primary" @click="connectSSE" :disabled="connecting">
+          <LoadingOutlined v-if="connecting" :spin="true" />
+          <LinkOutlined v-else />
+          {{ connecting ? '连接中' : '连接' }}
         </button>
         <button v-else class="btn-cancel" @click="disconnectSSE">
           <DisconnectOutlined /> 断开
@@ -110,7 +112,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { LinkOutlined, DisconnectOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { LinkOutlined, DisconnectOutlined, SearchOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import { getRecentLogs } from '../api/log'
 
 const levels = [
@@ -124,6 +126,7 @@ const logs = ref([])
 const activeLevels = ref(new Set(['INFO', 'DEBUG', 'WARN', 'ERROR']))
 const searchText = ref('')
 const sseConnected = ref(false)
+const connecting = ref(false)
 const logBodyRef = ref(null)
 const detailVisible = ref(false)
 const detailLog = ref(null)
@@ -185,7 +188,9 @@ async function loadHistory() {
 }
 
 function connectSSE() {
-  if (eventSource) return
+  if (eventSource || connecting.value) return
+
+  connecting.value = true
   const token = localStorage.getItem('token') || ''
   eventSource = new EventSource(`/api/logs/stream?token=${encodeURIComponent(token)}`)
 
@@ -208,15 +213,17 @@ function connectSSE() {
 
   eventSource.onopen = () => {
     sseConnected.value = true
+    connecting.value = false
   }
 
   eventSource.onerror = () => {
     sseConnected.value = false
+    connecting.value = false
     eventSource?.close()
     eventSource = null
     // 自动重连（延迟2秒避免频繁重试）
     setTimeout(() => {
-      if (!eventSource) connectSSE()
+      if (!eventSource && !connecting.value) connectSSE()
     }, 2000)
   }
 }
@@ -283,6 +290,9 @@ onUnmounted(() => {
 .connection-status.connected {
   color: #10b981;
 }
+.connection-status.connecting {
+  color: #f59e0b;
+}
 .status-dot {
   width: 8px;
   height: 8px;
@@ -291,6 +301,14 @@ onUnmounted(() => {
 }
 .connection-status.connected .status-dot {
   background: #10b981;
+}
+.connection-status.connecting .status-dot {
+  background: #f59e0b;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .btn-primary {

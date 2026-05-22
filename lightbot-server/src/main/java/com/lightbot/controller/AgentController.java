@@ -1,8 +1,10 @@
 package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.entity.Agent;
+import com.lightbot.enums.ErrorCode;
 import com.lightbot.service.AgentKnowledgeService;
 import com.lightbot.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -67,6 +69,9 @@ public class AgentController {
     public Result<Void> updateKnowledgeBindings(
             @PathVariable Long id,
             @RequestBody List<Long> knowledgeIds) {
+        if (knowledgeIds != null && knowledgeIds.size() > 3) {
+            throw new BizException(ErrorCode.AGENT_KNOWLEDGE_LIMIT);
+        }
         agentKnowledgeService.updateKnowledgeBindings(id, knowledgeIds);
         return Result.ok();
     }

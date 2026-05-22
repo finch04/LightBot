@@ -4,7 +4,7 @@ export function chat(data) {
   return request.post('/chat', data)
 }
 
-export async function chatStream(data, onChunk, onDone) {
+export async function chatStream(data, onChunk, onStatus, onMetadata, onDone) {
   const token = localStorage.getItem('token')
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
@@ -28,7 +28,7 @@ export async function chatStream(data, onChunk, onDone) {
     if (done) {
       // 处理 buffer 中残留的数据
       if (buffer.trim()) {
-        processSseLines(buffer, onChunk)
+        processSseLines(buffer, onChunk, onStatus, onMetadata)
       }
       onDone?.()
       break
@@ -39,18 +39,31 @@ export async function chatStream(data, onChunk, onDone) {
     if (lastNewline === -1) continue
     const complete = buffer.substring(0, lastNewline)
     buffer = buffer.substring(lastNewline + 1)
-    processSseLines(complete, onChunk)
+    processSseLines(complete, onChunk, onStatus, onMetadata)
   }
 }
 
-function processSseLines(text, onChunk) {
+function processSseLines(text, onChunk, onStatus, onMetadata) {
   const lines = text.split('\n')
   for (const line of lines) {
     if (line.startsWith('data:')) {
       const content = line.substring(5)
       if (content && content !== '[DONE]') {
-        onChunk?.(content)
+        // 判断消息类型
+        if (content.startsWith('[STATUS]')) {
+          onStatus?.(content.substring(8)) // 移除 [STATUS] 前缀
+        } else if (content.startsWith('[METADATA]')) {
+          onMetadata?.(content.substring(10)) // 移除 [METADATA] 前缀
+        } else {
+          onChunk?.(content)
+        }
       }
     }
   }
+}
+
+export function getRagReferences(sessionId, agentId, question) {
+  return request.get('/chat/rag-references', {
+    params: { sessionId, agentId, question }
+  })
 }

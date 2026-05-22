@@ -151,7 +151,7 @@
       <div class="panel full-width">
         <div class="panel-header">
           <h3>知识库绑定</h3>
-          <span class="panel-tip">绑定知识库后，Agent 可基于知识库内容回答问题</span>
+          <span class="panel-tip">每个 Agent 最多绑定 3 个知识库，绑定后可基于知识库内容回答问题</span>
         </div>
         <div class="knowledge-bind">
           <div class="selected-knowledge">
@@ -214,7 +214,6 @@ import { getAgentDetail, updateAgent, updateAgentKnowledge, generateAgentPrompt,
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
-
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
@@ -376,7 +375,7 @@ async function loadAgent() {
     await loadProviders()
     await Promise.all([loadConfigFields(agentConfig.providerId), loadModels(agentConfig.providerId)])
 
-    selectedKnowledgeIds.value = new Set(knowledgeIds || [])
+    selectedKnowledgeIds.value = new Set((knowledgeIds || []).map(String))
   } catch (e) {
     // interceptor已处理错误提示
   }
@@ -396,6 +395,10 @@ function toggleKnowledge(k) {
   if (ids.has(k.id)) {
     ids.delete(k.id)
   } else {
+    if (ids.size >= 3) {
+      message.warning('每个 Agent 最多绑定 3 个知识库')
+      return
+    }
     ids.add(k.id)
   }
   selectedKnowledgeIds.value = ids
@@ -484,6 +487,12 @@ async function handleSave() {
       message.warning('每个推荐问题不超过30字')
       return
     }
+  }
+
+  // 4. 校验知识库数量
+  if (selectedKnowledgeIds.value.size > 3) {
+    message.warning('每个 Agent 最多绑定 3 个知识库')
+    return
   }
 
   saving.value = true

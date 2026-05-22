@@ -119,13 +119,16 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
 
-        // 2. 获取绑定的知识库 ID 列表
+        // 2. 获取绑定的知识库 ID 列表（转为字符串避免前端 Long 精度丢失）
         List<Long> knowledgeIds = agentKnowledgeService.getKnowledgeIds(id);
+        List<String> knowledgeIdStrs = knowledgeIds.stream()
+                .map(String::valueOf)
+                .toList();
 
         // 3. 组装返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("agent", agent);
-        result.put("knowledgeIds", knowledgeIds);
+        result.put("knowledgeIds", knowledgeIdStrs);
         return result;
     }
 

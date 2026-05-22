@@ -310,7 +310,15 @@ watch(() => route.path, (path) => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 2px;
 }
 
 .sidebar-logo {
@@ -374,6 +382,7 @@ watch(() => route.path, (path) => {
 /* 对话历史 */
 .session-section {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
