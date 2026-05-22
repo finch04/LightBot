@@ -4,7 +4,7 @@ export function getTools(params) {
   return request.get('/tools', { params })
 }
 
-export function getToolById(id) {
+export function getTool(id) {
   return request.get(`/tools/${id}`)
 }
 

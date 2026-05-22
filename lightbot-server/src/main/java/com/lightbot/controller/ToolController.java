@@ -43,7 +43,11 @@ public class ToolController {
     public Result<Page<Tool>> list(
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "10") int pageSize,
-            @RequestParam(required = false) String name) {
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String toolType) {
+        if (toolType != null) {
+            return Result.ok(toolService.listTools(pageNum, pageSize, toolType));
+        }
         return Result.ok(toolService.listPage(pageNum, pageSize, name));
     }
 

@@ -8,11 +8,23 @@ import com.lightbot.dto.ToolRequest;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.enums.ToolType;
 import org.springframework.util.StringUtils;
 import com.lightbot.mapper.ToolMapper;
 import com.lightbot.service.ToolService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.method.MethodToolCallback;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Tool 服务实现类
@@ -22,8 +34,11 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         implements ToolService {
+
+    private final ApplicationContext applicationContext;
 
     @Override
     public Tool create(ToolRequest request) {
@@ -80,9 +95,123 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
+    public Page<Tool> listTools(int pageNum, int pageSize, String toolType) {
+        return page(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<Tool>()
+                        .eq(StringUtils.hasText(toolType), Tool::getToolType, toolType)
+                        .orderByDesc(Tool::getCreateTime));
+    }
+
+    @Override
     public void deleteById(Long id) {
-        if (!removeById(id)) {
+        Tool tool = getById(id);
+        if (tool == null) {
             throw new BizException(ErrorCode.TOOL_NOT_FOUND);
         }
+        if (tool.getToolType() == ToolType.BUILTIN) {
+            throw new BizException("内置工具不可删除");
+        }
+        removeById(id);
+    }
+
+    @Override
+    public List<ToolCallback> resolveToolCallbacks(List<String> toolNames) {
+        if (toolNames == null || toolNames.isEmpty()) {
+            return List.of();
+        }
+
+        // 1. 从DB查询工具记录
+        List<Tool> tools = list(new LambdaQueryWrapper<Tool>()
+                .in(Tool::getName, toolNames)
+                .eq(Tool::getStatus, CommonStatus.ACTIVE));
+        if (tools.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 收集所有 @Tool Bean 的 ToolCallback（通过 MethodToolCallbackProvider）
+        List<ToolCallback> allCallbacks = getAllBuiltinToolCallbacks();
+        Set<String> allCallbackNames = allCallbacks.stream()
+                .map(cb -> cb.getToolDefinition().name())
+                .collect(Collectors.toSet());
+
+        // 3. 过滤出 Agent 绑定的工具
+        List<ToolCallback> result = new ArrayList<>();
+        for (Tool tool : tools) {
+            if (allCallbackNames.contains(tool.getName())) {
+                allCallbacks.stream()
+                        .filter(cb -> cb.getToolDefinition().name().equals(tool.getName()))
+                        .findFirst()
+                        .ifPresent(result::add);
+            } else if (tool.getToolType() == ToolType.API) {
+                // API 类型工具：后续扩展 HTTP ToolCallback
+                log.info("[ToolService] API工具暂不支持自动执行: name={}", tool.getName());
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public List<ToolCallback> resolveToolCallbacksByIds(List<Long> toolIds) {
+        if (toolIds == null || toolIds.isEmpty()) {
+            return List.of();
+        }
+
+        // 1. 从DB查询工具记录
+        List<Tool> tools = listByIds(toolIds);
+        if (tools.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 收集所有 @Tool Bean 的 ToolCallback
+        List<ToolCallback> allCallbacks = getAllBuiltinToolCallbacks();
+        Set<String> allCallbackNames = allCallbacks.stream()
+                .map(cb -> cb.getToolDefinition().name())
+                .collect(Collectors.toSet());
+
+        // 3. 过滤出 Agent 绑定的工具
+        List<ToolCallback> result = new ArrayList<>();
+        for (Tool tool : tools) {
+            if (allCallbackNames.contains(tool.getName())) {
+                allCallbacks.stream()
+                        .filter(cb -> cb.getToolDefinition().name().equals(tool.getName()))
+                        .findFirst()
+                        .ifPresent(result::add);
+            } else if (tool.getToolType() == ToolType.API) {
+                log.info("[ToolService] API工具暂不支持自动执行: name={}", tool.getName());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取所有内置 @Tool Bean 的 ToolCallback
+     */
+    private List<ToolCallback> getAllBuiltinToolCallbacks() {
+        try {
+            MethodToolCallbackProvider provider = MethodToolCallbackProvider.builder()
+                    .toolObjects(getAllToolBeans())
+                    .build();
+            return List.of(provider.getToolCallbacks());
+        } catch (Exception e) {
+            log.warn("[ToolService] 获取内置ToolCallback失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 从 Spring 容器获取所有包含 @Tool 注解方法的 Bean
+     */
+    private List<Object> getAllToolBeans() {
+        Map<String, Object> beans = applicationContext.getBeansWithAnnotation(org.springframework.stereotype.Component.class);
+        return beans.values().stream()
+                .filter(bean -> {
+                    for (var method : bean.getClass().getMethods()) {
+                        if (method.isAnnotationPresent(org.springframework.ai.tool.annotation.Tool.class)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                })
+                .toList();
     }
 }

@@ -37,7 +37,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
     private final ObjectMapper objectMapper;
 
     @Override
-    public void execute(Task task) throws Exception {
+    public String execute(Task task) throws Exception {
         JsonNode payload = objectMapper.readTree(task.getPayload());
         Long documentId = payload.get("documentId").asLong();
         String tempPath = payload.get("tempPath").asText();
@@ -46,7 +46,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
         Document doc = documentService.getById(documentId);
         if (doc == null) {
             log.warn("[文档上传执行器] 文档不存在, documentId={}", documentId);
-            return;
+            return "文档不存在, documentId=" + documentId;
         }
 
         log.info("[文档上传执行器] 开始, taskId={}, documentId={}, tempPath={}", task.getId(), documentId, tempPath);
@@ -101,6 +101,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
             }
 
             log.info("[文档上传执行器] 完成, documentId={}", documentId);
+            return String.format("文档上传完成, documentId=%d, markdownPath=%s", documentId, doc.getMarkdownPath());
 
         } catch (Exception e) {
             log.error("[文档上传执行器] 失败, documentId={}", documentId, e);

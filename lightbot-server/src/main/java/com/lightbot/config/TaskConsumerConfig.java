@@ -93,8 +93,8 @@ public class TaskConsumerConfig {
                 }
 
                 try {
-                    executor.execute(task);
-                    taskService.markSuccess(taskId, "执行完成");
+                    String result = executor.execute(task);
+                    taskService.markSuccess(taskId, result);
                 } catch (Exception e) {
                     String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                     taskService.markFailed(taskId, error);

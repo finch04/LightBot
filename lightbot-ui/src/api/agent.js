@@ -51,3 +51,15 @@ export function uploadAgentAvatar(id, file) {
 export function setDefaultAgent(id) {
   return request.put(`/agents/${id}/default`)
 }
+
+export function updateAgentTools(id, toolIds) {
+  return request.put(`/agents/${id}/tools`, toolIds)
+}
+
+export function getAgentToolIds(id) {
+  return request.get(`/agents/${id}/tools`)
+}
+
+export function getAgentToolDetails(id) {
+  return request.get(`/agents/${id}/tools/detail`)
+}

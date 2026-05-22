@@ -85,7 +85,7 @@
           <a-input-number v-model:value="form.sortOrder" :min="0" style="width: 100%" />
         </a-form-item>
         <a-form-item label="扩展配置">
-          <a-textarea v-model:value="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
+          <JsonInput v-model="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
         </a-form-item>
       </a-form>
       <div class="dialog-footer">
@@ -109,6 +109,7 @@ import { message, Modal } from 'ant-design-vue'
 import { getSkillsByAgent, createSkill, updateSkill, deleteSkill } from '../api/skill'
 import { getAgents } from '../api/agent'
 import { getTools } from '../api/tool'
+import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
 const searchText = ref('')

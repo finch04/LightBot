@@ -4,7 +4,7 @@ export function chat(data) {
   return request.post('/chat', data)
 }
 
-export async function chatStream(data, onChunk, onStatus, onMetadata, onDone) {
+export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEvent, onDone }, signal) {
   const token = localStorage.getItem('token')
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
@@ -13,6 +13,7 @@ export async function chatStream(data, onChunk, onStatus, onMetadata, onDone) {
       Authorization: token || '',
     },
     body: JSON.stringify(data),
+    signal,
   })
 
   if (!response.ok) {
@@ -28,7 +29,7 @@ export async function chatStream(data, onChunk, onStatus, onMetadata, onDone) {
     if (done) {
       // 处理 buffer 中残留的数据
       if (buffer.trim()) {
-        processSseLines(buffer, onChunk, onStatus, onMetadata)
+        processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent })
       }
       onDone?.()
       break
@@ -39,11 +40,11 @@ export async function chatStream(data, onChunk, onStatus, onMetadata, onDone) {
     if (lastNewline === -1) continue
     const complete = buffer.substring(0, lastNewline)
     buffer = buffer.substring(lastNewline + 1)
-    processSseLines(complete, onChunk, onStatus, onMetadata)
+    processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent })
   }
 }
 
-function processSseLines(text, onChunk, onStatus, onMetadata) {
+function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent }) {
   const lines = text.split('\n')
   for (const line of lines) {
     if (line.startsWith('data:')) {
@@ -51,7 +52,18 @@ function processSseLines(text, onChunk, onStatus, onMetadata) {
       if (content && content !== '[DONE]') {
         // 判断消息类型
         if (content.startsWith('[STATUS]')) {
-          onStatus?.(content.substring(8)) // 移除 [STATUS] 前缀
+          const statusContent = content.substring(8)
+          // 尝试解析为工具事件 JSON
+          try {
+            const parsed = JSON.parse(statusContent)
+            if (parsed.type === 'tool_call' || parsed.type === 'tool_result') {
+              onToolEvent?.(parsed)
+              continue
+            }
+          } catch {
+            // 不是 JSON，作为普通状态消息处理
+          }
+          onStatus?.(statusContent)
         } else if (content.startsWith('[METADATA]')) {
           onMetadata?.(content.substring(10)) // 移除 [METADATA] 前缀
         } else {

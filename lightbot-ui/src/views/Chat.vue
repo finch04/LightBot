@@ -27,7 +27,7 @@
       <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
         <div class="message-avatar">
           <span v-if="msg.role === 'user'">{{ userInitial }}</span>
-          <img v-else-if="currentAgent?.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
+          <img v-else-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
           <span v-else class="bot-avatar">LB</span>
         </div>
         <div class="message-body">
@@ -35,6 +35,34 @@
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
           <div class="message-content-wrapper">
+            <!-- 工具调用展示 -->
+            <div v-if="msg._toolEvents && msg._toolEvents.length > 0" class="tool-calls-group">
+              <div class="tool-calls-header" @click="msg._toolExpanded = !msg._toolExpanded">
+                <LoadingOutlined v-if="msg._streaming" class="tool-icon spinning" />
+                <CheckCircleOutlined v-else class="tool-icon tool-success" />
+                <span class="tool-calls-title">
+                  调用了 {{ getUniqueToolNames(msg._toolEvents).length }} 个工具
+                </span>
+                <span class="tool-calls-names">
+                  {{ getUniqueToolNames(msg._toolEvents).join(', ') }}
+                </span>
+                <RightOutlined :class="{ expanded: msg._toolExpanded }" class="tool-expand-icon" />
+              </div>
+              <div v-show="msg._toolExpanded" class="tool-calls-list">
+                <div v-for="(evt, ti) in msg._toolEvents" :key="ti" class="tool-call-item">
+                  <div v-if="evt.type === 'tool_call'" class="tool-call-row">
+                    <LoadingOutlined class="tool-icon spinning" />
+                    <span class="tool-name">{{ evt.toolName }}</span>
+                    <span class="tool-args">{{ formatToolArgs(evt.args) }}</span>
+                  </div>
+                  <div v-else-if="evt.type === 'tool_result'" class="tool-result-row">
+                    <CheckCircleOutlined class="tool-icon tool-success" />
+                    <span class="tool-name">{{ evt.toolName }} 完成</span>
+                    <div class="tool-result-content">{{ truncateResult(evt.result) }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <!-- 流式阶段 & 结束后：统一渲染 Markdown -->
             <div class="message-content" v-html="renderMarkdown(msg.content)" />
             <!-- 复制按钮（仅流式结束后显示） -->
@@ -81,7 +109,7 @@
       <!-- 加载中（等待第一个 chunk）- 显示AI头像和加载动画 -->
       <div v-if="loading && !streaming" class="message assistant">
         <div class="message-avatar">
-          <img v-if="currentAgent?.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
+          <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
           <span v-else class="bot-avatar">LB</span>
         </div>
         <div class="message-body">
@@ -97,7 +125,7 @@
       <!-- 流式输出中但还没有内容时，也显示加载动画 -->
       <div v-if="loading && streaming && !hasStreamContent" class="message assistant">
         <div class="message-avatar">
-          <img v-if="currentAgent?.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
+          <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
           <span v-else class="bot-avatar">LB</span>
         </div>
         <div class="message-body">
@@ -120,7 +148,7 @@
           <a-tooltip :title="currentAgent?.name || '选择 Agent'">
             <button class="btn-agent">
               <RobotOutlined v-if="!currentAgent" />
-              <img v-else-if="currentAgent.avatar" :src="`http://localhost:9000/lightbot/${currentAgent.avatar}`" alt="" class="btn-agent-avatar" />
+              <img v-else-if="currentAgent.avatar" :src="currentAgent.avatar" alt="" class="btn-agent-avatar" />
               <span v-else class="btn-agent-initial">{{ currentAgent.name[0] }}</span>
             </button>
           </a-tooltip>
@@ -128,7 +156,7 @@
             <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : []">
               <a-menu-item v-for="a in agents" :key="String(a.id)">
                 <div class="agent-menu-item">
-                  <img v-if="a.avatar" :src="`http://localhost:9000/lightbot/${a.avatar}`" alt="" class="agent-menu-icon" />
+                  <img v-if="a.avatar" :src="a.avatar" alt="" class="agent-menu-icon" />
                   <span v-else class="agent-menu-icon">{{ a.name[0] }}</span>
                   <span>{{ a.name }}</span>
                   <span v-if="a.isDefault" class="agent-default-tag">默认</span>
@@ -149,12 +177,20 @@
           @input="autoResize"
         />
         <button
+          v-if="loading"
+          class="btn-stop"
+          @click="stopGenerating"
+          title="停止生成"
+        >
+          <PauseCircleOutlined />
+        </button>
+        <button
+          v-else
           class="btn-send"
-          :disabled="!input.trim() || loading"
+          :disabled="!input.trim()"
           @click="sendMessage"
         >
-          <SendOutlined v-if="!loading" />
-          <span v-else class="sending-dot">...</span>
+          <SendOutlined />
         </button>
       </div>
       <div class="input-hint">LightBot 可能会犯错，请核实重要信息。</div>
@@ -166,9 +202,10 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
+import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent } from '../api/agent'
@@ -193,6 +230,8 @@ const currentAgent = ref(null)
 const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 const hasStreamContent = ref(false)
+const abortController = ref(null)
+const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
 
@@ -224,24 +263,29 @@ const currentRecommendedQuestions = computed(() => {
   return []
 })
 
-// 配置 marked
-const renderer = new marked.Renderer()
-renderer.link = function ({ href, title, text }) {
-  const titleAttr = title ? ` title="${title}"` : ''
-  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
-}
-
-marked.setOptions({
-  renderer,
-  highlight: (code, lang) => {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang }).value
-    }
-    return hljs.highlightAuto(code).value
-  },
-  breaks: true,
-  gfm: true,
-})
+// 配置 marked (v15 API)
+marked.use(
+  markedHighlight({
+    langPrefix: 'hljs language-',
+    highlight(code, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, { language: lang }).value
+      }
+      return hljs.highlightAuto(code).value
+    },
+  }),
+  {
+    renderer: {
+      link({ href, title, tokens }) {
+        const text = this.parser.parseInline(tokens)
+        const titleAttr = title ? ` title="${title}"` : ''
+        return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+      },
+    },
+    breaks: true,
+    gfm: true,
+  }
+)
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -313,10 +357,12 @@ async function loadHistory() {
     messages.value = []
     selectedAgentId.value = null
     currentAgent.value = null
+    lastReplyElapsed.value = null
     return
   }
   // 切换对话时先清空旧内容，避免旧消息在加载期间残留
   messages.value = []
+  lastReplyElapsed.value = null
   loadingHistory.value = true
   try {
     // 并行加载消息和会话详情
@@ -369,6 +415,7 @@ async function sendMessage() {
   hasStreamContent.value = false
   lastReplyElapsed.value = null
   currentStatus.value = '正在思考...'
+  toolEvents.value = []
   const sendStartTime = Date.now()
   autoResize()
   scrollToBottom()
@@ -376,6 +423,9 @@ async function sendMessage() {
   // 延迟创建 assistant 消息，等第一个 chunk 到达时再 push，避免空头像
   let assistantMsg = null
   let pushed = false
+
+  // 创建 AbortController 用于中断流式请求
+  abortController.value = new AbortController()
 
   try {
     let sid = sessionId.value
@@ -392,53 +442,79 @@ async function sendMessage() {
 
     await chatStream(
       { message: text, sessionId: sid, agentId: currentAgentId || undefined },
-      // onChunk: 文本内容
-      (chunk) => {
-        if (!pushed) {
-          messages.value.push({ role: 'assistant', content: '', _streaming: true })
-          assistantMsg = messages.value[messages.value.length - 1]
-          pushed = true
-          hasStreamContent.value = true
-        }
-        assistantMsg.content += chunk
-        scrollToBottom()
-      },
-      // onStatus: 状态消息
-      (status) => {
-        currentStatus.value = status
-        scrollToBottom()
-      },
-      // onMetadata: metadata消息（包含RAG引用等）
-      (metadataStr) => {
-        if (assistantMsg) {
-          assistantMsg.metadata = safeJsonParse(metadataStr)
-        }
-      },
-      // onDone: 完成
-      () => {
-        if (assistantMsg) assistantMsg._streaming = false
-        loading.value = false
-        streaming.value = false
-        hasStreamContent.value = false
-        currentStatus.value = ''
-        lastReplyElapsed.value = Date.now() - sendStartTime
-        // 通知侧边栏刷新会话标题（异步生成，侧边栏会重试刷新）
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('session-title-updated'))
+      {
+        // onChunk: 文本内容
+        onChunk: (chunk) => {
+          if (!pushed) {
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolEvents: [] })
+            assistantMsg = messages.value[messages.value.length - 1]
+            pushed = true
+            hasStreamContent.value = true
+          }
+          assistantMsg.content += chunk
+          scrollToBottom()
+        },
+        // onStatus: 状态消息
+        onStatus: (status) => {
+          currentStatus.value = status
+          scrollToBottom()
+        },
+        // onToolEvent: 工具调用/结果事件
+        onToolEvent: (event) => {
+          if (!pushed) {
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolEvents: [] })
+            assistantMsg = messages.value[messages.value.length - 1]
+            pushed = true
+          }
+          assistantMsg._toolEvents.push(event)
+          toolEvents.value.push(event)
+          scrollToBottom()
+        },
+        // onMetadata: metadata消息（包含RAG引用等）
+        onMetadata: (metadataStr) => {
+          if (assistantMsg) {
+            assistantMsg.metadata = safeJsonParse(metadataStr)
+          }
+        },
+        // onDone: 完成
+        onDone: () => {
+          if (assistantMsg) assistantMsg._streaming = false
+          loading.value = false
+          streaming.value = false
+          hasStreamContent.value = false
+          currentStatus.value = ''
+          lastReplyElapsed.value = Date.now() - sendStartTime
+          abortController.value = null
+          // 通知侧边栏刷新会话标题（异步生成，侧边栏会重试刷新）
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('session-title-updated'))
         }, 1000)
-      }
+        },
+      },
+      abortController.value?.signal
     )
   } catch (e) {
-    if (!assistantMsg) {
-      messages.value.push({ role: 'assistant', content: '' })
-      assistantMsg = messages.value[messages.value.length - 1]
+    // 用户主动中断
+    if (e.name === 'AbortError') {
+      if (!assistantMsg) {
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolEvents: [] })
+        assistantMsg = messages.value[messages.value.length - 1]
+      }
+      assistantMsg.content += '\n\n*AI 输出已终止*'
+      assistantMsg._streaming = false
+    } else {
+      if (!assistantMsg) {
+        messages.value.push({ role: 'assistant', content: '' })
+        assistantMsg = messages.value[messages.value.length - 1]
+      }
+      assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
+      assistantMsg._streaming = false
     }
-    assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
-    assistantMsg._streaming = false
     loading.value = false
     streaming.value = false
     hasStreamContent.value = false
     currentStatus.value = ''
+    abortController.value = null
   }
 }
 
@@ -447,6 +523,36 @@ function copyMessage(msg) {
     msg._copied = true
     setTimeout(() => { msg._copied = false }, 2000)
   })
+}
+
+function stopGenerating() {
+  if (abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
+  }
+}
+
+function getUniqueToolNames(events) {
+  const names = new Set()
+  events.forEach(e => { if (e.toolName) names.add(e.toolName) })
+  return [...names]
+}
+
+function formatToolArgs(args) {
+  if (!args) return ''
+  try {
+    const obj = JSON.parse(args)
+    const entries = Object.entries(obj)
+    if (entries.length === 0) return ''
+    return entries.map(([k, v]) => `${k}=${typeof v === 'string' && v.length > 50 ? v.substring(0, 50) + '...' : v}`).join(', ')
+  } catch {
+    return args.length > 80 ? args.substring(0, 80) + '...' : args
+  }
+}
+
+function truncateResult(result) {
+  if (!result) return ''
+  return result.length > 300 ? result.substring(0, 300) + '...' : result
 }
 
 function formatElapsed(ms) {
@@ -505,8 +611,11 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
     skipNextWatch.value = false
     return
   }
-  // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
-  if (streaming.value) return
+  // 流式对话进行中，中断当前流
+  if (streaming.value && abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
+  }
   // 切换对话时清空展开状态
   expandedRefsMap.value = new Map()
   loadHistory()
@@ -913,6 +1022,118 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-send:disabled {
   background: #d4d4d8;
   cursor: not-allowed;
+}
+.btn-stop {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: #ef4444;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  font-size: 18px;
+}
+.btn-stop:hover {
+  background: #dc2626;
+}
+
+/* 工具调用样式 */
+.tool-calls-group {
+  margin-bottom: 8px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tool-calls-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: #52525b;
+  transition: background 0.15s;
+}
+.tool-calls-header:hover {
+  background: #f4f4f5;
+}
+.tool-calls-title {
+  font-weight: 500;
+}
+.tool-calls-names {
+  color: #a1a1aa;
+  margin-left: 4px;
+}
+.tool-expand-icon {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.tool-expand-icon.expanded {
+  transform: rotate(90deg);
+}
+.tool-calls-list {
+  border-top: 1px solid #e4e4e7;
+}
+.tool-call-item {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f4f4f5;
+}
+.tool-call-item:last-child {
+  border-bottom: none;
+}
+.tool-call-row,
+.tool-result-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+}
+.tool-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.tool-icon.tool-success {
+  color: #10b981;
+}
+.tool-name {
+  font-weight: 500;
+  color: #171717;
+  flex-shrink: 0;
+}
+.tool-args {
+  color: #71717a;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.tool-result-content {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #52525b;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .input-hint {
   text-align: center;

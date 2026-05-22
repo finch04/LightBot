@@ -112,13 +112,14 @@ minio:
   secret-key: minioadmin
   bucket: lightbot
 
+# 系统配置
+lightbot:
 # ========================================
 # OCR 配置（RapidOCR）
 # enabled：是否启用 OCR 功能
 # model-path：模型存放路径（仅用于健康检查展示，实际使用内置 PP-OCRv4 模型）
 # auto-download：是否自动下载（内置模型无需下载，此配置预留）
 # ========================================
-lightbot:
   ocr:
     enabled: false
     model-path: D:\models\RapidOCR\PP-OCRv4
@@ -126,6 +127,22 @@ lightbot:
   task:
     consumer:
       pool-size: 2
+# ========================================
+# 内置工具 API Key 配置
+# ========================================
+  # Tavily 联网搜索 API Key
+  # 获取地址：https://tavily.com → API Keys
+  # 环境变量：TAVILY_API_KEY
+  tavily:
+    api-key: ${TAVILY_API_KEY:}
+  # SiliconFlow AI 生图 API Key
+  # 获取地址：https://siliconflow.cn → API Keys
+  # 环境变量：SILICONFLOW_API_KEY
+  siliconflow:
+    api-key: ${SILICONFLOW_API_KEY:}
+
+
+
 
 # ========================================
 # SpringDoc / Swagger 配置
@@ -137,3 +154,5 @@ springdoc:
     tags-sorter: alpha
   api-docs:
     path: /v3/api-docs
+
+

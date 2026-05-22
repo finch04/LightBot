@@ -27,7 +27,7 @@
       <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/agents/${a.id}`)">
         <div class="card-top">
           <div class="card-icon" :class="{ 'has-avatar': a.avatar }">
-            <img v-if="a.avatar" :src="`http://localhost:9000/lightbot/${a.avatar}`" alt="" class="card-avatar-img" @error="a.avatar = ''" />
+            <img v-if="a.avatar" :src="a.avatar" alt="" class="card-avatar-img" @error="a.avatar = ''" />
             <span v-else>{{ (a.name || 'A')[0] }}</span>
           </div>
           <div class="card-info">

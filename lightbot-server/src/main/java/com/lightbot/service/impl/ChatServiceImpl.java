@@ -7,6 +7,7 @@ import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
 import com.lightbot.entity.Agent;
+import com.lightbot.tool.builtintool.QueryKnowledgeTool;
 import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.Message;
@@ -22,8 +23,13 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
@@ -57,17 +63,10 @@ public class ChatServiceImpl implements ChatService {
     private final KnowledgeService knowledgeService;
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
+    private final ToolService toolService;
     private final TaskExecutor taskExecutor;
 
     private static final String DEFAULT_SYSTEM_PROMPT = "你是 LightBot 智能助手，请用中文回答用户问题。回答应简洁准确，遇到不确定的信息请如实告知。";
-
-    private static final String RAG_CONTEXT_TEMPLATE = """
-            请基于以下参考资料回答用户的问题。
-            如果参考资料中没有相关信息，请如实告知用户。
-
-            参考资料：
-            %s
-            """;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -99,9 +98,9 @@ public class ChatServiceImpl implements ChatService {
         // 4. 构建消息列表（含系统提示词 + RAG上下文 + 历史消息）
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(sessionId, request.getMessage(), agent);
 
-        // 5. 通过 ModelFactory 获取 ChatModel 和 ChatOptions
+        // 5. 通过 ModelFactory 获取 ChatModel，构建 ChatOptions（含工具）
         ChatModel chatModel = modelFactory.getChatModel(providerId);
-        ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
+        ChatOptions options = buildChatOptionsWithTools(providerId, configMap, agent);
 
         log.info("[Chat] 用户消息: sessionId={}, agentId={}, message={}", sessionId,
                 agent != null ? agent.getId() : null, request.getMessage());
@@ -142,17 +141,72 @@ public class ChatServiceImpl implements ChatService {
         // 4. 先保存用户消息
         saveMessage(sessionId, MessageRole.USER, request.getMessage());
 
-        // 5. 构建消息列表（含RAG检索）
-        long ragStart = System.currentTimeMillis();
+        // 5. 构建消息列表（不含RAG，由工具按需检索）
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(sessionId, request.getMessage(), agent);
-        long ragElapsed = System.currentTimeMillis() - ragStart;
 
-        // 5.1 获取RAG引用信息（用于保存到metadata）
+        // 6. 通过 ModelFactory 获取 ChatModel，构建 ChatOptions（含工具）
+        ChatModel chatModel = modelFactory.getChatModel(providerId);
+        ToolCallingChatOptions toolOptions = buildChatOptionsWithTools(providerId, configMap, agent);
+
+        // 7. 手动工具调用循环：禁用Spring AI内部工具执行，自己控制工具调用流程
+        List<String> toolStatusEvents = new ArrayList<>();
+        Map<String, ToolCallback> toolCallbackMap = buildToolCallbackMap(toolOptions);
+
+        if (!toolCallbackMap.isEmpty()) {
+            toolOptions.setInternalToolExecutionEnabled(false);
+            int maxIterations = 10;
+
+            for (int i = 0; i < maxIterations; i++) {
+                ChatResponse toolResponse = chatModel.call(new Prompt(messages, toolOptions));
+                Generation gen = toolResponse.getResult();
+                if (gen == null) break;
+
+                AssistantMessage assistantMsg = gen.getOutput();
+                if (assistantMsg == null) break;
+
+                // 无工具调用 → 退出循环
+                if (!assistantMsg.hasToolCalls()) break;
+
+                // 添加助手消息到历史
+                messages.add(assistantMsg);
+
+                // 执行每个工具调用
+                for (AssistantMessage.ToolCall toolCall : assistantMsg.getToolCalls()) {
+                    String toolName = toolCall.name();
+                    String toolArgs = toolCall.arguments();
+
+                    log.info("[Chat] 工具调用: name={}, args={}", toolName, toolArgs);
+                    toolStatusEvents.add(generateToolCallEvent(toolName, toolArgs));
+
+                    String toolResult;
+                    ToolCallback callback = toolCallbackMap.get(toolName);
+                    if (callback != null) {
+                        try {
+                            toolResult = callback.call(toolArgs, new ToolContext(Map.of("agentId", agent.getId())));
+                        } catch (Exception e) {
+                            log.error("[Chat] 工具执行失败: name={}, error={}", toolName, e.getMessage());
+                            toolResult = "工具执行失败: " + e.getMessage();
+                        }
+                    } else {
+                        toolResult = "工具不存在: " + toolName;
+                    }
+
+                    log.info("[Chat] 工具结果: name={}, resultLength={}", toolName, toolResult.length());
+                    toolStatusEvents.add(generateToolResultEvent(toolName, toolResult));
+
+                    // 添加工具结果到消息列表
+                    messages.add(org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                            .responses(List.of(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                                    toolCall.id(), toolName, toolResult)))
+                            .build());
+                }
+            }
+        }
+
+        // 8. 提取工具执行期间的RAG引用（通过ThreadLocal由QueryKnowledgeTool捕获）
         String ragMetadata = null;
-        int ragResultCount = 0;
-        if (agent != null) {
-            List<Map<String, Object>> ragResults = getRagSearchResults(agent.getId(), request.getMessage());
-            ragResultCount = ragResults.size();
+        try {
+            List<Map<String, Object>> ragResults = QueryKnowledgeTool.getSearchResults();
             if (!ragResults.isEmpty()) {
                 List<RagReferenceVO> refs = ragResults.stream().map(row -> {
                     RagReferenceVO vo = new RagReferenceVO();
@@ -177,29 +231,23 @@ public class ChatServiceImpl implements ChatService {
                     log.warn("[Chat] 序列化RAG引用失败: {}", e.getMessage());
                 }
             }
+        } finally {
+            QueryKnowledgeTool.clearSearchResults();
         }
 
-        // 6. 通过 ModelFactory 获取 ChatModel 和 ChatOptions
-        ChatModel chatModel = modelFactory.getChatModel(providerId);
-        ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
+        // 9. 发送状态：开始流式输出
+        String ragStatus = "正在思考...";
 
-        // 7. 发送状态：RAG检索完成，开始思考
-        String ragStatus;
-        if (agent == null || agentService.getKnowledgeIds(agent.getId()).isEmpty()) {
-            ragStatus = "正在思考...";
-        } else if (ragResultCount > 0) {
-            ragStatus = String.format("知识库检索完成（%dms），已找到%d条相关内容，正在思考...", ragElapsed, ragResultCount);
-        } else {
-            ragStatus = "正在思考...";
-        }
-
-        // 8. 流式调用模型，收集完整回复后持久化
-        Flux<ChatResponse> stream = chatModel.stream(new Prompt(messages, options));
+        // 10. 流式调用模型，收集完整回复后持久化
+        Flux<ChatResponse> stream = chatModel.stream(new Prompt(messages, toolOptions));
 
         StringBuilder fullReply = new StringBuilder();
         String finalRagMetadata = ragMetadata;
+        List<String> finalToolEvents = toolStatusEvents;
         return Flux.concat(
-                // 先发送状态消息
+                // 先发送工具调用事件
+                Flux.fromIterable(finalToolEvents).map(evt -> STATUS_PREFIX + evt),
+                // 再发送状态消息
                 Flux.just(STATUS_PREFIX + ragStatus),
                 // 再发送流式文本（过滤空delta，避免前端收到大量空data:行）
                 stream.map(response -> {
@@ -233,6 +281,89 @@ public class ChatServiceImpl implements ChatService {
         }).doOnError(e -> {
             log.error("[Chat] 流式对话异常: sessionId={}, error={}", sessionId, e.getMessage(), e);
         });
+    }
+
+    /**
+     * 构建 ChatOptions，包含 Agent 绑定的工具回调
+     * <p>有工具时使用 ToolCallingChatOptions，无工具时退化为普通 ChatOptions</p>
+     */
+    private ToolCallingChatOptions buildChatOptionsWithTools(Long providerId, Map<String, Object> configMap, Agent agent) {
+        // 1. 基础模型配置
+        ToolCallingChatOptions.Builder toolBuilder = ToolCallingChatOptions.builder();
+        String modelId = configMap.containsKey("modelId") ? configMap.get("modelId").toString() : null;
+        if (modelId != null) toolBuilder.model(modelId);
+        if (configMap.containsKey("temperature")) {
+            Object v = configMap.get("temperature");
+            toolBuilder.temperature(v instanceof Number n ? n.doubleValue() : Double.parseDouble(v.toString()));
+        }
+        if (configMap.containsKey("topP")) {
+            Object v = configMap.get("topP");
+            toolBuilder.topP(v instanceof Number n ? n.doubleValue() : Double.parseDouble(v.toString()));
+        }
+        if (configMap.containsKey("maxTokens")) {
+            Object v = configMap.get("maxTokens");
+            toolBuilder.maxTokens(v instanceof Number n ? n.intValue() : Integer.parseInt(v.toString()));
+        }
+
+        // 2. 解析 Agent 绑定的工具
+        if (agent != null) {
+            List<Long> toolIds = agentService.getToolIds(agent.getId());
+            if (!toolIds.isEmpty()) {
+                List<ToolCallback> toolCallbacks = toolService.resolveToolCallbacksByIds(toolIds);
+                if (!toolCallbacks.isEmpty()) {
+                    toolBuilder.toolCallbacks(toolCallbacks);
+                    toolBuilder.toolContext(Map.of("agentId", agent.getId()));
+                    log.info("[Chat] 加载Agent工具: agentId={}, toolIds={}", agent.getId(), toolIds);
+                }
+            }
+        }
+
+        return toolBuilder.build();
+    }
+
+    /**
+     * 从 ToolCallingChatOptions 中提取工具名→ToolCallback 映射
+     */
+    private Map<String, ToolCallback> buildToolCallbackMap(ToolCallingChatOptions options) {
+        List<ToolCallback> callbacks = options.getToolCallbacks();
+        if (callbacks == null || callbacks.isEmpty()) {
+            return Map.of();
+        }
+        return callbacks.stream()
+                .collect(Collectors.toMap(
+                        cb -> cb.getToolDefinition().name(),
+                        cb -> cb,
+                        (a, b) -> b));
+    }
+
+    /**
+     * 生成工具调用状态事件 JSON
+     */
+    private String generateToolCallEvent(String toolName, String args) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "tool_call",
+                    "toolName", toolName,
+                    "args", args));
+        } catch (Exception e) {
+            return "{\"type\":\"tool_call\",\"toolName\":\"" + toolName + "\"}";
+        }
+    }
+
+    /**
+     * 生成工具结果状态事件 JSON
+     */
+    private String generateToolResultEvent(String toolName, String result) {
+        try {
+            // 截断过长的结果
+            String truncated = result.length() > 2000 ? result.substring(0, 2000) + "..." : result;
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "tool_result",
+                    "toolName", toolName,
+                    "result", truncated));
+        } catch (Exception e) {
+            return "{\"type\":\"tool_result\",\"toolName\":\"" + toolName + "\"}";
+        }
     }
 
     /**
@@ -300,15 +431,7 @@ public class ChatServiceImpl implements ChatService {
                 : DEFAULT_SYSTEM_PROMPT;
         messages.add(new SystemMessage(systemPrompt));
 
-        // 2. RAG上下文：如果Agent绑定了知识库，检索相关上下文（并行检索）
-        if (agent != null) {
-            String ragContext = retrieveRagContextParallel(agent.getId(), userMessage);
-            if (ragContext != null) {
-                messages.add(new SystemMessage(String.format(RAG_CONTEXT_TEMPLATE, ragContext)));
-            }
-        }
-
-        // 3. 加载最近20条历史消息
+        // 2. 加载最近20条历史消息
         List<Message> history = messageMapper.selectList(
                 new LambdaQueryWrapper<Message>()
                         .eq(Message::getSessionId, sessionId)
@@ -326,54 +449,6 @@ public class ChatServiceImpl implements ChatService {
         // 4. 当前用户消息
         messages.add(new UserMessage(userMessage));
         return messages;
-    }
-
-    /**
-     * RAG并行检索：并行查询多个知识库，提升检索速度
-     */
-    private String retrieveRagContextParallel(Long agentId, String question) {
-        List<Long> knowledgeIds = agentService.getKnowledgeIds(agentId);
-        if (knowledgeIds.isEmpty()) {
-            return null;
-        }
-
-        try {
-            // 1. 并行向量化问题
-            float[] queryVector = embedText(question);
-
-            // 2. 并行检索多个知识库（使用各知识库配置的 topK 和 threshold）
-            List<CompletableFuture<List<Map<String, Object>>>> futures = knowledgeIds.stream()
-                    .map(knowledgeId -> CompletableFuture.supplyAsync(() -> {
-                        try {
-                            Knowledge knowledge = knowledgeService.getById(knowledgeId);
-                            int topK = parseRagTopK(knowledge);
-                            double threshold = parseRagThreshold(knowledge);
-                            return embeddingService.searchSimilar(knowledgeId, queryVector, topK, threshold);
-                        } catch (Exception e) {
-                            log.warn("[Chat] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage());
-                            return List.<Map<String, Object>>of();
-                        }
-                    }, RAG_EXECUTOR))
-                    .toList();
-
-            // 3. 等待所有检索完成
-            List<Map<String, Object>> allResults = futures.stream()
-                    .map(CompletableFuture::join)
-                    .flatMap(List::stream)
-                    .toList();
-
-            if (allResults.isEmpty()) {
-                return null;
-            }
-
-            // 4. 构建上下文
-            return allResults.stream()
-                    .map(row -> String.format("【%s】\n%s", row.get("document_name"), row.get("content")))
-                    .collect(Collectors.joining("\n\n---\n\n"));
-        } catch (Exception e) {
-            log.warn("[Chat] RAG检索失败: {}", e.getMessage());
-            return null;
-        }
     }
 
     /**

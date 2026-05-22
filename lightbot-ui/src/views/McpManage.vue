@@ -79,7 +79,7 @@
             <a-input v-model:value="form.host" placeholder="http://localhost:3001/sse" />
           </a-form-item>
           <a-form-item label="请求头">
-            <a-textarea v-model:value="deployForm.headers" :rows="2" placeholder='{"Authorization": "Bearer xxx"}' />
+            <JsonInput v-model="deployForm.headers" :rows="2" placeholder='{"Authorization": "Bearer xxx"}' />
           </a-form-item>
         </template>
       </a-form>
@@ -102,6 +102,7 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer } from '../api/mcp'
+import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
 const searchText = ref('')

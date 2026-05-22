@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.ToolRequest;
 import com.lightbot.entity.Tool;
+import org.springframework.ai.tool.ToolCallback;
+
+import java.util.List;
 
 /**
  * Tool 服务接口
@@ -19,5 +22,23 @@ public interface ToolService extends IService<Tool> {
 
     Page<Tool> listPage(int pageNum, int pageSize, String name);
 
+    Page<Tool> listTools(int pageNum, int pageSize, String toolType);
+
     void deleteById(Long id);
+
+    /**
+     * 按工具名列表解析为 Spring AI ToolCallback
+     *
+     * @param toolNames 工具名列表
+     * @return ToolCallback 列表
+     */
+    List<ToolCallback> resolveToolCallbacks(List<String> toolNames);
+
+    /**
+     * 按工具ID列表解析为 Spring AI ToolCallback
+     *
+     * @param toolIds 工具ID列表
+     * @return ToolCallback 列表
+     */
+    List<ToolCallback> resolveToolCallbacksByIds(List<Long> toolIds);
 }

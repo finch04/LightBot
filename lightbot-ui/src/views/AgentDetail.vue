@@ -201,6 +201,68 @@
           </div>
         </div>
       </div>
+
+      <!-- 工具绑定 -->
+      <div class="panel full-width">
+        <div class="panel-header">
+          <h3>工具绑定</h3>
+          <span class="panel-tip">绑定后大模型可自主决定是否调用工具，提升回答准确性</span>
+        </div>
+        <div class="knowledge-bind">
+          <div class="selected-knowledge">
+            <div v-if="selectedTools.length === 0" class="empty-tip">
+              暂未绑定工具，请从下方列表选择
+            </div>
+            <div v-for="t in selectedTools" :key="t.id" class="knowledge-tag tool-tag">
+              <ToolOutlined />
+              <span>{{ t.displayName || t.name }}</span>
+              <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+              <button class="tag-remove" @click="removeTool(t.id)">
+                <CloseOutlined />
+              </button>
+            </div>
+          </div>
+          <div class="knowledge-list">
+            <div class="list-header">
+              <span>可用工具</span>
+              <a-input
+                v-model:value="toolSearchText"
+                placeholder="搜索工具..."
+                size="small"
+                style="width: 200px"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="t in filteredToolList"
+                :key="t.name"
+                class="knowledge-item"
+                :class="{ selected: selectedToolIds.has(t.id) }"
+                @click="toggleTool(t)"
+              >
+                <div class="item-icon tool-icon-bg">
+                  <ToolOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">
+                    {{ t.displayName || t.name }}
+                    <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                  </div>
+                  <div class="item-desc">{{ t.description || '暂无描述' }}</div>
+                </div>
+                <div class="item-check" v-if="selectedToolIds.has(t.id)">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredToolList.length === 0" class="empty-tip">
+                暂无可用工具
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -208,9 +270,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar } from '../api/agent'
+import { getTools } from '../api/tool'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
@@ -240,6 +303,10 @@ const modelSearchText = ref('')
 const selectedKnowledgeIds = ref(new Set())
 const knowledgeList = ref([])
 const searchText = ref('')
+const selectedToolIds = ref(new Set())
+const toolList = ref([])
+const toolSearchText = ref('')
+const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
 const saving = ref(false)
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
@@ -248,7 +315,7 @@ const avatarUploading = ref(false)
 
 const avatarUrl = computed(() => {
   if (!agent.avatar) return ''
-  return `http://localhost:9000/lightbot/${agent.avatar}`
+  return agent.avatar
 })
 
 const filteredModels = computed(() => {
@@ -270,6 +337,20 @@ const filteredKnowledgeList = computed(() => {
   return knowledgeList.value.filter(k =>
     k.name?.toLowerCase().includes(keyword) ||
     k.description?.toLowerCase().includes(keyword)
+  )
+})
+
+const selectedTools = computed(() => {
+  return toolList.value.filter(t => selectedToolIds.value.has(t.id))
+})
+
+const filteredToolList = computed(() => {
+  if (!toolSearchText.value) return toolList.value
+  const keyword = toolSearchText.value.toLowerCase()
+  return toolList.value.filter(t =>
+    t.name?.toLowerCase().includes(keyword) ||
+    t.displayName?.toLowerCase().includes(keyword) ||
+    t.description?.toLowerCase().includes(keyword)
   )
 })
 
@@ -376,6 +457,11 @@ async function loadAgent() {
     await Promise.all([loadConfigFields(agentConfig.providerId), loadModels(agentConfig.providerId)])
 
     selectedKnowledgeIds.value = new Set((knowledgeIds || []).map(String))
+
+    // 加载绑定的工具详情
+    const toolRes = await getAgentToolDetails(agentId)
+    const boundTools = toolRes.data || []
+    selectedToolIds.value = new Set(boundTools.map(t => t.id))
   } catch (e) {
     // interceptor已处理错误提示
   }
@@ -387,6 +473,15 @@ async function loadKnowledgeList() {
     knowledgeList.value = res.data.records || []
   } catch (e) {
     // ignore
+  }
+}
+
+async function loadToolList() {
+  try {
+    const res = await getTools({ pageNum: 1, pageSize: 100 })
+    toolList.value = res.data?.records || []
+  } catch (e) {
+    console.error('[AgentDetail] 加载工具列表失败:', e)
   }
 }
 
@@ -408,6 +503,22 @@ function removeKnowledge(id) {
   const ids = new Set(selectedKnowledgeIds.value)
   ids.delete(id)
   selectedKnowledgeIds.value = ids
+}
+
+function toggleTool(t) {
+  const ids = new Set(selectedToolIds.value)
+  if (ids.has(t.id)) {
+    ids.delete(t.id)
+  } else {
+    ids.add(t.id)
+  }
+  selectedToolIds.value = ids
+}
+
+function removeTool(id) {
+  const ids = new Set(selectedToolIds.value)
+  ids.delete(id)
+  selectedToolIds.value = ids
 }
 
 async function handleGeneratePrompt() {
@@ -512,6 +623,9 @@ async function handleSave() {
     // 3. 更新知识库绑定
     await updateAgentKnowledge(agentId, Array.from(selectedKnowledgeIds.value))
 
+    // 4. 更新工具绑定
+    await updateAgentTools(agentId, Array.from(selectedToolIds.value))
+
     message.success('保存成功')
   } catch (e) {
     // interceptor已处理错误提示
@@ -527,6 +641,7 @@ function startChat() {
 onMounted(() => {
   loadAgent()
   loadKnowledgeList()
+  loadToolList()
 })
 </script>
 
@@ -874,6 +989,7 @@ onMounted(() => {
   color: #171717;
 }
 .item-desc {
+  margin-top: 4px;
   font-size: 12px;
   color: #71717a;
   overflow: hidden;
@@ -943,5 +1059,22 @@ onMounted(() => {
 .avatar-tip {
   font-size: 12px;
   color: #a1a1aa;
+}
+
+/* 工具绑定样式 */
+.tool-tag {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+.tool-type-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #71717a;
+}
+.tool-icon-bg {
+  background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
 }
 </style>

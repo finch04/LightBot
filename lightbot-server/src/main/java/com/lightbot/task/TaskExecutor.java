@@ -14,6 +14,7 @@ public interface TaskExecutor {
      * 执行任务
      *
      * @param task 任务记录
+     * @return 执行结果描述
      */
-    void execute(Task task) throws Exception;
+    String execute(Task task) throws Exception;
 }

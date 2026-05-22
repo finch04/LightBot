@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.Tool;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -111,4 +112,28 @@ public interface AgentService extends IService<Agent> {
      * @param knowledgeIds 知识库 ID 列表
      */
     void updateKnowledgeBindings(Long agentId, List<Long> knowledgeIds);
+
+    /**
+     * 获取 Agent 绑定的工具ID列表
+     *
+     * @param agentId Agent ID
+     * @return 工具ID列表
+     */
+    List<Long> getToolIds(Long agentId);
+
+    /**
+     * 更新 Agent 的工具绑定
+     *
+     * @param agentId  Agent ID
+     * @param toolIds 工具ID列表
+     */
+    void updateToolBindings(Long agentId, List<Long> toolIds);
+
+    /**
+     * 获取 Agent 绑定的工具详情列表
+     *
+     * @param agentId Agent ID
+     * @return 工具详情列表
+     */
+    List<Tool> getToolDetails(Long agentId);
 }

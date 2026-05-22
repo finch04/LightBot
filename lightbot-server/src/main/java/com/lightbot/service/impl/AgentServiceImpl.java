@@ -14,6 +14,8 @@ import org.springframework.util.StringUtils;
 import com.lightbot.mapper.AgentMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.ToolService;
+import com.lightbot.entity.Tool;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +48,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final ModelFactory modelFactory;
     private final ObjectMapper objectMapper;
     private final MinioUtil minioUtil;
+    private final ToolService toolService;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
             你是一个AI助手提示词生成专家。根据用户提供的Agent名称和描述，生成一段专业的系统提示词。
@@ -275,6 +278,57 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    public List<Long> getToolIds(Long agentId) {
+        Agent agent = getById(agentId);
+        if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
+            return List.of();
+        }
+        try {
+            var configNode = objectMapper.readTree(agent.getConfig());
+            if (!configNode.has("tools")) {
+                return List.of();
+            }
+            return objectMapper.convertValue(configNode.get("tools"),
+                    new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("[Agent] 解析config.tools失败: agentId={}, error={}", agentId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public void updateToolBindings(Long agentId, List<Long> toolIds) {
+        Agent agent = getById(agentId);
+        if (agent == null) {
+            return;
+        }
+        try {
+            // 1. 解析现有config
+            var configNode = objectMapper.readTree(
+                    agent.getConfig() != null ? agent.getConfig() : "{}");
+
+            // 2. 更新tools字段
+            var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
+            configMap.put("tools", toolIds != null ? toolIds : List.of());
+
+            // 3. 保存回agent
+            agent.setConfig(objectMapper.writeValueAsString(configMap));
+            updateById(agent);
+        } catch (Exception e) {
+            log.error("[Agent] 更新工具绑定失败: agentId={}, error={}", agentId, e.getMessage());
+        }
+    }
+
+    @Override
+    public List<Tool> getToolDetails(Long agentId) {
+        List<Long> toolIds = getToolIds(agentId);
+        if (toolIds.isEmpty()) {
+            return List.of();
+        }
+        return toolService.listByIds(toolIds);
+    }
+
+    @Override
     public String uploadAvatar(Long id, MultipartFile file) {
         // 1. 校验Agent存在性
         Agent agent = getById(id);
@@ -291,19 +345,28 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         String filePath = String.format("agent/%d/avatar/%s%s", id, UUID.randomUUID().toString().replace("-", ""), ext);
 
         // 3. 删除旧头像（如果有）
-        if (agent.getAvatar() != null && !agent.getAvatar().isEmpty()) {
-            minioUtil.delete(agent.getAvatar());
-        }
+        deleteOldAvatar(agent.getAvatar());
 
         // 4. 上传新头像
         minioUtil.upload(file, filePath);
 
-        // 5. 更新Agent的avatar字段
-        agent.setAvatar(filePath);
+        // 5. 构建完整URL并更新Agent的avatar字段
+        String fullUrl = minioUtil.getPresignedUrl(filePath);
+        agent.setAvatar(fullUrl);
         updateById(agent);
 
-        log.info("[Agent] 头像上传成功: agentId={}, path={}", id, filePath);
-        return filePath;
+        log.info("[Agent] 头像上传成功: agentId={}, url={}", id, fullUrl);
+        return fullUrl;
+    }
+
+    /**
+     * 删除旧头像：兼容完整URL和相对路径
+     */
+    private void deleteOldAvatar(String avatar) {
+        if (avatar == null || avatar.isEmpty()) return;
+        // 兼容旧数据（相对路径）和新数据（完整URL）
+        String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
+        minioUtil.delete(path);
     }
 
     @Override

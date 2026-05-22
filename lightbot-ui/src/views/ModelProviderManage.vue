@@ -70,14 +70,12 @@
             <div class="form-hint">自定义获取模型列表的接口地址</div>
           </a-form-item>
           <a-form-item label="额外请求头">
-            <a-textarea v-model:value="form.headersJson" placeholder='{"Authorization": "Bearer xxx"}' :rows="3" />
+            <JsonInput v-model="form.headersJson" placeholder='{"Authorization": "Bearer xxx"}' :rows="3" />
             <div class="form-hint">JSON 格式，为空时不添加额外请求头</div>
-            <div v-if="form.headersJson && !isValidJson(form.headersJson)" class="form-error">JSON 格式不正确</div>
           </a-form-item>
           <a-form-item label="扩展配置">
-            <a-textarea v-model:value="form.extraJson" placeholder='{"timeout": 30000}' :rows="3" />
+            <JsonInput v-model="form.extraJson" placeholder='{"timeout": 30000}' :rows="3" />
             <div class="form-hint">JSON 格式的扩展配置</div>
-            <div v-if="form.extraJson && !isValidJson(form.extraJson)" class="form-error">JSON 格式不正确</div>
           </a-form-item>
         </template>
       </a-form>
@@ -192,6 +190,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutline
 import { message, Modal } from 'ant-design-vue'
 import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache } from '../api/modelProvider'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
+import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
 const dialogVisible = ref(false)

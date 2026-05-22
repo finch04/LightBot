@@ -81,16 +81,16 @@
           </a-select>
         </a-form-item>
         <a-form-item label="输入Schema">
-          <a-textarea v-model:value="form.inputSchema" :rows="4" placeholder='JSON Schema，如：{"type":"object","properties":{...}}' />
+          <JsonInput v-model="form.inputSchema" :rows="4" placeholder='JSON Schema，如：{"type":"object","properties":{...}}' />
         </a-form-item>
         <a-form-item label="输出Schema">
-          <a-textarea v-model:value="form.outputSchema" :rows="3" placeholder="输出参数 JSON Schema（可选）" />
+          <JsonInput v-model="form.outputSchema" :rows="3" placeholder="输出参数 JSON Schema（可选）" />
         </a-form-item>
         <a-form-item label="认证配置">
-          <a-textarea v-model:value="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
+          <JsonInput v-model="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
         </a-form-item>
         <a-form-item label="扩展配置">
-          <a-textarea v-model:value="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
+          <JsonInput v-model="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
         </a-form-item>
       </a-form>
       <div class="dialog-footer">
@@ -112,6 +112,7 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool } from '../api/tool'
+import JsonInput from '../components/JsonInput.vue'
 
 const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
 const typeColors = { builtin: '#171717', custom: '#0070f3', api: '#10b981', mcp: '#8b5cf6' }

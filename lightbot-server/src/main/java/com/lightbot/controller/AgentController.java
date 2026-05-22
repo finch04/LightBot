@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.Tool;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,6 +79,27 @@ public class AgentController {
     @GetMapping("/{id}/knowledge")
     public Result<List<Long>> getKnowledgeIds(@PathVariable Long id) {
         return Result.ok(agentService.getKnowledgeIds(id));
+    }
+
+    @Operation(summary = "更新Agent绑定的工具")
+    @PutMapping("/{id}/tools")
+    public Result<Void> updateToolBindings(
+            @PathVariable Long id,
+            @RequestBody List<Long> toolIds) {
+        agentService.updateToolBindings(id, toolIds);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取Agent绑定的工具ID列表")
+    @GetMapping("/{id}/tools")
+    public Result<List<Long>> getToolIds(@PathVariable Long id) {
+        return Result.ok(agentService.getToolIds(id));
+    }
+
+    @Operation(summary = "获取Agent绑定的工具详情列表")
+    @GetMapping("/{id}/tools/detail")
+    public Result<List<Tool>> getToolDetails(@PathVariable Long id) {
+        return Result.ok(agentService.getToolDetails(id));
     }
 
     @Operation(summary = "删除Agent")

@@ -27,7 +27,7 @@ public class DocumentIngestExecutor implements TaskExecutor {
     private final RedisUtil redisUtil;
 
     @Override
-    public void execute(Task task) throws Exception {
+    public String execute(Task task) throws Exception {
         JsonNode payload = objectMapper.readTree(task.getPayload());
         Long documentId = payload.get("documentId").asLong();
         String embeddingJson = payload.get("embeddingJson").toString();
@@ -44,5 +44,13 @@ public class DocumentIngestExecutor implements TaskExecutor {
             // 2. 更新进度
             taskService.updateProgress(task.getId(), progress, message);
         });
+
+        // 读取处理后的文档信息作为结果
+        var doc = documentService.getById(documentId);
+        if (doc != null) {
+            return String.format("入库完成, documentId=%d, chunkCount=%d, tokenCount=%d",
+                    documentId, doc.getChunkCount(), doc.getTokenCount());
+        }
+        return "入库完成, documentId=" + documentId;
     }
 }
