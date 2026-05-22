@@ -69,6 +69,11 @@ const routes = [
         component: () => import('../views/ToolManage.vue'),
       },
       {
+        path: 'extensions',
+        name: 'Extensions',
+        component: () => import('../views/Extensions.vue'),
+      },
+      {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('../views/DashboardView.vue'),

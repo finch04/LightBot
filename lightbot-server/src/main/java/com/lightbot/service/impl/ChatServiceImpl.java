@@ -8,6 +8,7 @@ import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.ChatSession;
+import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.Message;
 import com.lightbot.enums.ContentType;
 import com.lightbot.enums.MessageRole;
@@ -54,6 +55,7 @@ public class ChatServiceImpl implements ChatService {
     private final AgentService agentService;
     private final AgentKnowledgeService agentKnowledgeService;
     private final EmbeddingService embeddingService;
+    private final KnowledgeService knowledgeService;
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
     private final TaskExecutor taskExecutor;
@@ -333,11 +335,14 @@ public class ChatServiceImpl implements ChatService {
             // 1. 并行向量化问题
             float[] queryVector = embedText(question);
 
-            // 2. 并行检索多个知识库
+            // 2. 并行检索多个知识库（使用各知识库配置的 topK 和 threshold）
             List<CompletableFuture<List<Map<String, Object>>>> futures = knowledgeIds.stream()
                     .map(knowledgeId -> CompletableFuture.supplyAsync(() -> {
                         try {
-                            return embeddingService.searchSimilar(knowledgeId, queryVector, 3, 0.5);
+                            Knowledge knowledge = knowledgeService.getById(knowledgeId);
+                            int topK = parseRagTopK(knowledge);
+                            double threshold = parseRagThreshold(knowledge);
+                            return embeddingService.searchSimilar(knowledgeId, queryVector, topK, threshold);
                         } catch (Exception e) {
                             log.warn("[Chat] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage());
                             return List.<Map<String, Object>>of();
@@ -436,12 +441,13 @@ public class ChatServiceImpl implements ChatService {
                 conversationText.append(role).append("：").append(msg.getContent()).append("\n");
             }
 
-            // 4. 使用默认提供商调用模型生成标题
+            // 4. 使用会话绑定的Agent模型生成标题，未绑定则使用默认提供商
+            Long providerId = resolveTitleProviderId(session.getAgentId());
             List<org.springframework.ai.chat.messages.Message> promptMessages = new ArrayList<>();
             promptMessages.add(new SystemMessage("你是一个标题生成助手，只输出标题，不要任何其他内容。"));
             promptMessages.add(new UserMessage("请根据以下对话内容生成一个简短的标题（不超过20个字，不要加引号）：\n" + conversationText));
 
-            ChatResponse response = modelFactory.getChatModel(getDefaultProviderId()).call(new Prompt(promptMessages));
+            ChatResponse response = modelFactory.getChatModel(providerId).call(new Prompt(promptMessages));
             String title = response.getResult().getOutput().getText().trim();
 
             // 5. 清理标题
@@ -461,11 +467,27 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 获取默认providerId（用于标题生成等不需要指定provider的场景）
+     * 解析标题生成使用的providerId：优先使用会话绑定Agent的模型，未绑定则降级为默认提供商
+     */
+    private Long resolveTitleProviderId(Long agentId) {
+        if (agentId != null) {
+            Agent agent = agentService.getById(agentId);
+            if (agent != null) {
+                Map<String, Object> configMap = parseConfig(agent.getConfig());
+                Long providerId = getProviderId(configMap);
+                if (providerId != null) {
+                    return providerId;
+                }
+            }
+        }
+        return getDefaultProviderId();
+    }
+
+    /**
+     * 获取默认providerId（兜底方案）
      * 优先使用第一个可用的 ModelProvider
      */
     private Long getDefaultProviderId() {
-        // 从 ModelProviderService 获取第一个可用的 provider
         var providers = modelFactory.getAvailableProviderIds();
         if (providers.isEmpty()) {
             throw new IllegalStateException("没有可用的模型提供商，请先在模型提供商管理页面配置");
@@ -517,11 +539,14 @@ public class ChatServiceImpl implements ChatService {
             float[] queryVector = embedText(question);
             List<Map<String, Object>> allResults = new ArrayList<>();
 
-            // 并行检索
+            // 并行检索（使用各知识库配置的 topK 和 threshold）
             List<CompletableFuture<List<Map<String, Object>>>> futures = knowledgeIds.stream()
                     .map(knowledgeId -> CompletableFuture.supplyAsync(() -> {
                         try {
-                            return embeddingService.searchSimilar(knowledgeId, queryVector, 3, 0.5);
+                            Knowledge knowledge = knowledgeService.getById(knowledgeId);
+                            int topK = parseRagTopK(knowledge);
+                            double threshold = parseRagThreshold(knowledge);
+                            return embeddingService.searchSimilar(knowledgeId, queryVector, topK, threshold);
                         } catch (Exception e) {
                             log.warn("[Chat] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage());
                             return List.<Map<String, Object>>of();
@@ -536,5 +561,32 @@ public class ChatServiceImpl implements ChatService {
             log.warn("[Chat] RAG检索失败: {}", e.getMessage());
             return List.of();
         }
+    }
+
+    private static final int DEFAULT_RAG_TOP_K = 5;
+    private static final double DEFAULT_RAG_THRESHOLD = 0.5;
+
+    /**
+     * 从知识库配置中解析 RAG Top K
+     */
+    private int parseRagTopK(Knowledge knowledge) {
+        if (knowledge == null) {
+            return DEFAULT_RAG_TOP_K;
+        }
+        Map<String, Object> config = parseConfig(knowledge.getConfig());
+        Object val = config.get("ragTopK");
+        return val instanceof Number ? ((Number) val).intValue() : DEFAULT_RAG_TOP_K;
+    }
+
+    /**
+     * 从知识库配置中解析 RAG 相似度阈值
+     */
+    private double parseRagThreshold(Knowledge knowledge) {
+        if (knowledge == null) {
+            return DEFAULT_RAG_THRESHOLD;
+        }
+        Map<String, Object> config = parseConfig(knowledge.getConfig());
+        Object val = config.get("ragThreshold");
+        return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_RAG_THRESHOLD;
     }
 }

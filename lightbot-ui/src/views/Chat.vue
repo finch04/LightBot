@@ -35,10 +35,8 @@
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
           <div class="message-content-wrapper">
-            <!-- 流式阶段：显示原始文本 + 闪烁光标 -->
-            <div v-if="msg._streaming" class="message-content streaming-content">
-              <span class="streaming-text">{{ msg.content }}</span><span class="typing-cursor">|</span>
-            </div>
+            <!-- 流式阶段：渲染 Markdown + 闪烁光标 -->
+            <div v-if="msg._streaming" class="message-content streaming-content" v-html="renderMarkdown(msg.content)" /><span v-if="msg._streaming" class="typing-cursor">|</span>
             <!-- 流式结束后：渲染 Markdown -->
             <div v-else class="message-content" v-html="renderMarkdown(msg.content)" />
             <!-- 复制按钮（所有消息） -->
@@ -316,6 +314,8 @@ async function loadHistory() {
     currentAgent.value = null
     return
   }
+  // 切换对话时先清空旧内容，避免旧消息在加载期间残留
+  messages.value = []
   loadingHistory.value = true
   try {
     // 并行加载消息和会话详情
@@ -458,7 +458,7 @@ function formatElapsed(ms) {
 }
 
 function scrollToBottom() {
-  nextTick(() => {
+  requestAnimationFrame(() => {
     const el = messagesRef.value
     if (el) el.scrollTop = el.scrollHeight
   })
@@ -469,16 +469,13 @@ async function loadAgents() {
     const res = await getAgents({ pageNum: 1, pageSize: 100 })
     agents.value = res.data.records || []
 
-    // 新对话时，自动选中默认Agent
+    // 新对话时，自动选中默认Agent（由 selectedAgentId watcher 统一调用 loadCurrentAgent）
     if (!sessionId.value) {
       const defaultAgent = agents.value.find(a => a.isDefault)
       if (defaultAgent) {
         selectedAgentId.value = String(defaultAgent.id)
-        loadCurrentAgent(defaultAgent.id)
       } else if (agents.value.length > 0) {
-        // 没有默认Agent时，选中第一个
         selectedAgentId.value = String(agents.value[0].id)
-        loadCurrentAgent(agents.value[0].id)
       }
     }
   } catch (e) {
@@ -519,6 +516,13 @@ watch(selectedAgentId, (newId) => {
     loadCurrentAgent(newId)
   } else if (!newId) {
     currentAgent.value = null
+  }
+})
+
+// 新建对话时重新查询 agent 列表，确保默认 agent 被选中
+watch(sessionId, (newVal, oldVal) => {
+  if (!newVal && oldVal) {
+    loadAgents()
   }
 })
 </script>

@@ -65,6 +65,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .eq(Task::getId, taskId)
                 .set(Task::getProgress, progress)
                 .set(Task::getMessage, message)
+                .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
     }
 
@@ -74,6 +75,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .eq(Task::getId, taskId)
                 .set(Task::getStatus, TaskStatus.RUNNING)
                 .set(Task::getStartedAt, LocalDateTime.now())
+                .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
     }
 
@@ -85,6 +87,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .set(Task::getProgress, 100)
                 .set(Task::getResult, result)
                 .set(Task::getCompletedAt, LocalDateTime.now())
+                .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
         log.info("[任务] 执行成功, taskId={}", taskId);
         broadcastTaskCountByTaskId(taskId);
@@ -97,6 +100,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .set(Task::getStatus, TaskStatus.FAILED)
                 .set(Task::getError, error)
                 .set(Task::getCompletedAt, LocalDateTime.now())
+                .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
         log.warn("[任务] 执行失败, taskId={}, error={}", taskId, error);
         broadcastTaskCountByTaskId(taskId);
@@ -108,6 +112,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .eq(Task::getId, taskId)
                 .in(Task::getStatus, TaskStatus.PENDING, TaskStatus.RUNNING)
                 .set(Task::getCancelRequested, 1)
+                .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
         return update;
     }

@@ -105,7 +105,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
         } catch (Exception e) {
             log.error("[文档上传执行器] 失败, documentId={}", documentId, e);
             doc.setStatus(DocumentStatus.FAILED);
-            doc.setErrorMessage(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            doc.setErrorMessage(buildErrorMessage(e));
             documentService.updateById(doc);
             // 清理临时文件
             try {
@@ -151,5 +151,23 @@ public class DocumentUploadExecutor implements TaskExecutor {
         String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
         String baseName = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
         return String.format("knowledge/%d/parsed/%s.md", knowledgeId, baseName);
+    }
+
+    private String buildErrorMessage(Exception e) {
+        String msg = e.getMessage();
+        if (msg == null || msg.isBlank()) {
+            msg = e.getClass().getSimpleName();
+        }
+        StackTraceElement[] stack = e.getStackTrace();
+        if (stack.length > 0) {
+            StringBuilder sb = new StringBuilder(msg);
+            for (int i = 0; i < Math.min(3, stack.length); i++) {
+                sb.append("\n  at ").append(stack[i].getClassName())
+                        .append(".").append(stack[i].getMethodName())
+                        .append(":").append(stack[i].getLineNumber());
+            }
+            return sb.toString();
+        }
+        return msg;
     }
 }

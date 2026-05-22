@@ -9,6 +9,7 @@ import com.lightbot.model.ConfigField;
 import com.lightbot.model.FetchedModel;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.ModelProviderService;
+import com.lightbot.util.ModelProviderCacheUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ public class ModelProviderController {
 
     private final ModelProviderService modelProviderService;
     private final ModelFactory modelFactory;
+    private final ModelProviderCacheUtil cacheUtil;
 
     @Operation(summary = "新增模型提供商")
     @PostMapping
@@ -84,5 +86,12 @@ public class ModelProviderController {
     @GetMapping("/{id}/fetch-models")
     public Result<List<FetchedModel>> fetchModels(@PathVariable Long id) {
         return Result.ok(modelFactory.fetchModels(id));
+    }
+
+    @Operation(summary = "刷新模型提供商缓存（从数据库重新加载）")
+    @PostMapping("/refresh-cache")
+    public Result<Void> refreshCache() {
+        modelFactory.invalidateAllCache();
+        return Result.ok();
     }
 }

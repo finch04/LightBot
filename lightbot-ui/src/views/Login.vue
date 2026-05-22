@@ -54,6 +54,16 @@
         </div>
       </div>
     </div>
+
+    <!-- 底部链接 -->
+    <div class="page-footer">
+      <div class="footer-links">
+        <a href="https://github.com/finch04" target="_blank" rel="noopener">联系我们</a>
+        <span class="divider">|</span>
+        <a href="https://github.com/finch04/LightBot" target="_blank" rel="noopener">使用帮助</a>
+      </div>
+      <div class="footer-copyright">© 2026 LightBot. All Rights Reserved.</div>
+    </div>
   </div>
 </template>
 
@@ -260,6 +270,40 @@ async function handleLogin() {
 
 .form-footer .link:hover {
   color: #0761d1;
+}
+
+/* 底部链接 */
+.page-footer {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.page-footer a {
+  color: #8c8c8c;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.page-footer a:hover {
+  color: #171717;
+}
+
+.page-footer .divider {
+  margin: 0 8px;
+  color: #d9d9d9;
+}
+
+.footer-links {
+  margin-bottom: 4px;
+}
+
+.footer-copyright {
+  color: #bfbfbf;
 }
 
 /* 响应式 */

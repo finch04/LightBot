@@ -55,7 +55,7 @@ public class LawsChunkStrategy implements ChunkStrategy {
         }
 
         // 3. 按条文分块，保留上下文
-        return chunkByArticles(sections, params);
+        return TokenUtil.filterByMinTokens(chunkByArticles(sections, params));
     }
 
     /**

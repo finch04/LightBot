@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <div v-if="!hideHeader" class="page-header">
       <div>
         <h1 class="page-title">Skill 管理</h1>
         <p class="page-desc">管理 Agent 的技能（Skill），每个 Skill 绑定一个工具并定义提示词模板</p>
@@ -102,6 +102,7 @@
 </template>
 
 <script setup>
+defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'

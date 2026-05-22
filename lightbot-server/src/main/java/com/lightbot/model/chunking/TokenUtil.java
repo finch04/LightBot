@@ -16,6 +16,9 @@ public final class TokenUtil {
 
     private static final Pattern TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_]+|[一-鿿]");
 
+    /** 最小分块 token 数，低于此值的碎片会被过滤 */
+    public static final int MIN_CHUNK_TOKENS = 30;
+
     private TokenUtil() {
     }
 
@@ -84,5 +87,17 @@ public final class TokenUtil {
         }
 
         return result;
+    }
+
+    /**
+     * 过滤低于最小 token 数的碎片分块
+     *
+     * @param chunks 原始分块列表
+     * @return 过滤后的分块列表
+     */
+    public static List<String> filterByMinTokens(List<String> chunks) {
+        return chunks.stream()
+                .filter(c -> countTokens(c) >= MIN_CHUNK_TOKENS)
+                .toList();
     }
 }

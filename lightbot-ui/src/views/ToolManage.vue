@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <div v-if="!hideHeader" class="page-header">
       <div>
         <h1 class="page-title">工具管理</h1>
         <p class="page-desc">管理 Agent 可使用的工具（Tool）</p>
@@ -107,6 +107,7 @@
 </template>
 
 <script setup>
+defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'

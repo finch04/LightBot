@@ -35,3 +35,7 @@ export function checkModelProviderByForm(data) {
 export function fetchProviderModels(id) {
   return request.get(`/model-providers/${id}/fetch-models`)
 }
+
+export function refreshModelProviderCache() {
+  return request.post('/model-providers/refresh-cache')
+}

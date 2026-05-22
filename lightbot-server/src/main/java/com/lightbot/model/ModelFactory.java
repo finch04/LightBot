@@ -5,6 +5,7 @@ import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.service.ModelProviderService;
+import com.lightbot.util.ModelProviderCacheUtil;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,7 @@ public class ModelFactory {
 
     private final List<ModelProviderHandler> handlers;
     private final ModelProviderService modelProviderService;
+    private final ModelProviderCacheUtil cacheUtil;
 
     private static final String CONNECTIVITY_CHECK_PROMPT = "你好，请回复OK";
 
@@ -56,9 +58,16 @@ public class ModelFactory {
      */
     public ChatModel getChatModel(Long providerId) {
         return chatModelCache.computeIfAbsent(providerId, id -> {
-            ModelProvider provider = modelProviderService.getById(id);
+            // 1. 优先从缓存获取
+            ModelProvider provider = cacheUtil.getProvider(id);
+            // 2. 缓存未命中时回源数据库
             if (provider == null) {
-                throw new IllegalArgumentException("模型提供商不存在: " + id);
+                provider = modelProviderService.getById(id);
+                if (provider == null) {
+                    throw new IllegalArgumentException("模型提供商不存在: " + id);
+                }
+                cacheUtil.cacheProvider(provider);
+                log.info("[ModelFactory] 缓存未命中，从数据库加载提供商: id={}", id);
             }
             ModelProviderHandler handler = getHandler(provider.getType());
             log.info("[ModelFactory] 创建 ChatModel: providerId={}, type={}", id, provider.getType());
@@ -74,9 +83,13 @@ public class ModelFactory {
      * @return ChatOptions 实例
      */
     public ChatOptions buildChatOptions(Long providerId, Map<String, Object> config) {
-        ModelProvider provider = modelProviderService.getById(providerId);
+        ModelProvider provider = cacheUtil.getProvider(providerId);
         if (provider == null) {
-            throw new IllegalArgumentException("模型提供商不存在: " + providerId);
+            provider = modelProviderService.getById(providerId);
+            if (provider == null) {
+                throw new IllegalArgumentException("模型提供商不存在: " + providerId);
+            }
+            cacheUtil.cacheProvider(provider);
         }
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.buildChatOptions(config);
@@ -89,7 +102,7 @@ public class ModelFactory {
      * @return 配置字段列表
      */
     public List<ConfigField> getConfigFields(Long providerId) {
-        ModelProvider provider = modelProviderService.getById(providerId);
+        ModelProvider provider = cacheUtil.getProvider(providerId);
         if (provider == null) {
             throw new IllegalArgumentException("模型提供商不存在: " + providerId);
         }
@@ -104,6 +117,7 @@ public class ModelFactory {
      */
     public void invalidateCache(Long providerId) {
         chatModelCache.remove(providerId);
+        cacheUtil.evictProvider(providerId);
         log.info("[ModelFactory] 缓存已清除: providerId={}", providerId);
     }
 
@@ -112,6 +126,7 @@ public class ModelFactory {
      */
     public void invalidateAllCache() {
         chatModelCache.clear();
+        cacheUtil.evictAll();
         log.info("[ModelFactory] 所有缓存已清除");
     }
 
@@ -123,7 +138,7 @@ public class ModelFactory {
      */
     public String checkConnectivity(Long providerId) {
         // 1. 校验提供商存在性
-        ModelProvider provider = modelProviderService.getById(providerId);
+        ModelProvider provider = cacheUtil.getProvider(providerId);
         if (provider == null) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
         }
@@ -161,7 +176,7 @@ public class ModelFactory {
      * @return 模型信息列表（含类型推断）
      */
     public List<FetchedModel> fetchModels(Long providerId) {
-        ModelProvider provider = modelProviderService.getById(providerId);
+        ModelProvider provider = cacheUtil.getProvider(providerId);
         if (provider == null) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
         }
@@ -193,14 +208,22 @@ public class ModelFactory {
     }
 
     /**
-     * 获取所有可用的 providerId 列表
+     * 获取所有可用的 providerId 列表（优先Redis缓存，未命中回源数据库）
      *
      * @return providerId 列表
      */
     public List<Long> getAvailableProviderIds() {
-        return modelProviderService.list().stream()
-                .map(com.lightbot.entity.ModelProvider::getId)
-                .collect(Collectors.toList());
+        // 1. 优先从Redis缓存获取
+        List<ModelProvider> cached = cacheUtil.getAllProviders();
+        if (!cached.isEmpty()) {
+            return cached.stream().map(ModelProvider::getId).collect(Collectors.toList());
+        }
+        // 2. 缓存未命中，回源数据库并刷新缓存
+        List<ModelProvider> providers = modelProviderService.list();
+        if (!providers.isEmpty()) {
+            cacheUtil.cacheAllProviders(providers);
+        }
+        return providers.stream().map(ModelProvider::getId).collect(Collectors.toList());
     }
 
     private ModelProviderHandler getHandler(ModelProviderType type) {

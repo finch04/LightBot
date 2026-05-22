@@ -39,6 +39,7 @@ spring:
     redis:
       host: localhost
       port: 6379
+      database: 9
 
   # ========================================
   # SpringAI 模型配置

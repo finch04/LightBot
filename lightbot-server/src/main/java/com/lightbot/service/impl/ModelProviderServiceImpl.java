@@ -10,7 +10,10 @@ import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.ModelProviderMapper;
 import com.lightbot.service.ModelProviderService;
+import com.lightbot.util.ModelProviderCacheUtil;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +30,8 @@ import org.springframework.stereotype.Service;
 public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, ModelProvider>
         implements ModelProviderService {
 
+    private final ModelProviderCacheUtil cacheUtil;
+
     @Override
     public ModelProvider create(ModelProviderRequest request) {
         // 1. 构建实体并保存
@@ -41,6 +46,10 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         provider.setConfig(request.getConfig());
         provider.setStatus(CommonStatus.ACTIVE);
         save(provider);
+
+        // 2. 同步缓存
+        cacheUtil.cacheProvider(provider);
+        syncAllProvidersCache();
         return provider;
     }
 
@@ -61,6 +70,10 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         provider.setExtraJson(request.getExtraJson());
         provider.setConfig(request.getConfig());
         updateById(provider);
+
+        // 3. 同步缓存
+        cacheUtil.cacheProvider(provider);
+        syncAllProvidersCache();
         return provider;
     }
 
@@ -75,5 +88,17 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         if (!removeById(id)) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
         }
+        // 同步缓存
+        cacheUtil.evictProvider(id);
+        syncAllProvidersCache();
+    }
+
+    /**
+     * 刷新全部提供商列表缓存
+     */
+    private void syncAllProvidersCache() {
+        List<ModelProvider> all = list(new LambdaQueryWrapper<ModelProvider>()
+                .orderByDesc(ModelProvider::getCreateTime));
+        cacheUtil.cacheAllProviders(all);
     }
 }

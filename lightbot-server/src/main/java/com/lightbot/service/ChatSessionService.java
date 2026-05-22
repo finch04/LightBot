@@ -45,6 +45,20 @@ public interface ChatSessionService extends IService<ChatSession> {
     void archiveSession(Long sessionId);
 
     /**
+     * 物理删除会话及其所有消息
+     *
+     * @param sessionId 会话ID
+     */
+    void deleteSession(Long sessionId);
+
+    /**
+     * 切换会话置顶状态
+     *
+     * @param sessionId 会话ID
+     */
+    void togglePin(Long sessionId);
+
+    /**
      * 更新会话统计（消息数、token数、最后消息时间）
      *
      * @param sessionId  会话ID

@@ -25,4 +25,9 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
                 .eq(Message::getSessionId, sessionId)
                 .orderByAsc(Message::getCreateTime));
     }
+
+    @Override
+    public void deleteBySessionId(Long sessionId) {
+        remove(new LambdaQueryWrapper<Message>().eq(Message::getSessionId, sessionId));
+    }
 }

@@ -109,13 +109,13 @@
               <!-- 示例问题轮播 -->
               <div v-if="ragMessages.length === 0 && exampleQuestions.length > 0" class="example-questions">
                 <transition name="fade" mode="out-in">
-                  <button
+                  <span
                     :key="questionRotateIndex"
-                    class="btn-example-question"
+                    class="example-question-text"
                     @click="ragQuestion = exampleQuestions[questionRotateIndex]"
                   >
                     {{ exampleQuestions[questionRotateIndex] }}
-                  </button>
+                  </span>
                 </transition>
               </div>
             </div>
@@ -304,7 +304,12 @@
             </div>
           </a-form-item>
           <a-form-item label="分块大小" required>
-            <a-input-number v-model:value="ingestForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
+            <div style="display:flex;align-items:center;gap:6px">
+              <a-input-number v-model:value="ingestForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
+              <a-tooltip title="每个分块的最大Token数。过小的分块（<30 tokens）会被自动过滤，建议值 200-1000。设置过小可能导致所有分片被过滤，入库失败。">
+                <QuestionCircleOutlined style="color:#a1a1aa;cursor:pointer;font-size:14px" />
+              </a-tooltip>
+            </div>
           </a-form-item>
           <a-form-item label="重叠百分比" required>
             <a-input-number v-model:value="ingestForm.chunkOverlap" :min="0" :max="99" :step="5" style="width: 100%" />
@@ -456,7 +461,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
-  DownloadOutlined, LoadingOutlined, ReloadOutlined,
+  DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -566,7 +571,23 @@ const editForm = reactive({
 const exampleQuestions = ref([])
 const exampleQuestionsLoaded = ref(false)
 const questionRotateIndex = ref(0)
+const shownQuestionIndices = ref(new Set())
 let questionRotateTimer = null
+
+function pickRandomQuestionIndex() {
+  const len = exampleQuestions.value.length
+  if (len === 0) return 0
+  // 全部轮完则重置
+  if (shownQuestionIndices.value.size >= len) {
+    shownQuestionIndices.value.clear()
+  }
+  let idx
+  do {
+    idx = Math.floor(Math.random() * len)
+  } while (shownQuestionIndices.value.has(idx))
+  shownQuestionIndices.value.add(idx)
+  return idx
+}
 
 // 成员管理
 const members = ref([])
@@ -600,6 +621,7 @@ async function loadKnowledge() {
     exampleQuestions.value = []
   }
   exampleQuestionsLoaded.value = true
+  shownQuestionIndices.value.clear()
 }
 
 async function loadDocuments() {
@@ -1150,12 +1172,12 @@ onMounted(() => {
   loadKnowledge()
   loadDocuments()
   loadMembers()
-  // 示例问题轮播：每 2 秒切换下一个
+  // 示例问题轮播：每 3 秒随机切换，不重复
   questionRotateTimer = setInterval(() => {
     if (exampleQuestions.value.length > 0) {
-      questionRotateIndex.value = (questionRotateIndex.value + 1) % exampleQuestions.value.length
+      questionRotateIndex.value = pickRandomQuestionIndex()
     }
-  }, 2000)
+  }, 3000)
 })
 
 onUnmounted(() => {
@@ -1401,29 +1423,16 @@ onUnmounted(() => {
 
 /* 示例问题 */
 .example-questions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   padding-top: 10px;
 }
-.btn-example-question {
-  padding: 6px 14px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
-  border-radius: 100px;
+.example-question-text {
   font-size: 13px;
-  color: #52525b;
+  color: #a1a1aa;
   cursor: pointer;
-  transition: all 0.15s;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition: color 0.15s;
 }
-.btn-example-question:hover {
-  border-color: #0070f3;
+.example-question-text:hover {
   color: #0070f3;
-  background: #f0f7ff;
 }
 
 /* 示例问题轮播过渡 */
@@ -1638,8 +1647,9 @@ onUnmounted(() => {
   padding: 10px 16px;
   color: #dc2626;
   font-size: 13px;
+  white-space: pre-line;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 .modal-empty {

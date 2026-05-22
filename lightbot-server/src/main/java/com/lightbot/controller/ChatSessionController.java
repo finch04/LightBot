@@ -67,4 +67,18 @@ public class ChatSessionController {
         chatSessionService.archiveSession(id);
         return Result.ok();
     }
+
+    @Operation(summary = "删除会话（物理删除，包含所有消息）")
+    @DeleteMapping("/{id}")
+    public Result<Void> delete(@PathVariable Long id) {
+        chatSessionService.deleteSession(id);
+        return Result.ok();
+    }
+
+    @Operation(summary = "切换会话置顶状态")
+    @PutMapping("/{id}/pin")
+    public Result<Void> togglePin(@PathVariable Long id) {
+        chatSessionService.togglePin(id);
+        return Result.ok();
+    }
 }

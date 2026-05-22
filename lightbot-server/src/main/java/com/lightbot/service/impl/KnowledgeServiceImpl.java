@@ -231,19 +231,22 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             return;
         }
 
-        // 2. 读取文档 Markdown 内容
+        // 2. 校验文档状态，入库失败时不生成示例问题
+        Document doc = documentService.getById(documentId);
+        if (doc == null || doc.getStatus() != DocumentStatus.COMPLETED) {
+            return;
+        }
+
+        // 3. 读取文档 Markdown 内容
         String content = documentService.previewDocument(documentId);
         if (content == null || content.isBlank()) {
             log.warn("[示例问题] 文档内容为空, documentId={}", documentId);
             return;
         }
 
-        // 3. 截取前3000字符
+        // 4. 截取前3000字符
         String truncated = content.length() > 3000 ? content.substring(0, 3000) : content;
-
-        // 4. 获取文档名称
-        Document doc = documentService.getById(documentId);
-        String docName = doc != null ? doc.getName() : "未知文档";
+        String docName = doc.getName();
 
         // 5. 调用AI生成问题
         try {

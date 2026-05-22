@@ -74,10 +74,10 @@ public class GeneralChunkStrategy implements ChunkStrategy {
 
         // 4. 按百分比重叠
         if (params.getOverlappedPercent() > 0 && merged.size() > 1) {
-            return addOverlap(merged, params.getOverlappedPercent(), params.getDelimiter());
+            return TokenUtil.filterByMinTokens(addOverlap(merged, params.getOverlappedPercent(), params.getDelimiter()));
         }
 
-        return merged;
+        return TokenUtil.filterByMinTokens(merged);
     }
 
     /**

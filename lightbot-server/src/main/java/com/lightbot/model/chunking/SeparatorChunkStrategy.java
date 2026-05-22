@@ -47,6 +47,6 @@ public class SeparatorChunkStrategy implements ChunkStrategy {
             }
         }
 
-        return result;
+        return TokenUtil.filterByMinTokens(result);
     }
 }

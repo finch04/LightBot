@@ -10,6 +10,8 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelType;
 import com.lightbot.mapper.ModelMapper;
 import com.lightbot.service.ModelService;
+import com.lightbot.util.ModelCacheUtil;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +25,11 @@ import java.util.List;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model>
         implements ModelService {
+
+    private final ModelCacheUtil modelCacheUtil;
 
     @Override
     public Model create(ModelRequest request) {
@@ -43,6 +48,7 @@ public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model>
         model.setType(request.getType());
         model.setStatus(CommonStatus.ACTIVE);
         save(model);
+        syncCache(model.getProviderId());
         return model;
     }
 
@@ -65,8 +71,20 @@ public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model>
 
     @Override
     public void deleteById(Long id) {
+        Model model = getById(id);
         if (!removeById(id)) {
             throw new BizException(ErrorCode.MODEL_NOT_FOUND);
         }
+        if (model != null) {
+            syncCache(model.getProviderId());
+        }
+    }
+
+    /**
+     * 模型变更后同步缓存
+     */
+    private void syncCache(Long providerId) {
+        List<Model> all = list(new LambdaQueryWrapper<Model>().orderByAsc(Model::getProviderId));
+        modelCacheUtil.cacheAllModels(all);
     }
 }

@@ -39,7 +39,7 @@ public class BookChunkStrategy implements ChunkStrategy {
         List<Section> sections = parseSections(content, params.getDelimiter());
 
         // 2. 合并短段落直到达到 token 上限
-        return mergeSections(sections, params);
+        return TokenUtil.filterByMinTokens(mergeSections(sections, params));
     }
 
     /**

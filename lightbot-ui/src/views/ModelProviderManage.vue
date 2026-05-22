@@ -5,9 +5,14 @@
         <h1 class="page-title">模型提供商</h1>
         <p class="page-desc">管理 AI 模型提供商的 API 配置</p>
       </div>
-      <button class="btn-primary" @click="openDialog()">
-        <PlusOutlined /> 新增提供商
-      </button>
+      <div class="header-actions">
+        <button class="btn-refresh" :disabled="refreshing" @click="handleRefreshCache">
+          <SyncOutlined :class="{ spinning: refreshing }" /> 刷新缓存
+        </button>
+        <button class="btn-primary" @click="openDialog()">
+          <PlusOutlined /> 新增提供商
+        </button>
+      </div>
     </div>
 
     <div class="provider-grid">
@@ -183,15 +188,16 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels } from '../api/modelProvider'
+import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache } from '../api/modelProvider'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 
 const list = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
+const refreshing = ref(false)
 const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
 const showAdvanced = ref(false)
 
@@ -444,6 +450,18 @@ function modelTypeText(type) {
   return map[type] || type
 }
 
+async function handleRefreshCache() {
+  refreshing.value = true
+  try {
+    await refreshModelProviderCache()
+    message.success('缓存已刷新')
+  } catch {
+    // interceptor已处理错误提示
+  } finally {
+    refreshing.value = false
+  }
+}
+
 onMounted(loadData)
 </script>
 
@@ -459,6 +477,40 @@ onMounted(loadData)
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 32px;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.btn-refresh:hover:not(:disabled) {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .page-title {
   font-size: 24px;

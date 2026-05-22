@@ -40,9 +40,19 @@
             :class="['session-item', { active: currentSessionId === s.id }]"
             @click="switchSession(s)"
           >
+            <span v-if="s.pinned" class="session-pin">📌</span>
             <span class="session-title">{{ s.title || '新对话' }}</span>
-            <EditOutlined class="session-edit" @click.stop="startRename(s)" />
-            <CloseOutlined class="session-delete" @click.stop="archiveSession(s.id)" />
+            <a-dropdown :trigger="['click']" placement="bottomRight">
+              <EllipsisOutlined class="session-more" @click.stop />
+              <template #overlay>
+                <a-menu @click="({ key }) => handleSessionMenu(key, s)" >
+                  <a-menu-item key="pin">{{ s.pinned ? '取消置顶' : '置顶' }}</a-menu-item>
+                  <a-menu-item key="rename">重命名</a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item key="delete" class="menu-danger">删除</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
           <div v-if="sessions.length === 0" class="session-empty">暂无对话</div>
         </div>
@@ -84,6 +94,7 @@
                 </div>
               </a-menu-item>
               <a-menu-item key="model-providers">模型管理</a-menu-item>
+              <a-menu-item key="logs">日志</a-menu-item>
               <a-menu-divider />
               <a-menu-item key="logout">退出登录</a-menu-item>
             </a-menu>
@@ -104,21 +115,17 @@ import { ref, computed, onMounted, onUnmounted, watch, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   PlusOutlined,
-  CloseOutlined,
-  EditOutlined,
   DownOutlined,
   UpOutlined,
+  EllipsisOutlined,
   RobotOutlined,
   DatabaseOutlined,
-  ApiOutlined,
-  ThunderboltOutlined,
   ToolOutlined,
   DashboardOutlined,
-  FileTextOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { Modal } from 'ant-design-vue'
-import { getSessions, createSession, archiveSession as archiveSessionApi, updateSessionTitle } from '../api/chatSession'
+import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
 
 const route = useRoute()
 const router = useRouter()
@@ -143,11 +150,8 @@ const taskBadgeCount = computed(() => {
 const navItems = [
   { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
   { path: '/knowledge', label: '知识库', icon: markRaw(DatabaseOutlined) },
-  { path: '/mcp', label: 'MCP', icon: markRaw(ApiOutlined) },
-  { path: '/skills', label: 'Skill', icon: markRaw(ThunderboltOutlined) },
-  { path: '/tools', label: '工具', icon: markRaw(ToolOutlined) },
+  { path: '/extensions', label: '扩展', icon: markRaw(ToolOutlined) },
   { path: '/dashboard', label: '监控', icon: markRaw(DashboardOutlined) },
-  { path: '/logs', label: '日志', icon: markRaw(FileTextOutlined) },
 ]
 
 function isActive(path) {
@@ -187,21 +191,43 @@ function switchSession(session) {
   router.push(`/chat/${session.id}`)
 }
 
-function archiveSession(id) {
+function handleSessionMenu(key, session) {
+  if (key === 'pin') {
+    handleTogglePin(session)
+  } else if (key === 'rename') {
+    startRename(session)
+  } else if (key === 'delete') {
+    handleDeleteSession(session)
+  }
+}
+
+async function handleTogglePin(session) {
+  try {
+    await togglePinSession(session.id)
+    session.pinned = !session.pinned
+    // 重新排序：置顶的排前面
+    sessions.value.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+  } catch {
+    // interceptor已处理错误提示
+  }
+}
+
+function handleDeleteSession(session) {
   Modal.confirm({
-    title: '确认归档',
-    content: '归档后该对话将不再显示，是否继续？',
-    okText: '确认',
+    title: '确定删除对话？',
+    content: '删除后，聊天记录将不可恢复。',
+    okText: '删除',
+    okType: 'danger',
     cancelText: '取消',
     async onOk() {
       try {
-        await archiveSessionApi(id)
-        sessions.value = sessions.value.filter(s => s.id !== id)
-        if (currentSessionId.value === id) {
+        await deleteSession(session.id)
+        sessions.value = sessions.value.filter(s => s.id !== session.id)
+        if (currentSessionId.value === session.id) {
           router.push('/chat')
         }
-      } catch (e) {
-        // ignore
+      } catch {
+        // interceptor已处理错误提示
       }
     },
   })
@@ -233,6 +259,8 @@ function handleCommand({ key }) {
     router.push('/tasks')
   } else if (key === 'model-providers') {
     router.push('/model-providers')
+  } else if (key === 'logs') {
+    router.push('/logs')
   }
 }
 
@@ -310,15 +338,7 @@ watch(() => route.path, (path) => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.sidebar::-webkit-scrollbar {
-  width: 4px;
-}
-.sidebar::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 2px;
+  overflow: hidden;
 }
 
 .sidebar-logo {
@@ -381,14 +401,24 @@ watch(() => route.path, (path) => {
 
 /* 对话历史 */
 .session-section {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  flex: 1;
+  overflow-y: auto;
   padding: 0 8px;
 }
+.session-section::-webkit-scrollbar {
+  width: 4px;
+}
+.session-section::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 2px;
+}
 .section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #171717;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -409,18 +439,10 @@ watch(() => route.path, (path) => {
   transition: transform 0.2s;
 }
 .session-list {
-  flex: 1;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-.session-list::-webkit-scrollbar {
-  width: 4px;
-}
-.session-list::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 2px;
+  padding-bottom: 8px;
 }
 .session-item {
   display: flex;
@@ -445,25 +467,25 @@ watch(() => route.path, (path) => {
   font-size: 13px;
   color: #d4d4d8;
 }
-.session-edit {
-  opacity: 0;
-  color: #71717a;
+.session-pin {
   font-size: 12px;
-  transition: opacity 0.15s;
-  cursor: pointer;
-  margin-right: 2px;
+  margin-right: 4px;
+  flex-shrink: 0;
 }
-.session-item:hover .session-edit {
-  opacity: 1;
-}
-.session-delete {
+.session-more {
   opacity: 0;
   color: #71717a;
   font-size: 14px;
   transition: opacity 0.15s;
   cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
 }
-.session-item:hover .session-delete {
+.session-more:hover {
+  background: #3f3f46;
+  color: #d4d4d8;
+}
+.session-item:hover .session-more {
   opacity: 1;
 }
 .session-empty {
@@ -475,6 +497,8 @@ watch(() => route.path, (path) => {
 
 /* 用户信息 */
 .sidebar-footer {
+  flex-shrink: 0;
+  background: #171717;
   padding: 12px;
   border-top: 1px solid #27272a;
 }
@@ -515,6 +539,12 @@ watch(() => route.path, (path) => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+}
+:deep(.menu-danger) {
+  color: #ee0000 !important;
+}
+:deep(.menu-danger:hover) {
+  background: #f7d4d6 !important;
 }
 
 /* ===== 主内容区 ===== */

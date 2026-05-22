@@ -11,6 +11,7 @@ import com.lightbot.enums.SessionStatus;
 import com.lightbot.mapper.ChatSessionMapper;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
+import com.lightbot.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         implements ChatSessionService {
 
     private final AgentService agentService;
+    private final MessageService messageService;
 
     @Override
     public ChatSession createSession(Long agentId) {
@@ -51,6 +53,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         session.setStatus(SessionStatus.ACTIVE);
         session.setMessageCount(0);
         session.setTotalTokens(0L);
+        session.setPinned(false);
         save(session);
         return session;
     }
@@ -62,6 +65,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getUserId, userId)
                         .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
+                        .orderByDesc(ChatSession::getPinned)
                         .orderByDesc(ChatSession::getLastMessageAt));
     }
 
@@ -95,6 +99,28 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         session.setMessageCount(session.getMessageCount() + 1);
         session.setTotalTokens(session.getTotalTokens() + tokenCount);
         session.setLastMessageAt(LocalDateTime.now());
+        updateById(session);
+    }
+
+    @Override
+    public void deleteSession(Long sessionId) {
+        ChatSession session = getById(sessionId);
+        if (session == null) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        // 1. 物理删除会话下的所有消息
+        messageService.deleteBySessionId(sessionId);
+        // 2. 物理删除会话
+        removeById(sessionId);
+    }
+
+    @Override
+    public void togglePin(Long sessionId) {
+        ChatSession session = getById(sessionId);
+        if (session == null) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        session.setPinned(Boolean.TRUE.equals(session.getPinned()) ? false : true);
         updateById(session);
     }
 }

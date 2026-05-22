@@ -209,11 +209,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         }
 
         try {
-            // 0. 重新入库时清理旧的分块和向量
-            if (doc.getStatus() == DocumentStatus.COMPLETED) {
-                embeddingService.deleteByDocumentId(documentId);
-                chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
-            }
+            // 0. 清理旧的分块和向量（重新入库时删除历史数据，首次入库时无数据可删）
+            embeddingService.deleteByDocumentId(documentId);
+            chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
 
             // 1. 优先使用上传阶段生成的解析文本（含OCR结果），否则重新解析原文件
             progressCallback.accept(5, "正在解析文档...");
@@ -243,6 +241,11 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             String strategyName = parseChunkStrategy(embeddingJson);
             ChunkStrategy strategy = chunkStrategyFactory.getStrategy(strategyName);
             List<String> chunks = strategy.split(content, params);
+
+            // 2.1 分块结果为空（所有分片低于最小token阈值）
+            if (chunks.isEmpty()) {
+                throw new BizException(ErrorCode.DOCUMENT_CHUNKS_TOO_SHORT);
+            }
 
             // 3. 保存分块到数据库，状态为 CHUNKED
             progressCallback.accept(30, "正在保存分块...");
@@ -543,13 +546,11 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         StackTraceElement[] stack = e.getStackTrace();
         if (stack.length > 0) {
             StringBuilder sb = new StringBuilder(msg);
-            sb.append(" [at ");
             for (int i = 0; i < Math.min(3, stack.length); i++) {
-                if (i > 0) sb.append(" <- ");
-                sb.append(stack[i].getClassName()).append(".").append(stack[i].getMethodName());
-                sb.append(":").append(stack[i].getLineNumber());
+                sb.append("\n  at ").append(stack[i].getClassName())
+                        .append(".").append(stack[i].getMethodName())
+                        .append(":").append(stack[i].getLineNumber());
             }
-            sb.append("]");
             return sb.toString();
         }
         return msg;

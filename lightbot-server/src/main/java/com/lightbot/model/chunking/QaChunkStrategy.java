@@ -67,7 +67,7 @@ public class QaChunkStrategy implements ChunkStrategy {
         }
 
         // 4. 合并过短的问答对
-        return mergeShortChunks(result, params);
+        return TokenUtil.filterByMinTokens(mergeShortChunks(result, params));
     }
 
     /**

@@ -61,6 +61,10 @@ public class ChatSession {
     @Schema(description = "最后消息时间")
     private LocalDateTime lastMessageAt;
 
+    @TableField("pinned")
+    @Schema(description = "是否置顶")
+    private Boolean pinned;
+
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

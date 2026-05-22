@@ -20,4 +20,11 @@ public interface MessageService extends IService<Message> {
      * @return 消息列表
      */
     List<Message> listBySessionId(Long sessionId);
+
+    /**
+     * 删除会话下的所有消息
+     *
+     * @param sessionId 会话ID
+     */
+    void deleteBySessionId(Long sessionId);
 }

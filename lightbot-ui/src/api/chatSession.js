@@ -23,3 +23,11 @@ export function updateSessionTitle(id, title) {
 export function archiveSession(id) {
   return request.put(`/chat/sessions/${id}/archive`)
 }
+
+export function deleteSession(id) {
+  return request.delete(`/chat/sessions/${id}`)
+}
+
+export function togglePinSession(id) {
+  return request.put(`/chat/sessions/${id}/pin`)
+}
