@@ -35,14 +35,11 @@
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
           <div class="message-content-wrapper">
-            <!-- 流式阶段：渲染 Markdown + 闪烁光标 -->
-            <div v-if="msg._streaming" class="message-content streaming-content" v-html="renderMarkdown(msg.content)" /><span v-if="msg._streaming" class="typing-cursor">|</span>
-            <!-- 流式结束后：渲染 Markdown -->
-            <div v-else class="message-content" v-html="renderMarkdown(msg.content)" />
-            <!-- 复制按钮（所有消息） -->
-            <a-tooltip :title="msg._copied ? '已复制' : '复制'">
+            <!-- 流式阶段 & 结束后：统一渲染 Markdown -->
+            <div class="message-content" v-html="renderMarkdown(msg.content)" />
+            <!-- 复制按钮（仅流式结束后显示） -->
+            <a-tooltip v-if="!msg._streaming && msg.content" :title="msg._copied ? '已复制' : '复制'">
               <button
-                v-if="msg.content"
                 class="btn-copy"
                 :class="{ copied: msg._copied }"
                 @click="copyMessage(msg)"
@@ -64,6 +61,9 @@
                   <RightOutlined :class="{ expanded: isReferenceExpanded(msg, ri) }" />
                   <span class="rag-doc-name">{{ ref.documentName }}</span>
                   <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
+                  <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
+                    <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
+                  </a-tooltip>
                 </div>
                 <div v-if="isReferenceExpanded(msg, ri)" class="rag-item-content">
                   {{ ref.contentPreview }}
@@ -163,16 +163,17 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent } from '../api/agent'
 import { useUserStore } from '../stores/user'
+import { safeJsonParse } from '../utils/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -273,8 +274,8 @@ function handleAgentSelect({ key }) {
 function getMsgRagRefs(msg) {
   if (!msg.metadata) return []
   try {
-    const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata
-    return metadata.ragReferences || []
+    const metadata = typeof msg.metadata === 'string' ? safeJsonParse(msg.metadata) : msg.metadata
+    return metadata?.ragReferences || []
   } catch {
     return []
   }
@@ -394,8 +395,8 @@ async function sendMessage() {
       // onChunk: 文本内容
       (chunk) => {
         if (!pushed) {
-          assistantMsg = { role: 'assistant', content: '', _streaming: true }
-          messages.value.push(assistantMsg)
+          messages.value.push({ role: 'assistant', content: '', _streaming: true })
+          assistantMsg = messages.value[messages.value.length - 1]
           pushed = true
           hasStreamContent.value = true
         }
@@ -410,11 +411,7 @@ async function sendMessage() {
       // onMetadata: metadata消息（包含RAG引用等）
       (metadataStr) => {
         if (assistantMsg) {
-          try {
-            assistantMsg.metadata = JSON.parse(metadataStr)
-          } catch (e) {
-            console.warn('解析metadata失败:', e)
-          }
+          assistantMsg.metadata = safeJsonParse(metadataStr)
         }
       },
       // onDone: 完成
@@ -433,8 +430,8 @@ async function sendMessage() {
     )
   } catch (e) {
     if (!assistantMsg) {
-      assistantMsg = { role: 'assistant', content: '' }
-      messages.value.push(assistantMsg)
+      messages.value.push({ role: 'assistant', content: '' })
+      assistantMsg = messages.value[messages.value.length - 1]
     }
     assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
     assistantMsg._streaming = false
@@ -455,6 +452,11 @@ function copyMessage(msg) {
 function formatElapsed(ms) {
   if (ms < 1000) return `耗时 ${ms}ms`
   return `耗时 ${(ms / 1000).toFixed(1)}s`
+}
+
+function goToKnowledge(knowledgeId, documentId) {
+  const query = documentId ? { docId: String(documentId) } : {}
+  router.push({ path: `/knowledge/${knowledgeId}`, query })
 }
 
 function scrollToBottom() {
@@ -717,6 +719,23 @@ watch(sessionId, (newVal, oldVal) => {
 }
 
 /* Markdown 渲染 */
+.message-content :deep(h1),
+.message-content :deep(h2),
+.message-content :deep(h3),
+.message-content :deep(h4),
+.message-content :deep(h5),
+.message-content :deep(h6) {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #171717;
+}
+.message-content :deep(h1) { font-size: 1.5em; }
+.message-content :deep(h2) { font-size: 1.3em; }
+.message-content :deep(h3) { font-size: 1.15em; }
+.message-content :deep(h4),
+.message-content :deep(h5),
+.message-content :deep(h6) { font-size: 1em; }
 .message-content :deep(p) {
   margin: 0 0 12px;
 }
@@ -901,27 +920,6 @@ watch(sessionId, (newVal, oldVal) => {
   color: #a1a1aa;
   margin-top: 8px;
 }
-.typing-cursor {
-  animation: blink 0.8s infinite;
-}
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-.streaming-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.7;
-}
-.streaming-text {
-  /* 保持与 .message-content 一致的样式 */
-}
-.streaming-content .typing-cursor {
-  color: var(--primary-color, #6366f1);
-  font-weight: bold;
-  margin-left: 1px;
-}
-
 /* RAG 引用样式 */
 .rag-references {
   margin-top: 12px;
@@ -981,6 +979,16 @@ watch(sessionId, (newVal, oldVal) => {
   font-size: 12px;
   color: #10b981;
   font-weight: 500;
+}
+.rag-nav-btn {
+  font-size: 12px;
+  color: #6366f1;
+  margin-left: 4px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.rag-nav-btn:hover {
+  color: #4f46e5;
 }
 .rag-item-content {
   padding: 12px;

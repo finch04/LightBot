@@ -13,7 +13,6 @@ import com.lightbot.enums.ErrorCode;
 import org.springframework.util.StringUtils;
 import com.lightbot.mapper.AgentMapper;
 import com.lightbot.model.ModelFactory;
-import com.lightbot.service.AgentKnowledgeService;
 import com.lightbot.service.AgentService;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +43,6 @@ import java.util.UUID;
 public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         implements AgentService {
 
-    private final AgentKnowledgeService agentKnowledgeService;
     private final ModelFactory modelFactory;
     private final ObjectMapper objectMapper;
     private final MinioUtil minioUtil;
@@ -120,7 +118,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         }
 
         // 2. 获取绑定的知识库 ID 列表（转为字符串避免前端 Long 精度丢失）
-        List<Long> knowledgeIds = agentKnowledgeService.getKnowledgeIds(id);
+        List<Long> knowledgeIds = getKnowledgeIds(id);
         List<String> knowledgeIdStrs = knowledgeIds.stream()
                 .map(String::valueOf)
                 .toList();
@@ -161,8 +159,16 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         // 3. 调用AI生成
         Long providerId = resolveProviderId();
         ChatModel chatModel = modelFactory.getChatModel(providerId);
-        ChatResponse response = chatModel.call(new Prompt(messages));
-        String result = response.getResult().getOutput().getText().trim();
+        String result;
+        try {
+            ChatResponse response = chatModel.call(new Prompt(messages));
+            result = response.getResult().getOutput().getText().trim();
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[Agent] AI生成系统提示词失败: agentId={}, error={}", id, e.getMessage());
+            throw new BizException(ErrorCode.AI_GENERATE_FAILED);
+        }
 
         log.info("[Agent] AI生成系统提示词: agentId={}", id);
         return result;
@@ -188,8 +194,16 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         // 3. 调用AI生成
         Long providerId = resolveProviderId();
         ChatModel chatModel = modelFactory.getChatModel(providerId);
-        ChatResponse response = chatModel.call(new Prompt(messages));
-        String json = response.getResult().getOutput().getText().trim();
+        String json;
+        try {
+            ChatResponse response = chatModel.call(new Prompt(messages));
+            json = response.getResult().getOutput().getText().trim();
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[Agent] AI生成推荐问题失败: agentId={}, error={}", id, e.getMessage());
+            throw new BizException(ErrorCode.AI_GENERATE_FAILED);
+        }
 
         // 4. 清理可能的markdown代码块标记
         json = json.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "").trim();
@@ -209,6 +223,55 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
         log.info("[Agent] AI生成推荐问题: agentId={}", id);
         return json;
+    }
+
+    @Override
+    public List<Long> getKnowledgeIds(Long agentId) {
+        Agent agent = getById(agentId);
+        if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
+            return List.of();
+        }
+        try {
+            var configNode = objectMapper.readTree(agent.getConfig());
+            if (!configNode.has("knowledges")) {
+                return List.of();
+            }
+            List<String> ids = objectMapper.convertValue(configNode.get("knowledges"),
+                    new TypeReference<>() {});
+            return ids.stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(Long::parseLong)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("[Agent] 解析config.knowledges失败: agentId={}, error={}", agentId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public void updateKnowledgeBindings(Long agentId, List<Long> knowledgeIds) {
+        Agent agent = getById(agentId);
+        if (agent == null) {
+            return;
+        }
+        try {
+            // 1. 解析现有config
+            var configNode = objectMapper.readTree(
+                    agent.getConfig() != null ? agent.getConfig() : "{}");
+
+            // 2. 更新knowledges字段
+            List<String> idStrs = knowledgeIds != null
+                    ? knowledgeIds.stream().map(String::valueOf).toList()
+                    : List.of();
+            var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
+            configMap.put("knowledges", idStrs);
+
+            // 3. 保存回agent
+            agent.setConfig(objectMapper.writeValueAsString(configMap));
+            updateById(agent);
+        } catch (Exception e) {
+            log.error("[Agent] 更新知识库绑定失败: agentId={}, error={}", agentId, e.getMessage());
+        }
     }
 
     @Override

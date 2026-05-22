@@ -95,4 +95,20 @@ public interface AgentService extends IService<Agent> {
      * @return 头像访问URL
      */
     String uploadAvatar(Long id, MultipartFile file);
+
+    /**
+     * 获取 Agent 绑定的知识库 ID 列表
+     *
+     * @param agentId Agent ID
+     * @return 知识库 ID 列表
+     */
+    List<Long> getKnowledgeIds(Long agentId);
+
+    /**
+     * 更新 Agent 的知识库绑定
+     *
+     * @param agentId      Agent ID
+     * @param knowledgeIds 知识库 ID 列表
+     */
+    void updateKnowledgeBindings(Long agentId, List<Long> knowledgeIds);
 }

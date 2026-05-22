@@ -2,7 +2,9 @@ package com.lightbot.util;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.common.BizException;
 import com.lightbot.entity.Document;
+import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,8 +94,16 @@ public class MindmapUtil {
 
         // 4. 调用AI生成
         ChatModel chatModel = modelFactory.getChatModel(providerId);
-        ChatResponse response = chatModel.call(new Prompt(messages));
-        String json = response.getResult().getOutput().getText().trim();
+        String json;
+        try {
+            ChatResponse response = chatModel.call(new Prompt(messages));
+            json = response.getResult().getOutput().getText().trim();
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[MindmapUtil] AI生成思维导图失败: error={}", e.getMessage());
+            throw new BizException(ErrorCode.AI_GENERATE_FAILED);
+        }
 
         // 5. 清理并解析JSON
         json = cleanJsonResponse(json);
@@ -119,7 +129,7 @@ public class MindmapUtil {
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
             log.error("[MindmapUtil] JSON解析失败: {}", e.getMessage());
-            throw new RuntimeException("思维导图数据解析失败", e);
+            throw new BizException(ErrorCode.AI_GENERATE_FAILED);
         }
     }
 }

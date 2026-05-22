@@ -39,6 +39,9 @@
         <template v-if="column.key === 'name'">
           <a class="task-name-link" @click="openDetail(record)">{{ record.name }}</a>
         </template>
+        <template v-else-if="column.key === 'type'">
+          <a-tag :color="typeColor[record.type]">{{ typeMap[record.type] || record.type }}</a-tag>
+        </template>
         <template v-else-if="column.key === 'status'">
           <a-badge :status="statusBadge[record.status]" :text="statusMap[record.status] || record.status" />
         </template>
@@ -63,6 +66,15 @@
           >
             取消
           </a-button>
+          <a-button
+            v-else
+            type="link"
+            size="small"
+            danger
+            @click.stop="handleDelete(record)"
+          >
+            删除
+          </a-button>
         </template>
         <template v-else-if="column.key === 'createTime'">
           {{ formatTime(record.createTime) }}
@@ -74,7 +86,7 @@
     <a-drawer
       v-model:open="detailVisible"
       title="任务详情"
-      :width="480"
+      :width="560"
       :footer="null"
     >
       <template v-if="detailTask">
@@ -96,10 +108,15 @@
             </div>
           </a-descriptions-item>
           <a-descriptions-item label="进度信息">{{ detailTask.message || '-' }}</a-descriptions-item>
+          <a-descriptions-item v-if="detailTask.payload" label="请求参数">
+            <span class="json-text">{{ formatJson(detailTask.payload) }}</span>
+          </a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ formatTime(detailTask.createTime) }}</a-descriptions-item>
           <a-descriptions-item label="开始时间">{{ formatTime(detailTask.startedAt) }}</a-descriptions-item>
           <a-descriptions-item label="完成时间">{{ formatTime(detailTask.completedAt) }}</a-descriptions-item>
-          <a-descriptions-item v-if="detailTask.result" label="执行结果">{{ detailTask.result }}</a-descriptions-item>
+          <a-descriptions-item v-if="detailTask.result" label="执行结果">
+            <span class="json-text">{{ formatJson(detailTask.result) }}</span>
+          </a-descriptions-item>
           <a-descriptions-item v-if="detailTask.error" label="错误信息">
             <span class="error-text">{{ detailTask.error }}</span>
           </a-descriptions-item>
@@ -113,7 +130,7 @@
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getTaskList, cancelTask } from '../api/task'
+import { getTaskList, cancelTask, deleteTask } from '../api/task'
 
 const loading = ref(false)
 const tasks = ref([])
@@ -132,10 +149,11 @@ const pagination = reactive({
 })
 
 const columns = [
-  { title: '任务名称', dataIndex: 'name', key: 'name', ellipsis: true },
+  { title: '任务名称', dataIndex: 'name', key: 'name', ellipsis: true, width: 240 },
+  { title: '类型', dataIndex: 'type', key: 'type', width: 110 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 160 },
-  { title: '操作', key: 'action', width: 80 },
+  { title: '操作', key: 'action', width: 100 },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
 ]
 
@@ -143,6 +161,12 @@ const typeMap = {
   document_upload: '文档上传',
   document_ingest: '文档入库',
   document_ocr: '文档OCR',
+}
+
+const typeColor = {
+  document_upload: 'blue',
+  document_ingest: 'green',
+  document_ocr: 'orange',
 }
 
 const statusMap = {
@@ -225,6 +249,24 @@ function handleCancel(record) {
   })
 }
 
+function handleDelete(record) {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定删除任务「${record.name}」？删除后不可恢复。`,
+    okText: '确认',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await deleteTask(record.id)
+        message.success('删除成功')
+        loadTasks()
+      } catch (e) {
+        // interceptor handled
+      }
+    },
+  })
+}
+
 function formatTime(time) {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN', {
@@ -235,6 +277,14 @@ function formatTime(time) {
     minute: '2-digit',
     second: '2-digit',
   })
+}
+
+function formatJson(val) {
+  if (!val) return '-'
+  if (typeof val === 'string') {
+    try { return JSON.stringify(JSON.parse(val), null, 2) } catch { return val }
+  }
+  return JSON.stringify(val, null, 2)
 }
 
 onMounted(() => {
@@ -330,6 +380,12 @@ onUnmounted(() => {
 }
 .error-text {
   color: #dc2626;
+}
+.json-text {
+  font-family: 'Geist Mono', 'Menlo', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .progress-cell {
   display: flex;

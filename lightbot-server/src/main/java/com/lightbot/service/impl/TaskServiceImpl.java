@@ -143,6 +143,22 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .eq(Task::getStatus, status));
     }
 
+    @Override
+    public void deleteTask(Long taskId, Long userId) {
+        Task task = getTaskById(taskId, userId);
+
+        // 仅已终态任务可删除
+        boolean isTerminal = task.getStatus() == TaskStatus.SUCCESS
+                || task.getStatus() == TaskStatus.FAILED
+                || task.getStatus() == TaskStatus.CANCELLED;
+        if (!isTerminal) {
+            throw new BizException(ErrorCode.TASK_DELETE_FAILED);
+        }
+
+        removeById(taskId);
+        log.info("[任务] 删除成功, taskId={}, userId={}", taskId, userId);
+    }
+
     /** 推送任务计数变更给指定用户 */
     private void broadcastTaskCount(Long userId) {
         try {

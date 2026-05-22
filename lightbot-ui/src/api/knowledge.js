@@ -74,56 +74,8 @@ export function getDefaultIngestConfig(knowledgeId) {
   return request.get(`/knowledge/${knowledgeId}/default-ingest-config`)
 }
 
-export function askKnowledge(knowledgeId, question) {
-  return request.post(`/knowledge/${knowledgeId}/ask`, null, { params: { question } })
-}
-
-export async function askKnowledgeStream(knowledgeId, question, onChunk, onDone) {
-  const token = localStorage.getItem('token')
-  const response = await fetch(`/api/knowledge/${knowledgeId}/ask-stream?question=${encodeURIComponent(question)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token || '',
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error('流式请求失败')
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) {
-      if (buffer.trim()) {
-        processSseLines(buffer, onChunk)
-      }
-      onDone?.()
-      break
-    }
-    buffer += decoder.decode(value, { stream: true })
-    const lastNewline = buffer.lastIndexOf('\n')
-    if (lastNewline === -1) continue
-    const complete = buffer.substring(0, lastNewline)
-    buffer = buffer.substring(lastNewline + 1)
-    processSseLines(complete, onChunk)
-  }
-}
-
-function processSseLines(text, onChunk) {
-  const lines = text.split('\n')
-  for (const line of lines) {
-    if (line.startsWith('data:')) {
-      const content = line.substring(5)
-      if (content && content !== '[DONE]') {
-        onChunk?.(content)
-      }
-    }
-  }
+export function searchKnowledge(knowledgeId, question) {
+  return request.get(`/knowledge/${knowledgeId}/search`, { params: { question } })
 }
 
 export function generateMindmap(knowledgeId) {
@@ -153,6 +105,18 @@ export function removeKnowledgeMember(knowledgeId, userId) {
 }
 
 // ========== 示例问题 ==========
+
+export function getExampleQuestions(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/example-questions`)
+}
+
+export function updateExampleQuestions(knowledgeId, questions) {
+  return request.put(`/knowledge/${knowledgeId}/example-questions`, questions)
+}
+
+export function generateOneExampleQuestion(knowledgeId) {
+  return request.post(`/knowledge/${knowledgeId}/example-questions/generate`)
+}
 
 export function generateExampleQuestions(knowledgeId) {
   return request.post(`/knowledge/${knowledgeId}/generate-questions`)

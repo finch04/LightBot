@@ -87,13 +87,17 @@ mybatis-plus:
 # ========================================
 sa-token:
   token-name: Authorization
-  timeout: 86400
+  timeout: 604800
   active-timeout: -1
   is-concurrent: true
   is-share: true
   token-style: uuid
   is-log: false
   is-read-param: true
+  # Redis 配置：session 持久化到 Redis，重启不丢失
+  redis:
+    key-prefix: 'sa-token:'
+    database: 0
 
 # ========================================
 # MinIO 对象存储配置

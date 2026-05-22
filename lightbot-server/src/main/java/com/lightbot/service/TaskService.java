@@ -68,4 +68,12 @@ public interface TaskService extends IService<Task> {
      * @return 任务数量
      */
     Long countByStatus(Long userId, String status);
+
+    /**
+     * 删除任务（仅已终态任务可删除）
+     *
+     * @param taskId 任务ID
+     * @param userId 用户ID（校验归属）
+     */
+    void deleteTask(Long taskId, Long userId);
 }

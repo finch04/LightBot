@@ -42,7 +42,8 @@ public interface EmbeddingMapper extends BaseMapper<Embedding> {
      * @param topK        返回数量
      * @return 检索结果（chunk_id, content, document_name, score）
      */
-    @Select("SELECT c.id AS chunk_id, c.content, d.name AS document_name, " +
+    @Select("SELECT c.id AS chunk_id, c.content, c.knowledge_id, c.document_id, " +
+            "d.name AS document_name, " +
             "1 - (e.vector <=> #{vector}::vector) AS score " +
             "FROM embedding e " +
             "JOIN chunk c ON e.chunk_id = c.id " +

@@ -87,4 +87,9 @@ public class Task {
     @TableField("completed_at")
     @Schema(description = "完成时间")
     private LocalDateTime completedAt;
+
+    @TableField("deleted")
+    @TableLogic
+    @Schema(description = "逻辑删除标记")
+    private Integer deleted;
 }

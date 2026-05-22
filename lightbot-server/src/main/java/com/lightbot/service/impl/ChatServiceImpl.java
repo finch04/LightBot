@@ -53,7 +53,6 @@ public class ChatServiceImpl implements ChatService {
     private final MessageMapper messageMapper;
     private final ChatSessionService chatSessionService;
     private final AgentService agentService;
-    private final AgentKnowledgeService agentKnowledgeService;
     private final EmbeddingService embeddingService;
     private final KnowledgeService knowledgeService;
     private final EmbeddingModel embeddingModel;
@@ -150,8 +149,10 @@ public class ChatServiceImpl implements ChatService {
 
         // 5.1 获取RAG引用信息（用于保存到metadata）
         String ragMetadata = null;
+        int ragResultCount = 0;
         if (agent != null) {
             List<Map<String, Object>> ragResults = getRagSearchResults(agent.getId(), request.getMessage());
+            ragResultCount = ragResults.size();
             if (!ragResults.isEmpty()) {
                 List<RagReferenceVO> refs = ragResults.stream().map(row -> {
                     RagReferenceVO vo = new RagReferenceVO();
@@ -183,9 +184,14 @@ public class ChatServiceImpl implements ChatService {
         ChatOptions options = modelFactory.buildChatOptions(providerId, configMap);
 
         // 7. 发送状态：RAG检索完成，开始思考
-        String ragStatus = agent != null && agentKnowledgeService.getKnowledgeIds(agent.getId()).isEmpty()
-                ? "正在思考..."
-                : String.format("知识库检索完成（%dms），正在思考...", ragElapsed);
+        String ragStatus;
+        if (agent == null || agentService.getKnowledgeIds(agent.getId()).isEmpty()) {
+            ragStatus = "正在思考...";
+        } else if (ragResultCount > 0) {
+            ragStatus = String.format("知识库检索完成（%dms），已找到%d条相关内容，正在思考...", ragElapsed, ragResultCount);
+        } else {
+            ragStatus = "正在思考...";
+        }
 
         // 8. 流式调用模型，收集完整回复后持久化
         Flux<ChatResponse> stream = chatModel.stream(new Prompt(messages, options));
@@ -195,18 +201,18 @@ public class ChatServiceImpl implements ChatService {
         return Flux.concat(
                 // 先发送状态消息
                 Flux.just(STATUS_PREFIX + ragStatus),
-                // 再发送流式文本
+                // 再发送流式文本（过滤空delta，避免前端收到大量空data:行）
                 stream.map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
                     }
                     String delta = response.getResult().getOutput().getText();
-                    if (delta == null) {
+                    if (delta == null || delta.isEmpty()) {
                         return "";
                     }
                     fullReply.append(delta);
                     return delta;
-                }),
+                }).filter(delta -> !delta.isEmpty()),
                 // 流式结束后发送metadata（如果有）
                 Flux.defer(() -> {
                     if (finalRagMetadata != null) {
@@ -326,7 +332,7 @@ public class ChatServiceImpl implements ChatService {
      * RAG并行检索：并行查询多个知识库，提升检索速度
      */
     private String retrieveRagContextParallel(Long agentId, String question) {
-        List<Long> knowledgeIds = agentKnowledgeService.getKnowledgeIds(agentId);
+        List<Long> knowledgeIds = agentService.getKnowledgeIds(agentId);
         if (knowledgeIds.isEmpty()) {
             return null;
         }
@@ -530,7 +536,7 @@ public class ChatServiceImpl implements ChatService {
      * 执行RAG检索，返回原始结果（用于获取引用信息）
      */
     private List<Map<String, Object>> getRagSearchResults(Long agentId, String question) {
-        List<Long> knowledgeIds = agentKnowledgeService.getKnowledgeIds(agentId);
+        List<Long> knowledgeIds = agentService.getKnowledgeIds(agentId);
         if (knowledgeIds.isEmpty()) {
             return List.of();
         }

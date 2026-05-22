@@ -218,7 +218,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             只返回JSON格式，不要有其他内容：{"question": "..."}
             """;
 
-    private static final int MAX_QUESTIONS = 20;
+    private static final int MAX_QUESTIONS = 10;
 
     @Override
     public void generateExampleQuestions(Long knowledgeId, Long documentId) {
@@ -338,6 +338,105 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             updateById(knowledge);
         } catch (Exception e) {
             log.warn("[示例问题] 保存失败: {}", e.getMessage());
+        }
+    }
+
+    /** 示例问题最大数量 */
+    private static final int MAX_EXAMPLE_QUESTIONS = 10;
+
+    @Override
+    public List<String> getExampleQuestions(Long knowledgeId) {
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            return List.of();
+        }
+        return parseExampleQuestions(knowledge.getExampleQuestions());
+    }
+
+    @Override
+    public void updateExampleQuestions(Long knowledgeId, List<String> questions) {
+        Knowledge knowledge = getByIdWithPermission(knowledgeId);
+
+        // 最多保留10个，超出删最早的
+        List<String> trimmed = new ArrayList<>(questions);
+        while (trimmed.size() > MAX_EXAMPLE_QUESTIONS) {
+            trimmed.remove(0);
+        }
+
+        try {
+            knowledge.setExampleQuestions(objectMapper.writeValueAsString(trimmed));
+        } catch (Exception e) {
+            log.warn("[示例问题] 序列化失败: {}", e.getMessage());
+            return;
+        }
+        updateById(knowledge);
+        log.info("[示例问题] 更新成功: knowledgeId={}, count={}", knowledgeId, trimmed.size());
+    }
+
+    @Override
+    public String generateOneExampleQuestion(Long knowledgeId) {
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
+        }
+
+        // 读取第一个已完成文档的内容
+        List<Document> docs = documentService.listByKnowledgeId(knowledgeId).stream()
+                .filter(d -> d.getStatus() == DocumentStatus.COMPLETED)
+                .toList();
+        if (docs.isEmpty()) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NO_DOCUMENT);
+        }
+
+        Document doc = docs.get(0);
+        String content = documentService.previewDocument(doc.getId());
+        if (content == null || content.isBlank()) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NO_DOCUMENT);
+        }
+
+        String truncated = content.length() > 3000 ? content.substring(0, 3000) : content;
+
+        // 调用AI生成问题
+        Long providerId = resolveProviderId(null);
+        ChatModel chatModel = modelFactory.getChatModel(providerId);
+
+        String userPrompt = String.format("文档名称：%s\n\n文档内容（前3000字）：\n%s", doc.getName(), truncated);
+        List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(QUESTION_GEN_SYSTEM_PROMPT));
+        messages.add(new UserMessage(userPrompt));
+
+        String reply;
+        try {
+            ChatResponse response = chatModel.call(new Prompt(messages));
+            reply = response.getResult().getOutput().getText();
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[示例问题] AI生成失败: knowledgeId={}, error={}", knowledgeId, e.getMessage());
+            throw new BizException(ErrorCode.AI_GENERATE_FAILED);
+        }
+
+        String question = parseQuestionFromJson(reply);
+        if (question == null || question.isBlank()) {
+            log.warn("[示例问题] AI返回格式异常, reply={}", reply);
+            throw new BizException(ErrorCode.AI_GENERATE_FAILED);
+        }
+
+        // 追加到列表（满10则删最早）
+        appendQuestion(knowledge, question);
+        log.info("[示例问题] AI生成成功: knowledgeId={}, question={}", knowledgeId, question);
+        return question;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> parseExampleQuestions(String json) {
+        if (json == null || json.isBlank() || "[]".equals(json)) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {});
+        } catch (Exception e) {
+            return List.of();
         }
     }
 

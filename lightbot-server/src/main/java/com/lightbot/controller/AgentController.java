@@ -5,7 +5,6 @@ import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.entity.Agent;
 import com.lightbot.enums.ErrorCode;
-import com.lightbot.service.AgentKnowledgeService;
 import com.lightbot.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +28,6 @@ import java.util.Map;
 public class AgentController {
 
     private final AgentService agentService;
-    private final AgentKnowledgeService agentKnowledgeService;
 
     @Operation(summary = "创建Agent")
     @PostMapping
@@ -72,14 +70,14 @@ public class AgentController {
         if (knowledgeIds != null && knowledgeIds.size() > 3) {
             throw new BizException(ErrorCode.AGENT_KNOWLEDGE_LIMIT);
         }
-        agentKnowledgeService.updateKnowledgeBindings(id, knowledgeIds);
+        agentService.updateKnowledgeBindings(id, knowledgeIds);
         return Result.ok();
     }
 
     @Operation(summary = "获取Agent绑定的知识库ID列表")
     @GetMapping("/{id}/knowledge")
     public Result<List<Long>> getKnowledgeIds(@PathVariable Long id) {
-        return Result.ok(agentKnowledgeService.getKnowledgeIds(id));
+        return Result.ok(agentService.getKnowledgeIds(id));
     }
 
     @Operation(summary = "删除Agent")

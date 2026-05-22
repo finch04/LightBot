@@ -32,7 +32,7 @@ public enum ErrorCode {
     AGENT_NOT_FOUND(30000, "Agent不存在", HttpStatus.BAD_REQUEST),
     AGENT_KNOWLEDGE_LIMIT(30003, "每个Agent最多绑定3个知识库", HttpStatus.BAD_REQUEST),
     AI_NO_PROVIDER(30001, "未配置模型提供商，请先添加一个模型提供商", HttpStatus.BAD_REQUEST),
-    AI_GENERATE_FAILED(30002, "AI生成失败，请重试", HttpStatus.INTERNAL_SERVER_ERROR),
+    AI_GENERATE_FAILED(30002, "AI生成失败，请检查模型KEY配置", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // ========== 会话模块 ==========
     SESSION_NOT_FOUND(30001, "会话不存在", HttpStatus.BAD_REQUEST),
@@ -69,6 +69,7 @@ public enum ErrorCode {
     // ========== 任务模块 ==========
     TASK_NOT_FOUND(61001, "任务不存在", HttpStatus.BAD_REQUEST),
     TASK_CANCEL_FAILED(61002, "任务无法取消", HttpStatus.BAD_REQUEST),
+    TASK_DELETE_FAILED(61003, "任务无法删除（仅已完成/失败/已取消的任务可删除）", HttpStatus.BAD_REQUEST),
 
     // ========== RAG 模块 ==========
     RAG_KNOWLEDGE_NOT_FOUND(70001, "知识库不存在", HttpStatus.BAD_REQUEST),

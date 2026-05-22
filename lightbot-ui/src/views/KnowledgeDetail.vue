@@ -85,38 +85,59 @@
         </div>
       </div>
 
-      <!-- RAG 问答 + 思维导图 -->
+      <!-- 检索测试 + 思维导图 -->
       <div class="panel">
         <a-tabs v-model:activeKey="activeTab">
-          <a-tab-pane key="ask" tab="RAG 问答">
+          <a-tab-pane key="ask" tab="检索测试">
             <div class="rag-section">
               <div class="rag-messages" ref="ragRef">
-                <div v-for="(msg, i) in ragMessages" :key="i" :class="['rag-msg', msg.role]">
-                  <div v-if="msg.role === 'user'" class="rag-content">{{ msg.content }}</div>
-                  <div v-else class="rag-content markdown-body" v-html="renderMarkdown(msg.content)"></div>
+                <!-- 用户提问 -->
+                <div v-for="(msg, i) in ragMessages" :key="i" class="rag-msg user">
+                  <div class="rag-content">{{ msg.content }}</div>
+                </div>
+                <!-- 检索结果摘要 -->
+                <div v-if="searchResults.length > 0" class="rag-msg assistant">
+                  检索到 {{ searchResults.length }} 个文档块
+                </div>
+                <div v-else-if="ragMessages.length > 0 && !ragLoading" class="rag-msg assistant">
+                  未检索到相关内容
+                </div>
+                <!-- 文档块列表 -->
+                <div v-for="(item, i) in searchResults" :key="'chunk-' + i" class="chunk-result-card">
+                  <div class="chunk-result-header">
+                    <span class="chunk-rank">#{{ item.rank }}</span>
+                    <span class="chunk-source">{{ item.documentName }}</span>
+                    <span class="chunk-score">相似度 {{ (item.score * 100).toFixed(1) }}%</span>
+                  </div>
+                  <div class="chunk-result-content">{{ item.content }}</div>
                 </div>
               </div>
               <div class="rag-input">
                 <input
                   v-model="ragQuestion"
-                  placeholder="基于知识库提问..."
+                  placeholder="输入测试问题..."
                   @keydown.enter="askRag"
                 />
                 <button class="btn-primary-sm" :disabled="!ragQuestion.trim() || ragLoading" @click="askRag">
-                  提问
+                  {{ ragLoading ? '检索中...' : '检索' }}
                 </button>
               </div>
-              <!-- 示例问题轮播 -->
-              <div v-if="ragMessages.length === 0 && exampleQuestions.length > 0" class="example-questions">
-                <transition name="fade" mode="out-in">
-                  <span
-                    :key="questionRotateIndex"
-                    class="example-question-text"
-                    @click="ragQuestion = exampleQuestions[questionRotateIndex]"
-                  >
-                    {{ exampleQuestions[questionRotateIndex] }}
-                  </span>
-                </transition>
+              <!-- 示例问题轮播 / 空状态引导 -->
+              <div v-if="ragMessages.length === 0" class="example-questions">
+                <template v-if="exampleQuestions.length > 0">
+                  <transition name="fade" mode="out-in">
+                    <span
+                      :key="questionRotateIndex"
+                      class="example-question-text"
+                      @click="ragQuestion = exampleQuestions[questionRotateIndex]"
+                    >
+                      {{ exampleQuestions[questionRotateIndex] }}
+                    </span>
+                  </transition>
+                </template>
+                <div v-else class="example-questions-hint">
+                  暂无示例问题，<a @click="handleGenerateQuestions" :disabled="editQuestionLoading">点击生成示例问题</a>
+                </div>
               </div>
             </div>
           </a-tab-pane>
@@ -191,6 +212,18 @@
         </a-tab-pane>
         <a-tab-pane v-if="chunks.length > 0" key="chunks" tab="分块列表">
           <div class="tab-pane-body chunk-list-pane">
+            <!-- 入库配置展示 -->
+            <div v-if="currentDoc?.embeddingJson" class="ingest-config-display">
+              <div class="config-title">入库配置</div>
+              <div class="config-tags">
+                <a-tag color="blue">策略：{{ parseIngestConfig(currentDoc.embeddingJson).chunkStrategy || '-' }}</a-tag>
+                <a-tag color="blue">分片大小：{{ parseIngestConfig(currentDoc.embeddingJson).chunkSize || '-' }}</a-tag>
+                <a-tag color="blue">重叠：{{ parseIngestConfig(currentDoc.embeddingJson).chunkOverlap ?? '-' }}</a-tag>
+                <a-tag v-if="parseIngestConfig(currentDoc.embeddingJson).chunkDelimiter" color="blue">
+                  分隔符：{{ parseIngestConfig(currentDoc.embeddingJson).chunkDelimiter }}
+                </a-tag>
+              </div>
+            </div>
             <div class="chunk-list">
               <div v-for="(chunk, i) in chunks" :key="chunk.id" class="chunk-item" @click="openChunkDetail(chunk)">
                 <div class="chunk-header">
@@ -344,7 +377,7 @@
     </a-modal>
 
     <!-- 编辑知识库弹窗 -->
-    <a-modal v-model:open="editVisible" title="编辑知识库" :width="480" @ok="handleEdit" :confirm-loading="editSubmitting">
+    <a-modal v-model:open="editVisible" title="编辑知识库" :width="520" @ok="handleEdit" :confirm-loading="editSubmitting">
       <a-form :model="editForm" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="editForm.name" placeholder="知识库名称" />
@@ -368,6 +401,39 @@
         <a-form-item label="自动生成问题">
           <a-switch v-model:checked="editForm.autoGenerateQuestions" />
           <span class="form-hint" style="margin-left: 8px">入库文档时AI自动生成示例问题</span>
+        </a-form-item>
+        <!-- 示例问题管理 -->
+        <a-form-item label="示例问题">
+          <template #label>
+            <span>示例问题</span>
+            <a-tooltip title="知识库的示例问题会展示在RAG问答界面，帮助用户快速了解知识库内容。最多10个。">
+              <QuestionCircleOutlined style="margin-left: 4px; color: #8c8c8c; font-size: 12px" />
+            </a-tooltip>
+          </template>
+          <div class="edit-questions-list">
+            <div v-for="(q, qi) in editExampleQuestions" :key="qi" class="edit-question-item">
+              <a-input
+                v-if="q.editing"
+                v-model:value="q.text"
+                size="small"
+                placeholder="输入示例问题"
+                @press-enter="confirmEditQuestion(qi)"
+                @blur="confirmEditQuestion(qi)"
+              />
+              <template v-else>
+                <span class="edit-question-text" @click="startEditQuestion(qi)">{{ q.text }}</span>
+              </template>
+              <DeleteOutlined class="edit-question-delete" @click="removeEditQuestion(qi)" />
+            </div>
+            <div class="edit-question-actions">
+              <a-button size="small" type="dashed" @click="addEditQuestion" :disabled="editExampleQuestions.length >= 10">
+                <PlusOutlined /> 新增
+              </a-button>
+              <a-button size="small" type="dashed" :loading="editQuestionLoading" @click="aiGenerateEditQuestion" :disabled="editExampleQuestions.length >= 10">
+                <RobotOutlined /> AI生成
+              </a-button>
+            </div>
+          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -461,15 +527,15 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
-  DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined,
+  DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined, DeleteOutlined, RobotOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getKnowledge, updateKnowledge, getDocuments, uploadDocument, uploadDocuments, deleteDocument,
-  previewDocument, getDocumentDownloadUrl, getChunks, askKnowledge, askKnowledgeStream,
+  previewDocument, getDocumentDownloadUrl, getChunks, searchKnowledge,
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
-  generateExampleQuestions,
+  generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
@@ -515,6 +581,7 @@ const ragQuestion = ref('')
 const ragMessages = ref([])
 const ragLoading = ref(false)
 const ragRef = ref(null)
+const searchResults = ref([])
 const mindmapData = ref(null)
 const mindmapLoading = ref(false)
 const mindmapSvgRef = ref(null)
@@ -528,6 +595,20 @@ const previewContent = ref('')
 const previewLoaded = ref(false)
 const downloadUrl = ref('')
 const chunks = ref([])
+
+/** 解析文档入库配置JSON，缓存结果避免重复解析 */
+const _ingestConfigCache = new Map()
+function parseIngestConfig(json) {
+  if (!json) return {}
+  if (_ingestConfigCache.has(json)) return _ingestConfigCache.get(json)
+  try {
+    const config = typeof json === 'string' ? JSON.parse(json) : json
+    _ingestConfigCache.set(json, config)
+    return config
+  } catch {
+    return {}
+  }
+}
 
 // 分块详情弹窗
 const chunkDetailVisible = ref(false)
@@ -567,6 +648,8 @@ const editForm = reactive({
   ragThreshold: 0.7,
   autoGenerateQuestions: false,
 })
+const editExampleQuestions = ref([])
+const editQuestionLoading = ref(false)
 
 const exampleQuestions = ref([])
 const exampleQuestionsLoaded = ref(false)
@@ -856,6 +939,13 @@ async function openEditDialog() {
     ragThreshold: config.ragThreshold ?? 0.7,
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
   })
+
+  // 加载示例问题
+  try {
+    const res = await getExampleQuestions(knowledgeId)
+    editExampleQuestions.value = (res.data || []).map(q => ({ text: q, editing: false }))
+  } catch { editExampleQuestions.value = [] }
+
   editVisible.value = true
 
   // 加载嵌入模型列表
@@ -882,11 +972,80 @@ async function handleEdit() {
       embeddingModel: editForm.embeddingModel,
       config,
     })
+    // 保存示例问题
+    const questions = editExampleQuestions.value.map(q => q.text).filter(t => t && t.trim())
+    await updateExampleQuestions(knowledgeId, questions)
     message.success('更新成功')
     editVisible.value = false
     loadKnowledge()
   } finally {
     editSubmitting.value = false
+  }
+}
+
+// ========== 编辑弹窗 - 示例问题管理 ==========
+
+function addEditQuestion() {
+  if (editExampleQuestions.value.length >= 10) {
+    return message.warning('最多保留10个示例问题')
+  }
+  editExampleQuestions.value.push({ text: '', editing: true })
+}
+
+function removeEditQuestion(index) {
+  editExampleQuestions.value.splice(index, 1)
+}
+
+function startEditQuestion(index) {
+  editExampleQuestions.value[index].editing = true
+}
+
+function confirmEditQuestion(index) {
+  const q = editExampleQuestions.value[index]
+  if (!q.text || !q.text.trim()) {
+    editExampleQuestions.value.splice(index, 1)
+    return
+  }
+  q.editing = false
+}
+
+async function aiGenerateEditQuestion() {
+  if (editExampleQuestions.value.length >= 10) {
+    return message.warning('最多保留10个示例问题')
+  }
+  editQuestionLoading.value = true
+  try {
+    const res = await generateOneExampleQuestion(knowledgeId)
+    const question = res.data
+    if (question) {
+      editExampleQuestions.value.push({ text: question, editing: false })
+      message.success('生成成功')
+    }
+  } catch (e) {
+    // interceptor handled
+  } finally {
+    editQuestionLoading.value = false
+  }
+}
+
+// ========== RAG 问答 - 生成示例问题 ==========
+
+async function handleGenerateQuestions() {
+  editQuestionLoading.value = true
+  try {
+    const res = await generateOneExampleQuestion(knowledgeId)
+    const question = res.data
+    if (question) {
+      exampleQuestions.value.push(question)
+      if (exampleQuestions.value.length === 1) {
+        questionRotateIndex.value = 0
+      }
+      message.success('生成成功')
+    }
+  } catch (e) {
+    // interceptor handled
+  } finally {
+    editQuestionLoading.value = false
   }
 }
 
@@ -911,18 +1070,7 @@ function deleteDoc(docId) {
   })
 }
 
-// ========== RAG 问答 ==========
-
-const mdRenderer = new marked.Renderer()
-mdRenderer.link = function ({ href, title, text }) {
-  const titleAttr = title ? ` title="${title}"` : ''
-  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
-}
-
-function renderMarkdown(text) {
-  if (!text) return ''
-  return marked.parse(text, { renderer: mdRenderer })
-}
+// ========== 检索测试 ==========
 
 async function askRag() {
   const q = ragQuestion.value.trim()
@@ -930,30 +1078,14 @@ async function askRag() {
   ragMessages.value.push({ role: 'user', content: q })
   ragQuestion.value = ''
   ragLoading.value = true
-
-  // 添加空的assistant消息，用于流式填充
-  const assistantIndex = ragMessages.value.length
-  ragMessages.value.push({ role: 'assistant', content: '' })
+  searchResults.value = []
 
   try {
-    await askKnowledgeStream(knowledgeId, q,
-      (chunk) => {
-        // 流式追加内容
-        ragMessages.value[assistantIndex].content += chunk
-        // 自动滚动到底部
-        nextTick(() => {
-          if (ragRef.value) {
-            ragRef.value.scrollTop = ragRef.value.scrollHeight
-          }
-        })
-      },
-      () => {
-        // 流式完成
-        ragLoading.value = false
-      }
-    )
+    const res = await searchKnowledge(knowledgeId, q)
+    searchResults.value = res.data || []
   } catch (e) {
-    ragMessages.value[assistantIndex].content = '查询失败：' + (e.message || '未知错误')
+    // interceptor 已处理错误提示
+  } finally {
     ragLoading.value = false
   }
 }
@@ -1168,10 +1300,22 @@ function roleColor(role) {
   return map[role] || 'default'
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadKnowledge()
-  loadDocuments()
+  await loadDocuments()
   loadMembers()
+
+  // 从聊天页跳转过来时，自动打开对应文档的预览弹窗
+  const docId = route.query.docId
+  if (docId) {
+    const doc = documents.value.find(d => String(d.id) === String(docId))
+    if (doc) {
+      openDocModal(doc)
+    }
+    // 清除 query 参数，避免刷新重复打开
+    router.replace({ query: {} })
+  }
+
   // 示例问题轮播：每 3 秒随机切换，不重复
   questionRotateTimer = setInterval(() => {
     if (exampleQuestions.value.length > 0) {
@@ -1403,6 +1547,52 @@ onUnmounted(() => {
   font-size: 14px;
   line-height: 1.6;
 }
+
+/* 检索结果 - 文档块卡片 */
+.chunk-result-card {
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: border-color 0.15s;
+}
+.chunk-result-card:hover {
+  border-color: #6366f1;
+}
+.chunk-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.chunk-rank {
+  background: #6366f1;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.chunk-source {
+  color: #52525b;
+  font-weight: 500;
+}
+.chunk-score {
+  margin-left: auto;
+  color: #16a34a;
+  font-size: 12px;
+  font-weight: 500;
+}
+.chunk-result-content {
+  font-size: 13px;
+  color: #3f3f46;
+  line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .rag-input {
   display: flex;
   gap: 8px;
@@ -1433,6 +1623,58 @@ onUnmounted(() => {
 }
 .example-question-text:hover {
   color: #0070f3;
+}
+.example-questions-hint {
+  font-size: 13px;
+  color: #a1a1aa;
+  padding-top: 10px;
+}
+.example-questions-hint a {
+  color: #6366f1;
+  cursor: pointer;
+}
+.example-questions-hint a:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+/* 编辑弹窗 - 示例问题列表 */
+.edit-questions-list {
+  width: 100%;
+}
+.edit-question-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.edit-question-text {
+  flex: 1;
+  font-size: 13px;
+  color: #3f3f46;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-question-text:hover {
+  background: #f4f4f5;
+}
+.edit-question-delete {
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.edit-question-delete:hover {
+  color: #dc2626;
+}
+.edit-question-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* 示例问题轮播过渡 */
@@ -1539,6 +1781,24 @@ onUnmounted(() => {
 .chunk-list-pane {
   height: 520px;
   overflow: hidden;
+}
+.ingest-config-display {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.config-title {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.config-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .text-content-preview {
   padding: 20px 24px;

@@ -1,6 +1,9 @@
 package com.lightbot.service;
 
+import com.lightbot.dto.RagSearchResultVO;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 /**
  * RAG 检索增强生成服务接口
@@ -29,4 +32,13 @@ public interface RagService {
      * @return 流式回答
      */
     Flux<String> askStream(Long knowledgeId, String question, Long providerId);
+
+    /**
+     * 纯向量检索测试（不调用LLM），返回检索到的文档块列表
+     *
+     * @param knowledgeId 知识库ID
+     * @param question    用户问题
+     * @return 检索结果列表
+     */
+    List<RagSearchResultVO> search(Long knowledgeId, String question);
 }

@@ -2,6 +2,7 @@ package com.lightbot.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.RagSearchResultVO;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
@@ -179,6 +180,50 @@ public class RagServiceImpl implements RagService {
                 .map(response -> response.getResult().getOutput().getText())
                 .doOnComplete(() -> log.info("[RAG] 流式问答完成: knowledgeId={}", knowledgeId))
                 .doOnError(e -> log.error("[RAG] 流式问答异常: knowledgeId={}, error={}", knowledgeId, e.getMessage()));
+    }
+
+    @Override
+    public List<RagSearchResultVO> search(Long knowledgeId, String question) {
+        // 1. 校验知识库存在性
+        Knowledge knowledge = knowledgeService.getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
+        }
+
+        // 2. 解析检索参数
+        int topK = parseRagTopK(knowledge);
+        double threshold = parseRagThreshold(knowledge);
+        log.info("[RAG] 检索测试开始: knowledgeId={}, topK={}, threshold={}, question={}",
+                knowledgeId, topK, threshold, question);
+
+        // 3. 将问题文本向量化
+        float[] queryVector = embedText(question);
+
+        // 4. 向量检索 + 阈值过滤
+        List<Map<String, Object>> rawResults = embeddingService.searchSimilarRaw(knowledgeId, queryVector, topK);
+        List<Map<String, Object>> results = rawResults.stream()
+                .filter(row -> {
+                    Object score = row.get("score");
+                    return score != null && ((Number) score).doubleValue() >= threshold;
+                })
+                .toList();
+        log.info("[RAG] 检索测试完成: raw={}, filtered={}", rawResults.size(), results.size());
+
+        // 5. 转为VO返回（已按相似度降序，rank从1开始）
+        int rank = 0;
+        List<RagSearchResultVO> voList = new ArrayList<>();
+        for (Map<String, Object> row : results) {
+            RagSearchResultVO vo = new RagSearchResultVO();
+            vo.setContent((String) row.get("content"));
+            vo.setRank(++rank);
+            Object score = row.get("score");
+            vo.setScore(score != null ? Math.round(((Number) score).doubleValue() * 10000.0) / 10000.0 : null);
+            vo.setDocumentName((String) row.get("document_name"));
+            Object documentId = row.get("document_id");
+            vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
+            voList.add(vo);
+        }
+        return voList;
     }
 
     /**

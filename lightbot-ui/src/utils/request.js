@@ -4,12 +4,13 @@ import router from '../router'
 
 /**
  * 将 JSON 字符串中的 Long 类型数字转为字符串，防止前端精度丢失
- * 匹配规则：连续 16 位及以上的数字（雪花算法 ID 长度为 18-19 位）
+ * 匹配规则：连续 16 位及以上的整数（雪花算法 ID 长度为 18-19 位）
+ * 同时处理对象属性值（冒号后）和数组元素（逗号/方括号后）
  */
 function convertLongToString(data) {
   if (typeof data !== 'string') return data
-  // 匹配 JSON 值中的大数字（包括负数），避免误伤小数和普通数字
-  return data.replace(/:\s*(-?\d{16,})/g, ':"$1"')
+  // 匹配 JSON 值中的大数字：冒号后、逗号后、左方括号后
+  return data.replace(/(?<=:\s*|,\s*|\[\s*)(-?\d{16,})(?=\s*[,\]}])/g, '"$1"')
 }
 
 const request = axios.create({
@@ -82,3 +83,16 @@ request.interceptors.response.use(
 )
 
 export default request
+
+/**
+ * 安全的 JSON.parse，处理 Long 类型精度丢失
+ * 用于 SSE 流式数据等绕过 axios 拦截器的场景
+ */
+export function safeJsonParse(jsonStr) {
+  if (typeof jsonStr !== 'string') return jsonStr
+  try {
+    return JSON.parse(convertLongToString(jsonStr))
+  } catch {
+    return null
+  }
+}

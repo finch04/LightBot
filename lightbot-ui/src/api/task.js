@@ -15,3 +15,7 @@ export function getTask(taskId) {
 export function cancelTask(taskId) {
   return request.post(`/tasks/${taskId}/cancel`)
 }
+
+export function deleteTask(taskId) {
+  return request.delete(`/tasks/${taskId}`)
+}

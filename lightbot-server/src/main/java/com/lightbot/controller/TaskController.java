@@ -62,4 +62,12 @@ public class TaskController {
         }
         return Result.ok();
     }
+
+    @Operation(summary = "删除任务")
+    @DeleteMapping("/{taskId}")
+    public Result<Void> delete(@PathVariable Long taskId) {
+        long userId = StpUtil.getLoginIdAsLong();
+        taskService.deleteTask(taskId, userId);
+        return Result.ok();
+    }
 }

@@ -97,4 +97,28 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @param documentId  文档ID
      */
     void generateExampleQuestions(Long knowledgeId, Long documentId);
+
+    /**
+     * 获取示例问题列表
+     *
+     * @param knowledgeId 知识库ID
+     * @return 问题列表
+     */
+    List<String> getExampleQuestions(Long knowledgeId);
+
+    /**
+     * 更新示例问题列表（全量替换，最多10个）
+     *
+     * @param knowledgeId    知识库ID
+     * @param questions      新的问题列表
+     */
+    void updateExampleQuestions(Long knowledgeId, List<String> questions);
+
+    /**
+     * AI生成一个示例问题并追加到列表
+     *
+     * @param knowledgeId 知识库ID
+     * @return 生成的问题
+     */
+    String generateOneExampleQuestion(Long knowledgeId);
 }
