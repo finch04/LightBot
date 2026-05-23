@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">模型提供商</h1>
+        <h1 class="page-title">模型管理</h1>
         <p class="page-desc">管理 AI 模型提供商的 API 配置</p>
       </div>
       <div class="header-actions">

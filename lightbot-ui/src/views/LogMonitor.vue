@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">日志监控</h1>
+        <h1 class="page-title">日志</h1>
         <p class="page-desc">实时查看系统日志，支持按级别过滤</p>
       </div>
       <div class="header-actions">

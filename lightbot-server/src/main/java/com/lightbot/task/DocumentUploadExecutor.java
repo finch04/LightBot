@@ -88,8 +88,9 @@ public class DocumentUploadExecutor implements TaskExecutor {
                 doc.setMarkdownPath(markdownPath);
             }
 
-            // 5. 更新文档状态为 UPLOADED
+            // 5. 更新文档状态为 UPLOADED，清空错误消息
             doc.setStatus(DocumentStatus.UPLOADED);
+            doc.setErrorMessage(null);
             documentService.updateById(doc);
             taskService.updateProgress(task.getId(), 95, "处理完成");
 

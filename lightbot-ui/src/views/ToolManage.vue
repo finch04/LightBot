@@ -34,6 +34,9 @@
             <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
           </div>
           <div class="card-actions">
+            <a-tooltip title="测试工具">
+              <button class="btn-icon" @click="openTestDialog(t)"><PlayCircleOutlined /></button>
+            </a-tooltip>
             <button class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
             <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
           </div>
@@ -103,15 +106,69 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 测试工具弹窗 -->
+    <a-modal v-model:open="testDialogVisible" title="测试工具" :width="680" :footer="null" :maskClosable="false">
+      <div class="test-tool-info">
+        <span class="test-tool-name">{{ testToolName }}</span>
+        <span class="test-tool-desc">{{ testToolDesc }}</span>
+      </div>
+      <!-- 参数说明 -->
+      <div v-if="testToolParams.length > 0" class="test-params-section">
+        <div class="test-params-title">参数说明</div>
+        <table class="test-params-table">
+          <thead>
+            <tr><th>参数名</th><th>类型</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in testToolParams" :key="p.name">
+              <td><code>{{ p.name }}</code></td>
+              <td>{{ p.type }}</td>
+              <td>{{ p.desc }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="test-params-section">
+        <div class="test-params-hint">该工具无需输入参数，直接点击执行即可</div>
+      </div>
+      <!-- JSON 输入 -->
+      <div class="test-input-header">
+        <span class="test-input-label">输入参数（JSON）</span>
+        <button class="btn-text" @click="formatTestArgs">格式化</button>
+      </div>
+      <textarea
+        ref="testArgsRef"
+        v-model="testArgs"
+        class="test-json-input"
+        rows="6"
+        spellcheck="false"
+        placeholder='{"key": "value"}'
+      />
+      <div class="dialog-footer">
+        <div></div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="testDialogVisible = false">关闭</button>
+          <button class="btn-primary-sm" :disabled="testLoading" @click="handleTest">
+            {{ testLoading ? '执行中...' : '执行测试' }}
+          </button>
+        </div>
+      </div>
+      <a-divider v-if="testResult !== null" />
+      <div v-if="testResult !== null" class="test-result">
+        <div class="test-result-label">执行结果</div>
+        <pre class="test-result-content">{{ testResult }}</pre>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getTools, createTool, updateTool, deleteTool } from '../api/tool'
+import { getTools, createTool, updateTool, deleteTool, testTool } from '../api/tool'
 import JsonInput from '../components/JsonInput.vue'
 
 const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
@@ -126,6 +183,65 @@ const form = reactive({
   toolType: 'custom', endpointUrl: '', authType: 'none',
   inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
 })
+
+const testDialogVisible = ref(false)
+const testToolName = ref('')
+const testToolDesc = ref('')
+const testToolId = ref(null)
+const testToolParams = ref([])
+const testArgs = ref('{}')
+const testResult = ref(null)
+const testLoading = ref(false)
+const testArgsRef = ref(null)
+
+/** 内置工具的参数说明和示例 */
+const builtinToolMeta = {
+  calculator: {
+    params: [
+      { name: 'a', type: 'number', desc: '第一个操作数' },
+      { name: 'b', type: 'number', desc: '第二个操作数' },
+      { name: 'operation', type: 'string', desc: '运算类型：add（加）、subtract（减）、multiply（乘）、divide（除）' },
+    ],
+    example: { a: 10, b: 5, operation: 'add' },
+  },
+  web_search: {
+    params: [
+      { name: 'query', type: 'string', desc: '搜索关键词' },
+      { name: 'maxResults', type: 'number', desc: '返回结果数量（默认5，最大10）' },
+    ],
+    example: { query: '北京天气', maxResults: 5 },
+  },
+  image_generation: {
+    params: [
+      { name: 'prompt', type: 'string', desc: '图片描述（英文效果更佳）' },
+      { name: 'negativePrompt', type: 'string', desc: '负面提示词，描述不希望出现的元素（可选）' },
+    ],
+    example: { prompt: 'a cute cat wearing sunglasses on the beach', negativePrompt: 'blurry, low quality' },
+  },
+  pg_list_tables: {
+    params: [],
+    example: {},
+  },
+  pg_describe_table: {
+    params: [
+      { name: 'tableName', type: 'string', desc: '要查看的表名' },
+    ],
+    example: { tableName: 'agent' },
+  },
+  pg_query: {
+    params: [
+      { name: 'sql', type: 'string', desc: 'SQL 查询语句（仅允许 SELECT）' },
+    ],
+    example: { sql: 'SELECT * FROM agent LIMIT 10' },
+  },
+  query_knowledge: {
+    params: [
+      { name: 'question', type: 'string', desc: '搜索问题' },
+      { name: 'agentId', type: 'number', desc: 'Agent ID（测试时需指定，用于查找绑定的知识库）' },
+    ],
+    example: { question: '什么是SAP', agentId: 0 },
+  },
+}
 
 async function loadData() {
   try {
@@ -191,7 +307,64 @@ function handleDelete(id) {
   })
 }
 
+function openTestDialog(tool) {
+  testToolId.value = tool.id
+  testToolName.value = tool.displayName || tool.name
+  testToolDesc.value = tool.description || ''
+  testResult.value = null
+
+  // 查找内置工具元数据，自动填充参数说明和示例
+  const meta = builtinToolMeta[tool.name]
+  if (meta) {
+    testToolParams.value = meta.params
+    testArgs.value = JSON.stringify(meta.example, null, 2)
+  } else {
+    testToolParams.value = []
+    testArgs.value = '{}'
+  }
+
+  testDialogVisible.value = true
+}
+
+function formatTestArgs() {
+  try {
+    const obj = JSON.parse(testArgs.value)
+    testArgs.value = JSON.stringify(obj, null, 2)
+  } catch {
+    message.warning('JSON 格式错误，无法格式化')
+  }
+}
+
+async function handleTest() {
+  if (!testArgs.value.trim()) return message.warning('请输入参数')
+  // 验证 JSON 格式
+  try {
+    JSON.parse(testArgs.value)
+  } catch {
+    return message.warning('参数必须是合法的 JSON 格式')
+  }
+  testLoading.value = true
+  testResult.value = null
+  try {
+    const res = await testTool(testToolId.value, testArgs.value)
+    testResult.value = res.data
+  } catch (e) {
+    testResult.value = '请求失败: ' + (e.response?.data?.message || e.message || '未知错误')
+  } finally {
+    testLoading.value = false
+  }
+}
+
 onMounted(loadData)
+
+function search(text) {
+  const next = text || ''
+  if (searchText.value === next) return
+  searchText.value = next
+  loadData()
+}
+
+defineExpose({ openDialog, search })
 </script>
 
 <style scoped>
@@ -391,5 +564,123 @@ onMounted(loadData)
 .btn-primary-sm:disabled {
   background: #d4d4d8;
   cursor: not-allowed;
+}
+
+.test-tool-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.test-tool-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #171717;
+}
+.test-tool-desc {
+  font-size: 13px;
+  color: #71717a;
+}
+.test-params-section {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+.test-params-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.test-params-hint {
+  font-size: 13px;
+  color: #a1a1aa;
+  font-style: italic;
+}
+.test-params-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.test-params-table th {
+  text-align: left;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  color: #52525b;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e5e5;
+}
+.test-params-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #171717;
+}
+.test-params-table code {
+  background: #f5f5f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #0070f3;
+}
+.test-input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.test-input-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+}
+.btn-text {
+  background: none;
+  border: none;
+  color: #0070f3;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.btn-text:hover {
+  background: #f0f5ff;
+}
+.test-json-input {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px 16px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+  background: #fafafa;
+  color: #171717;
+  box-sizing: border-box;
+}
+.test-json-input:focus {
+  border-color: #0070f3;
+  background: #fff;
+}
+.test-result-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.test-result-content {
+  background: #f5f5f5;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #171717;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 </style>

@@ -205,6 +205,15 @@ function handleDelete(id) {
 }
 
 onMounted(loadData)
+
+function search(text) {
+  const next = text || ''
+  if (searchText.value === next) return
+  searchText.value = next
+  loadData()
+}
+
+defineExpose({ openDialog, search })
 </script>
 
 <style scoped>

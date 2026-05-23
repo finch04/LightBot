@@ -97,7 +97,12 @@ public class TaskConsumerConfig {
                     taskService.markSuccess(taskId, result);
                 } catch (Exception e) {
                     String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                    taskService.markFailed(taskId, error);
+                    // 区分用户取消和其他失败
+                    if ("任务已被用户取消".equals(error)) {
+                        taskService.markCancelled(taskId, "任务被用户取消");
+                    } else {
+                        taskService.markFailed(taskId, error);
+                    }
                 }
 
             } catch (Exception e) {

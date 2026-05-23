@@ -9,6 +9,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.aop.framework.Advised;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +40,9 @@ public class BuiltInToolRegistrar {
         int imported = 0;
 
         for (Object bean : toolBeans) {
-            for (Method method : bean.getClass().getMethods()) {
+            Class<?> clazz = getTargetClass(bean);
+            for (Method method : clazz.getDeclaredMethods()) {
+                if (method.isSynthetic() || method.isBridge()) continue;
                 org.springframework.ai.tool.annotation.Tool annotation =
                         method.getAnnotation(org.springframework.ai.tool.annotation.Tool.class);
                 if (annotation == null) continue;
@@ -97,7 +100,9 @@ public class BuiltInToolRegistrar {
                 org.springframework.stereotype.Component.class);
         return allBeans.values().stream()
                 .filter(bean -> {
-                    for (Method method : bean.getClass().getMethods()) {
+                    Class<?> clazz = getTargetClass(bean);
+                    for (Method method : clazz.getDeclaredMethods()) {
+                        if (method.isSynthetic() || method.isBridge()) continue;
                         if (method.isAnnotationPresent(org.springframework.ai.tool.annotation.Tool.class)) {
                             return true;
                         }
@@ -105,6 +110,20 @@ public class BuiltInToolRegistrar {
                     return false;
                 })
                 .toList();
+    }
+
+    /**
+     * 获取 Bean 的真实类（处理 CGLIB 代理）
+     */
+    private Class<?> getTargetClass(Object bean) {
+        if (bean instanceof Advised advised) {
+            try {
+                return advised.getTargetSource().getTarget().getClass();
+            } catch (Exception e) {
+                // fall through
+            }
+        }
+        return bean.getClass();
     }
 
     /**

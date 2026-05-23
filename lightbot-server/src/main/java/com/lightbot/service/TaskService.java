@@ -51,6 +51,14 @@ public interface TaskService extends IService<Task> {
     boolean requestCancel(Long taskId);
 
     /**
+     * 标记任务为已取消
+     *
+     * @param taskId  任务ID
+     * @param message 取消说明
+     */
+    void markCancelled(Long taskId, String message);
+
+    /**
      * 分页查询用户任务
      */
     Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status);

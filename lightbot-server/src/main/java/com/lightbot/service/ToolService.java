@@ -41,4 +41,13 @@ public interface ToolService extends IService<Tool> {
      * @return ToolCallback 列表
      */
     List<ToolCallback> resolveToolCallbacksByIds(List<Long> toolIds);
+
+    /**
+     * 测试执行单个工具
+     *
+     * @param toolId 工具ID
+     * @param args   JSON格式的工具参数
+     * @return 执行结果
+     */
+    String testTool(Long toolId, String args);
 }

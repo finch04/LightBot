@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @Tag(name = "Tool管理", description = "Tool的增删改查")
 @RestController
 @RequestMapping("/api/tools")
@@ -55,5 +57,11 @@ public class ToolController {
     @GetMapping("/{id}")
     public Result<Tool> getById(@PathVariable Long id) {
         return Result.ok(toolService.getById(id));
+    }
+
+    @Operation(summary = "测试执行Tool")
+    @PostMapping("/{id}/test")
+    public Result<String> testTool(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return Result.ok(toolService.testTool(id, body.getOrDefault("args", "{}")));
     }
 }

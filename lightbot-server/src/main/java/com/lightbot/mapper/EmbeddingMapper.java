@@ -55,6 +55,44 @@ public interface EmbeddingMapper extends BaseMapper<Embedding> {
                                              @Param("topK") int topK);
 
     /**
+     * 余弦相似度检索 Top-K（带阈值过滤，下沉到SQL层）
+     * <p>相比 searchSimilar，将阈值过滤从Java层下沉到SQL WHERE子句，
+     * 避免传输低于阈值的无效数据</p>
+     *
+     * @param vector      查询向量字符串
+     * @param knowledgeId 知识库ID
+     * @param topK        返回数量
+     * @param threshold   相似度阈值（0-1），低于此值的结果不返回
+     * @return 检索结果（chunk_id, content, document_name, score）
+     */
+    @Select("SELECT c.id AS chunk_id, c.content, c.knowledge_id, c.document_id, " +
+            "d.name AS document_name, " +
+            "1 - (e.vector <=> #{vector}::vector) AS score " +
+            "FROM embedding e " +
+            "JOIN chunk c ON e.chunk_id = c.id " +
+            "JOIN document d ON c.document_id = d.id " +
+            "WHERE c.knowledge_id = #{knowledgeId} AND d.deleted = 0 " +
+            "AND (1 - (e.vector <=> #{vector}::vector)) >= #{threshold} " +
+            "ORDER BY e.vector <=> #{vector}::vector LIMIT #{topK}")
+    List<Map<String, Object>> searchSimilarWithThreshold(@Param("vector") String vector,
+                                                          @Param("knowledgeId") Long knowledgeId,
+                                                          @Param("topK") int topK,
+                                                          @Param("threshold") double threshold);
+
+    /**
+     * 批量存储向量
+     *
+     * @param vectors 向量数据列表，每项包含 [id, chunkId, modelName, dimension, vectorStr]
+     */
+    @Insert("<script>" +
+            "INSERT INTO embedding (id, chunk_id, model_name, dimension, vector, create_time) VALUES " +
+            "<foreach collection='vectors' item='v' separator=','>" +
+            "(#{v.id}, #{v.chunkId}, #{v.modelName}, #{v.dimension}, #{v.vector}::vector, NOW())" +
+            "</foreach>" +
+            "</script>")
+    void batchInsertVectors(@Param("vectors") List<Map<String, Object>> vectors);
+
+    /**
      * 删除指定知识库的所有向量
      *
      * @param knowledgeId 知识库ID

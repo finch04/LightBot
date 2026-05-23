@@ -41,8 +41,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 
 /**
@@ -59,6 +63,16 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     /** 单文件大小上限 100MB */
     private static final long MAX_FILE_SIZE = 100L * 1024 * 1024;
+
+    /** 批量 Embedding 每批大小（受 Embedding API 限制，通常 50-200） */
+    private static final int EMBED_BATCH_SIZE = 50;
+
+    /** 并行入库线程池（控制并发，避免 Embedding API 限流） */
+    private static final ExecutorService INGEST_EXECUTOR = Executors.newFixedThreadPool(3, r -> {
+        Thread t = new Thread(r, "doc-ingest");
+        t.setDaemon(true);
+        return t;
+    });
 
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
@@ -299,39 +313,49 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 .eq(Chunk::getDocumentId, documentId)
                 .eq(Chunk::getStatus, ChunkStatus.CHUNKED));
 
-        log.info("[向量化] 开始, documentId={}, chunks={}", documentId, chunks.size());
+        log.info("[向量化] 开始(批量模式), documentId={}, batchSize={}", documentId, chunks.size());
 
         int total = chunks.size();
         int success = 0;
         int failed = 0;
 
-        for (int i = 0; i < total; i++) {
-            Chunk chunk = chunks.get(i);
+        // 3. 分批处理，每批 EMBED_BATCH_SIZE 个chunk
+        for (int batchStart = 0; batchStart < total; batchStart += EMBED_BATCH_SIZE) {
+            int batchEnd = Math.min(batchStart + EMBED_BATCH_SIZE, total);
+            List<Chunk> batch = chunks.subList(batchStart, batchEnd);
+
+            // 3.1 批量调用 EmbeddingModel
+            List<String> texts = batch.stream().map(Chunk::getContent).toList();
+            float[][] vectors;
             try {
-                // 3. 更新状态为向量化中
-                chunk.setStatus(ChunkStatus.VECTORIZING);
-                chunkService.updateById(chunk);
-
-                // 4. 调用 EmbeddingModel 将内容转为向量
-                float[] vector = embedText(chunk.getContent());
-
-                // 5. 存储向量
-                embeddingService.saveVector(chunk.getId(), modelName, vector);
-
-                // 6. 更新状态为已向量化
-                chunk.setStatus(ChunkStatus.VECTORIZED);
-                chunkService.updateById(chunk);
-                success++;
-
-                // 7. 报告进度
-                int progress = (int) ((i + 1.0) / total * 100);
-                progressCallback.accept(progress, "向量化中 " + (i + 1) + "/" + total);
+                vectors = embedBatch(texts);
             } catch (Exception e) {
-                log.error("[向量化] 分块失败, chunkId={}", chunk.getId(), e);
-                chunk.setStatus(ChunkStatus.FAILED);
-                chunkService.updateById(chunk);
-                failed++;
+                log.error("[向量化] 批量Embedding失败, batchStart={}", batchStart, e);
+                // 批量失败时标记该批次所有chunk为失败
+                for (Chunk chunk : batch) {
+                    chunk.setStatus(ChunkStatus.FAILED);
+                    chunkService.updateById(chunk);
+                    failed++;
+                }
+                continue;
             }
+
+            // 3.2 批量更新chunk状态为向量化中
+            List<Long> chunkIds = batch.stream().map(Chunk::getId).toList();
+            batch.forEach(c -> c.setStatus(ChunkStatus.VECTORIZING));
+            chunkService.updateBatchById(batch);
+
+            // 3.3 批量存储向量
+            embeddingService.batchSaveVectors(chunkIds, modelName, Arrays.asList(vectors));
+
+            // 3.4 批量更新chunk状态为已向量化
+            batch.forEach(c -> c.setStatus(ChunkStatus.VECTORIZED));
+            chunkService.updateBatchById(batch);
+            success += batch.size();
+
+            // 3.5 报告进度
+            int progress = (int) ((batchEnd * 1.0 / total) * 100);
+            progressCallback.accept(progress, "向量化中 " + batchEnd + "/" + total);
         }
 
         log.info("[向量化] 完成, documentId={}, success={}, failed={}", documentId, success, failed);
@@ -345,6 +369,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         Document doc = getById(documentId);
         if (doc != null) {
             doc.setStatus(DocumentStatus.COMPLETED);
+            doc.setErrorMessage(null);
             updateById(doc);
 
             // 异步触发示例问题生成（失败不影响主流程）
@@ -361,6 +386,20 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         EmbeddingResponse response = embeddingModel.call(
                 new EmbeddingRequest(List.of(text), null));
         return response.getResult().getOutput();
+    }
+
+    /**
+     * 批量文本向量化：一次请求处理多个文本，减少网络往返
+     *
+     * @param texts 文本列表
+     * @return 向量列表，与输入文本一一对应
+     */
+    private float[][] embedBatch(List<String> texts) {
+        EmbeddingResponse response = embeddingModel.call(
+                new EmbeddingRequest(texts, null));
+        return response.getResults().stream()
+                .map(r -> r.getOutput())
+                .toArray(float[][]::new);
     }
 
     @Override

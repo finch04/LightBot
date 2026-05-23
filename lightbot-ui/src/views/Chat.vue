@@ -38,7 +38,7 @@
             <!-- 工具调用展示 -->
             <div v-if="msg._toolEvents && msg._toolEvents.length > 0" class="tool-calls-group">
               <div class="tool-calls-header" @click="msg._toolExpanded = !msg._toolExpanded">
-                <LoadingOutlined v-if="msg._streaming" class="tool-icon spinning" />
+                <LoadingOutlined v-if="!msg._toolsDone" class="tool-icon spinning" />
                 <CheckCircleOutlined v-else class="tool-icon tool-success" />
                 <span class="tool-calls-title">
                   调用了 {{ getUniqueToolNames(msg._toolEvents).length }} 个工具
@@ -51,14 +51,27 @@
               <div v-show="msg._toolExpanded" class="tool-calls-list">
                 <div v-for="(evt, ti) in msg._toolEvents" :key="ti" class="tool-call-item">
                   <div v-if="evt.type === 'tool_call'" class="tool-call-row">
-                    <LoadingOutlined class="tool-icon spinning" />
+                    <SearchOutlined v-if="evt.toolName === 'query_knowledge'" class="tool-icon tool-query" />
+                    <LoadingOutlined v-else class="tool-icon spinning" />
                     <span class="tool-name">{{ evt.toolName }}</span>
                     <span class="tool-args">{{ formatToolArgs(evt.args) }}</span>
                   </div>
                   <div v-else-if="evt.type === 'tool_result'" class="tool-result-row">
                     <CheckCircleOutlined class="tool-icon tool-success" />
                     <span class="tool-name">{{ evt.toolName }} 完成</span>
-                    <div class="tool-result-content">{{ truncateResult(evt.result) }}</div>
+                    <div class="tool-result-summary" @click="toggleToolResult(msg, ti)">
+                      <span v-if="parseToolResultCount(evt.result) !== null">
+                        找到 {{ parseToolResultCount(evt.result) }} 条相关内容
+                      </span>
+                      <span v-else>执行完成</span>
+                      <RightOutlined :class="{ expanded: isToolResultExpanded(msg, ti) }" class="tool-expand-icon" />
+                    </div>
+                    <div v-if="isToolResultExpanded(msg, ti)" class="tool-result-content">{{ evt.result }}</div>
+                  </div>
+                  <div v-else-if="evt.type === 'tool_status'" class="tool-status-row">
+                    <CheckCircleOutlined v-if="msg._toolsDone" class="tool-icon tool-success" />
+                    <LoadingOutlined v-else class="tool-icon spinning" />
+                    <span class="tool-status-text">{{ evt.message }}</span>
                   </div>
                 </div>
               </div>
@@ -205,7 +218,7 @@ import { marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent } from '../api/agent'
@@ -370,11 +383,23 @@ async function loadHistory() {
       getSessionMessages(sessionId.value),
       getSession(sessionId.value),
     ])
-    messages.value = (msgRes.data || []).map(m => ({
-      role: m.role?.code || m.role,
-      content: m.content,
-      metadata: m.metadata,
-    }))
+    messages.value = (msgRes.data || []).map(m => {
+      // 从 metadata 恢复 toolEvents（持久化的工具调用链路）
+      let toolEvents = []
+      if (m.metadata) {
+        try {
+          const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
+          if (metadata?.toolEvents) toolEvents = metadata.toolEvents
+        } catch {}
+      }
+      return {
+        role: m.role?.code || m.role,
+        content: m.content,
+        metadata: m.metadata,
+        _toolEvents: toolEvents,
+        _toolsDone: true,
+      }
+    })
 
     // 从会话中恢复 agentId
     const session = sessionRes.data
@@ -446,7 +471,7 @@ async function sendMessage() {
         // onChunk: 文本内容
         onChunk: (chunk) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolEvents: [] })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [] })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
             hasStreamContent.value = true
@@ -459,15 +484,24 @@ async function sendMessage() {
           currentStatus.value = status
           scrollToBottom()
         },
-        // onToolEvent: 工具调用/结果事件
+        // onToolEvent: 工具调用/结果/状态事件
         onToolEvent: (event) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolEvents: [] })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [] })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
           }
+          // tool_complete 是标记事件，不加入 _toolEvents
+          if (event.type === 'tool_complete') {
+            assistantMsg._toolsDone = true
+            return
+          }
           assistantMsg._toolEvents.push(event)
           toolEvents.value.push(event)
+          // 工具状态事件实时更新顶部状态栏
+          if (event.type === 'tool_status' && event.message) {
+            currentStatus.value = event.message
+          }
           scrollToBottom()
         },
         // onMetadata: metadata消息（包含RAG引用等）
@@ -478,7 +512,10 @@ async function sendMessage() {
         },
         // onDone: 完成
         onDone: () => {
-          if (assistantMsg) assistantMsg._streaming = false
+          if (assistantMsg) {
+            assistantMsg._streaming = false
+            assistantMsg._toolsDone = true
+          }
           loading.value = false
           streaming.value = false
           hasStreamContent.value = false
@@ -497,7 +534,7 @@ async function sendMessage() {
     // 用户主动中断
     if (e.name === 'AbortError') {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolEvents: [] })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [] })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content += '\n\n*AI 输出已终止*'
@@ -553,6 +590,36 @@ function formatToolArgs(args) {
 function truncateResult(result) {
   if (!result) return ''
   return result.length > 300 ? result.substring(0, 300) + '...' : result
+}
+
+/**
+ * 解析工具返回结果中的数量（如"找到 1 条相关内容"）
+ */
+function parseToolResultCount(result) {
+  if (!result) return null
+  const match = result.match(/找到\s*(\d+)\s*条/)
+  return match ? parseInt(match[1]) : null
+}
+
+// 用于存储每条消息的工具结果展开状态
+const expandedToolResultsMap = ref(new Map())
+
+function isToolResultExpanded(msg, index) {
+  const msgIndex = messages.value.indexOf(msg)
+  const key = `${msgIndex}-tool-${index}`
+  return expandedToolResultsMap.value.has(key)
+}
+
+function toggleToolResult(msg, index) {
+  const msgIndex = messages.value.indexOf(msg)
+  const key = `${msgIndex}-tool-${index}`
+  const newMap = new Map(expandedToolResultsMap.value)
+  if (newMap.has(key)) {
+    newMap.delete(key)
+  } else {
+    newMap.set(key, true)
+  }
+  expandedToolResultsMap.value = newMap
 }
 
 function formatElapsed(ms) {
@@ -618,6 +685,7 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
   }
   // 切换对话时清空展开状态
   expandedRefsMap.value = new Map()
+  expandedToolResultsMap.value = new Map()
   loadHistory()
 })
 
@@ -1089,9 +1157,15 @@ watch(sessionId, (newVal, oldVal) => {
 .tool-call-item:last-child {
   border-bottom: none;
 }
-.tool-call-row,
+.tool-call-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+}
 .tool-result-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 6px;
   font-size: 13px;
@@ -1102,6 +1176,9 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .tool-icon.tool-success {
   color: #10b981;
+}
+.tool-icon.tool-query {
+  color: #6366f1;
 }
 .tool-name {
   font-weight: 500;
@@ -1114,8 +1191,19 @@ watch(sessionId, (newVal, oldVal) => {
   font-size: 12px;
   word-break: break-all;
 }
+.tool-result-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: #0070f3;
+  font-size: 13px;
+}
+.tool-result-summary:hover {
+  color: #005bc4;
+}
 .tool-result-content {
-  width: 100%;
+  flex-basis: 100%;
   margin-top: 4px;
   padding: 8px;
   background: #f9fafb;
@@ -1127,6 +1215,17 @@ watch(sessionId, (newVal, oldVal) => {
   word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
+}
+.tool-status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: #0070f3;
+}
+.tool-status-text {
+  color: #52525b;
+  font-size: 12px;
 }
 .spinning {
   animation: spin 1s linear infinite;

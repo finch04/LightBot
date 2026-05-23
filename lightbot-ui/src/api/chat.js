@@ -56,7 +56,7 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent }) {
           // 尝试解析为工具事件 JSON
           try {
             const parsed = JSON.parse(statusContent)
-            if (parsed.type === 'tool_call' || parsed.type === 'tool_result') {
+            if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status') {
               onToolEvent?.(parsed)
               continue
             }

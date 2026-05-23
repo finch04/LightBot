@@ -24,6 +24,15 @@ public interface EmbeddingService extends IService<Embedding> {
     void saveVector(Long chunkId, String modelName, float[] vector);
 
     /**
+     * 批量存储向量（减少数据库往返次数）
+     *
+     * @param chunkIds  分块ID列表
+     * @param modelName 模型名称
+     * @param vectors   向量数据列表，与 chunkIds 一一对应
+     */
+    void batchSaveVectors(List<Long> chunkIds, String modelName, List<float[]> vectors);
+
+    /**
      * 余弦相似度检索 Top-K
      *
      * @param knowledgeId 知识库ID
@@ -33,6 +42,17 @@ public interface EmbeddingService extends IService<Embedding> {
      * @return 检索结果（chunk_id, content, document_name, score）
      */
     List<Map<String, Object>> searchSimilar(Long knowledgeId, float[] queryVector, int topK, double threshold);
+
+    /**
+     * 余弦相似度检索 Top-K（阈值过滤下沉到SQL层）
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param topK        返回数量
+     * @param threshold   相似度阈值（SQL WHERE 过滤）
+     * @return 检索结果（chunk_id, content, document_name, score）
+     */
+    List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector, int topK, double threshold);
 
     /**
      * 余弦相似度检索 Top-K（不过滤阈值，返回原始结果）

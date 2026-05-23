@@ -15,11 +15,15 @@ import com.lightbot.service.ToolService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.metadata.ToolMetadata;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.method.MethodToolCallback;
-import org.springframework.ai.tool.method.MethodToolCallbackProvider;
+import org.springframework.ai.tool.support.ToolDefinitions;
+import org.springframework.aop.framework.Advised;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -185,33 +189,90 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
 
     /**
      * 获取所有内置 @Tool Bean 的 ToolCallback
+     * <p>绕过 MethodToolCallbackProvider，手动用反射构建 ToolCallback，
+     * 避免 CGLIB 代理和 getDeclaredMethods() 导致的注解发现失败</p>
      */
     private List<ToolCallback> getAllBuiltinToolCallbacks() {
         try {
-            MethodToolCallbackProvider provider = MethodToolCallbackProvider.builder()
-                    .toolObjects(getAllToolBeans())
-                    .build();
-            return List.of(provider.getToolCallbacks());
+            List<ToolCallback> callbacks = new ArrayList<>();
+            Map<String, Object> beans = applicationContext.getBeansWithAnnotation(org.springframework.stereotype.Component.class);
+
+            for (Object bean : beans.values()) {
+                // 解包 CGLIB 代理，获取真实类
+                Class<?> clazz = getTargetClass(bean);
+                // 直接遍历类声明的方法（跳过编译器生成的桥方法和synthetic方法）
+                for (Method method : clazz.getDeclaredMethods()) {
+                    if (method.isSynthetic() || method.isBridge()) continue;
+                    org.springframework.ai.tool.annotation.Tool tool = method.getAnnotation(org.springframework.ai.tool.annotation.Tool.class);
+                    if (tool != null) {
+                        method.setAccessible(true);
+                        callbacks.add(MethodToolCallback.builder()
+                                .toolDefinition(ToolDefinitions.from(method))
+                                .toolMetadata(ToolMetadata.from(method))
+                                .toolMethod(method)
+                                .toolObject(bean)
+                                .build());
+                    }
+                }
+            }
+
+            log.info("[ToolService] 发现内置ToolCallback: {}", callbacks.stream()
+                    .map(cb -> cb.getToolDefinition().name()).toList());
+            return callbacks;
         } catch (Exception e) {
-            log.warn("[ToolService] 获取内置ToolCallback失败: {}", e.getMessage());
+            log.warn("[ToolService] 获取内置ToolCallback失败: {}", e.getMessage(), e);
             return List.of();
         }
     }
 
-    /**
-     * 从 Spring 容器获取所有包含 @Tool 注解方法的 Bean
-     */
-    private List<Object> getAllToolBeans() {
-        Map<String, Object> beans = applicationContext.getBeansWithAnnotation(org.springframework.stereotype.Component.class);
-        return beans.values().stream()
-                .filter(bean -> {
-                    for (var method : bean.getClass().getMethods()) {
-                        if (method.isAnnotationPresent(org.springframework.ai.tool.annotation.Tool.class)) {
-                            return true;
-                        }
+    @Override
+    public String testTool(Long toolId, String args) {
+        // 1. 解析工具回调
+        List<ToolCallback> callbacks = resolveToolCallbacksByIds(List.of(toolId));
+        if (callbacks.isEmpty()) {
+            throw new BizException(ErrorCode.TOOL_NOT_FOUND);
+        }
+
+        // 2. 执行工具
+        ToolCallback callback = callbacks.get(0);
+        String toolName = callback.getToolDefinition().name();
+        log.info("[ToolService] 测试工具: toolId={}, name={}, args={}", toolId, toolName, args);
+
+        try {
+            // 从 args 中提取 agentId（如有），供 query_knowledge 等需要上下文的工具使用
+            long agentId = 0L;
+            if (args != null && !args.isBlank()) {
+                try {
+                    var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(args);
+                    if (node.has("agentId")) {
+                        agentId = node.get("agentId").asLong(0);
                     }
-                    return false;
-                })
-                .toList();
+                } catch (Exception ignored) {}
+            }
+            org.springframework.ai.chat.model.ToolContext testContext =
+                    new org.springframework.ai.chat.model.ToolContext(Map.of(
+                            "agentId", agentId,
+                            "requestId", "test-" + System.nanoTime()));
+            String result = callback.call(args != null ? args : "{}", testContext);
+            log.info("[ToolService] 工具测试完成: name={}, resultLength={}", toolName, result.length());
+            return result;
+        } catch (Exception e) {
+            log.error("[ToolService] 工具测试失败: name={}, error={}", toolName, e.getMessage(), e);
+            return "工具执行失败: " + e.getMessage();
+        }
+    }
+
+    /**
+     * 获取 Bean 的真实类（处理 CGLIB 代理）
+     */
+    private Class<?> getTargetClass(Object bean) {
+        if (bean instanceof Advised advised) {
+            try {
+                return advised.getTargetSource().getTarget().getClass();
+            } catch (Exception e) {
+                // fall through
+            }
+        }
+        return bean.getClass();
     }
 }

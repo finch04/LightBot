@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">Agent 管理</h1>
+        <h1 class="page-title">Agent</h1>
         <p class="page-desc">创建和管理 AI Agent，配置系统提示词和行为</p>
       </div>
       <div class="page-header-actions">

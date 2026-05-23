@@ -19,3 +19,7 @@ export function updateTool(data) {
 export function deleteTool(id) {
   return request.delete(`/tools/${id}`)
 }
+
+export function testTool(id, args) {
+  return request.post(`/tools/${id}/test`, { args })
+}

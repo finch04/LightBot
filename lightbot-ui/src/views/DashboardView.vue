@@ -189,7 +189,7 @@ const agentStatusList = computed(() => {
 const docStatusList = computed(() => {
   const sc = knowledgeStats.value.documentStatusCounts || {}
   const total = Object.values(sc).reduce((a, b) => a + b, 0) || 1
-  const labels = { pending: '待处理', processing: '处理中', completed: '已完成', failed: '失败' }
+  const labels = { uploading: '上传中', uploaded: '已上传', pending: '分块中', processing: '向量化中', completed: '已完成', failed: '失败' }
   return Object.entries(sc).map(([key, count]) => ({
     key,
     label: labels[key] || key,
@@ -404,6 +404,8 @@ onMounted(loadAll)
 .status-fill.draft { background: #a1a1aa; }
 .status-fill.published { background: #16a34a; }
 .status-fill.archived { background: #d97706; }
+.status-fill.uploading { background: #d97706; }
+.status-fill.uploaded { background: #a1a1aa; }
 .status-fill.pending { background: #a1a1aa; }
 .status-fill.processing { background: #3b82f6; }
 .status-fill.completed { background: #16a34a; }

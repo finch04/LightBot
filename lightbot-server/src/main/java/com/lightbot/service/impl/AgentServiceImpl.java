@@ -239,12 +239,20 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             if (!configNode.has("knowledges")) {
                 return List.of();
             }
-            List<String> ids = objectMapper.convertValue(configNode.get("knowledges"),
-                    new TypeReference<>() {});
-            return ids.stream()
-                    .filter(s -> s != null && !s.isBlank())
-                    .map(Long::parseLong)
-                    .toList();
+            // 逐个用 JsonNode.longValue() 转换，避免 ObjectMapper.convertValue 对大数精度丢失
+            var knowledgesNode = configNode.get("knowledges");
+            List<Long> ids = new ArrayList<>();
+            for (var node : knowledgesNode) {
+                if (node.isNumber()) {
+                    ids.add(node.longValue());
+                } else if (node.isTextual()) {
+                    String text = node.asText();
+                    if (text != null && !text.isBlank()) {
+                        ids.add(Long.parseLong(text));
+                    }
+                }
+            }
+            return ids;
         } catch (Exception e) {
             log.warn("[Agent] 解析config.knowledges失败: agentId={}, error={}", agentId, e.getMessage());
             return List.of();

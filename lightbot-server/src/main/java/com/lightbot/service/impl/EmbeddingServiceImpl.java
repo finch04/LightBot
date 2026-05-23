@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +36,28 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         embeddingMapper.insertVector(id, chunkId, modelName, vector.length, vectorStr);
     }
 
+    /**
+     * 批量存储向量（减少数据库往返次数）
+     *
+     * @param chunkIds  分块ID列表
+     * @param modelName 模型名称
+     * @param vectors   向量数据列表，与 chunkIds 一一对应
+     */
+    public void batchSaveVectors(List<Long> chunkIds, String modelName, List<float[]> vectors) {
+        List<Map<String, Object>> batch = new ArrayList<>(chunkIds.size());
+        for (int i = 0; i < chunkIds.size(); i++) {
+            float[] vector = vectors.get(i);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", IdWorker.getId());
+            row.put("chunkId", chunkIds.get(i));
+            row.put("modelName", modelName);
+            row.put("dimension", vector.length);
+            row.put("vector", toVectorString(vector));
+            batch.add(row);
+        }
+        embeddingMapper.batchInsertVectors(batch);
+    }
+
     @Override
     public List<Map<String, Object>> searchSimilar(Long knowledgeId, float[] queryVector, int topK, double threshold) {
         String vectorStr = toVectorString(queryVector);
@@ -46,6 +70,12 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
                     return score != null && ((Number) score).doubleValue() >= threshold;
                 })
                 .toList();
+    }
+
+    @Override
+    public List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector, int topK, double threshold) {
+        String vectorStr = toVectorString(queryVector);
+        return embeddingMapper.searchSimilarWithThreshold(vectorStr, knowledgeId, topK, threshold);
     }
 
     @Override

@@ -78,25 +78,16 @@ public class RagServiceImpl implements RagService {
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 3. 在知识库中检索相似内容（先获取原始结果用于日志）
-        List<Map<String, Object>> rawResults = embeddingService.searchSimilarRaw(
-                knowledgeId, queryVector, topK);
-        log.info("[RAG] 向量检索原始结果数={}", rawResults.size());
-        for (int i = 0; i < rawResults.size(); i++) {
-            Map<String, Object> row = rawResults.get(i);
+        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层）
+        List<Map<String, Object>> results = embeddingService.searchSimilarSql(
+                knowledgeId, queryVector, topK, threshold);
+        log.info("[RAG] 向量检索完成(SQL过滤): threshold={}, 命中分块数={}", threshold, results.size());
+        for (int i = 0; i < results.size(); i++) {
+            Map<String, Object> row = results.get(i);
             String content = String.valueOf(row.get("content"));
             String preview = content.length() > 100 ? content.substring(0, 100) + "..." : content;
-            log.info("[RAG] 原始分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
+            log.info("[RAG] 检索分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
         }
-
-        // 3.1 过滤低于阈值的结果
-        List<Map<String, Object>> results = rawResults.stream()
-                .filter(row -> {
-                    Object score = row.get("score");
-                    return score != null && ((Number) score).doubleValue() >= threshold;
-                })
-                .toList();
-        log.info("[RAG] 阈值过滤后: threshold={}, 命中分块数={}", threshold, results.size());
 
         if (results.isEmpty()) {
             return "抱歉，在知识库中没有找到相关信息。";
@@ -140,25 +131,16 @@ public class RagServiceImpl implements RagService {
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 3. 在知识库中检索相似内容（先获取原始结果用于日志）
-        List<Map<String, Object>> rawResults = embeddingService.searchSimilarRaw(
-                knowledgeId, queryVector, topK);
-        log.info("[RAG] 向量检索原始结果数={}", rawResults.size());
-        for (int i = 0; i < rawResults.size(); i++) {
-            Map<String, Object> row = rawResults.get(i);
+        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层）
+        List<Map<String, Object>> results = embeddingService.searchSimilarSql(
+                knowledgeId, queryVector, topK, threshold);
+        log.info("[RAG] 向量检索完成(SQL过滤): threshold={}, 命中分块数={}", threshold, results.size());
+        for (int i = 0; i < results.size(); i++) {
+            Map<String, Object> row = results.get(i);
             String content = String.valueOf(row.get("content"));
             String preview = content.length() > 100 ? content.substring(0, 100) + "..." : content;
-            log.info("[RAG] 原始分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
+            log.info("[RAG] 检索分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
         }
-
-        // 3.1 过滤低于阈值的结果
-        List<Map<String, Object>> results = rawResults.stream()
-                .filter(row -> {
-                    Object score = row.get("score");
-                    return score != null && ((Number) score).doubleValue() >= threshold;
-                })
-                .toList();
-        log.info("[RAG] 阈值过滤后: threshold={}, 命中分块数={}", threshold, results.size());
 
         if (results.isEmpty()) {
             return Flux.just("抱歉，在知识库中没有找到相关信息。");
@@ -199,15 +181,9 @@ public class RagServiceImpl implements RagService {
         // 3. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 4. 向量检索 + 阈值过滤
-        List<Map<String, Object>> rawResults = embeddingService.searchSimilarRaw(knowledgeId, queryVector, topK);
-        List<Map<String, Object>> results = rawResults.stream()
-                .filter(row -> {
-                    Object score = row.get("score");
-                    return score != null && ((Number) score).doubleValue() >= threshold;
-                })
-                .toList();
-        log.info("[RAG] 检索测试完成: raw={}, filtered={}", rawResults.size(), results.size());
+        // 4. 向量检索（阈值过滤下沉到SQL层）
+        List<Map<String, Object>> results = embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold);
+        log.info("[RAG] 检索测试完成: results={}", results.size());
 
         // 5. 转为VO返回（已按相似度降序，rank从1开始）
         int rank = 0;

@@ -4,6 +4,7 @@ import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.tool.ToolEventEmitter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -45,8 +47,12 @@ public class QueryKnowledgeTool {
         return t;
     });
 
-    /** 工具执行期间捕获的原始搜索结果，供 ChatService 提取 RAG 引用 metadata */
-    private static final ThreadLocal<List<Map<String, Object>>> SEARCH_RESULTS_HOLDER = new ThreadLocal<>();
+    /**
+     * 按请求ID存储的搜索结果（跨线程安全）
+     * <p>工具在 SEARCH_EXECUTOR 线程池执行，无法用 ThreadLocal 传递结果给主线程，
+     * 改用 ConcurrentHashMap 以 requestId 为 key 存储</p>
+     */
+    private static final ConcurrentHashMap<String, List<Map<String, Object>>> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
 
     @Tool(name = "query_knowledge",
           description = "搜索智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。")
@@ -54,29 +60,49 @@ public class QueryKnowledgeTool {
             @ToolParam(description = "搜索问题") String question,
             ToolContext context) {
         Long agentId = ((Number) context.getContext().get("agentId")).longValue();
+        String requestId = (String) context.getContext().get("requestId");
         log.info("[Tool:query_knowledge] 开始检索: agentId={}, question={}", agentId, question);
 
         // 1. 获取Agent绑定的知识库ID列表
         List<Long> knowledgeIds = agentService.getKnowledgeIds(agentId);
+        log.info("[Tool:query_knowledge] Agent绑定知识库: agentId={}, knowledgeIds={}", agentId, knowledgeIds);
         if (knowledgeIds.isEmpty()) {
             return "该智能体未绑定任何知识库，无法检索。";
         }
 
         try {
             // 2. 向量化问题
+            ToolEventEmitter.emit("正在向量化查询问题...");
             float[] queryVector = embedText(question);
+            log.info("[Tool:query_knowledge] 问题向量化完成: dimension={}", queryVector.length);
 
-            // 3. 并行检索多个知识库
+            // 3. 并行检索多个知识库（阈值过滤下沉到SQL层）
             List<CompletableFuture<List<Map<String, Object>>>> futures = knowledgeIds.stream()
                     .map(knowledgeId -> CompletableFuture.supplyAsync(() -> {
                         try {
                             Knowledge knowledge = knowledgeService.getById(knowledgeId);
-                            if (knowledge == null) return List.<Map<String, Object>>of();
+                            if (knowledge == null) {
+                                log.warn("[Tool:query_knowledge] 知识库不存在: knowledgeId={}", knowledgeId);
+                                return List.<Map<String, Object>>of();
+                            }
+                            String kbName = knowledge.getName();
+                            ToolEventEmitter.emit("正在检索知识库「" + kbName + "」...");
                             int topK = parseTopK(knowledge);
                             double threshold = parseThreshold(knowledge);
-                            return embeddingService.searchSimilar(knowledgeId, queryVector, topK, threshold);
+                            log.info("[Tool:query_knowledge] 检索知识库: name={}, knowledgeId={}, topK={}, threshold={}",
+                                    kbName, knowledgeId, topK, threshold);
+                            List<Map<String, Object>> results = embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold);
+                            log.info("[Tool:query_knowledge] 知识库检索结果: name={}, count={}", kbName, results.size());
+                            for (int i = 0; i < Math.min(results.size(), 5); i++) {
+                                Map<String, Object> row = results.get(i);
+                                log.info("[Tool:query_knowledge]   结果#{}: document={}, score={}, contentLength={}",
+                                        i + 1, row.get("document_name"), row.get("score"),
+                                        row.get("content") != null ? ((String) row.get("content")).length() : 0);
+                            }
+                            ToolEventEmitter.emit("知识库「" + kbName + "」找到 " + results.size() + " 条结果");
+                            return results;
                         } catch (Exception e) {
-                            log.warn("[Tool:query_knowledge] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage());
+                            log.warn("[Tool:query_knowledge] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage(), e);
                             return List.<Map<String, Object>>of();
                         }
                     }, SEARCH_EXECUTOR))
@@ -88,10 +114,16 @@ public class QueryKnowledgeTool {
                     .flatMap(List::stream)
                     .toList();
 
-            // 4.1 捕获原始结果供 ChatService 提取 RAG 引用
-            SEARCH_RESULTS_HOLDER.set(allResults);
+            // 4.1 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
+            if (requestId != null) {
+                SEARCH_RESULTS_MAP.put(requestId, allResults);
+            }
+
+            ToolEventEmitter.emit("共找到 " + allResults.size() + " 条相关内容");
 
             if (allResults.isEmpty()) {
+                log.warn("[Tool:query_knowledge] 未找到结果: agentId={}, knowledgeIds={}, question={}",
+                        agentId, knowledgeIds, question);
                 return "未在知识库中找到与问题相关的内容。";
             }
 
@@ -107,7 +139,7 @@ public class QueryKnowledgeTool {
             log.info("[Tool:query_knowledge] 检索完成: agentId={}, results={}", agentId, allResults.size());
             return sb.toString();
         } catch (Exception e) {
-            log.error("[Tool:query_knowledge] 检索异常: agentId={}, error={}", agentId, e.getMessage());
+            log.error("[Tool:query_knowledge] 检索异常: agentId={}, error={}", agentId, e.getMessage(), e);
             return "知识库检索过程中发生错误：" + e.getMessage();
         }
     }
@@ -121,7 +153,8 @@ public class QueryKnowledgeTool {
         if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 5;
         try {
             var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-            return node.has("topK") ? node.get("topK").asInt(5) : 5;
+            // 与 RagServiceImpl 保持一致，读取 ragTopK / ragThreshold
+            return node.has("ragTopK") ? node.get("ragTopK").asInt(5) : 5;
         } catch (Exception e) {
             return 5;
         }
@@ -131,25 +164,22 @@ public class QueryKnowledgeTool {
         if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 0.5;
         try {
             var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-            return node.has("threshold") ? node.get("threshold").asDouble(0.5) : 0.5;
+            // 与 RagServiceImpl 保持一致，读取 ragTopK / ragThreshold
+            return node.has("ragThreshold") ? node.get("ragThreshold").asDouble(0.5) : 0.5;
         } catch (Exception e) {
             return 0.5;
         }
     }
 
     /**
-     * 获取工具执行期间捕获的RAG搜索结果（仅当前线程有效）
-     * <p>调用方必须在使用后调用 {@link #clearSearchResults()} 清理</p>
+     * 按 requestId 获取工具执行期间的搜索结果（跨线程安全）
+     *
+     * @param requestId 请求ID
+     * @return 搜索结果列表，不存在则返回空列表
      */
-    public static List<Map<String, Object>> getSearchResults() {
-        List<Map<String, Object>> results = SEARCH_RESULTS_HOLDER.get();
-        return results != null ? new ArrayList<>(results) : List.of();
-    }
-
-    /**
-     * 清理当前线程的RAG搜索结果缓存
-     */
-    public static void clearSearchResults() {
-        SEARCH_RESULTS_HOLDER.remove();
+    public static List<Map<String, Object>> getSearchResults(String requestId) {
+        if (requestId == null) return List.of();
+        List<Map<String, Object>> results = SEARCH_RESULTS_MAP.remove(requestId);
+        return results != null ? results : List.of();
     }
 }

@@ -107,6 +107,19 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     }
 
     @Override
+    public void markCancelled(Long taskId, String message) {
+        lambdaUpdate()
+                .eq(Task::getId, taskId)
+                .set(Task::getStatus, TaskStatus.CANCELLED)
+                .set(Task::getError, message)
+                .set(Task::getCompletedAt, LocalDateTime.now())
+                .set(Task::getUpdateTime, LocalDateTime.now())
+                .update();
+        log.info("[任务] 已取消, taskId={}, message={}", taskId, message);
+        broadcastTaskCountByTaskId(taskId);
+    }
+
+    @Override
     public boolean requestCancel(Long taskId) {
         boolean update = lambdaUpdate()
                 .eq(Task::getId, taskId)
