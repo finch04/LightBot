@@ -48,10 +48,13 @@ public class ChatSessionController {
         return Result.ok(chatSessionService.getById(id));
     }
 
-    @Operation(summary = "获取会话的消息历史")
+    @Operation(summary = "获取会话的消息历史（分页）")
     @GetMapping("/{id}/messages")
-    public Result<List<Message>> getMessages(@PathVariable Long id) {
-        return Result.ok(messageService.listBySessionId(id));
+    public Result<Page<Message>> getMessages(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return Result.ok(messageService.listBySessionIdPage(id, pageNum, pageSize));
     }
 
     @Operation(summary = "更新会话标题")

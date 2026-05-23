@@ -52,7 +52,12 @@ public class ChatController {
                 .subscribe(
                         chunk -> {
                             try {
-                                emitter.send(chunk);
+                                // 文本内容中的换行符需要转义，否则SSE解析会丢失
+                                // STATUS/METADATA/DONE 前缀的事件不含换行，无需处理
+                                String safe = chunk.startsWith("[STATUS]") || chunk.startsWith("[METADATA]") || chunk.startsWith("[DONE]")
+                                        ? chunk
+                                        : chunk.replace("\n", "\\n");
+                                emitter.send(safe);
                             } catch (IOException e) {
                                 log.debug("[Chat] 客户端断开连接: {}", e.getMessage());
                             }

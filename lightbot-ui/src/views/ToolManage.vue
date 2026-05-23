@@ -56,7 +56,7 @@
     <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑工具' : '新增工具'" :width="640" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="工具标识" required>
-          <a-input v-model:value="form.name" placeholder="如：http_request（英文，唯一标识）" />
+          <a-input v-model:value="form.name" placeholder="如：http_request（英文，唯一标识）" :disabled="form.toolType === 'builtin'" />
         </a-form-item>
         <a-form-item label="显示名称">
           <a-input v-model:value="form.displayName" placeholder="如：HTTP 请求" />
@@ -72,29 +72,37 @@
             <a-select-option value="mcp">MCP协议</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="端点地址">
-          <a-input v-model:value="form.endpointUrl" placeholder="API 端点 URL（API 类型必填）" />
-        </a-form-item>
-        <a-form-item label="认证类型">
-          <a-select v-model:value="form.authType" style="width: 100%">
-            <a-select-option value="none">无认证</a-select-option>
-            <a-select-option value="api_key">API Key</a-select-option>
-            <a-select-option value="oauth">OAuth</a-select-option>
-            <a-select-option value="bearer">Bearer Token</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="输入Schema">
-          <JsonInput v-model="form.inputSchema" :rows="4" placeholder='JSON Schema，如：{"type":"object","properties":{...}}' />
-        </a-form-item>
-        <a-form-item label="输出Schema">
-          <JsonInput v-model="form.outputSchema" :rows="3" placeholder="输出参数 JSON Schema（可选）" />
-        </a-form-item>
-        <a-form-item label="认证配置">
-          <JsonInput v-model="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
-        </a-form-item>
-        <a-form-item label="扩展配置">
-          <JsonInput v-model="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
-        </a-form-item>
+        <!-- 高级选项折叠区 -->
+        <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
+          <span>高级选项</span>
+          <RightOutlined :class="['toggle-icon', { expanded: showAdvanced }]" />
+        </div>
+        <template v-if="showAdvanced">
+          <a-form-item label="端点地址">
+            <a-input v-model:value="form.endpointUrl" placeholder="API 端点 URL（API 类型必填）" />
+          </a-form-item>
+          <a-form-item label="认证类型">
+            <a-select v-model:value="form.authType" style="width: 100%">
+              <a-select-option value="none">无认证</a-select-option>
+              <a-select-option value="api_key">API Key</a-select-option>
+              <a-select-option value="oauth">OAuth</a-select-option>
+              <a-select-option value="bearer">Bearer Token</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="输入Schema">
+            <JsonInput v-model="form.inputSchema" :rows="4" placeholder='JSON Schema，如：{"type":"object","properties":{...}}' />
+            <div class="form-hint">定义工具的输入参数（JSON Schema 格式），供 Agent 理解参数含义</div>
+          </a-form-item>
+          <a-form-item label="输出Schema">
+            <JsonInput v-model="form.outputSchema" :rows="3" placeholder="输出参数 JSON Schema（可选）" />
+          </a-form-item>
+          <a-form-item label="认证配置">
+            <JsonInput v-model="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
+          </a-form-item>
+          <a-form-item label="扩展配置">
+            <JsonInput v-model="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
+          </a-form-item>
+        </template>
       </a-form>
       <div class="dialog-footer">
         <div></div>
@@ -118,12 +126,13 @@
         <div class="test-params-title">参数说明</div>
         <table class="test-params-table">
           <thead>
-            <tr><th>参数名</th><th>类型</th><th>说明</th></tr>
+            <tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr>
           </thead>
           <tbody>
             <tr v-for="p in testToolParams" :key="p.name">
               <td><code>{{ p.name }}</code></td>
               <td>{{ p.type }}</td>
+              <td><span v-if="p.required" class="param-required">是</span><span v-else class="param-optional">否</span></td>
               <td>{{ p.desc }}</td>
             </tr>
           </tbody>
@@ -193,54 +202,47 @@ const testArgs = ref('{}')
 const testResult = ref(null)
 const testLoading = ref(false)
 const testArgsRef = ref(null)
+const showAdvanced = ref(false)
 
-/** 内置工具的参数说明和示例 */
-const builtinToolMeta = {
-  calculator: {
-    params: [
-      { name: 'a', type: 'number', desc: '第一个操作数' },
-      { name: 'b', type: 'number', desc: '第二个操作数' },
-      { name: 'operation', type: 'string', desc: '运算类型：add（加）、subtract（减）、multiply（乘）、divide（除）' },
-    ],
-    example: { a: 10, b: 5, operation: 'add' },
-  },
-  web_search: {
-    params: [
-      { name: 'query', type: 'string', desc: '搜索关键词' },
-      { name: 'maxResults', type: 'number', desc: '返回结果数量（默认5，最大10）' },
-    ],
-    example: { query: '北京天气', maxResults: 5 },
-  },
-  image_generation: {
-    params: [
-      { name: 'prompt', type: 'string', desc: '图片描述（英文效果更佳）' },
-      { name: 'negativePrompt', type: 'string', desc: '负面提示词，描述不希望出现的元素（可选）' },
-    ],
-    example: { prompt: 'a cute cat wearing sunglasses on the beach', negativePrompt: 'blurry, low quality' },
-  },
-  pg_list_tables: {
-    params: [],
-    example: {},
-  },
-  pg_describe_table: {
-    params: [
-      { name: 'tableName', type: 'string', desc: '要查看的表名' },
-    ],
-    example: { tableName: 'agent' },
-  },
-  pg_query: {
-    params: [
-      { name: 'sql', type: 'string', desc: 'SQL 查询语句（仅允许 SELECT）' },
-    ],
-    example: { sql: 'SELECT * FROM agent LIMIT 10' },
-  },
-  query_knowledge: {
-    params: [
-      { name: 'question', type: 'string', desc: '搜索问题' },
-      { name: 'agentId', type: 'number', desc: 'Agent ID（测试时需指定，用于查找绑定的知识库）' },
-    ],
-    example: { question: '什么是SAP', agentId: 0 },
-  },
+/**
+ * 从 JSON Schema 中解析工具参数列表
+ */
+function parseToolParams(inputSchema) {
+  if (!inputSchema || inputSchema === '{}') return []
+  try {
+    const schema = typeof inputSchema === 'string' ? JSON.parse(inputSchema) : inputSchema
+    const properties = schema.properties || {}
+    const required = schema.required || []
+    return Object.entries(properties).map(([name, prop]) => ({
+      name,
+      type: prop.type || 'string',
+      desc: prop.description || '',
+      required: required.includes(name),
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 从 JSON Schema 生成示例参数
+ */
+function generateToolExample(inputSchema) {
+  if (!inputSchema || inputSchema === '{}') return {}
+  try {
+    const schema = typeof inputSchema === 'string' ? JSON.parse(inputSchema) : inputSchema
+    const properties = schema.properties || {}
+    const example = {}
+    for (const [name, prop] of Object.entries(properties)) {
+      if (prop.type === 'string') example[name] = prop.description || '示例值'
+      else if (prop.type === 'number' || prop.type === 'integer') example[name] = 0
+      else if (prop.type === 'boolean') example[name] = true
+      else example[name] = null
+    }
+    return example
+  } catch {
+    return {}
+  }
 }
 
 async function loadData() {
@@ -313,15 +315,9 @@ function openTestDialog(tool) {
   testToolDesc.value = tool.description || ''
   testResult.value = null
 
-  // 查找内置工具元数据，自动填充参数说明和示例
-  const meta = builtinToolMeta[tool.name]
-  if (meta) {
-    testToolParams.value = meta.params
-    testArgs.value = JSON.stringify(meta.example, null, 2)
-  } else {
-    testToolParams.value = []
-    testArgs.value = '{}'
-  }
+  // 从 inputSchema 动态解析参数说明和生成示例
+  testToolParams.value = parseToolParams(tool.inputSchema)
+  testArgs.value = JSON.stringify(generateToolExample(tool.inputSchema), null, 2)
 
   testDialogVisible.value = true
 }
@@ -521,6 +517,45 @@ defineExpose({ openDialog, search })
   padding: 48px 24px;
   color: #a1a1aa;
   font-size: 14px;
+}
+
+/* 高级选项折叠区 */
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: #71717a;
+  border-top: 1px dashed #ebebeb;
+  user-select: none;
+  margin-bottom: 8px;
+}
+.advanced-toggle:hover {
+  color: #171717;
+}
+.toggle-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+.form-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.param-required {
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 500;
+}
+.param-optional {
+  color: #a1a1aa;
+  font-size: 12px;
 }
 
 .dialog-footer {

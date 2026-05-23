@@ -5,7 +5,7 @@
       <!-- 欢迎状态（新对话 + 无消息） -->
       <div v-if="!sessionId && messages.length === 0 && !loadingHistory" class="empty-state">
         <img src="/lightbot-logo-single.png" alt="LightBot" class="empty-logo" />
-        <div class="welcome-content" v-html="renderMarkdown(currentWelcomeMessage)"></div>
+        <div class="welcome-content"><MarkdownPreview :content="currentWelcomeMessage" /></div>
         <!-- 推荐问题：全部展示 -->
         <div v-if="currentRecommendedQuestions.length > 0" class="recommended-questions">
           <button
@@ -23,6 +23,13 @@
         </div>
       </div>
 
+      <!-- 加载更早的消息 -->
+      <div v-if="hasMoreMessages && !streaming" class="load-more-area">
+        <a-button size="small" :loading="loadingOlder" @click="loadOlderMessages">
+          加载更早的消息
+        </a-button>
+      </div>
+
       <!-- 消息列表 -->
       <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
         <div class="message-avatar">
@@ -35,49 +42,44 @@
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
           <div class="message-content-wrapper">
-            <!-- 工具调用展示 -->
-            <div v-if="msg._toolEvents && msg._toolEvents.length > 0" class="tool-calls-group">
-              <div class="tool-calls-header" @click="msg._toolExpanded = !msg._toolExpanded">
-                <LoadingOutlined v-if="!msg._toolsDone" class="tool-icon spinning" />
-                <CheckCircleOutlined v-else class="tool-icon tool-success" />
-                <span class="tool-calls-title">
-                  调用了 {{ getUniqueToolNames(msg._toolEvents).length }} 个工具
-                </span>
-                <span class="tool-calls-names">
-                  {{ getUniqueToolNames(msg._toolEvents).join(', ') }}
-                </span>
-                <RightOutlined :class="{ expanded: msg._toolExpanded }" class="tool-expand-icon" />
+            <!-- 深度思考面板 -->
+            <div v-if="msg._reasoningContent" class="reasoning-panel">
+              <div class="reasoning-header" @click="msg._reasoningExpanded = !msg._reasoningExpanded">
+                <BulbOutlined class="reasoning-icon" />
+                <span class="reasoning-title">深度思考</span>
+                <LoadingOutlined v-if="msg._streaming && !msg._reasoningDone" class="reasoning-spinner" />
+                <RightOutlined :class="{ expanded: msg._reasoningExpanded }" class="tool-expand-icon" />
               </div>
-              <div v-show="msg._toolExpanded" class="tool-calls-list">
-                <div v-for="(evt, ti) in msg._toolEvents" :key="ti" class="tool-call-item">
-                  <div v-if="evt.type === 'tool_call'" class="tool-call-row">
-                    <SearchOutlined v-if="evt.toolName === 'query_knowledge'" class="tool-icon tool-query" />
-                    <LoadingOutlined v-else class="tool-icon spinning" />
-                    <span class="tool-name">{{ evt.toolName }}</span>
-                    <span class="tool-args">{{ formatToolArgs(evt.args) }}</span>
-                  </div>
-                  <div v-else-if="evt.type === 'tool_result'" class="tool-result-row">
-                    <CheckCircleOutlined class="tool-icon tool-success" />
-                    <span class="tool-name">{{ evt.toolName }} 完成</span>
-                    <div class="tool-result-summary" @click="toggleToolResult(msg, ti)">
-                      <span v-if="parseToolResultCount(evt.result) !== null">
-                        找到 {{ parseToolResultCount(evt.result) }} 条相关内容
-                      </span>
-                      <span v-else>执行完成</span>
-                      <RightOutlined :class="{ expanded: isToolResultExpanded(msg, ti) }" class="tool-expand-icon" />
-                    </div>
-                    <div v-if="isToolResultExpanded(msg, ti)" class="tool-result-content">{{ evt.result }}</div>
-                  </div>
-                  <div v-else-if="evt.type === 'tool_status'" class="tool-status-row">
-                    <CheckCircleOutlined v-if="msg._toolsDone" class="tool-icon tool-success" />
-                    <LoadingOutlined v-else class="tool-icon spinning" />
-                    <span class="tool-status-text">{{ evt.message }}</span>
-                  </div>
-                </div>
-              </div>
+              <div v-show="msg._reasoningExpanded" class="reasoning-content">{{ msg._reasoningContent }}</div>
             </div>
-            <!-- 流式阶段 & 结束后：统一渲染 Markdown -->
-            <div class="message-content" v-html="renderMarkdown(msg.content)" />
+            <!-- 有工具事件：按 offset 位置插入工具块（流式/历史统一逻辑，支持多轮工具调用） -->
+            <template v-if="msg._toolEvents?.length > 0 && getToolBlockOffsets(msg).length > 0">
+              <template v-for="(segment, si) in splitContentByOffsets(msg)" :key="si">
+                <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!msg._streaming" /></div>
+                <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
+                  <ToolCallsGroupComponent
+                    :tool-events="getToolEventsForOffset(msg, segment.offset)"
+                    :is-done="isToolBlockDone(msg, segment.offset)"
+                    :default-expanded="msg._streaming && !isToolBlockDone(msg, segment.offset)"
+                  />
+                </div>
+              </template>
+            </template>
+            <!-- 有工具事件但 offset 尚未到达：临时追加在末尾 -->
+            <template v-else-if="msg._toolEvents?.length > 0">
+              <div v-if="msg.content" class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
+              <div class="tool-block-inline">
+                <ToolCallsGroupComponent
+                  :tool-events="msg._toolEvents"
+                  :is-done="msg._toolsDone"
+                  :default-expanded="msg._streaming"
+                />
+              </div>
+            </template>
+            <!-- 无工具事件：正常渲染 -->
+            <template v-else>
+              <div class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
+            </template>
             <!-- 复制按钮（仅流式结束后显示） -->
             <a-tooltip v-if="!msg._streaming && msg.content" :title="msg._copied ? '已复制' : '复制'">
               <button
@@ -212,18 +214,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { marked } from 'marked'
-import { markedHighlight } from 'marked-highlight'
-import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
+import MarkdownPreview from '../components/MarkdownPreview.vue'
+import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -239,9 +239,13 @@ const agents = ref([])
 const selectedAgentId = ref(null)
 const skipNextWatch = ref(false)
 const loadingHistory = ref(false)
+const messagePage = ref(1)
+const hasMoreMessages = ref(false)
+const loadingOlder = ref(false)
 const currentAgent = ref(null)
 const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
+let sendStartTime = 0
 const hasStreamContent = ref(false)
 const abortController = ref(null)
 const toolEvents = ref([])
@@ -275,35 +279,6 @@ const currentRecommendedQuestions = computed(() => {
   }
   return []
 })
-
-// 配置 marked (v15 API)
-marked.use(
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code, lang) {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value
-      }
-      return hljs.highlightAuto(code).value
-    },
-  }),
-  {
-    renderer: {
-      link({ href, title, tokens }) {
-        const text = this.parser.parseInline(tokens)
-        const titleAttr = title ? ` title="${title}"` : ''
-        return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
-      },
-    },
-    breaks: true,
-    gfm: true,
-  }
-)
-
-function renderMarkdown(text) {
-  if (!text) return ''
-  return marked.parse(text)
-}
 
 function handleKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -362,6 +337,33 @@ function toggleReference(msg, index) {
   expandedRefsMap.value = newMap
 }
 
+function parseMessage(m) {
+  let toolEvents = []
+  let toolBlockOffsets = []
+  let reasoningContent = ''
+  if (m.metadata) {
+    try {
+      const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
+      if (metadata?.toolEvents) toolEvents = metadata.toolEvents
+      if (metadata?.toolBlockOffsets) toolBlockOffsets = metadata.toolBlockOffsets
+      if (metadata?.reasoningContent) reasoningContent = metadata.reasoningContent
+    } catch {}
+  }
+  return {
+    role: m.role?.code || m.role,
+    content: m.content,
+    metadata: m.metadata,
+    _toolEvents: toolEvents,
+    _toolBlockOffsets: toolBlockOffsets,
+    _toolBlocksDone: [],
+    _toolExpanded: false,
+    _toolsDone: true,
+    _reasoningContent: reasoningContent,
+    _reasoningExpanded: false,
+    _reasoningDone: true,
+  }
+}
+
 async function loadHistory() {
   // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
   if (streaming.value) return
@@ -377,35 +379,22 @@ async function loadHistory() {
   messages.value = []
   lastReplyElapsed.value = null
   loadingHistory.value = true
+  messagePage.value = 1
   try {
-    // 并行加载消息和会话详情
+    // 并行加载消息（第1页）和会话详情
     const [msgRes, sessionRes] = await Promise.all([
-      getSessionMessages(sessionId.value),
+      getSessionMessages(sessionId.value, { pageNum: 1, pageSize: 10 }),
       getSession(sessionId.value),
     ])
-    messages.value = (msgRes.data || []).map(m => {
-      // 从 metadata 恢复 toolEvents（持久化的工具调用链路）
-      let toolEvents = []
-      if (m.metadata) {
-        try {
-          const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
-          if (metadata?.toolEvents) toolEvents = metadata.toolEvents
-        } catch {}
-      }
-      return {
-        role: m.role?.code || m.role,
-        content: m.content,
-        metadata: m.metadata,
-        _toolEvents: toolEvents,
-        _toolsDone: true,
-      }
-    })
+    const records = msgRes.data?.records || []
+    // API 按创建时间倒序返回，前端正序显示（旧→新）
+    messages.value = records.reverse().map(m => parseMessage(m))
+    hasMoreMessages.value = records.length === 10
 
     // 从会话中恢复 agentId
     const session = sessionRes.data
     if (session?.agentId) {
       selectedAgentId.value = session.agentId
-      // 加载 agent 详情以获取欢迎语和推荐问题
       loadCurrentAgent(session.agentId)
     }
     scrollToBottom()
@@ -413,6 +402,39 @@ async function loadHistory() {
     messages.value = []
   } finally {
     loadingHistory.value = false
+  }
+}
+
+async function loadOlderMessages() {
+  if (loadingOlder.value || !hasMoreMessages.value || streaming.value) return
+
+  const container = messagesRef.value
+  const oldScrollHeight = container?.scrollHeight || 0
+
+  loadingOlder.value = true
+  try {
+    messagePage.value++
+    const res = await getSessionMessages(sessionId.value, {
+      pageNum: messagePage.value,
+      pageSize: 10,
+    })
+    const records = res.data?.records || []
+    if (records.length > 0) {
+      const olderMessages = records.reverse().map(m => parseMessage(m))
+      messages.value = [...olderMessages, ...messages.value]
+      hasMoreMessages.value = records.length === 10
+      // 保持滚动位置
+      await nextTick()
+      if (container) {
+        container.scrollTop = container.scrollHeight - oldScrollHeight
+      }
+    } else {
+      hasMoreMessages.value = false
+    }
+  } catch {
+    // 静默失败
+  } finally {
+    loadingOlder.value = false
   }
 }
 
@@ -441,7 +463,7 @@ async function sendMessage() {
   lastReplyElapsed.value = null
   currentStatus.value = '正在思考...'
   toolEvents.value = []
-  const sendStartTime = Date.now()
+  sendStartTime = Date.now()
   autoResize()
   scrollToBottom()
 
@@ -471,7 +493,7 @@ async function sendMessage() {
         // onChunk: 文本内容
         onChunk: (chunk) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [] })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
             hasStreamContent.value = true
@@ -487,34 +509,55 @@ async function sendMessage() {
         // onToolEvent: 工具调用/结果/状态事件
         onToolEvent: (event) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [] })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
           }
-          // tool_complete 是标记事件，不加入 _toolEvents
           if (event.type === 'tool_complete') {
-            assistantMsg._toolsDone = true
+            const offset = event.contentOffset ?? assistantMsg._currentToolOffset
+            markToolBlockDone(assistantMsg, offset)
             return
           }
+          if (event.type === 'reasoning_content') {
+            assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
+            assistantMsg._reasoningDone = true
+            return
+          }
+
+          const offset = event.contentOffset ?? assistantMsg.content.length
+          if (event.contentOffset == null) {
+            event.contentOffset = offset
+          }
+          if (event.type === 'tool_call') {
+            assistantMsg._toolExpanded = true
+            assistantMsg._currentToolOffset = offset
+            registerToolBlockOffset(assistantMsg, offset)
+          } else if (assistantMsg._currentToolOffset == null || assistantMsg._currentToolOffset < 0) {
+            assistantMsg._currentToolOffset = offset
+            registerToolBlockOffset(assistantMsg, offset)
+          }
+
           assistantMsg._toolEvents.push(event)
           toolEvents.value.push(event)
-          // 工具状态事件实时更新顶部状态栏
           if (event.type === 'tool_status' && event.message) {
             currentStatus.value = event.message
           }
           scrollToBottom()
         },
-        // onMetadata: metadata消息（包含RAG引用等）
+        // onMetadata: metadata消息（含工具事件与 offset，每轮工具调用后更新）
         onMetadata: (metadataStr) => {
-          if (assistantMsg) {
-            assistantMsg.metadata = safeJsonParse(metadataStr)
-          }
+          if (!assistantMsg) return
+          applyToolMetadata(assistantMsg, safeJsonParse(metadataStr))
         },
         // onDone: 完成
         onDone: () => {
           if (assistantMsg) {
+            if (!assistantMsg._toolBlockOffsets?.length) {
+              assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
+            }
             assistantMsg._streaming = false
             assistantMsg._toolsDone = true
+            assistantMsg._toolExpanded = false
           }
           loading.value = false
           streaming.value = false
@@ -534,18 +577,19 @@ async function sendMessage() {
     // 用户主动中断
     if (e.name === 'AbortError') {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [] })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content += '\n\n*AI 输出已终止*'
       assistantMsg._streaming = false
     } else {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '' })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
       assistantMsg._streaming = false
+      assistantMsg._toolsDone = true
     }
     loading.value = false
     streaming.value = false
@@ -569,57 +613,79 @@ function stopGenerating() {
   }
 }
 
-function getUniqueToolNames(events) {
-  const names = new Set()
-  events.forEach(e => { if (e.toolName) names.add(e.toolName) })
-  return [...names]
-}
-
-function formatToolArgs(args) {
-  if (!args) return ''
-  try {
-    const obj = JSON.parse(args)
-    const entries = Object.entries(obj)
-    if (entries.length === 0) return ''
-    return entries.map(([k, v]) => `${k}=${typeof v === 'string' && v.length > 50 ? v.substring(0, 50) + '...' : v}`).join(', ')
-  } catch {
-    return args.length > 80 ? args.substring(0, 80) + '...' : args
+function registerToolBlockOffset(msg, offset) {
+  if (offset == null || offset < 0) return
+  if (!msg._toolBlockOffsets) msg._toolBlockOffsets = []
+  if (!msg._toolBlockOffsets.includes(offset)) {
+    msg._toolBlockOffsets.push(offset)
+    msg._toolBlockOffsets.sort((a, b) => a - b)
   }
 }
 
-function truncateResult(result) {
-  if (!result) return ''
-  return result.length > 300 ? result.substring(0, 300) + '...' : result
+function getToolBlockOffsets(msg) {
+  if (msg._toolBlockOffsets?.length > 0) return msg._toolBlockOffsets
+  const fromEvents = [...new Set(
+    (msg._toolEvents || [])
+      .map(e => e.contentOffset)
+      .filter(o => o != null && o >= 0)
+  )]
+  return fromEvents.sort((a, b) => a - b)
 }
 
-/**
- * 解析工具返回结果中的数量（如"找到 1 条相关内容"）
- */
-function parseToolResultCount(result) {
-  if (!result) return null
-  const match = result.match(/找到\s*(\d+)\s*条/)
-  return match ? parseInt(match[1]) : null
-}
-
-// 用于存储每条消息的工具结果展开状态
-const expandedToolResultsMap = ref(new Map())
-
-function isToolResultExpanded(msg, index) {
-  const msgIndex = messages.value.indexOf(msg)
-  const key = `${msgIndex}-tool-${index}`
-  return expandedToolResultsMap.value.has(key)
-}
-
-function toggleToolResult(msg, index) {
-  const msgIndex = messages.value.indexOf(msg)
-  const key = `${msgIndex}-tool-${index}`
-  const newMap = new Map(expandedToolResultsMap.value)
-  if (newMap.has(key)) {
-    newMap.delete(key)
-  } else {
-    newMap.set(key, true)
+function getToolEventsForOffset(msg, offset) {
+  const events = msg._toolEvents || []
+  const matched = events.filter(e => e.contentOffset === offset)
+  if (matched.length > 0) return matched
+  const offsets = getToolBlockOffsets(msg)
+  if (offsets.length === 1 && offsets[0] === offset) {
+    return events.filter(e => e.contentOffset == null)
   }
-  expandedToolResultsMap.value = newMap
+  return matched
+}
+
+function isToolBlockDone(msg, offset) {
+  if (msg._toolBlocksDone?.includes(offset)) return true
+  if (!msg._streaming) return true
+  return getToolEventsForOffset(msg, offset).some(e => e.type === 'tool_result')
+}
+
+function markToolBlockDone(msg, offset) {
+  if (offset == null || offset < 0) return
+  if (!msg._toolBlocksDone) msg._toolBlocksDone = []
+  if (!msg._toolBlocksDone.includes(offset)) {
+    msg._toolBlocksDone.push(offset)
+  }
+}
+
+function applyToolMetadata(msg, meta) {
+  if (!meta) return
+  msg.metadata = { ...(msg.metadata || {}), ...meta }
+  if (meta.toolEvents?.length) {
+    msg._toolEvents = meta.toolEvents
+  }
+  if (meta.toolBlockOffsets?.length) {
+    msg._toolBlockOffsets = meta.toolBlockOffsets
+  }
+}
+
+function splitContentByOffsets(msg) {
+  const content = msg.content || ''
+  const offsets = getToolBlockOffsets(msg)
+  if (offsets.length === 0) return [{ type: 'text', text: content }]
+
+  const segments = []
+  let lastIdx = 0
+  for (const offset of offsets) {
+    if (offset > lastIdx && offset <= content.length) {
+      segments.push({ type: 'text', text: content.substring(lastIdx, offset) })
+    }
+    segments.push({ type: 'tool', offset })
+    lastIdx = offset
+  }
+  if (lastIdx < content.length) {
+    segments.push({ type: 'text', text: content.substring(lastIdx) })
+  }
+  return segments
 }
 
 function formatElapsed(ms) {
@@ -670,6 +736,16 @@ onMounted(() => {
   }
   loadHistory()
   loadAgents()
+
+  // 滚动到顶部自动加载更早的消息
+  const container = messagesRef.value
+  if (container) {
+    container.addEventListener('scroll', () => {
+      if (container.scrollTop < 50 && hasMoreMessages.value && !loadingOlder.value && !streaming.value) {
+        loadOlderMessages()
+      }
+    })
+  }
 })
 
 watch(() => route.params.sessionId, (newVal, oldVal) => {
@@ -685,7 +761,6 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
   }
   // 切换对话时清空展开状态
   expandedRefsMap.value = new Map()
-  expandedToolResultsMap.value = new Map()
   loadHistory()
 })
 
@@ -726,6 +801,11 @@ watch(sessionId, (newVal, oldVal) => {
 .chat-messages::-webkit-scrollbar-thumb {
   background: #d4d4d8;
   border-radius: 3px;
+}
+
+.load-more-area {
+  text-align: center;
+  padding: 12px 0;
 }
 
 .empty-state {
@@ -916,9 +996,6 @@ watch(sessionId, (newVal, oldVal) => {
 .message-content :deep(p) {
   margin: 0 0 12px;
 }
-.message-content :deep(p:last-child) {
-  margin-bottom: 0;
-}
 .message-content :deep(code) {
   background: #f4f4f5;
   padding: 2px 6px;
@@ -944,6 +1021,14 @@ watch(sessionId, (newVal, oldVal) => {
 .message-content :deep(ol) {
   padding-left: 20px;
   margin: 8px 0;
+}
+.message-content :deep(li > p),
+.message-content :deep(ol > p),
+.message-content :deep(ul > p) {
+  margin: 2px 0;
+}
+.message-content :deep(li) {
+  margin: 2px 0;
 }
 .message-content :deep(blockquote) {
   border-left: 3px solid #0070f3;
@@ -1110,129 +1195,55 @@ watch(sessionId, (newVal, oldVal) => {
   background: #dc2626;
 }
 
-/* 工具调用样式 */
-.tool-calls-group {
+/* 工具块内联容器 */
+.tool-block-inline {
+  margin: 8px 0;
+}
+
+/* 深度思考面板 */
+.reasoning-panel {
   margin-bottom: 8px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid #fef3c7;
   border-radius: 8px;
   overflow: hidden;
 }
-.tool-calls-header {
+.reasoning-header {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #f9fafb;
+  background: #fefce8;
   cursor: pointer;
   user-select: none;
   font-size: 13px;
-  color: #52525b;
+  color: #a16207;
   transition: background 0.15s;
 }
-.tool-calls-header:hover {
-  background: #f4f4f5;
+.reasoning-header:hover {
+  background: #fef9c3;
 }
-.tool-calls-title {
+.reasoning-icon {
+  color: #eab308;
+  font-size: 14px;
+}
+.reasoning-title {
   font-weight: 500;
 }
-.tool-calls-names {
-  color: #a1a1aa;
-  margin-left: 4px;
-}
-.tool-expand-icon {
-  margin-left: auto;
-  font-size: 10px;
-  transition: transform 0.2s;
-}
-.tool-expand-icon.expanded {
-  transform: rotate(90deg);
-}
-.tool-calls-list {
-  border-top: 1px solid #e4e4e7;
-}
-.tool-call-item {
-  padding: 6px 12px;
-  border-bottom: 1px solid #f4f4f5;
-}
-.tool-call-item:last-child {
-  border-bottom: none;
-}
-.tool-call-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-}
-.tool-result-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-}
-.tool-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.tool-icon.tool-success {
-  color: #10b981;
-}
-.tool-icon.tool-query {
-  color: #6366f1;
-}
-.tool-name {
-  font-weight: 500;
-  color: #171717;
-  flex-shrink: 0;
-}
-.tool-args {
-  color: #71717a;
-  font-family: 'SF Mono', 'Menlo', monospace;
+.reasoning-spinner {
+  color: #eab308;
   font-size: 12px;
-  word-break: break-all;
-}
-.tool-result-summary {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  color: #0070f3;
-  font-size: 13px;
-}
-.tool-result-summary:hover {
-  color: #005bc4;
-}
-.tool-result-content {
-  flex-basis: 100%;
-  margin-top: 4px;
-  padding: 8px;
-  background: #f9fafb;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #52525b;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.tool-status-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-  color: #0070f3;
-}
-.tool-status-text {
-  color: #52525b;
-  font-size: 12px;
-}
-.spinning {
   animation: spin 1s linear infinite;
 }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.reasoning-content {
+  padding: 10px 12px;
+  background: #fffbeb;
+  font-size: 13px;
+  color: #71717a;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
 }
 .input-hint {
   text-align: center;

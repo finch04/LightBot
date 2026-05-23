@@ -109,6 +109,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 new LambdaQueryWrapper<Agent>()
                         .eq(Agent::getUserId, userId)
                         .like(StringUtils.hasText(name), Agent::getName, name)
+                        .orderByDesc(Agent::getIsDefault)
                         .orderByDesc(Agent::getCreateTime));
     }
 

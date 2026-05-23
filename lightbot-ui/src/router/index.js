@@ -79,6 +79,11 @@ const routes = [
         component: () => import('../views/DashboardView.vue'),
       },
       {
+        path: 'observability',
+        name: 'Observability',
+        component: () => import('../views/Observability.vue'),
+      },
+      {
         path: 'logs',
         name: 'Logs',
         component: () => import('../views/LogMonitor.vue'),

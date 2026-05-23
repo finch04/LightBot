@@ -84,6 +84,9 @@ public enum ErrorCode {
     // ========== MCP模块 ==========
     MCP_SERVER_NOT_FOUND(90001, "MCP Server不存在", HttpStatus.BAD_REQUEST),
 
+    // ========== LLM调用链模块 ==========
+    LLM_TRACE_NOT_FOUND(93001, "调用链记录不存在", HttpStatus.BAD_REQUEST),
+
     // ========== 文件存储 ==========
     FILE_UPLOAD_FAILED(80001, "文件上传失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_DOWNLOAD_FAILED(80002, "文件下载失败", HttpStatus.INTERNAL_SERVER_ERROR),

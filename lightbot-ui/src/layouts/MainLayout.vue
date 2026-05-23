@@ -122,6 +122,7 @@ import {
   DatabaseOutlined,
   ToolOutlined,
   DashboardOutlined,
+  EyeOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { Modal } from 'ant-design-vue'
@@ -151,7 +152,8 @@ const navItems = [
   { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
   { path: '/knowledge', label: '知识库', icon: markRaw(DatabaseOutlined) },
   { path: '/extensions', label: '扩展', icon: markRaw(ToolOutlined) },
-  { path: '/dashboard', label: '监控', icon: markRaw(DashboardOutlined) },
+  { path: '/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
+  { path: '/observability', label: '可观测性', icon: markRaw(EyeOutlined) },
 ]
 
 function isActive(path) {

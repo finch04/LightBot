@@ -11,6 +11,7 @@ import com.lightbot.enums.SessionStatus;
 import com.lightbot.mapper.ChatSessionMapper;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
+import com.lightbot.service.LlmTraceService;
 import com.lightbot.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     private final AgentService agentService;
     private final MessageService messageService;
+    private final LlmTraceService llmTraceService;
 
     @Override
     public ChatSession createSession(Long agentId) {
@@ -110,7 +112,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         }
         // 1. 物理删除会话下的所有消息
         messageService.deleteBySessionId(sessionId);
-        // 2. 物理删除会话
+        // 2. 物理删除会话下的所有调用链记录
+        llmTraceService.deleteBySessionId(sessionId);
+        // 3. 物理删除会话
         removeById(sessionId);
     }
 

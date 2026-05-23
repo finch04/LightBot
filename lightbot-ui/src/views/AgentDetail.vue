@@ -144,6 +144,27 @@
             <a-input v-else v-model:value="agentConfig[field.key]" placeholder="请输入" />
             <div v-if="field.hint" class="param-hint">{{ field.hint }}</div>
           </a-form-item>
+          <a-form-item label="上下文条数">
+            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+              <a-input-number
+                v-model:value="agentConfig.maxContextMessages"
+                :min="1"
+                :max="50"
+                :step="5"
+                placeholder="默认20"
+                style="flex: 1"
+              />
+              <a-tooltip
+                title="与模型对话时最多携带的历史消息条数。条数越多上下文越完整，但消耗的Token也越多"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+            <div class="param-hint">与模型对话时最多携带的历史消息条数，默认20条</div>
+          </a-form-item>
         </a-form>
       </div>
 
@@ -208,6 +229,21 @@
           <h3>工具绑定</h3>
           <span class="panel-tip">绑定后大模型可自主决定是否调用工具，提升回答准确性</span>
         </div>
+        <div class="tool-options-bar">
+          <div class="tool-option-item">
+            <span class="tool-option-label">工具调用模式</span>
+            <a-switch v-model:checked="agentConfig.asyncToolCalls" size="default" />
+            <span class="tool-option-value">{{ agentConfig.asyncToolCalls ? '异步（并行）' : '串行（逐个）' }}</span>
+            <a-tooltip
+              title="串行模式：每次只调用一个工具，等待结果后再决定是否继续调用；异步模式：AI可同时调用多个工具，提升效率但可能消耗更多Token"
+              overlay-class-name="no-flip-tooltip"
+              :overlay-style="{ maxWidth: '320px' }"
+              placement="topLeft"
+            >
+              <QuestionCircleOutlined class="tool-option-help" />
+            </a-tooltip>
+          </div>
+        </div>
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div v-if="selectedTools.length === 0" class="empty-tip">
@@ -270,7 +306,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar } from '../api/agent'
 import { getTools } from '../api/tool'
@@ -874,6 +910,38 @@ onMounted(() => {
 .panel-tip {
   font-size: 12px;
   color: #a1a1aa;
+}
+
+.tool-options-bar {
+  display: flex;
+  gap: 24px;
+  padding: 12px 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.tool-option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-option-label {
+  font-size: 13px;
+  color: #52525b;
+  font-weight: 500;
+}
+.tool-option-value {
+  font-size: 13px;
+  color: #171717;
+}
+.tool-option-help {
+  font-size: 14px;
+  color: #a1a1aa;
+  cursor: help;
+  transition: color 0.2s;
+}
+.tool-option-help:hover {
+  color: #1890ff;
 }
 
 .param-row {

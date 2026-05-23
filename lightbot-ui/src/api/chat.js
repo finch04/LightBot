@@ -23,15 +23,22 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
   const reader = response.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
+  let doneFired = false
+  const fireDone = () => {
+    if (!doneFired) {
+      doneFired = true
+      onDone?.()
+    }
+  }
 
   while (true) {
     const { done, value } = await reader.read()
     if (done) {
       // 处理 buffer 中残留的数据
       if (buffer.trim()) {
-        processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent })
+        processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent, onDone: fireDone })
       }
-      onDone?.()
+      fireDone()
       break
     }
     buffer += decoder.decode(value, { stream: true })
@@ -40,23 +47,42 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
     if (lastNewline === -1) continue
     const complete = buffer.substring(0, lastNewline)
     buffer = buffer.substring(lastNewline + 1)
-    processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent })
+    processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent, onDone: fireDone })
   }
 }
 
-function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent }) {
+function decodeSseTextContent(raw) {
+  if (!raw) return ''
+  let content = raw
+  // Spring SseEmitter 可能对字符串做 JSON 编码
+  if (content.startsWith('"') && content.endsWith('"')) {
+    try {
+      content = JSON.parse(content)
+    } catch {
+      // 保持原样
+    }
+  }
+  // 后端将 \n 转义为 \\n 防止 SSE 行截断
+  return content.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
+}
+
+function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onDone }) {
   const lines = text.split('\n')
   for (const line of lines) {
     if (line.startsWith('data:')) {
-      const content = line.substring(5)
-      if (content && content !== '[DONE]') {
-        // 判断消息类型
+      let content = line.substring(5)
+      if (content === '[DONE]') {
+        onDone?.()
+        continue
+      }
+      if (content) {
+        // 判断消息类型（先检查前缀，再处理内容）
         if (content.startsWith('[STATUS]')) {
           const statusContent = content.substring(8)
           // 尝试解析为工具事件 JSON
           try {
             const parsed = JSON.parse(statusContent)
-            if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status') {
+            if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status' || parsed.type === 'tool_complete' || parsed.type === 'reasoning_content') {
               onToolEvent?.(parsed)
               continue
             }
@@ -65,9 +91,9 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent }) {
           }
           onStatus?.(statusContent)
         } else if (content.startsWith('[METADATA]')) {
-          onMetadata?.(content.substring(10)) // 移除 [METADATA] 前缀
+          onMetadata?.(content.substring(10))
         } else {
-          onChunk?.(content)
+          onChunk?.(decodeSseTextContent(content))
         }
       }
     }

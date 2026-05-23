@@ -1,5 +1,6 @@
 package com.lightbot.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.Message;
 
@@ -14,7 +15,17 @@ import java.util.List;
 public interface MessageService extends IService<Message> {
 
     /**
-     * 获取会话的消息历史
+     * 分页获取会话消息（按创建时间倒序，返回最新N条）
+     *
+     * @param sessionId 会话ID
+     * @param pageNum   页码
+     * @param pageSize  每页数量
+     * @return 分页消息列表
+     */
+    Page<Message> listBySessionIdPage(Long sessionId, int pageNum, int pageSize);
+
+    /**
+     * 获取会话的全部消息历史
      *
      * @param sessionId 会话ID
      * @return 消息列表
