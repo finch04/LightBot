@@ -24,6 +24,7 @@ import com.lightbot.service.*;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
 import com.lightbot.util.TikaUtil;
+import com.lightbot.util.WebFetchUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -77,6 +78,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
     private final OcrUtil ocrUtil;
+    private final WebFetchUtil webFetchUtil;
     private final ChunkService chunkService;
     private final ChunkStrategyFactory chunkStrategyFactory;
     private final EmbeddingService embeddingService;
@@ -473,6 +475,80 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         // 预签名URL中携带正确的Content-Type，浏览器才能内联展示而非下载
         String url = minioUtil.getPresignedUrl(doc.getFilePath(), contentType);
         return new DocumentDownloadVO(url, doc.getFileType(), doc.getName(), contentType);
+    }
+
+    @Override
+    public Document fetchUrlDocument(Long knowledgeId, String url) {
+        long userId = StpUtil.getLoginIdAsLong();
+
+        // 1. 抓取 URL 内容
+        WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
+
+        // 2. 生成文件名和内容
+        String fileName = result.generateFileName();
+        String content = result.getContent();
+        if (content == null || content.isBlank()) {
+            throw new BizException(ErrorCode.DOCUMENT_PARSE_FAILED, "网页内容为空");
+        }
+
+        // 3. 计算内容哈希（用于去重）
+        String contentHash = calculateContentHash(content);
+
+        // 4. 检查同一知识库下是否已存在相同内容
+        Document existing = getOne(new LambdaQueryWrapper<Document>()
+                .eq(Document::getKnowledgeId, knowledgeId)
+                .eq(Document::getFileHash, contentHash)
+                .eq(Document::getDeleted, 0));
+        if (existing != null) {
+            throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS, existing.getName());
+        }
+
+        // 5. 上传内容到 MinIO
+        String filePath = minioUtil.generatePath(knowledgeId, fileName);
+        long contentSize = content.length();
+        try (InputStream is = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
+            minioUtil.upload(is, filePath, contentSize, "text/plain");
+        } catch (Exception e) {
+            log.error("[URL抓取] MinIO上传失败, url={}", url, e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+
+        // 6. 创建文档记录（状态为 UPLOADED，可直接入库）
+        Document doc = new Document();
+        doc.setKnowledgeId(knowledgeId);
+        doc.setUserId(userId);
+        doc.setName(fileName);
+        doc.setFilePath(filePath);
+        doc.setFileType("txt");
+        doc.setFileSize(contentSize);
+        doc.setFileHash(contentHash);
+        doc.setStatus(DocumentStatus.UPLOADED);
+        // 存储来源URL到metadata
+        doc.setMetadata(String.format("{\"sourceUrl\":\"%s\",\"title\":\"%s\",\"fetchedAt\":%d}",
+                url, result.getTitle(), result.getFetchedAt()));
+        save(doc);
+
+        log.info("[URL抓取] 文档创建成功, documentId={}, url={}, contentLength={}",
+                doc.getId(), url, content.length());
+
+        return doc;
+    }
+
+    /**
+     * 计算文本内容的哈希
+     */
+    private String calculateContentHash(String content) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(content.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return String.valueOf(System.currentTimeMillis());
+        }
     }
 
     /**

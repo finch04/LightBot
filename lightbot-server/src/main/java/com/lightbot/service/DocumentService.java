@@ -106,4 +106,13 @@ public interface DocumentService extends IService<Document> {
      * @return 下载信息
      */
     DocumentDownloadVO getDocumentDownloadUrl(Long documentId);
+
+    /**
+     * 从 URL 抓取内容并创建文档记录
+     *
+     * @param knowledgeId 知识库ID
+     * @param url         URL地址
+     * @return 文档记录
+     */
+    Document fetchUrlDocument(Long knowledgeId, String url);
 }

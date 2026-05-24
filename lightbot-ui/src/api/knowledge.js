@@ -38,6 +38,12 @@ export function uploadDocuments(knowledgeId, files, ocrEnabled = false) {
   })
 }
 
+export function fetchUrlDocument(knowledgeId, url) {
+  return request.post(`/knowledge/${knowledgeId}/documents/fetch-url`, null, {
+    params: { url },
+  })
+}
+
 export function ingestDocument(docId, data) {
   return request.post(`/knowledge/documents/${docId}/ingest`, data)
 }

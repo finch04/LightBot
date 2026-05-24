@@ -138,6 +138,13 @@ public class KnowledgeController {
         return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled));
     }
 
+    @Operation(summary = "从URL抓取内容到知识库（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/documents/fetch-url")
+    public Result<Document> fetchUrlDocument(@PathVariable Long id,
+                                              @RequestParam String url) {
+        return Result.ok(documentService.fetchUrlDocument(id, url));
+    }
+
     @Operation(summary = "获取知识库下的文档列表（需要成员权限）")
     @GetMapping("/{id}/documents")
     public Result<?> listDocuments(@PathVariable Long id,

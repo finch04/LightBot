@@ -457,21 +457,27 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
 
-        // 2. 生成存储路径：agent/{agentId}/avatar/{uuid}.{ext}
+        // 2. 校验文件格式（仅允许图片格式）
         String originalName = file.getOriginalFilename();
         String ext = "";
         if (originalName != null && originalName.lastIndexOf('.') > 0) {
-            ext = originalName.substring(originalName.lastIndexOf('.'));
+            ext = originalName.substring(originalName.lastIndexOf('.') + 1).toLowerCase();
         }
-        String filePath = String.format("agent/%d/avatar/%s%s", id, UUID.randomUUID().toString().replace("-", ""), ext);
+        List<String> allowedExts = List.of("jpg", "jpeg", "png", "gif", "webp", "bmp");
+        if (!allowedExts.contains(ext)) {
+            throw new BizException(ErrorCode.AVATAR_UNSUPPORTED_TYPE, "支持格式: jpg/jpeg/png/gif/webp/bmp");
+        }
 
-        // 3. 删除旧头像（如果有）
+        // 3. 生成存储路径：agent/{agentId}/avatar/{uuid}.{ext}
+        String filePath = String.format("agent/%d/avatar/%s.%s", id, UUID.randomUUID().toString().replace("-", ""), ext);
+
+        // 4. 删除旧头像（如果有）
         deleteOldAvatar(agent.getAvatar());
 
-        // 4. 上传新头像
+        // 5. 上传新头像
         minioUtil.upload(file, filePath);
 
-        // 5. 构建完整URL并更新Agent的avatar字段
+        // 6. 构建完整URL并更新Agent的avatar字段
         String fullUrl = minioUtil.getPresignedUrl(filePath);
         agent.setAvatar(fullUrl);
         updateById(agent);

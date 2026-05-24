@@ -267,14 +267,24 @@
       :footer="null"
     >
       <div class="upload-section">
-        <div class="upload-dropzone" @click="triggerFileInput" @drop.prevent="onDrop" @dragover.prevent>
+        <!-- 上传模式切换 -->
+        <div class="upload-mode-switch">
+          <a-segmented
+            v-model:value="uploadMode"
+            :options="uploadModeOptions"
+            size="small"
+          />
+        </div>
+
+        <!-- 文件上传区域 -->
+        <div v-if="uploadMode === 'file'" class="upload-dropzone" @click="triggerFileInput" @drop.prevent="onDrop" @dragover.prevent>
           <input ref="fileInputRef" type="file" multiple accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.html,.htm" style="display: none" @change="onFileSelect" />
           <p class="dropzone-text">拖拽文件到此处，或点击选择</p>
           <p class="dropzone-hint">支持 md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html，单文件最大 100MB</p>
         </div>
 
         <!-- OCR 开关 -->
-        <div class="ocr-section">
+        <div v-if="uploadMode === 'file'" class="ocr-section">
           <div class="ocr-toggle">
             <a-switch v-model:checked="ocrEnabled" size="small" @change="handleOcrToggle" />
             <span class="ocr-label">启用 OCR 识别</span>
@@ -293,7 +303,7 @@
           </div>
         </div>
 
-        <div class="upload-file-list" v-if="uploadFiles.length > 0">
+        <div v-if="uploadMode === 'file' && uploadFiles.length > 0" class="upload-file-list">
           <div v-for="(file, i) in uploadFiles" :key="i" class="upload-file-item">
             <span class="upload-file-name">{{ file.name }}</span>
             <span class="upload-file-status" :class="file._status">
@@ -305,10 +315,53 @@
           </div>
         </div>
 
+        <!-- URL 输入区域 -->
+        <div v-if="uploadMode === 'url'" class="url-input-area">
+          <a-textarea
+            v-model:value="urlInput"
+            placeholder="输入 URL，一行一个&#10;https://example.com/article1&#10;https://example.com/article2"
+            :auto-size="{ minRows: 4, maxRows: 8 }"
+            class="url-textarea"
+          />
+          <div class="url-input-actions">
+            <span class="url-hint">支持批量粘贴，自动过滤空行</span>
+            <button class="btn-primary-sm" :disabled="!urlInput.trim() || urlFetching" @click="handleFetchUrls">
+              {{ urlFetching ? '解析中...' : '解析 URL' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- URL 列表 -->
+        <div v-if="uploadMode === 'url' && urlList.length > 0" class="url-list">
+          <div v-for="(item, i) in urlList" :key="i" class="url-item">
+            <div class="url-icon-wrapper">
+              <CheckCircleOutlined v-if="item.status === 'success'" class="url-icon success" />
+              <CloseCircleOutlined v-else-if="item.status === 'error'" class="url-icon error" :title="item.error" />
+              <SyncOutlined v-else class="url-icon spinning" spin />
+            </div>
+            <div class="url-content">
+              <span class="url-text" :title="item.url">{{ item.url }}</span>
+              <span v-if="item.status === 'success'" class="url-title">{{ item.title }}</span>
+              <span v-else-if="item.status === 'error'" class="url-error">{{ item.error }}</span>
+            </div>
+            <button class="btn-icon-sm" @click="removeUrlItem(i)">
+              <CloseOutlined />
+            </button>
+          </div>
+        </div>
+
+        <!-- URL 空状态 -->
+        <div v-if="uploadMode === 'url' && urlList.length === 0" class="url-empty-tip">
+          <GlobalOutlined /> 输入 URL 后点击解析，系统将自动抓取网页内容
+        </div>
+
         <div class="upload-actions">
           <button class="btn-outline-sm" @click="uploadVisible = false">取消</button>
-          <button class="btn-primary-sm" :disabled="uploadFiles.length === 0 || uploadSubmitting" @click="handleBatchUpload">
+          <button v-if="uploadMode === 'file'" class="btn-primary-sm" :disabled="uploadFiles.length === 0 || uploadSubmitting" @click="handleBatchUpload">
             {{ uploadSubmitting ? '上传中...' : '开始上传' }}
+          </button>
+          <button v-if="uploadMode === 'url'" class="btn-primary-sm" :disabled="!hasSuccessfulUrls" @click="handleConfirmUrls">
+            确认添加
           </button>
         </div>
       </div>
@@ -528,6 +581,7 @@ import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
   DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined, DeleteOutlined, RobotOutlined,
+  GlobalOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -536,6 +590,7 @@ import {
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
+  fetchUrlDocument,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
@@ -622,6 +677,21 @@ const fileInputRef = ref(null)
 const ocrEnabled = ref(false)
 const ocrChecking = ref(false)
 const ocrHealth = ref(null)
+
+// 上传模式切换
+const uploadMode = ref('file')
+const uploadModeOptions = [
+  { value: 'file', label: '上传文件' },
+  { value: 'url', label: '解析 URL' },
+]
+
+// URL 抓取
+const urlInput = ref('')
+const urlList = ref([])
+const urlFetching = ref(false)
+
+// 计算属性：是否有成功的 URL
+const hasSuccessfulUrls = computed(() => urlList.value.some(item => item.status === 'success'))
 
 // 入库弹窗
 const ingestVisible = ref(false)
@@ -734,6 +804,9 @@ function openUploadModal() {
   uploadFiles.value = []
   ocrEnabled.value = false
   ocrHealth.value = null
+  uploadMode.value = 'file'
+  urlInput.value = ''
+  urlList.value = []
   uploadVisible.value = true
 }
 
@@ -804,6 +877,85 @@ async function handleBatchUpload() {
   } finally {
     uploadSubmitting.value = false
   }
+}
+
+// ========== URL 抓取功能 ==========
+
+function isValidUrl(str) {
+  try {
+    const url = new URL(str)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+async function handleFetchUrls() {
+  const text = urlInput.value.trim()
+  if (!text) return
+
+  // 1. 解析 URL 列表（按换行分隔，过滤空行）
+  const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l)
+  const validUrls = lines.filter(isValidUrl)
+
+  if (validUrls.length === 0) {
+    message.warning('未检测到有效的 URL')
+    return
+  }
+
+  // 2. 添加新 URL 到列表（去重），直接创建并添加对象
+  const pendingItems = []
+  for (const url of validUrls) {
+    if (urlList.value.some(u => u.url === url)) continue
+    const item = { url, status: 'pending', title: '', error: '' }
+    urlList.value.push(item)
+    pendingItems.push(item)
+  }
+
+  if (pendingItems.length === 0) {
+    message.info('所有 URL 已在列表中')
+    return
+  }
+
+  urlInput.value = ''
+  urlFetching.value = true
+
+  // 3. 并行抓取每个新添加的 URL
+  const promises = pendingItems.map(item => fetchSingleUrl(item))
+  await Promise.allSettled(promises)
+
+  urlFetching.value = false
+}
+
+async function fetchSingleUrl(item) {
+  item.status = 'fetching'
+  try {
+    const res = await fetchUrlDocument(knowledgeId, item.url)
+    item.status = 'success'
+    item.title = res.data?.name || '网页内容'
+    item.documentId = res.data?.id
+  } catch (e) {
+    item.status = 'error'
+    item.error = e.response?.data?.message || e.message || '抓取失败'
+  }
+}
+
+function removeUrlItem(index) {
+  urlList.value.splice(index, 1)
+}
+
+async function handleConfirmUrls() {
+  const successItems = urlList.value.filter(item => item.status === 'success')
+  if (successItems.length === 0) {
+    message.warning('请至少解析一个成功的 URL')
+    return
+  }
+
+  message.success(`已添加 ${successItems.length} 个网页文档，可在文档列表中查看`)
+  uploadVisible.value = false
+  urlList.value = []
+  urlInput.value = ''
+  setTimeout(loadDocuments, 500)
 }
 
 // ========== 入库弹窗 ==========
@@ -2202,6 +2354,96 @@ onUnmounted(() => {
   padding-top: 8px;
   border-top: 1px solid #ebebeb;
 }
+
+/* 上传模式切换 */
+.upload-mode-switch {
+  margin-bottom: 12px;
+}
+
+/* URL 输入区域 */
+.url-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.url-textarea {
+  width: 100%;
+}
+.url-input-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.url-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+
+/* URL 列表 */
+.url-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.url-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #f5f5f5;
+  border-radius: 6px;
+}
+.url-icon-wrapper {
+  flex-shrink: 0;
+  width: 16px;
+}
+.url-icon {
+  font-size: 14px;
+}
+.url-icon.success {
+  color: #16a34a;
+}
+.url-icon.error {
+  color: #dc2626;
+}
+.url-icon.spinning {
+  color: #d97706;
+}
+.url-content {
+  flex: 1;
+  min-width: 0;
+}
+.url-text {
+  font-size: 13px;
+  color: #52525b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.url-title {
+  font-size: 12px;
+  color: #16a34a;
+}
+.url-error {
+  font-size: 12px;
+  color: #dc2626;
+}
+.url-empty-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px dashed #d4d4d8;
+  border-radius: 8px;
+  color: #71717a;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
 .form-hint {
   font-size: 12px;
   color: #a1a1aa;

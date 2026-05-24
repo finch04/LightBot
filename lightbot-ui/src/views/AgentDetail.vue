@@ -42,8 +42,8 @@
                   <UploadOutlined />
                 </div>
               </div>
-              <input ref="avatarInputRef" type="file" accept="image/*" style="display: none" @change="onAvatarFileChange" />
-              <span class="avatar-tip">支持 jpg/png，建议 200x200</span>
+              <input ref="avatarInputRef" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp" style="display: none" @change="onAvatarFileChange" />
+              <span class="avatar-tip">支持 jpg/jpeg/png/gif/webp，建议 200x200</span>
             </div>
           </a-form-item>
           <a-form-item label="描述">
