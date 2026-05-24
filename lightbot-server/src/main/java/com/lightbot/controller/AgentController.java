@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.service.AgentService;
@@ -92,14 +93,39 @@ public class AgentController {
 
     @Operation(summary = "获取Agent绑定的工具ID列表")
     @GetMapping("/{id}/tools")
-    public Result<List<Long>> getToolIds(@PathVariable Long id) {
-        return Result.ok(agentService.getToolIds(id));
+    public Result<List<String>> getToolIds(@PathVariable Long id) {
+        List<Long> toolIds = agentService.getToolIds(id);
+        List<String> toolIdStrs = toolIds.stream().map(String::valueOf).toList();
+        return Result.ok(toolIdStrs);
     }
 
     @Operation(summary = "获取Agent绑定的工具详情列表")
     @GetMapping("/{id}/tools/detail")
     public Result<List<Tool>> getToolDetails(@PathVariable Long id) {
         return Result.ok(agentService.getToolDetails(id));
+    }
+
+    @Operation(summary = "获取Agent绑定的MCP Server ID列表")
+    @GetMapping("/{id}/mcp-servers")
+    public Result<List<String>> getMcpServerIds(@PathVariable Long id) {
+        List<Long> mcpServerIds = agentService.getMcpServerIds(id);
+        List<String> mcpServerIdStrs = mcpServerIds.stream().map(String::valueOf).toList();
+        return Result.ok(mcpServerIdStrs);
+    }
+
+    @Operation(summary = "更新Agent绑定的MCP Server")
+    @PutMapping("/{id}/mcp-servers")
+    public Result<Void> updateMcpServerBindings(
+            @PathVariable Long id,
+            @RequestBody List<Long> mcpServerIds) {
+        agentService.updateMcpServerBindings(id, mcpServerIds);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取Agent绑定的MCP Server详情列表")
+    @GetMapping("/{id}/mcp-servers/detail")
+    public Result<List<McpServer>> getMcpServerDetails(@PathVariable Long id) {
+        return Result.ok(agentService.getMcpServerDetails(id));
     }
 
     @Operation(summary = "删除Agent")

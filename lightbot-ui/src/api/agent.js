@@ -63,3 +63,15 @@ export function getAgentToolIds(id) {
 export function getAgentToolDetails(id) {
   return request.get(`/agents/${id}/tools/detail`)
 }
+
+export function getAgentMcpServerIds(id) {
+  return request.get(`/agents/${id}/mcp-servers`)
+}
+
+export function updateAgentMcpServers(id, mcpServerIds) {
+  return request.put(`/agents/${id}/mcp-servers`, mcpServerIds)
+}
+
+export function getAgentMcpServerDetails(id) {
+  return request.get(`/agents/${id}/mcp-servers/detail`)
+}

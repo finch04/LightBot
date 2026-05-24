@@ -1,6 +1,7 @@
 package com.lightbot.dto;
 
 import com.lightbot.enums.McpInstallType;
+import com.lightbot.enums.McpTransportType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -28,4 +29,11 @@ public class McpServerRequest {
     private String detailConfig;
 
     private String host;
+
+    @NotNull(message = "传输类型不能为空")
+    private McpTransportType transport;
+
+    private String headers;
+
+    private String disabledTools;
 }

@@ -136,7 +136,14 @@
 
         <!-- AI完整回复 -->
         <div v-if="detailTrace.replyContent" class="reply-section">
-          <h4>AI回复内容</h4>
+          <div class="reply-header">
+            <h4>AI回复内容</h4>
+            <button class="btn-copy" @click="copyToClipboard(detailTrace.replyContent, 'reply')">
+              <CheckOutlined v-if="copiedKey === 'reply'" style="color: #52c41a" />
+              <CopyOutlined v-else />
+              {{ copiedKey === 'reply' ? '已复制' : '复制' }}
+            </button>
+          </div>
           <div class="reply-content-box">{{ detailTrace.replyContent }}</div>
         </div>
 
@@ -210,12 +217,24 @@
                   </div>
                   <!-- AI思考内容 -->
                   <div v-if="sub.attributes?.content && sub.name === 'ai_reasoning'" class="sd-section">
-                    <div class="sd-section-title">思考过程</div>
+                    <div class="sd-section-title-row">
+                      <span class="sd-section-title">思考过程</span>
+                      <button class="btn-copy-sm" @click="copyToClipboard(sub.attributes.content, 'reasoning_' + sub.spanId + '_' + si)">
+                        <CheckOutlined v-if="copiedKey === 'reasoning_' + sub.spanId + '_' + si" style="color: #52c41a" />
+                        <CopyOutlined v-else />
+                      </button>
+                    </div>
                     <div class="sd-content-box reasoning-box">{{ sub.attributes.content }}</div>
                   </div>
                   <!-- 最终回复内容 -->
                   <div v-if="sub.attributes?.content && sub.name === 'ai_reply'" class="sd-section">
-                    <div class="sd-section-title">完整回复</div>
+                    <div class="sd-section-title-row">
+                      <span class="sd-section-title">完整回复</span>
+                      <button class="btn-copy-sm" @click="copyToClipboard(sub.attributes.content, 'reply_' + sub.spanId + '_' + si)">
+                        <CheckOutlined v-if="copiedKey === 'reply_' + sub.spanId + '_' + si" style="color: #52c41a" />
+                        <CopyOutlined v-else />
+                      </button>
+                    </div>
                     <div class="sd-content-box">{{ sub.attributes.content }}</div>
                   </div>
                   <!-- 工具调用详情 -->
@@ -247,6 +266,8 @@ import {
   ClockCircleOutlined,
   ToolOutlined,
   SearchOutlined,
+  CopyOutlined,
+  CheckOutlined,
 } from '@ant-design/icons-vue'
 import { getTraces, getTraceDetail, getTraceOverview } from '../api/observability'
 import { useRouter } from 'vue-router'
@@ -259,6 +280,15 @@ const overview = ref({})
 const detailVisible = ref(false)
 const detailTrace = ref(null)
 const expandedSpans = ref(new Set())
+const copiedKey = ref(null)
+let copyTimer = null
+
+function copyToClipboard(text, key) {
+  navigator.clipboard.writeText(text)
+  copiedKey.value = key
+  clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => { copiedKey.value = null }, 2000)
+}
 
 const filter = reactive({
   sessionId: null,
@@ -687,7 +717,56 @@ onMounted(() => {
 
 /* AI回复内容 */
 .reply-section { margin-bottom: 20px; }
-.reply-section h4 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.reply-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.reply-header h4 { font-size: 15px; font-weight: 600; margin: 0; }
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-copy:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-copy-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-copy-sm:hover {
+  background: #f0f0f0;
+  color: #0070f3;
+}
+.sd-section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.sd-section-title-row .sd-section-title {
+  margin-bottom: 0;
+}
 .reply-content-box {
   background: #fff;
   border: 1px solid #e8e8e8;

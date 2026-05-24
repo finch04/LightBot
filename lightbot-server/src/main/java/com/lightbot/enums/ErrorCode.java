@@ -83,6 +83,8 @@ public enum ErrorCode {
 
     // ========== MCP模块 ==========
     MCP_SERVER_NOT_FOUND(90001, "MCP Server不存在", HttpStatus.BAD_REQUEST),
+    MCP_CONNECTION_FAILED(90002, "MCP Server连接失败", HttpStatus.BAD_REQUEST),
+    MCP_CONFIG_ERROR(90003, "MCP Server配置错误", HttpStatus.BAD_REQUEST),
 
     // ========== LLM调用链模块 ==========
     LLM_TRACE_NOT_FOUND(93001, "调用链记录不存在", HttpStatus.BAD_REQUEST),

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.McpInstallType;
+import com.lightbot.enums.McpTransportType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -51,6 +52,18 @@ public class McpServer {
     @TableField("host")
     @Schema(description = "服务地址")
     private String host;
+
+    @TableField("transport")
+    @Schema(description = "传输类型: sse, stdio, streamable_http")
+    private McpTransportType transport;
+
+    @TableField(value = "headers", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "HTTP请求头(JSONB)")
+    private String headers;
+
+    @TableField(value = "disabled_tools", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "禁用的工具名列表(JSONB数组)")
+    private String disabledTools;
 
     @TableField("status")
     @Schema(description = "状态")

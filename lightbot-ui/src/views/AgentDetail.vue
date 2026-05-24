@@ -165,15 +165,186 @@
             </div>
             <div class="param-hint">与模型对话时最多携带的历史消息条数，默认20条</div>
           </a-form-item>
+          <a-form-item label="上下文摘要">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <a-switch v-model:checked="agentConfig.enableSummary" />
+              <span class="tool-option-value">{{ agentConfig.enableSummary ? '已启用' : '未启用' }}</span>
+              <a-tooltip
+                title="当上下文大小超过阈值时，自动对早期对话进行摘要，以优化Token使用"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+          </a-form-item>
+          <a-form-item v-if="agentConfig.enableSummary" label="摘要触发阈值">
+            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+              <a-input-number
+                v-model:value="agentConfig.summaryThresholdKb"
+                :min="10"
+                :max="1000"
+                :step="10"
+                placeholder="100"
+                style="flex: 1"
+              />
+              <span style="font-size: 13px; color: #71717a; white-space: nowrap;">KB</span>
+              <a-tooltip
+                title="当上下文大小超过该值时，启用摘要功能以优化上下文使用。单位为 KB，默认值为 100KB"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+            <div class="param-hint">上下文超过该大小时自动摘要，默认 100KB</div>
+          </a-form-item>
         </a-form>
       </div>
+    </div>
+
+    <!-- 绑定配置 Tabs -->
+    <a-tabs v-model:activeKey="activeTab" @change="onTabChange" class="binding-tabs">
+      <!-- 工具绑定 -->
+      <a-tab-pane key="tools" tab="工具绑定">
+        <div class="tool-options-bar">
+          <div class="tool-option-item">
+            <span class="tool-option-label">工具调用模式</span>
+            <a-switch v-model:checked="agentConfig.asyncToolCalls" size="default" />
+            <span class="tool-option-value">{{ agentConfig.asyncToolCalls ? '异步（并行）' : '串行（逐个）' }}</span>
+            <a-tooltip
+              title="串行模式：每次只调用一个工具，等待结果后再决定是否继续调用；异步模式：AI可同时调用多个工具，提升效率但可能消耗更多Token"
+              overlay-class-name="no-flip-tooltip"
+              :overlay-style="{ maxWidth: '320px' }"
+              placement="topLeft"
+            >
+              <QuestionCircleOutlined class="tool-option-help" />
+            </a-tooltip>
+          </div>
+        </div>
+        <div class="knowledge-bind">
+          <div class="selected-knowledge">
+            <div v-if="selectedTools.length === 0" class="empty-tip">
+              暂未绑定工具，请从下方列表选择
+            </div>
+            <div v-for="t in selectedTools" :key="t.id" class="knowledge-tag tool-tag">
+              <ToolOutlined />
+              <span>{{ t.displayName || t.name }}</span>
+              <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+              <button class="tag-remove" @click="removeTool(t.id)">
+                <CloseOutlined />
+              </button>
+            </div>
+          </div>
+          <div class="knowledge-list">
+            <div class="list-header">
+              <span>可用工具</span>
+              <a-input
+                v-model:value="toolSearchText"
+                placeholder="搜索工具..."
+                size="small"
+                style="width: 200px"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="type-filter-bar">
+              <button
+                v-for="opt in toolTypeOptions"
+                :key="opt.value"
+                class="type-filter-btn"
+                :class="{ active: toolTypeFilter === opt.value }"
+                @click="toolTypeFilter = opt.value; loadToolList(opt.value || undefined)"
+              >{{ opt.label }}</button>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="t in filteredToolList"
+                :key="t.name"
+                class="knowledge-item"
+                :class="{ selected: selectedToolIds.has(t.id) }"
+                @click="toggleTool(t)"
+              >
+                <div class="item-icon tool-icon-bg">
+                  <ToolOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">
+                    {{ t.displayName || t.name }}
+                    <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                  </div>
+                  <div class="item-desc">{{ t.description || '暂无描述' }}</div>
+                </div>
+                <div class="item-check" v-if="selectedToolIds.has(t.id)">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredToolList.length === 0" class="empty-tip">
+                暂无可用工具
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <!-- MCP 工具 -->
+      <a-tab-pane key="mcp" tab="MCP 工具">
+        <div class="knowledge-bind">
+          <div class="selected-knowledge">
+            <div v-if="selectedMcpServers.length === 0" class="empty-tip">
+              暂未绑定 MCP Server，请从下方列表选择
+            </div>
+            <div v-for="s in selectedMcpServers" :key="s.id" class="knowledge-tag mcp-tag">
+              <ApiOutlined />
+              <span>{{ s.name }}</span>
+              <button class="tag-remove" @click="removeMcpServer(s.id)">
+                <CloseOutlined />
+              </button>
+            </div>
+          </div>
+          <div class="knowledge-list">
+            <div class="list-header">
+              <span>可用 MCP Server</span>
+              <a-input
+                v-model:value="mcpSearchText"
+                placeholder="搜索 MCP Server..."
+                size="small"
+                style="width: 200px"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="s in filteredMcpServerList"
+                :key="s.id"
+                class="knowledge-item"
+                :class="{ selected: selectedMcpServerIds.has(s.id) }"
+                @click="toggleMcpServer(s)"
+              >
+                <div class="item-icon mcp-icon-bg">
+                  <ApiOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">{{ s.name }}</div>
+                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                </div>
+                <div class="item-check" v-if="selectedMcpServerIds.has(s.id)">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredMcpServerList.length === 0" class="empty-tip">
+                暂无可用 MCP Server
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
 
       <!-- 知识库绑定 -->
-      <div class="panel full-width">
-        <div class="panel-header">
-          <h3>知识库绑定</h3>
-          <span class="panel-tip">每个 Agent 最多绑定 3 个知识库，绑定后可基于知识库内容回答问题</span>
-        </div>
+      <a-tab-pane key="knowledge" tab="知识库">
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div v-if="selectedKnowledge.length === 0" class="empty-tip">
@@ -221,98 +392,23 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- 工具绑定 -->
-      <div class="panel full-width">
-        <div class="panel-header">
-          <h3>工具绑定</h3>
-          <span class="panel-tip">绑定后大模型可自主决定是否调用工具，提升回答准确性</span>
-        </div>
-        <div class="tool-options-bar">
-          <div class="tool-option-item">
-            <span class="tool-option-label">工具调用模式</span>
-            <a-switch v-model:checked="agentConfig.asyncToolCalls" size="default" />
-            <span class="tool-option-value">{{ agentConfig.asyncToolCalls ? '异步（并行）' : '串行（逐个）' }}</span>
-            <a-tooltip
-              title="串行模式：每次只调用一个工具，等待结果后再决定是否继续调用；异步模式：AI可同时调用多个工具，提升效率但可能消耗更多Token"
-              overlay-class-name="no-flip-tooltip"
-              :overlay-style="{ maxWidth: '320px' }"
-              placement="topLeft"
-            >
-              <QuestionCircleOutlined class="tool-option-help" />
-            </a-tooltip>
-          </div>
-        </div>
-        <div class="knowledge-bind">
-          <div class="selected-knowledge">
-            <div v-if="selectedTools.length === 0" class="empty-tip">
-              暂未绑定工具，请从下方列表选择
-            </div>
-            <div v-for="t in selectedTools" :key="t.id" class="knowledge-tag tool-tag">
-              <ToolOutlined />
-              <span>{{ t.displayName || t.name }}</span>
-              <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
-              <button class="tag-remove" @click="removeTool(t.id)">
-                <CloseOutlined />
-              </button>
-            </div>
-          </div>
-          <div class="knowledge-list">
-            <div class="list-header">
-              <span>可用工具</span>
-              <a-input
-                v-model:value="toolSearchText"
-                placeholder="搜索工具..."
-                size="small"
-                style="width: 200px"
-              >
-                <template #prefix><SearchOutlined /></template>
-              </a-input>
-            </div>
-            <div class="list-body">
-              <div
-                v-for="t in filteredToolList"
-                :key="t.name"
-                class="knowledge-item"
-                :class="{ selected: selectedToolIds.has(t.id) }"
-                @click="toggleTool(t)"
-              >
-                <div class="item-icon tool-icon-bg">
-                  <ToolOutlined />
-                </div>
-                <div class="item-info">
-                  <div class="item-name">
-                    {{ t.displayName || t.name }}
-                    <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
-                  </div>
-                  <div class="item-desc">{{ t.description || '暂无描述' }}</div>
-                </div>
-                <div class="item-check" v-if="selectedToolIds.has(t.id)">
-                  <CheckOutlined />
-                </div>
-              </div>
-              <div v-if="filteredToolList.length === 0" class="empty-tip">
-                暂无可用工具
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      </a-tab-pane>
+    </a-tabs>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers } from '../api/agent'
 import { getTools } from '../api/tool'
+import { getToolTypes } from '../api/enum'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
+import { getMcpServers } from '../api/mcp'
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
@@ -342,8 +438,23 @@ const searchText = ref('')
 const selectedToolIds = ref(new Set())
 const toolList = ref([])
 const toolSearchText = ref('')
+const toolTypeFilter = ref('')
+const toolTypeList = ref([])
 const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
+const toolTypeOptions = computed(() => {
+  const options = [{ value: '', label: '全部' }]
+  for (const t of toolTypeList.value) {
+    options.push({ value: t.value, label: t.label })
+  }
+  return options
+})
 const saving = ref(false)
+const activeTab = ref('tools')
+
+// MCP Server 绑定
+const selectedMcpServerIds = ref(new Set())
+const mcpServerList = ref([])
+const mcpSearchText = ref('')
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
@@ -387,6 +498,19 @@ const filteredToolList = computed(() => {
     t.name?.toLowerCase().includes(keyword) ||
     t.displayName?.toLowerCase().includes(keyword) ||
     t.description?.toLowerCase().includes(keyword)
+  )
+})
+
+const selectedMcpServers = computed(() => {
+  return mcpServerList.value.filter(s => selectedMcpServerIds.value.has(s.id))
+})
+
+const filteredMcpServerList = computed(() => {
+  if (!mcpSearchText.value) return mcpServerList.value
+  const keyword = mcpSearchText.value.toLowerCase()
+  return mcpServerList.value.filter(s =>
+    s.name?.toLowerCase().includes(keyword) ||
+    s.description?.toLowerCase().includes(keyword)
   )
 })
 
@@ -458,7 +582,7 @@ function restoreDefaults() {
 async function loadAgent() {
   try {
     const res = await getAgentDetail(agentId)
-    const { agent: agentData, knowledgeIds } = res.data
+    const { agent: agentData, knowledgeIds, mcpServerIds } = res.data
 
     // 分离基本信息和配置
     const { config, agentType, ...basicInfo } = agentData
@@ -498,6 +622,9 @@ async function loadAgent() {
     const toolRes = await getAgentToolDetails(agentId)
     const boundTools = toolRes.data || []
     selectedToolIds.value = new Set(boundTools.map(t => t.id))
+
+    // MCP Server IDs（从 detail 接口获取）
+    selectedMcpServerIds.value = new Set((mcpServerIds || []).map(String))
   } catch (e) {
     // interceptor已处理错误提示
   }
@@ -512,9 +639,20 @@ async function loadKnowledgeList() {
   }
 }
 
-async function loadToolList() {
+async function loadToolTypes() {
   try {
-    const res = await getTools({ pageNum: 1, pageSize: 100 })
+    const res = await getToolTypes()
+    toolTypeList.value = res.data || []
+  } catch (e) {
+    console.error('[AgentDetail] 加载工具类型枚举失败:', e)
+  }
+}
+
+async function loadToolList(toolType) {
+  try {
+    const params = { pageNum: 1, pageSize: 100 }
+    if (toolType) params.toolType = toolType
+    const res = await getTools(params)
     toolList.value = res.data?.records || []
   } catch (e) {
     console.error('[AgentDetail] 加载工具列表失败:', e)
@@ -555,6 +693,42 @@ function removeTool(id) {
   const ids = new Set(selectedToolIds.value)
   ids.delete(id)
   selectedToolIds.value = ids
+}
+
+function toggleMcpServer(s) {
+  const ids = new Set(selectedMcpServerIds.value)
+  if (ids.has(s.id)) {
+    ids.delete(s.id)
+  } else {
+    ids.add(s.id)
+  }
+  selectedMcpServerIds.value = ids
+}
+
+function removeMcpServer(id) {
+  const ids = new Set(selectedMcpServerIds.value)
+  ids.delete(id)
+  selectedMcpServerIds.value = ids
+}
+
+// Tab 切换刷新
+async function onTabChange(tab) {
+  if (tab === 'tools') {
+    await Promise.all([loadToolTypes(), loadToolList(toolTypeFilter.value || undefined)])
+  } else if (tab === 'mcp') {
+    await loadMcpServerList()
+  } else if (tab === 'knowledge') {
+    await loadKnowledgeList()
+  }
+}
+
+async function loadMcpServerList() {
+  try {
+    const res = await getMcpServers({ pageNum: 1, pageSize: 100 })
+    mcpServerList.value = res.data?.records || []
+  } catch (e) {
+    console.error('[AgentDetail] 加载MCP Server列表失败:', e)
+  }
 }
 
 async function handleGeneratePrompt() {
@@ -662,6 +836,9 @@ async function handleSave() {
     // 4. 更新工具绑定
     await updateAgentTools(agentId, Array.from(selectedToolIds.value))
 
+    // 5. 更新 MCP Server 绑定
+    await updateAgentMcpServers(agentId, Array.from(selectedMcpServerIds.value))
+
     message.success('保存成功')
   } catch (e) {
     // interceptor已处理错误提示
@@ -674,10 +851,10 @@ function startChat() {
   router.push({ path: '/chat', query: { agentId: agentId } })
 }
 
-onMounted(() => {
-  loadAgent()
-  loadKnowledgeList()
-  loadToolList()
+onMounted(async () => {
+  await loadAgent()
+  // 加载初始 tab（工具绑定）的数据
+  await Promise.all([loadToolTypes(), loadToolList()])
 })
 </script>
 
@@ -887,6 +1064,7 @@ onMounted(() => {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+/* tab 内容不再需要 grid，panel 宽度自适应 */
 .panel {
   background: #fff;
   border: 1px solid #ebebeb;
@@ -1144,5 +1322,51 @@ onMounted(() => {
 }
 .tool-icon-bg {
   background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
+}
+.mcp-tag {
+  background: #fdf4ff;
+  border-color: #e9d5ff;
+  color: #7c3aed;
+}
+.mcp-icon-bg {
+  background: linear-gradient(135deg, #7c3aed, #a855f7) !important;
+}
+.type-filter-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.type-filter-btn {
+  padding: 2px 10px;
+  border: 1px solid #e4e4e7;
+  border-radius: 100px;
+  background: #fff;
+  font-size: 12px;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.type-filter-btn:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.type-filter-btn.active {
+  background: #0070f3;
+  border-color: #0070f3;
+  color: #fff;
+}
+.agent-tabs {
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+  padding: 0 20px 20px;
+}
+.binding-tabs {
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+  padding: 16px 20px 20px;
+  margin-top: 16px;
 }
 </style>

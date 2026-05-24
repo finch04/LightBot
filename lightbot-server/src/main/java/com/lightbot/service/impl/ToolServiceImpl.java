@@ -107,6 +107,27 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
+    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType) {
+        LambdaQueryWrapper<Tool> wrapper = new LambdaQueryWrapper<Tool>()
+                .orderByDesc(Tool::getCreateTime);
+
+        // 关键字搜索（name 或 displayName）
+        if (StringUtils.hasText(keyword)) {
+            wrapper.and(w -> w
+                    .like(Tool::getName, keyword)
+                    .or()
+                    .like(Tool::getDisplayName, keyword));
+        }
+
+        // 工具类型过滤
+        if (StringUtils.hasText(toolType)) {
+            wrapper.eq(Tool::getToolType, toolType);
+        }
+
+        return page(new Page<>(pageNum, pageSize), wrapper);
+    }
+
+    @Override
     public void deleteById(Long id) {
         Tool tool = getById(id);
         if (tool == null) {
@@ -147,7 +168,6 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                         .findFirst()
                         .ifPresent(result::add);
             } else if (tool.getToolType() == ToolType.API) {
-                // API 类型工具：后续扩展 HTTP ToolCallback
                 log.info("[ToolService] API工具暂不支持自动执行: name={}", tool.getName());
             }
         }

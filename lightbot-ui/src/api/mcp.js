@@ -19,3 +19,19 @@ export function updateMcpServer(data) {
 export function deleteMcpServer(id) {
   return request.delete(`/mcp-servers/${id}`)
 }
+
+export function testMcpServer(id) {
+  return request.post(`/mcp-servers/${id}/test`)
+}
+
+export function getMcpServerTools(id) {
+  return request.get(`/mcp-servers/${id}/tools`)
+}
+
+export function refreshMcpServerTools(id) {
+  return request.post(`/mcp-servers/${id}/tools/refresh`)
+}
+
+export function toggleMcpTool(serverId, toolName) {
+  return request.put(`/mcp-servers/${serverId}/tools/${toolName}/toggle`)
+}

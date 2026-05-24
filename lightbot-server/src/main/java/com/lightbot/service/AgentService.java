@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -136,4 +137,28 @@ public interface AgentService extends IService<Agent> {
      * @return 工具详情列表
      */
     List<Tool> getToolDetails(Long agentId);
+
+    /**
+     * 获取 Agent 绑定的 MCP Server ID 列表
+     *
+     * @param agentId Agent ID
+     * @return MCP Server ID 列表
+     */
+    List<Long> getMcpServerIds(Long agentId);
+
+    /**
+     * 更新 Agent 的 MCP Server 绑定
+     *
+     * @param agentId      Agent ID
+     * @param mcpServerIds MCP Server ID 列表
+     */
+    void updateMcpServerBindings(Long agentId, List<Long> mcpServerIds);
+
+    /**
+     * 获取 Agent 绑定的 MCP Server 详情列表
+     *
+     * @param agentId Agent ID
+     * @return MCP Server 详情列表
+     */
+    List<McpServer> getMcpServerDetails(Long agentId);
 }

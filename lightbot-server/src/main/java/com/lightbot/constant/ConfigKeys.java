@@ -25,6 +25,9 @@ public final class ConfigKeys {
         // OpenAI
         public static final String PRESENCE_PENALTY = "presencePenalty";
         public static final String FREQUENCY_PENALTY = "frequencyPenalty";
+        // 上下文摘要
+        public static final String ENABLE_SUMMARY = "enableSummary";
+        public static final String SUMMARY_THRESHOLD_KB = "summaryThresholdKb";
     }
 
     /**

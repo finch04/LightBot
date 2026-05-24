@@ -8,11 +8,15 @@ import com.lightbot.dto.McpServerRequest;
 import com.lightbot.entity.McpServer;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
-import org.springframework.util.StringUtils;
 import com.lightbot.mapper.McpServerMapper;
+import com.lightbot.service.McpClientService;
 import com.lightbot.service.McpServerService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * MCP Server 服务实现类
@@ -22,8 +26,13 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer>
         implements McpServerService {
+
+    @Lazy
+    @Autowired
+    private McpClientService mcpClientService;
 
     @Override
     public McpServer create(McpServerRequest request) {
@@ -35,6 +44,9 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
         server.setDeployConfig(request.getDeployConfig());
         server.setDetailConfig(request.getDetailConfig());
         server.setHost(request.getHost());
+        server.setTransport(request.getTransport());
+        server.setHeaders(request.getHeaders());
+        server.setDisabledTools(request.getDisabledTools());
         server.setStatus(CommonStatus.ACTIVE);
         save(server);
         return server;
@@ -54,7 +66,12 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
         server.setDeployConfig(request.getDeployConfig());
         server.setDetailConfig(request.getDetailConfig());
         server.setHost(request.getHost());
+        server.setTransport(request.getTransport());
+        server.setHeaders(request.getHeaders());
+        server.setDisabledTools(request.getDisabledTools());
         updateById(server);
+        // 配置变更后清除 MCP 客户端缓存，下次对话重新拉取工具
+        mcpClientService.clearCache(server.getId());
         return server;
     }
 
@@ -71,5 +88,6 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
         if (!removeById(id)) {
             throw new BizException(ErrorCode.MCP_SERVER_NOT_FOUND);
         }
+        mcpClientService.clearCache(id);
     }
 }

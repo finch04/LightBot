@@ -37,10 +37,19 @@ public class BizException extends RuntimeException {
     }
 
     /**
-     * 通过错误码枚举构造异常（支持格式化消息）
+     * 通过错误码枚造异常（支持格式化消息）
      */
     public BizException(ErrorCode errorCode, Object... args) {
         super(String.format(errorCode.getMessage(), args));
+        this.code = errorCode.getCode();
+        this.httpStatus = errorCode.getHttpStatus();
+    }
+
+    /**
+     * 通过错误码枚举构造异常（保留原始异常）
+     */
+    public BizException(ErrorCode errorCode, Throwable cause) {
+        super(errorCode.getMessage(), cause);
         this.code = errorCode.getCode();
         this.httpStatus = errorCode.getHttpStatus();
     }

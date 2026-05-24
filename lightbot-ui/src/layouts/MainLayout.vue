@@ -1,16 +1,25 @@
 <template>
   <div class="layout">
     <!-- 左侧边栏 -->
-    <aside class="sidebar">
-      <!-- Logo -->
-      <div class="sidebar-logo" @click="router.push('/chat')">
-        <img src="/lightbot-logo.png" alt="LightBot" class="logo-img" />
+    <aside :class="['sidebar', { collapsed: sidebarCollapsed }]">
+      <!-- Logo + 收起按钮 -->
+      <div class="sidebar-header">
+        <div class="sidebar-logo" @click="sidebarCollapsed ? toggleSidebar() : router.push('/chat')">
+          <img src="/lightbot-logo.png" alt="LightBot" class="logo-img logo-full" />
+          <img src="/lightbot-logo-single.png" alt="LightBot" class="logo-img logo-single" />
+          <div class="logo-unfold-icon">
+            <MenuUnfoldOutlined />
+          </div>
+        </div>
+        <div v-if="!sidebarCollapsed" class="sidebar-toggle" @click="toggleSidebar">
+          <MenuFoldOutlined />
+        </div>
       </div>
 
       <!-- 新建对话按钮 -->
       <button class="btn-new-chat" @click="newChat">
         <PlusOutlined />
-        新建对话
+        <span class="sidebar-text">新建对话</span>
       </button>
 
       <!-- 导航菜单 -->
@@ -22,12 +31,12 @@
           :class="['nav-item', { active: isActive(item.path) }]"
         >
           <component :is="item.icon" />
-          <span>{{ item.label }}</span>
+          <span class="sidebar-text">{{ item.label }}</span>
         </router-link>
       </nav>
 
       <!-- 对话历史 -->
-      <div class="session-section">
+      <div v-show="!sidebarCollapsed" class="session-section">
         <div class="section-title" @click="sessionsCollapsed = !sessionsCollapsed">
           <span>最近对话</span>
           <DownOutlined v-if="sessionsCollapsed" class="collapse-icon" />
@@ -76,13 +85,15 @@
 
       <!-- 用户信息 -->
       <div class="sidebar-footer">
-        <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']">
+        <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown">
           <div class="user-info">
             <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
-            <span class="user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
-            <a-badge v-if="taskBadgeCount" :count="taskBadgeCount" :number-style="{ fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }" />
-            <UpOutlined v-if="userDropdownOpen" />
-            <DownOutlined v-else />
+            <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
+            <a-badge v-if="taskBadgeCount" class="sidebar-badge" :count="taskBadgeCount" :number-style="taskBadgeStyle" />
+            <span class="sidebar-text">
+              <UpOutlined v-if="userDropdownOpen" />
+              <DownOutlined v-else />
+            </span>
           </div>
           <template #overlay>
             <a-menu @click="handleCommand">
@@ -101,6 +112,7 @@
           </template>
         </a-dropdown>
       </div>
+
     </aside>
 
     <!-- 主内容区 -->
@@ -123,6 +135,8 @@ import {
   ToolOutlined,
   DashboardOutlined,
   EyeOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { Modal } from 'ant-design-vue'
@@ -140,6 +154,7 @@ const renameValue = ref('')
 const renameTarget = ref(null)
 const userDropdownOpen = ref(false)
 const sessionsCollapsed = ref(false)
+const sidebarCollapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 const runningTaskCount = ref(0)
 let taskSSE = null
 
@@ -147,6 +162,11 @@ const taskBadgeCount = computed(() => {
   if (runningTaskCount.value <= 0) return 0
   return runningTaskCount.value > 10 ? '10+' : runningTaskCount.value
 })
+
+const taskBadgeStyle = computed(() => sidebarCollapsed.value
+  ? { fontSize: '8px', boxShadow: 'none', backgroundColor: '#f5222d', minWidth: '14px', height: '14px', lineHeight: '14px', padding: '0 3px' }
+  : { fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }
+)
 
 const navItems = [
   { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
@@ -158,6 +178,15 @@ const navItems = [
 
 function isActive(path) {
   return route.path.startsWith(path)
+}
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('sidebar-collapsed', sidebarCollapsed.value)
+}
+
+function getPopupContainer() {
+  return document.body
 }
 
 async function loadSessions() {
@@ -341,14 +370,84 @@ watch(() => route.path, (path) => {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  transition: width 0.25s ease;
+}
+.sidebar.collapsed {
+  width: 60px;
+}
+.sidebar.collapsed .sidebar-text {
+  display: none;
+}
+.sidebar.collapsed .logo-img {
+  height: 32px;
+}
+.sidebar.collapsed .btn-new-chat {
+  margin: 0 8px 12px;
+  padding: 10px 0;
+  justify-content: center;
+}
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+.sidebar.collapsed .user-info {
+  justify-content: center;
+  padding: 8px 4px;
+  position: relative;
+}
+.sidebar-badge {
+  flex-shrink: 0;
+}
+.sidebar.collapsed .sidebar-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+.sidebar.collapsed .sidebar-footer {
+  padding: 12px 6px;
 }
 
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 8px;
+  flex-shrink: 0;
+}
+.sidebar.collapsed .sidebar-header {
+  padding: 12px 6px 8px;
+  justify-content: center;
+}
 .sidebar-logo {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 16px 12px;
   cursor: pointer;
+  flex: 1;
+  position: relative;
+}
+.logo-single,
+.logo-unfold-icon {
+  display: none;
+}
+.sidebar.collapsed .logo-full {
+  display: none;
+}
+.sidebar.collapsed .logo-single {
+  display: block;
+}
+.sidebar.collapsed .logo-unfold-icon {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #a1a1aa;
+  font-size: 18px;
+  background: #171717;
+}
+.sidebar.collapsed .sidebar-logo:hover .logo-unfold-icon {
+  display: flex;
 }
 .logo-img {
   height: 56px;
@@ -503,6 +602,7 @@ watch(() => route.path, (path) => {
   background: #171717;
   padding: 12px;
   border-top: 1px solid #27272a;
+  margin-top: auto;
 }
 .user-info {
   display: flex;
@@ -547,6 +647,28 @@ watch(() => route.path, (path) => {
 }
 :deep(.menu-danger:hover) {
   background: #f7d4d6 !important;
+}
+:global(.sidebar-user-dropdown .ant-dropdown-menu) {
+  min-width: 160px;
+}
+
+/* 收起/展开按钮 */
+.sidebar-toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #52525b;
+  font-size: 14px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-toggle:hover {
+  background: #27272a;
+  color: #a1a1aa;
 }
 
 /* ===== 主内容区 ===== */

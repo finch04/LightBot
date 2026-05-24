@@ -39,12 +39,25 @@
         <div class="card-detail">
           <span v-if="s.description">{{ s.description }}</span>
           <span v-if="s.host">地址: {{ s.host }}</span>
+          <span class="card-transport">{{ s.transport?.code || s.transport || s.installType }}</span>
+        </div>
+        <div class="card-footer">
+          <button class="btn-text" :disabled="testingId === s.id" @click="handleTest(s)">
+            <ApiOutlined /> 测试连接
+          </button>
+          <button class="btn-text" @click="openToolsDrawer(s)">
+            <ToolOutlined /> 查看工具
+          </button>
         </div>
       </div>
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑 MCP Server' : '新增 MCP Server'" :width="560" :footer="null" :maskClosable="false">
+    <a-modal v-model:open="dialogVisible" :width="560" :footer="null" :maskClosable="false">
+      <template #title>
+        <span>{{ form.id ? '编辑 MCP Server' : '新增 MCP Server' }}</span>
+        <QuestionCircleOutlined class="help-icon" @click="guideVisible = true" />
+      </template>
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="form.name" placeholder="如：filesystem-server" />
@@ -75,6 +88,12 @@
 
         <!-- sse 配置 -->
         <template v-if="form.installType === 'sse'">
+          <a-form-item label="传输协议">
+            <a-select v-model:value="form.transport" style="width: 100%">
+              <a-select-option value="sse">SSE</a-select-option>
+              <a-select-option value="streamable_http">Streamable HTTP</a-select-option>
+            </a-select>
+          </a-form-item>
           <a-form-item label="服务地址" required>
             <a-input v-model:value="form.host" placeholder="http://localhost:3001/sse" />
           </a-form-item>
@@ -93,23 +112,222 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 配置指南弹窗 -->
+    <a-modal v-model:open="guideVisible" title="MCP Server 配置指南" :width="640" :footer="null">
+      <div class="guide">
+        <div class="guide-section">
+          <div class="guide-h3">什么是 MCP？</div>
+          <p>MCP (Model Context Protocol) 是 Anthropic 开放的 AI 工具协议，让 AI 能调用外部工具（如文件操作、图表生成、数据库查询等）。</p>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-h3">配置步骤</div>
+          <div class="guide-step">
+            <span class="guide-num">1</span>
+            <div>
+              <b>选择安装类型</b>
+              <p>根据 MCP Server 的发布方式选择：NPX（Node.js 包）、UVX（Python 包）、SSE（远程 HTTP 服务）</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">2</span>
+            <div>
+              <b>填写配置</b>
+              <p>不同类型的配置项不同，详见下方示例</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">3</span>
+            <div>
+              <b>测试连接</b>
+              <p>创建后点击卡片上的「测试连接」，验证 MCP Server 是否可达</p>
+            </div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">4</span>
+            <div>
+              <b>绑定 Agent</b>
+              <p>在 Agent 详情页的「MCP 工具」Tab 中绑定该 MCP Server，对话时 LLM 即可自动调用其工具</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-h3">NPX 示例（本地 Node.js 工具）</div>
+          <div class="guide-code">
+            <div><b>安装类型</b>：NPX (Node.js)</div>
+            <div><b>包名</b>：@modelcontextprotocol/server-filesystem</div>
+            <div><b>命令参数</b>（每行一个）：</div>
+            <pre>--allow-read
+/tmp</pre>
+          </div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-h3">UVX 示例（本地 Python 工具）</div>
+          <div class="guide-code">
+            <div><b>安装类型</b>：UVX (Python)</div>
+            <div><b>包名</b>：mcp-server-fetch</div>
+          </div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-h3">SSE / Streamable HTTP 示例（远程服务）</div>
+          <div class="guide-code">
+            <div><b>安装类型</b>：SSE (远程服务)</div>
+            <div><b>传输协议</b>：SSE 或 Streamable HTTP（根据服务端支持选择）</div>
+            <div><b>服务地址</b>：http://localhost:3001/sse</div>
+            <div><b>请求头</b>（如需认证）：</div>
+            <pre>{"Authorization": "Bearer your-token"}</pre>
+          </div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-h3">环境变量说明</div>
+          <p>部分 MCP Server 需要 API Key 等环境变量，格式为 <code>KEY=VALUE</code>，每行一个。例如：</p>
+          <pre class="guide-pre">GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 工具列表抽屉 -->
+    <a-drawer
+      v-model:open="toolsDrawerVisible"
+      title="MCP 工具列表"
+      :width="520"
+      :bodyStyle="{ padding: '16px' }"
+    >
+      <div class="tools-header">
+        <div class="tools-header-left">
+          <span class="tools-server-name">{{ currentServer?.name }}</span>
+          <span class="tools-count">{{ toolsList.length }} 个工具</span>
+        </div>
+        <button class="btn-refresh" :disabled="toolsLoading" @click="handleRefreshTools">
+          <SyncOutlined :spin="toolsLoading" /> 刷新工具
+        </button>
+      </div>
+      <a-spin :spinning="toolsLoading">
+        <div v-if="toolsError" class="tools-error">
+          <div class="tools-error-title">加载失败</div>
+          <div class="tools-error-msg">{{ toolsError }}</div>
+          <button class="btn-retry" @click="loadTools">重新加载</button>
+        </div>
+        <div v-else-if="toolsList.length === 0 && !toolsLoading" class="tools-empty">暂无工具，请检查 MCP Server 配置</div>
+        <div v-for="tool in toolsList" :key="tool.name" class="tool-item">
+          <div class="tool-header">
+            <div class="tool-info">
+              <div class="tool-name">{{ tool.name }}</div>
+              <div class="tool-desc">{{ tool.description || '暂无描述' }}</div>
+            </div>
+            <div class="tool-actions">
+              <button class="tool-detail-btn" @click="openToolDetailModal(tool)">
+                <EyeOutlined /> 详情
+              </button>
+              <a-switch
+                :checked="tool.enabled"
+                size="small"
+                :loading="toolToggling === tool.name"
+                @change="(checked) => handleToggleTool(tool.name, checked)"
+              />
+            </div>
+          </div>
+        </div>
+      </a-spin>
+    </a-drawer>
+
+    <!-- 工具详情弹窗 -->
+    <a-modal
+      v-model:open="toolDetailVisible"
+      :title="toolDetail?.name || '工具详情'"
+      :width="640"
+      :footer="null"
+    >
+      <div class="tool-detail-modal">
+        <div class="detail-section">
+          <div class="detail-label">工具名称</div>
+          <div class="detail-value">{{ toolDetail?.name }}</div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label">工具描述</div>
+          <div class="detail-value">{{ toolDetail?.description || '暂无描述' }}</div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label">参数定义</div>
+          <div v-if="parsedSchema.length > 0" class="schema-table-wrap">
+            <table class="schema-table">
+              <thead>
+                <tr>
+                  <th>参数名</th>
+                  <th>类型</th>
+                  <th>描述</th>
+                  <th>必填</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="prop in parsedSchema" :key="prop.name">
+                  <td class="prop-name">{{ prop.name }}</td>
+                  <td class="prop-type">{{ prop.type }}</td>
+                  <td class="prop-desc">{{ prop.description || '-' }}</td>
+                  <td class="prop-required">{{ prop.required ? '是' : '否' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="schema-empty">暂无参数定义</div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 defineProps({ hideHeader: Boolean })
-import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, watch, onMounted, computed, h } from 'vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApiOutlined, ToolOutlined, QuestionCircleOutlined, SyncOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer } from '../api/mcp'
+import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
 const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const form = reactive({ id: null, name: '', description: '', installType: 'npx', host: '' })
+const form = reactive({ id: null, name: '', description: '', installType: 'npx', transport: 'stdio', host: '' })
 const deployForm = reactive({ packageName: '', args: '', env: '', headers: '' })
+const testingId = ref(null)
+const toolsDrawerVisible = ref(false)
+const toolsList = ref([])
+const toolsLoading = ref(false)
+const toolsError = ref('')
+const toolsServerId = ref(null)
+const currentServer = ref(null)
+const toolToggling = ref(null)
+const guideVisible = ref(false)
+// 工具详情弹窗
+const toolDetailVisible = ref(false)
+const toolDetail = ref(null)
+
+// 解析 inputSchema 为表格数据
+const parsedSchema = computed(() => {
+  if (!toolDetail.value?.inputSchema) return []
+  try {
+    const schema = typeof toolDetail.value.inputSchema === 'string'
+      ? JSON.parse(toolDetail.value.inputSchema)
+      : toolDetail.value.inputSchema
+    const properties = schema?.properties || {}
+    const required = schema?.required || []
+    return Object.entries(properties).map(([name, prop]) => ({
+      name,
+      type: prop.type || 'any',
+      description: prop.description || '',
+      required: required.includes(name)
+    }))
+  } catch {
+    return []
+  }
+})
 
 async function loadData() {
   const params = { pageNum: 1, pageSize: 50 }
@@ -143,12 +361,15 @@ function buildDeployConfig() {
         if (idx > 0) cfg.env[line.substring(0, idx).trim()] = line.substring(idx + 1).trim()
       })
     }
-  } else if (form.installType === 'sse') {
-    if (deployForm.headers) {
-      try { cfg.headers = JSON.parse(deployForm.headers) } catch { /* ignore */ }
-    }
   }
   return Object.keys(cfg).length > 0 ? JSON.stringify(cfg) : null
+}
+
+function buildHeaders() {
+  if (!deployForm.headers) return null
+  try {
+    return typeof deployForm.headers === 'string' ? deployForm.headers : JSON.stringify(deployForm.headers)
+  } catch { return null }
 }
 
 function onInstallTypeChange() {
@@ -157,14 +378,16 @@ function onInstallTypeChange() {
   deployForm.env = ''
   deployForm.headers = ''
   form.host = ''
+  form.transport = form.installType === 'sse' ? 'sse' : 'stdio'
 }
 
 function openDialog(row) {
   if (row) {
-    Object.assign(form, { ...row, installType: row.installType?.code || row.installType })
+    const transport = row.transport?.code || row.transport || (row.installType === 'sse' ? 'sse' : 'stdio')
+    Object.assign(form, { ...row, installType: row.installType?.code || row.installType, transport })
     parseDeployConfig(row.deployConfig)
   } else {
-    Object.assign(form, { id: null, name: '', description: '', installType: 'npx', host: '' })
+    Object.assign(form, { id: null, name: '', description: '', installType: 'npx', transport: 'stdio', host: '' })
     onInstallTypeChange()
   }
   dialogVisible.value = true
@@ -174,7 +397,7 @@ async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入名称')
   submitting.value = true
   try {
-    const data = { ...form, deployConfig: buildDeployConfig() }
+    const data = { ...form, deployConfig: buildDeployConfig(), headers: buildHeaders() }
     if (form.id) {
       await updateMcpServer(data)
       message.success('更新成功')
@@ -202,6 +425,95 @@ function handleDelete(id) {
       loadData()
     },
   })
+}
+
+async function handleTest(server) {
+  testingId.value = server.id
+  try {
+    const res = await testMcpServer(server.id)
+    const tools = res.data || []
+    Modal.info({
+      title: `连接成功 — ${server.name}`,
+      content: h('div', [
+        h('p', { style: { marginBottom: '8px' } }, `发现 ${tools.length} 个工具：`),
+        h('ul', { style: { paddingLeft: '20px', margin: '0' } },
+          tools.map(t => h('li', { style: { marginBottom: '4px' } }, t.name))
+        )
+      ]),
+      width: 480,
+    })
+  } catch (e) {
+    const msg = e?.response?.data?.message || e?.message || '连接失败，请检查配置'
+    Modal.error({ title: `连接失败 — ${server.name}`, content: msg, width: 480 })
+  } finally {
+    testingId.value = null
+  }
+}
+
+async function openToolsDrawer(server) {
+  currentServer.value = server
+  toolsServerId.value = server.id
+  toolsDrawerVisible.value = true
+  await loadTools()
+}
+
+async function loadTools() {
+  toolsLoading.value = true
+  toolsError.value = ''
+  try {
+    const res = await getMcpServerTools(toolsServerId.value)
+    toolsList.value = res.data || []
+  } catch (e) {
+    toolsList.value = []
+    toolsError.value = e?.response?.data?.message || e?.message || '连接失败，请检查配置'
+  } finally {
+    toolsLoading.value = false
+  }
+}
+
+function openToolDetailModal(tool) {
+  toolDetail.value = tool
+  toolDetailVisible.value = true
+}
+
+async function handleRefreshTools() {
+  toolsLoading.value = true
+  try {
+    await refreshMcpServerTools(toolsServerId.value)
+    message.success('工具已刷新')
+    await loadTools()
+  } catch (e) {
+    message.error('刷新失败: ' + (e?.response?.data?.message || e?.message))
+  } finally {
+    toolsLoading.value = false
+  }
+}
+
+async function handleToggleTool(toolName, enabled) {
+  toolToggling.value = toolName
+  try {
+    await toggleMcpTool(toolsServerId.value, toolName)
+    // 更新本地状态
+    const tool = toolsList.value.find(t => t.name === toolName)
+    if (tool) {
+      tool.enabled = enabled
+    }
+    message.success(enabled ? '工具已启用' : '工具已禁用')
+  } catch (e) {
+    message.error('操作失败: ' + (e?.response?.data?.message || e?.message))
+  } finally {
+    toolToggling.value = null
+  }
+}
+
+function formatSchema(schema) {
+  if (!schema) return '{}'
+  try {
+    const obj = typeof schema === 'string' ? JSON.parse(schema) : schema
+    return JSON.stringify(obj, null, 2)
+  } catch {
+    return schema
+  }
 }
 
 onMounted(loadData)
@@ -287,6 +599,8 @@ defineExpose({ openDialog, search })
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 .card-top {
   display: flex;
@@ -350,6 +664,7 @@ defineExpose({ openDialog, search })
   gap: 4px;
   font-size: 13px;
   color: #a1a1aa;
+  flex: 1;
 }
 
 .dialog-footer {
@@ -393,5 +708,337 @@ defineExpose({ openDialog, search })
 .btn-primary-sm:disabled {
   background: #d4d4d8;
   cursor: not-allowed;
+}
+.card-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+.btn-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-text:hover:not(:disabled) {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-text:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.card-transport {
+  font-size: 12px;
+  color: #a1a1aa;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 100px;
+  display: inline-block;
+  margin-top: 4px;
+}
+.tools-empty {
+  text-align: center;
+  color: #a1a1aa;
+  padding: 40px 0;
+}
+.tools-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.tools-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tools-server-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
+.tools-count {
+  font-size: 12px;
+  color: #71717a;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-refresh:hover:not(:disabled) {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-retry {
+  margin-top: 12px;
+  padding: 6px 16px;
+  background: #0070f3;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-retry:hover {
+  background: #005bb5;
+}
+.tool-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.tool-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.tool-info {
+  flex: 1;
+  min-width: 0;
+}
+.tool-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #171717;
+}
+.tool-desc {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.tool-detail-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tool-detail-btn:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.tool-detail-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detail-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #52525b;
+}
+.detail-value {
+  font-size: 14px;
+  color: #171717;
+}
+.schema-table-wrap {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.schema-table th {
+  background: #fafafa;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 500;
+  color: #52525b;
+  border-bottom: 1px solid #f0f0f0;
+}
+.schema-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #171717;
+}
+.schema-table tr:last-child td {
+  border-bottom: none;
+}
+.prop-name {
+  font-weight: 500;
+  color: #0070f3;
+}
+.prop-type {
+  color: #7c3aed;
+  font-size: 12px;
+}
+.prop-desc {
+  color: #71717a;
+}
+.prop-required {
+  text-align: center;
+}
+.schema-empty {
+  color: #a1a1aa;
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+  background: #fafafa;
+  border-radius: 8px;
+}
+.tools-error {
+  text-align: center;
+  padding: 24px;
+}
+.tools-error-title {
+  font-size: 14px;
+  color: #ef4444;
+  font-weight: 500;
+}
+.tools-error-msg {
+  font-size: 13px;
+  color: #71717a;
+  margin-top: 8px;
+}
+.help-icon {
+  margin-left: 8px;
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 16px;
+  vertical-align: middle;
+}
+.help-icon:hover {
+  color: #0070f3;
+}
+.guide {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.guide-section {
+  margin-bottom: 20px;
+}
+.guide-section:last-child {
+  margin-bottom: 0;
+}
+.guide-h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.guide p {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.6;
+  margin: 0;
+}
+.guide-step {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.guide-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #171717;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.guide-step b {
+  font-size: 13px;
+  color: #171717;
+}
+.guide-step p {
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 2px;
+}
+.guide-code {
+  background: #f9fafb;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.8;
+}
+.guide-code b {
+  color: #171717;
+}
+.guide-code pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 4px 0 0 0;
+  overflow-x: auto;
+}
+.guide-pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 6px 0 0 0;
+  overflow-x: auto;
+}
+.guide code {
+  background: #f0f0f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #e11d48;
 }
 </style>
