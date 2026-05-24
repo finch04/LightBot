@@ -78,6 +78,10 @@ public class Tool {
     @Schema(description = "状态")
     private CommonStatus status;
 
+    @TableField("is_system")
+    @Schema(description = "是否系统工具（系统工具自动注入，不可编辑删除）")
+    private Boolean isSystem;
+
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

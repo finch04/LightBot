@@ -2,6 +2,8 @@ package com.lightbot.tool.builtintool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.tool.annotation.SystemTool;
+import com.lightbot.tool.annotation.ToolParamMeta;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -18,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 内置工具 — 联网搜索（Tavily API）
+ * 系统内置工具 — 联网搜索（Tavily API）
  * <p>通过 Tavily API 搜索互联网获取最新信息</p>
  *
  * @author finch
@@ -26,6 +28,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component("webSearchTool")
+@SystemTool(displayName = "联网搜索", description = "联网搜索互联网获取最新信息")
 public class WebSearchTool {
 
     @Value("${lightbot.tavily.api-key:}")
@@ -39,8 +42,10 @@ public class WebSearchTool {
     @Tool(name = "web_search",
           description = "联网搜索互联网获取最新信息。当用户问题涉及时事、新闻、股票价格、天气、或任何需要最新数据的问题时调用此工具。")
     public String search(
-            @ToolParam(description = "搜索关键词") String query,
-            @ToolParam(description = "返回结果数量（默认5，最大10）") int maxResults) {
+            @ToolParam(description = "搜索关键词")
+            @ToolParamMeta(example = "今天天气") String query,
+            @ToolParam(description = "返回结果数量（默认5，最大10）")
+            @ToolParamMeta(example = "5") int maxResults) {
         log.info("[Tool:web_search] 搜索: query={}, maxResults={}", query, maxResults);
 
         if (apiKey == null || apiKey.isBlank()) {

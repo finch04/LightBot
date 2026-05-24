@@ -104,6 +104,7 @@
                   <a-badge v-if="taskBadgeCount" :count="taskBadgeCount" :number-style="{ fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }" />
                 </div>
               </a-menu-item>
+              <a-menu-item key="settings">系统设置</a-menu-item>
               <a-menu-item key="model-providers">模型管理</a-menu-item>
               <a-menu-item key="logs">日志</a-menu-item>
               <a-menu-divider />
@@ -288,6 +289,8 @@ function handleCommand({ key }) {
     router.push('/profile')
   } else if (key === 'tasks') {
     router.push('/tasks')
+  } else if (key === 'settings') {
+    router.push('/settings')
   } else if (key === 'model-providers') {
     router.push('/model-providers')
   } else if (key === 'logs') {

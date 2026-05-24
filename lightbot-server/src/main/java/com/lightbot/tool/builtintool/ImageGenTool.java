@@ -2,6 +2,8 @@ package com.lightbot.tool.builtintool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.tool.annotation.SystemTool;
+import com.lightbot.tool.annotation.ToolParamMeta;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 内置工具 — AI 文生图（SiliconFlow API）
+ * 系统内置工具 — AI 文生图（SiliconFlow API）
  * <p>根据文字描述生成图片，使用 Qwen-Image 模型</p>
  *
  * @author finch
@@ -28,6 +30,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component("imageGenTool")
+@SystemTool(displayName = "AI图片生成", description = "根据文字描述生成图片")
 @RequiredArgsConstructor
 public class ImageGenTool {
 
@@ -44,8 +47,10 @@ public class ImageGenTool {
     @Tool(name = "image_generation",
           description = "根据文字描述生成图片。当用户需要生成图片、插画、设计图、创意图时调用此工具。建议使用英文描述以获得更好的效果。")
     public String generate(
-            @ToolParam(description = "图片描述（英文效果更佳）") String prompt,
-            @ToolParam(description = "负面提示词，描述不希望出现的元素（可选）") String negativePrompt) {
+            @ToolParam(description = "图片描述（英文效果更佳）")
+            @ToolParamMeta(example = "a beautiful sunset over the ocean") String prompt,
+            @ToolParam(description = "负面提示词，描述不希望出现的元素（可选）")
+            @ToolParamMeta(example = "blurry, low quality", required = false) String negativePrompt) {
         log.info("[Tool:image_generation] 生成图片: prompt={}", prompt);
 
         if (apiKey == null || apiKey.isBlank()) {

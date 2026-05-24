@@ -46,14 +46,21 @@ public class ToolController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "100") int pageSize,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String toolType) {
-        return Result.ok(toolService.listToolsWithFilter(pageNum, pageSize, keyword, toolType));
+            @RequestParam(required = false) String toolType,
+            @RequestParam(required = false) Boolean isSystem) {
+        return Result.ok(toolService.listToolsWithFilter(pageNum, pageSize, keyword, toolType, isSystem));
     }
 
     @Operation(summary = "获取单个Tool")
     @GetMapping("/{id}")
     public Result<Tool> getById(@PathVariable Long id) {
         return Result.ok(toolService.getById(id));
+    }
+
+    @Operation(summary = "获取Tool示例参数")
+    @GetMapping("/{id}/example")
+    public Result<Map<String, Object>> getExampleParams(@PathVariable Long id) {
+        return Result.ok(toolService.getExampleParams(id));
     }
 
     @Operation(summary = "测试执行Tool")

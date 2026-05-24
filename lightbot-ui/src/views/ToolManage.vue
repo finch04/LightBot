@@ -10,10 +10,25 @@
           v-model:value="searchText"
           placeholder="搜索工具名称..."
           allow-clear
-          style="width: 220px"
+          style="width: 180px"
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
+        <a-select
+          v-model:value="toolTypeFilter"
+          placeholder="工具类型"
+          allow-clear
+          style="width: 120px"
+        >
+          <a-select-option v-for="t in toolTypeList" :key="t.value" :value="t.value">{{ t.label }}</a-select-option>
+        </a-select>
+        <a-switch v-model:checked="showSystemTools" size="small">
+          <template #checkedChildren>系统</template>
+          <template #unCheckedChildren>普通</template>
+        </a-switch>
+        <a-tooltip v-if="showSystemTools" title="如何新增系统工具？" :getPopupContainer="getPopupContainer" placement="bottomRight">
+          <button class="btn-icon-help" @click="systemToolHelpVisible = true"><QuestionCircleOutlined /></button>
+        </a-tooltip>
         <button class="btn-outline" @click="loadData">
           <ReloadOutlined /> 刷新
         </button>
@@ -24,21 +39,24 @@
     </div>
 
     <div class="provider-grid">
-      <div v-for="t in list" :key="t.id" class="provider-card">
+      <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'system-card': t.isSystem }">
         <div class="card-top">
           <div class="card-icon" :style="{ background: typeColors[t.toolType?.code || t.toolType] || '#171717' }">
             {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
           </div>
           <div class="card-info">
-            <h3>{{ t.displayName || t.name }}</h3>
+            <h3>
+              {{ t.displayName || t.name }}
+              <span v-if="t.isSystem" class="system-badge">系统</span>
+            </h3>
             <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
           </div>
           <div class="card-actions">
             <a-tooltip title="测试工具">
               <button class="btn-icon" @click="openTestDialog(t)"><PlayCircleOutlined /></button>
             </a-tooltip>
-            <button class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
-            <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+            <button v-if="!t.isSystem" class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
+            <button v-if="!t.isSystem" class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
           </div>
         </div>
         <div class="card-detail">
@@ -169,22 +187,89 @@
         <pre class="test-result-content">{{ testResult }}</pre>
       </div>
     </a-modal>
+
+    <!-- 系统工具帮助弹窗 -->
+    <a-modal
+      v-model:open="systemToolHelpVisible"
+      title="如何新增系统工具"
+      :width="640"
+      :footer="null"
+    >
+      <div class="help-content">
+        <div class="help-section">
+          <h4>什么是系统工具？</h4>
+          <p>系统工具是核心内置工具，自动注入到所有 Agent，用户无法在前端编辑或删除。例如：<code>query_knowledge</code>（知识库检索工具）。</p>
+        </div>
+        <div class="help-section">
+          <h4>如何新增系统工具？</h4>
+          <p>系统工具必须通过代码新增，步骤如下：</p>
+          <div class="help-steps">
+            <div class="help-step">
+              <span class="step-num">1</span>
+              <div>
+                <b>编写工具方法</b>
+                <p>在 Java 类中编写带有 <code>@Tool</code> 注解的方法，定义工具的输入参数和返回值。</p>
+                <pre class="code-block">@Tool(description = "在知识库中检索相关内容")
+public String queryKnowledge(
+    @ToolParam(description = "检索关键词") String query,
+    @ToolParam(description = "Agent ID") long agentId) {
+    // 工具实现逻辑
+}</pre>
+              </div>
+            </div>
+            <div class="help-step">
+              <span class="step-num">2</span>
+              <div>
+                <b>标记为系统工具</b>
+                <p>工具类需要添加 <code>@Component</code> 注解，方法会被自动发现并注册为 ToolCallback。</p>
+              </div>
+            </div>
+            <div class="help-step">
+              <span class="step-num">3</span>
+              <div>
+                <b>数据库标记</b>
+                <p>在 <code>tool</code> 表中将对应工具记录的 <code>is_system</code> 字段设为 <code>true</code>。</p>
+                <pre class="code-block">UPDATE tool SET is_system = TRUE WHERE name = 'your_tool_name';</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="help-section">
+          <h4>系统工具特性</h4>
+          <ul class="help-list">
+            <li>自动注入：运行时自动添加到所有 Agent 的工具列表</li>
+            <li>不可编辑：前端无法修改系统工具的配置</li>
+            <li>不可删除：前端无法删除系统工具</li>
+            <li>知识库关联：<code>query_knowledge</code> 工具会在 Agent 绑定知识库后自动启用检索能力</li>
+          </ul>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool } from '../api/tool'
+import { getToolTypes } from '../api/enum'
 import JsonInput from '../components/JsonInput.vue'
+
+function getPopupContainer() {
+  return document.body
+}
 
 const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
 const typeColors = { builtin: '#171717', custom: '#0070f3', api: '#10b981', mcp: '#8b5cf6' }
 
 const list = ref([])
 const searchText = ref('')
+const toolTypeFilter = ref(undefined)
+const toolTypeList = ref([])
+const showSystemTools = ref(false)
+const systemToolHelpVisible = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({
@@ -248,7 +333,9 @@ function generateToolExample(inputSchema) {
 async function loadData() {
   try {
     const params = { pageNum: 1, pageSize: 50 }
-    if (searchText.value) params.name = searchText.value
+    if (searchText.value) params.keyword = searchText.value
+    if (toolTypeFilter.value) params.toolType = toolTypeFilter.value
+    params.isSystem = showSystemTools.value
     const res = await getTools(params)
     list.value = res.data.records || []
   } catch (e) {
@@ -256,7 +343,18 @@ async function loadData() {
   }
 }
 
+async function loadToolTypes() {
+  try {
+    const res = await getToolTypes()
+    toolTypeList.value = res.data || []
+  } catch (e) {
+    // ignore
+  }
+}
+
 watch(searchText, () => loadData())
+watch(toolTypeFilter, () => loadData())
+watch(showSystemTools, () => loadData())
 
 function openDialog(row) {
   if (row) {
@@ -351,16 +449,26 @@ async function handleTest() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadToolTypes()
+  loadData()
+})
 
-function search(text) {
+function search(text, toolType) {
   const next = text || ''
-  if (searchText.value === next) return
+  if (searchText.value === next && toolTypeFilter.value === (toolType || '')) return
   searchText.value = next
+  toolTypeFilter.value = toolType || undefined
   loadData()
 }
 
-defineExpose({ openDialog, search })
+function refresh() {
+  searchText.value = ''
+  toolTypeFilter.value = undefined
+  loadData()
+}
+
+defineExpose({ openDialog, search, refresh })
 </script>
 
 <style scoped>
@@ -717,5 +825,107 @@ defineExpose({ openDialog, search })
   word-break: break-all;
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+
+/* 系统工具卡片样式 */
+.system-card {
+  border-color: #0070f3;
+  background: #f0f7ff;
+}
+.system-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 100px;
+  background: #0070f3;
+  color: #fff;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.btn-icon-help {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  font-size: 14px;
+}
+.btn-icon-help:hover {
+  background: #f5f5f5;
+  color: #0070f3;
+}
+
+/* 帮助弹窗样式 */
+.help-content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.help-section {
+  margin-bottom: 20px;
+}
+.help-section:last-child {
+  margin-bottom: 0;
+}
+.help-section h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.help-section p {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.6;
+  margin: 0;
+}
+.help-steps {
+  margin-top: 12px;
+}
+.help-step {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #171717;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.help-step b {
+  font-size: 13px;
+  color: #171717;
+}
+.help-step p {
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 4px;
+}
+.code-block {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 6px 0 0 0;
+  overflow-x: auto;
+}
+.help-list {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.8;
+  padding-left: 20px;
 }
 </style>

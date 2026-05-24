@@ -5,6 +5,8 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.tool.ToolEventEmitter;
+import com.lightbot.tool.annotation.SystemTool;
+import com.lightbot.tool.annotation.ToolParamMeta;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -25,7 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
- * 内置工具 — 查询知识库
+ * 系统内置工具 — 查询知识库
  * <p>搜索智能体绑定的知识库，由大模型按需调用，避免每次强制RAG</p>
  *
  * @author finch
@@ -33,6 +35,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component("queryKnowledgeTool")
+@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", autoInject = true)
 @RequiredArgsConstructor
 public class QueryKnowledgeTool {
 
@@ -57,10 +60,23 @@ public class QueryKnowledgeTool {
     @Tool(name = "query_knowledge",
           description = "搜索智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。")
     public String queryKnowledge(
-            @ToolParam(description = "搜索问题") String question,
+            @ToolParam(description = "搜索问题")
+            @ToolParamMeta(example = "如何配置模型参数") String question,
+            @ToolParam(description = "智能体ID，用于检索绑定的知识库（测试时填写，LLM调用时系统自动注入）")
+            @ToolParamMeta(example = "0", required = false) Long agentId,
+            // ToolContext 用于传递系统上下文（不出现在 inputSchema 中，测试工具页面不展示）：
+            // - requestId：用于存储搜索结果，供 ChatService 读取并持久化到消息 metadata（前端显示知识库引用来源）
+            // - agentId：作为 fallback，LLM 不传时从 ToolContext 获取
             ToolContext context) {
-        Long agentId = ((Number) context.getContext().get("agentId")).longValue();
+        // requestId 从 ToolContext 获取
         String requestId = (String) context.getContext().get("requestId");
+        // agentId：测试时从参数获取，LLM调用时从 ToolContext 获取
+        if (agentId == null || agentId == 0) {
+            Object agentIdObj = context.getContext().get("agentId");
+            if (agentIdObj != null) {
+                agentId = ((Number) agentIdObj).longValue();
+            }
+        }
         log.info("[Tool:query_knowledge] 开始检索: agentId={}, question={}", agentId, question);
 
         // 1. 获取Agent绑定的知识库ID列表

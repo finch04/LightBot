@@ -78,6 +78,10 @@ public enum ErrorCode {
     TOOL_NOT_FOUND(91001, "工具不存在", HttpStatus.BAD_REQUEST),
     TOOL_NAME_EXISTS(91002, "工具标识已存在", HttpStatus.BAD_REQUEST),
 
+    // ========== SubAgent模块 ==========
+    SUBAGENT_NOT_FOUND(91101, "SubAgent不存在", HttpStatus.BAD_REQUEST),
+    SUBAGENT_NAME_EXISTS(91102, "SubAgent标识已存在", HttpStatus.BAD_REQUEST),
+
     // ========== Skill模块 ==========
     SKILL_NOT_FOUND(92001, "Skill不存在", HttpStatus.BAD_REQUEST),
 

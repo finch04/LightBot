@@ -161,4 +161,20 @@ public interface AgentService extends IService<Agent> {
      * @return MCP Server 详情列表
      */
     List<McpServer> getMcpServerDetails(Long agentId);
+
+    /**
+     * 获取 Agent 绑定的 SubAgent ID 列表
+     *
+     * @param agentId Agent ID
+     * @return SubAgent ID 列表
+     */
+    List<Long> getSubAgentIds(Long agentId);
+
+    /**
+     * 更新 Agent 的 SubAgent 绑定
+     *
+     * @param agentId     Agent ID
+     * @param subAgentIds SubAgent ID 列表
+     */
+    void updateSubAgentBindings(Long agentId, List<Long> subAgentIds);
 }

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">扩展管理</h1>
-        <p class="page-desc">管理 MCP 服务、Skill 技能和工具</p>
+        <p class="page-desc">管理 MCP 服务、Skill 技能、工具和 SubAgents</p>
       </div>
     </div>
     <div class="tab-toolbar">
@@ -11,8 +11,24 @@
         <a-tab-pane key="mcp" tab="MCP Server" />
         <a-tab-pane key="skills" tab="Skill" />
         <a-tab-pane key="tools" tab="工具" />
+        <a-tab-pane key="subagents" tab="SubAgents" />
       </a-tabs>
       <div class="toolbar-actions">
+        <!-- 工具Tab时显示系统工具按钮和类型筛选 -->
+        <SystemToolDrawer v-if="activeTab === 'tools'" placement="bottomRight" />
+        <a-select
+          v-if="activeTab === 'tools'"
+          v-model:value="toolTypeFilter"
+          placeholder="工具类型"
+          allow-clear
+          style="width: 120px"
+        >
+          <a-select-option value="">全部</a-select-option>
+          <a-select-option value="builtin">内置</a-select-option>
+          <a-select-option value="custom">自定义</a-select-option>
+          <a-select-option value="api">API调用</a-select-option>
+          <a-select-option value="mcp">MCP协议</a-select-option>
+        </a-select>
         <a-input
           v-model:value="searchText"
           :placeholder="searchPlaceholder"
@@ -31,6 +47,7 @@
       <McpManage v-show="activeTab === 'mcp'" ref="mcpRef" hide-header />
       <SkillManage v-show="activeTab === 'skills'" ref="skillRef" hide-header />
       <ToolManage v-show="activeTab === 'tools'" ref="toolRef" hide-header />
+      <SubAgentManage v-show="activeTab === 'subagents'" ref="subAgentRef" hide-header />
     </div>
   </div>
 </template>
@@ -41,41 +58,65 @@ import { PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import McpManage from './McpManage.vue'
 import SkillManage from './SkillManage.vue'
 import ToolManage from './ToolManage.vue'
+import SubAgentManage from './SubAgentManage.vue'
+import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 
 const activeTab = ref('mcp')
 const searchText = ref('')
+const toolTypeFilter = ref('')
 const mcpRef = ref(null)
 const skillRef = ref(null)
 const toolRef = ref(null)
+const subAgentRef = ref(null)
 
 const addBtnText = computed(() => {
-  const map = { mcp: '新增 MCP Server', skills: '新增 Skill', tools: '新增工具' }
+  const map = { mcp: '新增 MCP Server', skills: '新增 Skill', tools: '新增工具', subagents: '新增 SubAgent' }
   return map[activeTab.value] || '新增'
 })
 
 const searchPlaceholder = computed(() => {
-  const map = { mcp: '搜索 MCP Server...', skills: '搜索 Skill...', tools: '搜索工具...' }
+  const map = { mcp: '搜索 MCP Server...', skills: '搜索 Skill...', tools: '搜索工具...', subagents: '搜索 SubAgent...' }
   return map[activeTab.value] || '搜索...'
 })
 
 function handleAdd() {
   const target = activeTab.value === 'mcp' ? mcpRef.value
     : activeTab.value === 'skills' ? skillRef.value
-    : toolRef.value
+    : activeTab.value === 'tools' ? toolRef.value
+    : subAgentRef.value
   target?.openDialog()
 }
 
 function handleSearch() {
   const target = activeTab.value === 'mcp' ? mcpRef.value
     : activeTab.value === 'skills' ? skillRef.value
-    : toolRef.value
-  target?.search(searchText.value)
+    : activeTab.value === 'tools' ? toolRef.value
+    : subAgentRef.value
+  // 传递搜索文本和工具类型（仅工具Tab）
+  if (activeTab.value === 'tools') {
+    target?.search(searchText.value, toolTypeFilter.value)
+  } else {
+    target?.search(searchText.value)
+  }
 }
 
-// 切换Tab时清空搜索
+// 工具类型筛选变化时触发搜索
+watch(toolTypeFilter, () => {
+  if (activeTab.value === 'tools') {
+    handleSearch()
+  }
+})
+
+// 切换Tab时清空搜索并刷新数据
 watch(activeTab, () => {
   searchText.value = ''
-  handleSearch()
+  toolTypeFilter.value = ''
+  // 触发对应组件的数据刷新
+  const target = activeTab.value === 'mcp' ? mcpRef.value
+    : activeTab.value === 'skills' ? skillRef.value
+    : activeTab.value === 'tools' ? toolRef.value
+    : subAgentRef.value
+  target?.refresh()
 })
 </script>
 

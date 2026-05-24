@@ -23,3 +23,7 @@ export function deleteTool(id) {
 export function testTool(id, args) {
   return request.post(`/tools/${id}/test`, { args })
 }
+
+export function getToolExampleParams(id) {
+  return request.get(`/tools/${id}/example`)
+}

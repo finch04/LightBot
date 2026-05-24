@@ -16,6 +16,7 @@ import com.lightbot.model.ModelFactory;
 import com.lightbot.entity.McpServer;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.McpServerService;
+import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.ToolService;
 import com.lightbot.entity.Tool;
 import com.lightbot.util.MinioUtil;
@@ -52,6 +53,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final MinioUtil minioUtil;
     private final ToolService toolService;
     private final McpServerService mcpServerService;
+    private final SystemConfigService systemConfigService;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
             你是一个AI助手提示词生成专家。根据用户提供的Agent名称和描述，生成一段专业的系统提示词。
@@ -136,11 +138,18 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 .map(String::valueOf)
                 .toList();
 
-        // 4. 组装返回结果
+        // 4. 获取绑定的 SubAgent ID 列表（转为字符串避免前端 Long 精度丢失）
+        List<Long> subAgentIds = getSubAgentIds(id);
+        List<String> subAgentIdStrs = subAgentIds.stream()
+                .map(String::valueOf)
+                .toList();
+
+        // 5. 组装返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("agent", agent);
         result.put("knowledgeIds", knowledgeIdStrs);
         result.put("mcpServerIds", mcpServerIdStrs);
+        result.put("subAgentIds", subAgentIdStrs);
         return result;
     }
 
@@ -399,6 +408,48 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    public List<Long> getSubAgentIds(Long agentId) {
+        Agent agent = getById(agentId);
+        if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
+            return List.of();
+        }
+        try {
+            var configNode = objectMapper.readTree(agent.getConfig());
+            if (!configNode.has("subagents")) {
+                return List.of();
+            }
+            return objectMapper.convertValue(configNode.get("subagents"),
+                    new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("[Agent] 解析config.subagents失败: agentId={}, error={}", agentId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public void updateSubAgentBindings(Long agentId, List<Long> subAgentIds) {
+        Agent agent = getById(agentId);
+        if (agent == null) {
+            return;
+        }
+        try {
+            // 1. 解析现有config
+            var configNode = objectMapper.readTree(
+                    agent.getConfig() != null ? agent.getConfig() : "{}");
+
+            // 2. 更新subagents字段
+            var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
+            configMap.put("subagents", subAgentIds != null ? subAgentIds : List.of());
+
+            // 3. 保存回agent
+            agent.setConfig(objectMapper.writeValueAsString(configMap));
+            updateById(agent);
+        } catch (Exception e) {
+            log.error("[Agent] 更新SubAgent绑定失败: agentId={}, error={}", agentId, e.getMessage());
+        }
+    }
+
+    @Override
     public String uploadAvatar(Long id, MultipartFile file) {
         // 1. 校验Agent存在性
         Agent agent = getById(id);
@@ -471,9 +522,16 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     /**
-     * 解析providerId（优先使用Agent配置中的，否则使用第一个可用的）
+     * 解析providerId（优先使用系统默认配置，否则使用第一个可用的）
      */
     private Long resolveProviderId() {
+        // 1. 优先使用系统默认AI配置
+        var defaultConfig = systemConfigService.getDefaultAiConfig();
+        if (defaultConfig.providerId() != null) {
+            return defaultConfig.providerId();
+        }
+
+        // 2. 否则使用第一个可用的提供商
         List<Long> providerIds = modelFactory.getAvailableProviderIds();
         if (providerIds.isEmpty()) {
             throw new BizException(ErrorCode.AI_NO_PROVIDER);

@@ -1,5 +1,7 @@
 package com.lightbot.tool.builtintool;
 
+import com.lightbot.tool.annotation.SystemTool;
+import com.lightbot.tool.annotation.ToolParamMeta;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -16,7 +18,7 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 内置工具 — PostgreSQL 数据库查询
+ * 系统内置工具 — PostgreSQL 数据库查询
  * <p>提供只读数据库查询能力，包括列出表、查看表结构、执行 SELECT 查询</p>
  *
  * @author finch
@@ -24,6 +26,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Slf4j
 @Component("pgSqlTool")
+@SystemTool(displayName = "数据库查询工具集", description = "PostgreSQL 数据库只读查询工具")
 @RequiredArgsConstructor
 public class PgSqlTool {
 
@@ -38,6 +41,7 @@ public class PgSqlTool {
             "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE)\\b",
             Pattern.CASE_INSENSITIVE);
 
+    @SystemTool(displayName = "列出数据库表")
     @Tool(name = "pg_list_tables",
           description = "列出数据库中所有表名。当用户想了解数据库有哪些表时调用此工具。")
     public String listTables() {
@@ -58,10 +62,12 @@ public class PgSqlTool {
         }
     }
 
+    @SystemTool(displayName = "查看表结构")
     @Tool(name = "pg_describe_table",
           description = "查看指定表的结构，包括字段名、类型、是否可空、默认值、注释和索引信息。")
     public String describeTable(
-            @ToolParam(description = "表名") String tableName) {
+            @ToolParam(description = "表名")
+            @ToolParamMeta(example = "agent") String tableName) {
         log.info("[Tool:pg_describe_table] 查看表结构: tableName={}", tableName);
 
         // 校验表名合法性
@@ -120,10 +126,12 @@ public class PgSqlTool {
         return sb.toString();
     }
 
+    @SystemTool(displayName = "执行SQL查询")
     @Tool(name = "pg_query",
           description = "执行只读 SQL 查询（仅允许 SELECT）。当用户需要查询数据库中的数据时调用此工具。")
     public String query(
-            @ToolParam(description = "SQL 查询语句（仅 SELECT）") String sql) {
+            @ToolParam(description = "SQL 查询语句（仅 SELECT）")
+            @ToolParamMeta(example = "SELECT * FROM agent LIMIT 10") String sql) {
         log.info("[Tool:pg_query] 执行查询: sql={}", sql);
 
         // SQL 安全校验

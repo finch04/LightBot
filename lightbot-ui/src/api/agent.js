@@ -75,3 +75,11 @@ export function updateAgentMcpServers(id, mcpServerIds) {
 export function getAgentMcpServerDetails(id) {
   return request.get(`/agents/${id}/mcp-servers/detail`)
 }
+
+export function getAgentSubAgentIds(id) {
+  return request.get(`/agents/${id}/subagents`)
+}
+
+export function updateAgentSubAgents(id, subAgentIds) {
+  return request.put(`/agents/${id}/subagents`, subAgentIds)
+}

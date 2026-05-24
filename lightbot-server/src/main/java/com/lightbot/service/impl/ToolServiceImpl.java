@@ -75,7 +75,11 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         if (tool == null) {
             throw new BizException(ErrorCode.TOOL_NOT_FOUND);
         }
-        // 2. 更新字段
+        // 2. 系统工具不可编辑
+        if (Boolean.TRUE.equals(tool.getIsSystem())) {
+            throw new BizException("系统工具不可编辑");
+        }
+        // 3. 更新字段
         tool.setName(request.getName());
         tool.setDisplayName(request.getDisplayName());
         tool.setDescription(request.getDescription());
@@ -107,7 +111,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
-    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType) {
+    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, Boolean isSystem) {
         LambdaQueryWrapper<Tool> wrapper = new LambdaQueryWrapper<Tool>()
                 .orderByDesc(Tool::getCreateTime);
 
@@ -124,6 +128,11 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             wrapper.eq(Tool::getToolType, toolType);
         }
 
+        // 系统工具过滤
+        if (isSystem != null) {
+            wrapper.eq(Tool::getIsSystem, isSystem);
+        }
+
         return page(new Page<>(pageNum, pageSize), wrapper);
     }
 
@@ -133,8 +142,9 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         if (tool == null) {
             throw new BizException(ErrorCode.TOOL_NOT_FOUND);
         }
-        if (tool.getToolType() == ToolType.BUILTIN) {
-            throw new BizException("内置工具不可删除");
+        // 系统工具不可删除
+        if (Boolean.TRUE.equals(tool.getIsSystem())) {
+            throw new BizException("系统工具不可删除");
         }
         removeById(id);
     }
@@ -294,5 +304,30 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             }
         }
         return bean.getClass();
+    }
+
+    @Override
+    public Map<String, Object> getExampleParams(Long toolId) {
+        Tool tool = getById(toolId);
+        if (tool == null) {
+            throw new BizException(ErrorCode.TOOL_NOT_FOUND);
+        }
+        // 从 config 字段解析 exampleParams
+        if (tool.getConfig() != null && !tool.getConfig().isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(tool.getConfig());
+                if (node.has("exampleParams")) {
+                    var exampleNode = node.get("exampleParams");
+                    Map<String, Object> example = new java.util.HashMap<>();
+                    exampleNode.fields().forEachRemaining(entry -> {
+                        example.put(entry.getKey(), entry.getValue().asText());
+                    });
+                    return example;
+                }
+            } catch (Exception e) {
+                log.warn("[ToolService] 解析示例参数失败: toolId={}, error={}", toolId, e.getMessage());
+            }
+        }
+        return Map.of();
     }
 }

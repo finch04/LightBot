@@ -128,6 +128,23 @@ public class AgentController {
         return Result.ok(agentService.getMcpServerDetails(id));
     }
 
+    @Operation(summary = "获取Agent绑定的SubAgent ID列表")
+    @GetMapping("/{id}/subagents")
+    public Result<List<String>> getSubAgentIds(@PathVariable Long id) {
+        List<Long> subAgentIds = agentService.getSubAgentIds(id);
+        List<String> subAgentIdStrs = subAgentIds.stream().map(String::valueOf).toList();
+        return Result.ok(subAgentIdStrs);
+    }
+
+    @Operation(summary = "更新Agent绑定的SubAgent")
+    @PutMapping("/{id}/subagents")
+    public Result<Void> updateSubAgentBindings(
+            @PathVariable Long id,
+            @RequestBody List<Long> subAgentIds) {
+        agentService.updateSubAgentBindings(id, subAgentIds);
+        return Result.ok();
+    }
+
     @Operation(summary = "删除Agent")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {

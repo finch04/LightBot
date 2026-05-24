@@ -98,6 +98,11 @@ const routes = [
         name: 'Tasks',
         component: () => import('../views/TaskCenter.vue'),
       },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('../views/SettingsView.vue'),
+      },
     ],
   },
 ]

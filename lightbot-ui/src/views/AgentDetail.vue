@@ -25,6 +25,11 @@
           <h3>基本信息</h3>
         </div>
         <a-form :model="agent" :label-col="{ span: 6 }">
+          <a-form-item label="智能体ID">
+            <div class="id-field">
+              <span class="id-value">{{ agent.id || '新建后生成' }}</span>
+            </div>
+          </a-form-item>
           <a-form-item label="名称">
             <a-input v-model:value="agent.name" placeholder="Agent 名称" />
           </a-form-item>
@@ -226,6 +231,12 @@
         </div>
         <div class="knowledge-bind">
           <div class="selected-knowledge">
+            <div class="selected-header">
+              <span class="selected-label">已绑定 {{ selectedTools.length }} 个工具</span>
+              <button v-if="selectedTools.length > 0" class="btn-clear" @click="clearSelectedTools">
+                <DeleteOutlined /> 清空
+              </button>
+            </div>
             <div v-if="selectedTools.length === 0" class="empty-tip">
               暂未绑定工具，请从下方列表选择
             </div>
@@ -240,15 +251,18 @@
           </div>
           <div class="knowledge-list">
             <div class="list-header">
-              <span>可用工具</span>
-              <a-input
-                v-model:value="toolSearchText"
-                placeholder="搜索工具..."
-                size="small"
-                style="width: 200px"
-              >
-                <template #prefix><SearchOutlined /></template>
-              </a-input>
+              <span>可选工具</span>
+              <div class="list-header-actions">
+                <SystemToolDrawer placement="bottomRight" />
+                <a-input
+                  v-model:value="toolSearchText"
+                  placeholder="搜索工具..."
+                  size="small"
+                  style="width: 200px"
+                >
+                  <template #prefix><SearchOutlined /></template>
+                </a-input>
+              </div>
             </div>
             <div class="type-filter-bar">
               <button
@@ -290,9 +304,15 @@
       </a-tab-pane>
 
       <!-- MCP 工具 -->
-      <a-tab-pane key="mcp" tab="MCP 工具">
+      <a-tab-pane key="mcp" tab="MCP Server">
         <div class="knowledge-bind">
           <div class="selected-knowledge">
+            <div class="selected-header">
+              <span class="selected-label">已绑定 {{ selectedMcpServers.length }} 个 MCP Server</span>
+              <button v-if="selectedMcpServers.length > 0" class="btn-clear" @click="clearSelectedMcpServers">
+                <DeleteOutlined /> 清空
+              </button>
+            </div>
             <div v-if="selectedMcpServers.length === 0" class="empty-tip">
               暂未绑定 MCP Server，请从下方列表选择
             </div>
@@ -347,14 +367,22 @@
       <a-tab-pane key="knowledge" tab="知识库">
         <div class="knowledge-bind">
           <div class="selected-knowledge">
-            <div v-if="selectedKnowledge.length === 0" class="empty-tip">
-              暂未绑定知识库，请从下方列表选择
-            </div>
-            <div v-for="k in selectedKnowledge" :key="k.id" class="knowledge-tag">
-              <span>{{ k.name }}</span>
-              <button class="tag-remove" @click="removeKnowledge(k.id)">
-                <CloseOutlined />
+            <div class="selected-header">
+              <span class="selected-label">已绑定 {{ selectedKnowledge.length }} 个知识库</span>
+              <button v-if="selectedKnowledge.length > 0" class="btn-clear" @click="clearSelectedKnowledge">
+                <DeleteOutlined /> 清空
               </button>
+            </div>
+            <div class="selected-knowledge-tags">
+              <div v-if="selectedKnowledge.length === 0" class="empty-tip">
+                暂未绑定知识库，请从下方列表选择
+              </div>
+              <div v-for="k in selectedKnowledge" :key="k.id" class="knowledge-tag">
+                <span>{{ k.name }}</span>
+                <button class="tag-remove" @click="removeKnowledge(k.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
             </div>
           </div>
           <div class="knowledge-list">
@@ -377,7 +405,9 @@
                 :class="{ selected: selectedKnowledgeIds.has(k.id) }"
                 @click="toggleKnowledge(k)"
               >
-                <div class="item-icon">K</div>
+                <div class="item-icon knowledge-icon">
+                  <BookOutlined />
+                </div>
                 <div class="item-info">
                   <div class="item-name">{{ k.name }}</div>
                   <div class="item-desc">{{ k.description || '暂无描述' }}</div>
@@ -393,22 +423,92 @@
           </div>
         </div>
       </a-tab-pane>
+
+      <!-- SubAgent 绑定 -->
+      <a-tab-pane key="subagents" tab="SubAgents">
+        <div class="subagent-bind">
+          <div class="selected-subagents">
+            <div class="selected-header">
+              <span class="selected-label">已绑定 {{ selectedSubAgents.length }} 个 SubAgent</span>
+              <button v-if="selectedSubAgents.length > 0" class="btn-clear" @click="clearSelectedSubAgents">
+                <DeleteOutlined /> 清空
+              </button>
+            </div>
+            <div class="selected-subagents-tags">
+              <div v-if="selectedSubAgents.length === 0" class="empty-tip">
+                暂未绑定 SubAgent，从下方列表选择
+              </div>
+              <div v-for="s in selectedSubAgents" :key="s.id" class="subagent-tag">
+                <div class="tag-info">
+                  <span class="tag-name">{{ s.displayName }}</span>
+                  <span class="tag-desc">{{ s.description || '暂无描述' }}</span>
+                </div>
+                <button class="tag-remove" @click="removeSubAgent(s.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="subagent-list">
+            <div class="list-header">
+              <span>可用的 SubAgent</span>
+              <a-input
+                v-model:value="subAgentSearchText"
+                placeholder="搜索 SubAgent..."
+                size="small"
+                style="width: 200px"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="s in filteredSubAgentList"
+                :key="s.id"
+                class="subagent-item"
+                :class="{ selected: selectedSubAgentIds.has(s.id) }"
+                @click="toggleSubAgent(s)"
+              >
+                <div class="item-icon subagent-icon">
+                  <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+                  <RobotOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">{{ s.displayName }}</div>
+                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                  <div class="item-tools" v-if="s.tools && JSON.parse(s.tools).length > 0">
+                    工具: {{ JSON.parse(s.tools).join(', ') }}
+                  </div>
+                </div>
+                <div class="item-check" v-if="selectedSubAgentIds.has(s.id)">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredSubAgentList.length === 0" class="empty-tip">
+                暂无可用 SubAgent
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
     </a-tabs>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents } from '../api/agent'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
+import { getEnabledSubAgents } from '../api/subagent'
+import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
@@ -455,6 +555,11 @@ const activeTab = ref('tools')
 const selectedMcpServerIds = ref(new Set())
 const mcpServerList = ref([])
 const mcpSearchText = ref('')
+
+// SubAgent 绑定
+const selectedSubAgentIds = ref(new Set())
+const subAgentList = ref([])
+const subAgentSearchText = ref('')
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
@@ -510,6 +615,20 @@ const filteredMcpServerList = computed(() => {
   const keyword = mcpSearchText.value.toLowerCase()
   return mcpServerList.value.filter(s =>
     s.name?.toLowerCase().includes(keyword) ||
+    s.description?.toLowerCase().includes(keyword)
+  )
+})
+
+const selectedSubAgents = computed(() => {
+  return subAgentList.value.filter(s => selectedSubAgentIds.value.has(s.id))
+})
+
+const filteredSubAgentList = computed(() => {
+  if (!subAgentSearchText.value) return subAgentList.value
+  const keyword = subAgentSearchText.value.toLowerCase()
+  return subAgentList.value.filter(s =>
+    s.name?.toLowerCase().includes(keyword) ||
+    s.displayName?.toLowerCase().includes(keyword) ||
     s.description?.toLowerCase().includes(keyword)
   )
 })
@@ -582,7 +701,7 @@ function restoreDefaults() {
 async function loadAgent() {
   try {
     const res = await getAgentDetail(agentId)
-    const { agent: agentData, knowledgeIds, mcpServerIds } = res.data
+    const { agent: agentData, knowledgeIds, mcpServerIds, subAgentIds } = res.data
 
     // 分离基本信息和配置
     const { config, agentType, ...basicInfo } = agentData
@@ -617,6 +736,7 @@ async function loadAgent() {
     await Promise.all([loadConfigFields(agentConfig.providerId), loadModels(agentConfig.providerId)])
 
     selectedKnowledgeIds.value = new Set((knowledgeIds || []).map(String))
+    selectedSubAgentIds.value = new Set((subAgentIds || []).map(String))
 
     // 加载绑定的工具详情
     const toolRes = await getAgentToolDetails(agentId)
@@ -650,7 +770,7 @@ async function loadToolTypes() {
 
 async function loadToolList(toolType) {
   try {
-    const params = { pageNum: 1, pageSize: 100 }
+    const params = { pageNum: 1, pageSize: 100, isSystem: false }
     if (toolType) params.toolType = toolType
     const res = await getTools(params)
     toolList.value = res.data?.records || []
@@ -711,6 +831,36 @@ function removeMcpServer(id) {
   selectedMcpServerIds.value = ids
 }
 
+// SubAgent 操作
+function toggleSubAgent(s) {
+  const ids = new Set(selectedSubAgentIds.value)
+  if (ids.has(s.id)) {
+    ids.delete(s.id)
+  } else {
+    ids.add(s.id)
+  }
+  selectedSubAgentIds.value = ids
+}
+
+function removeSubAgent(id) {
+  const ids = new Set(selectedSubAgentIds.value)
+  ids.delete(id)
+  selectedSubAgentIds.value = ids
+}
+
+function clearSelectedSubAgents() {
+  selectedSubAgentIds.value = new Set()
+}
+
+async function loadSubAgentList() {
+  try {
+    const res = await getEnabledSubAgents()
+    subAgentList.value = res.data || []
+  } catch (e) {
+    console.error('[AgentDetail] 加载SubAgent列表失败:', e)
+  }
+}
+
 // Tab 切换刷新
 async function onTabChange(tab) {
   if (tab === 'tools') {
@@ -719,6 +869,8 @@ async function onTabChange(tab) {
     await loadMcpServerList()
   } else if (tab === 'knowledge') {
     await loadKnowledgeList()
+  } else if (tab === 'subagents') {
+    await loadSubAgentList()
   }
 }
 
@@ -729,6 +881,18 @@ async function loadMcpServerList() {
   } catch (e) {
     console.error('[AgentDetail] 加载MCP Server列表失败:', e)
   }
+}
+
+function clearSelectedTools() {
+  selectedToolIds.value = new Set()
+}
+
+function clearSelectedMcpServers() {
+  selectedMcpServerIds.value = new Set()
+}
+
+function clearSelectedKnowledge() {
+  selectedKnowledgeIds.value = new Set()
 }
 
 async function handleGeneratePrompt() {
@@ -838,6 +1002,9 @@ async function handleSave() {
 
     // 5. 更新 MCP Server 绑定
     await updateAgentMcpServers(agentId, Array.from(selectedMcpServerIds.value))
+
+    // 6. 更新 SubAgent 绑定
+    await updateAgentSubAgents(agentId, Array.from(selectedSubAgentIds.value))
 
     message.success('保存成功')
   } catch (e) {
@@ -987,6 +1154,23 @@ onMounted(async () => {
 }
 .questions-header {
   margin-bottom: 8px;
+}
+.id-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.id-value {
+  font-size: 14px;
+  color: #171717;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  background: #f5f5f5;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+.id-hint {
+  font-size: 12px;
+  color: #a1a1aa;
 }
 .btn-ai-sm {
   display: inline-flex;
@@ -1146,9 +1330,16 @@ onMounted(async () => {
   gap: 16px;
 }
 .selected-knowledge {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.selected-knowledge-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 12px;
   min-height: 40px;
   padding: 12px;
   background: #f9fafb;
@@ -1194,6 +1385,11 @@ onMounted(async () => {
   font-weight: 500;
   color: #374151;
 }
+.list-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .list-body {
   max-height: 300px;
   overflow-y: auto;
@@ -1224,6 +1420,23 @@ onMounted(async () => {
   font-weight: 700;
   font-size: 14px;
   flex-shrink: 0;
+  position: relative;
+}
+.knowledge-icon {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+}
+.subagent-icon {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.builtin-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 10px;
+  padding: 1px 4px;
+  background: #0070f3;
+  color: #fff;
+  border-radius: 4px;
 }
 .item-info {
   flex: 1;
@@ -1368,5 +1581,121 @@ onMounted(async () => {
   border-radius: 12px;
   padding: 16px 20px 20px;
   margin-top: 16px;
+}
+
+/* 清空按钮样式 */
+.selected-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.selected-label {
+  font-size: 13px;
+  color: #71717a;
+  font-weight: 500;
+}
+.btn-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid #e4e4e7;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-clear:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+/* SubAgent 绑定 */
+.subagent-bind {
+  display: flex;
+  gap: 24px;
+}
+.selected-subagents {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.selected-subagents-tags {
+  margin-top: 12px;
+}
+.subagent-tag {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.subagent-tag .tag-info {
+  flex: 1;
+  min-width: 0;
+}
+.subagent-tag .tag-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #171717;
+}
+.subagent-tag .tag-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #71717a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subagent-tag .tag-remove {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.subagent-tag .tag-remove:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.subagent-list {
+  flex: 1;
+  min-width: 0;
+}
+.subagent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.subagent-item:hover {
+  background: #f9fafb;
+}
+.subagent-item.selected {
+  background: #eff6ff;
+}
+.subagent-item .builtin-badge {
+  font-size: 10px;
+  padding: 1px 4px;
+  background: #0070f3;
+  color: #fff;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+.subagent-item .item-tools {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #0070f3;
 }
 </style>

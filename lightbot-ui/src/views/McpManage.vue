@@ -241,7 +241,7 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
     <a-modal
       v-model:open="toolDetailVisible"
       :title="toolDetail?.name || '工具详情'"
-      :width="640"
+      :width="720"
       :footer="null"
     >
       <div class="tool-detail-modal">
@@ -262,6 +262,7 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
                   <th>参数名</th>
                   <th>类型</th>
                   <th>描述</th>
+                  <th>默认值</th>
                   <th>必填</th>
                 </tr>
               </thead>
@@ -270,12 +271,22 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
                   <td class="prop-name">{{ prop.name }}</td>
                   <td class="prop-type">{{ prop.type }}</td>
                   <td class="prop-desc">{{ prop.description || '-' }}</td>
+                  <td class="prop-default">{{ formatDefaultValue(prop.default) }}</td>
                   <td class="prop-required">{{ prop.required ? '是' : '否' }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div v-else class="schema-empty">暂无参数定义</div>
+          <div v-else class="schema-empty">无参数（可直接调用）</div>
+        </div>
+        <div v-if="parsedSchema.length > 0" class="detail-section">
+          <div class="detail-label">请求示例</div>
+          <div class="example-wrap">
+            <pre class="example-json">{{ requestExample }}</pre>
+            <button class="copy-btn" @click="copyExample">
+              <CopyOutlined /> 复制
+            </button>
+          </div>
         </div>
       </div>
     </a-modal>
@@ -285,7 +296,7 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted, computed, h } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApiOutlined, ToolOutlined, QuestionCircleOutlined, SyncOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApiOutlined, ToolOutlined, QuestionCircleOutlined, SyncOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
@@ -322,12 +333,58 @@ const parsedSchema = computed(() => {
       name,
       type: prop.type || 'any',
       description: prop.description || '',
-      required: required.includes(name)
+      required: required.includes(name),
+      default: prop.default,        // 保留原始默认值
+      example: prop.example || prop.examples?.[0]  // 保留原始示例值
     }))
   } catch {
     return []
   }
 })
+
+// 根据参数定义生成请求示例（优先使用原始default/example）
+const requestExample = computed(() => {
+  if (parsedSchema.value.length === 0) return '{}'
+  const example = {}
+  for (const prop of parsedSchema.value) {
+    // 优先使用原始default/example，否则根据类型生成
+    if (prop.default !== undefined) {
+      example[prop.name] = prop.default
+    } else if (prop.example !== undefined) {
+      example[prop.name] = prop.example
+    } else {
+      example[prop.name] = generateExampleValue(prop.type)
+    }
+  }
+  return JSON.stringify(example, null, 2)
+})
+
+// 根据类型生成示例值（作为fallback）
+function generateExampleValue(type) {
+  switch (type) {
+    case 'string': return ''
+    case 'number': return 0
+    case 'integer': return 0
+    case 'boolean': return false
+    case 'array': return []
+    case 'object': return {}
+    default: return null
+  }
+}
+
+// 复制示例
+function copyExample() {
+  navigator.clipboard.writeText(requestExample.value)
+  message.success('已复制到剪贴板')
+}
+
+// 格式化默认值显示
+function formatDefaultValue(val) {
+  if (val === undefined) return '-'
+  if (val === null) return 'null'
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
 
 async function loadData() {
   const params = { pageNum: 1, pageSize: 50 }
@@ -525,7 +582,12 @@ function search(text) {
   loadData()
 }
 
-defineExpose({ openDialog, search })
+function refresh() {
+  searchText.value = ''
+  loadData()
+}
+
+defineExpose({ openDialog, search, refresh })
 </script>
 
 <style scoped>
@@ -929,6 +991,38 @@ defineExpose({ openDialog, search })
   text-align: center;
   background: #fafafa;
   border-radius: 8px;
+}
+.example-wrap {
+  position: relative;
+}
+.example-json {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin: 0;
+  overflow-x: auto;
+  max-height: 200px;
+}
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #cdd6f4;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 .tools-error {
   text-align: center;
