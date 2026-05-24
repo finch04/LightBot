@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -61,6 +62,7 @@ public class MessageMiddleware implements ChatMiddleware {
             - 使用中文回答
             - 回答应简洁准确
             - 遇到不确定的信息请如实告知
+            - **只回答当前用户最后一条消息中的问题**；历史消息仅作背景参考，若与当前问题无关不要复述、不要展开历史中的其他问题
 
             ## 输出格式要求（必须严格遵守，这是最重要的规则）
             你必须使用标准 Markdown 格式输出，严禁输出纯文本段落。
@@ -141,14 +143,15 @@ public class MessageMiddleware implements ChatMiddleware {
 
         messages.add(new org.springframework.ai.chat.messages.SystemMessage(systemPrompt));
 
-        // 4. 加载历史消息
+        // 4. 加载历史消息：必须按「最近 N 条」取，再按时间正序交给模型（原先 ASC LIMIT 会取最旧 N 条，长会话会丢当前上下文、模型易被旧问题带偏）
         List<Message> history = messageMapper.selectList(
                 new LambdaQueryWrapper<Message>()
                         .eq(Message::getSessionId, sessionId)
-                        .orderByAsc(Message::getCreateTime)
+                        .orderByDesc(Message::getCreateTime)
                         .last("LIMIT " + (maxContextMessages + 1)));
+        Collections.reverse(history);
 
-        // 排除最后一条如果就是当前用户消息
+        // 排除最后一条如果就是当前用户消息（已在上面先持久化）
         if (!history.isEmpty()) {
             Message lastMsg = history.get(history.size() - 1);
             if (lastMsg.getRole() == MessageRole.USER && userMessage.equals(lastMsg.getContent())) {
@@ -167,6 +170,8 @@ public class MessageMiddleware implements ChatMiddleware {
                 messages.add(new UserMessage(msg.getContent()));
             } else if (msg.getRole() == MessageRole.ASSISTANT) {
                 messages.add(new AssistantMessage(msg.getContent()));
+            } else if (msg.getRole() == MessageRole.SYSTEM && msg.getContent() != null && !msg.getContent().isBlank()) {
+                messages.add(new SystemMessage(msg.getContent()));
             }
         }
 
@@ -202,6 +207,9 @@ public class MessageMiddleware implements ChatMiddleware {
                 4. 如果工具返回了参考文献或搜索结果，必须在回答中引用这些内容
                 5. 如果工具返回"未找到相关内容"，请基于自身知识回答并说明知识库中未找到相关信息
                 6. 禁止在工具尚未返回结果时就提前结束对话
+                7. **重要：只根据当前用户的问题来决定调用哪些工具，不要根据历史对话中的无关内容来调用工具**
+                   - 历史对话中提到的实体/主题，如果与当前问题无关，不要主动查询
+                   - 例如：历史中提到了"A公司"，但当前问题问"B是谁"，只查询"B"，不要查询"A公司"
                 """);
 
         sb.append("""

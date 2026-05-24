@@ -5,14 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.ToolRequest;
+import com.lightbot.entity.Agent;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ToolType;
 import org.springframework.util.StringUtils;
 import com.lightbot.mapper.ToolMapper;
+import com.lightbot.service.AgentService;
 import com.lightbot.service.ToolService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.metadata.ToolMetadata;
@@ -20,7 +21,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.method.MethodToolCallback;
 import org.springframework.ai.tool.support.ToolDefinitions;
 import org.springframework.aop.framework.Advised;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Method;
@@ -38,11 +41,18 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         implements ToolService {
 
     private final ApplicationContext applicationContext;
+
+    @Autowired
+    @Lazy
+    private AgentService agentService;
+
+    public ToolServiceImpl(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
 
     @Override
     public Tool create(ToolRequest request) {
@@ -278,6 +288,15 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                         agentId = node.get("agentId").asLong(0);
                     }
                 } catch (Exception ignored) {}
+            }
+            // agentId 为空时，使用当前用户的默认 Agent（便于测试 query_knowledge 等工具）
+            if (agentId == 0) {
+                long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
+                Agent defaultAgent = agentService.getDefaultAgent(userId);
+                if (defaultAgent != null) {
+                    agentId = defaultAgent.getId();
+                    log.info("[ToolService] 测试工具自动使用默认Agent: agentId={}", agentId);
+                }
             }
             org.springframework.ai.chat.model.ToolContext testContext =
                     new org.springframework.ai.chat.model.ToolContext(Map.of(

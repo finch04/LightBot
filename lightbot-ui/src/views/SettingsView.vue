@@ -74,7 +74,7 @@
               <div class="info-icon"><BulbOutlined /></div>
               <div class="info-content">
                 <h4>思维导图生成</h4>
-                <p>未来功能：系统将使用此配置生成思维导图等AI辅助内容</p>
+                <p>系统将使用此配置生成思维导图等AI辅助内容</p>
               </div>
             </div>
           </div>
@@ -140,7 +140,12 @@ async function handleProviderChange(providerId) {
 async function loadModels(providerId) {
   try {
     const res = await getModelsByProvider(providerId)
-    modelList.value = res.data || []
+    // 只显示对话型模型（LLM）
+    const allModels = res.data || []
+    modelList.value = allModels.filter(m => {
+      const typeCode = m.type?.code || m.type
+      return typeCode === 'llm'
+    })
   } catch (e) {
     console.error('[Settings] 加载模型失败:', e)
     modelList.value = []

@@ -10,6 +10,9 @@ import com.lightbot.enums.ModelProviderType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,6 +25,11 @@ import java.util.stream.Collectors;
 
 /**
  * 通义千问（DashScope）模型处理器
+ * <p>支持两种调用模式：</p>
+ * <ul>
+ *   <li>原生模式（DashScope SDK）：baseUrl 不配置或为空</li>
+ *   <li>兼容模式（OpenAI SDK）：baseUrl 包含 "compatible-mode"</li>
+ * </ul>
  *
  * @author finch
  * @since 2026-05-19
@@ -32,6 +40,12 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /** 兼容模式标识：baseUrl 中包含此字符串时使用 OpenAI SDK */
+    private static final String COMPATIBLE_MODE_MARKER = "compatible-mode";
+
+    /** 兼容模式默认 baseUrl */
+    private static final String COMPATIBLE_MODE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+
     @Override
     public ModelProviderType getProviderType() {
         return ModelProviderType.DASHSCOPE;
@@ -39,40 +53,78 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
     @Override
     public ChatModel createChatModel(ModelProvider provider) {
-        DashScopeApi.Builder apiBuilder = DashScopeApi.builder()
-                .apiKey(provider.getApiKey());
-        // 支持自定义 baseUrl（如私有化部署或兼容模式端点）
-        if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
-            apiBuilder.baseUrl(provider.getBaseUrl());
+        String baseUrl = provider.getBaseUrl();
+
+        // 判断是否使用兼容模式
+        boolean useCompatibleMode = baseUrl != null && baseUrl.contains(COMPATIBLE_MODE_MARKER);
+
+        if (useCompatibleMode) {
+            // 使用 OpenAI SDK（兼容模式），支持百炼平台新模型
+            log.info("[DashScopeHandler] 使用 OpenAI 兼容模式: baseUrl={}", baseUrl);
+            OpenAiApi openAiApi = OpenAiApi.builder()
+                    .baseUrl(baseUrl)
+                    .apiKey(provider.getApiKey())
+                    .build();
+            return OpenAiChatModel.builder()
+                    .openAiApi(openAiApi)
+                    .build();
+        } else {
+            // 使用 DashScope SDK（原生模式）
+            log.info("[DashScopeHandler] 使用 DashScope 原生模式");
+            DashScopeApi.Builder apiBuilder = DashScopeApi.builder()
+                    .apiKey(provider.getApiKey());
+            if (baseUrl != null && !baseUrl.isBlank()) {
+                apiBuilder.baseUrl(baseUrl);
+            }
+            DashScopeApi api = apiBuilder.build();
+            return DashScopeChatModel.builder()
+                    .dashScopeApi(api)
+                    .build();
         }
-        DashScopeApi api = apiBuilder.build();
-        return DashScopeChatModel.builder()
-                .dashScopeApi(api)
-                .build();
     }
 
     @Override
-    public ChatOptions buildChatOptions(Map<String, Object> config) {
-        DashScopeChatOptions.DashScopeChatOptionsBuilder builder = DashScopeChatOptions.builder();
-
-        // modelId 未配置时使用默认模型，避免 SDK 使用不兼容的默认值
+    public ChatOptions buildChatOptions(ModelProvider provider, Map<String, Object> config) {
         String modelId = config.containsKey("modelId") ? config.get("modelId").toString() : getCheapestModel();
-        builder.withModel(modelId);
 
-        if (config.containsKey("temperature")) {
-            builder.withTemperature(toDouble(config.get("temperature")));
-        }
-        if (config.containsKey("topP")) {
-            builder.withTopP(toDouble(config.get("topP")));
-        }
-        if (config.containsKey("maxTokens")) {
-            builder.withMaxToken(toInt(config.get("maxTokens")));
-        }
-        if (config.containsKey("repetitionPenalty")) {
-            builder.withRepetitionPenalty(toDouble(config.get("repetitionPenalty")));
-        }
+        // 判断是否使用兼容模式（通过 provider.baseUrl 判断）
+        String baseUrl = provider.getBaseUrl();
+        boolean useCompatibleMode = baseUrl != null && baseUrl.contains(COMPATIBLE_MODE_MARKER);
 
-        return builder.build();
+        if (useCompatibleMode) {
+            // 使用 OpenAI ChatOptions
+            OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
+            builder.model(modelId);
+
+            if (config.containsKey("temperature")) {
+                builder.temperature(toDouble(config.get("temperature")));
+            }
+            if (config.containsKey("topP")) {
+                builder.topP(toDouble(config.get("topP")));
+            }
+            if (config.containsKey("maxTokens")) {
+                builder.maxTokens(toInt(config.get("maxTokens")));
+            }
+            return builder.build();
+        } else {
+            // 使用 DashScope ChatOptions
+            DashScopeChatOptions.DashScopeChatOptionsBuilder builder = DashScopeChatOptions.builder();
+            builder.withModel(modelId);
+
+            if (config.containsKey("temperature")) {
+                builder.withTemperature(toDouble(config.get("temperature")));
+            }
+            if (config.containsKey("topP")) {
+                builder.withTopP(toDouble(config.get("topP")));
+            }
+            if (config.containsKey("maxTokens")) {
+                builder.withMaxToken(toInt(config.get("maxTokens")));
+            }
+            if (config.containsKey("repetitionPenalty")) {
+                builder.withRepetitionPenalty(toDouble(config.get("repetitionPenalty")));
+            }
+            return builder.build();
+        }
     }
 
     @Override

@@ -58,30 +58,30 @@ public class QueryKnowledgeTool {
     private static final ConcurrentHashMap<String, List<Map<String, Object>>> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
 
     @Tool(name = "query_knowledge",
-          description = "搜索智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。")
+          description = "搜索智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。\n\n注意：agentId参数由系统自动注入，请勿填写或猜测该参数值。")
     public String queryKnowledge(
             @ToolParam(description = "搜索问题")
             @ToolParamMeta(example = "如何配置模型参数") String question,
-            @ToolParam(description = "智能体ID，用于检索绑定的知识库（测试时填写，LLM调用时系统自动注入）")
-            @ToolParamMeta(example = "0", required = false) Long agentId,
-            // ToolContext 用于传递系统上下文（不出现在 inputSchema 中，测试工具页面不展示）：
-            // - requestId：用于存储搜索结果，供 ChatService 读取并持久化到消息 metadata（前端显示知识库引用来源）
-            // - agentId：作为 fallback，LLM 不传时从 ToolContext 获取
+            @ToolParam(description = "智能体ID（系统自动注入，请勿填写）")
+            @ToolParamMeta(example = "", required = false) Long agentId,
             ToolContext context) {
         // requestId 从 ToolContext 获取
         String requestId = (String) context.getContext().get("requestId");
-        // agentId：测试时从参数获取，LLM调用时从 ToolContext 获取
-        if (agentId == null || agentId == 0) {
-            Object agentIdObj = context.getContext().get("agentId");
-            if (agentIdObj != null) {
-                agentId = ((Number) agentIdObj).longValue();
-            }
+        // agentId 优先从 ToolContext 获取（LLM调用时系统注入正确值）
+        // 仅当 ToolContext 为空时才使用参数值（前端测试场景）
+        Long finalAgentId = null;
+        Object agentIdObj = context.getContext().get("agentId");
+        if (agentIdObj != null) {
+            finalAgentId = ((Number) agentIdObj).longValue();
         }
-        log.info("[Tool:query_knowledge] 开始检索: agentId={}, question={}", agentId, question);
+        if (finalAgentId == null && agentId != null) {
+            finalAgentId = agentId;
+        }
+        log.info("[Tool:query_knowledge] 开始检索: agentId={}, question={}", finalAgentId, question);
 
         // 1. 获取Agent绑定的知识库ID列表
-        List<Long> knowledgeIds = agentService.getKnowledgeIds(agentId);
-        log.info("[Tool:query_knowledge] Agent绑定知识库: agentId={}, knowledgeIds={}", agentId, knowledgeIds);
+        List<Long> knowledgeIds = agentService.getKnowledgeIds(finalAgentId);
+        log.info("[Tool:query_knowledge] Agent绑定知识库: agentId={}, knowledgeIds={}", finalAgentId, knowledgeIds);
         if (knowledgeIds.isEmpty()) {
             return "该智能体未绑定任何知识库，无法检索。";
         }
@@ -139,7 +139,7 @@ public class QueryKnowledgeTool {
 
             if (allResults.isEmpty()) {
                 log.warn("[Tool:query_knowledge] 未找到结果: agentId={}, knowledgeIds={}, question={}",
-                        agentId, knowledgeIds, question);
+                        finalAgentId, knowledgeIds, question);
                 return "未在知识库中找到与问题相关的内容。";
             }
 
@@ -152,10 +152,10 @@ public class QueryKnowledgeTool {
                         i + 1, row.get("document_name"), row.get("content")));
             }
 
-            log.info("[Tool:query_knowledge] 检索完成: agentId={}, results={}", agentId, allResults.size());
+            log.info("[Tool:query_knowledge] 检索完成: agentId={}, results={}", finalAgentId, allResults.size());
             return sb.toString();
         } catch (Exception e) {
-            log.error("[Tool:query_knowledge] 检索异常: agentId={}, error={}", agentId, e.getMessage(), e);
+            log.error("[Tool:query_knowledge] 检索异常: agentId={}, error={}", finalAgentId, e.getMessage(), e);
             return "知识库检索过程中发生错误：" + e.getMessage();
         }
     }

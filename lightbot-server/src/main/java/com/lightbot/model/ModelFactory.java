@@ -92,7 +92,7 @@ public class ModelFactory {
             cacheUtil.cacheProvider(provider);
         }
         ModelProviderHandler handler = getHandler(provider.getType());
-        return handler.buildChatOptions(config);
+        return handler.buildChatOptions(provider, config);
     }
 
     /**
@@ -197,7 +197,7 @@ public class ModelFactory {
             ModelProviderHandler handler = getHandler(provider.getType());
             ChatModel chatModel = handler.createChatModel(provider);
             // 使用最便宜的模型进行连通性检查，避免消耗高价值配额
-            ChatOptions options = handler.buildChatOptions(Map.of("modelId", handler.getCheapestModel()));
+            ChatOptions options = handler.buildChatOptions(provider, Map.of("modelId", handler.getCheapestModel()));
             ChatResponse response = chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT), options));
             log.info("[ModelFactory] 连通性检查通过: type={}, model={}", provider.getType(), handler.getCheapestModel());
             return "连接成功，API Key 有效";

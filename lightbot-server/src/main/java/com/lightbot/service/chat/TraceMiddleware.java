@@ -63,14 +63,33 @@ public class TraceMiddleware implements ChatMiddleware {
                     // 2. 异步生成标题
                     taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent()));
 
-                    // 3. 追加AI思考内容到spans
+                    // 3. 记录发送给LLM的消息列表（用于可观测性排查）
+                    if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
+                        List<Map<String, Object>> messageList = ctx.getMessages().stream()
+                                .map(msg -> {
+                                    Map<String, Object> item = new java.util.LinkedHashMap<>();
+                                    item.put("role", msg.getMessageType().getValue());
+                                    String content = extractMessageContent(msg);
+                                    // 截断超长内容（单条消息超过2000字符只保留前2000）
+                                    if (content != null && content.length() > 2000) {
+                                        content = content.substring(0, 2000) + "...(截断)";
+                                    }
+                                    item.put("content", content);
+                                    return item;
+                                }).toList();
+                        ctx.getSpans().add(buildSpan("llm_input", null, "messages_to_llm",
+                                ctx.getStartTime(), 0, "OK",
+                                Map.of("messageCount", messageList.size(), "messages", messageList)));
+                    }
+
+                    // 4. 追加AI思考内容到spans
                     if (ctx.getReasoningContent().length() > 0) {
                         ctx.getSpans().add(buildSpan("reasoning", null, "ai_reasoning",
                                 ctx.getStartTime(), tEnd - ctx.getStartTime(), "OK",
                                 Map.of("content", ctx.getReasoningContent().toString())));
                     }
 
-                    // 4. 构建Trace并异步写库
+                    // 5. 构建Trace并异步写库
                     persistTrace(ctx, "completed", tEnd - ctx.getStartTime(), null);
                 })
                 .doOnError(e -> {
@@ -78,6 +97,21 @@ public class TraceMiddleware implements ChatMiddleware {
                     log.error("[Chat] 流式对话异常: sessionId={}, error={}", ctx.getSessionId(), e.getMessage(), e);
                     persistTrace(ctx, "failed", tErr - ctx.getStartTime(), e.getMessage());
                 });
+    }
+
+    /**
+     * 提取消息内容（兼容各类 Message 类型）
+     */
+    private String extractMessageContent(org.springframework.ai.chat.messages.Message msg) {
+        if (msg instanceof org.springframework.ai.chat.messages.SystemMessage sm) {
+            return sm.getText();
+        } else if (msg instanceof org.springframework.ai.chat.messages.UserMessage um) {
+            return um.getText();
+        } else if (msg instanceof org.springframework.ai.chat.messages.AssistantMessage am) {
+            return am.getText();
+        } else {
+            return msg.toString();
+        }
     }
 
     /**

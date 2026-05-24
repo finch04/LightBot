@@ -1,6 +1,7 @@
 package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.DefaultAiConfigDTO;
 import com.lightbot.entity.SystemConfig;
 
 /**
@@ -30,19 +31,14 @@ public interface SystemConfigService extends IService<SystemConfig> {
     /**
      * 获取默认AI配置
      *
-     * @return 默认AI配置，包含providerId和modelId
+     * @return 默认AI配置
      */
-    DefaultAiConfig getDefaultAiConfig();
+    DefaultAiConfigDTO getDefaultAiConfig();
 
     /**
      * 更新默认AI配置
      *
      * @param config 默认AI配置
      */
-    void updateDefaultAiConfig(DefaultAiConfig config);
-
-    /**
-     * 默认AI配置DTO
-     */
-    record DefaultAiConfig(Long providerId, String modelId) {}
+    void updateDefaultAiConfig(DefaultAiConfigDTO config);
 }

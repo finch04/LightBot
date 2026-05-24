@@ -221,7 +221,12 @@ function search(text) {
   loadData()
 }
 
-defineExpose({ openDialog, search })
+function refresh() {
+  searchText.value = ''
+  loadData()
+}
+
+defineExpose({ openDialog, search, refresh })
 </script>
 
 <style scoped>

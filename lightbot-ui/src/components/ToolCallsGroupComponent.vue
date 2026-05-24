@@ -185,7 +185,7 @@ function toggleResult(index) {
 
 .event-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 13px;
   padding: 3px 0;
@@ -194,6 +194,7 @@ function toggleResult(index) {
   .event-icon {
     flex-shrink: 0;
     font-size: 13px;
+    margin-top: 2px;
     &.icon-success { color: var(--color-success-500); }
     &.icon-spinning { color: var(--main-600); animation: spin 1s linear infinite; }
   }
@@ -201,24 +202,20 @@ function toggleResult(index) {
   .event-label {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     strong { color: var(--main-700); font-weight: 600; }
   }
 
   .event-args {
     color: var(--gray-400);
     font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 240px;
-    flex-shrink: 0;
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
   }
 
   .event-text {
     color: var(--gray-500);
+    flex: 1;
   }
 
   .result-toggle {

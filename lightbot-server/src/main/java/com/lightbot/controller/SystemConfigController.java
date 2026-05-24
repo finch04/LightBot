@@ -1,8 +1,8 @@
 package com.lightbot.controller;
 
 import com.lightbot.common.Result;
+import com.lightbot.dto.DefaultAiConfigDTO;
 import com.lightbot.service.SystemConfigService;
-import com.lightbot.service.SystemConfigService.DefaultAiConfig;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +24,13 @@ public class SystemConfigController {
 
     @Operation(summary = "获取默认AI配置")
     @GetMapping("/default-ai")
-    public Result<DefaultAiConfig> getDefaultAiConfig() {
+    public Result<DefaultAiConfigDTO> getDefaultAiConfig() {
         return Result.ok(systemConfigService.getDefaultAiConfig());
     }
 
     @Operation(summary = "更新默认AI配置")
     @PutMapping("/default-ai")
-    public Result<Void> updateDefaultAiConfig(@RequestBody DefaultAiConfig config) {
+    public Result<Void> updateDefaultAiConfig(@RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultAiConfig(config);
         return Result.ok();
     }

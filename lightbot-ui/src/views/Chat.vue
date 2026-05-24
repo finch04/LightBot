@@ -407,6 +407,8 @@ async function loadHistory() {
 
 async function loadOlderMessages() {
   if (loadingOlder.value || !hasMoreMessages.value || streaming.value) return
+  // 新对话时 sessionId 为 null，不应请求
+  if (!sessionId.value) return
 
   const container = messagesRef.value
   const oldScrollHeight = container?.scrollHeight || 0
@@ -946,6 +948,13 @@ watch(sessionId, (newVal, oldVal) => {
   border-radius: 12px 12px 2px 12px;
   text-align: left;
   max-width: 80%;
+}
+/* 用户消息气泡内紧凑样式 */
+.message.user .message-content :deep(.markdown-preview p) {
+  margin: 0;
+}
+.message.user .message-content :deep(.markdown-preview) {
+  line-height: 1.5;
 }
 
 /* 复制按钮 */

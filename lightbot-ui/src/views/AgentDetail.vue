@@ -237,16 +237,18 @@
                 <DeleteOutlined /> 清空
               </button>
             </div>
-            <div v-if="selectedTools.length === 0" class="empty-tip">
-              暂未绑定工具，请从下方列表选择
-            </div>
-            <div v-for="t in selectedTools" :key="t.id" class="knowledge-tag tool-tag">
-              <ToolOutlined />
-              <span>{{ t.displayName || t.name }}</span>
-              <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
-              <button class="tag-remove" @click="removeTool(t.id)">
-                <CloseOutlined />
-              </button>
+            <div class="selected-knowledge-tags">
+              <div v-if="selectedTools.length === 0" class="empty-tip">
+                暂未绑定工具，请从下方列表选择
+              </div>
+              <div v-for="t in selectedTools" :key="t.id" class="knowledge-tag tool-tag">
+                <ToolOutlined />
+                <span>{{ t.displayName || t.name }}</span>
+                <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                <button class="tag-remove" @click="removeTool(t.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
             </div>
           </div>
           <div class="knowledge-list">
@@ -313,15 +315,17 @@
                 <DeleteOutlined /> 清空
               </button>
             </div>
-            <div v-if="selectedMcpServers.length === 0" class="empty-tip">
-              暂未绑定 MCP Server，请从下方列表选择
-            </div>
-            <div v-for="s in selectedMcpServers" :key="s.id" class="knowledge-tag mcp-tag">
-              <ApiOutlined />
-              <span>{{ s.name }}</span>
-              <button class="tag-remove" @click="removeMcpServer(s.id)">
-                <CloseOutlined />
-              </button>
+            <div class="selected-knowledge-tags">
+              <div v-if="selectedMcpServers.length === 0" class="empty-tip">
+                暂未绑定 MCP Server，请从下方列表选择
+              </div>
+              <div v-for="s in selectedMcpServers" :key="s.id" class="knowledge-tag mcp-tag">
+                <ApiOutlined />
+                <span>{{ s.name }}</span>
+                <button class="tag-remove" @click="removeMcpServer(s.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
             </div>
           </div>
           <div class="knowledge-list">
@@ -438,11 +442,9 @@
               <div v-if="selectedSubAgents.length === 0" class="empty-tip">
                 暂未绑定 SubAgent，从下方列表选择
               </div>
-              <div v-for="s in selectedSubAgents" :key="s.id" class="subagent-tag">
-                <div class="tag-info">
-                  <span class="tag-name">{{ s.displayName }}</span>
-                  <span class="tag-desc">{{ s.description || '暂无描述' }}</span>
-                </div>
+              <div v-for="s in selectedSubAgents" :key="s.id" class="knowledge-tag subagent-tag">
+                <RobotOutlined />
+                <span>{{ s.displayName }}</span>
                 <button class="tag-remove" @click="removeSubAgent(s.id)">
                   <CloseOutlined />
                 </button>
@@ -1330,15 +1332,13 @@ onMounted(async () => {
   gap: 16px;
 }
 .selected-knowledge {
-  width: 300px;
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
 }
 .selected-knowledge-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   margin-top: 12px;
   min-height: 40px;
   padding: 12px;
@@ -1626,46 +1626,19 @@ onMounted(async () => {
   flex-direction: column;
 }
 .selected-subagents-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
+  min-height: 40px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
 }
 .subagent-tag {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-.subagent-tag .tag-info {
-  flex: 1;
-  min-width: 0;
-}
-.subagent-tag .tag-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #171717;
-}
-.subagent-tag .tag-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #71717a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.subagent-tag .tag-remove {
-  padding: 4px;
-  background: transparent;
-  border: none;
-  color: #a1a1aa;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.subagent-tag .tag-remove:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 .subagent-list {
   flex: 1;

@@ -2,6 +2,7 @@ package com.lightbot.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.dto.DefaultAiConfigDTO;
 import com.lightbot.entity.SystemConfig;
 import com.lightbot.mapper.SystemConfigMapper;
 import com.lightbot.service.SystemConfigService;
@@ -44,10 +45,10 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
     }
 
     @Override
-    public DefaultAiConfig getDefaultAiConfig() {
+    public DefaultAiConfigDTO getDefaultAiConfig() {
         String value = getConfigValue(DEFAULT_AI_PROVIDER_KEY);
         if (value == null || value.isBlank()) {
-            return new DefaultAiConfig(null, null);
+            return new DefaultAiConfigDTO(null, null);
         }
         try {
             var node = objectMapper.readTree(value);
@@ -55,15 +56,15 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
                     ? node.get("providerId").asLong() : null;
             String modelId = node.has("modelId") && !node.get("modelId").isNull()
                     ? node.get("modelId").asText() : null;
-            return new DefaultAiConfig(providerId, modelId);
+            return new DefaultAiConfigDTO(providerId, modelId);
         } catch (Exception e) {
             log.warn("[SystemConfig] 解析default_ai_provider失败: {}", e.getMessage());
-            return new DefaultAiConfig(null, null);
+            return new DefaultAiConfigDTO(null, null);
         }
     }
 
     @Override
-    public void updateDefaultAiConfig(DefaultAiConfig config) {
+    public void updateDefaultAiConfig(DefaultAiConfigDTO config) {
         try {
             String value = objectMapper.writeValueAsString(config);
             updateConfigValue(DEFAULT_AI_PROVIDER_KEY, value);

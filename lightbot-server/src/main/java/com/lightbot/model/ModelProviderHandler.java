@@ -35,10 +35,11 @@ public interface ModelProviderHandler {
     /**
      * 根据 Agent config 构建 ChatOptions
      *
-     * @param config Agent config JSONB 解析后的 Map
+     * @param provider 提供商实体（含 baseUrl 用于判断模式）
+     * @param config   Agent config JSONB 解析后的 Map
      * @return ChatOptions 实例
      */
-    ChatOptions buildChatOptions(Map<String, Object> config);
+    ChatOptions buildChatOptions(ModelProvider provider, Map<String, Object> config);
 
     /**
      * 获取该提供商的配置字段定义，用于前端动态渲染表单

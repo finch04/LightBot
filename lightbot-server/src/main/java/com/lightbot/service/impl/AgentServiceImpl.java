@@ -527,8 +527,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private Long resolveProviderId() {
         // 1. 优先使用系统默认AI配置
         var defaultConfig = systemConfigService.getDefaultAiConfig();
-        if (defaultConfig.providerId() != null) {
-            return defaultConfig.providerId();
+        if (defaultConfig.getProviderId() != null) {
+            return defaultConfig.getProviderId();
         }
 
         // 2. 否则使用第一个可用的提供商

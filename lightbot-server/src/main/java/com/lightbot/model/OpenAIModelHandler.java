@@ -50,7 +50,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
     }
 
     @Override
-    public ChatOptions buildChatOptions(Map<String, Object> config) {
+    public ChatOptions buildChatOptions(ModelProvider provider, Map<String, Object> config) {
         OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
 
         // modelId 未配置时使用默认模型

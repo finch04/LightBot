@@ -21,6 +21,7 @@ import com.lightbot.model.ModelFactory;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.MindmapUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     private final ModelFactory modelFactory;
     private final ObjectMapper objectMapper;
     private final MindmapUtil mindmapUtil;
+    private final SystemConfigService systemConfigService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -467,9 +469,18 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
      * 解析providerId，为空时使用默认提供商（第一个可用的）
      */
     private Long resolveProviderId(Long providerId) {
+        // 1. 优先使用传入的 providerId
         if (providerId != null) {
             return providerId;
         }
+
+        // 2. 其次使用系统默认AI配置
+        var defaultConfig = systemConfigService.getDefaultAiConfig();
+        if (defaultConfig.getProviderId() != null) {
+            return defaultConfig.getProviderId();
+        }
+
+        // 3. 最后使用第一个可用的提供商
         var providers = modelFactory.getAvailableProviderIds();
         if (providers.isEmpty()) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
