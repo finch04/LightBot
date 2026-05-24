@@ -49,7 +49,17 @@
           <a-form-item label="描述">
             <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" />
           </a-form-item>
-          <a-form-item label="系统提示词">
+          <!-- 类型选择：放在前面，影响后续字段显示 -->
+          <a-form-item label="类型">
+            <a-select v-model:value="agent.agentType" style="width: 100%" :disabled="!!agentId">
+              <a-select-option value="chat">对话型</a-select-option>
+              <a-select-option value="assistant">助手型</a-select-option>
+              <a-select-option value="workflow">工作流型</a-select-option>
+            </a-select>
+            <div v-if="agentId" class="param-hint">Agent 类型创建后不可修改</div>
+          </a-form-item>
+          <!-- 系统提示词：仅非工作流类型显示 -->
+          <a-form-item v-if="agent.agentType !== 'workflow'" label="系统提示词">
             <div class="prompt-wrapper">
               <a-textarea v-model:value="agent.systemPrompt" :rows="6" placeholder="定义 Agent 的行为和角色..." />
               <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
@@ -59,17 +69,11 @@
               </a-tooltip>
             </div>
           </a-form-item>
-          <a-form-item label="类型">
-            <a-select v-model:value="agent.agentType" style="width: 100%">
-              <a-select-option value="chat">对话型</a-select-option>
-              <a-select-option value="assistant">助手型</a-select-option>
-              <a-select-option value="workflow">工作流型</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="欢迎语">
+          <!-- 欢迎语和推荐问题：仅非工作流类型显示 -->
+          <a-form-item v-if="agent.agentType !== 'workflow'" label="欢迎语">
             <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" />
           </a-form-item>
-          <a-form-item label="推荐问题">
+          <a-form-item v-if="agent.agentType !== 'workflow'" label="推荐问题">
             <div class="questions-header">
               <button class="btn-ai-sm" :disabled="generatingQuestions" @click="handleGenerateQuestions">
                 <ThunderboltOutlined :spin="generatingQuestions" />
@@ -91,8 +95,8 @@
         </a-form>
       </div>
 
-      <!-- 模型参数调优 -->
-      <div class="panel">
+      <!-- 模型参数调优：仅 CHAT/ASSISTANT 类型显示 -->
+      <div class="panel" v-if="agent.agentType !== 'workflow'">
         <div class="panel-header">
           <h3>模型参数调优</h3>
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -208,10 +212,77 @@
           </a-form-item>
         </a-form>
       </div>
+
+      <!-- WORKFLOW 类型：工作流配置（右侧面板） -->
+      <div class="panel" v-if="agent.agentType === 'workflow'">
+        <div class="panel-header">
+          <h3>工作流配置</h3>
+        </div>
+        <div class="workflow-entry-content">
+          <!-- 配置说明 -->
+          <div class="workflow-guide">
+            <div class="guide-title">
+              <BookOutlined style="margin-right: 6px;" />
+              配置说明
+            </div>
+            <ul class="guide-list">
+              <li>从左侧节点库拖拽节点到画布</li>
+              <li>连接节点形成执行流程</li>
+              <li>点击节点配置详细参数</li>
+              <li>每个LLM节点可独立选择模型</li>
+            </ul>
+          </div>
+
+          <!-- 节点统计 -->
+          <div class="workflow-stats" v-if="workflowStats.total > 0">
+            <div class="stats-header">节点统计</div>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-value">{{ workflowStats.total }}</span>
+                <span class="stat-label">总节点</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value llm">{{ workflowStats.llm }}</span>
+                <span class="stat-label">大模型</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value condition">{{ workflowStats.condition }}</span>
+                <span class="stat-label">条件</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value tool">{{ workflowStats.tool }}</span>
+                <span class="stat-label">工具</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value retrieval">{{ workflowStats.retrieval }}</span>
+                <span class="stat-label">检索</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value edges">{{ workflowStats.edges }}</span>
+                <span class="stat-label">连线</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 配置状态 -->
+          <div class="workflow-status">
+            <CheckCircleOutlined v-if="hasWorkflowConfig" style="color: #22c55e" />
+            <ExclamationCircleOutlined v-else style="color: #f59e0b" />
+            <span class="status-text">{{ hasWorkflowConfig ? '已配置工作流' : '尚未配置工作流' }}</span>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="workflow-entry-actions">
+            <button class="btn-primary" @click="goToWorkflowEdit">
+              <SettingOutlined /> 配置工作流
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 绑定配置 Tabs -->
-    <a-tabs v-model:activeKey="activeTab" @change="onTabChange" class="binding-tabs">
+    <!-- CHAT/ASSISTANT 类型：绑定配置 Tabs -->
+    <a-tabs v-if="agent.agentType !== 'workflow'" v-model:activeKey="activeTab" @change="onTabChange" class="binding-tabs">
       <!-- 工具绑定 -->
       <a-tab-pane key="tools" tab="工具绑定">
         <div class="tool-options-bar">
@@ -500,7 +571,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents } from '../api/agent'
 import { getTools } from '../api/tool'
@@ -521,7 +592,7 @@ const agent = reactive({
   name: '',
   description: '',
   systemPrompt: '',
-  agentType: 'CHAT',
+  agentType: 'chat',
   icon: '',
 })
 
@@ -566,6 +637,37 @@ const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
 const avatarUploading = ref(false)
+
+// 工作流相关
+const workflowData = ref(null)
+
+// 是否已配置工作流
+const hasWorkflowConfig = computed(() => {
+  if (!workflowData.value) return false
+  const nodes = workflowData.value.nodes || []
+  // 检查是否有 start 和 end 节点之外的其他节点
+  return nodes.filter(n => n.type !== 'start' && n.type !== 'end').length > 0
+})
+
+// 工作流节点统计
+const workflowStats = computed(() => {
+  if (!workflowData.value) return { total: 0, llm: 0, condition: 0, retrieval: 0, tool: 0, edges: 0 }
+  const nodes = workflowData.value.nodes || []
+  const edges = workflowData.value.edges || []
+  return {
+    total: nodes.length,
+    llm: nodes.filter(n => n.type === 'llm').length,
+    condition: nodes.filter(n => n.type === 'condition').length,
+    retrieval: nodes.filter(n => n.type === 'retrieval').length,
+    tool: nodes.filter(n => n.type === 'tool').length,
+    edges: edges.length
+  }
+})
+
+// 跳转到工作流编辑页面
+function goToWorkflowEdit() {
+  router.push(`/workflow/${agentId}`)
+}
 
 const avatarUrl = computed(() => {
   if (!agent.avatar) return ''
@@ -719,6 +821,10 @@ async function loadAgent() {
       try {
         const parsed = typeof config === 'string' ? JSON.parse(config) : config
         Object.assign(agentConfig, parsed)
+        // 提取 workflow 数据
+        if (parsed.workflow) {
+          workflowData.value = parsed.workflow
+        }
       } catch (e) {
         // ignore
       }
@@ -1021,7 +1127,10 @@ function startChat() {
 }
 
 onMounted(async () => {
-  await loadAgent()
+  // 编辑模式才加载Agent数据，新建模式使用默认值
+  if (agentId) {
+    await loadAgent()
+  }
   // 加载初始 tab（工具绑定）的数据
   await Promise.all([loadToolTypes(), loadToolList()])
 })
@@ -1670,5 +1779,99 @@ onMounted(async () => {
   margin-top: 4px;
   font-size: 11px;
   color: #0070f3;
+}
+
+/* 工作流配置样式 */
+.workflow-entry-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workflow-guide {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.guide-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.guide-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.8;
+}
+
+.workflow-stats {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.stats-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 10px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.stat-value.llm { color: #7c3aed; }
+.stat-value.condition { color: #d97706; }
+.stat-value.tool { color: #059669; }
+.stat-value.retrieval { color: #4f46e5; }
+.stat-value.edges { color: #6b7280; }
+
+.stat-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.workflow-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.workflow-status .status-text {
+  font-size: 14px;
+  color: #52525b;
+}
+
+.workflow-entry-actions {
+  display: flex;
+  justify-content: center;
 }
 </style>

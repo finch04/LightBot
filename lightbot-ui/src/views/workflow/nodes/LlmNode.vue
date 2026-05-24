@@ -1,0 +1,107 @@
+<template>
+  <div class="workflow-node llm-node" :class="{ selected }" @dblclick="$emit('edit')">
+    <Handle type="target" position="left" />
+    <Handle type="source" position="right" />
+    <div class="node-header">
+      <div class="node-icon">
+        <RobotOutlined />
+      </div>
+      <div class="node-title">{{ data.label || '大模型' }}</div>
+    </div>
+    <div class="node-body">
+      <div v-if="data.modelName" class="node-config">
+        <span class="config-label">模型:</span>
+        <span class="config-value">{{ data.modelName }}</span>
+      </div>
+      <div v-if="data.promptTemplate" class="node-config">
+        <span class="config-label">提示词:</span>
+        <span class="config-value">{{ truncate(data.promptTemplate, 20) }}</span>
+      </div>
+      <div v-if="!data.modelId && !data.promptTemplate" class="node-placeholder">
+        点击配置模型和提示词
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { Handle } from '@vue-flow/core'
+import { RobotOutlined } from '@ant-design/icons-vue'
+
+defineProps({
+  data: Object,
+  selected: Boolean
+})
+
+defineEmits(['edit'])
+
+function truncate(str, len) {
+  if (!str) return ''
+  return str.length > len ? str.slice(0, len) + '...' : str
+}
+</script>
+
+<style scoped>
+.llm-node {
+  background: #fff;
+  border: 2px solid #7c3aed;
+  border-radius: 12px;
+  min-width: 180px;
+  transition: all 0.2s ease;
+}
+
+.llm-node:hover {
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+}
+
+.llm-node.selected {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f3e8ff;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 10px 10px 0 0;
+}
+
+.node-icon {
+  color: #7c3aed;
+  font-size: 16px;
+}
+
+.node-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.node-body {
+  padding: 12px 14px;
+}
+
+.node-config {
+  display: flex;
+  gap: 4px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.config-label {
+  color: #6b7280;
+}
+
+.config-value {
+  color: #374151;
+  font-weight: 500;
+}
+
+.node-placeholder {
+  font-size: 12px;
+  color: #9ca3af;
+}
+</style>

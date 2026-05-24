@@ -38,6 +38,16 @@ export function uploadDocuments(knowledgeId, files, ocrEnabled = false) {
   })
 }
 
+export function previewUrlDocument(knowledgeId, url) {
+  return request.post(`/knowledge/${knowledgeId}/documents/preview-url`, null, {
+    params: { url },
+  })
+}
+
+export function saveUrlDocument(knowledgeId, data) {
+  return request.post(`/knowledge/${knowledgeId}/documents/save-url`, data)
+}
+
 export function fetchUrlDocument(knowledgeId, url) {
   return request.post(`/knowledge/${knowledgeId}/documents/fetch-url`, null, {
     params: { url },

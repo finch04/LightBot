@@ -11,6 +11,18 @@ importers:
       '@ant-design/icons-vue':
         specifier: ^7.0.1
         version: 7.0.1(vue@3.5.34)
+      '@vue-flow/background':
+        specifier: ^1.3.2
+        version: 1.3.2(@vue-flow/core@1.48.2(vue@3.5.34))(vue@3.5.34)
+      '@vue-flow/controls':
+        specifier: ^1.1.2
+        version: 1.1.3(@vue-flow/core@1.48.2(vue@3.5.34))(vue@3.5.34)
+      '@vue-flow/core':
+        specifier: ^1.42.5
+        version: 1.48.2(vue@3.5.34)
+      '@vue-flow/minimap':
+        specifier: ^1.5.2
+        version: 1.5.4(@vue-flow/core@1.48.2(vue@3.5.34))(vue@3.5.34)
       ant-design-vue:
         specifier: ^4.2.6
         version: 4.2.6(vue@3.5.34)
@@ -402,6 +414,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  '@types/web-bluetooth@0.0.20':
+    resolution: {integrity: sha512-g9gZnnXVq7gM7v3tJCWV/qw7w+KeOlSHAhgF9RytFyifW6AF61hdT2ucrYhPq9hLs5JIryeupHV3qGk95dH9ow==}
+
   '@vitejs/plugin-vue@5.2.4':
     resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -411,6 +426,29 @@ packages:
 
   '@vscode/markdown-it-katex@1.1.2':
     resolution: {integrity: sha512-+4IIv5PgrmhKvW/3LpkpkGg257OViEhXkOOgCyj5KMsjsOfnRXkni8XAuuF9Ui5p3B8WnUovlDXAQNb8RJ/RaQ==}
+
+  '@vue-flow/background@1.3.2':
+    resolution: {integrity: sha512-eJPhDcLj1wEo45bBoqTXw1uhl0yK2RaQGnEINqvvBsAFKh/camHJd5NPmOdS1w+M9lggc9igUewxaEd3iCQX2w==}
+    peerDependencies:
+      '@vue-flow/core': ^1.23.0
+      vue: ^3.3.0
+
+  '@vue-flow/controls@1.1.3':
+    resolution: {integrity: sha512-XCf+G+jCvaWURdFlZmOjifZGw3XMhN5hHlfMGkWh9xot+9nH9gdTZtn+ldIJKtarg3B21iyHU8JjKDhYcB6JMw==}
+    peerDependencies:
+      '@vue-flow/core': ^1.23.0
+      vue: ^3.3.0
+
+  '@vue-flow/core@1.48.2':
+    resolution: {integrity: sha512-raxhgKWE+G/mcEvXJjGFUDYW9rAI3GOtiHR3ZkNpwBWuIaCC1EYiBmKGwJOoNzVFgwO7COgErnK7i08i287AFA==}
+    peerDependencies:
+      vue: ^3.3.0
+
+  '@vue-flow/minimap@1.5.4':
+    resolution: {integrity: sha512-l4C+XTAXnRxsRpUdN7cAVFBennC1sVRzq4bDSpVK+ag7tdMczAnhFYGgbLkUw3v3sY6gokyWwMl8CDonp8eB2g==}
+    peerDependencies:
+      '@vue-flow/core': ^1.23.0
+      vue: ^3.3.0
 
   '@vue/compiler-core@3.5.34':
     resolution: {integrity: sha512-s9cLyK5mLcvZ4Agva5QgRsQyLKvts9WbU9DB6NqiZkkGEdwmcEiylj5Jbwkp680drF/NNCV8OlAJSe+yMLxaJw==}
@@ -443,6 +481,15 @@ packages:
 
   '@vue/shared@3.5.34':
     resolution: {integrity: sha512-24uqU4OIiX29ryC3MeWid/Xf2fa2EFRUVLb77nRhk+UrTVrh/XiGtFAFmJBAtBRbjwNdsPRP+jj/OL27Eg1NDA==}
+
+  '@vueuse/core@10.11.1':
+    resolution: {integrity: sha512-guoy26JQktXPcz+0n3GukWIy/JDNKti9v6VEMu6kV2sYBsWuGiTU8OWdg+ADfUbHg3/3DlqySDe7JmdHrktiww==}
+
+  '@vueuse/metadata@10.11.1':
+    resolution: {integrity: sha512-IGa5FXd003Ug1qAZmyE8wF3sJ81xGLSqTqtQ6jaVfkeZ4i5kS2mwQF61yhVqojRnenVew5PldLyRgvdl4YYuSw==}
+
+  '@vueuse/shared@10.11.1':
+    resolution: {integrity: sha512-LHpC8711VFZlDaYUXEBbFBCQ7GS3dVU9mjOhhMhXP6txTV4EhYQg/KGnQuvt/sPAtoUKq7VVUnL6mVtFoL42sA==}
 
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
@@ -1331,6 +1378,8 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/web-bluetooth@0.0.20': {}
+
   '@vitejs/plugin-vue@5.2.4(vite@6.4.2(less@4.6.4)(yaml@2.9.0))(vue@3.5.34)':
     dependencies:
       vite: 6.4.2(less@4.6.4)(yaml@2.9.0)
@@ -1339,6 +1388,34 @@ snapshots:
   '@vscode/markdown-it-katex@1.1.2':
     dependencies:
       katex: 0.16.47
+
+  '@vue-flow/background@1.3.2(@vue-flow/core@1.48.2(vue@3.5.34))(vue@3.5.34)':
+    dependencies:
+      '@vue-flow/core': 1.48.2(vue@3.5.34)
+      vue: 3.5.34
+
+  '@vue-flow/controls@1.1.3(@vue-flow/core@1.48.2(vue@3.5.34))(vue@3.5.34)':
+    dependencies:
+      '@vue-flow/core': 1.48.2(vue@3.5.34)
+      vue: 3.5.34
+
+  '@vue-flow/core@1.48.2(vue@3.5.34)':
+    dependencies:
+      '@vueuse/core': 10.11.1(vue@3.5.34)
+      d3-drag: 3.0.0
+      d3-interpolate: 3.0.1
+      d3-selection: 3.0.0
+      d3-zoom: 3.0.0
+      vue: 3.5.34
+    transitivePeerDependencies:
+      - '@vue/composition-api'
+
+  '@vue-flow/minimap@1.5.4(@vue-flow/core@1.48.2(vue@3.5.34))(vue@3.5.34)':
+    dependencies:
+      '@vue-flow/core': 1.48.2(vue@3.5.34)
+      d3-selection: 3.0.0
+      d3-zoom: 3.0.0
+      vue: 3.5.34
 
   '@vue/compiler-core@3.5.34':
     dependencies:
@@ -1395,6 +1472,25 @@ snapshots:
       vue: 3.5.34
 
   '@vue/shared@3.5.34': {}
+
+  '@vueuse/core@10.11.1(vue@3.5.34)':
+    dependencies:
+      '@types/web-bluetooth': 0.0.20
+      '@vueuse/metadata': 10.11.1
+      '@vueuse/shared': 10.11.1(vue@3.5.34)
+      vue-demi: 0.14.10(vue@3.5.34)
+    transitivePeerDependencies:
+      - '@vue/composition-api'
+      - vue
+
+  '@vueuse/metadata@10.11.1': {}
+
+  '@vueuse/shared@10.11.1(vue@3.5.34)':
+    dependencies:
+      vue-demi: 0.14.10(vue@3.5.34)
+    transitivePeerDependencies:
+      - '@vue/composition-api'
+      - vue
 
   agent-base@6.0.2:
     dependencies:

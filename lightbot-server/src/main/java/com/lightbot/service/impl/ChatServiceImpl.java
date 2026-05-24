@@ -56,6 +56,7 @@ public class ChatServiceImpl implements ChatService {
 
     // 中间件
     private final InitMiddleware initMiddleware;
+    private final WorkflowMiddleware workflowMiddleware;
     private final MessageMiddleware messageMiddleware;
     private final ToolPrepMiddleware toolPrepMiddleware;
     private final TraceMiddleware traceMiddleware;
@@ -100,8 +101,8 @@ public class ChatServiceImpl implements ChatService {
         ChatContext ctx = ChatContext.of(request);
         ctx.setRequestId(String.valueOf(System.nanoTime()));
 
-        // 构建中间件链：Init → Message → ToolPrep → Trace → [core]
-        List<ChatMiddleware> middlewares = List.of(initMiddleware, messageMiddleware, toolPrepMiddleware, traceMiddleware);
+        // 构建中间件链：Init → Workflow → Message → ToolPrep → Trace → [core]
+        List<ChatMiddleware> middlewares = List.of(initMiddleware, workflowMiddleware, messageMiddleware, toolPrepMiddleware, traceMiddleware);
         ChatServiceCore core = this::streamCore;
 
         return ChatMiddlewareChain.of(middlewares, core).proceed(ctx)

@@ -4,6 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.safety.Safelist;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
 
@@ -11,9 +14,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
- * Web URL 内容抓取工具
+ * Web URL 内容抓取工具（多策略正文提取 + 预览 HTML）
  *
  * @author finch
  * @since 2026-05-24
@@ -22,129 +28,276 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class WebFetchUtil {
 
-    /** 请求超时时间（毫秒） */
     private static final int TIMEOUT_MS = 30000;
-
-    /** 最大内容长度（字符），防止抓取过大页面 */
     private static final int MAX_CONTENT_LENGTH = 500000;
+    private static final int MAX_PREVIEW_HTML_LENGTH = 200000;
+
+    private static final String USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+    private static final String[] CONTENT_SELECTORS = {
+            "article",
+            "main",
+            "[role=main]",
+            "#content",
+            "#main",
+            "#article",
+            "#post",
+            ".article",
+            ".post-content",
+            ".article-content",
+            ".entry-content",
+            ".content",
+            ".main",
+            ".post",
+            ".markdown-body",
+            ".rich-text",
+            ".detail-content",
+            ".news-content",
+            ".text-content"
+    };
+
+    private static final Pattern BOILERPLATE_CLASS = Pattern.compile(
+            "nav|menu|sidebar|footer|header|advert|ads|banner|social|share|comment|related|breadcrumb|toolbar|popup|modal|cookie",
+            Pattern.CASE_INSENSITIVE);
 
     /**
-     * 抓取 URL 内容，提取正文文本
+     * 抓取 URL 内容
      *
      * @param url URL 地址
-     * @return 抓取结果（含标题、内容、来源URL）
+     * @return 抓取结果
      */
     public FetchResult fetch(String url) {
         log.info("[WebFetch] 开始抓取: url={}", url);
 
-        // 1. 校验 URL 格式
         if (!isValidUrl(url)) {
             throw new IllegalArgumentException("无效的 URL 格式: " + url);
         }
 
-        // 2. 抓取网页
-        Document doc;
+        Document doc = loadDocument(url);
+        String title = extractTitle(doc);
+        String description = extractDescription(doc);
+        Element mainContent = locateMainContent(doc);
+        String content = extractStructuredText(mainContent != null ? mainContent : doc.body());
+        String previewHtml = buildPreviewHtml(mainContent != null ? mainContent : doc.body());
+
+        if (content == null || content.isBlank()) {
+            throw new RuntimeException("未能从网页中提取有效正文，请尝试其他 URL 或上传 HTML 文件");
+        }
+
+        if (content.length() > MAX_CONTENT_LENGTH) {
+            content = content.substring(0, MAX_CONTENT_LENGTH) + "\n\n...(内容过长已截断)";
+        }
+        if (previewHtml.length() > MAX_PREVIEW_HTML_LENGTH) {
+            previewHtml = previewHtml.substring(0, MAX_PREVIEW_HTML_LENGTH) + "<p>...(预览内容过长已截断)</p>";
+        }
+
+        log.info("[WebFetch] 抓取完成: url={}, title={}, contentLength={}", url, title, content.length());
+        return new FetchResult(url, title, content, previewHtml, description);
+    }
+
+    private Document loadDocument(String url) {
         try {
-            doc = Jsoup.connect(url)
+            return Jsoup.connect(url)
                     .timeout(TIMEOUT_MS)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .userAgent(USER_AGENT)
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                    .referrer(url)
                     .followRedirects(true)
-                    .maxBodySize(MAX_CONTENT_LENGTH * 2) // 字节数限制
+                    .ignoreHttpErrors(true)
+                    .ignoreContentType(true)
+                    .maxBodySize(MAX_CONTENT_LENGTH * 4)
                     .get();
         } catch (IOException e) {
             log.error("[WebFetch] 抓取失败: url={}, error={}", url, e.getMessage());
             throw new RuntimeException("网页抓取失败: " + e.getMessage());
         }
-
-        // 3. 提取标题
-        String title = extractTitle(doc);
-
-        // 4. 提取正文内容
-        String content = extractContent(doc);
-
-        // 5. 限制内容长度
-        if (content.length() > MAX_CONTENT_LENGTH) {
-            content = content.substring(0, MAX_CONTENT_LENGTH) + "\n...(内容过长已截断)";
-        }
-
-        log.info("[WebFetch] 抓取完成: url={}, title={}, contentLength={}", url, title, content.length());
-
-        return new FetchResult(url, title, content);
     }
 
-    /**
-     * 校验 URL 格式
-     */
     private boolean isValidUrl(String url) {
         if (url == null || url.isBlank()) {
             return false;
         }
         try {
-            URI uri = new URI(url);
+            URI uri = new URI(url.trim());
             String scheme = uri.getScheme();
-            return scheme != null && (scheme.equals("http") || scheme.equals("https"));
+            return scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"));
         } catch (URISyntaxException e) {
             return false;
         }
     }
 
-    /**
-     * 提取网页标题
-     */
     private String extractTitle(Document doc) {
-        // 优先使用 <title> 标签
+        Element ogTitle = doc.selectFirst("meta[property=og:title]");
+        if (ogTitle != null && !ogTitle.attr("content").isBlank()) {
+            return ogTitle.attr("content").trim();
+        }
         String title = doc.title();
         if (title != null && !title.isBlank()) {
             return title.trim();
         }
-
-        // 回退：使用 <h1> 标签
         Element h1 = doc.selectFirst("h1");
-        if (h1 != null) {
+        if (h1 != null && !h1.text().isBlank()) {
             return h1.text().trim();
         }
-
-        // 回退：使用 og:title meta
-        Element ogTitle = doc.selectFirst("meta[property=og:title]");
-        if (ogTitle != null) {
-            return ogTitle.attr("content").trim();
-        }
-
         return "未命名网页";
     }
 
-    /**
-     * 提取正文内容
-     * 策略：移除导航、脚本、样式等无关元素，提取正文区域的纯文本
+    private String extractDescription(Document doc) {
+        Element meta = doc.selectFirst("meta[name=description], meta[property=og:description]");
+        if (meta != null && !meta.attr("content").isBlank()) {
+            return meta.attr("content").trim();
+        }
+        return null;
+    }
+
+  /**
+     * 定位正文容器：优先语义标签，其次按文本密度评分
      */
-    private String extractContent(Document doc) {
-        // 1. 移除无关元素
-        doc.select("script, style, nav, header, footer, aside, iframe, noscript, form, button, input, select, textarea, svg, img").remove();
+    private Element locateMainContent(Document doc) {
+        removeBoilerplate(doc);
 
-        // 2. 移除导航类 class/id
-        doc.select("[class~=nav|menu|sidebar|footer|header|advertisement|ads|banner|social|share|comment|related]").remove();
-        doc.select("[id~=nav|menu|sidebar|footer|header|advertisement|ads|banner|social|share|comment|related]").remove();
-
-        // 3. 尝试定位主要内容区域（常见的内容容器 class/id）
-        Element contentContainer = doc.selectFirst("article, main, [role=main], #content, #main, .content, .main, .post, .article, .entry, .post-content, .article-content");
-
-        String content;
-        if (contentContainer != null) {
-            content = contentContainer.text();
-        } else {
-            // 回退：提取 <body> 下的全部文本
-            Element body = doc.body();
-            if (body != null) {
-                content = body.text();
-            } else {
-                content = doc.text();
+        for (String selector : CONTENT_SELECTORS) {
+            Elements found = doc.select(selector);
+            for (Element el : found) {
+                if (el.text().trim().length() > 80) {
+                    return el.clone();
+                }
             }
         }
 
-        // 4. 清理多余空白
-        content = content.replaceAll("\\s+", " ").trim();
+        Element body = doc.body();
+        if (body == null) {
+            return null;
+        }
 
-        return content;
+        Element best = null;
+        int bestScore = 0;
+        for (Element candidate : body.select("div, section, article, main")) {
+            if (isBoilerplate(candidate)) {
+                continue;
+            }
+            int score = scoreContentElement(candidate);
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+        return best != null ? best.clone() : body.clone();
+    }
+
+    private void removeBoilerplate(Document doc) {
+        doc.select("script, style, nav, header, footer, aside, iframe, noscript, form, svg, canvas, video, audio").remove();
+        doc.select("[class*=comment], [id*=comment], [class*=sidebar], [id*=sidebar]").remove();
+    }
+
+    private boolean isBoilerplate(Element el) {
+        String cls = el.className();
+        String id = el.id();
+        return BOILERPLATE_CLASS.matcher(cls).find() || BOILERPLATE_CLASS.matcher(id).find();
+    }
+
+    /** 文本密度评分：正文越长、链接占比越低得分越高 */
+    private int scoreContentElement(Element el) {
+        String text = el.text().trim();
+        if (text.length() < 50) {
+            return 0;
+        }
+        int linkLen = 0;
+        for (Element a : el.select("a")) {
+            linkLen += a.text().length();
+        }
+        return text.length() - linkLen * 2;
+    }
+
+    /**
+     * 将 DOM 转为保留结构的纯文本（标题/段落/列表）
+     */
+    private String extractStructuredText(Element root) {
+        if (root == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        appendStructuredNode(root, sb, 0);
+        return normalizeTextBlock(sb.toString());
+    }
+
+    private void appendStructuredNode(Node node, StringBuilder sb, int depth) {
+        if (node instanceof TextNode textNode) {
+            String t = textNode.text();
+            if (!t.isBlank()) {
+                sb.append(t);
+            }
+            return;
+        }
+        if (!(node instanceof Element el)) {
+            return;
+        }
+        String tag = el.tagName().toLowerCase();
+        switch (tag) {
+            case "h1" -> appendBlock(sb, "# " + el.text().trim(), depth);
+            case "h2" -> appendBlock(sb, "## " + el.text().trim(), depth);
+            case "h3" -> appendBlock(sb, "### " + el.text().trim(), depth);
+            case "h4", "h5", "h6" -> appendBlock(sb, "#### " + el.text().trim(), depth);
+            case "p", "div", "section", "article", "blockquote" -> {
+                String block = el.text().trim();
+                if (!block.isBlank()) {
+                    appendBlock(sb, block, depth);
+                }
+            }
+            case "li" -> appendBlock(sb, "- " + el.text().trim(), depth);
+            case "br" -> sb.append('\n');
+            case "tr" -> {
+                List<String> cells = new ArrayList<>();
+                for (Element cell : el.select("th, td")) {
+                    cells.add(cell.text().trim());
+                }
+                if (!cells.isEmpty()) {
+                    appendBlock(sb, String.join(" | ", cells), depth);
+                }
+            }
+            case "table" -> {
+                for (Element child : el.children()) {
+                    appendStructuredNode(child, sb, depth);
+                }
+                sb.append('\n');
+            }
+            default -> {
+                for (Node child : el.childNodes()) {
+                    appendStructuredNode(child, sb, depth);
+                }
+            }
+        }
+    }
+
+    private void appendBlock(StringBuilder sb, String text, int depth) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
+            sb.append('\n');
+        }
+        sb.append(text.trim()).append("\n\n");
+    }
+
+    private String normalizeTextBlock(String text) {
+        return text.replace("\r\n", "\n")
+                .replaceAll("[ \\t\\f\\r]+", " ")
+                .replaceAll("\\n{3,}", "\n\n")
+                .trim();
+    }
+
+    private String buildPreviewHtml(Element root) {
+        if (root == null) {
+            return "";
+        }
+        Element clone = root.clone();
+        clone.select("script, style, iframe, form, input, button, select, textarea, svg").remove();
+        String raw = clone.html();
+        return Jsoup.clean(raw, Safelist.relaxed()
+                .addTags("article", "section", "header", "footer", "figure", "figcaption")
+                .addAttributes(":all", "class", "id"));
     }
 
     /**
@@ -154,12 +307,16 @@ public class WebFetchUtil {
         private final String url;
         private final String title;
         private final String content;
+        private final String previewHtml;
+        private final String description;
         private final long fetchedAt;
 
-        public FetchResult(String url, String title, String content) {
+        public FetchResult(String url, String title, String content, String previewHtml, String description) {
             this.url = url;
             this.title = title;
             this.content = content;
+            this.previewHtml = previewHtml;
+            this.description = description;
             this.fetchedAt = System.currentTimeMillis();
         }
 
@@ -175,22 +332,25 @@ public class WebFetchUtil {
             return content;
         }
 
+        public String getPreviewHtml() {
+            return previewHtml;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
         public long getFetchedAt() {
             return fetchedAt;
         }
 
-        /**
-         * 生成文件名（从标题或 URL）
-         */
         public String generateFileName() {
             String name = title;
             if (name == null || name.isBlank() || name.equals("未命名网页")) {
-                // 从 URL 提取路径作为文件名
                 try {
                     URI uri = new URI(url);
                     String path = uri.getPath();
                     if (path != null && !path.isBlank() && !path.equals("/")) {
-                        // 移除前导斜杠和后缀
                         name = path.replaceAll("^/+|/$", "").replaceAll("/", "_");
                     } else {
                         name = uri.getHost();
@@ -199,9 +359,7 @@ public class WebFetchUtil {
                     name = "web_content";
                 }
             }
-            // 清理非法字符
             name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
-            // 限制长度
             if (name.length() > 100) {
                 name = name.substring(0, 100);
             }

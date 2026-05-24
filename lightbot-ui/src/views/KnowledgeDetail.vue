@@ -263,7 +263,7 @@
     <a-modal
       v-model:open="uploadVisible"
       title="上传文档"
-      :width="520"
+      :width="uploadMode === 'url' ? 640 : 520"
       :footer="null"
     >
       <div class="upload-section">
@@ -334,25 +334,50 @@
         <!-- URL 列表 -->
         <div v-if="uploadMode === 'url' && urlList.length > 0" class="url-list">
           <div v-for="(item, i) in urlList" :key="i" class="url-item">
-            <div class="url-icon-wrapper">
+            <div class="url-status-col">
               <CheckCircleOutlined v-if="item.status === 'success'" class="url-icon success" />
-              <CloseCircleOutlined v-else-if="item.status === 'error'" class="url-icon error" :title="item.error" />
+              <CloseCircleOutlined v-else-if="item.status === 'error'" class="url-icon error" />
               <SyncOutlined v-else class="url-icon spinning" spin />
             </div>
-            <div class="url-content">
-              <span class="url-text" :title="item.url">{{ item.url }}</span>
-              <span v-if="item.status === 'success'" class="url-title">{{ item.title }}</span>
-              <span v-else-if="item.status === 'error'" class="url-error">{{ item.error }}</span>
+            <div class="url-main">
+              <div class="url-row-top">
+                <a
+                  class="url-link"
+                  :href="item.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :title="item.url"
+                >{{ item.url }}</a>
+                <div class="url-toolbar">
+                  <a-tooltip v-if="item.status === 'success'" title="预览网页内容">
+                    <button type="button" class="url-icon-btn" @click="openUrlPreview(item)">
+                      <EyeOutlined />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip title="移除">
+                    <button type="button" class="url-icon-btn danger" @click="removeUrlItem(i)">
+                      <CloseOutlined />
+                    </button>
+                  </a-tooltip>
+                </div>
+              </div>
+              <div v-if="item.status === 'success'" class="url-row-bottom">
+                <span class="url-doc-title" :title="item.title">{{ item.title }}</span>
+                <span v-if="item.contentLength" class="url-char-badge">{{ formatUrlContentLength(item.contentLength) }}</span>
+              </div>
+              <div v-else-if="item.status === 'error'" class="url-row-bottom">
+                <span class="url-error">{{ item.error }}</span>
+              </div>
+              <div v-else-if="item.status === 'fetching'" class="url-row-bottom">
+                <span class="url-status-text">正在解析网页...</span>
+              </div>
             </div>
-            <button class="btn-icon-sm" @click="removeUrlItem(i)">
-              <CloseOutlined />
-            </button>
           </div>
         </div>
 
         <!-- URL 空状态 -->
         <div v-if="uploadMode === 'url' && urlList.length === 0" class="url-empty-tip">
-          <GlobalOutlined /> 输入 URL 后点击解析，系统将自动抓取网页内容
+          <GlobalOutlined /> 输入 URL 后点击解析，解析成功后可预览网页内容，确认无误后再添加
         </div>
 
         <div class="upload-actions">
@@ -360,10 +385,40 @@
           <button v-if="uploadMode === 'file'" class="btn-primary-sm" :disabled="uploadFiles.length === 0 || uploadSubmitting" @click="handleBatchUpload">
             {{ uploadSubmitting ? '上传中...' : '开始上传' }}
           </button>
-          <button v-if="uploadMode === 'url'" class="btn-primary-sm" :disabled="!hasSuccessfulUrls" @click="handleConfirmUrls">
-            确认添加
+          <button v-if="uploadMode === 'url'" class="btn-primary-sm" :disabled="!hasSuccessfulUrls || urlSaving" @click="handleConfirmUrls">
+            {{ urlSaving ? '添加中...' : '确认添加' }}
           </button>
         </div>
+      </div>
+    </a-modal>
+
+    <!-- URL 网页预览弹窗 -->
+    <a-modal
+      v-model:open="urlPreviewVisible"
+      :title="urlPreviewItem?.title || '网页预览'"
+      :width="960"
+      :footer="null"
+      destroy-on-close
+    >
+      <div v-if="urlPreviewItem" class="url-preview-modal">
+        <div class="url-preview-source">
+          <GlobalOutlined />
+          <a :href="urlPreviewItem.url" target="_blank" rel="noopener noreferrer">{{ urlPreviewItem.url }}</a>
+        </div>
+        <p v-if="urlPreviewItem.description" class="url-preview-desc">{{ urlPreviewItem.description }}</p>
+        <a-tabs v-model:activeKey="urlPreviewTab">
+          <a-tab-pane key="html" tab="网页预览">
+            <div
+              v-if="urlPreviewItem.previewHtml"
+              class="url-preview-html"
+              v-html="urlPreviewItem.previewHtml"
+            />
+            <div v-else class="url-preview-empty">暂无 HTML 预览，请查看「正文文本」</div>
+          </a-tab-pane>
+          <a-tab-pane key="text" tab="正文文本">
+            <pre class="url-preview-text">{{ urlPreviewItem.content }}</pre>
+          </a-tab-pane>
+        </a-tabs>
       </div>
     </a-modal>
 
@@ -581,7 +636,7 @@ import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
   DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined, DeleteOutlined, RobotOutlined,
-  GlobalOutlined,
+  GlobalOutlined, EyeOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -590,7 +645,7 @@ import {
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
-  fetchUrlDocument,
+  fetchUrlDocument, previewUrlDocument, saveUrlDocument,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getModelsByType } from '../api/model'
@@ -689,6 +744,10 @@ const uploadModeOptions = [
 const urlInput = ref('')
 const urlList = ref([])
 const urlFetching = ref(false)
+const urlPreviewVisible = ref(false)
+const urlPreviewItem = ref(null)
+const urlPreviewTab = ref('html')
+const urlSaving = ref(false)
 
 // 计算属性：是否有成功的 URL
 const hasSuccessfulUrls = computed(() => urlList.value.some(item => item.status === 'success'))
@@ -930,14 +989,36 @@ async function handleFetchUrls() {
 async function fetchSingleUrl(item) {
   item.status = 'fetching'
   try {
-    const res = await fetchUrlDocument(knowledgeId, item.url)
+    const res = await previewUrlDocument(knowledgeId, item.url)
+    const data = res.data || {}
     item.status = 'success'
-    item.title = res.data?.name || '网页内容'
-    item.documentId = res.data?.id
+    item.title = data.title || '网页内容'
+    item.content = data.content || ''
+    item.previewHtml = data.previewHtml || ''
+    item.contentLength = data.contentLength || (item.content?.length ?? 0)
+    item.description = data.description || ''
+    item.suggestedFileName = data.suggestedFileName || ''
   } catch (e) {
     item.status = 'error'
-    item.error = e.response?.data?.message || e.message || '抓取失败'
+    item.error = e.response?.data?.message || e.message || '解析失败'
   }
+}
+
+function formatUrlContentLength(length) {
+  if (!length) return ''
+  if (length >= 10000) {
+    return `${(length / 10000).toFixed(length >= 100000 ? 0 : 1)} 万字`
+  }
+  if (length >= 1000) {
+    return `${(length / 1000).toFixed(1)}k 字`
+  }
+  return `${length.toLocaleString()} 字`
+}
+
+function openUrlPreview(item) {
+  urlPreviewItem.value = item
+  urlPreviewTab.value = item.previewHtml ? 'html' : 'text'
+  urlPreviewVisible.value = true
 }
 
 function removeUrlItem(index) {
@@ -945,17 +1026,39 @@ function removeUrlItem(index) {
 }
 
 async function handleConfirmUrls() {
-  const successItems = urlList.value.filter(item => item.status === 'success')
+  const successItems = urlList.value.filter(item => item.status === 'success' && item.content)
   if (successItems.length === 0) {
     message.warning('请至少解析一个成功的 URL')
     return
   }
 
-  message.success(`已添加 ${successItems.length} 个网页文档，可在文档列表中查看`)
-  uploadVisible.value = false
-  urlList.value = []
-  urlInput.value = ''
-  setTimeout(loadDocuments, 500)
+  urlSaving.value = true
+  let saved = 0
+  const errors = []
+  for (const item of successItems) {
+    try {
+      await saveUrlDocument(knowledgeId, {
+        url: item.url,
+        title: item.title,
+        content: item.content,
+      })
+      saved++
+    } catch (e) {
+      errors.push(`${item.url}: ${e.response?.data?.message || e.message || '保存失败'}`)
+    }
+  }
+  urlSaving.value = false
+
+  if (saved > 0) {
+    message.success(`已添加 ${saved} 个网页文档，可在文档列表中查看`)
+    uploadVisible.value = false
+    urlList.value = []
+    urlInput.value = ''
+    setTimeout(loadDocuments, 500)
+  }
+  if (errors.length > 0) {
+    message.error(errors[0])
+  }
 }
 
 // ========== 入库弹窗 ==========
@@ -2383,22 +2486,181 @@ onUnmounted(() => {
 .url-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 200px;
+  gap: 8px;
+  max-height: 300px;
   overflow-y: auto;
   margin-top: 8px;
 }
 .url-item {
   display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background: #fafafa;
+  transition: border-color 0.15s, background 0.15s;
+}
+.url-item:hover {
+  border-color: #d4d4d8;
+  background: #fff;
+}
+.url-status-col {
+  flex-shrink: 0;
+  width: 18px;
+  padding-top: 2px;
+}
+.url-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.url-row-top {
+  display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.url-link {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #3f3f46;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.url-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.url-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.url-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #71717a;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.url-icon-btn:hover {
+  background: #f4f4f5;
+  color: #2563eb;
+}
+.url-icon-btn.danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.url-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.url-doc-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #18181b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.url-char-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #52525b;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 999px;
+}
+.url-status-text {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.url-preview-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.url-preview-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #71717a;
+  word-break: break-all;
+}
+.url-preview-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #52525b;
+  background: #fafafa;
   padding: 8px 10px;
-  border: 1px solid #f5f5f5;
   border-radius: 6px;
 }
-.url-icon-wrapper {
-  flex-shrink: 0;
-  width: 16px;
+.url-preview-html {
+  max-height: 480px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.url-preview-html :deep(img) {
+  max-width: 100%;
+  height: auto;
+}
+.url-preview-html :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.url-preview-html :deep(th),
+.url-preview-html :deep(td) {
+  border: 1px solid #e4e4e7;
+  padding: 6px 8px;
+}
+.url-preview-text {
+  max-height: 480px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.url-preview-empty {
+  padding: 24px;
+  text-align: center;
+  color: #a1a1aa;
+  font-size: 13px;
 }
 .url-icon {
   font-size: 14px;
@@ -2412,24 +2674,11 @@ onUnmounted(() => {
 .url-icon.spinning {
   color: #d97706;
 }
-.url-content {
-  flex: 1;
-  min-width: 0;
-}
-.url-text {
-  font-size: 13px;
-  color: #52525b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.url-title {
-  font-size: 12px;
-  color: #16a34a;
-}
 .url-error {
   font-size: 12px;
   color: #dc2626;
+  line-height: 1.5;
+  word-break: break-word;
 }
 .url-empty-tip {
   display: flex;

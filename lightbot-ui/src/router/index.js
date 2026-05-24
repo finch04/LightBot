@@ -54,6 +54,11 @@ const routes = [
         component: () => import('../views/AgentDetail.vue'),
       },
       {
+        path: 'workflow/:agentId',
+        name: 'WorkflowEdit',
+        component: () => import('../views/WorkflowEdit.vue'),
+      },
+      {
         path: 'mcp',
         name: 'MCP',
         component: () => import('../views/McpManage.vue'),

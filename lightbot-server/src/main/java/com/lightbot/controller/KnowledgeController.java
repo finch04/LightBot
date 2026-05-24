@@ -7,6 +7,8 @@ import com.lightbot.dto.DocumentDownloadVO;
 import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.KnowledgeMemberVO;
 import com.lightbot.dto.RagSearchResultVO;
+import com.lightbot.dto.UrlFetchPreviewVO;
+import com.lightbot.dto.UrlSaveRequest;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.Task;
@@ -136,6 +138,20 @@ public class KnowledgeController {
                                                    @RequestParam("files") List<MultipartFile> files,
                                                    @RequestParam(defaultValue = "false") boolean ocrEnabled) {
         return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled));
+    }
+
+    @Operation(summary = "预览URL网页内容（不入库）")
+    @PostMapping("/{id}/documents/preview-url")
+    public Result<UrlFetchPreviewVO> previewUrlDocument(@PathVariable Long id,
+                                                         @RequestParam String url) {
+        return Result.ok(documentService.previewUrlDocument(id, url));
+    }
+
+    @Operation(summary = "保存已预览的URL网页内容")
+    @PostMapping("/{id}/documents/save-url")
+    public Result<Document> saveUrlDocument(@PathVariable Long id,
+                                             @RequestBody @jakarta.validation.Valid UrlSaveRequest request) {
+        return Result.ok(documentService.saveUrlDocument(id, request));
     }
 
     @Operation(summary = "从URL抓取内容到知识库（需要DEVELOPER及以上权限）")

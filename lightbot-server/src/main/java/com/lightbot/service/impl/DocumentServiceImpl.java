@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.DocumentDownloadVO;
 import com.lightbot.dto.IngestRequest;
+import com.lightbot.dto.UrlFetchPreviewVO;
+import com.lightbot.dto.UrlSaveRequest;
 import com.lightbot.entity.Chunk;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
@@ -478,23 +480,43 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     @Override
+    public UrlFetchPreviewVO previewUrlDocument(Long knowledgeId, String url) {
+        WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
+        return UrlFetchPreviewVO.builder()
+                .url(result.getUrl())
+                .title(result.getTitle())
+                .content(result.getContent())
+                .previewHtml(result.getPreviewHtml())
+                .suggestedFileName(result.generateFileName())
+                .contentLength(result.getContent().length())
+                .description(result.getDescription())
+                .build();
+    }
+
+    @Override
+    public Document saveUrlDocument(Long knowledgeId, UrlSaveRequest request) {
+        return persistUrlContent(knowledgeId, request.getUrl(), request.getTitle(), request.getContent(), System.currentTimeMillis());
+    }
+
+    @Override
     public Document fetchUrlDocument(Long knowledgeId, String url) {
+        WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
+        return persistUrlContent(knowledgeId, url, result.getTitle(), result.getContent(), result.getFetchedAt());
+    }
+
+    /**
+     * 将 URL 正文持久化为知识库文档
+     */
+    private Document persistUrlContent(Long knowledgeId, String url, String title, String content, long fetchedAt) {
         long userId = StpUtil.getLoginIdAsLong();
 
-        // 1. 抓取 URL 内容
-        WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
-
-        // 2. 生成文件名和内容
-        String fileName = result.generateFileName();
-        String content = result.getContent();
         if (content == null || content.isBlank()) {
             throw new BizException(ErrorCode.DOCUMENT_PARSE_FAILED, "网页内容为空");
         }
 
-        // 3. 计算内容哈希（用于去重）
+        String fileName = buildUrlFileName(title, url);
         String contentHash = calculateContentHash(content);
 
-        // 4. 检查同一知识库下是否已存在相同内容
         Document existing = getOne(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getFileHash, contentHash)
@@ -503,9 +525,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS, existing.getName());
         }
 
-        // 5. 上传内容到 MinIO
         String filePath = minioUtil.generatePath(knowledgeId, fileName);
-        long contentSize = content.length();
+        long contentSize = content.getBytes(StandardCharsets.UTF_8).length;
         try (InputStream is = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
             minioUtil.upload(is, filePath, contentSize, "text/plain");
         } catch (Exception e) {
@@ -513,7 +534,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
 
-        // 6. 创建文档记录（状态为 UPLOADED，可直接入库）
         Document doc = new Document();
         doc.setKnowledgeId(knowledgeId);
         doc.setUserId(userId);
@@ -523,15 +543,18 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         doc.setFileSize(contentSize);
         doc.setFileHash(contentHash);
         doc.setStatus(DocumentStatus.UPLOADED);
-        // 存储来源URL到metadata
+        String safeTitle = title != null ? title.replace("\"", "\\\"") : "";
         doc.setMetadata(String.format("{\"sourceUrl\":\"%s\",\"title\":\"%s\",\"fetchedAt\":%d}",
-                url, result.getTitle(), result.getFetchedAt()));
+                url, safeTitle, fetchedAt));
         save(doc);
 
-        log.info("[URL抓取] 文档创建成功, documentId={}, url={}, contentLength={}",
-                doc.getId(), url, content.length());
-
+        log.info("[URL抓取] 文档创建成功, documentId={}, url={}, contentLength={}", doc.getId(), url, content.length());
         return doc;
+    }
+
+    private String buildUrlFileName(String title, String url) {
+        WebFetchUtil.FetchResult dummy = new WebFetchUtil.FetchResult(url, title, "", "", null);
+        return dummy.generateFileName();
     }
 
     /**

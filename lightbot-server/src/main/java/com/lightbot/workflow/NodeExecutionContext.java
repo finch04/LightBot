@@ -1,0 +1,68 @@
+package com.lightbot.workflow;
+
+import com.lightbot.entity.Agent;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.Map;
+
+/**
+ * 工作流节点执行上下文
+ * <p>包含执行过程中需要的所有数据和变量</p>
+ *
+ * @author finch
+ * @since 2026-05-24
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class NodeExecutionContext {
+
+    /**
+     * Agent ID
+     */
+    private Long agentId;
+
+    /**
+     * 会话 ID
+     */
+    private Long sessionId;
+
+    /**
+     * 用户输入
+     */
+    private String userInput;
+
+    /**
+     * 节点间传递的变量
+     */
+    private Map<String, Object> variables;
+
+    /**
+     * 各节点输出结果（key为节点ID）
+     */
+    private Map<String, Object> nodeOutputs;
+
+    /**
+     * 当前节点 ID
+     */
+    private String currentNodeId;
+
+    /**
+     * 当前节点数据（前端配置的 data 字段）
+     */
+    private Map<String, Object> currentNodeData;
+
+    /**
+     * Workflow 定义（所有节点和边）
+     */
+    private WorkflowDefinition workflow;
+
+    /**
+     * Agent 实体
+     */
+    private Agent agent;
+}

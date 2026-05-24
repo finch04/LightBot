@@ -3,6 +3,8 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.UrlFetchPreviewVO;
+import com.lightbot.dto.UrlSaveRequest;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Task;
 import org.springframework.web.multipart.MultipartFile;
@@ -108,11 +110,17 @@ public interface DocumentService extends IService<Document> {
     DocumentDownloadVO getDocumentDownloadUrl(Long documentId);
 
     /**
-     * 从 URL 抓取内容并创建文档记录
-     *
-     * @param knowledgeId 知识库ID
-     * @param url         URL地址
-     * @return 文档记录
+     * 预览 URL 网页内容（不入库）
+     */
+    UrlFetchPreviewVO previewUrlDocument(Long knowledgeId, String url);
+
+    /**
+     * 保存已预览的 URL 网页内容为文档
+     */
+    Document saveUrlDocument(Long knowledgeId, UrlSaveRequest request);
+
+    /**
+     * 从 URL 抓取内容并创建文档记录（抓取后立即入库，兼容旧调用）
      */
     Document fetchUrlDocument(Long knowledgeId, String url);
 }

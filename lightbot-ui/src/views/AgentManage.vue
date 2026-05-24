@@ -79,10 +79,12 @@
             <a-select-option value="workflow">工作流型</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="系统提示词">
+        <!-- 系统提示词：仅非工作流类型显示 -->
+        <a-form-item v-if="form.agentType !== 'workflow'" label="系统提示词">
           <a-textarea v-model:value="form.systemPrompt" :rows="4" placeholder="定义 Agent 的行为和角色..." />
         </a-form-item>
-        <a-form-item v-if="!form.id" label="模型提供商" required>
+        <!-- 模型提供商：仅新建且非工作流类型显示 -->
+        <a-form-item v-if="!form.id && form.agentType !== 'workflow'" label="模型提供商" required>
           <a-select v-model:value="form.providerId" placeholder="选择模型提供商" style="width: 100%">
             <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
               {{ p.name }} ({{ p.type?.code || p.type }})
@@ -144,14 +146,15 @@ function openDialog(row) {
 
 async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入名称')
-  if (!form.id && !form.providerId) return message.warning('请选择模型提供商')
+  // 工作流类型不需要模型提供商，在LLM节点中配置
+  if (!form.id && form.agentType !== 'workflow' && !form.providerId) return message.warning('请选择模型提供商')
   submitting.value = true
   try {
     if (form.id) {
       await updateAgent(form)
       message.success('更新成功')
     } else {
-      const config = JSON.stringify({ providerId: form.providerId })
+      const config = form.agentType === 'workflow' ? '{}' : JSON.stringify({ providerId: form.providerId })
       await createAgent({ ...form, config })
       message.success('创建成功')
     }
