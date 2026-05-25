@@ -57,6 +57,14 @@ public class AgentWorkflowController {
         return Result.ok(workflowConfigService.listVersions(agentId));
     }
 
+    @Operation(summary = "获取历史版本画布配置")
+    @GetMapping("/versions/{version}")
+    public Result<Map<String, Object>> getVersionGraph(
+            @PathVariable Long agentId,
+            @PathVariable Integer version) {
+        return Result.ok(workflowConfigService.getVersionGraph(agentId, version));
+    }
+
     @Operation(summary = "恢复历史版本到草稿")
     @PostMapping("/versions/{version}/restore")
     public Result<Void> restoreVersion(@PathVariable Long agentId, @PathVariable Integer version) {

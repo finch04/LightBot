@@ -28,6 +28,8 @@ public final class ConfigKeys {
         // 上下文摘要
         public static final String ENABLE_SUMMARY = "enableSummary";
         public static final String SUMMARY_THRESHOLD_KB = "summaryThresholdKb";
+        /** 提示词自定义变量列表 [{key,label,defaultValue,description}] */
+        public static final String PROMPT_VARIABLES = "promptVariables";
     }
 
     /**

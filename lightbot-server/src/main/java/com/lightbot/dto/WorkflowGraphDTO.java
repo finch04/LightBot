@@ -21,4 +21,7 @@ public class WorkflowGraphDTO {
 
     @Schema(description = "全局配置：会话变量、上下文轮次等")
     private Map<String, Object> globalConfig;
+
+    @Schema(description = "发布说明（选填，最多50字，仅发布时生效）")
+    private String publishDescription;
 }

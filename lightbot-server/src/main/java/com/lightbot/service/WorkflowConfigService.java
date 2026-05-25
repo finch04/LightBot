@@ -44,6 +44,11 @@ public interface WorkflowConfigService {
     void restoreVersion(Long agentId, Integer version);
 
     /**
+     * 获取指定历史版本的画布配置（只读预览）
+     */
+    Map<String, Object> getVersionGraph(Long agentId, Integer version);
+
+    /**
      * 调试运行
      */
     WorkflowTestResultVO testRun(Long agentId, WorkflowTestRequest request);

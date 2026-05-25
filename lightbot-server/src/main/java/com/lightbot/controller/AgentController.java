@@ -3,11 +3,13 @@ package com.lightbot.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
+import com.lightbot.dto.AgentPublishRequest;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.AgentVersionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ import java.util.Map;
 public class AgentController {
 
     private final AgentService agentService;
+    private final AgentVersionService agentVersionService;
 
     @Operation(summary = "创建Agent")
     @PostMapping
@@ -69,7 +72,7 @@ public class AgentController {
     public Result<Void> updateKnowledgeBindings(
             @PathVariable Long id,
             @RequestBody List<Long> knowledgeIds) {
-        if (knowledgeIds != null && knowledgeIds.size() > 3) {
+        if (knowledgeIds != null && knowledgeIds.size() > 10) {
             throw new BizException(ErrorCode.AGENT_KNOWLEDGE_LIMIT);
         }
         agentService.updateKnowledgeBindings(id, knowledgeIds);
@@ -87,6 +90,9 @@ public class AgentController {
     public Result<Void> updateToolBindings(
             @PathVariable Long id,
             @RequestBody List<Long> toolIds) {
+        if (toolIds != null && toolIds.size() > 10) {
+            throw new BizException(ErrorCode.AGENT_TOOL_LIMIT);
+        }
         agentService.updateToolBindings(id, toolIds);
         return Result.ok();
     }
@@ -118,6 +124,9 @@ public class AgentController {
     public Result<Void> updateMcpServerBindings(
             @PathVariable Long id,
             @RequestBody List<Long> mcpServerIds) {
+        if (mcpServerIds != null && mcpServerIds.size() > 5) {
+            throw new BizException(ErrorCode.AGENT_MCP_LIMIT);
+        }
         agentService.updateMcpServerBindings(id, mcpServerIds);
         return Result.ok();
     }
@@ -141,6 +150,9 @@ public class AgentController {
     public Result<Void> updateSubAgentBindings(
             @PathVariable Long id,
             @RequestBody List<Long> subAgentIds) {
+        if (subAgentIds != null && subAgentIds.size() > 5) {
+            throw new BizException(ErrorCode.AGENT_SUBAGENT_LIMIT);
+        }
         agentService.updateSubAgentBindings(id, subAgentIds);
         return Result.ok();
     }
@@ -176,5 +188,14 @@ public class AgentController {
     public Result<String> uploadAvatar(@PathVariable Long id,
                                        @RequestParam("file") MultipartFile file) {
         return Result.ok(agentService.uploadAvatar(id, file));
+    }
+
+    @Operation(summary = "发布Agent（对话型/助手型）")
+    @PostMapping("/{id}/publish")
+    public Result<Map<String, Object>> publishAgent(
+            @PathVariable Long id,
+            @RequestBody(required = false) AgentPublishRequest body) {
+        String description = body != null ? body.getDescription() : null;
+        return Result.ok(agentVersionService.publishChatAgent(id, description));
     }
 }

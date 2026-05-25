@@ -20,6 +20,10 @@ export function listWorkflowVersions(agentId) {
   return request.get(`/agents/${agentId}/workflow/versions`)
 }
 
+export function getWorkflowVersionDetail(agentId, version) {
+  return request.get(`/agents/${agentId}/workflow/versions/${version}`)
+}
+
 export function restoreWorkflowVersion(agentId, version) {
   return request.post(`/agents/${agentId}/workflow/versions/${version}/restore`)
 }

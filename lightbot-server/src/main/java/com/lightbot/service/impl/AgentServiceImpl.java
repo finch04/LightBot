@@ -20,6 +20,7 @@ import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.ToolService;
 import com.lightbot.entity.Tool;
 import com.lightbot.util.MinioUtil;
+import com.lightbot.service.AgentVersionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -54,6 +55,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final ToolService toolService;
     private final McpServerService mcpServerService;
     private final SystemConfigService systemConfigService;
+    private final AgentVersionService agentVersionService;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
             你是一个AI助手提示词生成专家。根据用户提供的Agent名称和描述，生成一段专业的系统提示词。
@@ -80,8 +82,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         // 2. 初始化Agent字段
         agent.setUserId(userId);
         agent.setStatus(AgentStatus.DRAFT);
-        agent.setVersion(1);
+        agent.setVersion(0);
         save(agent);
+        agentVersionService.initDraftOnCreate(agent);
         return agent;
     }
 
@@ -104,6 +107,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         existing.setAgentType(agent.getAgentType());
         existing.setConfig(agent.getConfig());
         updateById(existing);
+        if (existing.getAgentType() != null && existing.getAgentType() != com.lightbot.enums.AgentType.WORKFLOW) {
+            agentVersionService.saveChatDraft(existing.getId());
+        }
         return existing;
     }
 

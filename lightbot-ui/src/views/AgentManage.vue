@@ -43,7 +43,7 @@
         <p class="card-desc">{{ a.description || '暂无描述' }}</p>
         <div class="card-meta">
           <span class="card-status" :class="(a.status?.code || a.status || 'draft').toLowerCase()">
-            {{ statusText(a.status?.code || a.status) }}
+            {{ statusText(a.status?.code || a.status, a.version) }}
           </span>
           <span class="card-time">{{ formatTime(a.createTime) }}</span>
         </div>
@@ -196,9 +196,15 @@ function agentTypeLabel(t) {
   return map[code] || code || '对话型'
 }
 
-function statusText(s) {
-  const map = { draft: '草稿', published: '已发布', archived: '已归档' }
-  return map[s] || s || '草稿'
+function statusText(s, version) {
+  const code = s?.code || s || 'draft'
+  const map = {
+    draft: '草稿',
+    published: version > 0 ? `已发布 v${version}` : '已发布',
+    published_editing: version > 0 ? `已发布编辑中 v${version}` : '已发布编辑中',
+    archived: '已归档',
+  }
+  return map[code] || code
 }
 
 function formatTime(t) {
@@ -389,6 +395,10 @@ onMounted(() => {
 .card-status.published {
   background: #dcfce7;
   color: #16a34a;
+}
+.card-status.published_editing {
+  background: #fef3c7;
+  color: #d97706;
 }
 .card-status.archived {
   background: #fef3c7;

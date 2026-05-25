@@ -1,5 +1,7 @@
 <template>
-  <a-form layout="vertical">
+  <div :class="{ 'config-readonly': readonly }">
+  <div v-if="readonly" class="readonly-overlay" aria-hidden="true" />
+  <a-form layout="vertical" :disabled="readonly">
     <a-form-item label="节点 ID">
       <span class="node-id-display mono">{{ node.id }}</span>
     </a-form-item>
@@ -40,12 +42,12 @@
           :rows="4"
           @change="emitSync"
         />
-        <div class="field-hint">用户提示词为每轮具体任务内容（对应 UserMessage），支持 {{input}} 等变量引用。</div>
+        <div class="field-hint"  v-text="`用户提示词为每轮具体任务内容（对应 UserMessage），支持 {{input}} 等变量引用。`"></div>
       </a-form-item>
       <a-form-item label="温度">
         <a-slider v-model:value="node.data.temperature" :min="0" :max="2" :step="0.1" @change="emitSync" />
       </a-form-item>
-      <ShortMemoryForm v-model="node.data.short_memory" @update:model-value="emitSync" />
+      <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
     </template>
 
     <!-- 意图分类 -->
@@ -93,7 +95,7 @@
           <a-select-option value="advanced">效果模式 — 逐步思考，匹配更精准</a-select-option>
         </a-select>
       </a-form-item>
-      <ShortMemoryForm v-model="node.data.short_memory" @update:model-value="emitSync" />
+      <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
       <a-form-item label="提示词（额外约束）">
         <a-textarea v-model:value="node.data.instruction" :rows="3" placeholder="为意图识别提供额外要求" @change="emitSync" />
       </a-form-item>
@@ -303,7 +305,7 @@
         <a-button type="text" danger @click="removeExtractParam(idx)"><DeleteOutlined /></a-button>
       </div>
       <a-button type="dashed" block size="small" @click="addExtractParam"><PlusOutlined /> 添加参数</a-button>
-      <ShortMemoryForm v-model="node.data.short_memory" @update:model-value="emitSync" />
+      <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
     </template>
 
     <!-- 应用组件 -->
@@ -393,6 +395,7 @@
       <a-form-item label="输入参数 JSON"><a-textarea v-model:value="node.data.inputParams" :rows="4" @change="emitSync" /></a-form-item>
     </template>
   </a-form>
+  </div>
 </template>
 
 <script setup>
@@ -403,6 +406,7 @@ import { createConditionId } from '../nodeMeta'
 
 const props = defineProps({
   node: { type: Object, required: true },
+  readonly: { type: Boolean, default: false },
   providers: { type: Array, default: () => [] },
   llmModelList: { type: Array, default: () => [] },
   knowledgeList: { type: Array, default: () => [] },
@@ -440,26 +444,32 @@ const groupVariables = computed(() => {
 })
 
 function emitSync() {
+  if (props.readonly) return
   emit('sync')
 }
 
 function onLlmProviderChange(v) {
+  if (props.readonly) return
   emit('llm-provider-change', v)
 }
 
 function onLlmModelChange(v) {
+  if (props.readonly) return
   emit('llm-model-change', v)
 }
 
 function onKnowledgeChange(v) {
+  if (props.readonly) return
   emit('knowledge-change', v)
 }
 
 function onToolChange(v) {
+  if (props.readonly) return
   emit('tool-change', v)
 }
 
 function onOverrideToggle(checked) {
+  if (props.readonly) return
   if (!checked && props.node.data.knowledgeBaseTopK != null) {
     props.node.data.topK = props.node.data.knowledgeBaseTopK
     props.node.data.threshold = props.node.data.knowledgeBaseThreshold
@@ -468,6 +478,7 @@ function onOverrideToggle(checked) {
 }
 
 function addIntent() {
+  if (props.readonly) return
   if (!props.node.data.conditions) props.node.data.conditions = []
   if (props.node.data.conditions.length >= 10) return
   props.node.data.conditions.push({ id: createConditionId(), subject: '' })
@@ -475,17 +486,20 @@ function addIntent() {
 }
 
 function removeIntent(idx) {
+  if (props.readonly) return
   props.node.data.conditions.splice(idx, 1)
   emitSync()
 }
 
 function addBranch() {
+  if (props.readonly) return
   if (!props.node.data.branches) props.node.data.branches = []
   props.node.data.branches.push({ condition: '', targetNodeId: '' })
   emitSync()
 }
 
 function removeBranch(idx) {
+  if (props.readonly) return
   props.node.data.branches.splice(idx, 1)
   emitSync()
 }
@@ -566,4 +580,25 @@ function removeGroupVar(idx) {
 
 .param-row, .extract-param-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .param-row .ant-input, .extract-param-row .ant-input { flex: 1; min-width: 80px; }
+.config-readonly {
+  position: relative;
+}
+.readonly-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  cursor: not-allowed;
+  background: transparent;
+}
+.config-readonly :deep(.ant-btn-dashed),
+.config-readonly :deep(.ant-btn-text.ant-btn-dangerous) {
+  display: none;
+}
+.config-readonly :deep(.ant-select-selector),
+.config-readonly :deep(.ant-slider),
+.config-readonly :deep(.ant-input),
+.config-readonly :deep(.ant-input-number),
+.config-readonly :deep(.ant-switch) {
+  pointer-events: none;
+}
 </style>

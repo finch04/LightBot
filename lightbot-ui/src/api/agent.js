@@ -83,3 +83,7 @@ export function getAgentSubAgentIds(id) {
 export function updateAgentSubAgents(id, subAgentIds) {
   return request.put(`/agents/${id}/subagents`, subAgentIds)
 }
+
+export function publishAgent(id, data = {}) {
+  return request.post(`/agents/${id}/publish`, data)
+}

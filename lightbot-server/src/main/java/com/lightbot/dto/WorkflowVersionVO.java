@@ -28,4 +28,7 @@ public class WorkflowVersionVO {
 
     @Schema(description = "是否为当前生效版本")
     private Boolean current;
+
+    @Schema(description = "发布说明")
+    private String description;
 }

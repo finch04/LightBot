@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
+import com.lightbot.enums.AgentStatus;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.ChatSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ public class InitMiddleware implements ChatMiddleware {
 
     private final ChatSessionService chatSessionService;
     private final AgentService agentService;
+    private final AgentVersionService agentVersionService;
     private final ModelFactory modelFactory;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -51,8 +54,8 @@ public class InitMiddleware implements ChatMiddleware {
         ctx.getSpans().add(buildSpan("s2", "s1", "agent_load", t1, t2 - t1, "OK",
                 Map.of("agentId", agent != null ? agent.getId() : null, "agentName", agent != null ? agent.getName() : null)));
 
-        // 3. 解析config获取providerId
-        Map<String, Object> configMap = parseConfig(agent != null ? agent.getConfig() : null);
+        // 3. 解析 config（对话已发布时优先用 agent_version 快照）
+        Map<String, Object> configMap = resolveRuntimeConfigMap(agent);
         ctx.setConfigMap(configMap);
         ctx.setProviderId(getProviderId(configMap));
 
@@ -70,9 +73,50 @@ public class InitMiddleware implements ChatMiddleware {
         Agent agent = loadAgent(ctx.getRequest().getAgentId());
         ctx.setAgent(agent);
 
-        Map<String, Object> configMap = parseConfig(agent != null ? agent.getConfig() : null);
+        Map<String, Object> configMap = resolveRuntimeConfigMap(agent);
         ctx.setConfigMap(configMap);
         ctx.setProviderId(getProviderId(configMap));
+    }
+
+    /**
+     * 对话运行时配置：已发布版本用 agent_version 快照，否则用 agent 表当前值。
+     */
+    public Map<String, Object> resolveRuntimeConfigMap(Agent agent) {
+        if (agent == null) {
+            return Map.of();
+        }
+        Map<String, Object> configMap = parseConfig(agent.getConfig());
+        if (agent.getVersion() != null && agent.getVersion() > 0
+                && (agent.getStatus() == AgentStatus.PUBLISHED || agent.getStatus() == AgentStatus.PUBLISHED_EDITING)) {
+            Map<String, Object> published = agentVersionService.loadPublishedRuntimeConfig(agent.getId());
+            if (published != null) {
+                applyPublishedChatFields(agent, published);
+                Object cfg = published.get("config");
+                if (cfg instanceof Map<?, ?> cfgMap) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> merged = new java.util.HashMap<>((Map<String, Object>) cfgMap);
+                    configMap = merged;
+                }
+            }
+        }
+        return configMap;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyPublishedChatFields(Agent agent, Map<String, Object> published) {
+        if (published.get("systemPrompt") instanceof String sp && !sp.isBlank()) {
+            agent.setSystemPrompt(sp);
+        }
+        if (published.get("welcomeMessage") instanceof String wm) {
+            agent.setWelcomeMessage(wm);
+        }
+        if (published.get("recommendedQuestions") != null) {
+            try {
+                agent.setRecommendedQuestions(OBJECT_MAPPER.writeValueAsString(published.get("recommendedQuestions")));
+            } catch (Exception ignored) {
+                // 保持 agent 表原值
+            }
+        }
     }
 
     /**

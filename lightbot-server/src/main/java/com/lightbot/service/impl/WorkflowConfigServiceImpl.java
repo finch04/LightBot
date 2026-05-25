@@ -10,15 +10,15 @@ import com.lightbot.entity.Agent;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.WorkflowConfigService;
-import com.lightbot.workflow.WorkflowConfigKeys;
 import com.lightbot.workflow.WorkflowConfigParser;
 import com.lightbot.workflow.WorkflowDefinition;
 import com.lightbot.workflow.WorkflowExecutorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 工作流配置：草稿暂存、发布、版本、调试
+ * 工作流配置：委托 AgentVersionService，版本数据存 agent_version 表
  */
 @Slf4j
 @Service
@@ -35,32 +35,18 @@ import java.util.Set;
 public class WorkflowConfigServiceImpl implements WorkflowConfigService {
 
     private final AgentService agentService;
+    private final AgentVersionService agentVersionService;
     private final ObjectMapper objectMapper;
     private final WorkflowExecutorService workflowExecutorService;
 
     @Override
     public Map<String, Object> getWorkflowConfig(Long agentId) {
-        Agent agent = requireAgent(agentId);
-        Map<String, Object> config = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
-        Map<String, Object> result = new HashMap<>();
-        result.put("draft", WorkflowConfigParser.resolveDraftGraph(config));
-        result.put("published", WorkflowConfigParser.resolvePublishedGraph(config));
-        result.put("publishedVersion", config.getOrDefault(WorkflowConfigKeys.PUBLISHED_VERSION, 0));
-        result.put("status", config.getOrDefault(WorkflowConfigKeys.WORKFLOW_STATUS, WorkflowConfigKeys.STATUS_DRAFT));
-        return result;
+        return agentVersionService.getWorkflowEditorState(agentId);
     }
 
     @Override
     public void saveDraft(Long agentId, WorkflowGraphDTO graph) {
-        Agent agent = requireAgent(agentId);
-        Map<String, Object> config = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
-        Map<String, Object> graphMap = toGraphMap(graph);
-        config.put(WorkflowConfigKeys.WORKFLOW_DRAFT, graphMap);
-        config.put(WorkflowConfigKeys.WORKFLOW_LEGACY, graphMap);
-        if (!WorkflowConfigKeys.STATUS_PUBLISHED.equals(config.get(WorkflowConfigKeys.WORKFLOW_STATUS))) {
-            config.put(WorkflowConfigKeys.WORKFLOW_STATUS, WorkflowConfigKeys.STATUS_DRAFT);
-        }
-        persistConfig(agent, config);
+        agentVersionService.saveWorkflowDraft(agentId, graph);
     }
 
     @Override
@@ -69,35 +55,7 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
         if (!errors.isEmpty()) {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(), String.join("；", errors));
         }
-
-        Agent agent = requireAgent(agentId);
-        Map<String, Object> config = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
-        Map<String, Object> graphMap = toGraphMap(graph);
-
-        int currentVersion = config.get(WorkflowConfigKeys.PUBLISHED_VERSION) instanceof Number
-                ? ((Number) config.get(WorkflowConfigKeys.PUBLISHED_VERSION)).intValue() : 0;
-        int nextVersion = currentVersion + 1;
-
-        Map<String, Object> versionSnapshot = new HashMap<>(graphMap);
-        versionSnapshot.put("version", nextVersion);
-        versionSnapshot.put("publishedAt", LocalDateTime.now().toString());
-
-        List<Map<String, Object>> versions = new ArrayList<>(WorkflowConfigParser.getVersions(config));
-        versions.add(versionSnapshot);
-
-        config.put(WorkflowConfigKeys.WORKFLOW_DRAFT, graphMap);
-        config.put(WorkflowConfigKeys.WORKFLOW_PUBLISHED, graphMap);
-        config.put(WorkflowConfigKeys.WORKFLOW_LEGACY, graphMap);
-        config.put(WorkflowConfigKeys.WORKFLOW_VERSIONS, versions);
-        config.put(WorkflowConfigKeys.PUBLISHED_VERSION, nextVersion);
-        config.put(WorkflowConfigKeys.WORKFLOW_STATUS, WorkflowConfigKeys.STATUS_PUBLISHED);
-
-        persistConfig(agent, config);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("version", nextVersion);
-        result.put("status", WorkflowConfigKeys.STATUS_PUBLISHED);
-        return result;
+        return agentVersionService.publishWorkflow(agentId, graph);
     }
 
     @Override
@@ -108,62 +66,17 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
 
     @Override
     public List<WorkflowVersionVO> listVersions(Long agentId) {
-        Agent agent = requireAgent(agentId);
-        Map<String, Object> config = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
-        int publishedVersion = config.get(WorkflowConfigKeys.PUBLISHED_VERSION) instanceof Number
-                ? ((Number) config.get(WorkflowConfigKeys.PUBLISHED_VERSION)).intValue() : 0;
-
-        List<WorkflowVersionVO> list = new ArrayList<>();
-        for (Map<String, Object> snap : WorkflowConfigParser.getVersions(config)) {
-            int version = snap.get("version") instanceof Number ? ((Number) snap.get("version")).intValue() : 0;
-            int nodeCount = 0;
-            int edgeCount = 0;
-            if (snap.get("nodes") instanceof List<?> nodes) {
-                nodeCount = nodes.size();
-            }
-            if (snap.get("edges") instanceof List<?> edges) {
-                edgeCount = edges.size();
-            }
-            LocalDateTime publishedAt = null;
-            if (snap.get("publishedAt") != null) {
-                try {
-                    publishedAt = LocalDateTime.parse(snap.get("publishedAt").toString());
-                } catch (Exception ignored) {
-                    // ignore parse error
-                }
-            }
-            list.add(WorkflowVersionVO.builder()
-                    .version(version)
-                    .publishedAt(publishedAt)
-                    .nodeCount(nodeCount)
-                    .edgeCount(edgeCount)
-                    .current(version == publishedVersion)
-                    .build());
-        }
-        list.sort((a, b) -> Integer.compare(b.getVersion(), a.getVersion()));
-        return list;
+        return agentVersionService.listPublishedVersions(agentId);
     }
 
     @Override
     public void restoreVersion(Long agentId, Integer version) {
-        Agent agent = requireAgent(agentId);
-        Map<String, Object> config = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
-        Map<String, Object> target = WorkflowConfigParser.getVersions(config).stream()
-                .filter(v -> version.equals(v.get("version") instanceof Number
-                        ? ((Number) v.get("version")).intValue() : null))
-                .findFirst()
-                .orElseThrow(() -> new BizException(ErrorCode.BAD_REQUEST.getCode(), "版本不存在: " + version));
+        agentVersionService.restorePublishedToDraft(agentId, version);
+    }
 
-        Map<String, Object> graphMap = new HashMap<>();
-        graphMap.put("nodes", target.get("nodes"));
-        graphMap.put("edges", target.get("edges"));
-        if (target.get("globalConfig") != null) {
-            graphMap.put("globalConfig", target.get("globalConfig"));
-        }
-
-        config.put(WorkflowConfigKeys.WORKFLOW_DRAFT, graphMap);
-        config.put(WorkflowConfigKeys.WORKFLOW_LEGACY, graphMap);
-        persistConfig(agent, config);
+    @Override
+    public Map<String, Object> getVersionGraph(Long agentId, Integer version) {
+        return agentVersionService.getPublishedVersionGraph(agentId, version);
     }
 
     @Override
@@ -176,7 +89,7 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
             definition = WorkflowConfigParser.toDefinition(toGraphMap(request.getGraph()), objectMapper);
         } else {
             boolean useDraft = request.getUseDraft() == null || Boolean.TRUE.equals(request.getUseDraft());
-            definition = WorkflowConfigParser.fromAgentConfig(agent.getConfig(), useDraft, objectMapper);
+            definition = agentVersionService.loadWorkflowDefinition(agentId, useDraft);
         }
         if (definition == null || definition.getNodes() == null || definition.getNodes().isEmpty()) {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "工作流为空，请先配置节点");
@@ -203,15 +116,6 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
         return agent;
-    }
-
-    private void persistConfig(Agent agent, Map<String, Object> config) {
-        try {
-            agent.setConfig(objectMapper.writeValueAsString(config));
-            agentService.updateById(agent);
-        } catch (Exception e) {
-            throw new BizException(ErrorCode.INTERNAL_ERROR.getCode(), "保存工作流配置失败");
-        }
     }
 
     private Map<String, Object> toGraphMap(WorkflowGraphDTO graph) {

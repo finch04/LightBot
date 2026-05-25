@@ -5,7 +5,8 @@
       <button class="btn-back" @click="goBack">
         <ArrowLeftOutlined /> 返回
       </button>
-      <a-tag v-if="workflowStatus !== 'published'" color="orange" class="publish-tag">未发布</a-tag>
+      <a-tag v-if="workflowStatus === 'draft'" color="orange" class="publish-tag">未发布</a-tag>
+      <a-tag v-else-if="workflowStatus === 'published_editing'" color="gold" class="publish-tag">已发布编辑中</a-tag>
       <a-tag v-else color="green" class="publish-tag">已发布 v{{ publishedVersion }}</a-tag>
       <h1 class="workflow-title">{{ agent?.name || '工作流配置' }}</h1>
       <div class="toolbar-status">
@@ -42,18 +43,26 @@
         <span v-else-if="lastAutoSaveTime" class="auto-save-hint">{{ formatAutoSaveTime(lastAutoSaveTime) }} 已自动保存</span>
       </div>
       <div class="toolbar-actions">
+        <template v-if="isVersionPreview">
+          <a-button type="primary" @click="backToCurrentDraft">
+            <RollbackOutlined /> 回到当前版本
+          </a-button>
+          <a-button type="default" @click="openVersionDrawer">版本管理</a-button>
+        </template>
+        <template v-else>
         <a-button v-if="canUndo" type="default" @click="undoAction">
           <UndoOutlined /> 撤回
         </a-button>
         <a-button type="default" @click="globalConfigVisible = true">全局设置</a-button>
         <a-button type="default" @click="testVisible = true">测试运行</a-button>
-        <a-button type="default" @click="openVersionDrawer">版本历史</a-button>
+        <a-button type="default" @click="openVersionDrawer">版本管理</a-button>
         <a-button type="default" @click="saveDraft" :disabled="saving" :loading="saving">
           <SaveOutlined /> 暂存
         </a-button>
-        <a-button type="primary" @click="publishWorkflow" :disabled="saving" :loading="saving">
+        <a-button type="primary" @click="openPublishModal" :disabled="saving">
           发布
         </a-button>
+        </template>
       </div>
     </div>
 
@@ -140,6 +149,71 @@
 
       <!-- 中间画布 -->
       <div class="canvas-area" ref="canvasAreaRef" @dragover.prevent @drop="onDrop">
+        <div v-if="isVersionPreview" class="version-preview-banner">
+          正在预览历史版本 v{{ selectedVersion }}（只读），点击右上角「回到当前版本」返回草稿
+        </div>
+
+        <!-- 画布内版本列表（不遮挡顶部工具栏） -->
+        <div
+          v-if="versionVisible"
+          class="version-panel-float"
+          :style="versionPanelStyle"
+        >
+          <div class="version-panel-header">
+            <span
+              class="version-panel-drag-handle"
+              title="按住拖动面板"
+              @mousedown.prevent="onVersionPanelDragStart"
+            >
+              <HolderOutlined />
+            </span>
+            <span class="version-panel-title">历史版本</span>
+            <button type="button" class="version-panel-close" @click="versionVisible = false">
+              <CloseOutlined />
+            </button>
+          </div>
+          <div class="version-panel-body">
+            <div
+              class="version-item draft"
+              :class="{ active: selectedVersion === 'draft' }"
+              @click="selectVersion('draft')"
+            >
+              <div class="version-item-title">当前草稿</div>
+              <div class="version-item-desc">继续编辑未发布的修改</div>
+            </div>
+            <a-divider style="margin: 12px 0" />
+            <a-spin :spinning="versionLoading">
+              <a-timeline>
+                <a-timeline-item
+                  v-for="(item, idx) in versionList"
+                  :key="item.version"
+                  :color="selectedVersion === item.version ? '#6366f1' : '#d1d5db'"
+                >
+                  <div
+                    class="version-item"
+                    :class="{ active: selectedVersion === item.version }"
+                    @click="selectVersion(item.version)"
+                  >
+                    <div class="version-item-header">
+                      <span class="version-item-title">
+                        {{ idx === 0 ? '线上版本' : `v${item.version}` }}
+                      </span>
+                      <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
+                    </div>
+                    <div v-if="item.description" class="version-item-note">{{ item.description }}</div>
+                    <div class="version-item-desc">{{ formatVersionDesc(item) }}</div>
+                  </div>
+                </a-timeline-item>
+              </a-timeline>
+              <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
+            </a-spin>
+          </div>
+          <div v-if="selectedVersion !== 'draft'" class="version-panel-footer">
+            <a-button type="primary" block @click="overwriteDraftFromVersion">
+              覆盖当前草稿
+            </a-button>
+          </div>
+        </div>
         <!-- 拖动节点时显示删除区 -->
         <div
           v-show="isNodeDragging"
@@ -155,8 +229,10 @@
           v-if="nodes.length > 0"
           :nodes="nodes"
           :edges="edges"
-          :nodes-draggable="true"
-          :edges-selectable="true"
+          :nodes-draggable="!isVersionPreview"
+          :edges-selectable="!isVersionPreview"
+          :nodes-connectable="!isVersionPreview"
+          :elements-selectable="!isVersionPreview"
           :default-edge-options="defaultEdgeOptions"
           @connect="onConnect"
           @nodes-change="onNodesChange"
@@ -267,7 +343,7 @@
             <CloseOutlined />
           </button>
         </div>
-        <div class="panel-body">
+        <div class="panel-body" :class="{ 'panel-body-readonly': isVersionPreview }">
           <!-- 节点错误提示 -->
           <div v-if="getNodeErrors(selectedNode.id).length > 0" class="node-errors">
             <div v-for="err in getNodeErrors(selectedNode.id)" :key="err.field" class="error-item">
@@ -275,8 +351,11 @@
             </div>
           </div>
 
+          <a-alert v-if="isVersionPreview" type="info" show-icon message="历史版本预览（只读）" class="preview-readonly-alert" />
+
           <WorkflowNodeConfig
             v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end'"
+            :readonly="isVersionPreview"
             :node="selectedNode"
             :providers="providers"
             :llm-model-list="llmModelList"
@@ -292,15 +371,15 @@
             @knowledge-change="onKnowledgeChange"
             @tool-change="onToolChange"
           />
-          <a-form v-else layout="vertical">
+          <a-form v-else layout="vertical" :disabled="isVersionPreview">
             <a-form-item label="节点 ID"><span class="node-id-display mono">{{ selectedNode.id }}</span></a-form-item>
             <a-form-item label="节点名称">
-              <a-input v-model:value="selectedNode.data.label" @change="syncNodes" />
+              <a-input v-model:value="selectedNode.data.label" :disabled="isVersionPreview" @change="syncNodes" />
             </a-form-item>
           </a-form>
 
           <!-- 删除节点按钮 -->
-          <div class="panel-footer" v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end'">
+          <div class="panel-footer" v-if="!isVersionPreview && selectedNode.type !== 'start' && selectedNode.type !== 'end'">
             <a-button type="text" danger @click="deleteSelectedNode">
               <DeleteOutlined /> 删除节点
             </a-button>
@@ -429,19 +508,23 @@
     </div>
   </a-drawer>
 
-  <a-drawer v-model:open="versionVisible" title="版本历史" :width="420">
-    <a-list :data-source="versionList" :loading="versionLoading">
-      <template #renderItem="{ item }">
-        <a-list-item>
-          <a-list-item-meta :title="`v${item.version}`" :description="formatVersionDesc(item)" />
-          <template #actions>
-            <a-tag v-if="item.current" color="green">当前</a-tag>
-            <a-button size="small" @click="restoreVersion(item.version)">恢复为草稿</a-button>
-          </template>
-        </a-list-item>
-      </template>
-    </a-list>
-  </a-drawer>
+  <a-modal
+    v-model:open="publishModalVisible"
+    title="发布工作流"
+    ok-text="确认发布"
+    cancel-text="取消"
+    :confirm-loading="saving"
+    @ok="confirmPublishWorkflow"
+  >
+    <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
+    <a-textarea
+      v-model:value="publishDescription"
+      :maxlength="50"
+      show-count
+      :rows="2"
+      placeholder="例如：新增检索节点、调整 LLM 提示词"
+    />
+  </a-modal>
 </template>
 
 <script setup>
@@ -456,7 +539,8 @@ import {
   SearchOutlined, LeftOutlined, RightOutlined, CloseOutlined, DeleteOutlined,
   RobotOutlined, ForkOutlined, BookOutlined, ToolOutlined, PlayCircleOutlined,
   StopOutlined, PlusOutlined, DownOutlined, UndoOutlined, QuestionCircleOutlined,
-  BranchesOutlined, ArrowRightOutlined, AuditOutlined
+  BranchesOutlined, ArrowRightOutlined, AuditOutlined, RollbackOutlined,
+  HolderOutlined
 } from '@ant-design/icons-vue'
 import { message, notification, Modal } from 'ant-design-vue'
 import { getAgentDetail } from '../api/agent'
@@ -469,6 +553,7 @@ import {
   saveWorkflowDraft,
   publishWorkflow as publishWorkflowApi,
   listWorkflowVersions,
+  getWorkflowVersionDetail,
   restoreWorkflowVersion,
   testWorkflow
 } from '../api/workflow'
@@ -516,12 +601,32 @@ const testAnimating = ref(false)
 const testCurrentNodeId = ref(null)
 const testResult = ref(null)
 const versionVisible = ref(false)
+const publishModalVisible = ref(false)
+const publishDescription = ref('')
 const lastAutoSaveTime = ref(null)
 const autoSaving = ref(false)
 const workflowLoaded = ref(false)
 let autoSaveTimer = null
 const versionList = ref([])
 const versionLoading = ref(false)
+const selectedVersion = ref('draft')
+const VERSION_PANEL_WIDTH = 300
+const versionPanelPos = ref({ x: 0, y: 48 })
+let versionPanelDragState = null
+let versionPanelLayoutReady = false
+
+const versionPanelStyle = computed(() => {
+  const canvas = canvasAreaRef.value
+  const h = canvas
+    ? Math.max(280, canvas.clientHeight - versionPanelPos.value.y - 72)
+    : 400
+  return {
+    left: `${versionPanelPos.value.x}px`,
+    top: `${versionPanelPos.value.y}px`,
+    height: `${h}px`,
+    width: `${VERSION_PANEL_WIDTH}px`,
+  }
+})
 const globalConfig = ref({
   history_config: { history_switch: true, history_max_round: 5 },
   variable_config: { conversation_params: [] }
@@ -601,6 +706,8 @@ const filteredCanvasNodes = computed(() => {
 
 const filteredNodeGroups = computed(() => getNodeLibraryGroups(nodeSearch.value))
 
+const isVersionPreview = computed(() => selectedVersion.value !== 'draft')
+
 function hasSavedLayout(nodeList) {
   return nodeList.some(n => {
     const p = n.position
@@ -622,19 +729,22 @@ function formatAutoSaveTime(d) {
 }
 
 function scheduleAutoSave() {
-  if (!workflowLoaded.value) return
+  if (!workflowLoaded.value || isVersionPreview.value) return
   if (!isDirty.value) return
   clearTimeout(autoSaveTimer)
   autoSaveTimer = setTimeout(() => doAutoSave(true), 600)
 }
 
 async function doAutoSave(silent = true) {
-  if (autoSaving.value || !isDirty.value) return
+  if (autoSaving.value || !isDirty.value || isVersionPreview.value) return
   autoSaving.value = true
   try {
     await saveWorkflowDraft(agentId, buildWorkflowPayload())
     markWorkflowSaved()
     lastAutoSaveTime.value = new Date()
+    if (workflowStatus.value === 'published') {
+      workflowStatus.value = 'published_editing'
+    }
   } catch (e) {
     if (!silent) {
       notification.error({ message: '自动保存失败', description: e.message })
@@ -654,6 +764,10 @@ async function flushAutoSave() {
 async function closeNodePanel() {
   const node = selectedNode.value
   if (!node) return
+  if (isVersionPreview.value) {
+    selectedNode.value = null
+    return
+  }
   const wasDirty = isDirty.value
   clearTimeout(autoSaveTimer)
   if (wasDirty) {
@@ -800,6 +914,7 @@ onMounted(async () => {
 })
 
 function onKeyDown(event) {
+  if (isVersionPreview.value) return
   if (event.key !== 'Delete' && event.key !== 'Backspace') return
   const tag = document.activeElement?.tagName?.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return
@@ -814,6 +929,8 @@ function onKeyDown(event) {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('mousemove', onVersionPanelDragMove)
+  document.removeEventListener('mouseup', onVersionPanelDragEnd)
   clearTimeout(autoSaveTimer)
 })
 
@@ -963,6 +1080,7 @@ function onDragStart(event, nodeType) {
 
 // 拖拽放置
 function onDrop(event) {
+  if (isVersionPreview.value) return
   const nodeType = event.dataTransfer.getData('nodeType')
   if (!nodeType) return
 
@@ -989,7 +1107,7 @@ function onDrop(event) {
 
 // 同步节点变更（含拖动后的 position），保证未保存检测与保存能带上坐标
 function onNodesChange(changes) {
-  if (!changes?.length) return
+  if (isVersionPreview.value || !changes?.length) return
   const nextNodes = applyNodeChanges(changes, nodes.value)
   nodes.value = nextNodes
   triggerRef(nodes)
@@ -1040,6 +1158,7 @@ function removeNodeById(nodeId, { skipHistory = false } = {}) {
 
 // 连接节点
 function onConnect(params) {
+  if (isVersionPreview.value) return
   recordHistory()
   const newEdge = {
     id: `edge_${params.source}_${params.target}_${params.sourceHandle || 'default'}_${Date.now()}`,
@@ -1085,6 +1204,7 @@ function syncNodes() {
 
 // LLM 提供商变更
 async function onLlmProviderChange(providerId) {
+  if (isVersionPreview.value) return
   const provider = providers.value.find(p => p.id === providerId)
   selectedNode.value.data.providerName = provider?.name || ''
   selectedNode.value.data.modelId = null
@@ -1110,6 +1230,7 @@ async function loadLlmModels(providerId) {
 }
 
 function onLlmModelChange(modelId) {
+  if (isVersionPreview.value) return
   const model = llmModelList.value.find(m => m.modelId === modelId)
   selectedNode.value.data.modelName = model?.name || modelId || ''
   syncNodes()
@@ -1296,6 +1417,9 @@ async function saveDraft() {
   try {
     await saveWorkflowDraft(agentId, buildWorkflowPayload())
     markWorkflowSaved()
+    if (workflowStatus.value === 'published') {
+      workflowStatus.value = 'published_editing'
+    }
     message.success('工作流已暂存（草稿）')
   } catch (e) {
     notification.error({ message: '暂存失败', description: e.message })
@@ -1304,19 +1428,31 @@ async function saveDraft() {
   }
 }
 
-async function publishWorkflow() {
+function openPublishModal() {
   const errors = validateWorkflow()
   if (errors.length > 0) return
+  publishDescription.value = ''
+  publishModalVisible.value = true
+}
 
+async function confirmPublishWorkflow() {
   saving.value = true
   try {
-    const res = await publishWorkflowApi(agentId, buildWorkflowPayload())
+    const payload = buildWorkflowPayload()
+    const desc = publishDescription.value?.trim()
+    if (desc) {
+      payload.publishDescription = desc
+    }
+    const res = await publishWorkflowApi(agentId, payload)
     workflowStatus.value = 'published'
     publishedVersion.value = res.data?.version || publishedVersion.value + 1
+    selectedVersion.value = 'draft'
     markWorkflowSaved()
+    publishModalVisible.value = false
     message.success(`工作流已发布（v${publishedVersion.value}）`)
   } catch (e) {
     notification.error({ message: '发布失败', description: e.message || e.response?.data?.message })
+    return Promise.reject(e)
   } finally {
     saving.value = false
   }
@@ -1324,6 +1460,8 @@ async function publishWorkflow() {
 
 async function openVersionDrawer() {
   versionVisible.value = true
+  await nextTick()
+  ensureVersionPanelPosition()
   versionLoading.value = true
   try {
     const res = await listWorkflowVersions(agentId)
@@ -1335,22 +1473,124 @@ async function openVersionDrawer() {
   }
 }
 
-async function restoreVersion(version) {
-  try {
-    await restoreWorkflowVersion(agentId, version)
-    const wfRes = await getWorkflowConfig(agentId)
-    applyWorkflowGraph(wfRes.data.draft)
-    markWorkflowSaved()
-    message.success(`已恢复 v${version} 到草稿`)
-    versionVisible.value = false
-  } catch (e) {
-    notification.error({ message: '恢复失败', description: e.message })
+async function selectVersion(version) {
+  selectedVersion.value = version
+  selectedNode.value = null
+  clearEdgeSelection()
+  testVisible.value = false
+
+  if (version === 'draft') {
+    try {
+      const wfRes = await getWorkflowConfig(agentId)
+      workflowStatus.value = wfRes.data.status || 'draft'
+      applyWorkflowGraph(wfRes.data.draft)
+      markWorkflowSaved()
+      scheduleFitView(false)
+    } catch (e) {
+      notification.error({ message: '加载草稿失败', description: e.message })
+    }
+    return
   }
+
+  try {
+    const res = await getWorkflowVersionDetail(agentId, version)
+    applyWorkflowGraph(res.data)
+    markWorkflowSaved()
+    versionVisible.value = true
+    await nextTick()
+    ensureVersionPanelPosition()
+    scheduleFitView(false)
+  } catch (e) {
+    notification.error({ message: '加载版本失败', description: e.message })
+  }
+}
+
+async function backToCurrentDraft() {
+  await selectVersion('draft')
+  message.success('已回到当前版本')
+}
+
+function ensureVersionPanelPosition() {
+  if (versionPanelLayoutReady) return
+  const canvas = canvasAreaRef.value
+  if (!canvas) return
+  const x = Math.max(12, canvas.clientWidth - VERSION_PANEL_WIDTH - 12)
+  versionPanelPos.value = { x, y: 48 }
+  versionPanelLayoutReady = true
+}
+
+function onVersionPanelDragStart(e) {
+  if (!canvasAreaRef.value) return
+  versionPanelDragState = {
+    startX: e.clientX,
+    startY: e.clientY,
+    originX: versionPanelPos.value.x,
+    originY: versionPanelPos.value.y,
+  }
+  document.addEventListener('mousemove', onVersionPanelDragMove)
+  document.addEventListener('mouseup', onVersionPanelDragEnd)
+}
+
+function onVersionPanelDragMove(e) {
+  if (!versionPanelDragState || !canvasAreaRef.value) return
+  const canvas = canvasAreaRef.value
+  const maxX = canvas.clientWidth - VERSION_PANEL_WIDTH - 12
+  const maxY = Math.max(12, canvas.clientHeight - 120)
+  const dx = e.clientX - versionPanelDragState.startX
+  const dy = e.clientY - versionPanelDragState.startY
+  versionPanelPos.value = {
+    x: Math.min(maxX, Math.max(12, versionPanelDragState.originX + dx)),
+    y: Math.min(maxY, Math.max(12, versionPanelDragState.originY + dy)),
+  }
+}
+
+function onVersionPanelDragEnd() {
+  versionPanelDragState = null
+  document.removeEventListener('mousemove', onVersionPanelDragMove)
+  document.removeEventListener('mouseup', onVersionPanelDragEnd)
+}
+
+function overwriteDraftFromVersion() {
+  if (selectedVersion.value === 'draft') return
+  const version = selectedVersion.value
+  Modal.confirm({
+    title: '覆盖当前草稿',
+    content: `确定将历史版本 v${version} 的内容覆盖到当前草稿吗？此操作会替换未发布的编辑内容，且不可撤销。`,
+    okText: '确认覆盖',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await restoreWorkflowVersion(agentId, version)
+        const wfRes = await getWorkflowConfig(agentId)
+        workflowStatus.value = wfRes.data.status || 'published_editing'
+        await selectVersion('draft')
+        message.success(`已用 v${version} 覆盖当前草稿`)
+      } catch (e) {
+        notification.error({ message: '覆盖失败', description: e.message })
+      }
+    }
+  })
+}
+
+function formatVersionTime(val) {
+  if (val == null || val === '') return ''
+  const raw = String(val)
+  const normalized = raw.includes('T') && !raw.endsWith('Z')
+    ? raw.replace(/(\.\d{3})\d*/, '$1')
+    : raw
+  const d = new Date(normalized)
+  if (Number.isNaN(d.getTime())) {
+    return raw.slice(0, 19).replace('T', ' ')
+  }
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 function formatVersionDesc(item) {
   const parts = [`${item.nodeCount || 0} 节点`, `${item.edgeCount || 0} 连线`]
-  if (item.publishedAt) parts.push(item.publishedAt)
+  const time = formatVersionTime(item.publishedAt)
+  if (time) parts.push(time)
   return parts.join(' · ')
 }
 
@@ -1416,6 +1656,125 @@ function goBack() {
 }
 
 .publish-tag { flex-shrink: 0; }
+.version-panel-float {
+  position: absolute;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+.version-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+  cursor: default;
+}
+.version-panel-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #94a3b8;
+  border-radius: 4px;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+}
+.version-panel-drag-handle:hover {
+  color: #64748b;
+  background: #f1f5f9;
+}
+.version-panel-drag-handle:active {
+  cursor: grabbing;
+}
+.version-panel-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e293b;
+}
+.version-panel-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+  line-height: 1;
+}
+.version-panel-close:hover { color: #475569; }
+.version-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.version-panel-footer {
+  flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+.version-preview-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 8px 16px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #92400e;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  pointer-events: none;
+}
+.version-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.version-item:hover { background: #f3f4f6; }
+.version-item.active { background: #eef2ff; border: 1px solid #c7d2fe; }
+.version-item.draft { margin-bottom: 4px; }
+.version-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.version-item-title { font-weight: 600; font-size: 14px; color: #1f2937; }
+.version-item-note {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.45;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.version-item-desc { font-size: 12px; color: #9ca3af; }
+.publish-modal-tip {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #71717a;
+}
+.preview-readonly-alert { margin-bottom: 12px; }
+.panel-body-readonly {
+  position: relative;
+}
+.panel-body-readonly::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  cursor: not-allowed;
+  background: transparent;
+}
+.panel-body-readonly .preview-readonly-alert {
+  position: relative;
+  z-index: 16;
+}
 .toolbar-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .btn-validate { color: #6366f1; }
 .auto-save-hint { font-size: 12px; color: #94a3b8; white-space: nowrap; }

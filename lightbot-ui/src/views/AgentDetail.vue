@@ -9,11 +9,23 @@
         <p class="page-desc">{{ agent.description || '暂无描述' }}</p>
       </div>
       <div class="header-actions">
+        <span class="agent-status-badge" :class="agentStatusClass">{{ agentStatusText }}</span>
+        <button v-if="agent.agentType === 'workflow'" class="btn-outline" @click="goWorkflowEdit">
+          <SettingOutlined /> 工作流编排
+        </button>
         <button class="btn-outline" @click="startChat">
           <MessageOutlined /> 对话
         </button>
-        <button class="btn-primary" @click="handleSave" :disabled="saving">
-          <SaveOutlined /> 保存配置
+        <button v-if="agent.agentType !== 'workflow'" class="btn-outline" @click="handleSave" :disabled="saving">
+          <SaveOutlined /> 暂存
+        </button>
+        <button
+          v-if="agent.agentType !== 'workflow'"
+          class="btn-primary"
+          @click="handlePublish"
+          :disabled="publishing || saving"
+        >
+          <CheckCircleOutlined /> {{ publishing ? '发布中...' : '发布' }}
         </button>
       </div>
     </div>
@@ -61,14 +73,55 @@
           <!-- 系统提示词：仅非工作流类型显示 -->
           <a-form-item v-if="agent.agentType !== 'workflow'" label="系统提示词">
             <div class="prompt-wrapper">
-              <a-textarea v-model:value="agent.systemPrompt" :rows="6" placeholder="定义 Agent 的行为和角色..." />
+              <a-textarea
+                v-model:value="agent.systemPrompt"
+                :rows="6"
+                placeholder="定义 Agent 的行为和角色，可使用 {{变量名}} 引用下方配置的变量..."
+              />
               <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
                 <button class="btn-ai-icon" :disabled="generatingPrompt" @click="handleGeneratePrompt">
                   <ThunderboltOutlined :spin="generatingPrompt" />
                 </button>
               </a-tooltip>
             </div>
+            <div class="prompt-var-tip">
+              提示词中变量的选项来自下方「变量配置」。可通过入参变量表单填写，或对话请求的
+              <code>biz_params</code> 字段传递；传入的值将替换提示词中对应的 <code v-pre>{{变量名}}</code> 位置。
+            </div>
+            <div v-if="validPromptVariables.length" class="prompt-insert-vars">
+              <span class="insert-label">插入变量：</span>
+              <button
+                v-for="v in validPromptVariables"
+                :key="v.key"
+                type="button"
+                class="var-insert-btn"
+                @click="insertPromptVariable(v.key)"
+              >
+                {{ v.label || v.key }}
+              </button>
+            </div>
           </a-form-item>
+          <!-- 变量配置 -->
+          <div v-if="agent.agentType !== 'workflow'" class="variable-config-panel">
+            <div class="variable-config-header">
+              <h4 class="variable-config-title">变量配置</h4>
+              <button type="button" class="btn-add-var" @click="addPromptVariable">
+                <PlusOutlined /> 添加变量
+              </button>
+            </div>
+            <p class="variable-config-desc">
+              允许自定义变量。变量名仅支持英文、数字、下划线，在系统提示词中使用 <code v-pre>{{变量名}}</code> 引用。
+            </p>
+            <div v-if="promptVariables.length === 0" class="empty-tip">暂无变量，点击「添加变量」创建</div>
+            <div v-for="(v, idx) in promptVariables" :key="v._id" class="variable-row">
+              <a-input v-model:value="v.key" placeholder="变量名（如 company_name）" />
+              <a-input v-model:value="v.label" placeholder="显示名称" />
+              <a-input v-model:value="v.defaultValue" placeholder="默认值（可选）" />
+              <button type="button" class="btn-icon-sm danger" @click="removePromptVariable(idx)">
+                <DeleteOutlined />
+              </button>
+            </div>
+          </div>
           <!-- 欢迎语和推荐问题：仅非工作流类型显示 -->
           <a-form-item v-if="agent.agentType !== 'workflow'" label="欢迎语">
             <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" />
@@ -271,15 +324,27 @@
             <span class="status-text">{{ hasWorkflowConfig ? '已配置工作流' : '尚未配置工作流' }}</span>
           </div>
 
-          <!-- 操作按钮 -->
-          <div class="workflow-entry-actions">
-            <button class="btn-primary" @click="goToWorkflowEdit">
-              <SettingOutlined /> 配置工作流
-            </button>
-          </div>
         </div>
       </div>
     </div>
+
+    <a-modal
+      v-model:open="publishModalVisible"
+      title="发布 Agent"
+      ok-text="确认发布"
+      cancel-text="取消"
+      :confirm-loading="publishing"
+      @ok="confirmPublishAgent"
+    >
+      <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
+      <a-textarea
+        v-model:value="publishDescription"
+        :maxlength="50"
+        show-count
+        :rows="2"
+        placeholder="例如：优化系统提示词、调整模型参数"
+      />
+    </a-modal>
 
     <!-- CHAT/ASSISTANT 类型：绑定配置 Tabs -->
     <a-tabs v-if="agent.agentType !== 'workflow'" v-model:activeKey="activeTab" @change="onTabChange" class="binding-tabs">
@@ -303,7 +368,7 @@
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div class="selected-header">
-              <span class="selected-label">已绑定 {{ selectedTools.length }} 个工具</span>
+              <span class="selected-label">已绑定 {{ selectedTools.length }}/{{ BIND_LIMITS.tool }} 个工具</span>
               <button v-if="selectedTools.length > 0" class="btn-clear" @click="clearSelectedTools">
                 <DeleteOutlined /> 清空
               </button>
@@ -324,7 +389,7 @@
           </div>
           <div class="knowledge-list">
             <div class="list-header">
-              <span>可选工具</span>
+              <span>可选工具（{{ selectedTools.length }}/{{ BIND_LIMITS.tool }}）</span>
               <div class="list-header-actions">
                 <SystemToolDrawer placement="bottomRight" />
                 <a-input
@@ -381,7 +446,7 @@
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div class="selected-header">
-              <span class="selected-label">已绑定 {{ selectedMcpServers.length }} 个 MCP Server</span>
+              <span class="selected-label">已绑定 {{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }} 个 MCP Server</span>
               <button v-if="selectedMcpServers.length > 0" class="btn-clear" @click="clearSelectedMcpServers">
                 <DeleteOutlined /> 清空
               </button>
@@ -401,7 +466,7 @@
           </div>
           <div class="knowledge-list">
             <div class="list-header">
-              <span>可用 MCP Server</span>
+              <span>可用 MCP Server（{{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }}）</span>
               <a-input
                 v-model:value="mcpSearchText"
                 placeholder="搜索 MCP Server..."
@@ -443,7 +508,7 @@
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div class="selected-header">
-              <span class="selected-label">已绑定 {{ selectedKnowledge.length }} 个知识库</span>
+              <span class="selected-label">已绑定 {{ selectedKnowledge.length }}/{{ BIND_LIMITS.knowledge }} 个知识库</span>
               <button v-if="selectedKnowledge.length > 0" class="btn-clear" @click="clearSelectedKnowledge">
                 <DeleteOutlined /> 清空
               </button>
@@ -462,7 +527,7 @@
           </div>
           <div class="knowledge-list">
             <div class="list-header">
-              <span>可用知识库</span>
+              <span>可用知识库（{{ selectedKnowledge.length }}/{{ BIND_LIMITS.knowledge }}）</span>
               <a-input
                 v-model:value="searchText"
                 placeholder="搜索知识库..."
@@ -504,7 +569,7 @@
         <div class="subagent-bind">
           <div class="selected-subagents">
             <div class="selected-header">
-              <span class="selected-label">已绑定 {{ selectedSubAgents.length }} 个 SubAgent</span>
+              <span class="selected-label">已绑定 {{ selectedSubAgents.length }}/{{ BIND_LIMITS.subAgent }} 个 SubAgent</span>
               <button v-if="selectedSubAgents.length > 0" class="btn-clear" @click="clearSelectedSubAgents">
                 <DeleteOutlined /> 清空
               </button>
@@ -524,7 +589,7 @@
           </div>
           <div class="subagent-list">
             <div class="list-header">
-              <span>可用的 SubAgent</span>
+              <span>可用的 SubAgent（{{ selectedSubAgents.length }}/{{ BIND_LIMITS.subAgent }}）</span>
               <a-input
                 v-model:value="subAgentSearchText"
                 placeholder="搜索 SubAgent..."
@@ -573,7 +638,8 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent } from '../api/agent'
+import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
@@ -586,6 +652,13 @@ const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
 const avatarInputRef = ref(null)
+
+const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5 }
+
+const promptVariables = ref([])
+const validPromptVariables = computed(() =>
+  promptVariables.value.filter(v => v.key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v.key.trim()))
+)
 
 const agent = reactive({
   id: null,
@@ -622,6 +695,11 @@ const toolTypeOptions = computed(() => {
   return options
 })
 const saving = ref(false)
+const publishing = ref(false)
+const publishModalVisible = ref(false)
+const publishDescription = ref('')
+const agentStatus = ref('draft')
+const agentVersion = ref(0)
 const activeTab = ref('tools')
 
 // MCP Server 绑定
@@ -664,9 +742,53 @@ const workflowStats = computed(() => {
   }
 })
 
-// 跳转到工作流编辑页面
-function goToWorkflowEdit() {
+function goWorkflowEdit() {
   router.push(`/workflow/${agentId}`)
+}
+
+function syncPromptVariablesFromConfig(parsed) {
+  const list = parsed?.promptVariables
+  if (Array.isArray(list) && list.length) {
+    promptVariables.value = list.map(v => ({
+      _id: `${v.key || ''}-${Date.now()}-${Math.random()}`,
+      key: v.key || '',
+      label: v.label || '',
+      defaultValue: v.defaultValue || '',
+      description: v.description || '',
+    }))
+  } else {
+    promptVariables.value = []
+  }
+}
+
+function serializePromptVariables() {
+  return promptVariables.value
+    .filter(v => v.key?.trim())
+    .map(({ key, label, defaultValue, description }) => ({
+      key: key.trim(),
+      label: (label || key).trim(),
+      defaultValue: defaultValue || '',
+      description: description || '',
+    }))
+}
+
+function addPromptVariable() {
+  promptVariables.value.push({
+    _id: `var-${Date.now()}-${Math.random()}`,
+    key: '',
+    label: '',
+    defaultValue: '',
+    description: '',
+  })
+}
+
+function removePromptVariable(idx) {
+  promptVariables.value.splice(idx, 1)
+}
+
+function insertPromptVariable(key) {
+  const token = `{{${key}}}`
+  agent.systemPrompt = (agent.systemPrompt || '') + (agent.systemPrompt ? ' ' : '') + token
 }
 
 const avatarUrl = computed(() => {
@@ -815,19 +937,22 @@ async function loadAgent() {
     } else if (agentType) {
       agent.agentType = agentType
     }
+    agentStatus.value = agentData.status?.code || agentData.status || 'draft'
+    agentVersion.value = agentData.version || 0
 
     // 解析 config JSONB
     if (config) {
       try {
         const parsed = typeof config === 'string' ? JSON.parse(config) : config
         Object.assign(agentConfig, parsed)
-        // 提取 workflow 数据
-        if (parsed.workflow) {
-          workflowData.value = parsed.workflow
-        }
+        syncPromptVariablesFromConfig(parsed)
       } catch (e) {
         // ignore
       }
+    }
+
+    if (agent.agentType === 'workflow') {
+      await loadWorkflowSummary()
     }
 
     // 解析推荐问题
@@ -892,8 +1017,8 @@ function toggleKnowledge(k) {
   if (ids.has(k.id)) {
     ids.delete(k.id)
   } else {
-    if (ids.size >= 3) {
-      message.warning('每个 Agent 最多绑定 3 个知识库')
+    if (ids.size >= BIND_LIMITS.knowledge) {
+      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.knowledge} 个知识库`)
       return
     }
     ids.add(k.id)
@@ -912,6 +1037,10 @@ function toggleTool(t) {
   if (ids.has(t.id)) {
     ids.delete(t.id)
   } else {
+    if (ids.size >= BIND_LIMITS.tool) {
+      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.tool} 个工具`)
+      return
+    }
     ids.add(t.id)
   }
   selectedToolIds.value = ids
@@ -928,6 +1057,10 @@ function toggleMcpServer(s) {
   if (ids.has(s.id)) {
     ids.delete(s.id)
   } else {
+    if (ids.size >= BIND_LIMITS.mcp) {
+      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.mcp} 个 MCP Server`)
+      return
+    }
     ids.add(s.id)
   }
   selectedMcpServerIds.value = ids
@@ -945,6 +1078,10 @@ function toggleSubAgent(s) {
   if (ids.has(s.id)) {
     ids.delete(s.id)
   } else {
+    if (ids.size >= BIND_LIMITS.subAgent) {
+      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.subAgent} 个 SubAgent`)
+      return
+    }
     ids.add(s.id)
   }
   selectedSubAgentIds.value = ids
@@ -1054,44 +1191,73 @@ async function onAvatarFileChange(e) {
 async function handleSave() {
   if (!agent.name?.trim()) {
     message.warning('请输入 Agent 名称')
-    return
+    return false
   }
   if (!agent.agentType) {
     message.warning('请选择类型')
-    return
+    return false
+  }
+  if (agent.agentType === 'workflow') {
+    message.info('工作流型请在编排页发布')
+    return false
   }
   if (!agentConfig.providerId) {
     message.warning('请选择模型提供商')
-    return
+    return false
   }
   if (!agentConfig.modelId) {
     message.warning('请选择模型')
-    return
+    return false
   }
 
   // 2. 过滤空的推荐问题并校验
   const questions = recommendedQuestions.value.filter(q => q && q.trim())
   if (questions.length > 3) {
     message.warning('推荐问题最多3个')
-    return
+    return false
   }
   for (const q of questions) {
     if (q.length > 30) {
       message.warning('每个推荐问题不超过30字')
-      return
+      return false
     }
   }
 
   // 4. 校验知识库数量
-  if (selectedKnowledgeIds.value.size > 3) {
-    message.warning('每个 Agent 最多绑定 3 个知识库')
-    return
+  if (selectedKnowledgeIds.value.size > BIND_LIMITS.knowledge) {
+    message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.knowledge} 个知识库`)
+    return false
+  }
+  if (selectedToolIds.value.size > BIND_LIMITS.tool) {
+    message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.tool} 个工具`)
+    return false
+  }
+  if (selectedMcpServerIds.value.size > BIND_LIMITS.mcp) {
+    message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.mcp} 个 MCP Server`)
+    return false
+  }
+  if (selectedSubAgentIds.value.size > BIND_LIMITS.subAgent) {
+    message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.subAgent} 个 SubAgent`)
+    return false
+  }
+
+  const serializedVars = serializePromptVariables()
+  const keys = serializedVars.map(v => v.key)
+  if (keys.length !== new Set(keys).size) {
+    message.warning('变量名不能重复')
+    return false
+  }
+  for (const v of serializedVars) {
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v.key)) {
+      message.warning(`变量名格式不正确: ${v.key}`)
+      return false
+    }
   }
 
   saving.value = true
   try {
     // 1. 构建 config JSONB（包含 provider + 所有配置项）
-    const configObj = { ...agentConfig }
+    const configObj = { ...agentConfig, promptVariables: serializedVars }
     const configStr = JSON.stringify(configObj)
 
     // 2. 更新 Agent
@@ -1114,11 +1280,70 @@ async function handleSave() {
     // 6. 更新 SubAgent 绑定
     await updateAgentSubAgents(agentId, Array.from(selectedSubAgentIds.value))
 
-    message.success('保存成功')
+    message.success('暂存成功')
+    await loadAgent()
+    return true
   } catch (e) {
     // interceptor已处理错误提示
+    return false
   } finally {
     saving.value = false
+  }
+}
+
+const agentStatusText = computed(() => {
+  const map = {
+    draft: '草稿',
+    published: agentVersion.value > 0 ? `已发布 v${agentVersion.value}` : '已发布',
+    published_editing: agentVersion.value > 0 ? `已发布编辑中 v${agentVersion.value}` : '已发布编辑中',
+  }
+  return map[agentStatus.value] || agentStatus.value
+})
+
+const agentStatusClass = computed(() => {
+  const code = (agentStatus.value || 'draft').replace(/_/g, '-')
+  return `status-${code}`
+})
+
+async function loadWorkflowSummary() {
+  try {
+    const wfRes = await getWorkflowConfig(agentId)
+    const draft = wfRes.data?.draft
+    const published = wfRes.data?.published
+    workflowData.value = draft || published || { nodes: [], edges: [] }
+    if (wfRes.data?.status) {
+      agentStatus.value = wfRes.data.status?.code || wfRes.data.status
+    }
+    if (wfRes.data?.publishedVersion != null) {
+      agentVersion.value = wfRes.data.publishedVersion
+    }
+  } catch {
+    workflowData.value = { nodes: [], edges: [] }
+  }
+}
+
+function handlePublish() {
+  publishDescription.value = ''
+  publishModalVisible.value = true
+}
+
+async function confirmPublishAgent() {
+  publishing.value = true
+  try {
+    const saved = await handleSave()
+    if (!saved) {
+      return Promise.reject()
+    }
+    const desc = publishDescription.value?.trim() || undefined
+    const res = await publishAgent(agentId, desc ? { description: desc } : {})
+    agentVersion.value = res.data?.version ?? agentVersion.value + 1
+    agentStatus.value = res.data?.status || 'published'
+    publishModalVisible.value = false
+    message.success(`发布成功 v${agentVersion.value}`)
+  } catch {
+    // interceptor 已提示
+  } finally {
+    publishing.value = false
   }
 }
 
@@ -1195,7 +1420,123 @@ onMounted(async () => {
 }
 .header-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+.agent-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.agent-status-badge.status-draft {
+  background: #f4f4f5;
+  color: #52525b;
+  border-color: #e4e4e7;
+}
+.agent-status-badge.status-published {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+.agent-status-badge.status-published-editing {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+.publish-modal-tip {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #71717a;
+}
+.prompt-var-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #71717a;
+  line-height: 1.6;
+}
+.prompt-var-tip code {
+  font-size: 11px;
+  background: #f4f4f5;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.prompt-insert-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.insert-label {
+  font-size: 12px;
+  color: #71717a;
+}
+.var-insert-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 100px;
+  cursor: pointer;
+}
+.var-insert-btn:hover {
+  background: #e0e7ff;
+}
+.variable-config-panel {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.variable-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.variable-config-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+.btn-add-var {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px dashed #94a3b8;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #475569;
+}
+.btn-add-var:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+.variable-config-desc {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.variable-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
 }
 .btn-outline {
   display: flex;
@@ -1870,8 +2211,4 @@ onMounted(async () => {
   color: #52525b;
 }
 
-.workflow-entry-actions {
-  display: flex;
-  justify-content: center;
-}
 </style>

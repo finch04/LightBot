@@ -181,7 +181,8 @@
                 <div class="agent-menu-item">
                   <img v-if="a.avatar" :src="a.avatar" alt="" class="agent-menu-icon" />
                   <span v-else class="agent-menu-icon">{{ a.name[0] }}</span>
-                  <span>{{ a.name }}</span>
+                  <span class="agent-menu-name">{{ a.name }}</span>
+                  <span v-if="agentVersionLabel(a)" class="agent-version-tag">{{ agentVersionLabel(a) }}</span>
                   <span v-if="a.isDefault" class="agent-default-tag">默认</span>
                 </div>
               </a-menu-item>
@@ -732,18 +733,31 @@ function scrollToBottom() {
   })
 }
 
-async function loadAgents() {
+function agentVersionLabel(a) {
+  const status = a.status?.code || a.status || 'draft'
+  const ver = a.version || 0
+  if (status === 'published' && ver > 0) return `v${ver}`
+  if (status === 'published_editing' && ver > 0) return `v${ver}·编辑中`
+  if (status === 'draft') return '草稿'
+  return ''
+}
+
+async function loadAgents(preferredAgentId) {
   try {
     const res = await getAgents({ pageNum: 1, pageSize: 100 })
     agents.value = res.data.records || []
 
-    // 新对话时，自动选中默认Agent（由 selectedAgentId watcher 统一调用 loadCurrentAgent）
+    // 新对话时选中 Agent：优先 URL 指定，否则默认 Agent
     if (!sessionId.value) {
-      const defaultAgent = agents.value.find(a => a.isDefault)
-      if (defaultAgent) {
-        selectedAgentId.value = String(defaultAgent.id)
-      } else if (agents.value.length > 0) {
-        selectedAgentId.value = String(agents.value[0].id)
+      if (preferredAgentId) {
+        selectedAgentId.value = String(preferredAgentId)
+      } else {
+        const defaultAgent = agents.value.find(a => a.isDefault)
+        if (defaultAgent) {
+          selectedAgentId.value = String(defaultAgent.id)
+        } else if (agents.value.length > 0) {
+          selectedAgentId.value = String(agents.value[0].id)
+        }
       }
     }
   } catch (e) {
@@ -751,18 +765,14 @@ async function loadAgents() {
   }
 }
 
-onMounted(() => {
-  // 处理从 AgentDetail 带过来的 agentId 查询参数
+onMounted(async () => {
   const queryAgentId = route.query.agentId
+  loadHistory()
+  await loadAgents(queryAgentId || undefined)
   if (queryAgentId) {
-    // 仅加载 Agent 详情用于展示欢迎语，不设置 selectedAgentId
-    // 新对话创建会话时由后端决定默认 Agent
-    loadCurrentAgent(queryAgentId)
-    // 清除 URL 中的 agentId 参数，避免刷新页面时重复加载
+    await loadCurrentAgent(queryAgentId)
     router.replace({ path: '/chat' })
   }
-  loadHistory()
-  loadAgents()
 
   // 滚动到顶部自动加载更早的消息
   const container = messagesRef.value
@@ -1162,13 +1172,28 @@ watch(sessionId, (newVal, oldVal) => {
   background: #0070f3;
   color: #fff;
 }
+.agent-menu-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-version-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: #f4f4f5;
+  color: #71717a;
+  border-radius: 100px;
+  flex-shrink: 0;
+}
 .agent-default-tag {
   font-size: 10px;
   padding: 1px 6px;
   background: #eff6ff;
   color: #2563eb;
   border-radius: 100px;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .input-textarea {

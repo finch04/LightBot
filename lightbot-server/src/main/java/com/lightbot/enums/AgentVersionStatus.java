@@ -7,19 +7,14 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * Agent 状态
- *
- * @author finch
- * @since 2026-05-19
+ * Agent 版本行状态
  */
 @Getter
 @AllArgsConstructor
-public enum AgentStatus {
+public enum AgentVersionStatus {
 
     DRAFT("draft", "草稿"),
-    PUBLISHED("published", "已发布"),
-    PUBLISHED_EDITING("published_editing", "已发布编辑中"),
-    ARCHIVED("archived", "已归档");
+    PUBLISHED("published", "已发布");
 
     @EnumValue
     private final String code;
@@ -32,12 +27,12 @@ public enum AgentStatus {
     }
 
     @JsonCreator
-    public static AgentStatus fromValue(String value) {
-        for (AgentStatus e : values()) {
+    public static AgentVersionStatus fromValue(String value) {
+        for (AgentVersionStatus e : values()) {
             if (e.code.equalsIgnoreCase(value) || e.desc.equalsIgnoreCase(value) || e.name().equalsIgnoreCase(value)) {
                 return e;
             }
         }
-        throw new IllegalArgumentException("未知的Agent状态: " + value);
+        throw new IllegalArgumentException("未知的版本状态: " + value);
     }
 }

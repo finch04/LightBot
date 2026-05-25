@@ -2,21 +2,21 @@
   <div class="short-memory-form">
     <div class="sm-header">
       <span class="sm-title">记忆</span>
-      <a-switch v-model:checked="local.enabled" @change="emitChange" />
+      <a-switch v-model:checked="local.enabled" :disabled="disabled" @change="emitChange" />
     </div>
     <template v-if="local.enabled">
       <a-form-item label="记忆类型">
-        <a-select v-model:value="local.type" @change="emitChange">
+        <a-select v-model:value="local.type" :disabled="disabled" @change="emitChange">
           <a-select-option value="self">本节点缓存 — 仅记住本节点内上下文</a-select-option>
           <a-select-option value="custom">自定义缓存 — 使用全局上下文变量</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item v-if="local.type === 'self'" label="记忆轮次">
-        <a-slider v-model:value="local.round" :min="1" :max="50" :step="1" @change="emitChange" />
+        <a-slider v-model:value="local.round" :min="1" :max="50" :step="1" :disabled="disabled" @change="emitChange" />
         <span class="param-value">{{ local.round }}</span>
       </a-form-item>
       <a-form-item v-else label="上下文变量">
-        <a-input v-model:value="local.paramKey" placeholder="变量名，如 history" @change="emitChange" />
+        <a-input v-model:value="local.paramKey" :disabled="disabled" placeholder="变量名，如 history" @change="emitChange" />
       </a-form-item>
     </template>
   </div>
@@ -27,7 +27,8 @@ import { reactive, watch } from 'vue'
 import { SHORT_MEMORY_DEFAULT } from '../nodeMeta'
 
 const props = defineProps({
-  modelValue: { type: Object, default: () => ({ ...SHORT_MEMORY_DEFAULT }) }
+  modelValue: { type: Object, default: () => ({ ...SHORT_MEMORY_DEFAULT }) },
+  disabled: { type: Boolean, default: false }
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -38,6 +39,7 @@ watch(() => props.modelValue, (val) => {
 }, { deep: true })
 
 function emitChange() {
+  if (props.disabled) return
   emit('update:modelValue', { ...local })
 }
 </script>

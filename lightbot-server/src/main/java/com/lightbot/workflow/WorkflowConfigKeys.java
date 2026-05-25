@@ -17,4 +17,5 @@ public final class WorkflowConfigKeys {
 
     public static final String STATUS_DRAFT = "draft";
     public static final String STATUS_PUBLISHED = "published";
+    public static final String STATUS_PUBLISHED_EDITING = "published_editing";
 }

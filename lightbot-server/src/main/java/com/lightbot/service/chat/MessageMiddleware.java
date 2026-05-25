@@ -3,6 +3,8 @@ package com.lightbot.service.chat;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
+import com.lightbot.dto.ChatRequest;
+import com.lightbot.util.PromptTemplateUtil;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Message;
 import com.lightbot.enums.ContentType;
@@ -96,7 +98,8 @@ public class MessageMiddleware implements ChatMiddleware {
         saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
 
         // 2. 构建消息列表
-        List<org.springframework.ai.chat.messages.Message> messages = buildMessages(ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent());
+        List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
+                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest());
         ctx.setMessages(messages);
 
         return next.proceed(ctx);
@@ -107,18 +110,22 @@ public class MessageMiddleware implements ChatMiddleware {
      */
     public void prepare(ChatContext ctx) {
         saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
-        List<org.springframework.ai.chat.messages.Message> messages = buildMessages(ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent());
+        List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
+                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest());
         ctx.setMessages(messages);
     }
 
     /**
      * 构建消息列表：系统提示词 + 工具使用引导 + 历史消息 + 当前用户消息
      */
-    private List<org.springframework.ai.chat.messages.Message> buildMessages(Long sessionId, String userMessage, Agent agent) {
+    private List<org.springframework.ai.chat.messages.Message> buildMessages(
+            Long sessionId, String userMessage, Agent agent, ChatRequest request) {
         List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
 
         // 1. 解析Agent配置，获取上下文条数
-        Map<String, Object> agentConfigMap = initMiddleware.parseConfig(agent != null ? agent.getConfig() : null);
+        Map<String, Object> agentConfigMap = agent != null
+                ? initMiddleware.resolveRuntimeConfigMap(agent)
+                : Map.of();
         int maxContextMessages = 20;
         if (agentConfigMap.containsKey("maxContextMessages")) {
             Object v = agentConfigMap.get("maxContextMessages");
@@ -140,6 +147,13 @@ public class MessageMiddleware implements ChatMiddleware {
                 }
             }
         }
+
+        // 3.1 替换提示词中的 {{变量}}：默认值 + biz_params 入参
+        Object promptVarDefs = agentConfigMap.get(ConfigKeys.Agent.PROMPT_VARIABLES);
+        Map<String, Object> bizParams = request != null && request.getBizParams() != null
+                ? request.getBizParams() : Map.of();
+        Map<String, Object> varValues = PromptTemplateUtil.mergeVariableValues(promptVarDefs, bizParams);
+        systemPrompt = PromptTemplateUtil.render(systemPrompt, varValues);
 
         messages.add(new org.springframework.ai.chat.messages.SystemMessage(systemPrompt));
 

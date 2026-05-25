@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Agent;
 import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.AgentVersionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class WorkflowExecutorService {
 
     private final NodeProcessorRegistry registry;
     private final AgentService agentService;
+    private final AgentVersionService agentVersionService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -43,7 +45,7 @@ public class WorkflowExecutorService {
             throw new IllegalArgumentException("Agent不存在: " + agentId);
         }
 
-        WorkflowDefinition workflow = WorkflowConfigParser.fromAgentConfig(agent.getConfig(), false, objectMapper);
+        WorkflowDefinition workflow = agentVersionService.loadWorkflowDefinition(agentId, false);
         if (workflow == null || workflow.getNodes() == null || workflow.getNodes().isEmpty()) {
             log.warn("[WorkflowExecutorService] 工作流未发布或为空: agentId={}", agentId);
             return "工作流尚未发布或为空，请先在编排页发布工作流";

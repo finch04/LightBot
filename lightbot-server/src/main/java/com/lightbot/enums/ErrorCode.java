@@ -30,7 +30,10 @@ public enum ErrorCode {
 
     // ========== Agent模块 ==========
     AGENT_NOT_FOUND(30000, "Agent不存在", HttpStatus.BAD_REQUEST),
-    AGENT_KNOWLEDGE_LIMIT(30003, "每个Agent最多绑定3个知识库", HttpStatus.BAD_REQUEST),
+    AGENT_KNOWLEDGE_LIMIT(30003, "每个Agent最多绑定10个知识库", HttpStatus.BAD_REQUEST),
+    AGENT_TOOL_LIMIT(30005, "每个Agent最多绑定10个额外工具", HttpStatus.BAD_REQUEST),
+    AGENT_MCP_LIMIT(30006, "每个Agent最多绑定5个MCP Server", HttpStatus.BAD_REQUEST),
+    AGENT_SUBAGENT_LIMIT(30007, "每个Agent最多绑定5个SubAgent", HttpStatus.BAD_REQUEST),
     AVATAR_UNSUPPORTED_TYPE(30004, "头像文件格式不支持: %s", HttpStatus.BAD_REQUEST),
     AI_NO_PROVIDER(30001, "未配置模型提供商，请先添加一个模型提供商", HttpStatus.BAD_REQUEST),
     AI_GENERATE_FAILED(30002, "AI生成失败，请检查模型KEY配置", HttpStatus.INTERNAL_SERVER_ERROR),

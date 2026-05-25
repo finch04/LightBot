@@ -1,0 +1,62 @@
+package com.lightbot.service;
+
+import com.lightbot.dto.WorkflowGraphDTO;
+import com.lightbot.dto.WorkflowVersionVO;
+import com.lightbot.entity.Agent;
+import com.lightbot.workflow.WorkflowDefinition;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Agent 版本管理：草稿、发布、历史版本查询
+ */
+public interface AgentVersionService {
+
+    /**
+     * 获取工作流编辑态（草稿图 + 发布图 + 状态）
+     */
+    Map<String, Object> getWorkflowEditorState(Long agentId);
+
+    void saveWorkflowDraft(Long agentId, WorkflowGraphDTO graph);
+
+    Map<String, Object> publishWorkflow(Long agentId, WorkflowGraphDTO graph);
+
+    List<WorkflowVersionVO> listPublishedVersions(Long agentId);
+
+    Map<String, Object> getPublishedVersionGraph(Long agentId, Integer version);
+
+    /**
+     * 获取已发布版本详情（对话型返回 payload，工作流型返回 graph）
+     */
+    Map<String, Object> getPublishedVersionDetail(Long agentId, Integer version);
+
+    void restorePublishedToDraft(Long agentId, Integer version);
+
+    /**
+     * 对话型 Agent 发布（快照当前配置）
+     */
+    Map<String, Object> publishChatAgent(Long agentId, String description);
+
+    /**
+     * 保存对话型草稿快照（编辑后暂存）
+     */
+    void saveChatDraft(Long agentId);
+
+    /**
+     * 运行时加载已发布配置（对话），无则返回 null
+     */
+    Map<String, Object> loadPublishedRuntimeConfig(Long agentId);
+
+    WorkflowDefinition loadWorkflowDefinition(Long agentId, boolean useDraft);
+
+    /**
+     * Agent 创建后初始化草稿版本行
+     */
+    void initDraftOnCreate(Agent agent);
+
+    /**
+     * 从 agent.config 迁移历史版本数据（一次性）
+     */
+    void migrateLegacyIfNeeded(Agent agent);
+}
