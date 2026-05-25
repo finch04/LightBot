@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * 占位节点处理器：API / 循环 / 变量 / 意图分类 / 批处理 / MCP / 脚本 / 代码 / 工具
+ * 占位节点处理器：API / 循环 / 变量 / 批处理 / MCP / 脚本 / 代码 / 工具
  * <p>当前实现为透传到下一节点，后续可逐步补全业务逻辑</p>
  */
 @Slf4j
@@ -53,11 +53,6 @@ public abstract class PassthroughNodeProcessor extends AbstractFlowNodeProcessor
         }
 
         @Override public NodeType getType() { return NodeType.VARIABLE; }
-    }
-
-    @Component
-    public static class ClassifierNodeProcessor extends PassthroughNodeProcessor {
-        @Override public NodeType getType() { return NodeType.CLASSIFIER; }
     }
 
     @Component

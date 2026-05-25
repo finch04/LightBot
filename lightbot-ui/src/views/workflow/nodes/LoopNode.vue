@@ -39,6 +39,10 @@ const nodeClass = computed(() => ({
   border-radius: 12px;
   background: rgba(255, 247, 237, 0.55);
   pointer-events: auto;
+  cursor: grab;
+}
+.group-shell:active {
+  cursor: grabbing;
 }
 .group-shell.selected {
   border-color: #ea580c;
@@ -54,7 +58,11 @@ const nodeClass = computed(() => ({
   border-bottom: 1px dashed #fdba74;
   background: rgba(255, 237, 213, 0.85);
   border-radius: 10px 10px 0 0;
-  pointer-events: all;
+  pointer-events: auto;
+  cursor: grab;
+}
+.group-header:active {
+  cursor: grabbing;
 }
 .group-icon {
   width: 26px;
@@ -86,6 +94,6 @@ const nodeClass = computed(() => ({
   border: 1px dashed rgba(249, 115, 22, 0.35);
   background: rgba(255, 255, 255, 0.25);
   min-height: 200px;
-  pointer-events: none;
+  pointer-events: auto;
 }
 </style>

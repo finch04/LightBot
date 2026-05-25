@@ -111,19 +111,23 @@
           </a-select-option>
         </a-select>
       </a-form-item>
-      <a-divider>意图分类</a-divider>
-      <div v-for="(cond, idx) in node.data.conditions" :key="cond.id" class="intent-item">
-        <a-textarea
-          v-model:value="cond.subject"
-          placeholder="描述该意图，如：用户咨询产品价格"
-          :rows="2"
-          @change="emitSync"
-        />
-        <a-button type="text" danger size="small" @click="removeIntent(idx)"><DeleteOutlined /></a-button>
-      </div>
-      <a-button type="dashed" block size="small" class="param-add-btn" @click="addIntent">
-        <PlusOutlined /> 添加意图（{{ node.data.conditions?.length || 0 }}/10）
-      </a-button>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="意图分类" />
+        </template>
+        <div v-for="(cond, idx) in node.data.conditions" :key="cond.id" class="intent-item">
+          <a-textarea
+            v-model:value="cond.subject"
+            placeholder="描述该意图，如：用户咨询产品价格"
+            :rows="2"
+            @change="emitSync"
+          />
+          <a-button type="text" danger size="small" @click="removeIntent(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button type="dashed" block size="small" class="param-add-btn" @click="addIntent">
+          <PlusOutlined /> 添加意图（{{ node.data.conditions?.length || 0 }}/10）
+        </a-button>
+      </a-form-item>
       <a-form-item label="其他意图">
         <div class="field-hint">当所有意图均不匹配时，走「其他意图」出口分支</div>
       </a-form-item>
@@ -342,14 +346,18 @@
       <a-form-item label="提取指令">
         <a-textarea v-model:value="node.data.instruction" :rows="3" placeholder="补充提取规则说明" @change="emitSync" />
       </a-form-item>
-      <a-divider>提取参数定义</a-divider>
-      <div v-for="(p, idx) in node.data.extractParams" :key="idx" class="extract-param-row">
-        <a-input v-model:value="p.key" placeholder="参数 key" @change="emitSync" />
-        <a-input v-model:value="p.desc" placeholder="描述" @change="emitSync" />
-        <a-switch v-model:checked="p.required" checked-children="必填" un-checked-children="可选" @change="emitSync" />
-        <a-button type="text" danger @click="removeExtractParam(idx)"><DeleteOutlined /></a-button>
-      </div>
-      <a-button type="dashed" block size="small" class="param-add-btn" @click="addExtractParam"><PlusOutlined /> 添加参数</a-button>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="提取参数定义" />
+        </template>
+        <div v-for="(p, idx) in node.data.extractParams" :key="idx" class="extract-param-row">
+          <a-input v-model:value="p.key" placeholder="参数 key" @change="emitSync" />
+          <a-input v-model:value="p.desc" placeholder="描述" @change="emitSync" />
+          <a-switch v-model:checked="p.required" checked-children="必填" un-checked-children="可选" @change="emitSync" />
+          <a-button type="text" danger @click="removeExtractParam(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button type="dashed" block size="small" class="param-add-btn" @click="addExtractParam"><PlusOutlined /> 添加参数</a-button>
+      </a-form-item>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
     </template>
 

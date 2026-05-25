@@ -1,540 +1,143 @@
 <template>
   <div class="workflow-edit-page">
-    <!-- 顶部工具栏 -->
-    <div class="workflow-toolbar">
-      <button class="btn-back" @click="goBack">
-        <ArrowLeftOutlined /> 返回
-      </button>
-      <a-tag v-if="workflowStatus === 'draft'" color="orange" class="publish-tag">未发布</a-tag>
-      <a-tag v-else-if="workflowStatus === 'published_editing'" color="gold" class="publish-tag">已发布编辑中</a-tag>
-      <a-tag v-else color="green" class="publish-tag">已发布 v{{ publishedVersion }}</a-tag>
-      <h1 class="workflow-title">{{ agent?.name || '工作流配置' }}</h1>
-      <div class="toolbar-status">
-        <a-dropdown v-if="validationErrors.length > 0" :trigger="['click']">
-          <span class="status-error clickable">
-            <ExclamationCircleOutlined /> {{ validationErrors.length }} 个配置错误
-            <DownOutlined style="margin-left: 4px; font-size: 10px;" />
-          </span>
-          <template #overlay>
-            <div class="error-dropdown">
-              <div class="error-header">配置错误详情</div>
-              <div class="error-list">
-                <div v-for="err in validationErrors" :key="err.nodeId + err.field" class="error-item">
-                  <span class="error-node">{{ getNodeTitleById(err.nodeId) || '工作流全局' }}</span>
-                  <span class="error-field">{{ err.field }}</span>
-                  <span class="error-msg">{{ err.message }}</span>
-                </div>
-              </div>
-            </div>
-          </template>
-        </a-dropdown>
-        <span v-else-if="validationErrors.length === 0 && nodes.length >= 2" class="status-valid">
-          <CheckCircleOutlined /> 配置完整
-        </span>
-        <span v-else class="status-empty">
-          请添加节点并配置
-        </span>
-        <WorkflowTooltip title="纠正弯折过大的连线" placement="bottom">
-          <a-button type="text" size="small" class="btn-validate" :disabled="isVersionPreview || nodes.length < 2" @click="formatWorkflowLayout">
-            <ApartmentOutlined />
-          </a-button>
-        </WorkflowTooltip>
-        <WorkflowTooltip title="验证配置" placement="bottom">
-          <a-button type="text" size="small" class="btn-validate" @click="validateWorkflow">
-            <AuditOutlined />
-          </a-button>
-        </WorkflowTooltip>
-        <span v-if="autoSaving" class="auto-save-hint saving">保存中...</span>
-        <span v-else-if="lastAutoSaveTime" class="auto-save-hint">{{ formatAutoSaveTime(lastAutoSaveTime) }} 已自动保存</span>
-      </div>
-      <div class="toolbar-actions">
-        <template v-if="isVersionPreview">
-          <a-button type="primary" @click="backToCurrentDraft">
-            <RollbackOutlined /> 回到当前版本
-          </a-button>
-          <a-button type="default" @click="openVersionDrawer">版本管理</a-button>
-        </template>
-        <template v-else>
-        <WorkflowTooltip title="撤回 (Ctrl+Z)" placement="bottom">
-          <a-button v-if="canUndo" type="default" @click="undoAction">
-            <UndoOutlined /> 撤回
-          </a-button>
-        </WorkflowTooltip>
-        <a-button type="default" @click="globalConfigVisible = true">全局设置</a-button>
-        <a-button type="default" @click="testVisible = true">测试运行</a-button>
-        <a-button type="default" @click="openVersionDrawer">版本管理</a-button>
-        <a-button type="default" @click="saveDraft" :disabled="saving" :loading="saving">
-          <SaveOutlined /> 暂存
-        </a-button>
-        <a-button type="primary" @click="openPublishModal" :disabled="saving">
-          发布
-        </a-button>
-        </template>
-      </div>
-    </div>
+    <WorkflowEditToolbar
+      :agent-name="agent?.name"
+      :workflow-status="workflowStatus"
+      :published-version="publishedVersion"
+      :validation-errors="validationErrors"
+      :node-count="nodes.length"
+      :is-version-preview="isVersionPreview"
+      :can-undo="canUndo"
+      :saving="saving"
+      :auto-saving="autoSaving"
+      :last-auto-save-time="lastAutoSaveTime"
+      :get-node-title-by-id="getNodeTitleById"
+      :format-auto-save-time="formatAutoSaveTime"
+      @back="goBack"
+      @format-layout="formatWorkflowLayout"
+      @validate="validateWorkflow"
+      @back-to-draft="backToCurrentDraft"
+      @open-version="openVersionDrawer"
+      @undo="undoAction"
+      @open-global-config="globalConfigVisible = true"
+      @open-test="testVisible = true"
+      @save-draft="saveDraft"
+      @open-publish="openPublishModal"
+    />
 
-    <!-- 三栏布局 -->
     <div class="workflow-content">
-      <!-- 左侧节点面板 -->
-      <div class="node-panel" :class="{ collapsed: panelCollapsed }">
-        <div class="panel-header">
-          <span v-if="!panelCollapsed">{{ leftPanelTab === 'library' ? '节点库' : '画布节点' }}</span>
-          <div v-if="!panelCollapsed" class="panel-header-actions">
-            <WorkflowTooltip title="如何新增节点" placement="bottom">
-              <button type="button" class="btn-help" @click="nodeHelpVisible = true">
-                <QuestionCircleOutlined />
-              </button>
-            </WorkflowTooltip>
-          </div>
-          <button class="btn-collapse" @click="panelCollapsed = !panelCollapsed">
-            <LeftOutlined v-if="!panelCollapsed" />
-            <RightOutlined v-else />
-          </button>
-        </div>
-        <div v-if="panelCollapsed" class="panel-collapsed-rail">
-          <WorkflowTooltip title="节点库" placement="right">
-            <button
-              type="button"
-              class="rail-btn"
-              :class="{ active: leftPanelTab === 'library' }"
-              @click="openLeftPanelTab('library')"
-            >
-              <AppstoreOutlined />
-            </button>
-          </WorkflowTooltip>
-          <WorkflowTooltip title="画布节点" placement="right">
-            <button
-              type="button"
-              class="rail-btn"
-              :class="{ active: leftPanelTab === 'canvas' }"
-              @click="openLeftPanelTab('canvas')"
-            >
-              <UnorderedListOutlined />
-            </button>
-          </WorkflowTooltip>
-          <WorkflowTooltip title="如何新增节点" placement="right">
-            <button type="button" class="rail-btn" @click="nodeHelpVisible = true">
-              <QuestionCircleOutlined />
-            </button>
-          </WorkflowTooltip>
-        </div>
-        <div class="panel-body" v-if="!panelCollapsed">
-          <a-segmented
-            v-model:value="leftPanelTab"
-            :options="[
-              { label: '节点库', value: 'library' },
-              { label: '画布节点', value: 'canvas' }
-            ]"
-            block
-            size="small"
-            style="margin-bottom: 10px"
-          />
+      <WorkflowEditLeftPanel
+        v-model:panel-collapsed="panelCollapsed"
+        v-model:left-panel-tab="leftPanelTab"
+        v-model:canvas-node-search="canvasNodeSearch"
+        v-model:node-search="nodeSearch"
+        :filtered-canvas-nodes="filteredCanvasNodes"
+        :filtered-node-groups="filteredNodeGroups"
+        :selected-node-id="selectedNode?.id"
+        :get-node-color="getNodeColor"
+        :get-node-title="getNodeTitle"
+        :get-node-meta="getNodeMeta"
+        @open-node-help="nodeHelpVisible = true"
+        @open-tab="openLeftPanelTab"
+        @focus-node="focusNode"
+        @drag-start="onDragStart"
+      />
 
-          <template v-if="leftPanelTab === 'canvas'">
-            <a-input
-              v-model:value="canvasNodeSearch"
-              placeholder="搜索画布节点..."
-              allow-clear
-              size="small"
-            >
-              <template #prefix><SearchOutlined /></template>
-            </a-input>
-            <div class="canvas-node-list">
-              <div
-                v-for="n in filteredCanvasNodes"
-                :key="n.id"
-                class="canvas-node-item"
-                :class="{ active: selectedNode?.id === n.id }"
-                @click="focusNode(n)"
-              >
-                <span class="canvas-node-dot" :style="{ background: getNodeColor(n.type) }" />
-                <span class="canvas-node-name">{{ n.data?.label || getNodeTitle(n.type) }}</span>
-                <span class="canvas-node-type">{{ getNodeTitle(n.type) }}</span>
-              </div>
-            </div>
-          </template>
+      <WorkflowEditCanvas
+        ref="workflowCanvasRef"
+        :flow-id="WORKFLOW_FLOW_ID"
+        :nodes="nodes"
+        v-model:edges="edges"
+        :edge-types="edgeTypes"
+        :default-edge-options="defaultEdgeOptions"
+        :is-valid-connection="isValidWorkflowConnectionFn"
+        :is-version-preview="isVersionPreview"
+        :is-node-dragging="isNodeDragging"
+        :drag-over-trash="dragOverTrash"
+        :can-delete-dragged-node="canDeleteDraggedNode"
+        :get-node-color="getNodeColor"
+        :edge-insert-anchor-edge="edgeInsertAnchorEdge"
+        :edge-insert-label-style="edgeInsertLabelStyle"
+        :version-visible="versionVisible"
+        :version-panel-style="versionPanelStyle"
+        :version-list="versionList"
+        :version-loading="versionLoading"
+        :selected-version="selectedVersion"
+        :format-version-desc="formatVersionDesc"
+        @edges-change="onEdgesChange"
+        @connect="onConnect"
+        @edge-update="onEdgeUpdate"
+        @nodes-change="onNodesChange"
+        @node-drag-start="onNodeDragStart"
+        @node-drag="onNodeDrag"
+        @node-drag-stop="onNodeDragStop"
+        @drop="onDrop"
+        @node-click="onNodeClick"
+        @edge-click="onEdgeClick"
+        @edge-mouse-enter="onEdgeMouseEnter"
+        @edge-mouse-move="onEdgeMouseMove"
+        @edge-mouse-leave="onEdgeMouseLeave"
+        @pane-click="onPaneClick"
+        @edge-insert-pointer-enter="onEdgeInsertPointerEnter"
+        @edge-insert-pointer-leave="onEdgeInsertPointerLeave"
+        @insert-node-on-edge="onInsertNodeOnEdge"
+        @edge-insert-menu-open="onEdgeInsertMenuOpen"
+        @edge-insert-menu-close="onEdgeInsertMenuClose"
+        @version-panel-drag-start="onVersionPanelDragStart"
+        @close-version-panel="versionVisible = false"
+        @select-version="selectVersion"
+        @overwrite-draft="overwriteDraftFromVersion"
+      />
 
-          <template v-else>
-          <a-input
-            v-model:value="nodeSearch"
-            placeholder="搜索节点..."
-            allow-clear
-            size="small"
-          >
-            <template #prefix><SearchOutlined /></template>
-          </a-input>
+      <WorkflowEdgeDetailPanel
+        v-if="selectedEdge"
+        :edge="selectedEdge"
+        :is-version-preview="isVersionPreview"
+        :edge-target-candidates="edgeTargetCandidates"
+        :edge-source-handle-options="edgeSourceHandleOptions"
+        :handle-in="HANDLE_IN"
+        :handle-out="HANDLE_OUT"
+        :get-edge-source-label="getEdgeSourceLabel"
+        :get-edge-source-type="getEdgeSourceType"
+        :get-edge-target-label="getEdgeTargetLabel"
+        :get-edge-target-type="getEdgeTargetType"
+        :get-handle-display-name="getHandleDisplayName"
+        :get-node-title="getNodeTitle"
+        @close="clearEdgeSelection"
+        @target-change="onEdgeTargetChange"
+        @source-handle-change="onEdgeSourceHandleChange"
+        @delete="deleteSelectedEdge"
+      />
 
-          <div class="node-group" v-for="group in filteredNodeGroups" :key="group.key">
-            <div class="group-title">{{ group.title }}</div>
-            <NodeItem
-              v-for="type in group.items"
-              :key="type"
-              :type="type"
-              :title="getNodeMeta(type).title"
-              :desc="getNodeMeta(type).desc"
-              :color="getNodeMeta(type).color"
-              draggable="true"
-              @dragstart="onDragStart($event, type)"
-            />
-          </div>
-          </template>
-        </div>
-      </div>
-
-      <!-- 中间画布 -->
-      <div class="canvas-area" ref="canvasAreaRef" @dragover.prevent>
-        <div v-if="isVersionPreview" class="version-preview-banner">
-          正在预览历史版本 v{{ selectedVersion }}（只读），点击右上角「回到当前版本」返回草稿
-        </div>
-
-        <!-- 拖动节点时显示删除区 -->
-        <div
-          v-show="isNodeDragging"
-          ref="trashRef"
-          class="workflow-trash"
-          :class="{ 'is-over': dragOverTrash, 'is-disabled': !canDeleteDraggedNode }"
-        >
-          <DeleteOutlined class="trash-icon" />
-          <span class="trash-label">{{ canDeleteDraggedNode ? '拖到此处删除' : '开始/结束节点不可删除' }}</span>
-        </div>
-
-        <VueFlow
-          v-if="nodes.length > 0"
-          :nodes="nodes"
-          v-model:edges="edges"
-          :edge-types="edgeTypes"
-          connection-mode="strict"
-          :connection-radius="28"
-          :nodes-draggable="!isVersionPreview"
-          :edges-selectable="!isVersionPreview"
-          :edges-updatable="!isVersionPreview"
-          :nodes-connectable="!isVersionPreview"
-          :elements-selectable="!isVersionPreview"
-          :default-edge-options="defaultEdgeOptions"
-          :is-valid-connection="isValidWorkflowConnectionFn"
-          :delete-key-code="null"
-          @edges-change="onEdgesChange"
-          @connect="onConnect"
-          @edge-update="onEdgeUpdate"
-          @nodes-change="onNodesChange"
-          @node-drag-start="onNodeDragStart"
-          @node-drag="onNodeDrag"
-          @node-drag-stop="onNodeDragStop"
-          @dragover.prevent
-          @drop="onDrop"
-          @node-click="onNodeClick"
-          @edge-click="onEdgeClick"
-          @edge-mouse-enter="onEdgeMouseEnter"
-          @edge-mouse-move="onEdgeMouseMove"
-          @edge-mouse-leave="onEdgeMouseLeave"
-          @pane-click="onPaneClick"
-          :default-viewport="{ zoom: 0.8, x: 0, y: 0 }"
-          :min-zoom="0.1"
-          :max-zoom="4"
-        >
-          <Background :gap="[20, 20]" pattern-color="#e5e7eb" />
-
-          <Controls position="bottom-right" show-zoom show-fit-view />
-          <MiniMap
-            position="bottom-left"
-            class="workflow-minimap"
-            :offset-scale="4"
-            pannable
-            zoomable
-            :node-color="getNodeColor"
-            :node-stroke-width="3"
-          />
-
-          <!-- 自定义节点模板 -->
-          <template #node-start="props"><StartNode v-bind="props" /></template>
-          <template #node-end="props"><EndNode v-bind="props" /></template>
-          <template #node-llm="props"><LlmNode v-bind="props" /></template>
-          <template #node-condition="props"><ConditionNode v-bind="props" /></template>
-          <template #node-retrieval="props"><RetrievalNode v-bind="props" /></template>
-          <template #node-tool="props"><ToolNode v-bind="props" /></template>
-          <template #node-classifier="props"><ClassifierNode v-bind="props" /></template>
-          <template #node-api="props"><GenericWorkflowNode v-bind="props" node-type="api" summary-key="url" /></template>
-          <template #node-loop="props"><LoopNode v-bind="props" /></template>
-          <template #node-loop_start="props"><GroupBuiltinNode v-bind="props" node-type="loop_start" /></template>
-          <template #node-loop_end="props"><GroupBuiltinNode v-bind="props" node-type="loop_end" /></template>
-          <template #node-variable="props"><GenericWorkflowNode v-bind="props" node-type="variable" summary-key="variableName" /></template>
-          <template #node-batch="props"><BatchNode v-bind="props" /></template>
-          <template #node-batch_start="props"><GroupBuiltinNode v-bind="props" node-type="batch_start" /></template>
-          <template #node-batch_end="props"><GroupBuiltinNode v-bind="props" node-type="batch_end" /></template>
-          <template #node-script="props"><GenericWorkflowNode v-bind="props" node-type="script" /></template>
-          <template #node-mcp="props"><GenericWorkflowNode v-bind="props" node-type="mcp" summary-key="mcpServerName" /></template>
-          <template #node-input="props"><GenericWorkflowNode v-bind="props" node-type="input" /></template>
-          <template #node-output="props"><GenericWorkflowNode v-bind="props" node-type="output" summary-key="output" /></template>
-          <template #node-variable_handle="props"><GenericWorkflowNode v-bind="props" node-type="variable_handle" /></template>
-          <template #node-parameter_extractor="props"><GenericWorkflowNode v-bind="props" node-type="parameter_extractor" /></template>
-          <template #node-app_component="props"><GenericWorkflowNode v-bind="props" node-type="app_component" summary-key="componentName" /></template>
-
-          <!-- 拖线时水平/垂直吸附（对齐 admin 贝塞尔连线体验） -->
-          <template #connection-line="lineProps">
-            <WorkflowConnectionLine v-bind="lineProps" />
-          </template>
-
-          <!-- 连线中点插入节点（沿贝塞尔曲线中心，与 admin 一致） -->
-          <EdgeLabelRenderer>
-            <div
-              v-if="edgeInsertAnchorEdge && !isVersionPreview && edgeInsertLabelStyle"
-              :style="edgeInsertLabelStyle"
-              class="edge-insert-label-layer"
-              @mouseenter="onEdgeInsertPointerEnter"
-              @mouseleave="onEdgeInsertPointerLeave"
-            >
-              <WorkflowEdgeInsert
-                :visible="true"
-                @select="onInsertNodeOnEdge"
-                @menu-open="onEdgeInsertMenuOpen"
-                @menu-close="onEdgeInsertMenuClose"
-              />
-            </div>
-          </EdgeLabelRenderer>
-        </VueFlow>
-
-        <!-- 空状态提示 -->
-        <div v-if="nodes.length === 0" class="canvas-empty">
-          <p>从左侧拖拽节点到画布开始构建工作流</p>
-        </div>
-
-        <!-- 画布浮层：历史版本列表始终盖在 VueFlow / 控件之上 -->
-        <div v-if="versionVisible" class="canvas-overlay-top">
-          <div
-            class="version-panel-float"
-            :style="versionPanelStyle"
-          >
-            <div class="version-panel-header">
-              <span
-                class="version-panel-drag-handle"
-                title="按住拖动面板"
-                @mousedown.prevent="onVersionPanelDragStart"
-              >
-                <HolderOutlined />
-              </span>
-              <span class="version-panel-title">历史版本</span>
-              <button type="button" class="version-panel-close" @click="versionVisible = false">
-                <CloseOutlined />
-              </button>
-            </div>
-            <div class="version-panel-body">
-              <div
-                class="version-item draft"
-                :class="{ active: selectedVersion === 'draft' }"
-                @click="selectVersion('draft')"
-              >
-                <div class="version-item-title">当前草稿</div>
-                <div class="version-item-desc">继续编辑未发布的修改</div>
-              </div>
-              <a-divider style="margin: 12px 0" />
-              <a-spin :spinning="versionLoading">
-                <a-timeline>
-                  <a-timeline-item
-                    v-for="(item, idx) in versionList"
-                    :key="item.version"
-                    :color="selectedVersion === item.version ? '#6366f1' : '#d1d5db'"
-                  >
-                    <div
-                      class="version-item"
-                      :class="{ active: selectedVersion === item.version }"
-                      @click="selectVersion(item.version)"
-                    >
-                      <div class="version-item-header">
-                        <span class="version-item-title">
-                          {{ idx === 0 ? '线上版本' : `v${item.version}` }}
-                        </span>
-                        <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
-                      </div>
-                      <div v-if="item.description" class="version-item-note">{{ item.description }}</div>
-                      <div class="version-item-desc">{{ formatVersionDesc(item) }}</div>
-                    </div>
-                  </a-timeline-item>
-                </a-timeline>
-                <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
-              </a-spin>
-            </div>
-            <div v-if="selectedVersion !== 'draft'" class="version-panel-footer">
-              <a-button type="primary" block @click="overwriteDraftFromVersion">
-                覆盖当前草稿
-              </a-button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧配置面板：连线详情 -->
-      <div class="config-panel" v-if="selectedEdge">
-        <div class="panel-header">
-          <div class="node-type-badge">
-            <div class="type-icon edge-icon">
-              <BranchesOutlined />
-            </div>
-            <span class="type-name">连线详情</span>
-          </div>
-          <button class="btn-close" @click="clearEdgeSelection">
-            <CloseOutlined />
-          </button>
-        </div>
-        <div class="panel-body">
-          <div class="edge-detail-card">
-            <div class="edge-detail-row">
-              <span class="edge-detail-label">连线 ID</span>
-              <span class="edge-detail-value mono">{{ selectedEdge.id }}</span>
-            </div>
-            <div class="edge-connection-flow">
-              <div class="edge-node-box source">
-                <span class="edge-node-role">源节点</span>
-                <span class="edge-node-name">{{ getEdgeSourceLabel(selectedEdge) }}</span>
-                <span class="edge-node-type">{{ getEdgeSourceType(selectedEdge) }}</span>
-                <span v-if="selectedEdge.sourceHandle" class="edge-handle-tag">出口: {{ getHandleDisplayName(selectedEdge.sourceHandle) }}</span>
-              </div>
-              <div class="edge-arrow">
-                <ArrowRightOutlined />
-              </div>
-              <div class="edge-node-box target">
-                <span class="edge-node-role">目标节点</span>
-                <span class="edge-node-name">{{ getEdgeTargetLabel(selectedEdge) }}</span>
-                <span class="edge-node-type">{{ getEdgeTargetType(selectedEdge) }}</span>
-                <span class="edge-handle-tag">入口: {{ getHandleDisplayName(selectedEdge.targetHandle || HANDLE_IN) }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="edge-retarget-form">
-            <div class="edge-retarget-title">修改连线（可拖拽连线端点，或在此选择）</div>
-            <div class="edge-retarget-row">
-              <label>目标节点</label>
-              <a-select
-                :value="selectedEdge.target"
-                show-search
-                option-filter-prop="label"
-                style="width: 100%"
-                :disabled="isVersionPreview"
-                @change="onEdgeTargetChange"
-              >
-                <a-select-option
-                  v-for="n in edgeTargetCandidates"
-                  :key="n.id"
-                  :value="n.id"
-                  :label="n.data?.label || getNodeTitle(n.type)"
-                >
-                  {{ n.data?.label || getNodeTitle(n.type) }} ({{ getNodeTitle(n.type) }})
-                </a-select-option>
-              </a-select>
-            </div>
-            <div v-if="edgeSourceHandleOptions.length > 1" class="edge-retarget-row">
-              <label>源出口</label>
-              <a-select
-                :value="selectedEdge.sourceHandle || HANDLE_OUT"
-                style="width: 100%"
-                :disabled="isVersionPreview"
-                @change="onEdgeSourceHandleChange"
-              >
-                <a-select-option v-for="h in edgeSourceHandleOptions" :key="h.id" :value="h.id">
-                  {{ h.label }}
-                </a-select-option>
-              </a-select>
-            </div>
-            <p class="edge-retarget-hint">从节点右侧「出」拖到下游节点左侧「入」；禁止接入开始节点或从结束节点连出。</p>
-          </div>
-          <div class="panel-footer edge-delete-footer">
-            <a-button type="primary" danger block @click="deleteSelectedEdge">
-              <DeleteOutlined /> 删除连线
-            </a-button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧配置面板：节点配置 -->
-      <div class="config-panel" v-else-if="selectedNode">
-        <div class="panel-header config-panel-header">
-          <div class="node-type-badge">
-            <div class="type-icon" :style="{ background: getNodeColor(selectedNode.type) + '20', color: getNodeColor(selectedNode.type) }">
-              <NodeTypeIcon :type="selectedNode.type" />
-            </div>
-            <span class="type-name">{{ getNodeTitle(selectedNode.type) }}</span>
-            <WorkflowTooltip
-              v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end' && !isGroupBuiltinNode(selectedNode)"
-              title="查看节点说明与示例配置"
-              placement="topLeft"
-            >
-              <button type="button" class="btn-node-example" @click="openNodeExampleModal">
-                <QuestionCircleOutlined />
-              </button>
-            </WorkflowTooltip>
-          </div>
-          <div class="panel-header-right">
-            <div
-              v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end' && !isGroupBuiltinNode(selectedNode)"
-              class="panel-header-actions node-detail-actions"
-            >
-              <WorkflowTooltip v-if="canTestSelectedNode" title="测试运行此节点" placement="top">
-                <button type="button" class="btn-node-action" :disabled="isVersionPreview" @click="openNodeTestDrawer">
-                  <PlayCircleOutlined />
-                </button>
-              </WorkflowTooltip>
-              <WorkflowTooltip title="复制节点" placement="top">
-                <button type="button" class="btn-node-action" :disabled="isVersionPreview" @click="copySelectedNode">
-                  <CopyOutlined />
-                </button>
-              </WorkflowTooltip>
-            </div>
-            <button class="btn-close" @click="closeNodePanel">
-              <CloseOutlined />
-            </button>
-          </div>
-        </div>
-        <div class="panel-body" :class="{ 'panel-body-readonly': isVersionPreview }">
-          <!-- 节点错误提示 -->
-          <div v-if="getNodeErrors(selectedNode.id).length > 0" class="node-errors">
-            <div v-for="err in getNodeErrors(selectedNode.id)" :key="err.field" class="error-item">
-              <ExclamationCircleOutlined /> {{ err.message }}
-            </div>
-          </div>
-
-          <a-alert v-if="isVersionPreview" type="info" show-icon message="历史版本预览（只读）" class="preview-readonly-alert" />
-
-          <a-alert
-            v-if="isGroupBuiltinNode(selectedNode)"
-            type="info"
-            show-icon
-            message="容器内置节点"
-            description="该节点随循环/批处理容器自动创建，不可单独删除；删除容器时会一并移除。"
-          />
-
-          <WorkflowNodeConfig
-            v-else-if="selectedNode.type !== 'start' && selectedNode.type !== 'end'"
-            :readonly="isVersionPreview"
-            :node="selectedNode"
-            :edges="edges"
-            :providers="providers"
-            :llm-model-list="llmModelList"
-            :knowledge-list="knowledgeList"
-            :tools="tools"
-            :target-nodes="getTargetNodes()"
-            :filter-knowledge-option="filterKnowledgeOption"
-            :filter-tool-option="filterToolOption"
-            :get-tool-type-label="getToolTypeLabel"
-            @sync="syncNodes"
-            @llm-provider-change="onLlmProviderChange"
-            @llm-model-change="onLlmModelChange"
-            @knowledge-change="onKnowledgeChange"
-            @tool-change="onToolChange"
-          />
-          <a-form v-else layout="vertical" :disabled="isVersionPreview">
-            <a-form-item label="节点 ID"><span class="node-id-display mono">{{ selectedNode.id }}</span></a-form-item>
-            <a-form-item label="节点名称">
-              <a-input v-model:value="selectedNode.data.label" :disabled="isVersionPreview" @change="syncNodes" />
-            </a-form-item>
-          </a-form>
-
-          <!-- 删除节点按钮 -->
-          <div class="panel-footer" v-if="!isVersionPreview && selectedNode.type !== 'start' && selectedNode.type !== 'end' && !isGroupBuiltinNode(selectedNode)">
-            <a-button type="text" danger @click="deleteSelectedNode">
-              <DeleteOutlined /> 删除节点
-            </a-button>
-          </div>
-        </div>
-      </div>
+      <WorkflowNodeDetailPanel
+        v-else-if="selectedNode"
+        :node="selectedNode"
+        :edges="edges"
+        :is-version-preview="isVersionPreview"
+        :can-test-selected-node="canTestSelectedNode"
+        :node-errors="getNodeErrors(selectedNode.id)"
+        :providers="providers"
+        :llm-model-list="llmModelList"
+        :knowledge-list="knowledgeList"
+        :tools="tools"
+        :target-nodes="getTargetNodes()"
+        :filter-knowledge-option="filterKnowledgeOption"
+        :filter-tool-option="filterToolOption"
+        :get-tool-type-label="getToolTypeLabel"
+        :get-node-color="getNodeColor"
+        :get-node-title="getNodeTitle"
+        :is-group-builtin-node="isGroupBuiltinNode"
+        @close="closeNodePanel"
+        @open-example="openNodeExampleModal"
+        @open-test="openNodeTestDrawer"
+        @copy="copySelectedNode"
+        @sync="syncNodes"
+        @llm-provider-change="onLlmProviderChange"
+        @llm-model-change="onLlmModelChange"
+        @knowledge-change="onKnowledgeChange"
+        @tool-change="onToolChange"
+        @delete="deleteSelectedNode"
+      />
     </div>
   </div>
 
@@ -554,196 +157,45 @@
     @test-complete="onNodeTestComplete"
   />
 
-  <!-- 如何新增节点说明 -->
-  <a-modal
-    v-model:open="nodeHelpVisible"
-    title="如何新增工作流节点"
-    :width="760"
-    :footer="null"
-    destroy-on-close
-  >
-    <div class="node-help-content">
-      <p class="node-help-intro">
-        工作流采用「前端画板定义 DAG + 后端 NodeProcessor 执行」架构。新增一种节点需要<strong>前后端同时扩展</strong>，后端通过 Spring 自动注册处理器。
-      </p>
+  <WorkflowNodeHelpModal v-model:open="nodeHelpVisible" />
 
-      <h4>一、后端：定义节点类型（NodeType）</h4>
-      <p>在 <code>lightbot-server/.../enums/NodeType.java</code> 增加枚举项，例如：</p>
-      <pre class="node-help-code code-block-scroll code-block-scroll--dark">RETRIEVAL("retrieval", "知识检索"),</pre>
-      <p><code>code</code> 必须与前端节点 <code>type</code> 字符串一致（如 <code>llm</code>、<code>retrieval</code>）。</p>
+  <WorkflowGlobalConfigModal
+    v-model:open="globalConfigVisible"
+    :config="globalConfig"
+    @ok="globalConfigVisible = false"
+    @add-param="addConversationParam"
+    @remove-param="removeConversationParam"
+  />
 
-      <h4>二、后端：实现节点处理器（NodeProcessor）</h4>
-      <p>在 <code>lightbot-server/.../workflow/processor/</code> 新建类，实现接口 <code>NodeProcessor</code>：</p>
-      <ul>
-        <li><code>getType()</code>：返回对应的 <code>NodeType</code></li>
-        <li><code>execute(NodeExecutionContext context)</code>：读取 <code>context.getCurrentNodeData()</code> 中的配置，执行业务逻辑，通过 <code>NodeExecutionResult</code> 返回下一节点 ID 与输出变量</li>
-      </ul>
-      <p>参考现有实现：</p>
-      <ul>
-        <li><code>StartNodeProcessor</code> — 将用户输入写入变量 <code>input</code>，沿出边进入下一节点</li>
-        <li><code>LlmNodeProcessor</code> — 读取 <code>modelId</code>、<code>promptTemplate</code>，调用 Spring AI 生成内容</li>
-        <li><code>ConditionNodeProcessor</code> — 评估 <code>branches</code> 条件表达式，选择分支目标</li>
-        <li><code>EndNodeProcessor</code> — 结束工作流</li>
-      </ul>
-      <p>类上添加 <code>@Component</code>，无需手动注册。</p>
-
-      <h4>三、后端：自动注册（NodeProcessorRegistry）</h4>
-      <p><code>NodeProcessorRegistry</code> 在启动时注入所有 <code>NodeProcessor</code> 实现，按 <code>NodeType</code> 建立映射。执行时由 <code>WorkflowExecutorService</code> 从 START 节点开始，根据边的连接关系依次调用对应处理器。</p>
-
-      <h4>四、前端：节点库与画布（WorkflowEdit.vue）</h4>
-      <ol>
-        <li>在左侧节点库增加 <code>NodeItem</code>，<code>type</code> 与后端 <code>code</code> 一致</li>
-        <li>在 <code>getDefaultNodeData(type)</code> 中补充默认 <code>data</code> 字段</li>
-        <li>在 <code>getNodeColor</code> / <code>getNodeTitle</code> 中补充展示配置</li>
-        <li>在 <code>VueFlow</code> 内增加 <code>#node-xxx</code> 模板槽，引用 <code>workflow/nodes/XxxNode.vue</code> 自定义节点组件</li>
-        <li>在右侧配置面板增加该类型的表单项，并在 <code>validateWorkflow()</code> 中校验必填项</li>
-      </ol>
-
-      <h4>五、前端：自定义节点组件</h4>
-      <p>在 <code>lightbot-ui/src/views/workflow/nodes/</code> 创建 Vue 组件，使用 <code>Handle</code> 定义连接点（通常左侧 target、右侧 source；条件节点可多出口）。节点 <code>data</code> 中的配置会原样保存到 <code>agent.config.workflow</code> JSON。</p>
-
-      <h4>六、数据结构与执行流程</h4>
-      <ul>
-        <li><code>WorkflowDefinition</code>：包含 <code>nodes</code>（id、type、position、data）与 <code>edges</code>（source、target、sourceHandle 等）</li>
-        <li>保存：调用 <code>updateAgent</code>，将 workflow 写入 Agent 的 <code>config</code> 字段</li>
-        <li>运行：对话时 <code>WorkflowExecutorService.execute()</code> 解析 config，沿 DAG 执行直至 END</li>
-      </ul>
-
-      <p class="node-help-tip">
-        提示：当前画板已支持 start / end / llm / condition / retrieval / tool。枚举中还有 script、code 类型，需按上述步骤补齐前后端后方可使用。
-      </p>
-    </div>
-  </a-modal>
-
-  <a-modal v-model:open="globalConfigVisible" title="全局设置" :width="640" @ok="globalConfigVisible = false">
-    <a-form layout="vertical">
-      <a-form-item label="上下文轮次（history_max_round）">
-        <a-input-number v-model:value="globalConfig.history_config.history_max_round" :min="0" :max="50" style="width: 100%" />
-      </a-form-item>
-      <a-form-item label="启用对话历史">
-        <a-switch v-model:checked="globalConfig.history_config.history_switch" />
-      </a-form-item>
-      <a-divider>会话变量（conversation_params）</a-divider>
-      <div v-for="(param, idx) in globalConfig.variable_config.conversation_params" :key="idx" class="conv-param-row">
-        <a-input v-model:value="param.key" placeholder="变量名" style="flex:1" />
-        <a-input v-model:value="param.default_value" placeholder="默认值" style="flex:1" />
-        <a-button type="text" danger @click="removeConversationParam(idx)"><DeleteOutlined /></a-button>
-      </div>
-      <a-button type="dashed" block @click="addConversationParam"><PlusOutlined /> 添加会话变量</a-button>
-    </a-form>
-  </a-modal>
-
-  <a-drawer
+  <WorkflowTestDrawer
     v-model:open="testVisible"
-    title="测试运行"
-    :width="600"
-    :mask-closable="!testRunning && !testAnimating"
-    :keyboard="!testRunning && !testAnimating"
+    v-model:test-mode="testMode"
+    v-model:test-input="testInput"
+    v-model:test-use-draft="testUseDraft"
+    :test-running="testRunning"
+    :test-animating="testAnimating"
+    :test-messages="testMessages"
+    :test-result="testResult"
+    :test-current-node-id="testCurrentNodeId"
+    :get-node-title-by-id="getNodeTitleById"
     @close="onTestDrawerClose"
-  >
-    <a-alert v-if="testAnimating" type="info" show-icon message="正在执行工作流..." description="画布上当前节点会高亮显示执行状态" class="test-alert" />
-    <a-segmented
-      v-model:value="testMode"
-      :options="[
-        { label: '文本生成', value: 'generation' },
-        { label: '文本对话', value: 'conversation' }
-      ]"
-      block
-      class="test-mode-segment"
-    />
-    <p class="test-mode-hint">
-      {{ testMode === 'generation' ? '单轮生成：输入一次问题，执行完整工作流并返回结果。' : '多轮对话：保留历史消息，每轮携带 history_list / query 变量执行。' }}
-    </p>
+    @run="runWorkflowTest"
+    @clear-conversation="clearTestConversation"
+  />
 
-    <template v-if="testMode === 'conversation'">
-      <div class="test-chat-box">
-        <div v-if="!testMessages.length" class="test-chat-empty">暂无对话，在下方输入并发送</div>
-        <div v-for="(msg, i) in testMessages" :key="i" :class="['test-chat-msg', msg.role]">
-          <span class="test-chat-role">{{ msg.role === 'user' ? '用户' : '助手' }}</span>
-          <div class="test-chat-content">{{ msg.content }}</div>
-        </div>
-      </div>
-    </template>
-
-    <a-form layout="vertical">
-      <a-form-item :label="testMode === 'generation' ? '测试内容' : '本轮输入'" required>
-        <a-textarea
-          v-model:value="testInput"
-          :rows="testMode === 'generation' ? 5 : 3"
-          :placeholder="testMode === 'generation' ? '输入要生成的文本或问题' : '输入本轮用户消息'"
-        />
-      </a-form-item>
-      <a-form-item label="使用草稿配置">
-        <a-switch v-model:checked="testUseDraft" />
-      </a-form-item>
-      <div class="test-actions">
-        <a-button type="primary" :loading="testRunning || testAnimating" @click="runWorkflowTest">
-          {{ testAnimating ? '执行中...' : (testMode === 'conversation' ? '发送并运行' : '开始测试') }}
-        </a-button>
-        <a-button v-if="testMode === 'conversation'" :disabled="testRunning || testAnimating" @click="clearTestConversation">
-          清空对话
-        </a-button>
-      </div>
-    </a-form>
-    <a-divider v-if="testResult || testAnimating" />
-    <div v-if="testAnimating && testCurrentNodeId" class="test-current-node">
-      当前节点：<strong>{{ getNodeTitleById(testCurrentNodeId) }}</strong>
-    </div>
-    <div v-if="testResult">
-      <h4>输出结果</h4>
-      <pre class="test-output">{{ testResult.output || '（无输出）' }}</pre>
-      <h4>节点轨迹</h4>
-      <div
-        v-for="(ev, i) in testResult.nodeEvents"
-        :key="i"
-        class="test-event"
-        :class="{ active: ev.nodeId === testCurrentNodeId }"
-      >
-        <span class="test-event-type">{{ ev.type === 'workflow_node_start' ? '▶' : ev.type === 'workflow_node_complete' ? '✓' : '•' }}</span>
-        {{ ev.nodeLabel || ev.nodeId }} — {{ ev.message || ev.nodeType }}
-      </div>
-    </div>
-  </a-drawer>
-
-  <a-modal
+  <WorkflowPublishModal
     v-model:open="publishModalVisible"
-    title="发布工作流"
-    ok-text="确认发布"
-    cancel-text="取消"
-    class="publish-modal"
-    :confirm-loading="saving"
-    @ok="confirmPublishWorkflow"
-  >
-    <div class="publish-modal-content">
-      <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
-      <a-textarea
-        v-model:value="publishDescription"
-        class="publish-modal-textarea"
-        :maxlength="50"
-        show-count
-        :rows="3"
-        placeholder="例如：新增检索节点、调整 LLM 提示词"
-      />
-    </div>
-  </a-modal>
+    v-model:description="publishDescription"
+    :saving="saving"
+    @confirm="confirmPublishWorkflow"
+  />
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, shallowRef, triggerRef, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, shallowRef, triggerRef, nextTick, watch, markRaw, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { VueFlow, useVueFlow, applyNodeChanges, applyEdgeChanges, addEdge, EdgeLabelRenderer, Panel } from '@vue-flow/core'
+import { useVueFlow, applyNodeChanges, applyEdgeChanges, addEdge } from '@vue-flow/core'
 import { getEdgeInsertCenter } from './workflow/workflowEdgeGeometry'
-import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
-import {
-  ArrowLeftOutlined, SaveOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
-  SearchOutlined, LeftOutlined, RightOutlined, CloseOutlined, DeleteOutlined,
-  RobotOutlined, ForkOutlined, BookOutlined, ToolOutlined, PlayCircleOutlined,
-  StopOutlined, PlusOutlined, DownOutlined,   UndoOutlined, QuestionCircleOutlined, CopyOutlined,
-  BranchesOutlined, ArrowRightOutlined, AuditOutlined, RollbackOutlined,
-  HolderOutlined, ApartmentOutlined, AppstoreOutlined, UnorderedListOutlined
-} from '@ant-design/icons-vue'
 import { message, notification, Modal } from 'ant-design-vue'
 import { getAgentDetail } from '../api/agent'
 import { getKnowledge, getKnowledgeList } from '../api/knowledge'
@@ -759,29 +211,23 @@ import {
   restoreWorkflowVersion,
   testWorkflow
 } from '../api/workflow'
-import NodeItem from '../views/workflow/components/NodeItem.vue'
-import StartNode from '../views/workflow/nodes/StartNode.vue'
-import EndNode from '../views/workflow/nodes/EndNode.vue'
-import LlmNode from '../views/workflow/nodes/LlmNode.vue'
-import ConditionNode from '../views/workflow/nodes/ConditionNode.vue'
-import RetrievalNode from '../views/workflow/nodes/RetrievalNode.vue'
-import ToolNode from '../views/workflow/nodes/ToolNode.vue'
-import GenericWorkflowNode from '../views/workflow/nodes/GenericWorkflowNode.vue'
-import LoopNode from '../views/workflow/nodes/LoopNode.vue'
-import BatchNode from '../views/workflow/nodes/BatchNode.vue'
-import GroupBuiltinNode from '../views/workflow/nodes/GroupBuiltinNode.vue'
-import WorkflowConnectionLine from '../views/workflow/components/WorkflowConnectionLine.vue'
-import ClassifierNode from '../views/workflow/nodes/ClassifierNode.vue'
 import NodeSingleTestDrawer from '../views/workflow/components/NodeSingleTestDrawer.vue'
-import NodeTypeIcon from '../views/workflow/components/NodeTypeIcon.vue'
-import WorkflowNodeConfig from '../views/workflow/components/WorkflowNodeConfig.vue'
-import WorkflowTooltip from '../views/workflow/components/WorkflowTooltip.vue'
-import WorkflowEdgeInsert from '../views/workflow/components/WorkflowEdgeInsert.vue'
 import NodeExampleModal from '../views/workflow/components/NodeExampleModal.vue'
+import WorkflowEditToolbar from '../views/workflow/components/edit/WorkflowEditToolbar.vue'
+import WorkflowEditLeftPanel from '../views/workflow/components/edit/WorkflowEditLeftPanel.vue'
+import WorkflowEditCanvas from '../views/workflow/components/edit/WorkflowEditCanvas.vue'
+import WorkflowEdgeDetailPanel from '../views/workflow/components/edit/WorkflowEdgeDetailPanel.vue'
+import WorkflowNodeDetailPanel from '../views/workflow/components/edit/WorkflowNodeDetailPanel.vue'
+import WorkflowNodeHelpModal from '../views/workflow/components/edit/WorkflowNodeHelpModal.vue'
+import WorkflowGlobalConfigModal from '../views/workflow/components/edit/WorkflowGlobalConfigModal.vue'
+import WorkflowTestDrawer from '../views/workflow/components/edit/WorkflowTestDrawer.vue'
+import WorkflowPublishModal from '../views/workflow/components/edit/WorkflowPublishModal.vue'
 import { getNodeExample, canApplyNodeExample } from '../views/workflow/nodeConfigMeta'
 import { canSingleTestNodeType } from '../views/workflow/workflowNodeTest'
 import { ensureConditionGroups } from '../views/workflow/conditionUtils'
 import { applyWorkflowAutoLayout, applyWorkflowBezierEdgeStyle } from '../views/workflow/workflowLayout'
+import { WORKFLOW_DRAGGING_GROUP_ID_KEY } from '../views/workflow/useGroupDragMask'
+import '../views/workflow/workflowGroupDragMask.css'
 import WorkflowBezierEdge from '../views/workflow/edges/WorkflowBezierEdge.vue'
 import {
   isGroupNodeType,
@@ -802,7 +248,6 @@ import {
   getNodeDropPoint,
   getNodeParentId,
   hasEdgesToGroupSiblings,
-  absoluteTopLeftFromCenter,
 } from '../views/workflow/workflowGroup'
 import { getDefaultNodeData as buildDefaultNodeData, getNodeTitle as metaGetNodeTitle, getNodeColor as metaGetNodeColor, getNodeMeta, getNodeLibraryGroups, createConditionId } from '../views/workflow/nodeMeta'
 import {
@@ -821,7 +266,9 @@ const route = useRoute()
 const router = useRouter()
 const agentId = route.params.agentId
 
-// VueFlow hooks（getNodes 为画布真实坐标来源）
+const WORKFLOW_FLOW_ID = 'lightbot-workflow-edit'
+
+// VueFlow hooks（getNodes 为画布真实坐标来源；与画布子组件共用 flow id）
 const {
   fitView,
   addSelectedEdges,
@@ -833,12 +280,18 @@ const {
   findNode,
   screenToFlowCoordinate,
   updateNodeInternals,
-} = useVueFlow()
+  updateNode,
+} = useVueFlow({ id: WORKFLOW_FLOW_ID })
 
-const edgeTypes = {
-  'workflow-bezier': WorkflowBezierEdge,
-  default: WorkflowBezierEdge,
-}
+const workflowCanvasRef = ref(null)
+const canvasAreaRef = computed(() => workflowCanvasRef.value?.canvasAreaEl?.value ?? null)
+const trashRef = computed(() => workflowCanvasRef.value?.trashEl ?? null)
+
+/** 避免 edge 组件被 reactive 包装导致大量 Vue warn */
+const edgeTypes = markRaw({
+  'workflow-bezier': markRaw(WorkflowBezierEdge),
+  default: markRaw(WorkflowBezierEdge),
+})
 
 const defaultEdgeOptions = {
   type: 'workflow-bezier',
@@ -930,11 +383,70 @@ watch([selectedNode, selectedEdge, panelCollapsed, versionVisible], () => {
 })
 
 const validationErrors = ref([])
-const canvasAreaRef = ref(null)
-const trashRef = ref(null)
 const savedWorkflowSnapshot = ref('')
 const isNodeDragging = ref(false)
 const dragOverTrash = ref(false)
+/** 正在拖动的循环/批处理容器 id，子节点通过 inject 同步遮罩 */
+const draggingGroupId = ref(null)
+provide(WORKFLOW_DRAGGING_GROUP_ID_KEY, draggingGroupId)
+
+let groupDragPointerReleaseHandler = null
+
+function bindGroupDragPointerRelease() {
+  unbindGroupDragPointerRelease()
+  groupDragPointerReleaseHandler = () => {
+    endGroupDragMask()
+  }
+  document.addEventListener('mouseup', groupDragPointerReleaseHandler, true)
+  document.addEventListener('pointerup', groupDragPointerReleaseHandler, true)
+  document.addEventListener('pointercancel', groupDragPointerReleaseHandler, true)
+}
+
+function unbindGroupDragPointerRelease() {
+  if (!groupDragPointerReleaseHandler) return
+  document.removeEventListener('mouseup', groupDragPointerReleaseHandler, true)
+  document.removeEventListener('pointerup', groupDragPointerReleaseHandler, true)
+  document.removeEventListener('pointercancel', groupDragPointerReleaseHandler, true)
+  groupDragPointerReleaseHandler = null
+}
+
+function setGroupChildrenDragMask(groupId, masked) {
+  if (!groupId) return
+  let changed = false
+  const next = nodes.value.map(n => {
+    if (getNodeParentId(n) !== groupId) return n
+    const prevMasked = !!n.data?.groupDragMasked
+    if (prevMasked === masked) return n
+    changed = true
+    return {
+      ...n,
+      data: {
+        ...(n.data || {}),
+        groupDragMasked: masked,
+      },
+    }
+  })
+  if (changed) nodes.value = next
+}
+
+function clearGroupDragMaskDom() {
+  const root = canvasAreaRef.value
+  if (!root) return
+  root.querySelectorAll('.wf-group-child-mask').forEach(el => {
+    el.classList.remove('wf-group-child-mask')
+  })
+}
+
+function endGroupDragMask(groupId) {
+  const activeGroupId = groupId
+    || draggingGroupId.value
+    || (draggingNode.value && isGroupNodeType(draggingNode.value.type) ? draggingNode.value.id : null)
+  setGroupChildrenDragMask(activeGroupId, false)
+  draggingGroupId.value = null
+  unbindGroupDragPointerRelease()
+  // 兜底清理，避免内置开始/结束节点残留遮罩 class。
+  clearGroupDragMaskDom()
+}
 const draggingNode = ref(null)
 const hoveredEdge = ref(null)
 /** 插入菜单打开时保持锚点，避免鼠标移入 Popover 后层被销毁 */
@@ -949,12 +461,15 @@ const isDirty = computed(() => {
 })
 
 const canDeleteDraggedNode = computed(() => {
-  const node = draggingNode.value
-  return node && node.type !== 'start' && node.type !== 'end' && !isGroupBuiltinType(node.type)
+  return isNodeDeletable(draggingNode.value)
 })
 
 function isGroupBuiltinNode(node) {
   return node && isGroupBuiltinType(node.type)
+}
+
+function isNodeDeletable(node) {
+  return !!(node && node.type !== 'start' && node.type !== 'end' && !isGroupBuiltinType(node.type))
 }
 
 // 资源列表
@@ -1229,7 +744,7 @@ onMounted(async () => {
     })
     scheduleFitView(!hasSavedLayout(nodes.value))
     validateWorkflow(false)
-  } catch (e) {
+        } catch (e) {
     notification.error({ message: '加载失败', description: e.message })
   }
   window.addEventListener('keydown', onKeyDown)
@@ -1270,6 +785,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mousemove', onVersionPanelDragMove)
   document.removeEventListener('mouseup', onVersionPanelDragEnd)
+  unbindGroupDragPointerRelease()
   versionPanelResizeObserver?.disconnect()
   versionPanelResizeObserver = null
   clearTimeout(autoSaveTimer)
@@ -1333,6 +849,7 @@ function migrateWorkflowNode(node) {
 }
 
 /** 保证画布节点可拖动（避免持久化数据或内置类型把 draggable 写成 false） */
+
 function ensureNodeDraggable(node) {
   if (!node) return node
   const n = { ...node }
@@ -1340,6 +857,13 @@ function ensureNodeDraggable(node) {
     n.draggable = true
     n.selectable = n.selectable !== false
     n.connectable = n.connectable !== false
+    return n
+  }
+  if (isGroupNodeType(n.type)) {
+    n.draggable = true
+    n.selectable = n.selectable !== false
+    n.connectable = n.connectable !== false
+    n.dragHandle = '.group-shell'
     return n
   }
   n.draggable = true
@@ -1407,7 +931,7 @@ function scheduleUpdateNodeInternals(nodeIds) {
 }
 
 /** 提交节点列表（保证 parent 在前、子节点 expandParent，并刷新 Vue Flow 内部尺寸） */
-function commitWorkflowNodes(list, { refreshInternals = true } = {}) {
+function commitWorkflowNodes(list, { refreshInternals = true, internalIds = null } = {}) {
   nodes.value = sortNodesParentFirst(
     (list || []).map(n => {
       const m = ensureNodeDraggable(migrateGroupNodeFields({
@@ -1423,8 +947,33 @@ function commitWorkflowNodes(list, { refreshInternals = true } = {}) {
     }),
   )
   if (refreshInternals) {
-    scheduleUpdateNodeInternals(nodes.value.map(n => n.id))
+    const ids = internalIds?.length ? internalIds : nodes.value.map(n => n.id)
+    scheduleUpdateNodeInternals(ids)
   }
+}
+
+/** 局部更新节点，避免整表重刷引发闪烁 */
+function patchWorkflowNodes(patches, { refreshIds = [] } = {}) {
+  if (!patches?.length) return
+  const patchMap = new Map(patches.map(p => [p.id, p]))
+  nodes.value = sortNodesParentFirst(
+    nodes.value.map(n => {
+      const p = patchMap.get(n.id)
+      if (!p) return n
+      const merged = {
+        ...n,
+        ...p,
+        position: normalizePosition(p.position ?? n.position),
+      }
+      if (p.parentNode === null) {
+        delete merged.parentNode
+        delete merged.extent
+        delete merged.expandParent
+      }
+      return ensureNodeDraggable(migrateGroupNodeFields(merged))
+    }),
+  )
+  if (refreshIds.length) scheduleUpdateNodeInternals(refreshIds)
 }
 
 /**
@@ -1449,32 +998,53 @@ function applyNodeGroupMembership(nodeId, absolutePoint) {
   const pid = getNodeParentId(node)
   const groupAtPoint = findGroupAtPoint(flowNodes, dropPoint, { excludeId: nodeId, findNode })
 
-  // 已在容器内：根据落点决定留/出（未与容器内节点连线时可拖出）
+  // 已在容器内：落点仍在内容区则保留，否则移出（未与容器内节点连线时）
   if (pid) {
     const parent = flowNodes.find(n => n.id === pid)
     if (parent && isGroupNodeType(parent.type)) {
       const stillInside = groupAtPoint?.id === pid
       if (stillInside) {
-        const resized = fitGroupBoundsToChildren(parent, nodes.value, findNode)
-        if (resized !== parent) {
-          commitWorkflowNodes(nodes.value.map(n => (n.id === pid ? resized : n)))
-          return true
+        const kept = {
+          ...node,
+          extent: 'parent',
+          expandParent: true,
+          position: normalizePosition(node.position),
         }
-        return false
+        const resized = fitGroupBoundsToChildren(parent, nodes.value, findNode)
+        const patches = [{ id: nodeId, ...kept }]
+        if (resized.style?.width !== parent.style?.width || resized.style?.height !== parent.style?.height) {
+          patches.push({ id: pid, style: resized.style })
+        }
+        patchWorkflowNodes(patches, { refreshIds: [nodeId, pid] })
+        return true
       }
       if (hasEdgesToGroupSiblings(nodeId, pid, nodes.value, edges.value)) {
         message.warning('该节点已与容器内其他节点连线，请先断开连线再移出容器')
         const center = getNodeDropPoint(node, nodes.value, findNode)
         const rel = attachNodeToGroup(node, parent, center, findNode)
-        commitWorkflowNodes(nodes.value.map(n => (n.id === nodeId ? rel : n)))
+        patchWorkflowNodes([{ id: nodeId, ...rel }], { refreshIds: [nodeId] })
         return true
       }
-      const absTopLeft = absoluteTopLeftFromCenter(node, dropPoint, findNode)
-      const detached = { ...detachFromGroup(node), position: absTopLeft }
-      let next = nodes.value.map(n => (n.id === nodeId ? detached : n))
+      const absTopLeft = getAbsolutePosition(node, nodes.value, findNode)
+      const next = nodes.value.map(n => (
+        n.id === nodeId
+          ? { ...detachFromGroup(node), position: absTopLeft }
+          : n
+      ))
       const resized = fitGroupBoundsToChildren(parent, next, findNode)
-      next = next.map(n => (n.id === pid ? resized : n))
-      commitWorkflowNodes(next)
+      patchWorkflowNodes(
+        [
+          {
+            id: nodeId,
+            position: absTopLeft,
+            parentNode: null,
+            extent: null,
+            expandParent: null,
+          },
+          { id: pid, style: resized.style },
+        ],
+        { refreshIds: [nodeId, pid] },
+      )
       return true
     }
   }
@@ -1487,12 +1057,13 @@ function applyNodeGroupMembership(nodeId, absolutePoint) {
       dropPoint,
       findNode,
     )
-    const next = nodes.value.map(n => {
-      if (n.id === resized.id) return resized
-      if (n.id === nodeId) return attached
-      return n
-    })
-    commitWorkflowNodes(next)
+    patchWorkflowNodes(
+      [
+        { id: nodeId, ...attached },
+        { id: resized.id, style: resized.style },
+      ],
+      { refreshIds: [nodeId, resized.id] },
+    )
     return true
   }
 
@@ -1958,11 +1529,10 @@ function syncDraggedNodePositions(dragNodes) {
     const cur = normalizePosition(n.position)
     if (cur.x === nextPos.x && cur.y === nextPos.y) return n
     changed = true
-    const base = { ...n, position: nextPos }
-    return ensureNodeDraggable(isGroupNodeType(n.type) ? migrateGroupNodeFields(base) : base)
+    return { ...n, position: nextPos }
   })
   if (changed) {
-    nodes.value = sortNodesParentFirst(next)
+    nodes.value = next
   }
 }
 
@@ -2006,15 +1576,20 @@ function onNodeDragStart({ node }) {
   isNodeDragging.value = true
   dragOverTrash.value = false
   recordHistory()
-  // 拖出容器：临时取消 parent 限制，松手后再按落点决定留/出
+  if (node && isGroupNodeType(node.type)) {
+    draggingGroupId.value = node.id
+    setGroupChildrenDragMask(node.id, true)
+    bindGroupDragPointerRelease()
+  }
+  // 拖出容器：仅放开当前子节点的 parent 限制（不整表替换，避免闪烁）
   if (node && getNodeParentId(node) && !isGroupBuiltinType(node.type)) {
-    nodes.value = sortNodesParentFirst(
-      nodes.value.map(n => (
-        n.id === node.id
-          ? { ...n, extent: undefined, expandParent: false }
-          : n
-      )),
-    )
+    const idx = nodes.value.findIndex(n => n.id === node.id)
+    if (idx >= 0) {
+      nodes.value[idx] = { ...nodes.value[idx], extent: undefined, expandParent: false }
+    }
+    try {
+      updateNode(node.id, { extent: undefined, expandParent: false })
+    } catch (_) { /* ignore */ }
   }
 }
 
@@ -2032,35 +1607,47 @@ function onNodeDrag({ node, nodes: draggedNodes, event }) {
   }
 }
 
-function onNodeDragStop({ node, nodes: draggedNodes }) {
-  const dragList = draggedNodes?.length ? draggedNodes : node ? [node] : []
+function onNodeDragStop({ node, nodes: draggedNodes, event }) {
+  const activeNode = node || draggedNodes?.[0] || draggingNode.value
+  endGroupDragMask(activeNode && isGroupNodeType(activeNode.type) ? activeNode.id : null)
+
+  const dragList = draggedNodes?.length ? draggedNodes : activeNode ? [activeNode] : []
   syncDraggedNodePositions(dragList)
 
-  if (dragOverTrash.value && node && canDeleteDraggedNode.value) {
-    removeNodeById(node.id, { skipHistory: true })
+  if (event && trashRef.value) {
+    const rect = trashRef.value.getBoundingClientRect()
+    dragOverTrash.value =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+  }
+
+  if (dragOverTrash.value && activeNode && isNodeDeletable(activeNode)) {
+    removeNodeById(activeNode.id, { skipHistory: true })
     message.success('节点已删除')
-  } else if (node && isGroupBuiltinType(node.type) && getNodeParentId(node)) {
-    const pid = getNodeParentId(node)
-    let next = nodes.value.map(n => {
-      if (n.id !== node.id) return n
-      return ensureNodeDraggable({
-        ...n,
-        extent: 'parent',
-        expandParent: true,
-      })
-    })
-    const parent = next.find(n => n.id === pid)
-    if (parent) {
-      next = next.map(n => (n.id === pid ? fitGroupBoundsToChildren(parent, next, findNode) : n))
-    }
-    commitWorkflowNodes(next)
-  } else if (node && !isGroupNodeType(node.type) && !isGroupBuiltinType(node.type)) {
-    const dropPoint = getNodeDropPoint(
-      nodes.value.find(n => n.id === node.id) || node,
+  } else if (activeNode && isGroupBuiltinType(activeNode.type) && getNodeParentId(activeNode)) {
+    const pid = getNodeParentId(activeNode)
+    const resized = fitGroupBoundsToChildren(
+      nodes.value.find(n => n.id === pid),
       nodes.value,
       findNode,
     )
-    applyNodeGroupMembership(node.id, dropPoint)
+    const patches = [{
+      id: activeNode.id,
+      extent: 'parent',
+      expandParent: true,
+      position: normalizePosition(activeNode.position),
+    }]
+    if (resized?.style) patches.push({ id: pid, style: resized.style })
+    patchWorkflowNodes(patches, { refreshIds: [activeNode.id, pid] })
+  } else if (activeNode && !isGroupNodeType(activeNode.type) && !isGroupBuiltinType(activeNode.type)) {
+    const dropPoint = getNodeDropPoint(
+      nodes.value.find(n => n.id === activeNode.id) || activeNode,
+      nodes.value,
+      findNode,
+    )
+    applyNodeGroupMembership(activeNode.id, dropPoint)
     edges.value = pruneInvalidEdges(nodes.value, edges.value)
   }
   isNodeDragging.value = false
@@ -2510,7 +2097,7 @@ function openPublishModal() {
   if (errors.length > 0) return
   publishDescription.value = ''
   publishModalVisible.value = true
-}
+  }
 
 async function confirmPublishWorkflow() {
   saving.value = true
@@ -2693,16 +2280,23 @@ function openLeftPanelTab(tab) {
 function formatWorkflowLayout() {
   if (isVersionPreview.value || nodes.value.length < 2) return
   recordHistory()
-  const before = JSON.stringify(nodes.value.map(n => ({ id: n.id, x: n.position?.x, y: n.position?.y })))
+  const snapshotNode = n => ({
+    id: n.id,
+    x: n.position?.x,
+    y: n.position?.y,
+    w: n.style?.width,
+    h: n.style?.height,
+  })
+  const before = JSON.stringify(nodes.value.map(snapshotNode))
   const { nodes: laid, edges: laidEdges } = applyWorkflowAutoLayout(nodes.value, edges.value)
-  const after = JSON.stringify(laid.map(n => ({ id: n.id, x: n.position?.x, y: n.position?.y })))
+  const after = JSON.stringify(laid.map(snapshotNode))
   commitWorkflowNodes(laid)
   edges.value = laidEdges
   scheduleAutoSave()
   if (before !== after) {
-    message.success('已纠正弯折过大的连线')
+    message.success('已格式化工作流布局')
   } else {
-    message.info('当前连线无需调整')
+    message.info('当前布局已整齐，无需调整')
   }
 }
 

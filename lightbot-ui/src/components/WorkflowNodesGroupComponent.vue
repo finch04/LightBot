@@ -17,7 +17,7 @@
     </button>
 
     <div v-show="isExpanded" class="workflow-panel">
-      <div v-for="(step, i) in nodeSteps" :key="step.nodeId || i" class="workflow-step">
+      <div v-for="(step, i) in nodeSteps" :key="step.stepKey || `${step.nodeId || 'node'}_${i}`" class="workflow-step">
         <div class="event-row" :class="stepStatusClass(step)">
           <LoadingOutlined v-if="step.status === 'running'" class="event-icon icon-spinning" />
           <CheckCircleOutlined v-else-if="step.status === 'done'" class="event-icon icon-success" />
@@ -41,6 +41,15 @@
             <div v-if="step.detail" class="event-detail">
               <pre>{{ step.detail }}</pre>
             </div>
+            <div v-if="hasKvData(step.input)" class="event-kv-block">
+              <div class="event-kv-title">入参</div>
+              <pre>{{ formatKv(step.input) }}</pre>
+            </div>
+            <div v-if="hasKvData(step.outputs)" class="event-kv-block">
+              <div class="event-kv-title">出参</div>
+              <pre>{{ formatKv(step.outputs) }}</pre>
+            </div>
+            <div v-if="step.nextNodeId" class="event-next-node">下一节点: {{ step.nextNodeId }}</div>
             <div v-if="step.nodeId" class="event-node-id">节点 ID: {{ step.nodeId }}</div>
           </div>
         </div>
@@ -79,35 +88,59 @@ watch(
   { immediate: true }
 )
 
-/** 按 nodeId 合并 start/complete，展示运行中与详情 */
+/** 按事件顺序构建链路，保留重复节点经过记录（不再按 nodeId 去重） */
 const nodeSteps = computed(() => {
-  const map = new Map()
+  const steps = []
+  const runningByNodeId = new Map()
+  const stepByIndex = new Map()
+
   for (const e of props.workflowEvents) {
     if (e.type === 'workflow_node_start' && e.nodeId) {
-      const prev = map.get(e.nodeId) || {}
-      map.set(e.nodeId, {
-        ...prev,
+      const step = {
         nodeId: e.nodeId,
         nodeType: e.nodeType,
         nodeLabel: e.nodeLabel,
+        input: e.input,
+        stepIndex: e.stepIndex,
+        stepKey: `start_${e.stepIndex ?? steps.length}_${e.nodeId}`,
         status: 'running',
-      })
+      }
+      steps.push(step)
+      runningByNodeId.set(e.nodeId, step)
+      if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
     } else if (e.type === 'workflow_node_complete' && e.nodeId) {
-      const prev = map.get(e.nodeId) || {}
-      map.set(e.nodeId, {
-        ...prev,
-        nodeId: e.nodeId,
-        nodeType: e.nodeType ?? prev.nodeType,
-        nodeLabel: e.nodeLabel ?? prev.nodeLabel,
-        message: e.message,
-        detail: e.detail,
-        durationMs: e.durationMs,
-        success: e.success,
-        status: e.success === false ? 'failed' : 'done',
-      })
+      let step = null
+      if (e.stepIndex != null) {
+        step = stepByIndex.get(e.stepIndex) || null
+      }
+      if (!step) {
+        step = runningByNodeId.get(e.nodeId) || null
+      }
+      if (!step) {
+        step = {
+          nodeId: e.nodeId,
+          nodeType: e.nodeType,
+          nodeLabel: e.nodeLabel,
+          stepIndex: e.stepIndex,
+          stepKey: `complete_${e.stepIndex ?? steps.length}_${e.nodeId}`,
+          status: 'pending',
+        }
+        steps.push(step)
+      }
+      step.nodeType = e.nodeType ?? step.nodeType
+      step.nodeLabel = e.nodeLabel ?? step.nodeLabel
+      step.message = e.message
+      step.detail = e.detail
+      step.durationMs = e.durationMs
+      step.success = e.success
+      step.outputs = e.outputs
+      step.nextNodeId = e.nextNodeId
+      step.status = e.success === false ? 'failed' : 'done'
+      runningByNodeId.delete(e.nodeId)
+      if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
     }
   }
-  return Array.from(map.values())
+  return steps
 })
 
 const runningCount = computed(() =>
@@ -147,6 +180,19 @@ function getNodeTypeName(type) {
     app_component: '应用组件',
   }
   return map[type] || type || '节点'
+}
+
+function hasKvData(value) {
+  return value && typeof value === 'object' && Object.keys(value).length > 0
+}
+
+function formatKv(value) {
+  if (!value) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
 }
 </script>
 
@@ -329,6 +375,38 @@ function getNodeTypeName(type) {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.event-kv-block {
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ede9fe;
+  background: #faf5ff;
+}
+
+.event-kv-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6d28d9;
+}
+
+.event-kv-block pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4c1d95;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.event-next-node {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6b7280;
+  font-family: ui-monospace, monospace;
 }
 
 .event-node-id {

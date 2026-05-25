@@ -389,6 +389,7 @@ export function migrateGroupNodeFields(node) {
   const style = node.style || {}
   return {
     ...node,
+    dragHandle: '.group-shell',
     style: {
       width: style.width || `${size.width}px`,
       height: style.height || `${size.height}px`,

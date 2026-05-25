@@ -105,6 +105,39 @@ export function normalizeWorkflowEdges(edgeList) {
   })
 }
 
+/** 是否允许跨容器边界的合法连线（经内置起止节点与主流程衔接） */
+function isAllowedGroupBoundaryConnection(sourceNode, targetNode, sourceType, targetType) {
+  const sp = getNodeParentId(sourceNode)
+  const tp = getNodeParentId(targetNode)
+  if (sp === tp) return true
+
+  // 主流程 → 迭代开始 / 并行处理
+  if (GROUP_START_BUILTIN.has(targetType) && tp != null && sp == null) return true
+  // 迭代结束 / 并行结束 → 主流程
+  if (GROUP_END_BUILTIN.has(sourceType) && sp != null && tp == null) return true
+  return false
+}
+
+/** 容器内置起止节点的连线方向约束 */
+function isValidGroupBuiltinConnection(sourceNode, targetNode, sourceType, targetType) {
+  const sp = getNodeParentId(sourceNode)
+  const tp = getNodeParentId(targetNode)
+
+  if (GROUP_START_BUILTIN.has(sourceType) && tp !== sp) return false
+  if (GROUP_START_BUILTIN.has(targetType)) {
+    if (sp === tp) return false
+    if (sp != null) return false
+  }
+
+  if (GROUP_END_BUILTIN.has(targetType) && sp !== tp) return false
+  if (GROUP_END_BUILTIN.has(sourceType)) {
+    if (sp === tp) return false
+    if (tp != null) return false
+  }
+
+  return true
+}
+
 /**
  * @param {object} connection vue-flow Connection
  * @param {{ nodes: array, edges: array, excludeEdgeId?: string }} ctx
@@ -129,15 +162,15 @@ export function isValidWorkflowConnection(connection, ctx) {
   const sourceNode = getNode(nodes, source)
   const targetNode = getNode(nodes, target)
 
-  // 循环/批处理容器禁止任何外部连线
+  // 循环/批处理容器壳层禁止连线，经内置起止节点与主流程衔接
   if (isGroupNodeType(sourceType) || isGroupNodeType(targetType)) return false
 
-  // 容器内置开始节点不可作为连线目标，结束节点不可作为连线起点
-  if (GROUP_END_BUILTIN.has(sourceType)) return false
-  if (GROUP_START_BUILTIN.has(targetType)) return false
+  if (!isValidGroupBuiltinConnection(sourceNode, targetNode, sourceType, targetType)) return false
 
-  // 容器内外不能互连，仅允许同一 parentNode 内连线
-  if (sourceNode && targetNode && isCrossGroupEdge(sourceNode, targetNode)) return false
+  // 容器内外默认不能互连；内置起止节点允许与主流程衔接
+  if (sourceNode && targetNode && isCrossGroupEdge(sourceNode, targetNode)) {
+    if (!isAllowedGroupBoundaryConnection(sourceNode, targetNode, sourceType, targetType)) return false
+  }
 
   // 目标必须是入端口（归一化后应为 in；兼容拖拽过程中 handle 暂未解析）
   if (targetHandle != null && targetHandle !== '' && targetHandle !== HANDLE_IN) return false

@@ -24,14 +24,18 @@
 import { computed } from 'vue'
 import WorkflowHandle from '../components/WorkflowHandle.vue'
 import NodeTypeIcon from '../components/NodeTypeIcon.vue'
+import { useGroupDragMask } from '../useGroupDragMask'
 
 const props = defineProps({
   id: String,
   data: Object,
-  selected: Boolean
+  selected: Boolean,
+  parentNode: String,
 })
 
 defineEmits(['edit'])
+
+const { isGroupChildDragMasked } = useGroupDragMask(props)
 
 const intentConditions = computed(() => {
   const list = props.data?.conditions || []
@@ -40,6 +44,7 @@ const intentConditions = computed(() => {
 
 const nodeClass = computed(() => ({
   selected: props.selected,
+  'wf-group-child-mask': isGroupChildDragMasked.value,
   [`debug-${props.data?.debugStatus}`]: !!props.data?.debugStatus
 }))
 </script>

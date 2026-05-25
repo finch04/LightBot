@@ -1,0 +1,6 @@
+/* 循环/批处理容器拖拽时，子节点遮罩（由组件内 class 控制，松手即消失） */
+.wf-group-child-mask {
+  opacity: 0.45;
+  filter: grayscale(0.35);
+  pointer-events: none;
+}

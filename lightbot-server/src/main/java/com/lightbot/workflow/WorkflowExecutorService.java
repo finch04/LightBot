@@ -11,10 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 工作流执行服务
@@ -32,6 +35,7 @@ public class WorkflowExecutorService {
     private final AgentService agentService;
     private final AgentVersionService agentVersionService;
     private final ObjectMapper objectMapper;
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^}]+)}}");
 
     /**
      * 执行工作流
@@ -115,9 +119,11 @@ public class WorkflowExecutorService {
         }
 
         StringBuilder result = new StringBuilder();
+        int stepIndex = 0;
 
         // 4. 执行 DAG 链路
         while (currentNodeId != null) {
+            stepIndex++;
             WorkflowNode node = workflow.getNode(currentNodeId);
             if (node == null) {
                 log.warn("[WorkflowExecutorService] 节点不存在: nodeId={}", currentNodeId);
@@ -133,12 +139,18 @@ public class WorkflowExecutorService {
             final String executingNodeId = currentNodeId;
 
             long nodeStartMs = System.currentTimeMillis();
-            emitWorkflowEvent(workflowEvents, onEvent, Map.of(
-                    "type", "workflow_node_start",
-                    "nodeId", executingNodeId,
-                    "nodeType", nodeTypeCode,
-                    "nodeLabel", nodeLabel,
-                    "contentOffset", 0));
+            Map<String, Object> startEvent = new LinkedHashMap<>();
+            startEvent.put("type", "workflow_node_start");
+            startEvent.put("nodeId", executingNodeId);
+            startEvent.put("nodeType", nodeTypeCode);
+            startEvent.put("nodeLabel", nodeLabel);
+            startEvent.put("stepIndex", stepIndex);
+            startEvent.put("contentOffset", 0);
+            Map<String, Object> inputPreview = buildNodeInputPreview(node, context);
+            if (!inputPreview.isEmpty()) {
+                startEvent.put("input", inputPreview);
+            }
+            emitWorkflowEvent(workflowEvents, onEvent, startEvent);
 
             boolean nodeSuccess = true;
             String completeMessage = "执行完成";
@@ -183,10 +195,17 @@ public class WorkflowExecutorService {
             completeEvent.put("message", completeMessage);
             completeEvent.put("success", nodeSuccess);
             completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
+            completeEvent.put("stepIndex", stepIndex);
             completeEvent.put("contentOffset", 0);
+            if (nextNodeId != null) {
+                completeEvent.put("nextNodeId", nextNodeId);
+            }
             String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage);
             if (detail != null && !detail.isBlank()) {
                 completeEvent.put("detail", detail);
+            }
+            if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
+                completeEvent.put("outputs", summarizeMap(nodeResult.getOutputs(), 10));
             }
             emitWorkflowEvent(workflowEvents, onEvent, completeEvent);
 
@@ -201,6 +220,110 @@ public class WorkflowExecutorService {
         }
 
         return result.toString();
+    }
+
+    /**
+     * 构建节点入参预览，用于对话页展示链路传参。
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildNodeInputPreview(WorkflowNode node, NodeExecutionContext context) {
+        Map<String, Object> preview = new LinkedHashMap<>();
+        if (node == null || context == null) {
+            return preview;
+        }
+
+        if (node.getType() == NodeType.START) {
+            preview.put("userInput", truncateDetail(context.getUserInput()));
+            return preview;
+        }
+
+        Map<String, Object> nodeData = node.getData();
+        Object inputParamsObj = nodeData != null ? nodeData.get("input_params") : null;
+        if (inputParamsObj instanceof List<?> inputParamsList) {
+            for (Object item : inputParamsList) {
+                if (!(item instanceof Map<?, ?> paramMap)) {
+                    continue;
+                }
+                Object keyVal = paramMap.get("key");
+                String key = keyVal == null ? "" : String.valueOf(keyVal).trim();
+                if (key.isEmpty()) {
+                    continue;
+                }
+                Object rawValue = paramMap.get("value");
+                Object value = resolveInputParamValue(rawValue, context.getVariables());
+                preview.put(key, summarizeValue(value));
+            }
+        }
+
+        if (preview.isEmpty()) {
+            addIfPresent(preview, "input", context.getVariables().get("input"));
+            addIfPresent(preview, "query", context.getVariables().get("query"));
+            addIfPresent(preview, "retrievalResult", context.getVariables().get("retrievalResult"));
+            addIfPresent(preview, "llmOutput", context.getVariables().get("llmOutput"));
+            addIfPresent(preview, "result", context.getVariables().get("result"));
+        }
+        return preview;
+    }
+
+    private Object resolveInputParamValue(Object rawValue, Map<String, Object> variables) {
+        if (!(rawValue instanceof String valueText)) {
+            return rawValue;
+        }
+        Matcher matcher = VAR_PATTERN.matcher(valueText.trim());
+        if (matcher.matches()) {
+            String varName = matcher.group(1).trim();
+            return variables.get(varName);
+        }
+        StringBuffer sb = new StringBuffer();
+        matcher.reset();
+        while (matcher.find()) {
+            String varName = matcher.group(1).trim();
+            Object varValue = variables.get(varName);
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(varValue == null ? "" : String.valueOf(varValue)));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private Map<String, Object> summarizeMap(Map<String, Object> source, int maxEntries) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (source == null || source.isEmpty()) {
+            return out;
+        }
+        int count = 0;
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (count >= maxEntries) {
+                out.put("_truncated", "其余字段已省略");
+                break;
+            }
+            out.put(entry.getKey(), summarizeValue(entry.getValue()));
+            count++;
+        }
+        return out;
+    }
+
+    private Object summarizeValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof String text) {
+            return truncateDetail(text);
+        }
+        try {
+            String json = objectMapper.writeValueAsString(value);
+            return truncateDetail(json);
+        } catch (Exception e) {
+            return truncateDetail(String.valueOf(value));
+        }
+    }
+
+    private void addIfPresent(Map<String, Object> target, String key, Object value) {
+        if (value != null) {
+            target.put(key, summarizeValue(value));
+        }
     }
 
     /**

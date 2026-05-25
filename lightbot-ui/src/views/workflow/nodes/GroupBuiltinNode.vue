@@ -11,10 +11,13 @@
 <script setup>
 import { computed } from 'vue'
 import WorkflowHandle from '../components/WorkflowHandle.vue'
+import { useGroupDragMask } from '../useGroupDragMask'
 
 const props = defineProps({
+  id: String,
   data: Object,
   selected: Boolean,
+  parentNode: String,
   /** loop_start | loop_end | batch_start | batch_end */
   nodeType: { type: String, required: true },
 })
@@ -29,11 +32,14 @@ const VARIANT_META = {
 const meta = computed(() => VARIANT_META[props.nodeType] || { label: props.nodeType, variant: 'loop-start' })
 const defaultLabel = computed(() => meta.value.label)
 const variant = computed(() => meta.value.variant)
-const showSource = computed(() => props.nodeType === 'loop_start' || props.nodeType === 'batch_start')
-const showTarget = computed(() => props.nodeType === 'loop_end' || props.nodeType === 'batch_end')
+const showSource = computed(() => true)
+const showTarget = computed(() => true)
+
+const { isGroupChildDragMasked } = useGroupDragMask(props)
 
 const nodeClass = computed(() => ({
   selected: props.selected,
+  'wf-group-child-mask': isGroupChildDragMasked.value,
   [`debug-${props.data?.debugStatus}`]: !!props.data?.debugStatus,
 }))
 </script>

@@ -5,7 +5,10 @@
     width="520"
     destroy-on-close
     class="node-single-test-drawer"
-    @close="emit('update:open', false)"
+    :closable="!loading"
+    :mask-closable="!loading"
+    :keyboard="!loading"
+    @close="onDrawerClose"
   >
     <div v-if="node" class="node-test-body">
       <a-alert
@@ -27,7 +30,7 @@
               <code class="var-name">{{ item.key }}</code>
               <span v-if="item.label && item.label !== item.key" class="var-hint">{{ item.label }}</span>
             </div>
-            <a-textarea v-model:value="item.value" :rows="3" placeholder="填写测试值" />
+            <a-textarea v-model:value="item.value" :rows="3" placeholder="填写测试值" :disabled="loading" />
           </div>
         </div>
       </section>
@@ -46,19 +49,17 @@
           <span v-if="durationMs != null" class="status-duration">{{ durationMs }}ms</span>
         </div>
 
-        <div class="result-block">
-          <div class="result-block-title">输出</div>
-          <pre class="result-pre code-block-scroll code-block-scroll--dark">{{ outputText }}</pre>
+        <div class="result-block" :class="{ 'result-block-error': !lastSuccess }">
+          <div class="result-block-title">{{ lastSuccess ? '输出' : '错误信息' }}</div>
+          <pre
+            class="result-pre code-block-scroll code-block-scroll--dark"
+            :class="{ 'result-pre-error': !lastSuccess }"
+          >{{ outputText }}</pre>
         </div>
 
-        <div v-if="detailText" class="result-block">
+        <div v-if="lastSuccess && detailText" class="result-block">
           <div class="result-block-title">详情</div>
           <pre class="result-pre result-pre-muted code-block-scroll code-block-scroll--dark">{{ detailText }}</pre>
-        </div>
-
-        <div v-if="!lastSuccess && errorText" class="result-block result-block-error">
-          <div class="result-block-title">错误信息</div>
-          <pre class="result-pre result-pre-error code-block-scroll code-block-scroll--dark">{{ errorText }}</pre>
         </div>
       </section>
     </div>
@@ -93,7 +94,6 @@ const statusText = ref('')
 const durationMs = ref(null)
 const outputText = ref('')
 const detailText = ref('')
-const errorText = ref('')
 
 const drawerTitle = computed(() => {
   const label = props.node?.data?.label || props.node?.type || '节点'
@@ -112,6 +112,11 @@ const statusIcon = computed(() => {
   return lastSuccess.value ? CheckCircleFilled : CloseCircleFilled
 })
 
+function onDrawerClose() {
+  if (loading.value) return
+  emit('update:open', false)
+}
+
 function resetResultState() {
   resultData.value = null
   lastSuccess.value = true
@@ -119,10 +124,9 @@ function resetResultState() {
   durationMs.value = null
   outputText.value = ''
   detailText.value = ''
-  errorText.value = ''
 }
 
-function formatDisplayOutput(data, complete) {
+function formatSuccessOutput(data, complete) {
   const raw = data?.output
   if (raw != null && String(raw).trim() && String(raw).trim() !== '执行完成') {
     return String(raw).trim()
@@ -145,8 +149,8 @@ function applyResultPayload(data) {
   if (!data) {
     lastSuccess.value = false
     statusText.value = '执行失败'
-    errorText.value = '未收到有效响应'
-    outputText.value = '（无输出）'
+    outputText.value = '未收到有效响应'
+    detailText.value = ''
     return
   }
   resultData.value = data
@@ -156,23 +160,26 @@ function applyResultPayload(data) {
     lastSuccess.value = false
     statusText.value = '执行失败'
     durationMs.value = null
-    outputText.value = '（无输出）'
+    outputText.value = '未收到节点执行结果，请检查网络或后端日志'
     detailText.value = ''
-    errorText.value = '未收到节点执行结果，请检查网络或后端日志'
     return
   }
   lastSuccess.value = complete.success === true
   statusText.value = complete.message || (lastSuccess.value ? '运行成功' : '运行失败')
   durationMs.value = complete.durationMs != null ? Number(complete.durationMs) : null
-  const formatted = formatDisplayOutput(data, complete)
-  outputText.value = formatted || '（无输出）'
-  const detail = complete.detail ? String(complete.detail).trim() : ''
-  detailText.value = detail && detail !== formatted ? detail : ''
-  if (!lastSuccess.value) {
-    errorText.value = complete.message || detail || formatted || '节点执行失败'
-  } else {
-    errorText.value = ''
+
+  if (lastSuccess.value) {
+    const formatted = formatSuccessOutput(data, complete)
+    outputText.value = formatted || '（无输出）'
+    const detail = complete.detail ? String(complete.detail).trim() : ''
+    detailText.value = detail && detail !== formatted ? detail : ''
+    return
   }
+
+  const detail = complete.detail ? String(complete.detail).trim() : ''
+  const formatted = formatSuccessOutput(data, complete)
+  outputText.value = complete.message || detail || formatted || '节点执行失败'
+  detailText.value = ''
 }
 
 watch(
@@ -186,6 +193,7 @@ watch(
 )
 
 function resetInputs() {
+  if (loading.value) return
   inputs.value = buildNodeTestInputs(props.node).map(i => ({ ...i }))
   resetResultState()
 }
@@ -204,7 +212,6 @@ async function runTest() {
       graph: props.graphPayload,
       inputParams,
     })
-    // request 拦截器返回 Result { code, data, message }
     const data = res?.data != null ? res.data : res
     applyResultPayload(data)
     emit('test-complete', {
@@ -215,15 +222,15 @@ async function runTest() {
     if (lastSuccess.value) {
       message.success('节点测试完成')
     } else {
-      message.warning('节点测试未通过，请查看下方错误信息')
+      message.warning('节点测试未通过，请查看错误信息')
     }
   } catch (e) {
     lastSuccess.value = false
     statusText.value = '请求失败'
     durationMs.value = null
-    errorText.value = e?.message || '测试请求失败'
-    outputText.value = '（无输出）'
-    resultData.value = { nodeEvents: [{ success: false, message: errorText.value }] }
+    outputText.value = e?.message || '测试请求失败'
+    detailText.value = ''
+    resultData.value = { nodeEvents: [{ success: false, message: outputText.value }] }
     emit('test-complete', { nodeId: props.node.id, success: false, result: null })
   } finally {
     loading.value = false

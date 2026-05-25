@@ -20,17 +20,21 @@ import { computed } from 'vue'
 import WorkflowHandle from '../components/WorkflowHandle.vue'
 import NodeTypeIcon from '../components/NodeTypeIcon.vue'
 import { getNodeMeta } from '../nodeMeta'
+import { useGroupDragMask } from '../useGroupDragMask'
 
 const props = defineProps({
   nodeType: { type: String, required: true },
+  id: String,
   data: Object,
   selected: Boolean,
+  parentNode: String,
   summaryKey: { type: String, default: '' }
 })
 
 defineEmits(['edit'])
 
 const meta = computed(() => getNodeMeta(props.nodeType))
+const { isGroupChildDragMasked } = useGroupDragMask(props)
 
 const summaryText = computed(() => {
   if (!props.summaryKey || !props.data) return ''
@@ -40,6 +44,7 @@ const summaryText = computed(() => {
 
 const nodeClass = computed(() => ({
   selected: props.selected,
+  'wf-group-child-mask': isGroupChildDragMasked.value,
   [`debug-${props.data?.debugStatus}`]: !!props.data?.debugStatus
 }))
 </script>

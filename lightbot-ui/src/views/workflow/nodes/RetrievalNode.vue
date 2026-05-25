@@ -1,5 +1,5 @@
 <template>
-  <div class="workflow-node retrieval-node" :class="{ selected }" @dblclick="$emit('edit')">
+  <div class="workflow-node retrieval-node" :class="nodeClass" @dblclick="$emit('edit')">
     <WorkflowHandle type="target" position="left" />
     <WorkflowHandle type="source" position="right" />
     <div class="node-header">
@@ -23,15 +23,26 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { BookOutlined } from '@ant-design/icons-vue'
+import { useGroupDragMask } from '../useGroupDragMask'
 
-defineProps({
+const props = defineProps({
+  id: String,
   data: Object,
-  selected: Boolean
+  selected: Boolean,
+  parentNode: String,
 })
 
 defineEmits(['edit'])
+
+const { isGroupChildDragMasked } = useGroupDragMask(props)
+
+const nodeClass = computed(() => ({
+  selected: props.selected,
+  'wf-group-child-mask': isGroupChildDragMasked.value,
+}))
 </script>
 
 <style scoped>
