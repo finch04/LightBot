@@ -23,7 +23,18 @@ public enum NodeType {
     RETRIEVAL("retrieval", "知识检索"),
     TOOL("tool", "工具调用"),
     SCRIPT("script", "脚本节点"),
-    CODE("code", "代码节点");
+    CODE("code", "代码节点"),
+    API("api", "HTTP调用"),
+    LOOP("loop", "循环"),
+    VARIABLE("variable", "变量赋值"),
+    CLASSIFIER("classifier", "意图分类"),
+    BATCH("batch", "批处理"),
+    MCP("mcp", "MCP工具"),
+    INPUT("input", "流程输入"),
+    OUTPUT("output", "流程输出"),
+    VARIABLE_HANDLE("variable_handle", "变量处理"),
+    PARAMETER_EXTRACTOR("parameter_extractor", "参数提取"),
+    APP_COMPONENT("app_component", "应用组件");
 
     @EnumValue
     private final String code;

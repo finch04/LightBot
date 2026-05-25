@@ -1,9 +1,9 @@
 <template>
-  <div class="workflow-node condition-node" :class="{ selected }" @dblclick="$emit('edit')">
-    <Handle type="target" position="left" />
-    <Handle type="source" position="top" id="a" />
-    <Handle type="source" position="bottom" id="b" />
-    <Handle type="source" position="right" id="c" />
+  <div class="workflow-node condition-node" :class="nodeClass" @dblclick="$emit('edit')">
+    <WorkflowHandle type="target" position="left" />
+    <WorkflowHandle type="source" position="top" id="a" />
+    <WorkflowHandle type="source" position="bottom" id="b" />
+    <WorkflowHandle type="source" position="right" id="c" />
     <div class="node-header">
       <div class="node-icon">
         <ForkOutlined />
@@ -21,18 +21,33 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
+import { computed } from 'vue'
+import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { ForkOutlined } from '@ant-design/icons-vue'
 
-defineProps({
+const props = defineProps({
   data: Object,
   selected: Boolean
 })
 
 defineEmits(['edit'])
+
+const nodeClass = computed(() => ({
+  selected: props.selected,
+  [`debug-${props.data?.debugStatus}`]: !!props.data?.debugStatus
+}))
 </script>
 
 <style scoped>
+.condition-node.debug-executing { animation: wf-exec 1.2s linear infinite; border-color: #6366f1; }
+.condition-node.debug-success { border-color: #22c55e; }
+.condition-node.debug-fail { border-color: #ef4444; }
+@keyframes wf-exec {
+  0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); }
+  50% { box-shadow: 0 0 0 8px rgba(99,102,241,0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); }
+}
+
 .condition-node {
   background: #fff;
   border: 2px solid #d97706;

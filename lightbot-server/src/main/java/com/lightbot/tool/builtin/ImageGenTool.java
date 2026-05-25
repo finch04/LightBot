@@ -1,4 +1,4 @@
-package com.lightbot.tool.builtintool;
+package com.lightbot.tool.builtin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

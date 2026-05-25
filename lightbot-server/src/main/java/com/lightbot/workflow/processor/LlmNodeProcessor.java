@@ -5,15 +5,21 @@ import com.lightbot.model.ModelFactory;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
+import com.lightbot.workflow.WorkflowPromptUtils;
 import com.lightbot.workflow.WorkflowEdge;
+import com.lightbot.workflow.WorkflowNodeDataUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,39 +51,42 @@ public class LlmNodeProcessor implements NodeProcessor {
             nodeData = new HashMap<>();
         }
 
-        // 2. 获取 modelId（从节点配置或 Agent 默认配置）
-        Long modelId = null;
-        if (nodeData.containsKey("modelId")) {
-            modelId = ((Number) nodeData.get("modelId")).longValue();
-        } else {
-            // 从 Agent.config 获取默认 providerId
-            Map<String, Object> agentConfig = parseAgentConfig(context.getAgent().getConfig());
-            if (agentConfig.containsKey("providerId")) {
-                modelId = ((Number) agentConfig.get("providerId")).longValue();
-            }
-        }
-
-        if (modelId == null) {
-            log.warn("[LlmNodeProcessor] 未配置 modelId，节点ID={}", context.getCurrentNodeId());
+        // 2. 获取提供商 ID 与具体模型名
+        Long providerId = resolveProviderId(nodeData, context.getAgent().getConfig());
+        if (providerId == null) {
+            log.warn("[LlmNodeProcessor] 未配置 providerId，节点ID={}, nodeDataKeys={}",
+                    context.getCurrentNodeId(), nodeData.keySet());
+            String errMsg = "LLM节点未配置模型提供商，请在节点配置中选择提供商和模型";
             return NodeExecutionResult.builder()
+                    .streamContent(errMsg)
                     .finished(false)
                     .build();
         }
 
-        // 3. 构建 Prompt
-        String promptTemplate = (String) nodeData.getOrDefault("promptTemplate", "{{input}}");
-        String prompt = renderPrompt(promptTemplate, context.getVariables());
+        String modelName = resolveModelName(nodeData);
+
+        // 3. 构建 Prompt（系统提示词 + 用户提示词）
+        String promptTemplate = String.valueOf(nodeData.getOrDefault("promptTemplate", "{{input}}"));
+        String userPrompt = WorkflowPromptUtils.render(promptTemplate, context.getVariables());
+        String sysPromptRaw = WorkflowNodeDataUtils.parseString(nodeData.get("sysPrompt"));
+        String systemPrompt = sysPromptRaw != null
+                ? WorkflowPromptUtils.render(sysPromptRaw, context.getVariables()) : null;
 
         // 4. 构建 ChatOptions
         Map<String, Object> configParams = new HashMap<>();
-        if (nodeData.containsKey("model")) {
-            configParams.put("modelId", nodeData.get("model"));
+        if (modelName != null && !modelName.isEmpty()) {
+            configParams.put("modelId", modelName);
         }
-        ChatOptions chatOptions = modelFactory.buildChatOptions(modelId, configParams);
+        ChatOptions chatOptions = modelFactory.buildChatOptions(providerId, configParams);
 
         // 5. 调用 LLM
-        ChatModel chatModel = modelFactory.getChatModel(modelId);
-        ChatResponse response = chatModel.call(new Prompt(prompt, chatOptions));
+        ChatModel chatModel = modelFactory.getChatModel(providerId);
+        List<Message> messages = new ArrayList<>();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            messages.add(new SystemMessage(systemPrompt));
+        }
+        messages.add(new UserMessage(userPrompt));
+        ChatResponse response = chatModel.call(new Prompt(messages, chatOptions));
         String llmOutput = response.getResult().getOutput().getText();
 
         // 6. 获取下一个节点
@@ -100,18 +109,33 @@ public class LlmNodeProcessor implements NodeProcessor {
     }
 
     /**
-     * 渲染 Prompt模板，替换变量
+     * 解析 Agent.config JSON
      */
-    private String renderPrompt(String template, Map<String, Object> variables) {
-        String result = template;
-        if (variables != null) {
-            for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                String placeholder = "{{" + entry.getKey() + "}}";
-                String value = entry.getValue() != null ? entry.getValue().toString() : "";
-                result = result.replace(placeholder, value);
-            }
+    private Long resolveProviderId(Map<String, Object> nodeData, String agentConfigJson) {
+        Long providerId = WorkflowNodeDataUtils.parseLongId(nodeData.get("providerId"));
+        if (providerId != null) {
+            return providerId;
         }
-        return result;
+        if (nodeData.get("modelId") instanceof Number) {
+            return ((Number) nodeData.get("modelId")).longValue();
+        }
+        Map<String, Object> agentConfig = parseAgentConfig(agentConfigJson);
+        return WorkflowNodeDataUtils.parseLongId(agentConfig.get("providerId"));
+    }
+
+    /**
+     * 解析具体模型名称（字符串 modelId 或 model 字段）
+     */
+    private String resolveModelName(Map<String, Object> nodeData) {
+        String model = WorkflowNodeDataUtils.parseString(nodeData.get("model"));
+        if (model != null) {
+            return model;
+        }
+        Object modelIdVal = nodeData.get("modelId");
+        if (modelIdVal instanceof String && !((String) modelIdVal).isEmpty()) {
+            return (String) modelIdVal;
+        }
+        return WorkflowNodeDataUtils.parseString(nodeData.get("modelName"));
     }
 
     /**

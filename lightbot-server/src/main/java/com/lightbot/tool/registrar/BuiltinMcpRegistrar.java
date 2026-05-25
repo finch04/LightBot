@@ -1,4 +1,4 @@
-package com.lightbot.tool;
+package com.lightbot.tool.registrar;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +25,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class BuiltInMcpRegistrar {
+public class BuiltinMcpRegistrar {
 
     private final McpServerService mcpServerService;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -74,15 +74,15 @@ public class BuiltInMcpRegistrar {
                     server.setStatus(CommonStatus.DISABLED);
                     mcpServerService.save(server);
                     imported++;
-                    log.info("[BuiltInMcp] 导入内置MCP Server: name={}, id={}", def.name, server.getId());
+                    log.info("[BuiltinMcpRegistrar] 导入内置 MCP Server: name={}, id={}", def.name, server.getId());
                 } else {
-                    log.debug("[BuiltInMcp] 内置MCP Server已存在，跳过: name={}", def.name);
+                    log.debug("[BuiltinMcpRegistrar] 内置 MCP Server 已存在，跳过: name={}", def.name);
                 }
             } catch (Exception e) {
-                log.warn("[BuiltInMcp] 处理内置MCP Server失败: name={}, error={}", def.name, e.getMessage());
+                log.warn("[BuiltinMcpRegistrar] 处理内置 MCP Server 失败: name={}, error={}", def.name, e.getMessage());
             }
         }
-        log.info("[BuiltInMcp] 内置MCP Server扫描完成: total={}, imported={}", BUILT_IN_MCPS.size(), imported);
+        log.info("[BuiltinMcpRegistrar] 内置 MCP Server 扫描完成: total={}, imported={}", BUILT_IN_MCPS.size(), imported);
     }
 
     /**

@@ -30,9 +30,9 @@ public class WorkflowNode {
     private NodeType type;
 
     /**
-     * 节点位置（用于前端渲染）
+     * 节点位置（用于前端渲染，x/y 可为小数）
      */
-    private Map<String, Integer> position;
+    private Map<String, Object> position;
 
     /**
      * 节点配置数据（不同类型节点有不同配置）

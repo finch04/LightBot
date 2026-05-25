@@ -92,4 +92,52 @@ public final class ToolEventGenerator {
             return "{\"type\":\"reasoning_content\",\"content\":\"\"}";
         }
     }
+
+    /**
+     * 工作流节点开始执行事件
+     */
+    public static String workflowNodeStartEvent(String nodeId, String nodeType, String nodeLabel, int contentOffset) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "workflow_node_start",
+                    "nodeId", nodeId != null ? nodeId : "",
+                    "nodeType", nodeType != null ? nodeType : "",
+                    "nodeLabel", nodeLabel != null ? nodeLabel : "",
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"workflow_node_start\",\"nodeId\":\"" + nodeId + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
+    /**
+     * 工作流节点执行完成事件
+     */
+    public static String workflowNodeCompleteEvent(String nodeId, String nodeType, String nodeLabel,
+                                                   String message, boolean success, int contentOffset) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "workflow_node_complete",
+                    "nodeId", nodeId != null ? nodeId : "",
+                    "nodeType", nodeType != null ? nodeType : "",
+                    "nodeLabel", nodeLabel != null ? nodeLabel : "",
+                    "message", message != null ? message : "执行完成",
+                    "success", success,
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"workflow_node_complete\",\"nodeId\":\"" + nodeId + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
+    /**
+     * 工作流全部节点执行完成标记
+     */
+    public static String workflowCompleteEvent(int contentOffset) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "workflow_complete",
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"workflow_complete\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
 }

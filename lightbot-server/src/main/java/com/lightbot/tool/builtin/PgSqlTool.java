@@ -1,4 +1,4 @@
-package com.lightbot.tool.builtintool;
+package com.lightbot.tool.builtin;
 
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;

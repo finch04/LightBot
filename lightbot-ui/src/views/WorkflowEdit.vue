@@ -5,6 +5,8 @@
       <button class="btn-back" @click="goBack">
         <ArrowLeftOutlined /> 返回
       </button>
+      <a-tag v-if="workflowStatus !== 'published'" color="orange" class="publish-tag">未发布</a-tag>
+      <a-tag v-else color="green" class="publish-tag">已发布 v{{ publishedVersion }}</a-tag>
       <h1 class="workflow-title">{{ agent?.name || '工作流配置' }}</h1>
       <div class="toolbar-status">
         <a-dropdown v-if="validationErrors.length > 0" :trigger="['click']">
@@ -25,22 +27,32 @@
             </div>
           </template>
         </a-dropdown>
-        <span v-else-if="nodes.length > 2" class="status-valid">
+        <span v-else-if="validationErrors.length === 0 && nodes.length >= 2" class="status-valid">
           <CheckCircleOutlined /> 配置完整
         </span>
         <span v-else class="status-empty">
           请添加节点并配置
         </span>
+        <a-tooltip title="验证配置">
+          <a-button type="text" size="small" class="btn-validate" @click="validateWorkflow">
+            <AuditOutlined />
+          </a-button>
+        </a-tooltip>
+        <span v-if="autoSaving" class="auto-save-hint saving">保存中...</span>
+        <span v-else-if="lastAutoSaveTime" class="auto-save-hint">{{ formatAutoSaveTime(lastAutoSaveTime) }} 已自动保存</span>
       </div>
       <div class="toolbar-actions">
         <a-button v-if="canUndo" type="default" @click="undoAction">
           <UndoOutlined /> 撤回
         </a-button>
-        <a-button type="default" @click="validateWorkflow">
-          验证配置
+        <a-button type="default" @click="globalConfigVisible = true">全局设置</a-button>
+        <a-button type="default" @click="testVisible = true">测试运行</a-button>
+        <a-button type="default" @click="openVersionDrawer">版本历史</a-button>
+        <a-button type="default" @click="saveDraft" :disabled="saving" :loading="saving">
+          <SaveOutlined /> 暂存
         </a-button>
-        <a-button type="primary" @click="saveWorkflow" :disabled="saving" :loading="saving">
-          <SaveOutlined /> 保存工作流
+        <a-button type="primary" @click="publishWorkflow" :disabled="saving" :loading="saving">
+          发布
         </a-button>
       </div>
     </div>
@@ -50,13 +62,56 @@
       <!-- 左侧节点面板 -->
       <div class="node-panel" :class="{ collapsed: panelCollapsed }">
         <div class="panel-header">
-          <span v-if="!panelCollapsed">节点库</span>
+          <span v-if="!panelCollapsed">{{ leftPanelTab === 'library' ? '节点库' : '画布节点' }}</span>
+          <div v-if="!panelCollapsed" class="panel-header-actions">
+            <a-tooltip title="如何新增节点">
+              <button type="button" class="btn-help" @click="nodeHelpVisible = true">
+                <QuestionCircleOutlined />
+              </button>
+            </a-tooltip>
+          </div>
           <button class="btn-collapse" @click="panelCollapsed = !panelCollapsed">
             <LeftOutlined v-if="!panelCollapsed" />
             <RightOutlined v-else />
           </button>
         </div>
         <div class="panel-body" v-if="!panelCollapsed">
+          <a-segmented
+            v-model:value="leftPanelTab"
+            :options="[
+              { label: '节点库', value: 'library' },
+              { label: '画布节点', value: 'canvas' }
+            ]"
+            block
+            size="small"
+            style="margin-bottom: 10px"
+          />
+
+          <template v-if="leftPanelTab === 'canvas'">
+            <a-input
+              v-model:value="canvasNodeSearch"
+              placeholder="搜索画布节点..."
+              allow-clear
+              size="small"
+            >
+              <template #prefix><SearchOutlined /></template>
+            </a-input>
+            <div class="canvas-node-list">
+              <div
+                v-for="n in filteredCanvasNodes"
+                :key="n.id"
+                class="canvas-node-item"
+                :class="{ active: selectedNode?.id === n.id }"
+                @click="focusNode(n)"
+              >
+                <span class="canvas-node-dot" :style="{ background: getNodeColor(n.type) }" />
+                <span class="canvas-node-name">{{ n.data?.label || getNodeTitle(n.type) }}</span>
+                <span class="canvas-node-type">{{ getNodeTitle(n.type) }}</span>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
           <a-input
             v-model:value="nodeSearch"
             placeholder="搜索节点..."
@@ -66,56 +121,50 @@
             <template #prefix><SearchOutlined /></template>
           </a-input>
 
-          <div class="node-group">
-            <div class="group-title">基础节点</div>
+          <div class="node-group" v-for="group in filteredNodeGroups" :key="group.key">
+            <div class="group-title">{{ group.title }}</div>
             <NodeItem
-              type="llm"
-              title="大模型"
-              desc="调用大模型生成内容"
-              color="#7c3aed"
+              v-for="type in group.items"
+              :key="type"
+              :type="type"
+              :title="getNodeMeta(type).title"
+              :desc="getNodeMeta(type).desc"
+              :color="getNodeMeta(type).color"
               draggable="true"
-              @dragstart="onDragStart($event, 'llm')"
-            />
-            <NodeItem
-              type="condition"
-              title="条件判断"
-              desc="根据条件选择分支"
-              color="#d97706"
-              draggable="true"
-              @dragstart="onDragStart($event, 'condition')"
+              @dragstart="onDragStart($event, type)"
             />
           </div>
-
-          <div class="node-group">
-            <div class="group-title">扩展节点</div>
-            <NodeItem
-              type="retrieval"
-              title="知识检索"
-              desc="从知识库检索内容"
-              color="#4f46e5"
-              draggable="true"
-              @dragstart="onDragStart($event, 'retrieval')"
-            />
-            <NodeItem
-              type="tool"
-              title="工具调用"
-              desc="执行预设工具"
-              color="#059669"
-              draggable="true"
-              @dragstart="onDragStart($event, 'tool')"
-            />
-          </div>
+          </template>
         </div>
       </div>
 
       <!-- 中间画布 -->
-      <div class="canvas-area" @dragover.prevent @drop="onDrop">
+      <div class="canvas-area" ref="canvasAreaRef" @dragover.prevent @drop="onDrop">
+        <!-- 拖动节点时显示删除区 -->
+        <div
+          v-show="isNodeDragging"
+          ref="trashRef"
+          class="workflow-trash"
+          :class="{ 'is-over': dragOverTrash, 'is-disabled': !canDeleteDraggedNode }"
+        >
+          <DeleteOutlined class="trash-icon" />
+          <span class="trash-label">{{ canDeleteDraggedNode ? '拖到此处删除' : '开始/结束节点不可删除' }}</span>
+        </div>
+
         <VueFlow
           v-if="nodes.length > 0"
           :nodes="nodes"
           :edges="edges"
+          :nodes-draggable="true"
+          :edges-selectable="true"
+          :default-edge-options="defaultEdgeOptions"
           @connect="onConnect"
+          @nodes-change="onNodesChange"
+          @node-drag-start="onNodeDragStart"
+          @node-drag="onNodeDrag"
+          @node-drag-stop="onNodeDragStop"
           @node-click="onNodeClick"
+          @edge-click="onEdgeClick"
           @pane-click="onPaneClick"
           :default-viewport="{ zoom: 0.8, x: 0, y: 0 }"
           :min-zoom="0.1"
@@ -125,7 +174,10 @@
           <Controls position="bottom-right" show-zoom show-fit-view />
           <MiniMap
             position="bottom-left"
-            :style="{ width: '350px', height: '200px', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff' }"
+            class="workflow-minimap"
+            :offset-scale="4"
+            pannable
+            zoomable
             :node-color="getNodeColor"
             :node-stroke-width="3"
           />
@@ -137,6 +189,18 @@
           <template #node-condition="props"><ConditionNode v-bind="props" /></template>
           <template #node-retrieval="props"><RetrievalNode v-bind="props" /></template>
           <template #node-tool="props"><ToolNode v-bind="props" /></template>
+          <template #node-classifier="props"><ClassifierNode v-bind="props" /></template>
+          <template #node-api="props"><GenericWorkflowNode v-bind="props" node-type="api" summary-key="url" /></template>
+          <template #node-loop="props"><GenericWorkflowNode v-bind="props" node-type="loop" /></template>
+          <template #node-variable="props"><GenericWorkflowNode v-bind="props" node-type="variable" summary-key="variableName" /></template>
+          <template #node-batch="props"><GenericWorkflowNode v-bind="props" node-type="batch" /></template>
+          <template #node-script="props"><GenericWorkflowNode v-bind="props" node-type="script" /></template>
+          <template #node-mcp="props"><GenericWorkflowNode v-bind="props" node-type="mcp" summary-key="mcpServerName" /></template>
+          <template #node-input="props"><GenericWorkflowNode v-bind="props" node-type="input" /></template>
+          <template #node-output="props"><GenericWorkflowNode v-bind="props" node-type="output" summary-key="output" /></template>
+          <template #node-variable_handle="props"><GenericWorkflowNode v-bind="props" node-type="variable_handle" /></template>
+          <template #node-parameter_extractor="props"><GenericWorkflowNode v-bind="props" node-type="parameter_extractor" /></template>
+          <template #node-app_component="props"><GenericWorkflowNode v-bind="props" node-type="app_component" summary-key="componentName" /></template>
         </VueFlow>
 
         <!-- 空状态提示 -->
@@ -145,21 +209,61 @@
         </div>
       </div>
 
-      <!-- 右侧配置面板 -->
-      <div class="config-panel" v-if="selectedNode">
+      <!-- 右侧配置面板：连线详情 -->
+      <div class="config-panel" v-if="selectedEdge">
+        <div class="panel-header">
+          <div class="node-type-badge">
+            <div class="type-icon edge-icon">
+              <BranchesOutlined />
+            </div>
+            <span class="type-name">连线详情</span>
+          </div>
+          <button class="btn-close" @click="clearEdgeSelection">
+            <CloseOutlined />
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="edge-detail-card">
+            <div class="edge-detail-row">
+              <span class="edge-detail-label">连线 ID</span>
+              <span class="edge-detail-value mono">{{ selectedEdge.id }}</span>
+            </div>
+            <div class="edge-connection-flow">
+              <div class="edge-node-box source">
+                <span class="edge-node-role">源节点</span>
+                <span class="edge-node-name">{{ getEdgeSourceLabel(selectedEdge) }}</span>
+                <span class="edge-node-type">{{ getEdgeSourceType(selectedEdge) }}</span>
+                <span v-if="selectedEdge.sourceHandle" class="edge-handle-tag">出口: {{ selectedEdge.sourceHandle }}</span>
+              </div>
+              <div class="edge-arrow">
+                <ArrowRightOutlined />
+              </div>
+              <div class="edge-node-box target">
+                <span class="edge-node-role">目标节点</span>
+                <span class="edge-node-name">{{ getEdgeTargetLabel(selectedEdge) }}</span>
+                <span class="edge-node-type">{{ getEdgeTargetType(selectedEdge) }}</span>
+                <span v-if="selectedEdge.targetHandle" class="edge-handle-tag">入口: {{ selectedEdge.targetHandle }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="panel-footer edge-delete-footer">
+            <a-button type="primary" danger block @click="deleteSelectedEdge">
+              <DeleteOutlined /> 删除连线
+            </a-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧配置面板：节点配置 -->
+      <div class="config-panel" v-else-if="selectedNode">
         <div class="panel-header">
           <div class="node-type-badge">
             <div class="type-icon" :style="{ background: getNodeColor(selectedNode.type) + '20', color: getNodeColor(selectedNode.type) }">
-              <RobotOutlined v-if="selectedNode.type === 'llm'" />
-              <ForkOutlined v-if="selectedNode.type === 'condition'" />
-              <BookOutlined v-if="selectedNode.type === 'retrieval'" />
-              <ToolOutlined v-if="selectedNode.type === 'tool'" />
-              <PlayCircleOutlined v-if="selectedNode.type === 'start'" />
-              <StopOutlined v-if="selectedNode.type === 'end'" />
+              <NodeTypeIcon :type="selectedNode.type" />
             </div>
             <span class="type-name">{{ getNodeTitle(selectedNode.type) }}</span>
           </div>
-          <button class="btn-close" @click="selectedNode = null">
+          <button class="btn-close" @click="closeNodePanel">
             <CloseOutlined />
           </button>
         </div>
@@ -171,125 +275,28 @@
             </div>
           </div>
 
-          <a-form layout="vertical">
+          <WorkflowNodeConfig
+            v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end'"
+            :node="selectedNode"
+            :providers="providers"
+            :llm-model-list="llmModelList"
+            :knowledge-list="knowledgeList"
+            :tools="tools"
+            :target-nodes="getTargetNodes()"
+            :filter-knowledge-option="filterKnowledgeOption"
+            :filter-tool-option="filterToolOption"
+            :get-tool-type-label="getToolTypeLabel"
+            @sync="syncNodes"
+            @llm-provider-change="onLlmProviderChange"
+            @llm-model-change="onLlmModelChange"
+            @knowledge-change="onKnowledgeChange"
+            @tool-change="onToolChange"
+          />
+          <a-form v-else layout="vertical">
+            <a-form-item label="节点 ID"><span class="node-id-display mono">{{ selectedNode.id }}</span></a-form-item>
             <a-form-item label="节点名称">
-              <a-input
-                v-model:value="selectedNode.data.label"
-                placeholder="输入节点名称"
-                @change="syncNodes"
-              />
+              <a-input v-model:value="selectedNode.data.label" @change="syncNodes" />
             </a-form-item>
-
-            <!-- LLM节点配置 -->
-            <template v-if="selectedNode.type === 'llm'">
-              <a-form-item label="选择模型" required>
-                <a-select
-                  v-model:value="selectedNode.data.modelId"
-                  placeholder="选择模型提供商"
-                  @change="onModelChange"
-                >
-                  <a-select-option v-for="p in providers" :key="p.id" :value="p.id">
-                    {{ p.name }}
-                  </a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="提示词模板" required>
-                <a-textarea
-                  v-model:value="selectedNode.data.promptTemplate"
-                  placeholder="使用 {{input}} 表示用户输入，{{retrieval}} 表示检索结果"
-                  :rows="4"
-                  @change="syncNodes"
-                />
-              </a-form-item>
-              <a-form-item label="温度参数">
-                <a-slider
-                  v-model:value="selectedNode.data.temperature"
-                  :min="0"
-                  :max="2"
-                  :step="0.1"
-                  @change="syncNodes"
-                />
-                <span class="param-value">{{ selectedNode.data.temperature || 0.7 }}</span>
-              </a-form-item>
-            </template>
-
-            <!-- 条件节点配置 -->
-            <template v-if="selectedNode.type === 'condition'">
-              <a-form-item label="条件分支配置">
-                <div class="branches-config">
-                  <div class="branch-list">
-                    <div v-for="(branch, index) in selectedNode.data.branches" :key="index" class="branch-item">
-                      <div class="branch-row">
-                        <a-input
-                          v-model:value="branch.condition"
-                          placeholder="条件表达式，如: input === 'yes'"
-                          size="small"
-                          style="width: 100%"
-                          @change="syncNodes"
-                        />
-                      </div>
-                      <div class="branch-row">
-                        <a-select
-                          v-model:value="branch.targetNodeId"
-                          placeholder="选择目标节点"
-                          size="small"
-                          style="width: 100%"
-                          @change="syncNodes"
-                        >
-                          <a-select-option v-for="n in getTargetNodes()" :key="n.id" :value="n.id">
-                            {{ n.data.label || getNodeTitle(n.type) }}
-                          </a-select-option>
-                        </a-select>
-                        <a-button type="text" danger size="small" @click="removeBranch(index)">
-                          <DeleteOutlined />
-                        </a-button>
-                      </div>
-                    </div>
-                  </div>
-                  <a-button type="dashed" block size="small" @click="addBranch">
-                    <PlusOutlined /> 添加分支
-                  </a-button>
-                </div>
-              </a-form-item>
-            </template>
-
-            <!-- 知识检索配置 -->
-            <template v-if="selectedNode.type === 'retrieval'">
-              <a-form-item label="选择知识库" required>
-                <a-select
-                  v-model:value="selectedNode.data.knowledgeId"
-                  placeholder="选择知识库"
-                  @change="onKnowledgeChange"
-                >
-                  <a-select-option v-for="k in knowledgeList" :key="k.id" :value="k.id">
-                    {{ k.name }}
-                  </a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="检索数量">
-                <a-input-number
-                  v-model:value="selectedNode.data.topK"
-                  :min="1"
-                  :max="10"
-                  @change="syncNodes"
-                />
-              </a-form-item>
-            </template>
-
-            <!-- 工具调用配置 -->
-            <template v-if="selectedNode.type === 'tool'">
-              <a-form-item label="选择工具" required>
-                <a-select
-                  v-model:value="selectedNode.data.toolId"
-                  placeholder="选择工具"
-                  @change="onToolChange"
-                >
-                  <a-select-option v-for="t in tools" :key="t.id" :value="t.id">
-                    {{ t.displayName || t.name }}
-                  </a-select-option>
-                </a-select>
-              </a-form-item>
-            </template>
           </a-form>
 
           <!-- 删除节点按钮 -->
@@ -302,12 +309,145 @@
       </div>
     </div>
   </div>
+
+  <!-- 如何新增节点说明 -->
+  <a-modal
+    v-model:open="nodeHelpVisible"
+    title="如何新增工作流节点"
+    :width="760"
+    :footer="null"
+    destroy-on-close
+  >
+    <div class="node-help-content">
+      <p class="node-help-intro">
+        工作流采用「前端画板定义 DAG + 后端 NodeProcessor 执行」架构。新增一种节点需要<strong>前后端同时扩展</strong>，后端通过 Spring 自动注册处理器。
+      </p>
+
+      <h4>一、后端：定义节点类型（NodeType）</h4>
+      <p>在 <code>lightbot-server/.../enums/NodeType.java</code> 增加枚举项，例如：</p>
+      <pre class="node-help-code">RETRIEVAL("retrieval", "知识检索"),</pre>
+      <p><code>code</code> 必须与前端节点 <code>type</code> 字符串一致（如 <code>llm</code>、<code>retrieval</code>）。</p>
+
+      <h4>二、后端：实现节点处理器（NodeProcessor）</h4>
+      <p>在 <code>lightbot-server/.../workflow/processor/</code> 新建类，实现接口 <code>NodeProcessor</code>：</p>
+      <ul>
+        <li><code>getType()</code>：返回对应的 <code>NodeType</code></li>
+        <li><code>execute(NodeExecutionContext context)</code>：读取 <code>context.getCurrentNodeData()</code> 中的配置，执行业务逻辑，通过 <code>NodeExecutionResult</code> 返回下一节点 ID 与输出变量</li>
+      </ul>
+      <p>参考现有实现：</p>
+      <ul>
+        <li><code>StartNodeProcessor</code> — 将用户输入写入变量 <code>input</code>，沿出边进入下一节点</li>
+        <li><code>LlmNodeProcessor</code> — 读取 <code>modelId</code>、<code>promptTemplate</code>，调用 Spring AI 生成内容</li>
+        <li><code>ConditionNodeProcessor</code> — 评估 <code>branches</code> 条件表达式，选择分支目标</li>
+        <li><code>EndNodeProcessor</code> — 结束工作流</li>
+      </ul>
+      <p>类上添加 <code>@Component</code>，无需手动注册。</p>
+
+      <h4>三、后端：自动注册（NodeProcessorRegistry）</h4>
+      <p><code>NodeProcessorRegistry</code> 在启动时注入所有 <code>NodeProcessor</code> 实现，按 <code>NodeType</code> 建立映射。执行时由 <code>WorkflowExecutorService</code> 从 START 节点开始，根据边的连接关系依次调用对应处理器。</p>
+
+      <h4>四、前端：节点库与画布（WorkflowEdit.vue）</h4>
+      <ol>
+        <li>在左侧节点库增加 <code>NodeItem</code>，<code>type</code> 与后端 <code>code</code> 一致</li>
+        <li>在 <code>getDefaultNodeData(type)</code> 中补充默认 <code>data</code> 字段</li>
+        <li>在 <code>getNodeColor</code> / <code>getNodeTitle</code> 中补充展示配置</li>
+        <li>在 <code>VueFlow</code> 内增加 <code>#node-xxx</code> 模板槽，引用 <code>workflow/nodes/XxxNode.vue</code> 自定义节点组件</li>
+        <li>在右侧配置面板增加该类型的表单项，并在 <code>validateWorkflow()</code> 中校验必填项</li>
+      </ol>
+
+      <h4>五、前端：自定义节点组件</h4>
+      <p>在 <code>lightbot-ui/src/views/workflow/nodes/</code> 创建 Vue 组件，使用 <code>Handle</code> 定义连接点（通常左侧 target、右侧 source；条件节点可多出口）。节点 <code>data</code> 中的配置会原样保存到 <code>agent.config.workflow</code> JSON。</p>
+
+      <h4>六、数据结构与执行流程</h4>
+      <ul>
+        <li><code>WorkflowDefinition</code>：包含 <code>nodes</code>（id、type、position、data）与 <code>edges</code>（source、target、sourceHandle 等）</li>
+        <li>保存：调用 <code>updateAgent</code>，将 workflow 写入 Agent 的 <code>config</code> 字段</li>
+        <li>运行：对话时 <code>WorkflowExecutorService.execute()</code> 解析 config，沿 DAG 执行直至 END</li>
+      </ul>
+
+      <p class="node-help-tip">
+        提示：当前画板已支持 start / end / llm / condition / retrieval / tool。枚举中还有 script、code 类型，需按上述步骤补齐前后端后方可使用。
+      </p>
+    </div>
+  </a-modal>
+
+  <a-modal v-model:open="globalConfigVisible" title="全局设置" :width="640" @ok="globalConfigVisible = false">
+    <a-form layout="vertical">
+      <a-form-item label="上下文轮次（history_max_round）">
+        <a-input-number v-model:value="globalConfig.history_config.history_max_round" :min="0" :max="50" style="width: 100%" />
+      </a-form-item>
+      <a-form-item label="启用对话历史">
+        <a-switch v-model:checked="globalConfig.history_config.history_switch" />
+      </a-form-item>
+      <a-divider>会话变量（conversation_params）</a-divider>
+      <div v-for="(param, idx) in globalConfig.variable_config.conversation_params" :key="idx" class="conv-param-row">
+        <a-input v-model:value="param.key" placeholder="变量名" style="flex:1" />
+        <a-input v-model:value="param.default_value" placeholder="默认值" style="flex:1" />
+        <a-button type="text" danger @click="removeConversationParam(idx)"><DeleteOutlined /></a-button>
+      </div>
+      <a-button type="dashed" block @click="addConversationParam"><PlusOutlined /> 添加会话变量</a-button>
+    </a-form>
+  </a-modal>
+
+  <a-drawer
+    v-model:open="testVisible"
+    title="测试运行"
+    :width="560"
+    :mask-closable="!testRunning && !testAnimating"
+    :keyboard="!testRunning && !testAnimating"
+    @close="clearNodeDebugStatus"
+  >
+    <a-alert v-if="testAnimating" type="info" show-icon message="正在执行工作流..." description="画布上当前节点会高亮显示执行状态" class="test-alert" />
+    <a-form layout="vertical">
+      <a-form-item label="测试问题" required>
+        <a-textarea v-model:value="testInput" :rows="4" placeholder="输入要测试的问题或内容" />
+      </a-form-item>
+      <a-form-item label="使用草稿配置">
+        <a-switch v-model:checked="testUseDraft" />
+      </a-form-item>
+      <a-button type="primary" :loading="testRunning || testAnimating" @click="runWorkflowTest">
+        {{ testAnimating ? '执行中...' : '开始测试' }}
+      </a-button>
+    </a-form>
+    <a-divider v-if="testResult || testAnimating" />
+    <div v-if="testAnimating && testCurrentNodeId" class="test-current-node">
+      当前节点：<strong>{{ getNodeTitleById(testCurrentNodeId) }}</strong>
+    </div>
+    <div v-if="testResult">
+      <h4>输出结果</h4>
+      <pre class="test-output">{{ testResult.output || '（无输出）' }}</pre>
+      <h4>节点轨迹</h4>
+      <div
+        v-for="(ev, i) in testResult.nodeEvents"
+        :key="i"
+        class="test-event"
+        :class="{ active: ev.nodeId === testCurrentNodeId }"
+      >
+        <span class="test-event-type">{{ ev.type === 'workflow_node_start' ? '▶' : ev.type === 'workflow_node_complete' ? '✓' : '•' }}</span>
+        {{ ev.nodeLabel || ev.nodeId }} — {{ ev.message || ev.nodeType }}
+      </div>
+    </div>
+  </a-drawer>
+
+  <a-drawer v-model:open="versionVisible" title="版本历史" :width="420">
+    <a-list :data-source="versionList" :loading="versionLoading">
+      <template #renderItem="{ item }">
+        <a-list-item>
+          <a-list-item-meta :title="`v${item.version}`" :description="formatVersionDesc(item)" />
+          <template #actions>
+            <a-tag v-if="item.current" color="green">当前</a-tag>
+            <a-button size="small" @click="restoreVersion(item.version)">恢复为草稿</a-button>
+          </template>
+        </a-list-item>
+      </template>
+    </a-list>
+  </a-drawer>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, shallowRef, triggerRef, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, shallowRef, triggerRef, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, applyNodeChanges } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -315,13 +455,23 @@ import {
   ArrowLeftOutlined, SaveOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
   SearchOutlined, LeftOutlined, RightOutlined, CloseOutlined, DeleteOutlined,
   RobotOutlined, ForkOutlined, BookOutlined, ToolOutlined, PlayCircleOutlined,
-  StopOutlined, PlusOutlined, DownOutlined, UndoOutlined
+  StopOutlined, PlusOutlined, DownOutlined, UndoOutlined, QuestionCircleOutlined,
+  BranchesOutlined, ArrowRightOutlined, AuditOutlined
 } from '@ant-design/icons-vue'
-import { message, notification } from 'ant-design-vue'
-import { getAgentDetail, updateAgent } from '../api/agent'
+import { message, notification, Modal } from 'ant-design-vue'
+import { getAgentDetail } from '../api/agent'
+import { getKnowledge, getKnowledgeList } from '../api/knowledge'
 import { getModelProviders } from '../api/modelProvider'
-import { getKnowledgeList } from '../api/knowledge'
+import { getModelsByProvider } from '../api/model'
 import { getTools } from '../api/tool'
+import {
+  getWorkflowConfig,
+  saveWorkflowDraft,
+  publishWorkflow as publishWorkflowApi,
+  listWorkflowVersions,
+  restoreWorkflowVersion,
+  testWorkflow
+} from '../api/workflow'
 import NodeItem from '../views/workflow/components/NodeItem.vue'
 import StartNode from '../views/workflow/nodes/StartNode.vue'
 import EndNode from '../views/workflow/nodes/EndNode.vue'
@@ -329,30 +479,247 @@ import LlmNode from '../views/workflow/nodes/LlmNode.vue'
 import ConditionNode from '../views/workflow/nodes/ConditionNode.vue'
 import RetrievalNode from '../views/workflow/nodes/RetrievalNode.vue'
 import ToolNode from '../views/workflow/nodes/ToolNode.vue'
+import GenericWorkflowNode from '../views/workflow/nodes/GenericWorkflowNode.vue'
+import ClassifierNode from '../views/workflow/nodes/ClassifierNode.vue'
+import NodeTypeIcon from '../views/workflow/components/NodeTypeIcon.vue'
+import WorkflowNodeConfig from '../views/workflow/components/WorkflowNodeConfig.vue'
+import { getDefaultNodeData as buildDefaultNodeData, getNodeTitle as metaGetNodeTitle, getNodeColor as metaGetNodeColor, getNodeMeta, getNodeLibraryGroups, createConditionId } from '../views/workflow/nodeMeta'
 
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.agentId
 
-// VueFlow hooks
-const { fitView } = useVueFlow()
+// VueFlow hooks（getNodes 为画布真实坐标来源）
+const { fitView, addSelectedEdges, removeSelectedEdges, getSelectedEdges, getNodes, setCenter, setViewport } = useVueFlow()
+
+const defaultEdgeOptions = {
+  selectable: true,
+  style: { strokeWidth: 2, stroke: '#94a3b8' }
+}
 
 // 状态
 const agent = ref(null)
 const saving = ref(false)
 const panelCollapsed = ref(false)
 const nodeSearch = ref('')
+const nodeHelpVisible = ref(false)
+const leftPanelTab = ref('library')
+const canvasNodeSearch = ref('')
+const workflowStatus = ref('draft')
+const publishedVersion = ref(0)
+const globalConfigVisible = ref(false)
+const testVisible = ref(false)
+const testInput = ref('')
+const testUseDraft = ref(true)
+const testRunning = ref(false)
+const testAnimating = ref(false)
+const testCurrentNodeId = ref(null)
+const testResult = ref(null)
+const versionVisible = ref(false)
+const lastAutoSaveTime = ref(null)
+const autoSaving = ref(false)
+const workflowLoaded = ref(false)
+let autoSaveTimer = null
+const versionList = ref([])
+const versionLoading = ref(false)
+const globalConfig = ref({
+  history_config: { history_switch: true, history_max_round: 5 },
+  variable_config: { conversation_params: [] }
+})
 const selectedNode = ref(null)
+const selectedEdge = ref(null)
 const validationErrors = ref([])
+const canvasAreaRef = ref(null)
+const trashRef = ref(null)
+const savedWorkflowSnapshot = ref('')
+const isNodeDragging = ref(false)
+const dragOverTrash = ref(false)
+const draggingNode = ref(null)
+
+const isDirty = computed(() => {
+  if (!savedWorkflowSnapshot.value) return false
+  return savedWorkflowSnapshot.value !== getWorkflowSnapshot()
+})
+
+const canDeleteDraggedNode = computed(() => {
+  const node = draggingNode.value
+  return node && node.type !== 'start' && node.type !== 'end'
+})
 
 // 资源列表
 const providers = ref([])
+const llmModelList = ref([])
 const knowledgeList = ref([])
 const tools = ref([])
 
 // 节点和边数据（使用 shallowRef 避免递归更新）
 const nodes = shallowRef([])
 const edges = shallowRef([])
+
+function normalizePosition(pos) {
+  if (!pos) return { x: 100, y: 100 }
+  return {
+    x: Number(pos.x ?? 100),
+    y: Number(pos.y ?? 100)
+  }
+}
+
+function buildWorkflowPayload() {
+  const flowNodes = getNodes.value?.length ? getNodes.value : nodes.value
+  return {
+    nodes: flowNodes.map(n => {
+      const local = nodes.value.find(item => item.id === n.id)
+      return {
+        id: n.id,
+        type: n.type,
+        position: normalizePosition(n.position),
+        data: local?.data ?? n.data
+      }
+    }),
+    edges: edges.value.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle
+    })),
+    globalConfig: globalConfig.value
+  }
+}
+
+function getWorkflowSnapshot() {
+  return JSON.stringify(buildWorkflowPayload())
+}
+
+const filteredCanvasNodes = computed(() => {
+  const keyword = (canvasNodeSearch.value || '').toLowerCase()
+  return nodes.value.filter(n => {
+    const label = (n.data?.label || getNodeTitle(n.type) || '').toLowerCase()
+    return !keyword || label.includes(keyword) || n.type.includes(keyword)
+  })
+})
+
+const filteredNodeGroups = computed(() => getNodeLibraryGroups(nodeSearch.value))
+
+function hasSavedLayout(nodeList) {
+  return nodeList.some(n => {
+    const p = n.position
+    if (!p) return false
+    const x = Number(p.x)
+    const y = Number(p.y)
+    return (x !== 100 && x !== 0) || (y !== 200 && y !== 0)
+  })
+}
+
+function markWorkflowSaved() {
+  savedWorkflowSnapshot.value = getWorkflowSnapshot()
+}
+
+function formatAutoSaveTime(d) {
+  if (!d) return ''
+  const pad = n => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function scheduleAutoSave() {
+  if (!workflowLoaded.value) return
+  if (!isDirty.value) return
+  clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => doAutoSave(true), 600)
+}
+
+async function doAutoSave(silent = true) {
+  if (autoSaving.value || !isDirty.value) return
+  autoSaving.value = true
+  try {
+    await saveWorkflowDraft(agentId, buildWorkflowPayload())
+    markWorkflowSaved()
+    lastAutoSaveTime.value = new Date()
+  } catch (e) {
+    if (!silent) {
+      notification.error({ message: '自动保存失败', description: e.message })
+    }
+  } finally {
+    autoSaving.value = false
+  }
+}
+
+async function flushAutoSave() {
+  clearTimeout(autoSaveTimer)
+  if (isDirty.value) {
+    await doAutoSave(true)
+  }
+}
+
+async function closeNodePanel() {
+  const node = selectedNode.value
+  if (!node) return
+  const wasDirty = isDirty.value
+  clearTimeout(autoSaveTimer)
+  if (wasDirty) {
+    await doAutoSave(true)
+    message.success(`「${node.data?.label || getNodeTitle(node.type)}」已自动保存`)
+  }
+  selectedNode.value = null
+}
+
+function scheduleFitView(force = false) {
+  if (!force && hasSavedLayout(nodes.value)) {
+    return
+  }
+  nextTick(() => {
+    setTimeout(() => {
+      if (nodes.value.length > 0) {
+        try {
+          fitView({ padding: 0.2, includeHiddenNodes: true, duration: force ? 300 : 0 })
+        } catch (e) {
+          console.warn('fitView error:', e)
+        }
+      }
+    }, 120)
+  })
+}
+
+function applyWorkflowGraph(graph) {
+  if (!graph) return
+  if (graph.globalConfig) {
+    globalConfig.value = {
+      history_config: {
+        history_switch: graph.globalConfig.history_config?.history_switch ?? true,
+        history_max_round: graph.globalConfig.history_config?.history_max_round ?? 5
+      },
+      variable_config: {
+        conversation_params: graph.globalConfig.variable_config?.conversation_params || []
+      }
+    }
+  }
+  nodes.value = (graph.nodes || []).map(migrateWorkflowNode).map(n => ({
+    ...n,
+    position: normalizePosition(n.position)
+  }))
+  edges.value = graph.edges || []
+  triggerRef(nodes)
+  triggerRef(edges)
+}
+
+function focusNode(node) {
+  selectedNode.value = node
+  clearEdgeSelection()
+  const pos = normalizePosition(node.position)
+  try {
+    setCenter(pos.x + 90, pos.y + 40, { zoom: 1, duration: 300 })
+  } catch (_) {
+    setViewport({ x: -pos.x + 200, y: -pos.y + 120, zoom: 1 })
+  }
+}
+
+function addConversationParam() {
+  globalConfig.value.variable_config.conversation_params.push({ key: '', default_value: '' })
+}
+
+function removeConversationParam(index) {
+  globalConfig.value.variable_config.conversation_params.splice(index, 1)
+}
 
 // 操作历史记录（用于撤回）
 const history = ref([])
@@ -379,6 +746,8 @@ function undoAction() {
   triggerRef(nodes)
   triggerRef(edges)
   selectedNode.value = null
+  selectedEdge.value = null
+  clearEdgeSelection()
 }
 
 // 初始化加载
@@ -388,14 +757,16 @@ onMounted(async () => {
     const res = await getAgentDetail(agentId)
     agent.value = res.data.agent
 
-    // 解析工作流数据
-    if (res.data.agent.config) {
+    const wfRes = await getWorkflowConfig(agentId)
+    workflowStatus.value = wfRes.data.status || 'draft'
+    publishedVersion.value = wfRes.data.publishedVersion || 0
+    const draftGraph = wfRes.data.draft
+    if (draftGraph) {
+      applyWorkflowGraph(draftGraph)
+    } else if (res.data.agent.config) {
       const config = JSON.parse(res.data.agent.config)
       if (config.workflow) {
-        nodes.value = config.workflow.nodes || []
-        edges.value = config.workflow.edges || []
-        triggerRef(nodes)
-        triggerRef(edges)
+        applyWorkflowGraph(config.workflow)
       }
     }
 
@@ -418,48 +789,94 @@ onMounted(async () => {
     knowledgeList.value = knowledgeRes.data.records || []
     tools.value = toolRes.data.records || []
 
-    // 等待节点渲染后自动适配视图
-    await nextTick()
-    // 使用 setTimeout 确保 DOM 完全渲染，适配所有节点
-    setTimeout(() => {
-      if (nodes.value.length > 0) {
-        try {
-          fitView({ padding: 0.5, includeHiddenNodes: true, duration: 300 })
-        } catch (e) {
-          console.warn('fitView error:', e)
-        }
-      }
-    }, 150)
+    markWorkflowSaved()
+    nextTick(() => { workflowLoaded.value = true })
+    scheduleFitView(!hasSavedLayout(nodes.value))
+    validateWorkflow(false)
   } catch (e) {
     notification.error({ message: '加载失败', description: e.message })
   }
+  window.addEventListener('keydown', onKeyDown)
 })
+
+function onKeyDown(event) {
+  if (event.key !== 'Delete' && event.key !== 'Backspace') return
+  const tag = document.activeElement?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return
+
+  event.preventDefault()
+  if (selectedEdge.value) {
+    deleteSelectedEdge()
+  } else if (selectedNode.value && selectedNode.value.type !== 'start' && selectedNode.value.type !== 'end') {
+    deleteSelectedNode()
+  }
+}
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  clearTimeout(autoSaveTimer)
+})
+
+/** 兼容旧数据并补齐默认字段 */
+function migrateWorkflowNode(node) {
+  const defaults = buildDefaultNodeData(node.type)
+  const data = { ...(defaults || {}), ...(node.data || {}) }
+  if (node.type === 'llm') {
+    if (!data.providerId && data.modelId != null && typeof data.modelId === 'number') {
+      data.providerId = data.modelId
+      data.modelId = data.modelName || null
+    }
+    if (!data.short_memory) data.short_memory = defaults.short_memory
+  }
+  if (node.type === 'classifier') {
+    if (!data.conditions?.length) {
+      data.conditions = [{ id: createConditionId(), subject: '' }]
+    }
+    if (!data.mode_switch) data.mode_switch = 'efficient'
+    if (!data.short_memory) data.short_memory = defaults.short_memory
+  }
+  return { ...node, data }
+}
+
+function getDefaultNodeData(type) {
+  return buildDefaultNodeData(type)
+}
+
+// 选中 LLM 节点时加载模型列表
+watch(
+  () => {
+    const type = selectedNode.value?.type
+    if (type === 'llm' || type === 'classifier' || type === 'parameter_extractor') {
+      return selectedNode.value?.data?.providerId
+    }
+    return null
+  },
+  async (providerId) => {
+    if (providerId) {
+      await loadLlmModels(providerId)
+    } else {
+      llmModelList.value = []
+    }
+  }
+)
+
+// 实时校验工作流配置
+watch(
+  () => getWorkflowSnapshot(),
+  () => {
+    validateWorkflow(false)
+    scheduleAutoSave()
+  }
+)
 
 // 获取节点颜色
 function getNodeColor(nodeOrType) {
   const type = typeof nodeOrType === 'string' ? nodeOrType : nodeOrType?.type
-  const colors = {
-    start: '#22c55e',
-    end: '#ef4444',
-    llm: '#7c3aed',
-    condition: '#d97706',
-    retrieval: '#4f46e5',
-    tool: '#059669'
-  }
-  return colors[type] || '#6b7280'
+  return metaGetNodeColor(type)
 }
 
-// 获取节点标题
 function getNodeTitle(type) {
-  const titles = {
-    start: '开始',
-    end: '结束',
-    llm: '大模型',
-    condition: '条件判断',
-    retrieval: '知识检索',
-    tool: '工具调用'
-  }
-  return titles[type] || type
+  return metaGetNodeTitle(type)
 }
 
 // 根据节点ID获取节点标题
@@ -478,6 +895,65 @@ function getNodeErrors(nodeId) {
 // 获取可选的目标节点
 function getTargetNodes() {
   return nodes.value.filter(n => n.id !== selectedNode.value?.id)
+}
+
+// 根据节点 ID 获取展示信息
+function getNodeById(nodeId) {
+  return nodes.value.find(n => n.id === nodeId)
+}
+
+function getEdgeSourceLabel(edge) {
+  const node = getNodeById(edge.source)
+  return node?.data?.label || getNodeTitle(node?.type) || edge.source
+}
+
+function getEdgeTargetLabel(edge) {
+  const node = getNodeById(edge.target)
+  return node?.data?.label || getNodeTitle(node?.type) || edge.target
+}
+
+function getEdgeSourceType(edge) {
+  const node = getNodeById(edge.source)
+  return node ? getNodeTitle(node.type) : '未知'
+}
+
+function getEdgeTargetType(edge) {
+  const node = getNodeById(edge.target)
+  return node ? getNodeTitle(node.type) : '未知'
+}
+
+function clearEdgeSelection() {
+  selectedEdge.value = null
+  try {
+    removeSelectedEdges(getSelectedEdges())
+  } catch (_) { /* VueFlow 未就绪时忽略 */ }
+}
+
+function filterKnowledgeOption(input, option) {
+  const k = knowledgeList.value.find(item => String(item.id) === String(option.value))
+  if (!k) return false
+  const keyword = (input || '').toLowerCase()
+  const text = `${k.name} ${k.description || ''} ${k.embeddingModel || ''}`.toLowerCase()
+  return text.includes(keyword)
+}
+
+function filterToolOption(input, option) {
+  const t = tools.value.find(item => String(item.id) === String(option.value))
+  if (!t) return false
+  const keyword = (input || '').toLowerCase()
+  const text = `${t.displayName || ''} ${t.name || ''} ${t.description || ''}`.toLowerCase()
+  return text.includes(keyword)
+}
+
+function getToolTypeLabel(toolType) {
+  const code = toolType?.code || toolType
+  const labels = {
+    builtin: '内置',
+    http: 'HTTP',
+    mcp: 'MCP',
+    script: '脚本'
+  }
+  return labels[code] || code || '工具'
 }
 
 // 拖拽开始
@@ -508,34 +984,71 @@ function onDrop(event) {
 
   nodes.value = [...nodes.value, newNode]
   triggerRef(nodes)
-
-  // 添加节点后重新适配视图（延迟确保渲染完成）
-  setTimeout(() => {
-    try {
-      fitView({ padding: 0.5, includeHiddenNodes: true, duration: 300 })
-    } catch (e) {
-      console.warn('fitView error:', e)
-    }
-  }, 150)
+  scheduleFitView()
 }
 
-// 获取节点默认数据
-function getDefaultNodeData(type) {
-  const defaults = {
-    llm: { label: '大模型', modelId: null, modelName: '', promptTemplate: '{{input}}', temperature: 0.7 },
-    condition: { label: '条件判断', branches: [] },
-    retrieval: { label: '知识检索', knowledgeId: null, knowledgeName: '', topK: 5 },
-    tool: { label: '工具调用', toolId: null, toolName: '' }
+// 同步节点变更（含拖动后的 position），保证未保存检测与保存能带上坐标
+function onNodesChange(changes) {
+  if (!changes?.length) return
+  const nextNodes = applyNodeChanges(changes, nodes.value)
+  nodes.value = nextNodes
+  triggerRef(nodes)
+}
+
+function onNodeDragStart({ node }) {
+  draggingNode.value = node
+  isNodeDragging.value = true
+  dragOverTrash.value = false
+  recordHistory()
+}
+
+function onNodeDrag({ event }) {
+  if (!isNodeDragging.value || !event || !trashRef.value) return
+  const rect = trashRef.value.getBoundingClientRect()
+  dragOverTrash.value =
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom
+}
+
+function onNodeDragStop({ node }) {
+  if (dragOverTrash.value && node && node.type !== 'start' && node.type !== 'end') {
+    removeNodeById(node.id, { skipHistory: true })
+    message.success('节点已删除')
   }
-  return defaults[type] || { label: getNodeTitle(type) }
+  isNodeDragging.value = false
+  dragOverTrash.value = false
+  draggingNode.value = null
+}
+
+function removeNodeById(nodeId, { skipHistory = false } = {}) {
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node || node.type === 'start' || node.type === 'end') return
+  if (!skipHistory) recordHistory()
+
+  nodes.value = nodes.value.filter(n => n.id !== nodeId)
+  edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
+  triggerRef(nodes)
+  triggerRef(edges)
+  if (selectedNode.value?.id === nodeId) {
+    selectedNode.value = null
+  }
+  clearEdgeSelection()
+  scheduleFitView()
 }
 
 // 连接节点
 function onConnect(params) {
+  recordHistory()
   const newEdge = {
-    id: `edge_${params.source}_${params.target}`,
+    id: `edge_${params.source}_${params.target}_${params.sourceHandle || 'default'}_${Date.now()}`,
     source: params.source,
-    target: params.target
+    target: params.target,
+    sourceHandle: params.sourceHandle,
+    targetHandle: params.targetHandle,
+    selectable: true,
+    style: { strokeWidth: 2, stroke: '#94a3b8' }
   }
   edges.value = [...edges.value, newEdge]
   triggerRef(edges)
@@ -543,30 +1056,91 @@ function onConnect(params) {
 
 // 点击节点
 function onNodeClick(event) {
+  clearEdgeSelection()
+  selectedEdge.value = null
   selectedNode.value = event.node
 }
 
-// 点击空白区域，收回节点详情
-function onPaneClick() {
+// 点击连线
+function onEdgeClick(event) {
   selectedNode.value = null
+  selectedEdge.value = event.edge
+  try {
+    removeSelectedEdges(getSelectedEdges())
+    addSelectedEdges([event.edge])
+  } catch (_) { /* ignore */ }
+}
+
+// 点击空白区域
+function onPaneClick() {
+  closeNodePanel()
+  clearEdgeSelection()
 }
 
 // 同步节点数据
 function syncNodes() {
   triggerRef(nodes)
+  scheduleAutoSave()
 }
 
-// 模型选择变化
-function onModelChange(value) {
-  const provider = providers.value.find(p => p.id === value)
-  selectedNode.value.data.modelName = provider?.name || ''
+// LLM 提供商变更
+async function onLlmProviderChange(providerId) {
+  const provider = providers.value.find(p => p.id === providerId)
+  selectedNode.value.data.providerName = provider?.name || ''
+  selectedNode.value.data.modelId = null
+  selectedNode.value.data.modelName = ''
+  await loadLlmModels(providerId)
   syncNodes()
 }
 
-// 知识库选择变化
-function onKnowledgeChange(value) {
-  const knowledge = knowledgeList.value.find(k => k.id === value)
+async function loadLlmModels(providerId) {
+  if (!providerId) {
+    llmModelList.value = []
+    return
+  }
+  try {
+    const res = await getModelsByProvider(providerId)
+    llmModelList.value = (res.data || []).filter(m => {
+      const type = m.type?.code || m.type
+      return type === 'llm'
+    })
+  } catch {
+    llmModelList.value = []
+  }
+}
+
+function onLlmModelChange(modelId) {
+  const model = llmModelList.value.find(m => m.modelId === modelId)
+  selectedNode.value.data.modelName = model?.name || modelId || ''
+  syncNodes()
+}
+
+// 知识库选择变化：回显知识库 RAG 配置
+async function onKnowledgeChange(value) {
+  const knowledge = knowledgeList.value.find(k => String(k.id) === String(value))
   selectedNode.value.data.knowledgeName = knowledge?.name || ''
+  selectedNode.value.data.knowledgeBaseTopK = null
+  selectedNode.value.data.knowledgeBaseThreshold = null
+  if (value) {
+    try {
+      const detail = await getKnowledge(value)
+      const kb = detail.data
+      let cfg = {}
+      if (kb?.config) {
+        cfg = typeof kb.config === 'string' ? JSON.parse(kb.config) : kb.config
+      }
+      const topK = cfg.ragTopK ?? 5
+      const threshold = cfg.ragThreshold ?? 0.5
+      selectedNode.value.data.knowledgeBaseTopK = topK
+      selectedNode.value.data.knowledgeBaseThreshold = threshold
+      if (!selectedNode.value.data.overrideConfig) {
+        selectedNode.value.data.topK = topK
+        selectedNode.value.data.threshold = threshold
+      }
+    } catch (e) {
+      console.warn('加载知识库配置失败', e)
+    }
+  }
   syncNodes()
 }
 
@@ -577,35 +1151,64 @@ function onToolChange(value) {
   syncNodes()
 }
 
-// 添加分支
-function addBranch() {
-  if (!selectedNode.value.data.branches) {
-    selectedNode.value.data.branches = []
-  }
-  selectedNode.value.data.branches.push({ condition: '', targetNodeId: '' })
-  syncNodes()
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// 删除分支
-function removeBranch(index) {
-  selectedNode.value.data.branches.splice(index, 1)
-  syncNodes()
+function clearNodeDebugStatus() {
+  nodes.value = nodes.value.map(n => ({
+    ...n,
+    data: { ...n.data, debugStatus: null }
+  }))
+  triggerRef(nodes)
+}
+
+function setNodeDebugStatus(nodeId, status) {
+  nodes.value = nodes.value.map(n => {
+    if (n.id !== nodeId) return n
+    return { ...n, data: { ...n.data, debugStatus: status } }
+  })
+  triggerRef(nodes)
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (node) focusNode(node)
+}
+
+async function animateWorkflowTest(events) {
+  clearNodeDebugStatus()
+  testAnimating.value = true
+  for (const ev of events || []) {
+    if (ev.type === 'workflow_node_start' && ev.nodeId) {
+      setNodeDebugStatus(ev.nodeId, 'executing')
+      testCurrentNodeId.value = ev.nodeId
+      await sleep(700)
+    }
+    if (ev.type === 'workflow_node_complete' && ev.nodeId) {
+      setNodeDebugStatus(ev.nodeId, ev.success === false ? 'fail' : 'success')
+      await sleep(400)
+    }
+  }
+  testAnimating.value = false
 }
 
 // 删除选中节点
 function deleteSelectedNode() {
-  // 记录历史用于撤回
+  if (!selectedNode.value) return
+  removeNodeById(selectedNode.value.id)
+}
+
+// 删除选中连线
+function deleteSelectedEdge() {
+  if (!selectedEdge.value) return
   recordHistory()
 
-  nodes.value = nodes.value.filter(n => n.id !== selectedNode.value.id)
-  edges.value = edges.value.filter(e => e.source !== selectedNode.value.id && e.target !== selectedNode.value.id)
-  triggerRef(nodes)
+  const edgeId = selectedEdge.value.id
+  edges.value = edges.value.filter(e => e.id !== edgeId)
   triggerRef(edges)
-  selectedNode.value = null
+  selectedEdge.value = null
 }
 
 // 验证工作流
-function validateWorkflow() {
+function validateWorkflow(showToast = true) {
   const errors = []
 
   // 1. 检查 START 节点
@@ -637,6 +1240,7 @@ function validateWorkflow() {
   // 4. 检查节点配置
   nodes.value.forEach(n => {
     if (n.type === 'llm') {
+      if (!n.data.providerId) errors.push({ nodeId: n.id, field: 'providerId', message: '请选择模型提供商' })
       if (!n.data.modelId) errors.push({ nodeId: n.id, field: 'modelId', message: '请选择模型' })
       if (!n.data.promptTemplate) errors.push({ nodeId: n.id, field: 'promptTemplate', message: '请填写提示词' })
     }
@@ -646,9 +1250,34 @@ function validateWorkflow() {
     if (n.type === 'tool') {
       if (!n.data.toolId) errors.push({ nodeId: n.id, field: 'toolId', message: '请选择工具' })
     }
+    if (n.type === 'classifier') {
+      if (!n.data.providerId) errors.push({ nodeId: n.id, field: 'providerId', message: '请选择模型提供商' })
+      if (!n.data.modelId) errors.push({ nodeId: n.id, field: 'modelId', message: '请选择模型' })
+      if (!n.data.inputVariable) errors.push({ nodeId: n.id, field: 'inputVariable', message: '请配置输入变量' })
+      const emptyIntent = (n.data.conditions || []).some(c => c.id !== 'default' && !c.subject?.trim())
+      if (emptyIntent || !(n.data.conditions || []).length) {
+        errors.push({ nodeId: n.id, field: 'conditions', message: '请配置至少一个意图分类' })
+      }
+    }
+    if (n.type === 'api' && !n.data.url) {
+      errors.push({ nodeId: n.id, field: 'url', message: '请填写 API URL' })
+    }
+    if (n.type === 'output' && !n.data.output?.trim()) {
+      errors.push({ nodeId: n.id, field: 'output', message: '请填写输出内容' })
+    }
+    if (n.type === 'parameter_extractor') {
+      if (!n.data.providerId) errors.push({ nodeId: n.id, field: 'providerId', message: '请选择模型提供商' })
+      if (!n.data.modelId) errors.push({ nodeId: n.id, field: 'modelId', message: '请选择模型' })
+      if (!n.data.inputVariable) errors.push({ nodeId: n.id, field: 'inputVariable', message: '请配置输入变量' })
+    }
+    if (n.type === 'app_component' && !n.data.componentCode?.trim()) {
+      errors.push({ nodeId: n.id, field: 'componentCode', message: '请填写组件标识' })
+    }
   })
 
   validationErrors.value = errors
+
+  if (!showToast) return errors
 
   if (errors.length === 0) {
     message.success('工作流配置验证通过')
@@ -662,42 +1291,119 @@ function validateWorkflow() {
   return errors
 }
 
-// 保存工作流
-async function saveWorkflow() {
-  // 先验证
-  const errors = validateWorkflow()
-  if (errors.length > 0) {
-    return
-  }
-
+async function saveDraft() {
   saving.value = true
   try {
-    const workflowData = {
-      nodes: nodes.value,
-      edges: edges.value
-    }
-
-    // 构建 config
-    const config = agent.value.config ? JSON.parse(agent.value.config) : {}
-    config.workflow = workflowData
-
-    await updateAgent({
-      ...agent.value,
-      agentType: agent.value.agentType?.code || agent.value.agentType,
-      config: JSON.stringify(config)
-    })
-
-    message.success('工作流保存成功')
+    await saveWorkflowDraft(agentId, buildWorkflowPayload())
+    markWorkflowSaved()
+    message.success('工作流已暂存（草稿）')
   } catch (e) {
-    notification.error({ message: '保存失败', description: e.message })
+    notification.error({ message: '暂存失败', description: e.message })
   } finally {
     saving.value = false
   }
 }
 
+async function publishWorkflow() {
+  const errors = validateWorkflow()
+  if (errors.length > 0) return
+
+  saving.value = true
+  try {
+    const res = await publishWorkflowApi(agentId, buildWorkflowPayload())
+    workflowStatus.value = 'published'
+    publishedVersion.value = res.data?.version || publishedVersion.value + 1
+    markWorkflowSaved()
+    message.success(`工作流已发布（v${publishedVersion.value}）`)
+  } catch (e) {
+    notification.error({ message: '发布失败', description: e.message || e.response?.data?.message })
+  } finally {
+    saving.value = false
+  }
+}
+
+async function openVersionDrawer() {
+  versionVisible.value = true
+  versionLoading.value = true
+  try {
+    const res = await listWorkflowVersions(agentId)
+    versionList.value = res.data || []
+  } catch (e) {
+    notification.error({ message: '加载版本失败', description: e.message })
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+async function restoreVersion(version) {
+  try {
+    await restoreWorkflowVersion(agentId, version)
+    const wfRes = await getWorkflowConfig(agentId)
+    applyWorkflowGraph(wfRes.data.draft)
+    markWorkflowSaved()
+    message.success(`已恢复 v${version} 到草稿`)
+    versionVisible.value = false
+  } catch (e) {
+    notification.error({ message: '恢复失败', description: e.message })
+  }
+}
+
+function formatVersionDesc(item) {
+  const parts = [`${item.nodeCount || 0} 节点`, `${item.edgeCount || 0} 连线`]
+  if (item.publishedAt) parts.push(item.publishedAt)
+  return parts.join(' · ')
+}
+
+async function runWorkflowTest() {
+  if (!testInput.value?.trim()) {
+    message.warning('请输入测试问题')
+    return
+  }
+  const errors = validateWorkflow(false)
+  if (errors.length > 0) {
+    notification.warning({
+      message: '工作流配置未通过校验',
+      description: `发现 ${errors.length} 个错误，请先完善配置后再测试`
+    })
+    return
+  }
+
+  testVisible.value = true
+  testRunning.value = true
+  testResult.value = null
+  testCurrentNodeId.value = null
+  clearNodeDebugStatus()
+  try {
+    const res = await testWorkflow(agentId, {
+      input: testInput.value,
+      useDraft: testUseDraft.value,
+      graph: buildWorkflowPayload()
+    })
+    testResult.value = res.data
+    await animateWorkflowTest(res.data?.nodeEvents || [])
+    message.success('测试运行完成')
+  } catch (e) {
+    notification.error({ message: '测试失败', description: e.message })
+    clearNodeDebugStatus()
+  } finally {
+    testRunning.value = false
+  }
+}
+
 // 返回
 function goBack() {
-  router.push(`/agents/${agentId}`)
+  const navigate = () => router.push(`/agents/${agentId}`)
+  if (isDirty.value) {
+    Modal.confirm({
+      title: '未保存的修改',
+      content: '当前工作流修改后还未保存，是否退出？',
+      okText: '退出',
+      cancelText: '取消',
+      onOk: navigate
+    })
+  } else {
+    navigate()
+  }
 }
 </script>
 
@@ -707,6 +1413,94 @@ function goBack() {
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
+}
+
+.publish-tag { flex-shrink: 0; }
+.toolbar-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-validate { color: #6366f1; }
+.auto-save-hint { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+.auto-save-hint.saving { color: #6366f1; }
+.test-alert { margin-bottom: 12px; }
+.test-current-node { font-size: 13px; color: #6366f1; margin-bottom: 12px; padding: 8px 12px; background: #eef2ff; border-radius: 6px; }
+.test-event.active { background: #eef2ff; color: #4338ca; font-weight: 600; }
+.test-event-type { margin-right: 6px; }
+
+.canvas-area :deep(.vue-flow__handle) {
+  width: 16px !important;
+  height: 16px !important;
+  border: 2px solid #6366f1 !important;
+  background: #fff !important;
+  border-radius: 50% !important;
+  transition: width 0.15s, height 0.15s, background 0.15s;
+}
+.canvas-area :deep(.vue-flow__handle:hover) {
+  width: 22px !important;
+  height: 22px !important;
+  background: #6366f1 !important;
+}
+
+.canvas-node-list {
+  margin-top: 10px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+.canvas-node-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.canvas-node-item:hover,
+.canvas-node-item.active {
+  background: #f3f4f6;
+}
+.canvas-node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.canvas-node-name {
+  flex: 1;
+  color: #1f2937;
+  font-weight: 500;
+}
+.canvas-node-type {
+  color: #9ca3af;
+  font-size: 11px;
+}
+.conv-param-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.test-output {
+  background: #f9fafb;
+  padding: 12px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.test-event {
+  font-size: 12px;
+  color: #6b7280;
+  padding: 4px 0;
+}
+.form-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.text-muted {
+  font-size: 12px;
+  color: #9ca3af;
+}
+.kb-config-preview {
+  font-size: 12px;
+  color: #374151;
 }
 
 .workflow-toolbar {
@@ -883,6 +1677,50 @@ function goBack() {
   background: #fff;
 }
 
+/* 拖动节点删除区 */
+.workflow-trash {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 120px;
+  padding: 14px 24px;
+  border-radius: 12px;
+  border: 2px dashed #d4d4d8;
+  background: rgba(255, 255, 255, 0.95);
+  color: #71717a;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.15s;
+  pointer-events: none;
+}
+
+.workflow-trash .trash-icon {
+  font-size: 28px;
+}
+
+.workflow-trash .trash-label {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workflow-trash.is-over:not(.is-disabled) {
+  border-color: #ef4444;
+  border-style: solid;
+  background: #fef2f2;
+  color: #dc2626;
+  transform: translateX(-50%) scale(1.05);
+}
+
+.workflow-trash.is-disabled {
+  opacity: 0.65;
+}
+
 .canvas-empty {
   position: absolute;
   top: 50%;
@@ -999,6 +1837,195 @@ function goBack() {
   color: #6b7280;
   min-width: 40px;
 }
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  margin-left: 8px;
+}
+
+.btn-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.btn-help:hover {
+  background: #f3f4f6;
+  color: #7c3aed;
+}
+
+.edge-icon {
+  background: #f3e8ff !important;
+  color: #7c3aed !important;
+}
+
+.edge-detail-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.edge-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.edge-detail-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.edge-detail-value {
+  font-size: 13px;
+  color: #374151;
+  word-break: break-all;
+}
+
+.edge-detail-value.mono,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.edge-connection-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.edge-node-box {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edge-node-box.source {
+  border-color: #c4b5fd;
+}
+
+.edge-node-box.target {
+  border-color: #86efac;
+}
+
+.edge-node-role {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.edge-node-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.edge-node-type {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.edge-handle-tag {
+  font-size: 11px;
+  color: #7c3aed;
+  background: #f5f3ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.edge-arrow {
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.edge-delete-footer {
+  margin-top: 16px;
+  border-top: none;
+  padding: 0;
+}
+
+.node-help-content {
+  max-height: 65vh;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.node-help-content h4 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.node-help-content ul,
+.node-help-content ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.node-help-content li {
+  margin-bottom: 4px;
+}
+
+.node-help-intro {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: #f5f3ff;
+  border-radius: 8px;
+  color: #5b21b6;
+}
+
+.node-help-code {
+  background: #1f2937;
+  color: #e5e7eb;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.node-help-content code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.node-help-tip {
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 13px;
+}
 </style>
 
 <style>
@@ -1007,4 +2034,128 @@ function goBack() {
 @import '@vue-flow/core/dist/theme-default.css';
 @import '@vue-flow/controls/dist/style.css';
 @import '@vue-flow/minimap/dist/style.css';
+
+/* 缩略图：外层 SVG 随内容自适应，避免宽 viewBox 导致左右留白 */
+.workflow-minimap.vue-flow__minimap {
+  display: inline-block !important;
+  width: fit-content !important;
+  height: fit-content !important;
+  max-width: min(280px, 32vw);
+  max-height: 200px;
+  line-height: 0;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.workflow-minimap.vue-flow__minimap > svg {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: min(280px, 32vw);
+  max-height: 200px;
+}
+
+.workflow-minimap .vue-flow__minimap-mask {
+  fill: rgba(124, 58, 237, 0.08);
+}
+
+/* 选中连线高亮 */
+.vue-flow__edge.selected .vue-flow__edge-path {
+  stroke: #7c3aed !important;
+  stroke-width: 3 !important;
+}
+
+/* 知识库/工具下拉富选项 */
+.workflow-resource-dropdown .ant-select-item {
+  padding: 8px 10px !important;
+  height: auto !important;
+  min-height: auto !important;
+}
+
+.resource-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.resource-option-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-option-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.resource-option-icon.knowledge {
+  color: #4f46e5;
+}
+
+.resource-option-icon.tool {
+  color: #059669;
+}
+
+.resource-option-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1f2937;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-option-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.resource-option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.resource-tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.resource-tag.enabled {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.resource-tag.type {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.node-id-display {
+  display: block;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #52525b;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  word-break: break-all;
+}
 </style>

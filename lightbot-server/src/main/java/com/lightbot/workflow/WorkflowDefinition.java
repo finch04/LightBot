@@ -31,6 +31,11 @@ public class WorkflowDefinition {
     private List<WorkflowEdge> edges;
 
     /**
+     * 全局配置：会话变量、上下文轮次等
+     */
+    private Map<String, Object> globalConfig;
+
+    /**
      * 根据 ID 获取节点
      *
      * @param nodeId 节点 ID

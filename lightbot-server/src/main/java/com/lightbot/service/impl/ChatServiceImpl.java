@@ -5,7 +5,7 @@ import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.tool.ToolEventEmitter;
-import com.lightbot.tool.builtintool.QueryKnowledgeTool;
+import com.lightbot.tool.systemtool.QueryKnowledgeTool;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.enums.MessageRole;

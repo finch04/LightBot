@@ -1,4 +1,4 @@
-package com.lightbot.tool.builtintool;
+package com.lightbot.tool.builtin;
 
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
@@ -8,8 +8,8 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 /**
- * 系统内置工具 — 数学计算器
- * <p>执行基本数学运算，包括加减乘除</p>
+ * 内置工具 — 数学计算器
+ * <p>由 {@link com.lightbot.tool.registrar.BuiltinToolRegistrar} 注册，用户可选绑定</p>
  *
  * @author finch
  * @since 2026-05-22

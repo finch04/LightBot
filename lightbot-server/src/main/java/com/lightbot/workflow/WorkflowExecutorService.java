@@ -1,6 +1,5 @@
 package com.lightbot.workflow;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Agent;
 import com.lightbot.enums.NodeType;
@@ -10,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,20 +36,33 @@ public class WorkflowExecutorService {
      * @param userInput 用户输入
      * @return 执行结果（最终输出）
      */
-    public String execute(Long agentId, Long sessionId, String userInput) {
+    public String execute(Long agentId, Long sessionId, String userInput, List<Map<String, Object>> workflowEvents) {
         // 1. 加载 Agent 和 Workflow 定义
         Agent agent = agentService.getById(agentId);
         if (agent == null) {
             throw new IllegalArgumentException("Agent不存在: " + agentId);
         }
 
-        WorkflowDefinition workflow = parseWorkflow(agent.getConfig());
+        WorkflowDefinition workflow = WorkflowConfigParser.fromAgentConfig(agent.getConfig(), false, objectMapper);
         if (workflow == null || workflow.getNodes() == null || workflow.getNodes().isEmpty()) {
-            log.warn("[WorkflowExecutorService] 工作流为空: agentId={}", agentId);
-            return "工作流未配置，请先编辑工作流节点";
+            log.warn("[WorkflowExecutorService] 工作流未发布或为空: agentId={}", agentId);
+            return "工作流尚未发布或为空，请先在编排页发布工作流";
         }
 
-        // 2. 构建执行上下文
+        return executeWithDefinition(agent, workflow, sessionId, userInput, workflowEvents);
+    }
+
+    /**
+     * 使用指定工作流定义执行（调试/测试）
+     */
+    public String executeWithDefinition(Agent agent, WorkflowDefinition workflow, Long sessionId,
+                                        String userInput, List<Map<String, Object>> workflowEvents) {
+        Long agentId = agent.getId();
+        if (workflow == null || workflow.getNodes() == null || workflow.getNodes().isEmpty()) {
+            return "工作流为空";
+        }
+
+        // 1. 构建执行上下文
         NodeExecutionContext context = NodeExecutionContext.builder()
                 .agentId(agentId)
                 .sessionId(sessionId)
@@ -60,7 +73,10 @@ public class WorkflowExecutorService {
                 .nodeOutputs(new HashMap<>())
                 .build();
 
-        // 3. 从 START 节点开始执行
+        // 2. 注入全局配置中的会话变量默认值
+        applyGlobalConfig(context, workflow.getGlobalConfig());
+
+        // 3. 从 START 节点开始执行 DAG
         String currentNodeId = workflow.getStartNodeId();
         if (currentNodeId == null) {
             log.warn("[WorkflowExecutorService] 未找到 START 节点: agentId={}", agentId);
@@ -81,32 +97,71 @@ public class WorkflowExecutorService {
             context.setCurrentNodeId(currentNodeId);
             context.setCurrentNodeData(node.getData());
 
-            // 获取处理器并执行
-            NodeProcessor processor = registry.getProcessor(node.getType());
-            log.info("[WorkflowExecutorService] 执行节点: nodeId={}, type={}",
-                    currentNodeId, node.getType());
+            String nodeLabel = resolveNodeLabel(node);
+            String nodeTypeCode = node.getType() != null ? node.getType().getCode() : "";
+            final String executingNodeId = currentNodeId;
 
-            NodeExecutionResult nodeResult = processor.execute(context);
-
-            // 保存节点输出
-            if (nodeResult.getOutputs() != null) {
-                context.getNodeOutputs().put(currentNodeId, nodeResult.getOutputs());
-                context.getVariables().putAll(nodeResult.getOutputs());
+            // 推送节点开始事件
+            if (workflowEvents != null) {
+                workflowEvents.add(Map.of(
+                        "type", "workflow_node_start",
+                        "nodeId", executingNodeId,
+                        "nodeType", nodeTypeCode,
+                        "nodeLabel", nodeLabel,
+                        "contentOffset", 0));
             }
 
-            // 收集流式内容（LLM节点）
-            if (nodeResult.getStreamContent() != null) {
-                result.append(nodeResult.getStreamContent());
+            boolean nodeSuccess = true;
+            String completeMessage = "执行完成";
+            String nextNodeId = null;
+
+            try {
+                NodeProcessor processor = registry.getProcessor(node.getType());
+                log.info("[WorkflowExecutorService] 执行节点: nodeId={}, type={}",
+                        executingNodeId, node.getType());
+
+                NodeExecutionResult nodeResult = processor.execute(context);
+
+                if (nodeResult.getOutputs() != null) {
+                    context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
+                    context.getVariables().putAll(nodeResult.getOutputs());
+                }
+
+                if (nodeResult.getStreamContent() != null) {
+                    result.append(nodeResult.getStreamContent());
+                }
+
+                if (nodeResult.isFinished() || node.getType() == NodeType.END) {
+                    log.info("[WorkflowExecutorService] 工作流执行完成: agentId={}", agentId);
+                    nextNodeId = null;
+                } else {
+                    nextNodeId = nodeResult.getNextNodeId();
+                }
+            } catch (Exception e) {
+                nodeSuccess = false;
+                completeMessage = "执行失败: " + e.getMessage();
+                log.error("[WorkflowExecutorService] 节点执行失败: nodeId={}, error={}",
+                        executingNodeId, e.getMessage(), e);
+                nextNodeId = null;
             }
 
-            // END节点结束
-            if (nodeResult.isFinished() || node.getType() == NodeType.END) {
-                log.info("[WorkflowExecutorService] 工作流执行完成: agentId={}", agentId);
-                break;
+            if (workflowEvents != null) {
+                Map<String, Object> completeEvent = new HashMap<>();
+                completeEvent.put("type", "workflow_node_complete");
+                completeEvent.put("nodeId", executingNodeId);
+                completeEvent.put("nodeType", nodeTypeCode);
+                completeEvent.put("nodeLabel", nodeLabel);
+                completeEvent.put("message", completeMessage);
+                completeEvent.put("success", nodeSuccess);
+                completeEvent.put("contentOffset", 0);
+                workflowEvents.add(completeEvent);
             }
 
-            // 下一个节点
-            currentNodeId = nodeResult.getNextNodeId();
+            currentNodeId = nextNodeId;
+        }
+
+        if (workflowEvents != null) {
+            workflowEvents.add(Map.of("type", "workflow_complete", "contentOffset", 0));
         }
 
         // 5. 返回结果
@@ -118,28 +173,41 @@ public class WorkflowExecutorService {
     }
 
     /**
-     * 解析 Agent.config 中的 workflow 定义
-     *
-     * @param configJson Agent.config JSON
-     * @return WorkflowDefinition
+     * 将全局配置中的会话变量写入执行上下文
      */
-    private WorkflowDefinition parseWorkflow(String configJson) {
-        if (configJson == null || configJson.isEmpty()) {
-            return null;
+    @SuppressWarnings("unchecked")
+    private void applyGlobalConfig(NodeExecutionContext context, Map<String, Object> globalConfig) {
+        if (globalConfig == null) {
+            return;
         }
-
-        try {
-            Map<String, Object> config = objectMapper.readValue(configJson, new TypeReference<Map<String, Object>>() {});
-            Object workflowObj = config.get("workflow");
-            if (workflowObj == null) {
-                return null;
+        Object variableConfig = globalConfig.get("variable_config");
+        if (!(variableConfig instanceof Map<?, ?> varMap)) {
+            return;
+        }
+        Object conversationParams = varMap.get("conversation_params");
+        if (!(conversationParams instanceof List<?> params)) {
+            return;
+        }
+        for (Object item : params) {
+            if (item instanceof Map<?, ?> param) {
+                Object key = param.get("key");
+                if (key != null && !key.toString().isEmpty()) {
+                    context.getVariables().putIfAbsent(key.toString(), param.get("default_value"));
+                }
             }
-
-            String workflowJson = objectMapper.writeValueAsString(workflowObj);
-            return objectMapper.readValue(workflowJson, WorkflowDefinition.class);
-        } catch (Exception e) {
-            log.warn("[WorkflowExecutorService] 解析工作流失败: {}", e.getMessage());
-            return null;
         }
+    }
+
+    /**
+     * 从节点 data 解析展示名称
+     */
+    private String resolveNodeLabel(WorkflowNode node) {
+        if (node.getData() != null && node.getData().containsKey("label")) {
+            Object label = node.getData().get("label");
+            if (label != null && !label.toString().isEmpty()) {
+                return label.toString();
+            }
+        }
+        return node.getType() != null ? node.getType().getDesc() : "节点";
     }
 }

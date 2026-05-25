@@ -47,6 +47,8 @@ public class ChatContext {
     private int[] inputTokenHolder;
     private int[] outputTokenHolder;
     private List<Map<String, Object>> toolEventsList;
+    /** 工作流节点执行事件（WORKFLOW 类型 Agent） */
+    private List<Map<String, Object>> workflowEventsList;
     private List<LlmTraceSpan> spans;
     private long startTime;
 
@@ -63,6 +65,7 @@ public class ChatContext {
         ctx.inputTokenHolder = new int[]{0};
         ctx.outputTokenHolder = new int[]{0};
         ctx.toolEventsList = new ArrayList<>();
+        ctx.workflowEventsList = new ArrayList<>();
         ctx.spans = new ArrayList<>();
         return ctx;
     }

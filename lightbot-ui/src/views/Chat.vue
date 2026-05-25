@@ -52,6 +52,14 @@
               </div>
               <div v-show="msg._reasoningExpanded" class="reasoning-content">{{ msg._reasoningContent }}</div>
             </div>
+            <!-- 工作流节点执行（工作流型智能体） -->
+            <div v-if="msg._workflowEvents?.length > 0" class="workflow-block-inline">
+              <WorkflowNodesGroupComponent
+                :workflow-events="msg._workflowEvents"
+                :is-done="!msg._streaming"
+                :default-expanded="msg._streaming"
+              />
+            </div>
             <!-- 有工具事件：按 offset 位置插入工具块（流式/历史统一逻辑，支持多轮工具调用） -->
             <template v-if="msg._toolEvents?.length > 0 && getToolBlockOffsets(msg).length > 0">
               <template v-for="(segment, si) in splitContentByOffsets(msg)" :key="si">
@@ -224,6 +232,7 @@ import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
+import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -339,12 +348,14 @@ function toggleReference(msg, index) {
 
 function parseMessage(m) {
   let toolEvents = []
+  let workflowEvents = []
   let toolBlockOffsets = []
   let reasoningContent = ''
   if (m.metadata) {
     try {
       const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
       if (metadata?.toolEvents) toolEvents = metadata.toolEvents
+      if (metadata?.workflowEvents) workflowEvents = metadata.workflowEvents
       if (metadata?.toolBlockOffsets) toolBlockOffsets = metadata.toolBlockOffsets
       if (metadata?.reasoningContent) reasoningContent = metadata.reasoningContent
     } catch {}
@@ -354,6 +365,7 @@ function parseMessage(m) {
     content: m.content,
     metadata: m.metadata,
     _toolEvents: toolEvents,
+    _workflowEvents: workflowEvents,
     _toolBlockOffsets: toolBlockOffsets,
     _toolBlocksDone: [],
     _toolExpanded: false,
@@ -495,7 +507,7 @@ async function sendMessage() {
         // onChunk: 文本内容
         onChunk: (chunk) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
             hasStreamContent.value = true
@@ -511,7 +523,7 @@ async function sendMessage() {
         // onToolEvent: 工具调用/结果/状态事件
         onToolEvent: (event) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
           }
@@ -523,6 +535,16 @@ async function sendMessage() {
           if (event.type === 'reasoning_content') {
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
             assistantMsg._reasoningDone = true
+            return
+          }
+          // 工作流节点执行事件
+          if (event.type === 'workflow_node_start' || event.type === 'workflow_node_complete' || event.type === 'workflow_complete') {
+            if (!assistantMsg._workflowEvents) assistantMsg._workflowEvents = []
+            assistantMsg._workflowEvents.push(event)
+            if (event.type === 'workflow_node_start') {
+              currentStatus.value = `正在执行: ${event.nodeLabel || event.nodeType || '节点'}`
+            }
+            scrollToBottom()
             return
           }
 
@@ -579,14 +601,14 @@ async function sendMessage() {
     // 用户主动中断
     if (e.name === 'AbortError') {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content += '\n\n*AI 输出已终止*'
       assistantMsg._streaming = false
     } else {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
@@ -664,6 +686,9 @@ function applyToolMetadata(msg, meta) {
   msg.metadata = { ...(msg.metadata || {}), ...meta }
   if (meta.toolEvents?.length) {
     msg._toolEvents = meta.toolEvents
+  }
+  if (meta.workflowEvents?.length) {
+    msg._workflowEvents = meta.workflowEvents
   }
   if (meta.toolBlockOffsets?.length) {
     msg._toolBlockOffsets = meta.toolBlockOffsets
@@ -1206,6 +1231,10 @@ watch(sessionId, (newVal, oldVal) => {
 
 /* 工具块内联容器 */
 .tool-block-inline {
+  margin: 8px 0;
+}
+
+.workflow-block-inline {
   margin: 8px 0;
 }
 

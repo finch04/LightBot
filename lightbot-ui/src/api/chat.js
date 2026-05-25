@@ -82,7 +82,8 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onD
           // 尝试解析为工具事件 JSON
           try {
             const parsed = JSON.parse(statusContent)
-            if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status' || parsed.type === 'tool_complete' || parsed.type === 'reasoning_content') {
+            if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status' || parsed.type === 'tool_complete' || parsed.type === 'reasoning_content'
+                || parsed.type === 'workflow_node_start' || parsed.type === 'workflow_node_complete' || parsed.type === 'workflow_complete') {
               onToolEvent?.(parsed)
               continue
             }

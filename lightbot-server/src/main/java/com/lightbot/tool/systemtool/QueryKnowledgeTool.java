@@ -1,4 +1,4 @@
-package com.lightbot.tool.builtintool;
+package com.lightbot.tool.systemtool;
 
 import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
@@ -27,8 +27,8 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
- * 系统内置工具 — 查询知识库
- * <p>搜索智能体绑定的知识库，由大模型按需调用，避免每次强制RAG</p>
+ * 平台系统工具 — 知识库检索
+ * <p>自动注入所有 Agent，由 {@link com.lightbot.tool.registrar.PlatformSystemToolRegistrar} 注册</p>
  *
  * @author finch
  * @since 2026-05-22

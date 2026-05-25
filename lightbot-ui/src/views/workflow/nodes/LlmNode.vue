@@ -1,7 +1,7 @@
 <template>
-  <div class="workflow-node llm-node" :class="{ selected }" @dblclick="$emit('edit')">
-    <Handle type="target" position="left" />
-    <Handle type="source" position="right" />
+  <div class="workflow-node llm-node" :class="nodeClass" @dblclick="$emit('edit')">
+    <WorkflowHandle type="target" position="left" />
+    <WorkflowHandle type="source" position="right" />
     <div class="node-header">
       <div class="node-icon">
         <RobotOutlined />
@@ -25,15 +25,21 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
+import { computed } from 'vue'
+import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { RobotOutlined } from '@ant-design/icons-vue'
 
-defineProps({
+const props = defineProps({
   data: Object,
   selected: Boolean
 })
 
 defineEmits(['edit'])
+
+const nodeClass = computed(() => ({
+  selected: props.selected,
+  [`debug-${props.data?.debugStatus}`]: !!props.data?.debugStatus
+}))
 
 function truncate(str, len) {
   if (!str) return ''
@@ -57,6 +63,15 @@ function truncate(str, len) {
 .llm-node.selected {
   border-color: #8b5cf6;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+.llm-node.debug-executing { animation: wf-exec 1.2s linear infinite; border-color: #6366f1; }
+.llm-node.debug-success { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+.llm-node.debug-fail { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+@keyframes wf-exec {
+  0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); }
+  50% { box-shadow: 0 0 0 8px rgba(99,102,241,0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); }
 }
 
 .node-header {
