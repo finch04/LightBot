@@ -24,13 +24,18 @@ public abstract class PassthroughNodeProcessor extends AbstractFlowNodeProcessor
     }
 
     @Component
-    public static class ApiNodeProcessor extends PassthroughNodeProcessor {
-        @Override public NodeType getType() { return NodeType.API; }
+    public static class LoopNodeProcessor extends PassthroughNodeProcessor {
+        @Override public NodeType getType() { return NodeType.LOOP; }
     }
 
     @Component
-    public static class LoopNodeProcessor extends PassthroughNodeProcessor {
-        @Override public NodeType getType() { return NodeType.LOOP; }
+    public static class LoopStartNodeProcessor extends PassthroughNodeProcessor {
+        @Override public NodeType getType() { return NodeType.LOOP_START; }
+    }
+
+    @Component
+    public static class LoopEndNodeProcessor extends PassthroughNodeProcessor {
+        @Override public NodeType getType() { return NodeType.LOOP_END; }
     }
 
     @Component
@@ -61,13 +66,18 @@ public abstract class PassthroughNodeProcessor extends AbstractFlowNodeProcessor
     }
 
     @Component
-    public static class McpNodeProcessor extends PassthroughNodeProcessor {
-        @Override public NodeType getType() { return NodeType.MCP; }
+    public static class BatchStartNodeProcessor extends PassthroughNodeProcessor {
+        @Override public NodeType getType() { return NodeType.BATCH_START; }
     }
 
     @Component
-    public static class ScriptNodeProcessor extends PassthroughNodeProcessor {
-        @Override public NodeType getType() { return NodeType.SCRIPT; }
+    public static class BatchEndNodeProcessor extends PassthroughNodeProcessor {
+        @Override public NodeType getType() { return NodeType.BATCH_END; }
+    }
+
+    @Component
+    public static class McpNodeProcessor extends PassthroughNodeProcessor {
+        @Override public NodeType getType() { return NodeType.MCP; }
     }
 
     @Component

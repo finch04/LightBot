@@ -16,21 +16,40 @@
         <button class="btn-outline" @click="startChat">
           <MessageOutlined /> 对话
         </button>
-        <button v-if="agent.agentType !== 'workflow'" class="btn-outline" @click="handleSave" :disabled="saving">
+        <button
+          v-if="agent.agentType !== 'workflow'"
+          class="btn-outline"
+          @click="openVersionDrawer"
+        >
+          <HistoryOutlined /> 版本管理
+        </button>
+        <button v-if="agent.agentType !== 'workflow'" class="btn-outline" @click="handleSave" :disabled="saving || isVersionPreview">
           <SaveOutlined /> 暂存
         </button>
         <button
           v-if="agent.agentType !== 'workflow'"
           class="btn-primary"
           @click="handlePublish"
-          :disabled="publishing || saving"
+          :disabled="publishing || saving || isVersionPreview"
         >
           <CheckCircleOutlined /> {{ publishing ? '发布中...' : '发布' }}
         </button>
       </div>
     </div>
 
-    <div class="content-grid">
+    <a-alert
+      v-if="isVersionPreview"
+      type="info"
+      show-icon
+      class="version-preview-banner-top"
+      :message="`正在预览历史版本 v${selectedVersion}（只读）`"
+    >
+      <template #description>
+        <button type="button" class="link-btn" @click="selectAgentVersion('draft')">返回当前编辑</button>
+      </template>
+    </a-alert>
+
+    <div class="content-grid" :class="{ 'is-version-preview': isVersionPreview }">
       <!-- 基本信息 -->
       <div class="panel">
         <div class="panel-header">
@@ -333,18 +352,88 @@
       title="发布 Agent"
       ok-text="确认发布"
       cancel-text="取消"
+      class="publish-modal"
       :confirm-loading="publishing"
       @ok="confirmPublishAgent"
     >
-      <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
-      <a-textarea
-        v-model:value="publishDescription"
-        :maxlength="50"
-        show-count
-        :rows="2"
-        placeholder="例如：优化系统提示词、调整模型参数"
-      />
+      <div class="publish-modal-content">
+        <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
+        <a-textarea
+          v-model:value="publishDescription"
+          class="publish-modal-textarea"
+          :maxlength="50"
+          show-count
+          :rows="3"
+          placeholder="例如：优化系统提示词、调整模型参数"
+        />
+      </div>
     </a-modal>
+
+    <a-drawer
+      v-model:open="versionDrawerVisible"
+      title="版本历史"
+      placement="right"
+      :width="400"
+      class="agent-version-drawer"
+    >
+      <div
+        class="version-drawer-item draft"
+        :class="{ active: selectedVersion === 'draft' }"
+        @click="selectAgentVersion('draft')"
+      >
+        <div class="version-drawer-title">当前编辑</div>
+        <div class="version-drawer-desc">继续编辑未发布的修改</div>
+      </div>
+      <a-divider style="margin: 12px 0" />
+      <a-spin :spinning="versionLoading">
+        <div
+          v-for="(item, idx) in versionList"
+          :key="item.version"
+          class="version-drawer-item"
+          :class="{ active: selectedVersion === item.version }"
+          @click="selectAgentVersion(item.version)"
+        >
+          <div class="version-drawer-header">
+            <span class="version-drawer-title">{{ idx === 0 ? '线上版本' : `v${item.version}` }}</span>
+            <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
+          </div>
+          <div v-if="item.description" class="version-drawer-note">{{ item.description }}</div>
+          <div class="version-drawer-desc">{{ formatVersionDesc(item) }}</div>
+        </div>
+        <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
+      </a-spin>
+
+      <div v-if="versionPreview" class="version-preview-detail">
+        <h4 class="preview-detail-title">版本配置快照</h4>
+        <div class="preview-field">
+          <label>系统提示词</label>
+          <div class="preview-value pre">{{ versionPreview.systemPrompt || '（空）' }}</div>
+        </div>
+        <div class="preview-field">
+          <label>欢迎语</label>
+          <div class="preview-value">{{ versionPreview.welcomeMessage || '（空）' }}</div>
+        </div>
+        <div class="preview-field">
+          <label>模型</label>
+          <div class="preview-value">{{ previewModelLabel }}</div>
+        </div>
+        <div class="preview-field">
+          <label>绑定</label>
+          <div class="preview-value">
+            知识库 {{ (versionPreview.knowledgeIds || []).length }} ·
+            工具 {{ (versionPreview.toolIds || []).length }} ·
+            MCP {{ (versionPreview.mcpServerIds || []).length }} ·
+            SubAgent {{ (versionPreview.subAgentIds || []).length }}
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <a-button v-if="selectedVersion !== 'draft'" type="primary" block @click="confirmRestoreVersion">
+          恢复到此版本
+        </a-button>
+      </template>
+    </a-drawer>
 
     <!-- CHAT/ASSISTANT 类型：绑定配置 Tabs -->
     <a-tabs v-if="agent.agentType !== 'workflow'" v-model:activeKey="activeTab" @change="onTabChange" class="binding-tabs">
@@ -636,9 +725,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent } from '../api/agent'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion } from '../api/agent'
 import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -659,6 +748,18 @@ const promptVariables = ref([])
 const validPromptVariables = computed(() =>
   promptVariables.value.filter(v => v.key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v.key.trim()))
 )
+
+const isVersionPreview = computed(() => selectedVersion.value !== 'draft' && selectedVersion.value != null)
+
+const previewModelLabel = computed(() => {
+  const cfg = versionPreview.value?.config
+  if (!cfg) return '—'
+  const modelId = cfg.modelId || '—'
+  const providerId = cfg.providerId
+  const provider = providerList.value.find(p => String(p.id) === String(providerId))
+  const name = provider?.name || providerId || '—'
+  return `${name} / ${modelId}`
+})
 
 const agent = reactive({
   id: null,
@@ -698,6 +799,11 @@ const saving = ref(false)
 const publishing = ref(false)
 const publishModalVisible = ref(false)
 const publishDescription = ref('')
+const versionDrawerVisible = ref(false)
+const versionList = ref([])
+const versionLoading = ref(false)
+const selectedVersion = ref('draft')
+const versionPreview = ref(null)
 const agentStatus = ref('draft')
 const agentVersion = ref(0)
 const activeTab = ref('tools')
@@ -1322,6 +1428,92 @@ async function loadWorkflowSummary() {
   }
 }
 
+function formatVersionTime(val) {
+  if (val == null || val === '') return ''
+  const raw = String(val)
+  const normalized = raw.includes('T') && !raw.endsWith('Z')
+    ? raw.replace(/(\.\d{3})\d*/, '$1')
+    : raw
+  const d = new Date(normalized)
+  if (Number.isNaN(d.getTime())) {
+    return raw.slice(0, 19).replace('T', ' ')
+  }
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatVersionDesc(item) {
+  const parts = []
+  const time = formatVersionTime(item.publishedAt)
+  if (time) parts.push(time)
+  return parts.join(' · ') || '—'
+}
+
+async function openVersionDrawer() {
+  versionDrawerVisible.value = true
+  versionLoading.value = true
+  try {
+    const res = await listAgentVersions(agentId)
+    versionList.value = res.data || []
+  } catch (e) {
+    message.error(e.message || '加载版本失败')
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+async function selectAgentVersion(version) {
+  selectedVersion.value = version
+  if (version === 'draft') {
+    versionPreview.value = null
+    await loadAgent()
+    return
+  }
+  versionLoading.value = true
+  try {
+    const res = await getAgentVersionDetail(agentId, version)
+    const data = res.data || {}
+    const payload = data.payload || {}
+    versionPreview.value = {
+      systemPrompt: payload.systemPrompt,
+      welcomeMessage: payload.welcomeMessage,
+      recommendedQuestions: payload.recommendedQuestions,
+      config: payload.config || {},
+      knowledgeIds: payload.knowledgeIds || [],
+      toolIds: payload.toolIds || [],
+      mcpServerIds: payload.mcpServerIds || [],
+      subAgentIds: payload.subAgentIds || [],
+      description: data.description,
+    }
+  } catch (e) {
+    message.error(e.message || '加载版本失败')
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+function confirmRestoreVersion() {
+  if (selectedVersion.value === 'draft') return
+  const version = selectedVersion.value
+  Modal.confirm({
+    title: '恢复到此版本',
+    content: `确定将 v${version} 的配置恢复到当前编辑态吗？未发布的修改将被覆盖。`,
+    okText: '确认恢复',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await restoreAgentVersion(agentId, version)
+        message.success(`已恢复 v${version} 到当前编辑`)
+        await selectAgentVersion('draft')
+        agentStatus.value = 'published_editing'
+      } catch (e) {
+        message.error(e.message || '恢复失败')
+      }
+    },
+  })
+}
+
 function handlePublish() {
   publishDescription.value = ''
   publishModalVisible.value = true
@@ -1450,10 +1642,110 @@ onMounted(async () => {
   color: #b45309;
   border-color: #fde68a;
 }
+.publish-modal-content {
+  padding-bottom: 8px;
+}
 .publish-modal-tip {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 13px;
   color: #71717a;
+}
+.publish-modal-textarea {
+  margin-bottom: 28px;
+}
+:deep(.publish-modal .ant-modal-body) {
+  padding-bottom: 28px;
+}
+:deep(.publish-modal .ant-modal-footer) {
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+}
+.link-btn {
+  border: none;
+  background: none;
+  color: #6366f1;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+.content-grid.is-version-preview {
+  opacity: 0.92;
+  pointer-events: none;
+  user-select: none;
+}
+.version-preview-banner-top {
+  margin-bottom: 16px;
+  pointer-events: auto;
+}
+.agent-version-drawer .version-drawer-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+}
+.agent-version-drawer .version-drawer-item:hover {
+  background: #f3f4f6;
+}
+.agent-version-drawer .version-drawer-item.active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.version-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.version-drawer-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+}
+.version-drawer-note {
+  font-size: 13px;
+  color: #334155;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.version-drawer-desc {
+  font-size: 12px;
+  color: #9ca3af;
+}
+.version-preview-detail {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+.preview-detail-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+.preview-field {
+  margin-bottom: 12px;
+}
+.preview-field label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.preview-value {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
+.preview-value.pre {
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  background: #f8fafc;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 .prompt-var-tip {
   margin-top: 8px;

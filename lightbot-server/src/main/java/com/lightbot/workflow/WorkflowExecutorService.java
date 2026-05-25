@@ -1,6 +1,7 @@
 package com.lightbot.workflow;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
@@ -9,9 +10,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 工作流执行服务
@@ -39,7 +42,15 @@ public class WorkflowExecutorService {
      * @return 执行结果（最终输出）
      */
     public String execute(Long agentId, Long sessionId, String userInput, List<Map<String, Object>> workflowEvents) {
-        // 1. 加载 Agent 和 Workflow 定义
+        return execute(agentId, sessionId, userInput, workflowEvents, null);
+    }
+
+    /**
+     * 执行工作流，支持实时推送节点事件（onEvent 非空时每个节点开始/结束立即回调）
+     */
+    public String execute(Long agentId, Long sessionId, String userInput,
+                          List<Map<String, Object>> workflowEvents,
+                          Consumer<Map<String, Object>> onEvent) {
         Agent agent = agentService.getById(agentId);
         if (agent == null) {
             throw new IllegalArgumentException("Agent不存在: " + agentId);
@@ -51,7 +62,7 @@ public class WorkflowExecutorService {
             return "工作流尚未发布或为空，请先在编排页发布工作流";
         }
 
-        return executeWithDefinition(agent, workflow, sessionId, userInput, workflowEvents);
+        return executeWithDefinition(agent, workflow, sessionId, userInput, workflowEvents, onEvent);
     }
 
     /**
@@ -59,6 +70,19 @@ public class WorkflowExecutorService {
      */
     public String executeWithDefinition(Agent agent, WorkflowDefinition workflow, Long sessionId,
                                         String userInput, List<Map<String, Object>> workflowEvents) {
+        return executeWithDefinition(agent, workflow, sessionId, userInput, workflowEvents, null);
+    }
+
+    public String executeWithDefinition(Agent agent, WorkflowDefinition workflow, Long sessionId,
+                                        String userInput, List<Map<String, Object>> workflowEvents,
+                                        Consumer<Map<String, Object>> onEvent) {
+        return executeWithDefinition(agent, workflow, sessionId, userInput, workflowEvents, onEvent, null);
+    }
+
+    public String executeWithDefinition(Agent agent, WorkflowDefinition workflow, Long sessionId,
+                                        String userInput, List<Map<String, Object>> workflowEvents,
+                                        Consumer<Map<String, Object>> onEvent,
+                                        Map<String, Object> initialVariables) {
         Long agentId = agent.getId();
         if (workflow == null || workflow.getNodes() == null || workflow.getNodes().isEmpty()) {
             return "工作流为空";
@@ -77,6 +101,11 @@ public class WorkflowExecutorService {
 
         // 2. 注入全局配置中的会话变量默认值
         applyGlobalConfig(context, workflow.getGlobalConfig());
+
+        // 2.1 调试运行预置变量（query / history_list 等）
+        if (initialVariables != null && !initialVariables.isEmpty()) {
+            context.getVariables().putAll(initialVariables);
+        }
 
         // 3. 从 START 节点开始执行 DAG
         String currentNodeId = workflow.getStartNodeId();
@@ -103,26 +132,25 @@ public class WorkflowExecutorService {
             String nodeTypeCode = node.getType() != null ? node.getType().getCode() : "";
             final String executingNodeId = currentNodeId;
 
-            // 推送节点开始事件
-            if (workflowEvents != null) {
-                workflowEvents.add(Map.of(
-                        "type", "workflow_node_start",
-                        "nodeId", executingNodeId,
-                        "nodeType", nodeTypeCode,
-                        "nodeLabel", nodeLabel,
-                        "contentOffset", 0));
-            }
+            long nodeStartMs = System.currentTimeMillis();
+            emitWorkflowEvent(workflowEvents, onEvent, Map.of(
+                    "type", "workflow_node_start",
+                    "nodeId", executingNodeId,
+                    "nodeType", nodeTypeCode,
+                    "nodeLabel", nodeLabel,
+                    "contentOffset", 0));
 
             boolean nodeSuccess = true;
             String completeMessage = "执行完成";
             String nextNodeId = null;
+            NodeExecutionResult nodeResult = null;
 
             try {
                 NodeProcessor processor = registry.getProcessor(node.getType());
                 log.info("[WorkflowExecutorService] 执行节点: nodeId={}, type={}",
                         executingNodeId, node.getType());
 
-                NodeExecutionResult nodeResult = processor.execute(context);
+                nodeResult = processor.execute(context);
 
                 if (nodeResult.getOutputs() != null) {
                     context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
@@ -147,24 +175,25 @@ public class WorkflowExecutorService {
                 nextNodeId = null;
             }
 
-            if (workflowEvents != null) {
-                Map<String, Object> completeEvent = new HashMap<>();
-                completeEvent.put("type", "workflow_node_complete");
-                completeEvent.put("nodeId", executingNodeId);
-                completeEvent.put("nodeType", nodeTypeCode);
-                completeEvent.put("nodeLabel", nodeLabel);
-                completeEvent.put("message", completeMessage);
-                completeEvent.put("success", nodeSuccess);
-                completeEvent.put("contentOffset", 0);
-                workflowEvents.add(completeEvent);
+            Map<String, Object> completeEvent = new HashMap<>();
+            completeEvent.put("type", "workflow_node_complete");
+            completeEvent.put("nodeId", executingNodeId);
+            completeEvent.put("nodeType", nodeTypeCode);
+            completeEvent.put("nodeLabel", nodeLabel);
+            completeEvent.put("message", completeMessage);
+            completeEvent.put("success", nodeSuccess);
+            completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
+            completeEvent.put("contentOffset", 0);
+            String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage);
+            if (detail != null && !detail.isBlank()) {
+                completeEvent.put("detail", detail);
             }
+            emitWorkflowEvent(workflowEvents, onEvent, completeEvent);
 
             currentNodeId = nextNodeId;
         }
 
-        if (workflowEvents != null) {
-            workflowEvents.add(Map.of("type", "workflow_complete", "contentOffset", 0));
-        }
+        emitWorkflowEvent(workflowEvents, onEvent, Map.of("type", "workflow_complete", "contentOffset", 0));
 
         // 5. 返回结果
         if (result.isEmpty() && context.getVariables().containsKey("result")) {
@@ -211,5 +240,185 @@ public class WorkflowExecutorService {
             }
         }
         return node.getType() != null ? node.getType().getDesc() : "节点";
+    }
+
+    private void emitWorkflowEvent(List<Map<String, Object>> workflowEvents,
+                                   Consumer<Map<String, Object>> onEvent,
+                                   Map<String, Object> event) {
+        if (workflowEvents != null) {
+            workflowEvents.add(event);
+        }
+        if (onEvent != null) {
+            onEvent.accept(event);
+        }
+    }
+
+    /**
+     * 节点完成后的可读摘要，供对话页展示节点间传递内容
+     */
+    private String buildNodeDetail(WorkflowNode node, NodeExecutionResult result,
+                                   boolean success, String completeMessage) {
+        if (!success) {
+            return completeMessage;
+        }
+        if (result == null) {
+            return null;
+        }
+        if (result.getStreamContent() != null && !result.getStreamContent().isBlank()) {
+            return truncateDetail(result.getStreamContent());
+        }
+        Map<String, Object> outputs = result.getOutputs();
+        if (outputs == null || outputs.isEmpty()) {
+            return null;
+        }
+        if (outputs.containsKey("retrievalResult")) {
+            String text = String.valueOf(outputs.get("retrievalResult"));
+            if (text.isBlank()) {
+                return "知识检索：未命中相关内容";
+            }
+            return "知识检索命中 " + text.length() + " 字\n" + truncateDetail(text);
+        }
+        if (outputs.containsKey("llmOutput")) {
+            return truncateDetail(String.valueOf(outputs.get("llmOutput")));
+        }
+        if (outputs.containsKey("result")) {
+            return truncateDetail(String.valueOf(outputs.get("result")));
+        }
+        try {
+            String json = objectMapper.writeValueAsString(outputs);
+            return truncateDetail(json);
+        } catch (Exception e) {
+            return truncateDetail(outputs.toString());
+        }
+    }
+
+    /**
+     * 单节点测试主输出：优先 LLM/HTTP 等常见字段，否则序列化全部 outputs
+     */
+    private String formatSingleNodeOutput(NodeExecutionResult nodeResult) {
+        if (nodeResult == null) {
+            return "";
+        }
+        if (nodeResult.getStreamContent() != null && !nodeResult.getStreamContent().isBlank()) {
+            return nodeResult.getStreamContent();
+        }
+        Map<String, Object> outputs = nodeResult.getOutputs();
+        if (outputs == null || outputs.isEmpty()) {
+            return "";
+        }
+        if (outputs.containsKey("llmOutput")) {
+            return String.valueOf(outputs.get("llmOutput"));
+        }
+        if (outputs.containsKey("body")) {
+            return String.valueOf(outputs.get("body"));
+        }
+        if (outputs.containsKey("result")) {
+            return String.valueOf(outputs.get("result"));
+        }
+        if (outputs.containsKey("retrievalResult")) {
+            return String.valueOf(outputs.get("retrievalResult"));
+        }
+        try {
+            return objectMapper.writeValueAsString(outputs);
+        } catch (Exception jsonEx) {
+            return outputs.toString();
+        }
+    }
+
+    private static String truncateDetail(String text) {
+        if (text == null) {
+            return "";
+        }
+        String trimmed = text.trim();
+        int max = 400;
+        if (trimmed.length() <= max) {
+            return trimmed;
+        }
+        return trimmed.substring(0, max) + "…";
+    }
+
+    /**
+     * 单节点调试：仅执行指定节点处理器，不跑完整 DAG
+     */
+    public WorkflowTestResultVO executeSingleNode(Agent agent, WorkflowDefinition workflow, String nodeId,
+                                                  Map<String, Object> initialVariables) {
+        WorkflowNode node = workflow.getNode(nodeId);
+        if (node == null) {
+            throw new IllegalArgumentException("节点不存在: " + nodeId);
+        }
+        if (node.getType() == NodeType.START || node.getType() == NodeType.END) {
+            throw new IllegalArgumentException("开始/结束节点不支持单节点测试");
+        }
+
+        NodeExecutionContext context = NodeExecutionContext.builder()
+                .agentId(agent.getId())
+                .agent(agent)
+                .workflow(workflow)
+                .variables(new HashMap<>())
+                .nodeOutputs(new HashMap<>())
+                .currentNodeId(nodeId)
+                .currentNodeData(node.getData())
+                .build();
+
+        applyGlobalConfig(context, workflow.getGlobalConfig());
+        if (initialVariables != null && !initialVariables.isEmpty()) {
+            context.getVariables().putAll(initialVariables);
+        }
+
+        List<Map<String, Object>> events = new ArrayList<>();
+        String nodeLabel = resolveNodeLabel(node);
+        String nodeTypeCode = node.getType().getCode();
+        long nodeStartMs = System.currentTimeMillis();
+        emitWorkflowEvent(events, null, Map.of(
+                "type", "workflow_node_start",
+                "nodeId", nodeId,
+                "nodeType", nodeTypeCode,
+                "nodeLabel", nodeLabel));
+
+        boolean nodeSuccess = true;
+        String completeMessage = "执行完成";
+        NodeExecutionResult nodeResult = null;
+        String output = "";
+
+        try {
+            NodeProcessor processor = registry.getProcessor(node.getType());
+            nodeResult = processor.execute(context);
+            if (nodeResult.getOutputs() != null) {
+                context.getNodeOutputs().put(nodeId, nodeResult.getOutputs());
+                context.getVariables().putAll(nodeResult.getOutputs());
+            }
+            output = formatSingleNodeOutput(nodeResult);
+        } catch (Exception e) {
+            nodeSuccess = false;
+            completeMessage = "执行失败: " + e.getMessage();
+            output = completeMessage;
+            log.error("[WorkflowExecutorService] 单节点测试失败: nodeId={}, error={}", nodeId, e.getMessage(), e);
+        }
+
+        Map<String, Object> completeEvent = new HashMap<>();
+        completeEvent.put("type", "workflow_node_complete");
+        completeEvent.put("nodeId", nodeId);
+        completeEvent.put("nodeType", nodeTypeCode);
+        completeEvent.put("nodeLabel", nodeLabel);
+        completeEvent.put("message", completeMessage);
+        completeEvent.put("success", nodeSuccess);
+        completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
+        String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage);
+        if (detail != null && !detail.isBlank()) {
+            completeEvent.put("detail", detail);
+            if (output.isBlank()) {
+                output = detail;
+            }
+        }
+        if (nodeSuccess && nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
+            completeEvent.put("outputs", nodeResult.getOutputs());
+        }
+        emitWorkflowEvent(events, null, completeEvent);
+
+        return WorkflowTestResultVO.builder()
+                .output(output)
+                .nodeEvents(events)
+                .usedDraft(true)
+                .build();
     }
 }

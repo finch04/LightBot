@@ -1,6 +1,7 @@
 package com.lightbot.service;
 
 import com.lightbot.dto.WorkflowGraphDTO;
+import com.lightbot.dto.WorkflowNodeTestRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.dto.WorkflowVersionVO;
@@ -52,4 +53,9 @@ public interface WorkflowConfigService {
      * 调试运行
      */
     WorkflowTestResultVO testRun(Long agentId, WorkflowTestRequest request);
+
+    /**
+     * 单节点调试运行
+     */
+    WorkflowTestResultVO testNode(Long agentId, WorkflowNodeTestRequest request);
 }

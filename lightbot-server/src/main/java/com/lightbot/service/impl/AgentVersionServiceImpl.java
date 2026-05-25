@@ -20,6 +20,8 @@ import com.lightbot.workflow.WorkflowConfigParser;
 import com.lightbot.workflow.WorkflowDefinition;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +45,10 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     private final AgentMapper agentMapper;
     private final AgentVersionMapper agentVersionMapper;
     private final ObjectMapper objectMapper;
+
+    @Lazy
+    @Autowired
+    private AgentService agentService;
 
     @Override
     public Map<String, Object> getWorkflowEditorState(Long agentId) {
@@ -140,7 +146,120 @@ public class AgentVersionServiceImpl implements AgentVersionService {
 
     @Override
     public Map<String, Object> getPublishedVersionGraph(Long agentId, Integer version) {
+        Map<String, Object> detail = getPublishedVersionDetail(agentId, version);
+        if (!KIND_WORKFLOW.equals(detail.get("kind"))) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "该版本不是工作流类型");
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> graph = detail.get("graph") instanceof Map
+                ? new HashMap<>((Map<String, Object>) detail.get("graph")) : new HashMap<>();
+        graph.put("version", version);
+        return graph;
+    }
+
+    @Override
+    public Map<String, Object> getPublishedVersionDetail(Long agentId, Integer version) {
         requireAgent(agentId);
+        AgentVersion row = requirePublishedRow(agentId, version);
+        Map<String, Object> snap = parseJsonMap(row.getConfig());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("version", version);
+        result.put("description", row.getDescription());
+        result.put("publishedAt", row.getPublishTime());
+
+        if (KIND_CHAT.equals(snap.get("kind"))) {
+            result.put("kind", KIND_CHAT);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = snap.get("payload") instanceof Map
+                    ? (Map<String, Object>) snap.get("payload") : Map.of();
+            result.put("payload", payload);
+        } else {
+            result.put("kind", KIND_WORKFLOW);
+            result.put("graph", extractWorkflowGraph(row));
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void restorePublishedToDraft(Long agentId, Integer version) {
+        Agent agent = requireAgent(agentId);
+        AgentVersion row = requirePublishedRow(agentId, version);
+        Map<String, Object> snap = parseJsonMap(row.getConfig());
+
+        if (KIND_CHAT.equals(snap.get("kind"))) {
+            restoreChatSnapshotToDraft(agent, snap);
+        } else {
+            restoreWorkflowSnapshotToDraft(agent, snap, version);
+        }
+    }
+
+    private void restoreWorkflowSnapshotToDraft(Agent agent, Map<String, Object> snap, Integer version) {
+        Map<String, Object> graph = extractWorkflowGraphFromSnap(snap);
+        if (graph == null) {
+            graph = getPublishedVersionGraph(agent.getId(), version);
+            graph.remove("version");
+        }
+
+        AgentVersion draft = getOrCreateDraftRow(agent);
+        Map<String, Object> snapshot = new HashMap<>();
+        snapshot.put("kind", KIND_WORKFLOW);
+        snapshot.put("graph", graph);
+        draft.setConfig(writeJson(snapshot));
+        draft.setNodeCount(countNodesInMap(graph));
+        draft.setEdgeCount(countEdgesInMap(graph));
+        agentVersionMapper.updateById(draft);
+        updateAgentStatusAfterRestore(agent);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void restoreChatSnapshotToDraft(Agent agent, Map<String, Object> snap) {
+        Map<String, Object> payload = snap.get("payload") instanceof Map
+                ? (Map<String, Object>) snap.get("payload") : Map.of();
+
+        if (payload.get("systemPrompt") != null) {
+            agent.setSystemPrompt(String.valueOf(payload.get("systemPrompt")));
+        }
+        if (payload.get("welcomeMessage") != null) {
+            agent.setWelcomeMessage(String.valueOf(payload.get("welcomeMessage")));
+        }
+        if (payload.get("recommendedQuestions") != null) {
+            Object rq = payload.get("recommendedQuestions");
+            try {
+                agent.setRecommendedQuestions(rq instanceof String ? (String) rq : objectMapper.writeValueAsString(rq));
+            } catch (Exception e) {
+                log.warn("[AgentVersion] 恢复推荐问题失败: {}", e.getMessage());
+            }
+        }
+        if (payload.get("config") instanceof Map<?, ?> cfg) {
+            Map<String, Object> configMap = new HashMap<>();
+            cfg.forEach((k, v) -> configMap.put(String.valueOf(k), v));
+            agent.setConfig(writeJson(configMap));
+        }
+        agentMapper.updateById(agent);
+
+        Long agentId = agent.getId();
+        agentService.updateKnowledgeBindings(agentId, toLongList(payload.get("knowledgeIds")));
+        agentService.updateToolBindings(agentId, toLongList(payload.get("toolIds")));
+        agentService.updateMcpServerBindings(agentId, toLongList(payload.get("mcpServerIds")));
+        agentService.updateSubAgentBindings(agentId, toLongList(payload.get("subAgentIds")));
+
+        saveDraftConfig(agent, snap, 0, 0);
+        updateAgentStatusAfterRestore(agent);
+    }
+
+    private void updateAgentStatusAfterRestore(Agent agent) {
+        int publishedVer = agent.getVersion() != null ? agent.getVersion() : 0;
+        if (publishedVer > 0) {
+            agent.setStatus(AgentStatus.PUBLISHED_EDITING);
+        } else {
+            agent.setStatus(AgentStatus.DRAFT);
+        }
+        agentMapper.updateById(agent);
+    }
+
+    private AgentVersion requirePublishedRow(Long agentId, Integer version) {
         AgentVersion row = agentVersionMapper.selectOne(
                 new LambdaQueryWrapper<AgentVersion>()
                         .eq(AgentVersion::getAgentId, agentId)
@@ -150,38 +269,32 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         if (row == null) {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "版本不存在: " + version);
         }
-        Map<String, Object> graph = extractWorkflowGraph(row);
-        graph.put("version", version);
-        return graph;
+        return row;
     }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void restorePublishedToDraft(Long agentId, Integer version) {
-        Agent agent = requireAgent(agentId);
-        Map<String, Object> graph = getPublishedVersionGraph(agentId, version);
-        graph.remove("version");
+    private Map<String, Object> extractWorkflowGraphFromSnap(Map<String, Object> snap) {
+        if (snap.get("graph") instanceof Map<?, ?> graph) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> g = (Map<String, Object>) graph;
+            return g;
+        }
+        return null;
+    }
 
-        AgentVersion draft = getOrCreateDraftRow(agent);
-        Map<String, Object> snapshot = new HashMap<>();
-        snapshot.put("kind", KIND_WORKFLOW);
-        snapshot.put("graph", graph);
-        draft.setConfig(writeJson(snapshot));
-        if (graph.get("nodes") instanceof List<?> nodes) {
-            draft.setNodeCount(nodes.size());
+    @SuppressWarnings("unchecked")
+    private List<Long> toLongList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
         }
-        if (graph.get("edges") instanceof List<?> edges) {
-            draft.setEdgeCount(edges.size());
+        List<Long> ids = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Number n) {
+                ids.add(n.longValue());
+            } else if (item != null && !String.valueOf(item).isBlank()) {
+                ids.add(Long.parseLong(String.valueOf(item)));
+            }
         }
-        agentVersionMapper.updateById(draft);
-
-        int publishedVer = agent.getVersion() != null ? agent.getVersion() : 0;
-        if (publishedVer > 0) {
-            agent.setStatus(AgentStatus.PUBLISHED_EDITING);
-        } else {
-            agent.setStatus(AgentStatus.DRAFT);
-        }
-        agentMapper.updateById(agent);
+        return ids;
     }
 
     @Override

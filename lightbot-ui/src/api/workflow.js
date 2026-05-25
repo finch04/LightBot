@@ -31,3 +31,7 @@ export function restoreWorkflowVersion(agentId, version) {
 export function testWorkflow(agentId, data) {
   return request.post(`/agents/${agentId}/workflow/test`, data)
 }
+
+export function testWorkflowNode(agentId, data) {
+  return request.post(`/agents/${agentId}/workflow/test-node`, data)
+}

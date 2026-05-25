@@ -538,12 +538,21 @@ async function sendMessage() {
             assistantMsg._reasoningDone = true
             return
           }
-          // 工作流节点执行事件
+          // 工作流节点执行事件（实时推送，无需等待最终回复）
           if (event.type === 'workflow_node_start' || event.type === 'workflow_node_complete' || event.type === 'workflow_complete') {
             if (!assistantMsg._workflowEvents) assistantMsg._workflowEvents = []
             assistantMsg._workflowEvents.push(event)
+            hasStreamContent.value = true
             if (event.type === 'workflow_node_start') {
               currentStatus.value = `正在执行: ${event.nodeLabel || event.nodeType || '节点'}`
+            } else if (event.type === 'workflow_node_complete') {
+              const label = event.nodeLabel || event.nodeType || '节点'
+              const dur = event.durationMs != null ? ` (${event.durationMs}ms)` : ''
+              currentStatus.value = event.success === false
+                ? `${label} 执行失败`
+                : `${label} 已完成${dur}`
+            } else if (event.type === 'workflow_complete') {
+              currentStatus.value = '工作流执行完成，正在整理回复…'
             }
             scrollToBottom()
             return

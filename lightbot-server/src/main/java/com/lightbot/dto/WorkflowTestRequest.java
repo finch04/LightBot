@@ -20,4 +20,10 @@ public class WorkflowTestRequest {
 
     @Schema(description = "当前画布工作流（优先使用，测试时无需先暂存）")
     private WorkflowGraphDTO graph;
+
+    @Schema(description = "测试模式：generation 文本生成（单轮）| conversation 文本对话（多轮）")
+    private String testMode = "generation";
+
+    @Schema(description = "对话模式下的历史消息（role: user/assistant, content）")
+    private java.util.List<java.util.Map<String, String>> conversationHistory;
 }

@@ -3,6 +3,7 @@ package com.lightbot.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.WorkflowGraphDTO;
+import com.lightbot.dto.WorkflowNodeTestRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.dto.WorkflowVersionVO;
@@ -95,9 +96,11 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "工作流为空，请先配置节点");
         }
 
+        Map<String, Object> initialVariables = buildTestInitialVariables(request);
+
         List<Map<String, Object>> events = new ArrayList<>();
         String output = workflowExecutorService.executeWithDefinition(
-                agent, definition, null, request.getInput(), events);
+                agent, definition, null, request.getInput(), events, null, initialVariables);
 
         boolean usedDraft = request.getGraph() != null
                 || request.getUseDraft() == null
@@ -108,6 +111,87 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
                 .nodeEvents(events)
                 .usedDraft(usedDraft)
                 .build();
+    }
+
+    @Override
+    public WorkflowTestResultVO testNode(Long agentId, WorkflowNodeTestRequest request) {
+        Agent agent = requireAgent(agentId);
+        WorkflowDefinition definition;
+        if (request.getGraph() != null
+                && request.getGraph().getNodes() != null
+                && !request.getGraph().getNodes().isEmpty()) {
+            definition = WorkflowConfigParser.toDefinition(toGraphMap(request.getGraph()), objectMapper);
+        } else {
+            definition = agentVersionService.loadWorkflowDefinition(agentId, true);
+        }
+        if (definition == null || definition.getNodes() == null || definition.getNodes().isEmpty()) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "工作流为空，请先配置节点");
+        }
+
+        Map<String, Object> vars = new HashMap<>();
+        if (request.getInputParams() != null) {
+            request.getInputParams().forEach((k, v) -> {
+                if (k != null && !k.isBlank()) {
+                    vars.put(k, v != null ? v : "");
+                }
+            });
+        }
+        Object query = vars.get("query");
+        Object input = vars.get("input");
+        if (query == null || String.valueOf(query).isBlank()) {
+            vars.put("query", input != null ? input : "测试输入");
+        }
+        if (input == null || String.valueOf(input).isBlank()) {
+            vars.put("input", vars.get("query"));
+        }
+
+        try {
+            return workflowExecutorService.executeSingleNode(agent, definition, request.getNodeId(), vars);
+        } catch (Exception e) {
+            // 单节点测试：业务/执行异常也返回结构化结果，避免前端只能走 HTTP 错误
+            log.warn("[WorkflowConfigService] 单节点测试异常: agentId={}, nodeId={}, msg={}",
+                    agentId, request.getNodeId(), e.getMessage());
+            Map<String, Object> failEvent = new HashMap<>();
+            failEvent.put("type", "workflow_node_complete");
+            failEvent.put("nodeId", request.getNodeId());
+            failEvent.put("success", false);
+            failEvent.put("message", e.getMessage() != null ? e.getMessage() : "执行失败");
+            failEvent.put("durationMs", 0L);
+            String errMsg = e.getMessage() != null ? e.getMessage() : "执行失败";
+            return WorkflowTestResultVO.builder()
+                    .output(errMsg)
+                    .nodeEvents(List.of(failEvent))
+                    .usedDraft(true)
+                    .build();
+        }
+    }
+
+    /**
+     * 构建调试运行预置变量：文本生成 / 文本对话
+     */
+    private Map<String, Object> buildTestInitialVariables(WorkflowTestRequest request) {
+        Map<String, Object> vars = new HashMap<>();
+        String input = request.getInput();
+        if (input != null) {
+            vars.put("input", input);
+            vars.put("query", input);
+        }
+        if ("conversation".equalsIgnoreCase(request.getTestMode())
+                && request.getConversationHistory() != null
+                && !request.getConversationHistory().isEmpty()) {
+            vars.put("history_list", request.getConversationHistory());
+            StringBuilder historyText = new StringBuilder();
+            for (Map<String, String> msg : request.getConversationHistory()) {
+                if (msg == null) {
+                    continue;
+                }
+                String role = msg.getOrDefault("role", "user");
+                String content = msg.getOrDefault("content", "");
+                historyText.append(role).append(": ").append(content).append("\n");
+            }
+            vars.put("history", historyText.toString().trim());
+        }
+        return vars;
     }
 
     private Agent requireAgent(Long agentId) {

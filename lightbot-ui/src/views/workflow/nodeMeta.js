@@ -16,7 +16,7 @@ export const NODE_META = {
   start: { title: '开始', color: '#22c55e', icon: PlayCircleOutlined, desc: '工作流入口' },
   end: { title: '结束', color: '#ef4444', icon: StopOutlined, desc: '工作流出口' },
   llm: { title: '大模型', color: '#7c3aed', icon: RobotOutlined, desc: '调用大模型生成内容' },
-  condition: { title: '条件判断', color: '#d97706', icon: ForkOutlined, desc: '根据条件选择分支' },
+  condition: { title: '条件判断', color: '#d97706', icon: ForkOutlined, desc: '条件组匹配后走上/下/右出口' },
   retrieval: { title: '知识检索', color: '#4f46e5', icon: BookOutlined, desc: '从知识库检索内容' },
   tool: { title: '工具调用', color: '#059669', icon: ToolOutlined, desc: '执行预设工具' },
   api: { title: 'HTTP API', color: '#0ea5e9', icon: ApiOutlined, desc: '调用外部 HTTP 接口' },
@@ -24,7 +24,11 @@ export const NODE_META = {
   variable: { title: '变量赋值', color: '#ec4899', icon: EditOutlined, desc: '设置会话变量' },
   classifier: { title: '意图分类', color: '#f59e0b', icon: TagsOutlined, desc: '按意图路由分支' },
   batch: { title: '批处理', color: '#14b8a6', icon: ClusterOutlined, desc: '并行处理多条数据' },
-  script: { title: '脚本', color: '#64748b', icon: CodeOutlined, desc: '执行脚本逻辑' },
+  loop_start: { title: '迭代开始', color: '#8b5cf6', icon: SyncOutlined, desc: '循环容器内置节点' },
+  loop_end: { title: '迭代结束', color: '#a78bfa', icon: SyncOutlined, desc: '循环容器内置节点' },
+  batch_start: { title: '并行处理', color: '#14b8a6', icon: ClusterOutlined, desc: '批处理容器内置节点' },
+  batch_end: { title: '并行结束', color: '#2dd4bf', icon: ClusterOutlined, desc: '批处理容器内置节点' },
+  script: { title: '脚本', color: '#64748b', icon: CodeOutlined, desc: 'JS/Python 脚本处理变量' },
   mcp: { title: 'MCP', color: '#6366f1', icon: CloudServerOutlined, desc: '调用 MCP 工具' },
   input: { title: '流程输入', color: '#0d9488', icon: ImportOutlined, desc: '在流程中补充输入参数' },
   output: { title: '流程输出', color: '#0891b2', icon: ExportOutlined, desc: '输出流程中间结果' },
@@ -57,6 +61,16 @@ export function getNodeLibraryGroups(search = '') {
   })).filter(g => g.items.length > 0)
 }
 
+/** 连线中间可插入的节点（不含开始/结束） */
+export function getInsertableNodeLibraryGroups(search = '') {
+  return getNodeLibraryGroups(search)
+    .map(group => ({
+      ...group,
+      items: group.items.filter(type => type !== 'start' && type !== 'end'),
+    }))
+    .filter(g => g.items.length > 0)
+}
+
 export function getNodeMeta(type) {
   return NODE_META[type] || { title: type, color: '#6b7280', icon: RobotOutlined, desc: '' }
 }
@@ -86,7 +100,11 @@ export function getDefaultNodeData(type) {
       temperature: 0.7,
       short_memory: { ...SHORT_MEMORY_DEFAULT }
     },
-    condition: { label: '条件判断', branches: [] },
+    condition: {
+      label: '条件判断',
+      conditionGroups: [],
+      branches: [],
+    },
     retrieval: {
       label: '知识检索',
       knowledgeId: null,
@@ -109,9 +127,15 @@ export function getDefaultNodeData(type) {
     },
     loop: {
       label: '循环',
+      iterator_type: 'byArray',
+      count_limit: 100,
+      input_params: [{ key: 'item', type: 'Object', value_from: 'refer', value: '{{input}}' }],
+      output_params: [{ key: 'result', type: 'Object' }],
+      variable_parameters: [],
+      terminations: [],
       iteratorType: 'byArray',
       arrayVariable: '{{input}}',
-      countLimit: 10
+      countLimit: 100,
     },
     variable: { label: '变量赋值', variableName: '', variableValue: '' },
     classifier: {
@@ -128,12 +152,36 @@ export function getDefaultNodeData(type) {
     },
     batch: {
       label: '批处理',
-      batchSize: 10,
-      concurrentSize: 3,
+      batch_size: 100,
+      concurrent_size: 5,
+      error_strategy: 'continueOnError',
+      input_params: [{ key: 'item', type: 'Object', value_from: 'refer', value: '{{input}}' }],
+      output_params: [{ key: 'result', type: 'Array' }],
+      batchSize: 100,
+      concurrentSize: 5,
       errorStrategy: 'continueOnError',
-      arrayVariable: '{{input}}'
+      arrayVariable: '{{input}}',
     },
-    script: { label: '脚本', scriptContent: '' },
+    script: {
+      label: '脚本',
+      scriptLanguage: 'javascript',
+      scriptContent: `function main(params) {
+  const query = params.query || '';
+  const history_list = params.history_list || [];
+  return {
+    result: query,
+    historyCount: Array.isArray(history_list) ? history_list.length : 0
+  };
+}`,
+      inputParams: [
+        { key: 'query', value: '{{query}}' },
+        { key: 'history_list', value: '{{history_list}}' },
+      ],
+      outputParams: [{ key: 'result', type: 'String' }],
+      retryConfig: { enabled: false, maxAttempts: 3, delayMs: 1000 },
+      errorStrategy: 'defaultValue',
+      defaultOutput: '{"result":""}',
+    },
     mcp: { label: 'MCP', mcpServerName: '', toolName: '', inputParams: '{}' },
     input: {
       label: '流程输入',
@@ -171,7 +219,11 @@ export function getDefaultNodeData(type) {
       componentName: '',
       componentType: 'workflow',
       streamSwitch: false
-    }
+    },
+    loop_start: { label: '迭代开始', builtin: true },
+    loop_end: { label: '迭代结束', builtin: true },
+    batch_start: { label: '并行处理', builtin: true },
+    batch_end: { label: '并行结束', builtin: true },
   }
   return defaults[type] || { label: getNodeTitle(type) }
 }

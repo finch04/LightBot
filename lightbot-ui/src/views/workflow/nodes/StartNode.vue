@@ -1,6 +1,6 @@
 <template>
   <div class="workflow-node start-node">
-    <Handle type="source" position="right" />
+    <WorkflowHandle type="source" position="right" />
     <div class="node-content">
       <div class="node-icon">
         <PlayCircleOutlined />
@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
+import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { PlayCircleOutlined } from '@ant-design/icons-vue'
 
 defineProps({

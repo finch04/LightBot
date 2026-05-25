@@ -87,3 +87,15 @@ export function updateAgentSubAgents(id, subAgentIds) {
 export function publishAgent(id, data = {}) {
   return request.post(`/agents/${id}/publish`, data)
 }
+
+export function listAgentVersions(id) {
+  return request.get(`/agents/${id}/versions`)
+}
+
+export function getAgentVersionDetail(id, version) {
+  return request.get(`/agents/${id}/versions/${version}`)
+}
+
+export function restoreAgentVersion(id, version) {
+  return request.post(`/agents/${id}/versions/${version}/restore`)
+}

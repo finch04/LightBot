@@ -1,7 +1,7 @@
 <template>
   <div class="workflow-node retrieval-node" :class="{ selected }" @dblclick="$emit('edit')">
-    <Handle type="target" position="left" />
-    <Handle type="source" position="right" />
+    <WorkflowHandle type="target" position="left" />
+    <WorkflowHandle type="source" position="right" />
     <div class="node-header">
       <div class="node-icon">
         <BookOutlined />
@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
+import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { BookOutlined } from '@ant-design/icons-vue'
 
 defineProps({

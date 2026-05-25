@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.dto.AgentPublishRequest;
+import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
@@ -197,5 +198,26 @@ public class AgentController {
             @RequestBody(required = false) AgentPublishRequest body) {
         String description = body != null ? body.getDescription() : null;
         return Result.ok(agentVersionService.publishChatAgent(id, description));
+    }
+
+    @Operation(summary = "已发布版本列表")
+    @GetMapping("/{id}/versions")
+    public Result<List<WorkflowVersionVO>> listVersions(@PathVariable Long id) {
+        return Result.ok(agentVersionService.listPublishedVersions(id));
+    }
+
+    @Operation(summary = "获取已发布版本配置详情")
+    @GetMapping("/{id}/versions/{version}")
+    public Result<Map<String, Object>> getVersionDetail(
+            @PathVariable Long id,
+            @PathVariable Integer version) {
+        return Result.ok(agentVersionService.getPublishedVersionDetail(id, version));
+    }
+
+    @Operation(summary = "恢复已发布版本到当前编辑态")
+    @PostMapping("/{id}/versions/{version}/restore")
+    public Result<Void> restoreVersion(@PathVariable Long id, @PathVariable Integer version) {
+        agentVersionService.restorePublishedToDraft(id, version);
+        return Result.ok();
     }
 }

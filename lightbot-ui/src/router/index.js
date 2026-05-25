@@ -57,6 +57,7 @@ const routes = [
         path: 'workflow/:agentId',
         name: 'WorkflowEdit',
         component: () => import('../views/WorkflowEdit.vue'),
+        meta: { hideSidebar: true },
       },
       {
         path: 'mcp',

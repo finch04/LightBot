@@ -1,6 +1,6 @@
 <template>
   <div class="workflow-node end-node">
-    <Handle type="target" position="left" />
+    <WorkflowHandle type="target" position="left" />
     <div class="node-content">
       <div class="node-icon">
         <StopOutlined />
@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
+import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { StopOutlined } from '@ant-design/icons-vue'
 
 defineProps({

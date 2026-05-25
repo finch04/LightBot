@@ -1,7 +1,7 @@
 <template>
   <div class="layout">
     <!-- 左侧边栏 -->
-    <aside :class="['sidebar', { collapsed: sidebarCollapsed }]">
+    <aside :class="['sidebar', { collapsed: sidebarCollapsed && !sidebarHidden, hidden: sidebarHidden }]">
       <!-- Logo + 收起按钮 -->
       <div class="sidebar-header">
         <div class="sidebar-logo" @click="sidebarCollapsed ? toggleSidebar() : router.push('/chat')">
@@ -17,22 +17,42 @@
       </div>
 
       <!-- 新建对话按钮 -->
-      <button class="btn-new-chat" @click="newChat">
+      <a-tooltip v-if="sidebarCollapsed && !sidebarHidden" title="新建对话" placement="right">
+        <button class="btn-new-chat" @click="newChat">
+          <PlusOutlined />
+          <span class="sidebar-text">新建对话</span>
+        </button>
+      </a-tooltip>
+      <button v-else class="btn-new-chat" @click="newChat">
         <PlusOutlined />
         <span class="sidebar-text">新建对话</span>
       </button>
 
       <!-- 导航菜单 -->
       <nav class="nav-menu">
-        <router-link
-          v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
-          :class="['nav-item', { active: isActive(item.path) }]"
-        >
-          <component :is="item.icon" />
-          <span class="sidebar-text">{{ item.label }}</span>
-        </router-link>
+        <template v-for="item in navItems" :key="item.path">
+          <a-tooltip
+            v-if="sidebarCollapsed && !sidebarHidden"
+            :title="item.label"
+            placement="right"
+          >
+            <router-link
+              :to="item.path"
+              :class="['nav-item', { active: isActive(item.path) }]"
+            >
+              <component :is="item.icon" />
+              <span class="sidebar-text">{{ item.label }}</span>
+            </router-link>
+          </a-tooltip>
+          <router-link
+            v-else
+            :to="item.path"
+            :class="['nav-item', { active: isActive(item.path) }]"
+          >
+            <component :is="item.icon" />
+            <span class="sidebar-text">{{ item.label }}</span>
+          </router-link>
+        </template>
       </nav>
 
       <!-- 对话历史 -->
@@ -156,6 +176,8 @@ const renameTarget = ref(null)
 const userDropdownOpen = ref(false)
 const sessionsCollapsed = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
+const sidebarHidden = ref(false)
+let sidebarStateBeforeWorkflow = null
 const runningTaskCount = ref(0)
 let taskSSE = null
 
@@ -185,6 +207,24 @@ function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem('sidebar-collapsed', sidebarCollapsed.value)
 }
+
+function syncSidebarForRoute(path) {
+  const hide = path.startsWith('/workflow/')
+  if (hide) {
+    if (sidebarStateBeforeWorkflow === null) {
+      sidebarStateBeforeWorkflow = sidebarCollapsed.value
+    }
+    sidebarHidden.value = true
+    return
+  }
+  if (sidebarHidden.value) {
+    sidebarCollapsed.value = sidebarStateBeforeWorkflow ?? sidebarCollapsed.value
+    sidebarStateBeforeWorkflow = null
+    sidebarHidden.value = false
+  }
+}
+
+watch(() => route.path, syncSidebarForRoute, { immediate: true })
 
 function getPopupContainer() {
   return document.body
@@ -377,6 +417,14 @@ watch(() => route.path, (path) => {
 }
 .sidebar.collapsed {
   width: 60px;
+}
+.sidebar.hidden {
+  width: 0 !important;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  overflow: hidden;
+  pointer-events: none;
 }
 .sidebar.collapsed .sidebar-text {
   display: none;

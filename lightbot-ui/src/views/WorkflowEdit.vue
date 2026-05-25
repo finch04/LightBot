@@ -34,11 +34,16 @@
         <span v-else class="status-empty">
           请添加节点并配置
         </span>
-        <a-tooltip title="验证配置">
+        <WorkflowTooltip title="纠正弯折过大的连线" placement="bottom">
+          <a-button type="text" size="small" class="btn-validate" :disabled="isVersionPreview || nodes.length < 2" @click="formatWorkflowLayout">
+            <ApartmentOutlined />
+          </a-button>
+        </WorkflowTooltip>
+        <WorkflowTooltip title="验证配置" placement="bottom">
           <a-button type="text" size="small" class="btn-validate" @click="validateWorkflow">
             <AuditOutlined />
           </a-button>
-        </a-tooltip>
+        </WorkflowTooltip>
         <span v-if="autoSaving" class="auto-save-hint saving">保存中...</span>
         <span v-else-if="lastAutoSaveTime" class="auto-save-hint">{{ formatAutoSaveTime(lastAutoSaveTime) }} 已自动保存</span>
       </div>
@@ -50,9 +55,11 @@
           <a-button type="default" @click="openVersionDrawer">版本管理</a-button>
         </template>
         <template v-else>
-        <a-button v-if="canUndo" type="default" @click="undoAction">
-          <UndoOutlined /> 撤回
-        </a-button>
+        <WorkflowTooltip title="撤回 (Ctrl+Z)" placement="bottom">
+          <a-button v-if="canUndo" type="default" @click="undoAction">
+            <UndoOutlined /> 撤回
+          </a-button>
+        </WorkflowTooltip>
         <a-button type="default" @click="globalConfigVisible = true">全局设置</a-button>
         <a-button type="default" @click="testVisible = true">测试运行</a-button>
         <a-button type="default" @click="openVersionDrawer">版本管理</a-button>
@@ -73,16 +80,43 @@
         <div class="panel-header">
           <span v-if="!panelCollapsed">{{ leftPanelTab === 'library' ? '节点库' : '画布节点' }}</span>
           <div v-if="!panelCollapsed" class="panel-header-actions">
-            <a-tooltip title="如何新增节点">
+            <WorkflowTooltip title="如何新增节点" placement="bottom">
               <button type="button" class="btn-help" @click="nodeHelpVisible = true">
                 <QuestionCircleOutlined />
               </button>
-            </a-tooltip>
+            </WorkflowTooltip>
           </div>
           <button class="btn-collapse" @click="panelCollapsed = !panelCollapsed">
             <LeftOutlined v-if="!panelCollapsed" />
             <RightOutlined v-else />
           </button>
+        </div>
+        <div v-if="panelCollapsed" class="panel-collapsed-rail">
+          <WorkflowTooltip title="节点库" placement="right">
+            <button
+              type="button"
+              class="rail-btn"
+              :class="{ active: leftPanelTab === 'library' }"
+              @click="openLeftPanelTab('library')"
+            >
+              <AppstoreOutlined />
+            </button>
+          </WorkflowTooltip>
+          <WorkflowTooltip title="画布节点" placement="right">
+            <button
+              type="button"
+              class="rail-btn"
+              :class="{ active: leftPanelTab === 'canvas' }"
+              @click="openLeftPanelTab('canvas')"
+            >
+              <UnorderedListOutlined />
+            </button>
+          </WorkflowTooltip>
+          <WorkflowTooltip title="如何新增节点" placement="right">
+            <button type="button" class="rail-btn" @click="nodeHelpVisible = true">
+              <QuestionCircleOutlined />
+            </button>
+          </WorkflowTooltip>
         </div>
         <div class="panel-body" v-if="!panelCollapsed">
           <a-segmented
@@ -148,72 +182,11 @@
       </div>
 
       <!-- 中间画布 -->
-      <div class="canvas-area" ref="canvasAreaRef" @dragover.prevent @drop="onDrop">
+      <div class="canvas-area" ref="canvasAreaRef" @dragover.prevent>
         <div v-if="isVersionPreview" class="version-preview-banner">
           正在预览历史版本 v{{ selectedVersion }}（只读），点击右上角「回到当前版本」返回草稿
         </div>
 
-        <!-- 画布内版本列表（不遮挡顶部工具栏） -->
-        <div
-          v-if="versionVisible"
-          class="version-panel-float"
-          :style="versionPanelStyle"
-        >
-          <div class="version-panel-header">
-            <span
-              class="version-panel-drag-handle"
-              title="按住拖动面板"
-              @mousedown.prevent="onVersionPanelDragStart"
-            >
-              <HolderOutlined />
-            </span>
-            <span class="version-panel-title">历史版本</span>
-            <button type="button" class="version-panel-close" @click="versionVisible = false">
-              <CloseOutlined />
-            </button>
-          </div>
-          <div class="version-panel-body">
-            <div
-              class="version-item draft"
-              :class="{ active: selectedVersion === 'draft' }"
-              @click="selectVersion('draft')"
-            >
-              <div class="version-item-title">当前草稿</div>
-              <div class="version-item-desc">继续编辑未发布的修改</div>
-            </div>
-            <a-divider style="margin: 12px 0" />
-            <a-spin :spinning="versionLoading">
-              <a-timeline>
-                <a-timeline-item
-                  v-for="(item, idx) in versionList"
-                  :key="item.version"
-                  :color="selectedVersion === item.version ? '#6366f1' : '#d1d5db'"
-                >
-                  <div
-                    class="version-item"
-                    :class="{ active: selectedVersion === item.version }"
-                    @click="selectVersion(item.version)"
-                  >
-                    <div class="version-item-header">
-                      <span class="version-item-title">
-                        {{ idx === 0 ? '线上版本' : `v${item.version}` }}
-                      </span>
-                      <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
-                    </div>
-                    <div v-if="item.description" class="version-item-note">{{ item.description }}</div>
-                    <div class="version-item-desc">{{ formatVersionDesc(item) }}</div>
-                  </div>
-                </a-timeline-item>
-              </a-timeline>
-              <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
-            </a-spin>
-          </div>
-          <div v-if="selectedVersion !== 'draft'" class="version-panel-footer">
-            <a-button type="primary" block @click="overwriteDraftFromVersion">
-              覆盖当前草稿
-            </a-button>
-          </div>
-        </div>
         <!-- 拖动节点时显示删除区 -->
         <div
           v-show="isNodeDragging"
@@ -228,25 +201,39 @@
         <VueFlow
           v-if="nodes.length > 0"
           :nodes="nodes"
-          :edges="edges"
+          v-model:edges="edges"
+          :edge-types="edgeTypes"
+          connection-mode="strict"
+          :connection-radius="28"
           :nodes-draggable="!isVersionPreview"
           :edges-selectable="!isVersionPreview"
+          :edges-updatable="!isVersionPreview"
           :nodes-connectable="!isVersionPreview"
           :elements-selectable="!isVersionPreview"
           :default-edge-options="defaultEdgeOptions"
+          :is-valid-connection="isValidWorkflowConnectionFn"
+          :delete-key-code="null"
+          @edges-change="onEdgesChange"
           @connect="onConnect"
+          @edge-update="onEdgeUpdate"
           @nodes-change="onNodesChange"
           @node-drag-start="onNodeDragStart"
           @node-drag="onNodeDrag"
           @node-drag-stop="onNodeDragStop"
+          @dragover.prevent
+          @drop="onDrop"
           @node-click="onNodeClick"
           @edge-click="onEdgeClick"
+          @edge-mouse-enter="onEdgeMouseEnter"
+          @edge-mouse-move="onEdgeMouseMove"
+          @edge-mouse-leave="onEdgeMouseLeave"
           @pane-click="onPaneClick"
           :default-viewport="{ zoom: 0.8, x: 0, y: 0 }"
           :min-zoom="0.1"
           :max-zoom="4"
         >
           <Background :gap="[20, 20]" pattern-color="#e5e7eb" />
+
           <Controls position="bottom-right" show-zoom show-fit-view />
           <MiniMap
             position="bottom-left"
@@ -267,9 +254,13 @@
           <template #node-tool="props"><ToolNode v-bind="props" /></template>
           <template #node-classifier="props"><ClassifierNode v-bind="props" /></template>
           <template #node-api="props"><GenericWorkflowNode v-bind="props" node-type="api" summary-key="url" /></template>
-          <template #node-loop="props"><GenericWorkflowNode v-bind="props" node-type="loop" /></template>
+          <template #node-loop="props"><LoopNode v-bind="props" /></template>
+          <template #node-loop_start="props"><GroupBuiltinNode v-bind="props" node-type="loop_start" /></template>
+          <template #node-loop_end="props"><GroupBuiltinNode v-bind="props" node-type="loop_end" /></template>
           <template #node-variable="props"><GenericWorkflowNode v-bind="props" node-type="variable" summary-key="variableName" /></template>
-          <template #node-batch="props"><GenericWorkflowNode v-bind="props" node-type="batch" /></template>
+          <template #node-batch="props"><BatchNode v-bind="props" /></template>
+          <template #node-batch_start="props"><GroupBuiltinNode v-bind="props" node-type="batch_start" /></template>
+          <template #node-batch_end="props"><GroupBuiltinNode v-bind="props" node-type="batch_end" /></template>
           <template #node-script="props"><GenericWorkflowNode v-bind="props" node-type="script" /></template>
           <template #node-mcp="props"><GenericWorkflowNode v-bind="props" node-type="mcp" summary-key="mcpServerName" /></template>
           <template #node-input="props"><GenericWorkflowNode v-bind="props" node-type="input" /></template>
@@ -277,11 +268,97 @@
           <template #node-variable_handle="props"><GenericWorkflowNode v-bind="props" node-type="variable_handle" /></template>
           <template #node-parameter_extractor="props"><GenericWorkflowNode v-bind="props" node-type="parameter_extractor" /></template>
           <template #node-app_component="props"><GenericWorkflowNode v-bind="props" node-type="app_component" summary-key="componentName" /></template>
+
+          <!-- 拖线时水平/垂直吸附（对齐 admin 贝塞尔连线体验） -->
+          <template #connection-line="lineProps">
+            <WorkflowConnectionLine v-bind="lineProps" />
+          </template>
+
+          <!-- 连线中点插入节点（沿贝塞尔曲线中心，与 admin 一致） -->
+          <EdgeLabelRenderer>
+            <div
+              v-if="edgeInsertAnchorEdge && !isVersionPreview && edgeInsertLabelStyle"
+              :style="edgeInsertLabelStyle"
+              class="edge-insert-label-layer"
+              @mouseenter="onEdgeInsertPointerEnter"
+              @mouseleave="onEdgeInsertPointerLeave"
+            >
+              <WorkflowEdgeInsert
+                :visible="true"
+                @select="onInsertNodeOnEdge"
+                @menu-open="onEdgeInsertMenuOpen"
+                @menu-close="onEdgeInsertMenuClose"
+              />
+            </div>
+          </EdgeLabelRenderer>
         </VueFlow>
 
         <!-- 空状态提示 -->
         <div v-if="nodes.length === 0" class="canvas-empty">
           <p>从左侧拖拽节点到画布开始构建工作流</p>
+        </div>
+
+        <!-- 画布浮层：历史版本列表始终盖在 VueFlow / 控件之上 -->
+        <div v-if="versionVisible" class="canvas-overlay-top">
+          <div
+            class="version-panel-float"
+            :style="versionPanelStyle"
+          >
+            <div class="version-panel-header">
+              <span
+                class="version-panel-drag-handle"
+                title="按住拖动面板"
+                @mousedown.prevent="onVersionPanelDragStart"
+              >
+                <HolderOutlined />
+              </span>
+              <span class="version-panel-title">历史版本</span>
+              <button type="button" class="version-panel-close" @click="versionVisible = false">
+                <CloseOutlined />
+              </button>
+            </div>
+            <div class="version-panel-body">
+              <div
+                class="version-item draft"
+                :class="{ active: selectedVersion === 'draft' }"
+                @click="selectVersion('draft')"
+              >
+                <div class="version-item-title">当前草稿</div>
+                <div class="version-item-desc">继续编辑未发布的修改</div>
+              </div>
+              <a-divider style="margin: 12px 0" />
+              <a-spin :spinning="versionLoading">
+                <a-timeline>
+                  <a-timeline-item
+                    v-for="(item, idx) in versionList"
+                    :key="item.version"
+                    :color="selectedVersion === item.version ? '#6366f1' : '#d1d5db'"
+                  >
+                    <div
+                      class="version-item"
+                      :class="{ active: selectedVersion === item.version }"
+                      @click="selectVersion(item.version)"
+                    >
+                      <div class="version-item-header">
+                        <span class="version-item-title">
+                          {{ idx === 0 ? '线上版本' : `v${item.version}` }}
+                        </span>
+                        <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
+                      </div>
+                      <div v-if="item.description" class="version-item-note">{{ item.description }}</div>
+                      <div class="version-item-desc">{{ formatVersionDesc(item) }}</div>
+                    </div>
+                  </a-timeline-item>
+                </a-timeline>
+                <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
+              </a-spin>
+            </div>
+            <div v-if="selectedVersion !== 'draft'" class="version-panel-footer">
+              <a-button type="primary" block @click="overwriteDraftFromVersion">
+                覆盖当前草稿
+              </a-button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -309,7 +386,7 @@
                 <span class="edge-node-role">源节点</span>
                 <span class="edge-node-name">{{ getEdgeSourceLabel(selectedEdge) }}</span>
                 <span class="edge-node-type">{{ getEdgeSourceType(selectedEdge) }}</span>
-                <span v-if="selectedEdge.sourceHandle" class="edge-handle-tag">出口: {{ selectedEdge.sourceHandle }}</span>
+                <span v-if="selectedEdge.sourceHandle" class="edge-handle-tag">出口: {{ getHandleDisplayName(selectedEdge.sourceHandle) }}</span>
               </div>
               <div class="edge-arrow">
                 <ArrowRightOutlined />
@@ -318,9 +395,46 @@
                 <span class="edge-node-role">目标节点</span>
                 <span class="edge-node-name">{{ getEdgeTargetLabel(selectedEdge) }}</span>
                 <span class="edge-node-type">{{ getEdgeTargetType(selectedEdge) }}</span>
-                <span v-if="selectedEdge.targetHandle" class="edge-handle-tag">入口: {{ selectedEdge.targetHandle }}</span>
+                <span class="edge-handle-tag">入口: {{ getHandleDisplayName(selectedEdge.targetHandle || HANDLE_IN) }}</span>
               </div>
             </div>
+          </div>
+          <div class="edge-retarget-form">
+            <div class="edge-retarget-title">修改连线（可拖拽连线端点，或在此选择）</div>
+            <div class="edge-retarget-row">
+              <label>目标节点</label>
+              <a-select
+                :value="selectedEdge.target"
+                show-search
+                option-filter-prop="label"
+                style="width: 100%"
+                :disabled="isVersionPreview"
+                @change="onEdgeTargetChange"
+              >
+                <a-select-option
+                  v-for="n in edgeTargetCandidates"
+                  :key="n.id"
+                  :value="n.id"
+                  :label="n.data?.label || getNodeTitle(n.type)"
+                >
+                  {{ n.data?.label || getNodeTitle(n.type) }} ({{ getNodeTitle(n.type) }})
+                </a-select-option>
+              </a-select>
+            </div>
+            <div v-if="edgeSourceHandleOptions.length > 1" class="edge-retarget-row">
+              <label>源出口</label>
+              <a-select
+                :value="selectedEdge.sourceHandle || HANDLE_OUT"
+                style="width: 100%"
+                :disabled="isVersionPreview"
+                @change="onEdgeSourceHandleChange"
+              >
+                <a-select-option v-for="h in edgeSourceHandleOptions" :key="h.id" :value="h.id">
+                  {{ h.label }}
+                </a-select-option>
+              </a-select>
+            </div>
+            <p class="edge-retarget-hint">从节点右侧「出」拖到下游节点左侧「入」；禁止接入开始节点或从结束节点连出。</p>
           </div>
           <div class="panel-footer edge-delete-footer">
             <a-button type="primary" danger block @click="deleteSelectedEdge">
@@ -332,16 +446,42 @@
 
       <!-- 右侧配置面板：节点配置 -->
       <div class="config-panel" v-else-if="selectedNode">
-        <div class="panel-header">
+        <div class="panel-header config-panel-header">
           <div class="node-type-badge">
             <div class="type-icon" :style="{ background: getNodeColor(selectedNode.type) + '20', color: getNodeColor(selectedNode.type) }">
               <NodeTypeIcon :type="selectedNode.type" />
             </div>
             <span class="type-name">{{ getNodeTitle(selectedNode.type) }}</span>
+            <WorkflowTooltip
+              v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end' && !isGroupBuiltinNode(selectedNode)"
+              title="查看节点说明与示例配置"
+              placement="topLeft"
+            >
+              <button type="button" class="btn-node-example" @click="openNodeExampleModal">
+                <QuestionCircleOutlined />
+              </button>
+            </WorkflowTooltip>
           </div>
-          <button class="btn-close" @click="closeNodePanel">
-            <CloseOutlined />
-          </button>
+          <div class="panel-header-right">
+            <div
+              v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end' && !isGroupBuiltinNode(selectedNode)"
+              class="panel-header-actions node-detail-actions"
+            >
+              <WorkflowTooltip v-if="canTestSelectedNode" title="测试运行此节点" placement="top">
+                <button type="button" class="btn-node-action" :disabled="isVersionPreview" @click="openNodeTestDrawer">
+                  <PlayCircleOutlined />
+                </button>
+              </WorkflowTooltip>
+              <WorkflowTooltip title="复制节点" placement="top">
+                <button type="button" class="btn-node-action" :disabled="isVersionPreview" @click="copySelectedNode">
+                  <CopyOutlined />
+                </button>
+              </WorkflowTooltip>
+            </div>
+            <button class="btn-close" @click="closeNodePanel">
+              <CloseOutlined />
+            </button>
+          </div>
         </div>
         <div class="panel-body" :class="{ 'panel-body-readonly': isVersionPreview }">
           <!-- 节点错误提示 -->
@@ -353,10 +493,19 @@
 
           <a-alert v-if="isVersionPreview" type="info" show-icon message="历史版本预览（只读）" class="preview-readonly-alert" />
 
+          <a-alert
+            v-if="isGroupBuiltinNode(selectedNode)"
+            type="info"
+            show-icon
+            message="容器内置节点"
+            description="该节点随循环/批处理容器自动创建，不可单独删除；删除容器时会一并移除。"
+          />
+
           <WorkflowNodeConfig
-            v-if="selectedNode.type !== 'start' && selectedNode.type !== 'end'"
+            v-else-if="selectedNode.type !== 'start' && selectedNode.type !== 'end'"
             :readonly="isVersionPreview"
             :node="selectedNode"
+            :edges="edges"
             :providers="providers"
             :llm-model-list="llmModelList"
             :knowledge-list="knowledgeList"
@@ -379,7 +528,7 @@
           </a-form>
 
           <!-- 删除节点按钮 -->
-          <div class="panel-footer" v-if="!isVersionPreview && selectedNode.type !== 'start' && selectedNode.type !== 'end'">
+          <div class="panel-footer" v-if="!isVersionPreview && selectedNode.type !== 'start' && selectedNode.type !== 'end' && !isGroupBuiltinNode(selectedNode)">
             <a-button type="text" danger @click="deleteSelectedNode">
               <DeleteOutlined /> 删除节点
             </a-button>
@@ -388,6 +537,22 @@
       </div>
     </div>
   </div>
+
+  <NodeExampleModal
+    v-model:open="nodeExampleVisible"
+    :example="nodeExampleContent"
+    :readonly="isVersionPreview"
+    :allow-apply="nodeExampleAllowApply"
+    @apply="applyNodeExampleConfig"
+  />
+
+  <NodeSingleTestDrawer
+    v-model:open="nodeTestVisible"
+    :agent-id="agentId"
+    :node="selectedNode"
+    :graph-payload="workflowGraphPayload"
+    @test-complete="onNodeTestComplete"
+  />
 
   <!-- 如何新增节点说明 -->
   <a-modal
@@ -404,7 +569,7 @@
 
       <h4>一、后端：定义节点类型（NodeType）</h4>
       <p>在 <code>lightbot-server/.../enums/NodeType.java</code> 增加枚举项，例如：</p>
-      <pre class="node-help-code">RETRIEVAL("retrieval", "知识检索"),</pre>
+      <pre class="node-help-code code-block-scroll code-block-scroll--dark">RETRIEVAL("retrieval", "知识检索"),</pre>
       <p><code>code</code> 必须与前端节点 <code>type</code> 字符串一致（如 <code>llm</code>、<code>retrieval</code>）。</p>
 
       <h4>二、后端：实现节点处理器（NodeProcessor）</h4>
@@ -471,22 +636,54 @@
   <a-drawer
     v-model:open="testVisible"
     title="测试运行"
-    :width="560"
+    :width="600"
     :mask-closable="!testRunning && !testAnimating"
     :keyboard="!testRunning && !testAnimating"
-    @close="clearNodeDebugStatus"
+    @close="onTestDrawerClose"
   >
     <a-alert v-if="testAnimating" type="info" show-icon message="正在执行工作流..." description="画布上当前节点会高亮显示执行状态" class="test-alert" />
+    <a-segmented
+      v-model:value="testMode"
+      :options="[
+        { label: '文本生成', value: 'generation' },
+        { label: '文本对话', value: 'conversation' }
+      ]"
+      block
+      class="test-mode-segment"
+    />
+    <p class="test-mode-hint">
+      {{ testMode === 'generation' ? '单轮生成：输入一次问题，执行完整工作流并返回结果。' : '多轮对话：保留历史消息，每轮携带 history_list / query 变量执行。' }}
+    </p>
+
+    <template v-if="testMode === 'conversation'">
+      <div class="test-chat-box">
+        <div v-if="!testMessages.length" class="test-chat-empty">暂无对话，在下方输入并发送</div>
+        <div v-for="(msg, i) in testMessages" :key="i" :class="['test-chat-msg', msg.role]">
+          <span class="test-chat-role">{{ msg.role === 'user' ? '用户' : '助手' }}</span>
+          <div class="test-chat-content">{{ msg.content }}</div>
+        </div>
+      </div>
+    </template>
+
     <a-form layout="vertical">
-      <a-form-item label="测试问题" required>
-        <a-textarea v-model:value="testInput" :rows="4" placeholder="输入要测试的问题或内容" />
+      <a-form-item :label="testMode === 'generation' ? '测试内容' : '本轮输入'" required>
+        <a-textarea
+          v-model:value="testInput"
+          :rows="testMode === 'generation' ? 5 : 3"
+          :placeholder="testMode === 'generation' ? '输入要生成的文本或问题' : '输入本轮用户消息'"
+        />
       </a-form-item>
       <a-form-item label="使用草稿配置">
         <a-switch v-model:checked="testUseDraft" />
       </a-form-item>
-      <a-button type="primary" :loading="testRunning || testAnimating" @click="runWorkflowTest">
-        {{ testAnimating ? '执行中...' : '开始测试' }}
-      </a-button>
+      <div class="test-actions">
+        <a-button type="primary" :loading="testRunning || testAnimating" @click="runWorkflowTest">
+          {{ testAnimating ? '执行中...' : (testMode === 'conversation' ? '发送并运行' : '开始测试') }}
+        </a-button>
+        <a-button v-if="testMode === 'conversation'" :disabled="testRunning || testAnimating" @click="clearTestConversation">
+          清空对话
+        </a-button>
+      </div>
     </a-form>
     <a-divider v-if="testResult || testAnimating" />
     <div v-if="testAnimating && testCurrentNodeId" class="test-current-node">
@@ -513,24 +710,29 @@
     title="发布工作流"
     ok-text="确认发布"
     cancel-text="取消"
+    class="publish-modal"
     :confirm-loading="saving"
     @ok="confirmPublishWorkflow"
   >
-    <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
-    <a-textarea
-      v-model:value="publishDescription"
-      :maxlength="50"
-      show-count
-      :rows="2"
-      placeholder="例如：新增检索节点、调整 LLM 提示词"
-    />
+    <div class="publish-modal-content">
+      <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
+      <a-textarea
+        v-model:value="publishDescription"
+        class="publish-modal-textarea"
+        :maxlength="50"
+        show-count
+        :rows="3"
+        placeholder="例如：新增检索节点、调整 LLM 提示词"
+      />
+    </div>
   </a-modal>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, shallowRef, triggerRef, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { VueFlow, useVueFlow, applyNodeChanges } from '@vue-flow/core'
+import { VueFlow, useVueFlow, applyNodeChanges, applyEdgeChanges, addEdge, EdgeLabelRenderer, Panel } from '@vue-flow/core'
+import { getEdgeInsertCenter } from './workflow/workflowEdgeGeometry'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -538,9 +740,9 @@ import {
   ArrowLeftOutlined, SaveOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
   SearchOutlined, LeftOutlined, RightOutlined, CloseOutlined, DeleteOutlined,
   RobotOutlined, ForkOutlined, BookOutlined, ToolOutlined, PlayCircleOutlined,
-  StopOutlined, PlusOutlined, DownOutlined, UndoOutlined, QuestionCircleOutlined,
+  StopOutlined, PlusOutlined, DownOutlined,   UndoOutlined, QuestionCircleOutlined, CopyOutlined,
   BranchesOutlined, ArrowRightOutlined, AuditOutlined, RollbackOutlined,
-  HolderOutlined
+  HolderOutlined, ApartmentOutlined, AppstoreOutlined, UnorderedListOutlined
 } from '@ant-design/icons-vue'
 import { message, notification, Modal } from 'ant-design-vue'
 import { getAgentDetail } from '../api/agent'
@@ -565,21 +767,84 @@ import ConditionNode from '../views/workflow/nodes/ConditionNode.vue'
 import RetrievalNode from '../views/workflow/nodes/RetrievalNode.vue'
 import ToolNode from '../views/workflow/nodes/ToolNode.vue'
 import GenericWorkflowNode from '../views/workflow/nodes/GenericWorkflowNode.vue'
+import LoopNode from '../views/workflow/nodes/LoopNode.vue'
+import BatchNode from '../views/workflow/nodes/BatchNode.vue'
+import GroupBuiltinNode from '../views/workflow/nodes/GroupBuiltinNode.vue'
+import WorkflowConnectionLine from '../views/workflow/components/WorkflowConnectionLine.vue'
 import ClassifierNode from '../views/workflow/nodes/ClassifierNode.vue'
+import NodeSingleTestDrawer from '../views/workflow/components/NodeSingleTestDrawer.vue'
 import NodeTypeIcon from '../views/workflow/components/NodeTypeIcon.vue'
 import WorkflowNodeConfig from '../views/workflow/components/WorkflowNodeConfig.vue'
+import WorkflowTooltip from '../views/workflow/components/WorkflowTooltip.vue'
+import WorkflowEdgeInsert from '../views/workflow/components/WorkflowEdgeInsert.vue'
+import NodeExampleModal from '../views/workflow/components/NodeExampleModal.vue'
+import { getNodeExample, canApplyNodeExample } from '../views/workflow/nodeConfigMeta'
+import { canSingleTestNodeType } from '../views/workflow/workflowNodeTest'
+import { ensureConditionGroups } from '../views/workflow/conditionUtils'
+import { applyWorkflowAutoLayout, applyWorkflowBezierEdgeStyle } from '../views/workflow/workflowLayout'
+import WorkflowBezierEdge from '../views/workflow/edges/WorkflowBezierEdge.vue'
+import {
+  isGroupNodeType,
+  isGroupBuiltinType,
+  canBeGroupChild,
+  findGroupAtPoint,
+  findGroupForNode,
+  attachNodeToGroup,
+  attachNodeToGroupAndResize,
+  detachFromGroup,
+  createGroupWithBuiltins,
+  ensureGroupBuiltins,
+  migrateGroupNodeFields,
+  sortNodesParentFirst,
+  fitGroupBoundsToChildren,
+  isGroupNestedDrop,
+  getAbsolutePosition,
+  getNodeDropPoint,
+  getNodeParentId,
+  hasEdgesToGroupSiblings,
+  absoluteTopLeftFromCenter,
+} from '../views/workflow/workflowGroup'
 import { getDefaultNodeData as buildDefaultNodeData, getNodeTitle as metaGetNodeTitle, getNodeColor as metaGetNodeColor, getNodeMeta, getNodeLibraryGroups, createConditionId } from '../views/workflow/nodeMeta'
+import {
+  HANDLE_IN,
+  HANDLE_OUT,
+  normalizeConnection,
+  migrateWorkflowEdge,
+  normalizeWorkflowEdges,
+  ensureEdgeId,
+  isValidWorkflowConnection,
+  getHandleDisplayName,
+  buildEdgeId,
+} from '../views/workflow/workflowConnection'
 
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.agentId
 
 // VueFlow hooks（getNodes 为画布真实坐标来源）
-const { fitView, addSelectedEdges, removeSelectedEdges, getSelectedEdges, getNodes, setCenter, setViewport } = useVueFlow()
+const {
+  fitView,
+  addSelectedEdges,
+  removeSelectedEdges,
+  getSelectedEdges,
+  getNodes,
+  setCenter,
+  setViewport,
+  findNode,
+  screenToFlowCoordinate,
+  updateNodeInternals,
+} = useVueFlow()
+
+const edgeTypes = {
+  'workflow-bezier': WorkflowBezierEdge,
+  default: WorkflowBezierEdge,
+}
 
 const defaultEdgeOptions = {
+  type: 'workflow-bezier',
   selectable: true,
-  style: { strokeWidth: 2, stroke: '#94a3b8' }
+  updatable: true,
+  style: { strokeWidth: 2, stroke: '#94a3b8' },
 }
 
 // 状态
@@ -588,12 +853,36 @@ const saving = ref(false)
 const panelCollapsed = ref(false)
 const nodeSearch = ref('')
 const nodeHelpVisible = ref(false)
+const nodeExampleVisible = ref(false)
+const nodeTestVisible = ref(false)
+const nodeExampleContent = computed(() => {
+  const n = selectedNode.value
+  if (!n?.type) return null
+  if (n.type === 'script') {
+    return getNodeExample('script', { scriptLanguage: n.data?.scriptLanguage || 'javascript' })
+  }
+  return getNodeExample(n.type)
+})
+
+const nodeExampleAllowApply = computed(() => {
+  const type = selectedNode.value?.type
+  return type ? canApplyNodeExample(type) : false
+})
+
+const canTestSelectedNode = computed(() => {
+  const type = selectedNode.value?.type
+  return type ? canSingleTestNodeType(type) : false
+})
+
+const workflowGraphPayload = computed(() => buildWorkflowPayload())
 const leftPanelTab = ref('library')
 const canvasNodeSearch = ref('')
 const workflowStatus = ref('draft')
 const publishedVersion = ref(0)
 const globalConfigVisible = ref(false)
 const testVisible = ref(false)
+const testMode = ref('generation')
+const testMessages = ref([])
 const testInput = ref('')
 const testUseDraft = ref(true)
 const testRunning = ref(false)
@@ -614,6 +903,7 @@ const VERSION_PANEL_WIDTH = 300
 const versionPanelPos = ref({ x: 0, y: 48 })
 let versionPanelDragState = null
 let versionPanelLayoutReady = false
+let versionPanelResizeObserver = null
 
 const versionPanelStyle = computed(() => {
   const canvas = canvasAreaRef.value
@@ -633,6 +923,12 @@ const globalConfig = ref({
 })
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
+
+watch([selectedNode, selectedEdge, panelCollapsed, versionVisible], () => {
+  if (!versionVisible.value) return
+  nextTick(() => clampVersionPanelPosition())
+})
+
 const validationErrors = ref([])
 const canvasAreaRef = ref(null)
 const trashRef = ref(null)
@@ -640,6 +936,12 @@ const savedWorkflowSnapshot = ref('')
 const isNodeDragging = ref(false)
 const dragOverTrash = ref(false)
 const draggingNode = ref(null)
+const hoveredEdge = ref(null)
+/** 插入菜单打开时保持锚点，避免鼠标移入 Popover 后层被销毁 */
+const edgeInsertAnchorEdge = ref(null)
+const edgeInsertHoverLock = ref(false)
+const edgeInsertMenuOpen = ref(false)
+let edgeHoverLeaveTimer = null
 
 const isDirty = computed(() => {
   if (!savedWorkflowSnapshot.value) return false
@@ -648,8 +950,12 @@ const isDirty = computed(() => {
 
 const canDeleteDraggedNode = computed(() => {
   const node = draggingNode.value
-  return node && node.type !== 'start' && node.type !== 'end'
+  return node && node.type !== 'start' && node.type !== 'end' && !isGroupBuiltinType(node.type)
 })
+
+function isGroupBuiltinNode(node) {
+  return node && isGroupBuiltinType(node.type)
+}
 
 // 资源列表
 const providers = ref([])
@@ -657,9 +963,9 @@ const llmModelList = ref([])
 const knowledgeList = ref([])
 const tools = ref([])
 
-// 节点和边数据（使用 shallowRef 避免递归更新）
-const nodes = shallowRef([])
-const edges = shallowRef([])
+// 节点和边数据（edges 用 ref 保证 VueFlow 受控模式正确刷新）
+const nodes = ref([])
+const edges = ref([])
 
 function normalizePosition(pos) {
   if (!pos) return { x: 100, y: 100 }
@@ -674,20 +980,28 @@ function buildWorkflowPayload() {
   return {
     nodes: flowNodes.map(n => {
       const local = nodes.value.find(item => item.id === n.id)
-      return {
+      const payload = {
         id: n.id,
         type: n.type,
         position: normalizePosition(n.position),
-        data: local?.data ?? n.data
+        data: local?.data ?? n.data,
+      }
+      if (n.parentNode) payload.parentNode = n.parentNode
+      if (n.extent) payload.extent = n.extent
+      if (n.style) payload.style = n.style
+      if (n.zIndex != null) payload.zIndex = n.zIndex
+      return payload
+    }),
+    edges: edges.value.map(e => {
+      const m = migrateWorkflowEdge(e)
+      return {
+        id: m.id,
+        source: m.source,
+        target: m.target,
+        sourceHandle: m.sourceHandle,
+        targetHandle: HANDLE_IN,
       }
     }),
-    edges: edges.value.map(e => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: e.sourceHandle,
-      targetHandle: e.targetHandle
-    })),
     globalConfig: globalConfig.value
   }
 }
@@ -699,6 +1013,7 @@ function getWorkflowSnapshot() {
 const filteredCanvasNodes = computed(() => {
   const keyword = (canvasNodeSearch.value || '').toLowerCase()
   return nodes.value.filter(n => {
+    if (isGroupBuiltinType(n.type)) return false
     const label = (n.data?.label || getNodeTitle(n.type) || '').toLowerCase()
     return !keyword || label.includes(keyword) || n.type.includes(keyword)
   })
@@ -807,13 +1122,16 @@ function applyWorkflowGraph(graph) {
       }
     }
   }
-  nodes.value = (graph.nodes || []).map(migrateWorkflowNode).map(n => ({
+  const migratedNodes = (graph.nodes || []).map(migrateWorkflowNode).map(n => ({
     ...n,
-    position: normalizePosition(n.position)
+    position: normalizePosition(n.position),
+    ...(n.parentNode ? { parentNode: n.parentNode, extent: n.extent || 'parent', zIndex: n.zIndex ?? 10 } : {}),
   }))
-  edges.value = graph.edges || []
+  const withBuiltins = ensureGroupBuiltins(migratedNodes, graph.edges || [])
+  nodes.value = sortNodesParentFirst(withBuiltins.nodes.map(n => ensureNodeDraggable(migrateGroupNodeFields(n))))
+  edges.value = applyWorkflowBezierEdgeStyle(normalizeWorkflowEdges(withBuiltins.edges))
   triggerRef(nodes)
-  triggerRef(edges)
+  history.value = []
 }
 
 function focusNode(node) {
@@ -856,12 +1174,13 @@ function undoAction() {
   if (history.value.length === 0) return
   const lastState = history.value.pop()
   nodes.value = lastState.nodes
-  edges.value = lastState.edges
+  edges.value = [...lastState.edges]
   triggerRef(nodes)
-  triggerRef(edges)
   selectedNode.value = null
   selectedEdge.value = null
   clearEdgeSelection()
+  clearEdgeInsertUi()
+  message.info('已撤回上一步操作')
 }
 
 // 初始化加载
@@ -904,34 +1223,57 @@ onMounted(async () => {
     tools.value = toolRes.data.records || []
 
     markWorkflowSaved()
-    nextTick(() => { workflowLoaded.value = true })
+    nextTick(() => {
+      workflowLoaded.value = true
+      scheduleUpdateNodeInternals()
+    })
     scheduleFitView(!hasSavedLayout(nodes.value))
     validateWorkflow(false)
   } catch (e) {
     notification.error({ message: '加载失败', description: e.message })
   }
   window.addEventListener('keydown', onKeyDown)
+  nextTick(() => {
+    if (canvasAreaRef.value) {
+      versionPanelResizeObserver = new ResizeObserver(() => clampVersionPanelPosition())
+      versionPanelResizeObserver.observe(canvasAreaRef.value)
+    }
+  })
 })
 
 function onKeyDown(event) {
   if (isVersionPreview.value) return
-  if (event.key !== 'Delete' && event.key !== 'Backspace') return
   const tag = document.activeElement?.tagName?.toLowerCase()
-  if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return
+  const inInput = tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
+    if (!inInput && canUndo.value) {
+      event.preventDefault()
+      undoAction()
+    }
+    return
+  }
+
+  if (event.key !== 'Delete' && event.key !== 'Backspace') return
+  if (inInput) return
 
   event.preventDefault()
   if (selectedEdge.value) {
     deleteSelectedEdge()
-  } else if (selectedNode.value && selectedNode.value.type !== 'start' && selectedNode.value.type !== 'end') {
+  } else if (selectedNode.value && selectedNode.value.type !== 'start' && selectedNode.value.type !== 'end' && !isGroupBuiltinNode(selectedNode.value)) {
     deleteSelectedNode()
   }
 }
 
 onUnmounted(() => {
+  clearTimeout(nodeInternalsTimer)
   window.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mousemove', onVersionPanelDragMove)
   document.removeEventListener('mouseup', onVersionPanelDragEnd)
+  versionPanelResizeObserver?.disconnect()
+  versionPanelResizeObserver = null
   clearTimeout(autoSaveTimer)
+  clearTimeout(edgeHoverLeaveTimer)
 })
 
 /** 兼容旧数据并补齐默认字段 */
@@ -952,7 +1294,280 @@ function migrateWorkflowNode(node) {
     if (!data.mode_switch) data.mode_switch = 'efficient'
     if (!data.short_memory) data.short_memory = defaults.short_memory
   }
-  return { ...node, data }
+  if (node.type === 'condition') {
+    data.conditionGroups = ensureConditionGroups(data)
+  }
+  if (node.type === 'script') {
+    if (!data.scriptLanguage) data.scriptLanguage = defaults.scriptLanguage || 'javascript'
+    if (!data.inputParams?.length) data.inputParams = defaults.inputParams || []
+    if (!data.outputParams?.length) data.outputParams = defaults.outputParams || []
+    if (!data.retryConfig) data.retryConfig = defaults.retryConfig || { enabled: false, maxAttempts: 3, delayMs: 1000 }
+    if (!data.errorStrategy) data.errorStrategy = defaults.errorStrategy || 'defaultValue'
+    if (data.defaultOutput == null) data.defaultOutput = defaults.defaultOutput || '{}'
+    if (!data.scriptContent) data.scriptContent = defaults.scriptContent || ''
+  }
+  if (node.type === 'loop') {
+    if (!data.iterator_type && data.iteratorType) data.iterator_type = data.iteratorType
+    if (!data.iteratorType && data.iterator_type) data.iteratorType = data.iterator_type
+    if (data.count_limit == null && data.countLimit != null) data.count_limit = data.countLimit
+    if (!data.input_params?.length && data.arrayVariable) {
+      data.input_params = [{ key: 'item', type: 'Object', value_from: 'refer', value: data.arrayVariable }]
+    }
+    if (!data.output_params?.length) data.output_params = data.outputParams || defaults.output_params || [{ key: 'result', type: 'Object' }]
+  }
+  if (node.type === 'batch') {
+    if (data.batch_size == null && data.batchSize != null) data.batch_size = data.batchSize
+    if (data.concurrent_size == null && data.concurrentSize != null) data.concurrent_size = data.concurrentSize
+    if (!data.error_strategy && data.errorStrategy) data.error_strategy = data.errorStrategy
+    if (!data.input_params?.length && data.arrayVariable) {
+      data.input_params = [{ key: 'item', type: 'Object', value_from: 'refer', value: data.arrayVariable }]
+    }
+    if (!data.output_params?.length) data.output_params = data.outputParams || defaults.output_params || [{ key: 'result', type: 'Array' }]
+  }
+  const migrated = migrateGroupNodeFields({ ...node, data })
+  if (migrated.parentNode) {
+    migrated.extent = migrated.extent || 'parent'
+    migrated.zIndex = migrated.zIndex ?? 10
+  }
+  return ensureNodeDraggable(migrated)
+}
+
+/** 保证画布节点可拖动（避免持久化数据或内置类型把 draggable 写成 false） */
+function ensureNodeDraggable(node) {
+  if (!node) return node
+  const n = { ...node }
+  if (isGroupBuiltinType(n.type)) {
+    n.draggable = true
+    n.selectable = n.selectable !== false
+    n.connectable = n.connectable !== false
+    return n
+  }
+  n.draggable = true
+  n.selectable = n.selectable !== false
+  n.connectable = n.connectable !== false
+  if (n.type === 'input' || n.type === 'output') {
+    n.sourcePosition = n.sourcePosition || 'right'
+    n.targetPosition = n.targetPosition || 'left'
+    if (n.style?.width || n.style?.height) {
+      const { width, height, ...restStyle } = n.style
+      n.style = Object.keys(restStyle).length ? restStyle : undefined
+    }
+  }
+  return n
+}
+
+function flowPointFromEvent(event) {
+  try {
+    const pt = screenToFlowCoordinate({ x: event.clientX, y: event.clientY })
+    if (pt && Number.isFinite(pt.x) && Number.isFinite(pt.y)) return pt
+  } catch (_) { /* Vue Flow 未就绪时走 DOM 回退 */ }
+  const pane = canvasAreaRef.value?.querySelector('.vue-flow__viewport')
+    || canvasAreaRef.value?.querySelector('.vue-flow')
+  if (pane) {
+    const rect = pane.getBoundingClientRect()
+    const vp = pane.querySelector('.vue-flow__transformationpane')
+    const transform = vp ? getComputedStyle(vp).transform : ''
+    let scale = 0.8
+    if (transform && transform !== 'none') {
+      const m = transform.match(/matrix\(([^)]+)\)/)
+      if (m) scale = parseFloat(m[1].split(',')[0]) || scale
+    }
+    return {
+      x: (event.clientX - rect.left) / scale,
+      y: (event.clientY - rect.top) / scale,
+    }
+  }
+  return { x: 100, y: 100 }
+}
+
+function pruneInvalidEdges(nodeList, edgeList) {
+  return edgeList.filter(e => {
+    const src = nodeList.find(n => n.id === e.source)
+    const tgt = nodeList.find(n => n.id === e.target)
+    return isValidWorkflowConnection(
+      { source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle },
+      { nodes: nodeList, edges: edgeList, excludeEdgeId: e.id },
+    )
+  })
+}
+
+let nodeInternalsTimer = null
+
+/** 批量刷新节点尺寸（防抖，避免与 dimensions 事件形成死循环） */
+function scheduleUpdateNodeInternals(nodeIds) {
+  clearTimeout(nodeInternalsTimer)
+  nodeInternalsTimer = setTimeout(() => {
+    const ids = nodeIds?.length ? nodeIds : nodes.value.map(n => n.id)
+    ids.forEach(id => {
+      try {
+        updateNodeInternals(id)
+      } catch (_) { /* ignore */ }
+    })
+  }, 16)
+}
+
+/** 提交节点列表（保证 parent 在前、子节点 expandParent，并刷新 Vue Flow 内部尺寸） */
+function commitWorkflowNodes(list, { refreshInternals = true } = {}) {
+  nodes.value = sortNodesParentFirst(
+    (list || []).map(n => {
+      const m = ensureNodeDraggable(migrateGroupNodeFields({
+        ...n,
+        position: normalizePosition(n.position),
+      }))
+      if (m.parentNode) {
+        m.extent = m.extent || 'parent'
+        m.expandParent = m.expandParent !== false
+        m.zIndex = m.zIndex ?? 10
+      }
+      return m
+    }),
+  )
+  if (refreshInternals) {
+    scheduleUpdateNodeInternals(nodes.value.map(n => n.id))
+  }
+}
+
+/**
+ * 将节点纳入/移出循环批处理容器，并撑开容器边框
+ * @returns {boolean} 是否改动了 nodes
+ */
+function applyNodeGroupMembership(nodeId, absolutePoint) {
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node || isGroupBuiltinType(node.type)) return false
+
+  if (isGroupNodeType(node.type)) {
+    if (isGroupNestedDrop(node.type, nodes.value, absolutePoint, findNode)) {
+      message.warning('循环/批处理节点不能嵌套到其他容器中')
+    }
+    return false
+  }
+
+  if (!canBeGroupChild(node.type)) return false
+
+  const dropPoint = absolutePoint || getNodeDropPoint(node, nodes.value, findNode)
+  const flowNodes = getNodes.value?.length ? getNodes.value : nodes.value
+  const pid = getNodeParentId(node)
+  const groupAtPoint = findGroupAtPoint(flowNodes, dropPoint, { excludeId: nodeId, findNode })
+
+  // 已在容器内：根据落点决定留/出（未与容器内节点连线时可拖出）
+  if (pid) {
+    const parent = flowNodes.find(n => n.id === pid)
+    if (parent && isGroupNodeType(parent.type)) {
+      const stillInside = groupAtPoint?.id === pid
+      if (stillInside) {
+        const resized = fitGroupBoundsToChildren(parent, nodes.value, findNode)
+        if (resized !== parent) {
+          commitWorkflowNodes(nodes.value.map(n => (n.id === pid ? resized : n)))
+          return true
+        }
+        return false
+      }
+      if (hasEdgesToGroupSiblings(nodeId, pid, nodes.value, edges.value)) {
+        message.warning('该节点已与容器内其他节点连线，请先断开连线再移出容器')
+        const center = getNodeDropPoint(node, nodes.value, findNode)
+        const rel = attachNodeToGroup(node, parent, center, findNode)
+        commitWorkflowNodes(nodes.value.map(n => (n.id === nodeId ? rel : n)))
+        return true
+      }
+      const absTopLeft = absoluteTopLeftFromCenter(node, dropPoint, findNode)
+      const detached = { ...detachFromGroup(node), position: absTopLeft }
+      let next = nodes.value.map(n => (n.id === nodeId ? detached : n))
+      const resized = fitGroupBoundsToChildren(parent, next, findNode)
+      next = next.map(n => (n.id === pid ? resized : n))
+      commitWorkflowNodes(next)
+      return true
+    }
+  }
+
+  if (groupAtPoint) {
+    const { node: attached, group: resized } = attachNodeToGroupAndResize(
+      node,
+      groupAtPoint,
+      nodes.value,
+      dropPoint,
+      findNode,
+    )
+    const next = nodes.value.map(n => {
+      if (n.id === resized.id) return resized
+      if (n.id === nodeId) return attached
+      return n
+    })
+    commitWorkflowNodes(next)
+    return true
+  }
+
+  return false
+}
+
+function openNodeTestDrawer() {
+  if (!selectedNode.value || isVersionPreview.value) return
+  if (!canTestSelectedNode.value) {
+    message.warning('该节点类型暂不支持单节点测试')
+    return
+  }
+  nodeTestVisible.value = true
+}
+
+function copySelectedNode() {
+  const src = selectedNode.value
+  if (!src || isVersionPreview.value || src.type === 'start' || src.type === 'end' || isGroupBuiltinType(src.type)) return
+  recordHistory()
+  const pos = normalizePosition(src.position)
+  const newId = `node_${Date.now()}`
+  const idMap = { [src.id]: newId }
+  const toCopy = [src]
+  if (isGroupNodeType(src.type)) {
+    nodes.value.filter(n => getNodeParentId(n) === src.id).forEach((child, i) => {
+      idMap[child.id] = `node_${Date.now()}_c${i}`
+      toCopy.push(child)
+    })
+  }
+  const newNodes = toCopy.map((n, idx) => {
+    const nid = idMap[n.id]
+    const base = {
+      id: nid,
+      type: n.type,
+      position: {
+        x: normalizePosition(n.position).x + (idx === 0 ? 48 : 0),
+        y: normalizePosition(n.position).y + (idx === 0 ? 48 : 0),
+      },
+      data: JSON.parse(JSON.stringify(n.data || {})),
+    }
+    if (n.style) base.style = JSON.parse(JSON.stringify(n.style))
+    if (n.extent) base.extent = n.extent
+    if (n.zIndex != null) base.zIndex = n.zIndex
+    const pid = getNodeParentId(n)
+    if (pid && idMap[pid]) base.parentNode = idMap[pid]
+    return migrateGroupNodeFields(base)
+  })
+  commitWorkflowNodes([...nodes.value, ...newNodes])
+  selectedNode.value = nodes.value.find(n => n.id === idMap[src.id]) || newNodes[0]
+  message.success(isGroupNodeType(src.type) ? '已复制容器及内部节点' : '已复制节点')
+  scheduleAutoSave()
+}
+
+function onNodeTestComplete({ nodeId, success }) {
+  const n = nodes.value.find(item => item.id === nodeId)
+  if (n?.data) {
+    n.data.debugStatus = success ? 'success' : 'fail'
+    triggerRef(nodes)
+  }
+}
+
+function openNodeExampleModal() {
+  if (!selectedNode.value || selectedNode.value.type === 'start' || selectedNode.value.type === 'end') return
+  nodeExampleVisible.value = true
+}
+
+function applyNodeExampleConfig(exampleData) {
+  if (!selectedNode.value || isVersionPreview.value) return
+  selectedNode.value.data = {
+    ...selectedNode.value.data,
+    ...exampleData,
+    label: selectedNode.value.data.label || exampleData.label,
+  }
+  syncNodes()
+  message.success('已应用示例配置')
 }
 
 function getDefaultNodeData(type) {
@@ -1042,8 +1657,212 @@ function getEdgeTargetType(edge) {
 function clearEdgeSelection() {
   selectedEdge.value = null
   try {
-    removeSelectedEdges(getSelectedEdges())
+    const selected = getSelectedEdges()
+    if (selected?.length) {
+      removeSelectedEdges(selected)
+    }
   } catch (_) { /* VueFlow 未就绪时忽略 */ }
+}
+
+function cloneEdge(edge) {
+  if (!edge) return null
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    type: edge.type,
+    selectable: edge.selectable,
+    style: edge.style ? { ...edge.style } : undefined,
+  }
+}
+
+const edgeInsertLabelStyle = computed(() => {
+  const anchor = edgeInsertAnchorEdge.value
+  if (!anchor) return null
+  const center = getEdgeInsertCenter(anchor, findNode, nodes.value)
+  if (!center) return null
+  return {
+    position: 'absolute',
+    pointerEvents: 'all',
+    transform: `translate(-50%, -50%) translate(${center.x}px, ${center.y}px)`,
+  }
+})
+
+function getNodeCenterForInsert(node) {
+  const p = normalizePosition(node.position)
+  const isRound = node.type === 'start' || node.type === 'end'
+  const w = isRound ? 64 : 180
+  const h = isRound ? 64 : 88
+  return { x: p.x + w / 2, y: p.y + h / 2 }
+}
+
+function syncEdgeInsertAnchor(edge) {
+  if (!edge) return
+  hoveredEdge.value = edge
+  edgeInsertAnchorEdge.value = edge
+}
+
+function onEdgeMouseEnter({ edge }) {
+  if (isVersionPreview.value || isNodeDragging.value || edgeInsertMenuOpen.value) return
+  clearTimeout(edgeHoverLeaveTimer)
+  syncEdgeInsertAnchor(edge)
+}
+
+function onEdgeMouseMove({ edge }) {
+  if (isVersionPreview.value || isNodeDragging.value) return
+  if (!hoveredEdge.value || hoveredEdge.value.id !== edge.id) return
+  hoveredEdge.value = edge
+}
+
+function onEdgeMouseLeave() {
+  if (edgeInsertHoverLock.value || edgeInsertMenuOpen.value) return
+  clearTimeout(edgeHoverLeaveTimer)
+  edgeHoverLeaveTimer = setTimeout(() => {
+    if (!edgeInsertHoverLock.value && !edgeInsertMenuOpen.value) {
+      hoveredEdge.value = null
+      edgeInsertAnchorEdge.value = null
+    }
+  }, 280)
+}
+
+function onEdgeInsertPointerEnter() {
+  clearTimeout(edgeHoverLeaveTimer)
+  edgeInsertHoverLock.value = true
+}
+
+function onEdgeInsertPointerLeave() {
+  if (edgeInsertMenuOpen.value) return
+  edgeInsertHoverLock.value = false
+  onEdgeMouseLeave()
+}
+
+function onEdgeInsertMenuOpen() {
+  clearTimeout(edgeHoverLeaveTimer)
+  edgeInsertMenuOpen.value = true
+  edgeInsertHoverLock.value = true
+}
+
+function onEdgeInsertMenuClose() {
+  edgeInsertMenuOpen.value = false
+  edgeInsertHoverLock.value = false
+  hoveredEdge.value = null
+  edgeInsertAnchorEdge.value = null
+}
+
+function clearEdgeInsertUi() {
+  clearTimeout(edgeHoverLeaveTimer)
+  hoveredEdge.value = null
+  edgeInsertAnchorEdge.value = null
+  edgeInsertHoverLock.value = false
+  edgeInsertMenuOpen.value = false
+}
+
+function createWorkflowEdgeFromConnection(conn, idSuffix) {
+  const normalized = normalizeConnection(conn)
+  return ensureEdgeId({
+    id: `edge_${Date.now()}_${idSuffix}`,
+    type: 'workflow-bezier',
+    source: normalized.source,
+    target: normalized.target,
+    sourceHandle: normalized.sourceHandle || HANDLE_OUT,
+    targetHandle: HANDLE_IN,
+    selectable: true,
+    style: { strokeWidth: 2, stroke: '#94a3b8' },
+  }, idSuffix)
+}
+
+/** 在连线中间插入节点并拆成两条边 */
+function onInsertNodeOnEdge(nodeType) {
+  const edge = hoveredEdge.value
+  if (!edge || isVersionPreview.value) return
+  if (nodeType === 'start' || nodeType === 'end') {
+    message.warning('不能在连线中间插入开始或结束节点')
+    return
+  }
+
+  const sourceNode = getNodeById(edge.source)
+  const targetNode = getNodeById(edge.target)
+  if (!sourceNode || !targetNode) return
+
+  const newNodeId = `node_${Date.now()}`
+  const sc = getNodeCenterForInsert(sourceNode)
+  const tc = getNodeCenterForInsert(targetNode)
+  const mid = {
+    x: (sc.x + tc.x) / 2,
+    y: (sc.y + tc.y) / 2,
+  }
+  let newNode = {
+    id: newNodeId,
+    type: nodeType,
+    position: { x: mid.x - 90, y: mid.y - 44 },
+    data: getDefaultNodeData(nodeType),
+  }
+  if (isGroupNodeType(nodeType)) {
+    message.warning('循环/批处理容器请从节点库拖入画布')
+    return
+  }
+  // 插入到连线中间时若落在容器内则挂入
+  const midPack = attachNodeToGroupAndResize(
+    newNode,
+    findGroupAtPoint(nodes.value, mid, { findNode }) || null,
+    nodes.value,
+    mid,
+    findNode,
+  )
+  if (midPack.group) {
+    newNode = midPack.node
+  }
+
+  const edgeToNew = normalizeConnection({
+    source: edge.source,
+    target: newNodeId,
+    sourceHandle: edge.sourceHandle || HANDLE_OUT,
+    targetHandle: HANDLE_IN,
+  })
+  const edgeFromNew = normalizeConnection({
+    source: newNodeId,
+    target: edge.target,
+    sourceHandle: HANDLE_OUT,
+    targetHandle: HANDLE_IN,
+  })
+
+  if (!edge.id) {
+    message.warning('无法识别连线，请刷新后重试')
+    return
+  }
+  const edgesWithoutOld = edges.value.filter(e => e.id !== edge.id)
+  let nodesWithNew = [...nodes.value]
+  if (midPack.group) {
+    nodesWithNew = nodesWithNew.map(n => (n.id === midPack.group.id ? midPack.group : n))
+    newNode = midPack.node
+  }
+  nodesWithNew.push(newNode)
+  const ctx = { nodes: sortNodesParentFirst(nodesWithNew), edges: edgesWithoutOld }
+
+  if (!isValidWorkflowConnection(edgeToNew, ctx)) {
+    message.warning('无法插入：上游连线不合法')
+    return
+  }
+  if (!isValidWorkflowConnection(edgeFromNew, ctx)) {
+    message.warning('无法插入：下游连线不合法')
+    return
+  }
+
+  recordHistory()
+  commitWorkflowNodes(ctx.nodes)
+  edges.value = [
+    ...edgesWithoutOld,
+    createWorkflowEdgeFromConnection(edgeToNew, Date.now()),
+    createWorkflowEdgeFromConnection(edgeFromNew, Date.now() + 1),
+  ]
+  triggerRef(nodes)
+  clearEdgeInsertUi()
+  clearEdgeSelection()
+  selectedNode.value = newNode
+  message.success(`已插入「${getNodeTitle(nodeType)}」`)
+  scheduleAutoSave()
 }
 
 function filterKnowledgeOption(input, option) {
@@ -1084,33 +1903,102 @@ function onDrop(event) {
   const nodeType = event.dataTransfer.getData('nodeType')
   if (!nodeType) return
 
-  // 记录历史用于撤回
   recordHistory()
 
-  const rect = event.currentTarget.getBoundingClientRect()
-  const position = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+  const position = flowPointFromEvent(event)
+  let newNode
+
+  if (isGroupNodeType(nodeType)) {
+    if (isGroupNestedDrop(nodeType, nodes.value, position, findNode)) {
+      message.warning('循环/批处理节点不能嵌套到其他容器中')
+      return
+    }
+    const pack = createGroupWithBuiltins(nodeType, position, getDefaultNodeData(nodeType))
+    commitWorkflowNodes([...nodes.value, pack.group, ...pack.children])
+    edges.value = pruneInvalidEdges(nodes.value, edges.value)
+    scheduleFitView()
+    return
   }
 
-  const newNode = {
-    id: `node_${Date.now()}`,
+  const newId = `node_${Date.now()}`
+  newNode = {
+    id: newId,
     type: nodeType,
     position,
-    data: getDefaultNodeData(nodeType)
+    data: getDefaultNodeData(nodeType),
+    draggable: true,
+    selectable: true,
+    connectable: true,
+    ...(nodeType === 'input' || nodeType === 'output'
+      ? { sourcePosition: 'right', targetPosition: 'left' }
+      : {}),
   }
-
-  nodes.value = [...nodes.value, newNode]
-  triggerRef(nodes)
+  commitWorkflowNodes([...nodes.value, newNode])
+  applyNodeGroupMembership(newId, position)
+  edges.value = pruneInvalidEdges(nodes.value, edges.value)
   scheduleFitView()
 }
 
-// 同步节点变更（含拖动后的 position），保证未保存检测与保存能带上坐标
+/**
+ * 同步拖拽中的节点坐标（对齐 admin onNodeDrag：position 不走 onNodesChange）
+ */
+function syncDraggedNodePositions(dragNodes) {
+  if (isVersionPreview.value || !dragNodes?.length) return
+  const posMap = new Map()
+  for (const dn of dragNodes) {
+    if (dn?.id && dn.position) {
+      posMap.set(dn.id, normalizePosition(dn.position))
+    }
+  }
+  if (!posMap.size) return
+  let changed = false
+  const next = nodes.value.map(n => {
+    if (!posMap.has(n.id)) return n
+    const nextPos = posMap.get(n.id)
+    const cur = normalizePosition(n.position)
+    if (cur.x === nextPos.x && cur.y === nextPos.y) return n
+    changed = true
+    const base = { ...n, position: nextPos }
+    return ensureNodeDraggable(isGroupNodeType(n.type) ? migrateGroupNodeFields(base) : base)
+  })
+  if (changed) {
+    nodes.value = sortNodesParentFirst(next)
+  }
+}
+
+/**
+ * 节点变更：position 由 onNodeDrag 同步；dimensions 只刷新内部尺寸，不写回 nodes（避免卡死）
+ */
 function onNodesChange(changes) {
   if (isVersionPreview.value || !changes?.length) return
-  const nextNodes = applyNodeChanges(changes, nodes.value)
-  nodes.value = nextNodes
-  triggerRef(nodes)
+
+  if (changes.every(c => c.type === 'dimensions')) {
+    scheduleUpdateNodeInternals(changes.map(c => c.id).filter(Boolean))
+    return
+  }
+
+  const actionable = changes.filter(c => c.type !== 'position' && c.type !== 'dimensions')
+  if (!actionable.length) return
+
+  const type = actionable[0]?.type
+  if (!['remove', 'select'].includes(type)) return
+
+  const prevMap = new Map(nodes.value.map(n => [n.id, n]))
+  const nextNodes = applyNodeChanges(actionable, nodes.value).map(n => {
+    const old = prevMap.get(n.id)
+    const merged = old
+      ? {
+          ...n,
+          parentNode: n.parentNode ?? old.parentNode,
+          extent: n.extent ?? old.extent,
+          expandParent: n.expandParent ?? old.expandParent,
+          zIndex: n.zIndex ?? old.zIndex,
+          style: n.style ?? old.style,
+        }
+      : n
+    return ensureNodeDraggable(isGroupNodeType(n.type) ? migrateGroupNodeFields(merged) : merged)
+  })
+  nodes.value = sortNodesParentFirst(nextNodes)
 }
 
 function onNodeDragStart({ node }) {
@@ -1118,22 +2006,62 @@ function onNodeDragStart({ node }) {
   isNodeDragging.value = true
   dragOverTrash.value = false
   recordHistory()
+  // 拖出容器：临时取消 parent 限制，松手后再按落点决定留/出
+  if (node && getNodeParentId(node) && !isGroupBuiltinType(node.type)) {
+    nodes.value = sortNodesParentFirst(
+      nodes.value.map(n => (
+        n.id === node.id
+          ? { ...n, extent: undefined, expandParent: false }
+          : n
+      )),
+    )
+  }
 }
 
-function onNodeDrag({ event }) {
-  if (!isNodeDragging.value || !event || !trashRef.value) return
-  const rect = trashRef.value.getBoundingClientRect()
-  dragOverTrash.value =
-    event.clientX >= rect.left &&
-    event.clientX <= rect.right &&
-    event.clientY >= rect.top &&
-    event.clientY <= rect.bottom
+function onNodeDrag({ node, nodes: draggedNodes, event }) {
+  const dragList = draggedNodes?.length ? draggedNodes : node ? [node] : []
+  syncDraggedNodePositions(dragList)
+
+  if (event && trashRef.value) {
+    const rect = trashRef.value.getBoundingClientRect()
+    dragOverTrash.value =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+  }
 }
 
-function onNodeDragStop({ node }) {
-  if (dragOverTrash.value && node && node.type !== 'start' && node.type !== 'end') {
+function onNodeDragStop({ node, nodes: draggedNodes }) {
+  const dragList = draggedNodes?.length ? draggedNodes : node ? [node] : []
+  syncDraggedNodePositions(dragList)
+
+  if (dragOverTrash.value && node && canDeleteDraggedNode.value) {
     removeNodeById(node.id, { skipHistory: true })
     message.success('节点已删除')
+  } else if (node && isGroupBuiltinType(node.type) && getNodeParentId(node)) {
+    const pid = getNodeParentId(node)
+    let next = nodes.value.map(n => {
+      if (n.id !== node.id) return n
+      return ensureNodeDraggable({
+        ...n,
+        extent: 'parent',
+        expandParent: true,
+      })
+    })
+    const parent = next.find(n => n.id === pid)
+    if (parent) {
+      next = next.map(n => (n.id === pid ? fitGroupBoundsToChildren(parent, next, findNode) : n))
+    }
+    commitWorkflowNodes(next)
+  } else if (node && !isGroupNodeType(node.type) && !isGroupBuiltinType(node.type)) {
+    const dropPoint = getNodeDropPoint(
+      nodes.value.find(n => n.id === node.id) || node,
+      nodes.value,
+      findNode,
+    )
+    applyNodeGroupMembership(node.id, dropPoint)
+    edges.value = pruneInvalidEdges(nodes.value, edges.value)
   }
   isNodeDragging.value = false
   dragOverTrash.value = false
@@ -1143,12 +2071,20 @@ function onNodeDragStop({ node }) {
 function removeNodeById(nodeId, { skipHistory = false } = {}) {
   const node = nodes.value.find(n => n.id === nodeId)
   if (!node || node.type === 'start' || node.type === 'end') return
+  if (isGroupBuiltinType(node.type) && getNodeParentId(node)) {
+    message.warning('容器内置节点不可单独删除，请删除循环/批处理容器')
+    return
+  }
   if (!skipHistory) recordHistory()
 
-  nodes.value = nodes.value.filter(n => n.id !== nodeId)
-  edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
+  const removeIds = new Set([nodeId])
+  if (isGroupNodeType(node.type)) {
+    nodes.value.filter(n => getNodeParentId(n) === nodeId).forEach(c => removeIds.add(c.id))
+  }
+
+  nodes.value = nodes.value.filter(n => !removeIds.has(n.id))
+  edges.value = edges.value.filter(e => !removeIds.has(e.source) && !removeIds.has(e.target))
   triggerRef(nodes)
-  triggerRef(edges)
   if (selectedNode.value?.id === nodeId) {
     selectedNode.value = null
   }
@@ -1156,21 +2092,128 @@ function removeNodeById(nodeId, { skipHistory = false } = {}) {
   scheduleFitView()
 }
 
-// 连接节点
+function isValidWorkflowConnectionFn(connection) {
+  return isValidWorkflowConnection(connection, {
+    nodes: nodes.value,
+    edges: edges.value,
+  })
+}
+
+function applyEdgePatch(edgeId, patch) {
+  const idx = edges.value.findIndex(e => e.id === edgeId)
+  if (idx < 0) return false
+  const old = edges.value[idx]
+  const merged = normalizeConnection({
+    source: patch.source ?? old.source,
+    target: patch.target ?? old.target,
+    sourceHandle: patch.sourceHandle ?? old.sourceHandle,
+    targetHandle: patch.targetHandle ?? old.targetHandle ?? HANDLE_IN,
+  })
+  if (!isValidWorkflowConnection(merged, {
+    nodes: nodes.value,
+    edges: edges.value,
+    excludeEdgeId: edgeId,
+  })) {
+    message.warning('连线不合法：请从「出」连到下游节点「入」，且不能形成逆向或重复连线')
+    return false
+  }
+  const updated = {
+    ...old,
+    ...merged,
+    targetHandle: HANDLE_IN,
+    selectable: true,
+    style: old.style || { strokeWidth: 2, stroke: '#94a3b8' },
+  }
+  const next = [...edges.value]
+  next[idx] = updated
+  edges.value = next
+  if (selectedEdge.value?.id === edgeId) {
+    selectedEdge.value = updated
+  }
+  scheduleAutoSave()
+  return true
+}
+
+// 同步 Vue Flow 边变更到受控数据（选中、增删等；历史栈由 onConnect / deleteSelectedEdge 等显式记录）
+function onEdgesChange(changes) {
+  if (!changes?.length) return
+  edges.value = applyEdgeChanges(changes, edges.value)
+  if (changes.some(c => c.type === 'add' || c.type === 'remove')) {
+    scheduleAutoSave()
+  }
+}
+
+// 新建连线
 function onConnect(params) {
   if (isVersionPreview.value) return
+  const normalized = normalizeConnection(params)
+  if (!isValidWorkflowConnection(normalized, { nodes: nodes.value, edges: edges.value })) {
+    message.warning('无法连接：请从上游节点右侧「出」拖到下游节点左侧「入」')
+    return
+  }
   recordHistory()
   const newEdge = {
-    id: `edge_${params.source}_${params.target}_${params.sourceHandle || 'default'}_${Date.now()}`,
-    source: params.source,
-    target: params.target,
-    sourceHandle: params.sourceHandle,
-    targetHandle: params.targetHandle,
+    id: `edge_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    type: 'workflow-bezier',
+    source: normalized.source,
+    target: normalized.target,
+    sourceHandle: normalized.sourceHandle || HANDLE_OUT,
+    targetHandle: HANDLE_IN,
     selectable: true,
-    style: { strokeWidth: 2, stroke: '#94a3b8' }
+    style: { strokeWidth: 2, stroke: '#94a3b8' },
   }
-  edges.value = [...edges.value, newEdge]
-  triggerRef(edges)
+  edges.value = addEdge(newEdge, [...edges.value])
+  scheduleAutoSave()
+}
+
+// 拖拽重连连线端点
+function onEdgeUpdate({ edge, connection }) {
+  if (isVersionPreview.value || !edge || !connection) return
+  recordHistory()
+  applyEdgePatch(edge.id, connection)
+}
+
+const edgeTargetCandidates = computed(() =>
+  nodes.value.filter(n => n.type !== 'start')
+)
+
+const edgeSourceHandleOptions = computed(() => {
+  const edge = selectedEdge.value
+  if (!edge) return []
+  const node = nodes.value.find(n => n.id === edge.source)
+  if (!node) return [{ id: HANDLE_OUT, label: '出（默认）' }]
+  if (node.type === 'condition') {
+    return [
+      { id: 'out_a', label: '出（上分支）' },
+      { id: 'out_b', label: '出（下分支）' },
+      { id: 'out_c', label: '出（右分支）' },
+    ]
+  }
+  if (node.type === 'classifier') {
+    const opts = [{ id: HANDLE_OUT, label: '出（默认）' }]
+    ;(node.data?.conditions || []).forEach(c => {
+      if (c.id && c.id !== 'default') {
+        opts.push({ id: `${node.id}_${c.id}`, label: `出（${c.subject || c.id}）` })
+      }
+    })
+    if (node.id) {
+      opts.push({ id: `${node.id}_default`, label: '出（其他意图）' })
+    }
+    return opts
+  }
+  return [{ id: HANDLE_OUT, label: '出（默认）' }]
+})
+
+function onEdgeTargetChange(targetId) {
+  if (!selectedEdge.value || isVersionPreview.value) return
+  recordHistory()
+  applyEdgePatch(selectedEdge.value.id, { target: targetId, targetHandle: HANDLE_IN })
+}
+
+function onEdgeSourceHandleChange(sourceHandle) {
+  if (!selectedEdge.value || isVersionPreview.value) return
+  recordHistory()
+  applyEdgePatch(selectedEdge.value.id, { sourceHandle })
 }
 
 // 点击节点
@@ -1180,13 +2223,18 @@ function onNodeClick(event) {
   selectedNode.value = event.node
 }
 
-// 点击连线
-function onEdgeClick(event) {
+// 点击连线（仅选中，不触发删除）
+function onEdgeClick({ edge }) {
   selectedNode.value = null
-  selectedEdge.value = event.edge
+  selectedEdge.value = cloneEdge(edge)
   try {
-    removeSelectedEdges(getSelectedEdges())
-    addSelectedEdges([event.edge])
+    const prev = getSelectedEdges()
+    if (prev?.length) {
+      removeSelectedEdges(prev)
+    }
+    if (edge?.id) {
+      addSelectedEdges([edge.id])
+    }
   } catch (_) { /* ignore */ }
 }
 
@@ -1194,6 +2242,7 @@ function onEdgeClick(event) {
 function onPaneClick() {
   closeNodePanel()
   clearEdgeSelection()
+  clearEdgeInsertUi()
 }
 
 // 同步节点数据
@@ -1317,15 +2366,21 @@ function deleteSelectedNode() {
   removeNodeById(selectedNode.value.id)
 }
 
-// 删除选中连线
+// 删除选中连线（必须按 id 删除，避免误删全部）
 function deleteSelectedEdge() {
-  if (!selectedEdge.value) return
+  const edge = selectedEdge.value
+  if (!edge?.id) {
+    message.warning('无法识别连线，请刷新页面后重试')
+    return
+  }
   recordHistory()
-
-  const edgeId = selectedEdge.value.id
-  edges.value = edges.value.filter(e => e.id !== edgeId)
-  triggerRef(edges)
+  edges.value = applyEdgeChanges(
+    [{ type: 'remove', id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.sourceHandle ?? null, targetHandle: edge.targetHandle ?? null }],
+    edges.value
+  )
   selectedEdge.value = null
+  clearEdgeSelection()
+  scheduleAutoSave()
 }
 
 // 验证工作流
@@ -1346,20 +2401,42 @@ function validateWorkflow(showToast = true) {
     errors.push({ nodeId: null, field: 'end', message: '缺少结束节点' })
   }
 
-  // 3. 检查节点连接
+  // 3. 检查节点连接与逆向边
   const connectedIds = new Set()
   edges.value.forEach(e => {
     connectedIds.add(e.source)
     connectedIds.add(e.target)
+    const src = nodes.value.find(n => n.id === e.source)
+    const tgt = nodes.value.find(n => n.id === e.target)
+    if (src?.type === 'end') {
+      errors.push({ nodeId: e.source, field: 'connection', message: '结束节点不能作为连线起点' })
+    }
+    if (tgt?.type === 'start') {
+      errors.push({ nodeId: e.target, field: 'connection', message: '开始节点不能作为连线终点' })
+    }
+    if (e.targetHandle && e.targetHandle !== HANDLE_IN) {
+      errors.push({ nodeId: e.target, field: 'connection', message: `连线必须接入目标节点「入」端口，当前为 ${e.targetHandle}` })
+    }
+    if (e.sourceHandle === HANDLE_IN) {
+      errors.push({ nodeId: e.source, field: 'connection', message: '连线不能从目标节点「入」端口连出' })
+    }
+    if (!isValidWorkflowConnection(
+      { source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle },
+      { nodes: nodes.value, edges: edges.value, excludeEdgeId: e.id }
+    )) {
+      errors.push({ nodeId: e.source, field: 'connection', message: '存在非法或重复连线' })
+    }
   })
   nodes.value.forEach(n => {
-    if (n.type !== 'start' && !connectedIds.has(n.id)) {
+    if (n.type === 'start' || isGroupNodeType(n.type) || isGroupBuiltinType(n.type) || getNodeParentId(n)) return
+    if (!connectedIds.has(n.id)) {
       errors.push({ nodeId: n.id, field: 'connection', message: '节点未连接到工作流' })
     }
   })
 
   // 4. 检查节点配置
   nodes.value.forEach(n => {
+    if (isGroupBuiltinType(n.type)) return
     if (n.type === 'llm') {
       if (!n.data.providerId) errors.push({ nodeId: n.id, field: 'providerId', message: '请选择模型提供商' })
       if (!n.data.modelId) errors.push({ nodeId: n.id, field: 'modelId', message: '请选择模型' })
@@ -1462,6 +2539,7 @@ async function openVersionDrawer() {
   versionVisible.value = true
   await nextTick()
   ensureVersionPanelPosition()
+  clampVersionPanelPosition()
   versionLoading.value = true
   try {
     const res = await listWorkflowVersions(agentId)
@@ -1517,6 +2595,19 @@ function ensureVersionPanelPosition() {
   const x = Math.max(12, canvas.clientWidth - VERSION_PANEL_WIDTH - 12)
   versionPanelPos.value = { x, y: 48 }
   versionPanelLayoutReady = true
+}
+
+/** 右侧节点详情等导致画布宽度变化时，约束版本面板不越界、不错位 */
+function clampVersionPanelPosition() {
+  if (!versionVisible.value) return
+  const canvas = canvasAreaRef.value
+  if (!canvas) return
+  const maxX = Math.max(12, canvas.clientWidth - VERSION_PANEL_WIDTH - 12)
+  const maxY = Math.max(12, canvas.clientHeight - 120)
+  versionPanelPos.value = {
+    x: Math.min(Math.max(12, versionPanelPos.value.x), maxX),
+    y: Math.min(Math.max(12, versionPanelPos.value.y), maxY),
+  }
 }
 
 function onVersionPanelDragStart(e) {
@@ -1594,9 +2685,39 @@ function formatVersionDesc(item) {
   return parts.join(' · ')
 }
 
+function openLeftPanelTab(tab) {
+  leftPanelTab.value = tab
+  panelCollapsed.value = false
+}
+
+function formatWorkflowLayout() {
+  if (isVersionPreview.value || nodes.value.length < 2) return
+  recordHistory()
+  const before = JSON.stringify(nodes.value.map(n => ({ id: n.id, x: n.position?.x, y: n.position?.y })))
+  const { nodes: laid, edges: laidEdges } = applyWorkflowAutoLayout(nodes.value, edges.value)
+  const after = JSON.stringify(laid.map(n => ({ id: n.id, x: n.position?.x, y: n.position?.y })))
+  commitWorkflowNodes(laid)
+  edges.value = laidEdges
+  scheduleAutoSave()
+  if (before !== after) {
+    message.success('已纠正弯折过大的连线')
+  } else {
+    message.info('当前连线无需调整')
+  }
+}
+
+function clearTestConversation() {
+  testMessages.value = []
+  testResult.value = null
+}
+
+function onTestDrawerClose() {
+  clearNodeDebugStatus()
+}
+
 async function runWorkflowTest() {
   if (!testInput.value?.trim()) {
-    message.warning('请输入测试问题')
+    message.warning(testMode.value === 'generation' ? '请输入测试内容' : '请输入本轮消息')
     return
   }
   const errors = validateWorkflow(false)
@@ -1608,21 +2729,44 @@ async function runWorkflowTest() {
     return
   }
 
+  const userText = testInput.value.trim()
+  if (testMode.value === 'conversation') {
+    testMessages.value.push({ role: 'user', content: userText })
+  }
+
   testVisible.value = true
   testRunning.value = true
   testResult.value = null
   testCurrentNodeId.value = null
   clearNodeDebugStatus()
   try {
-    const res = await testWorkflow(agentId, {
-      input: testInput.value,
+    const payload = {
+      input: userText,
       useDraft: testUseDraft.value,
-      graph: buildWorkflowPayload()
-    })
+      graph: buildWorkflowPayload(),
+      testMode: testMode.value,
+    }
+    if (testMode.value === 'conversation') {
+      payload.conversationHistory = testMessages.value.map(m => ({
+        role: m.role,
+        content: m.content,
+      }))
+    }
+    const res = await testWorkflow(agentId, payload)
     testResult.value = res.data
+    if (testMode.value === 'conversation' && res.data?.output) {
+      testMessages.value.push({ role: 'assistant', content: res.data.output })
+    }
+    testInput.value = ''
     await animateWorkflowTest(res.data?.nodeEvents || [])
     message.success('测试运行完成')
   } catch (e) {
+    if (testMode.value === 'conversation' && testMessages.value.length) {
+      const last = testMessages.value[testMessages.value.length - 1]
+      if (last?.role === 'user' && last.content === userText) {
+        testMessages.value.pop()
+      }
+    }
     notification.error({ message: '测试失败', description: e.message })
     clearNodeDebugStatus()
   } finally {
@@ -1653,12 +2797,26 @@ function goBack() {
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
+  overflow-x: hidden;
 }
 
 .publish-tag { flex-shrink: 0; }
+/* 盖在 VueFlow、缩略图、缩放控件、删除区之上 */
+.edge-insert-label-layer {
+  pointer-events: none;
+}
+.edge-insert-label-layer > * {
+  pointer-events: auto;
+}
+.canvas-overlay-top {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
 .version-panel-float {
   position: absolute;
-  z-index: 12;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -1666,6 +2824,7 @@ function goBack() {
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   overflow: hidden;
+  pointer-events: auto;
 }
 .version-panel-header {
   display: flex;
@@ -1725,7 +2884,7 @@ function goBack() {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: 999;
   padding: 8px 16px;
   background: #fffbeb;
   border: 1px solid #fcd34d;
@@ -1754,10 +2913,24 @@ function goBack() {
   word-break: break-word;
 }
 .version-item-desc { font-size: 12px; color: #9ca3af; }
+.publish-modal-content {
+  padding-bottom: 8px;
+}
 .publish-modal-tip {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 13px;
   color: #71717a;
+}
+.publish-modal-textarea {
+  margin-bottom: 28px;
+}
+:deep(.publish-modal .ant-modal-body) {
+  padding-bottom: 28px;
+}
+:deep(.publish-modal .ant-modal-footer) {
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
 }
 .preview-readonly-alert { margin-bottom: 12px; }
 .panel-body-readonly {
@@ -1780,10 +2953,32 @@ function goBack() {
 .auto-save-hint { font-size: 12px; color: #94a3b8; white-space: nowrap; }
 .auto-save-hint.saving { color: #6366f1; }
 .test-alert { margin-bottom: 12px; }
+.test-mode-segment { margin-bottom: 8px; }
+.test-mode-hint { font-size: 12px; color: #6b7280; margin-bottom: 12px; line-height: 1.5; }
+.test-chat-box {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding: 10px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.test-chat-empty { font-size: 12px; color: #9ca3af; text-align: center; padding: 16px 0; }
+.test-chat-msg { margin-bottom: 10px; }
+.test-chat-msg.user .test-chat-content { background: #eef2ff; }
+.test-chat-msg.assistant .test-chat-content { background: #fff; border: 1px solid #e5e7eb; }
+.test-chat-role { font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px; }
+.test-chat-content { font-size: 13px; color: #374151; padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
+.test-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .test-current-node { font-size: 13px; color: #6366f1; margin-bottom: 12px; padding: 8px 12px; background: #eef2ff; border-radius: 6px; }
 .test-event.active { background: #eef2ff; color: #4338ca; font-weight: 600; }
 .test-event-type { margin-right: 6px; }
 
+.canvas-area :deep(.vue-flow__controls),
+.canvas-area :deep(.vue-flow__minimap) {
+  z-index: 5 !important;
+}
 .canvas-area :deep(.vue-flow__handle) {
   width: 16px !important;
   height: 16px !important;
@@ -2004,6 +3199,36 @@ function goBack() {
   justify-content: center;
 }
 
+.panel-collapsed-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  flex: 1;
+}
+.rail-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.rail-btn:hover {
+  background: #eef2ff;
+  color: #6366f1;
+}
+.rail-btn.active {
+  background: #6366f1;
+  color: #fff;
+}
+
 .btn-collapse {
   background: transparent;
   border: none;
@@ -2034,6 +3259,7 @@ function goBack() {
   flex: 1;
   position: relative;
   background: #fff;
+  isolation: isolate;
 }
 
 /* 拖动节点删除区 */
@@ -2042,7 +3268,7 @@ function goBack() {
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
-  z-index: 20;
+  z-index: 30;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2091,19 +3317,32 @@ function goBack() {
 
 /* 右侧配置面板 */
 .config-panel {
-  width: 380px;
+  width: 480px;
+  min-width: 480px;
+  max-width: 42vw;
+  flex-shrink: 0;
   background: #fff;
   border-left: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
 }
 
-.config-panel .panel-header {
+.config-panel .panel-header,
+.config-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #e5e7eb;
+  gap: 12px;
+}
+
+.panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .node-type-badge {
@@ -2126,6 +3365,59 @@ function goBack() {
   color: #1f2937;
 }
 
+.btn-node-example {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #eef2ff;
+  color: #6366f1;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-node-example:hover {
+  background: #6366f1;
+  color: #fff;
+}
+
+.node-detail-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-node-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+}
+.btn-node-action:hover:not(:disabled) {
+  background: #6366f1;
+  color: #fff;
+}
+.btn-node-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.config-panel .node-type-badge {
+  flex: 1;
+  min-width: 0;
+}
+
 .btn-close {
   background: transparent;
   border: none;
@@ -2135,8 +3427,10 @@ function goBack() {
 }
 
 .config-panel .panel-body {
+  position: relative;
   flex: 1;
   padding: 16px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -2322,6 +3616,32 @@ function goBack() {
   flex-shrink: 0;
 }
 
+.edge-retarget-form {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e7eb;
+}
+.edge-retarget-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+.edge-retarget-row {
+  margin-bottom: 12px;
+}
+.edge-retarget-row label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+.edge-retarget-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
 .edge-delete-footer {
   margin-top: 16px;
   border-top: none;
@@ -2399,8 +3719,8 @@ function goBack() {
   display: inline-block !important;
   width: fit-content !important;
   height: fit-content !important;
-  max-width: min(280px, 32vw);
-  max-height: 200px;
+  max-width: min(420px, 48vw);
+  max-height: 220px;
   line-height: 0;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
@@ -2413,12 +3733,59 @@ function goBack() {
   display: block !important;
   width: auto !important;
   height: auto !important;
-  max-width: min(280px, 32vw);
-  max-height: 200px;
+  max-width: min(420px, 48vw);
+  max-height: 220px;
 }
 
 .workflow-minimap .vue-flow__minimap-mask {
   fill: rgba(124, 58, 237, 0.08);
+}
+
+/* 与 AgentDetail 问号提示一致：限制宽度，箭头对准触发元素 */
+.no-flip-tooltip .ant-tooltip-inner {
+  max-width: min(320px, calc(100vw - 24px));
+  word-break: break-word;
+}
+
+/* 循环/批处理容器：由自定义节点绘制边框，去掉默认节点壳 */
+.vue-flow__node-loop,
+.vue-flow__node-batch {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.vue-flow__node-loop .vue-flow__node-label,
+.vue-flow__node-batch .vue-flow__node-label {
+  display: none;
+}
+
+.vue-flow__node-input,
+.vue-flow__node-output {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 200px !important;
+  min-width: 200px !important;
+  max-width: 200px !important;
+}
+
+.vue-flow__node-input .vue-flow__node-label,
+.vue-flow__node-output .vue-flow__node-label {
+  display: none;
+}
+
+.vue-flow__node-loop_start,
+.vue-flow__node-loop_end,
+.vue-flow__node-batch_start,
+.vue-flow__node-batch_end {
+  z-index: 12 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 /* 选中连线高亮 */

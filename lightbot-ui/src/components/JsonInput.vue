@@ -6,19 +6,19 @@
       :placeholder="placeholder"
       :rows="rows"
       spellcheck="false"
-      class="json-textarea"
+      class="json-textarea code-block-scroll"
     />
     <div class="json-input-actions">
-      <a-tooltip title="格式化 JSON">
-        <button class="json-btn" @click="formatJson" :disabled="!modelValue">
+      <WorkflowTooltip title="格式化 JSON" placement="top">
+        <button type="button" class="json-btn" @click="formatJson" :disabled="!modelValue">
           <CodeOutlined />
         </button>
-      </a-tooltip>
-      <a-tooltip title="压缩 JSON">
-        <button class="json-btn" @click="compressJson" :disabled="!modelValue">
+      </WorkflowTooltip>
+      <WorkflowTooltip title="压缩 JSON" placement="top">
+        <button type="button" class="json-btn" @click="compressJson" :disabled="!modelValue">
           <CompressOutlined />
         </button>
-      </a-tooltip>
+      </WorkflowTooltip>
     </div>
     <div v-if="error" class="json-error-msg">{{ error }}</div>
   </div>
@@ -27,6 +27,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { CodeOutlined, CompressOutlined } from '@ant-design/icons-vue'
+import WorkflowTooltip from '../views/workflow/components/WorkflowTooltip.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '{}' },

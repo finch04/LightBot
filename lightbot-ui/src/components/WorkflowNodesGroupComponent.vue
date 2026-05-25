@@ -6,7 +6,9 @@
         <LoadingOutlined v-else class="icon-spinning" />
       </span>
       <span class="summary-content">
-        <span class="summary-title">工作流执行 {{ nodeCount }} 个节点</span>
+        <span class="summary-title">
+          {{ isDone ? `工作流已执行 ${nodeSteps.length} 个节点` : `工作流执行中 (${runningCount} 个进行中)` }}
+        </span>
         <span v-if="nodeLabels.length" class="summary-meta">{{ nodeLabels.join(' → ') }}</span>
       </span>
       <span class="summary-trailing">
@@ -15,21 +17,32 @@
     </button>
 
     <div v-show="isExpanded" class="workflow-panel">
-      <div v-for="(evt, i) in displayEvents" :key="i" class="workflow-event-item">
-        <div v-if="evt.type === 'workflow_node_start'" class="event-row event-start">
-          <PlayCircleOutlined class="event-icon start" />
-          <span class="event-label">
-            执行 <strong>{{ evt.nodeLabel || getNodeTypeName(evt.nodeType) }}</strong>
-          </span>
-          <span class="event-id">{{ evt.nodeId }}</span>
-        </div>
-        <div v-else-if="evt.type === 'workflow_node_complete'" class="event-row" :class="evt.success === false ? 'event-fail' : 'event-done'">
-          <CheckCircleOutlined v-if="evt.success !== false" class="event-icon icon-success" />
-          <CloseCircleOutlined v-else class="event-icon icon-fail" />
-          <span class="event-label">
-            <strong>{{ evt.nodeLabel || getNodeTypeName(evt.nodeType) }}</strong>
-            {{ evt.message || (evt.success === false ? '执行失败' : '执行完成') }}
-          </span>
+      <div v-for="(step, i) in nodeSteps" :key="step.nodeId || i" class="workflow-step">
+        <div class="event-row" :class="stepStatusClass(step)">
+          <LoadingOutlined v-if="step.status === 'running'" class="event-icon icon-spinning" />
+          <CheckCircleOutlined v-else-if="step.status === 'done'" class="event-icon icon-success" />
+          <CloseCircleOutlined v-else-if="step.status === 'failed'" class="event-icon icon-fail" />
+          <PlayCircleOutlined v-else class="event-icon start" />
+          <div class="event-main">
+            <div class="event-head">
+              <span class="event-label">
+                <strong>{{ step.nodeLabel || getNodeTypeName(step.nodeType) }}</strong>
+                <span class="event-type-tag">{{ getNodeTypeName(step.nodeType) }}</span>
+              </span>
+              <span v-if="step.durationMs != null" class="event-duration">{{ step.durationMs }}ms</span>
+              <span v-else-if="step.status === 'running'" class="event-duration running">执行中</span>
+            </div>
+            <div v-if="step.status === 'failed'" class="event-message fail">
+              {{ step.message || '执行失败' }}
+            </div>
+            <div v-else-if="step.status === 'done' && step.message" class="event-message">
+              {{ step.message }}
+            </div>
+            <div v-if="step.detail" class="event-detail">
+              <pre>{{ step.detail }}</pre>
+            </div>
+            <div v-if="step.nodeId" class="event-node-id">节点 ID: {{ step.nodeId }}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -66,25 +79,51 @@ watch(
   { immediate: true }
 )
 
-const displayEvents = computed(() =>
-  props.workflowEvents.filter(e =>
-    e.type === 'workflow_node_start' || e.type === 'workflow_node_complete'
-  )
-)
-
-const nodeCount = computed(() =>
-  props.workflowEvents.filter(e => e.type === 'workflow_node_start').length
-)
-
-const nodeLabels = computed(() => {
-  const labels = []
-  props.workflowEvents.forEach(e => {
-    if (e.type === 'workflow_node_start' && e.nodeLabel) {
-      labels.push(e.nodeLabel)
+/** 按 nodeId 合并 start/complete，展示运行中与详情 */
+const nodeSteps = computed(() => {
+  const map = new Map()
+  for (const e of props.workflowEvents) {
+    if (e.type === 'workflow_node_start' && e.nodeId) {
+      const prev = map.get(e.nodeId) || {}
+      map.set(e.nodeId, {
+        ...prev,
+        nodeId: e.nodeId,
+        nodeType: e.nodeType,
+        nodeLabel: e.nodeLabel,
+        status: 'running',
+      })
+    } else if (e.type === 'workflow_node_complete' && e.nodeId) {
+      const prev = map.get(e.nodeId) || {}
+      map.set(e.nodeId, {
+        ...prev,
+        nodeId: e.nodeId,
+        nodeType: e.nodeType ?? prev.nodeType,
+        nodeLabel: e.nodeLabel ?? prev.nodeLabel,
+        message: e.message,
+        detail: e.detail,
+        durationMs: e.durationMs,
+        success: e.success,
+        status: e.success === false ? 'failed' : 'done',
+      })
     }
-  })
-  return labels
+  }
+  return Array.from(map.values())
 })
+
+const runningCount = computed(() =>
+  nodeSteps.value.filter(s => s.status === 'running').length
+)
+
+const nodeLabels = computed(() =>
+  nodeSteps.value.map(s => s.nodeLabel || getNodeTypeName(s.nodeType)).filter(Boolean)
+)
+
+function stepStatusClass(step) {
+  if (step.status === 'running') return 'event-running'
+  if (step.status === 'failed') return 'event-fail'
+  if (step.status === 'done') return 'event-done'
+  return 'event-start'
+}
 
 function getNodeTypeName(type) {
   const map = {
@@ -93,7 +132,19 @@ function getNodeTypeName(type) {
     llm: '大模型',
     condition: '条件判断',
     retrieval: '知识检索',
-    tool: '工具调用'
+    tool: '工具调用',
+    classifier: '意图分类',
+    api: 'API',
+    loop: '循环',
+    variable: '变量',
+    batch: '批处理',
+    script: '脚本',
+    mcp: 'MCP',
+    input: '输入',
+    output: '输出',
+    variable_handle: '变量处理',
+    parameter_extractor: '参数提取',
+    app_component: '应用组件',
   }
   return map[type] || type || '节点'
 }
@@ -170,10 +221,10 @@ function getNodeTypeName(type) {
   border-top: 1px solid #e9d5ff;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.workflow-event-item {
+.workflow-step {
   font-size: 13px;
 }
 
@@ -181,9 +232,14 @@ function getNodeTypeName(type) {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 6px;
   background: #fff;
+}
+
+.event-running {
+  border: 1px solid #c4b5fd;
+  background: #faf5ff;
 }
 
 .event-start {
@@ -208,19 +264,77 @@ function getNodeTypeName(type) {
 .event-icon.start { color: #7c3aed; }
 .event-icon.icon-fail { color: #dc2626; }
 
+.event-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .event-label {
   flex: 1;
+  min-width: 0;
   color: #374151;
   line-height: 1.5;
 }
 
-.event-id {
+.event-type-tag {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: #9ca3af;
+}
+
+.event-duration {
   flex-shrink: 0;
   font-size: 11px;
-  font-family: ui-monospace, monospace;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-duration.running {
+  color: #7c3aed;
+}
+
+.event-message {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.event-message.fail {
+  color: #dc2626;
+}
+
+.event-detail {
+  margin-top: 6px;
+  padding: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.event-detail pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.event-node-id {
+  margin-top: 4px;
+  font-size: 11px;
   color: #9ca3af;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-family: ui-monospace, monospace;
 }
 </style>

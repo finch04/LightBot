@@ -35,4 +35,14 @@ public class WorkflowEdge {
      * 边标签（条件分支的标签）
      */
     private String label;
+
+    /**
+     * 源连接点（如 in / out / out_a）
+     */
+    private String sourceHandle;
+
+    /**
+     * 目标连接点（通常为 in）
+     */
+    private String targetHandle;
 }

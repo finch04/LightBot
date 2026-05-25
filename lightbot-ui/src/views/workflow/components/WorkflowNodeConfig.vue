@@ -1,24 +1,53 @@
 <template>
   <div :class="{ 'config-readonly': readonly }">
   <div v-if="readonly" class="readonly-overlay" aria-hidden="true" />
-  <a-form layout="vertical" :disabled="readonly">
+  <a-form layout="vertical" :disabled="readonly" class="workflow-node-config-form">
     <a-form-item label="节点 ID">
       <span class="node-id-display mono">{{ node.id }}</span>
     </a-form-item>
-    <a-form-item label="节点名称">
+    <a-form-item>
+      <template #label>
+        <ConfigFieldLabel label="节点名称" :tip="hint('common', 'label')" />
+      </template>
       <a-input v-model:value="node.data.label" placeholder="输入节点名称" @change="emitSync" />
+    </a-form-item>
+
+    <a-form-item v-if="showBuiltinVars" class="builtin-vars-form-item">
+      <template #label>
+        <ConfigFieldLabel label="内置变量" tip="点击复制变量占位符，粘贴到输入框或脚本中" />
+      </template>
+      <div class="builtin-vars-inline">
+        <button
+          v-for="v in BUILTIN_VARIABLES"
+          :key="v.key"
+          type="button"
+          class="builtin-var-tag"
+          :disabled="readonly"
+          :title="`复制 ${v.example}`"
+          @click="copyBuiltinVar(v.example)"
+        >
+          <code>{{ v.example }}</code>
+          <CopyOutlined class="copy-icon" />
+        </button>
+      </div>
     </a-form-item>
 
     <!-- LLM -->
     <template v-if="node.type === 'llm'">
-      <a-form-item label="模型提供商" required>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="模型提供商" :tip="hint('llm', 'providerId')" />
+        </template>
         <a-select v-model:value="node.data.providerId" placeholder="选择模型提供商" @change="onLlmProviderChange">
           <a-select-option v-for="p in providers" :key="p.id" :value="p.id">
             {{ p.name }} ({{ p.type?.code || p.type }})
           </a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="模型" required>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="模型" :tip="hint('llm', 'modelId')" />
+        </template>
         <a-select
           v-model:value="node.data.modelId"
           placeholder="选择具体模型"
@@ -31,20 +60,27 @@
           </a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="系统提示词">
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="系统提示词" :tip="hint('llm', 'sysPrompt')" />
+        </template>
         <a-textarea v-model:value="node.data.sysPrompt" :rows="2" placeholder="定义 AI 角色、行为约束（对应 SystemMessage）" @change="emitSync" />
-        <div class="field-hint">系统提示词设定 AI 的身份与全局规则，不会随用户输入变化；留空则仅使用用户提示词。</div>
       </a-form-item>
-      <a-form-item label="用户提示词模板" required>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="用户提示词模板" :tip="hint('llm', 'promptTemplate')" />
+        </template>
         <a-textarea
           v-model:value="node.data.promptTemplate"
-          placeholder="使用 {{input}} 表示用户输入"
+          placeholder="{{query}} 或 {{history_list}}"
           :rows="4"
           @change="emitSync"
         />
-        <div class="field-hint"  v-text="`用户提示词为每轮具体任务内容（对应 UserMessage），支持 {{input}} 等变量引用。`"></div>
       </a-form-item>
-      <a-form-item label="温度">
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="温度" :tip="hint('llm', 'temperature')" />
+        </template>
         <a-slider v-model:value="node.data.temperature" :min="0" :max="2" :step="0.1" @change="emitSync" />
       </a-form-item>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
@@ -52,9 +88,11 @@
 
     <!-- 意图分类 -->
     <template v-if="node.type === 'classifier'">
-      <a-form-item label="输入变量" required>
-        <a-input v-model:value="node.data.inputVariable" placeholder="{{input}}" @change="emitSync" />
-        <div class="field-hint">用于意图判断的文本内容，支持 {{input}} 等变量</div>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="输入变量" :tip="hint('classifier', 'inputVariable')" />
+        </template>
+        <VariablePickerInput v-model="node.data.inputVariable" placeholder="{{query}}" :disabled="readonly" @change="emitSync" />
       </a-form-item>
       <a-form-item label="模型提供商" required>
         <a-select v-model:value="node.data.providerId" placeholder="选择模型" @change="onLlmProviderChange">
@@ -83,7 +121,7 @@
         />
         <a-button type="text" danger size="small" @click="removeIntent(idx)"><DeleteOutlined /></a-button>
       </div>
-      <a-button type="dashed" block size="small" @click="addIntent">
+      <a-button type="dashed" block size="small" class="param-add-btn" @click="addIntent">
         <PlusOutlined /> 添加意图（{{ node.data.conditions?.length || 0 }}/10）
       </a-button>
       <a-form-item label="其他意图">
@@ -106,26 +144,30 @@
 
     <!-- 条件 -->
     <template v-if="node.type === 'condition'">
-      <a-form-item label="条件分支">
-        <div v-for="(branch, index) in node.data.branches" :key="index" class="branch-item">
-          <a-input v-model:value="branch.condition" placeholder="条件表达式" size="small" @change="emitSync" />
-          <a-select v-model:value="branch.targetNodeId" placeholder="目标节点" size="small" @change="emitSync">
-            <a-select-option v-for="n in targetNodes" :key="n.id" :value="n.id">
-              {{ n.data?.label || n.type }}
-            </a-select-option>
-          </a-select>
-          <a-button type="text" danger size="small" @click="removeBranch(index)"><DeleteOutlined /></a-button>
-        </div>
-        <a-button type="dashed" block size="small" @click="addBranch"><PlusOutlined /> 添加分支</a-button>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="条件组" :tip="hint('condition', 'conditionGroups')" />
+        </template>
+        <ConditionGroupForm
+          v-model="node.data.conditionGroups"
+          :disabled="readonly"
+          @change="onConditionGroupsChange"
+        />
       </a-form-item>
     </template>
 
     <!-- 知识检索 -->
     <template v-if="node.type === 'retrieval'">
-      <a-form-item label="输入变量">
-        <a-input v-model:value="node.data.inputVariable" placeholder="{{input}}" @change="emitSync" />
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="输入变量" :tip="hint('retrieval', 'inputVariable')" />
+        </template>
+        <VariablePickerInput v-model="node.data.inputVariable" placeholder="{{query}}" :disabled="readonly" @change="emitSync" />
       </a-form-item>
-      <a-form-item label="知识库" required>
+      <a-form-item required>
+        <template #label>
+          <ConfigFieldLabel label="知识库" :tip="hint('retrieval', 'knowledgeId')" />
+        </template>
         <a-select
           v-model:value="node.data.knowledgeId"
           show-search
@@ -226,7 +268,8 @@
 
     <!-- 流程输入 -->
     <template v-if="node.type === 'input'">
-      <a-form-item label="输出参数">
+      <div class="config-section">
+        <div class="config-section-title">输出参数</div>
         <div v-for="(param, idx) in node.data.outputParams" :key="idx" class="param-row">
           <a-input v-model:value="param.key" placeholder="参数名" @change="emitSync" />
           <a-select v-model:value="param.type" style="width: 100px" @change="emitSync">
@@ -237,8 +280,10 @@
           <a-input v-model:value="param.defaultValue" placeholder="默认值" @change="emitSync" />
           <a-button type="text" danger @click="removeOutputParam(idx)"><DeleteOutlined /></a-button>
         </div>
-        <a-button type="dashed" block size="small" @click="addOutputParam"><PlusOutlined /> 添加参数</a-button>
-      </a-form-item>
+        <a-button type="dashed" block size="small" class="param-add-btn" @click="addOutputParam">
+          <PlusOutlined /> 添加参数
+        </a-button>
+      </div>
     </template>
 
     <!-- 流程输出 -->
@@ -274,7 +319,7 @@
             <a-input v-model:value="v.value" placeholder="{{变量引用}}" @change="emitSync" />
             <a-button type="text" danger @click="removeGroupVar(idx)"><DeleteOutlined /></a-button>
           </div>
-          <a-button type="dashed" block size="small" @click="addGroupVar"><PlusOutlined /> 添加变量</a-button>
+          <a-button type="dashed" block size="small" class="param-add-btn" @click="addGroupVar"><PlusOutlined /> 添加变量</a-button>
         </a-form-item>
       </template>
     </template>
@@ -304,7 +349,7 @@
         <a-switch v-model:checked="p.required" checked-children="必填" un-checked-children="可选" @change="emitSync" />
         <a-button type="text" danger @click="removeExtractParam(idx)"><DeleteOutlined /></a-button>
       </div>
-      <a-button type="dashed" block size="small" @click="addExtractParam"><PlusOutlined /> 添加参数</a-button>
+      <a-button type="dashed" block size="small" class="param-add-btn" @click="addExtractParam"><PlusOutlined /> 添加参数</a-button>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
     </template>
 
@@ -338,44 +383,109 @@
           <a-select-option value="DELETE">DELETE</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="Headers (JSON)"><a-textarea v-model:value="node.data.headers" :rows="2" @change="emitSync" /></a-form-item>
-      <a-form-item label="Body (JSON)"><a-textarea v-model:value="node.data.body" :rows="3" @change="emitSync" /></a-form-item>
+      <a-form-item label="Headers (JSON)">
+        <JsonInput v-model="node.data.headers" :rows="3" placeholder='{"Content-Type":"application/json"}' @update:model-value="emitSync" />
+      </a-form-item>
+      <a-form-item label="Body (JSON)">
+        <JsonInput v-model="node.data.body" :rows="4" placeholder='{"key":"value"}' @update:model-value="emitSync" />
+      </a-form-item>
       <a-form-item label="超时(秒)"><a-input-number v-model:value="node.data.timeout" :min="1" :max="120" @change="emitSync" /></a-form-item>
     </template>
 
-    <!-- 循环 -->
+    <!-- 循环（对齐 spring-ai-alibaba-admin Iterator） -->
     <template v-if="node.type === 'loop'">
-      <a-form-item label="循环类型">
-        <a-select v-model:value="node.data.iteratorType" @change="emitSync">
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="循环类型" :tip="hint('loop', 'iteratorType')" />
+        </template>
+        <a-select :value="loopIteratorType" @change="onLoopIteratorTypeChange">
           <a-select-option value="byArray">按数组循环</a-select-option>
           <a-select-option value="byCount">按次数循环</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item v-if="node.data.iteratorType === 'byArray'" label="循环数组变量">
-        <a-input v-model:value="node.data.arrayVariable" placeholder="{{items}}" @change="emitSync" />
+      <template v-if="loopIteratorType === 'byArray'">
+        <a-form-item>
+          <template #label>
+            <ConfigFieldLabel label="循环数组" :tip="hint('loop', 'arrayVariable')" />
+          </template>
+          <VariablePickerInput
+            :model-value="loopArrayVariable"
+            placeholder="{{input}} 或数组变量"
+            @update:model-value="onLoopArrayVariableChange"
+          />
+        </a-form-item>
+      </template>
+      <a-form-item v-else>
+        <template #label>
+          <ConfigFieldLabel label="循环次数上限" :tip="hint('loop', 'countLimit')" />
+        </template>
+        <a-input-number :value="loopCountLimit" :min="1" :max="500" @change="onLoopCountLimitChange" />
       </a-form-item>
-      <a-form-item v-else label="循环次数">
-        <a-input-number v-model:value="node.data.countLimit" :min="1" :max="100" @change="emitSync" />
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="输出变量" :tip="hint('loop', 'outputParams')" />
+        </template>
+        <div v-for="(p, idx) in node.data.output_params || node.data.outputParams || []" :key="'loop-out-' + idx" class="param-row">
+          <a-input v-model:value="p.key" placeholder="变量名" @change="syncLoopOutputParams" />
+          <a-select v-model:value="p.type" style="width: 100px" @change="syncLoopOutputParams">
+            <a-select-option value="String">String</a-select-option>
+            <a-select-option value="Object">Object</a-select-option>
+            <a-select-option value="Array">Array</a-select-option>
+          </a-select>
+          <a-button type="text" danger :disabled="readonly" @click="removeLoopOutputParam(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button type="dashed" block class="param-add-btn" :disabled="readonly" @click="addLoopOutputParam">+ 添加输出</a-button>
       </a-form-item>
     </template>
 
-    <!-- 批处理 -->
+    <!-- 批处理（对齐 spring-ai-alibaba-admin Parallel） -->
     <template v-if="node.type === 'batch'">
-      <a-form-item label="批处理数组">
-        <a-input v-model:value="node.data.arrayVariable" placeholder="{{input}}" @change="emitSync" />
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="批处理数组" :tip="hint('batch', 'arrayVariable')" />
+        </template>
+        <VariablePickerInput
+          :model-value="batchArrayVariable"
+          placeholder="{{input}} 或 Array 类型变量"
+          @update:model-value="onBatchArrayVariableChange"
+        />
       </a-form-item>
-      <a-form-item label="批处理上限">
-        <a-input-number v-model:value="node.data.batchSize" :min="1" :max="100" @change="emitSync" />
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="批处理上限" :tip="hint('batch', 'batchSize')" />
+        </template>
+        <a-input-number :value="batchSizeVal" :min="1" :max="500" @change="onBatchSizeChange" />
       </a-form-item>
-      <a-form-item label="并行数量">
-        <a-input-number v-model:value="node.data.concurrentSize" :min="1" :max="20" @change="emitSync" />
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="并行数量" :tip="hint('batch', 'concurrentSize')" />
+        </template>
+        <a-input-number :value="batchConcurrentVal" :min="1" :max="50" @change="onBatchConcurrentChange" />
       </a-form-item>
-      <a-form-item label="错误策略">
-        <a-select v-model:value="node.data.errorStrategy" @change="emitSync">
-          <a-select-option value="terminated">遇错终止</a-select-option>
-          <a-select-option value="continueOnError">跳过继续</a-select-option>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="错误响应方法" :tip="hint('batch', 'errorStrategy')" />
+        </template>
+        <a-select :value="batchErrorStrategy" @change="onBatchErrorStrategyChange">
+          <a-select-option value="terminated">错误时终止</a-select-option>
+          <a-select-option value="continueOnError">忽略错误并继续</a-select-option>
           <a-select-option value="removeErrorOutput">移除错误输出</a-select-option>
         </a-select>
+      </a-form-item>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="输出变量" :tip="hint('batch', 'outputParams')" />
+        </template>
+        <div v-for="(p, idx) in node.data.output_params || node.data.outputParams || []" :key="'batch-out-' + idx" class="param-row">
+          <a-input v-model:value="p.key" placeholder="变量名" @change="syncBatchOutputParams" />
+          <a-select v-model:value="p.type" style="width: 100px" @change="syncBatchOutputParams">
+            <a-select-option value="Array">Array</a-select-option>
+            <a-select-option value="Object">Object</a-select-option>
+            <a-select-option value="String">String</a-select-option>
+          </a-select>
+          <a-button type="text" danger :disabled="readonly" @click="removeBatchOutputParam(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button type="dashed" block class="param-add-btn" :disabled="readonly" @click="addBatchOutputParam">+ 添加输出</a-button>
       </a-form-item>
     </template>
 
@@ -385,27 +495,123 @@
       <a-form-item label="变量值"><a-input v-model:value="node.data.variableValue" @change="emitSync" /></a-form-item>
     </template>
 
-    <!-- 脚本 / MCP -->
+    <!-- 脚本 -->
     <template v-if="node.type === 'script'">
-      <a-form-item label="脚本内容"><a-textarea v-model:value="node.data.scriptContent" :rows="8" @change="emitSync" /></a-form-item>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="脚本代码" :tip="hint('script', 'scriptContent')" />
+        </template>
+        <CodeEditor
+          v-model="node.data.scriptContent"
+          v-model:language="node.data.scriptLanguage"
+          :disabled="readonly"
+          :rows="14"
+          fullscreen-title="脚本编辑"
+          @update:language="onScriptLanguageChange"
+          @change="emitSync"
+        />
+      </a-form-item>
+      <div class="config-section">
+        <div class="config-section-title">
+          <ConfigFieldLabel label="输入变量" :tip="hint('script', 'inputParams')" />
+        </div>
+        <div v-for="(p, idx) in node.data.inputParams" :key="'in-' + idx" class="param-row">
+          <a-input v-model:value="p.key" placeholder="参数名" :disabled="readonly" @change="emitSync" />
+          <VariablePickerInput v-model="p.value" :disabled="readonly" @change="emitSync" />
+          <a-button type="text" danger :disabled="readonly" @click="removeScriptInput(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button type="dashed" block size="small" class="param-add-btn" :disabled="readonly" @click="addScriptInput">
+          <PlusOutlined /> 添加入参
+        </a-button>
+      </div>
+      <div class="config-section">
+        <div class="config-section-title">
+          <ConfigFieldLabel label="输出变量" :tip="hint('script', 'outputParams')" />
+        </div>
+        <div v-for="(p, idx) in node.data.outputParams" :key="'out-' + idx" class="param-row">
+          <a-input v-model:value="p.key" placeholder="输出字段" :disabled="readonly" @change="emitSync" />
+          <a-select v-model:value="p.type" style="width: 100px" :disabled="readonly" @change="emitSync">
+            <a-select-option value="String">String</a-select-option>
+            <a-select-option value="Number">Number</a-select-option>
+            <a-select-option value="Boolean">Boolean</a-select-option>
+            <a-select-option value="Object">Object</a-select-option>
+          </a-select>
+          <a-button type="text" danger :disabled="readonly" @click="removeScriptOutput(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button type="dashed" block size="small" class="param-add-btn" :disabled="readonly" @click="addScriptOutput">
+          <PlusOutlined /> 添加出参
+        </a-button>
+      </div>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="启用重试" :tip="hint('script', 'retryEnabled')" />
+        </template>
+        <a-switch v-model:checked="node.data.retryConfig.enabled" :disabled="readonly" @change="emitSync" />
+      </a-form-item>
+      <template v-if="node.data.retryConfig?.enabled">
+        <a-form-item>
+          <template #label>
+            <ConfigFieldLabel label="最大次数" :tip="hint('script', 'maxAttempts')" />
+          </template>
+          <a-input-number v-model:value="node.data.retryConfig.maxAttempts" :min="1" :max="10" :disabled="readonly" @change="emitSync" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <ConfigFieldLabel label="重试间隔(ms)" :tip="hint('script', 'retryDelayMs')" />
+          </template>
+          <a-input-number v-model:value="node.data.retryConfig.delayMs" :min="0" :max="60000" :step="500" :disabled="readonly" @change="emitSync" />
+        </a-form-item>
+      </template>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="失败策略" :tip="hint('script', 'errorStrategy')" />
+        </template>
+        <a-select v-model:value="node.data.errorStrategy" :disabled="readonly" @change="emitSync">
+          <a-select-option value="defaultValue">使用默认值继续</a-select-option>
+          <a-select-option value="abort">终止流程</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item v-if="node.data.errorStrategy === 'defaultValue'">
+        <template #label>
+          <ConfigFieldLabel label="默认输出 JSON" :tip="hint('script', 'defaultOutput')" />
+        </template>
+        <JsonInput
+          v-model="node.data.defaultOutput"
+          :rows="4"
+          placeholder='{"result":""}'
+          @update:model-value="emitSync"
+        />
+      </a-form-item>
     </template>
+    <!-- MCP -->
     <template v-if="node.type === 'mcp'">
       <a-form-item label="MCP 服务"><a-input v-model:value="node.data.mcpServerName" @change="emitSync" /></a-form-item>
       <a-form-item label="工具名称"><a-input v-model:value="node.data.toolName" @change="emitSync" /></a-form-item>
-      <a-form-item label="输入参数 JSON"><a-textarea v-model:value="node.data.inputParams" :rows="4" @change="emitSync" /></a-form-item>
+      <a-form-item label="输入参数 JSON">
+        <JsonInput v-model="mcpInputParamsJson" :rows="4" placeholder='{"chat_id":"oc_xxx","text":"{{query}}"}' />
+      </a-form-item>
     </template>
   </a-form>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined } from '@ant-design/icons-vue'
+import { computed, watch } from 'vue'
+import { message } from 'ant-design-vue'
+import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined, CopyOutlined } from '@ant-design/icons-vue'
 import ShortMemoryForm from './ShortMemoryForm.vue'
+import ConfigFieldLabel from './ConfigFieldLabel.vue'
+import VariablePickerInput from './VariablePickerInput.vue'
+import CodeEditor from './CodeEditor.vue'
+import ConditionGroupForm from './ConditionGroupForm.vue'
+import JsonInput from '../../../components/JsonInput.vue'
 import { createConditionId } from '../nodeMeta'
+import { BUILTIN_VARIABLES, getFieldHint, getScriptExampleConfig } from '../nodeConfigMeta'
+import { syncConditionBranches, ensureConditionGroups } from '../conditionUtils'
 
 const props = defineProps({
   node: { type: Object, required: true },
+  edges: { type: Array, default: () => [] },
   readonly: { type: Boolean, default: false },
   providers: { type: Array, default: () => [] },
   llmModelList: { type: Array, default: () => [] },
@@ -422,8 +628,25 @@ const emit = defineEmits([
   'llm-provider-change',
   'llm-model-change',
   'knowledge-change',
-  'tool-change'
+  'tool-change',
 ])
+
+const mcpInputParamsJson = computed({
+  get() {
+    const v = props.node.data?.inputParams
+    if (v == null || v === '') return '{}'
+    if (typeof v === 'string') return v
+    try {
+      return JSON.stringify(v, null, 2)
+    } catch {
+      return '{}'
+    }
+  },
+  set(val) {
+    props.node.data.inputParams = val
+    emitSync()
+  },
+})
 
 const displayTopK = computed(() => {
   const d = props.node.data
@@ -442,6 +665,172 @@ const groupVariables = computed(() => {
   if (!groups?.length) return []
   return groups[0]?.variables || []
 })
+
+const showBuiltinVars = computed(() => {
+  const t = props.node.type
+  return ['llm', 'retrieval', 'classifier', 'script', 'output', 'variable', 'parameter_extractor', 'loop', 'batch', 'api'].includes(t)
+})
+
+const loopIteratorType = computed(() => props.node.data?.iterator_type || props.node.data?.iteratorType || 'byArray')
+const loopArrayVariable = computed(() => {
+  const params = props.node.data?.input_params || props.node.data?.inputParams
+  if (params?.[0]?.value) return params[0].value
+  return props.node.data?.arrayVariable || '{{input}}'
+})
+const loopCountLimit = computed(() => props.node.data?.count_limit ?? props.node.data?.countLimit ?? 100)
+const batchArrayVariable = computed(() => {
+  const params = props.node.data?.input_params || props.node.data?.inputParams
+  if (params?.[0]?.value) return params[0].value
+  return props.node.data?.arrayVariable || '{{input}}'
+})
+const batchSizeVal = computed(() => props.node.data?.batch_size ?? props.node.data?.batchSize ?? 100)
+const batchConcurrentVal = computed(() => props.node.data?.concurrent_size ?? props.node.data?.concurrentSize ?? 5)
+const batchErrorStrategy = computed(() => props.node.data?.error_strategy || props.node.data?.errorStrategy || 'continueOnError')
+
+function ensureLoopOutputParams() {
+  if (!props.node.data.output_params && !props.node.data.outputParams) {
+    props.node.data.output_params = [{ key: 'result', type: 'Object' }]
+  } else if (!props.node.data.output_params) {
+    props.node.data.output_params = [...(props.node.data.outputParams || [])]
+  }
+}
+
+function ensureBatchOutputParams() {
+  if (!props.node.data.output_params && !props.node.data.outputParams) {
+    props.node.data.output_params = [{ key: 'result', type: 'Array' }]
+  } else if (!props.node.data.output_params) {
+    props.node.data.output_params = [...(props.node.data.outputParams || [])]
+  }
+}
+
+function onLoopIteratorTypeChange(v) {
+  if (props.readonly) return
+  props.node.data.iterator_type = v
+  props.node.data.iteratorType = v
+  ensureLoopOutputParams()
+  emitSync()
+}
+
+function onLoopArrayVariableChange(v) {
+  if (props.readonly) return
+  props.node.data.arrayVariable = v
+  if (!props.node.data.input_params) props.node.data.input_params = [{ key: 'item', type: 'Object', value_from: 'refer', value: v }]
+  else props.node.data.input_params[0] = { ...props.node.data.input_params[0], value: v }
+  emitSync()
+}
+
+function onLoopCountLimitChange(v) {
+  if (props.readonly) return
+  props.node.data.count_limit = v
+  props.node.data.countLimit = v
+  emitSync()
+}
+
+function syncLoopOutputParams() {
+  props.node.data.outputParams = props.node.data.output_params
+  emitSync()
+}
+
+function addLoopOutputParam() {
+  ensureLoopOutputParams()
+  props.node.data.output_params.push({ key: '', type: 'Object' })
+  syncLoopOutputParams()
+}
+
+function removeLoopOutputParam(idx) {
+  props.node.data.output_params.splice(idx, 1)
+  syncLoopOutputParams()
+}
+
+function onBatchArrayVariableChange(v) {
+  if (props.readonly) return
+  props.node.data.arrayVariable = v
+  if (!props.node.data.input_params) props.node.data.input_params = [{ key: 'item', type: 'Object', value_from: 'refer', value: v }]
+  else props.node.data.input_params[0] = { ...props.node.data.input_params[0], value: v }
+  emitSync()
+}
+
+function onBatchSizeChange(v) {
+  if (props.readonly) return
+  props.node.data.batch_size = v
+  props.node.data.batchSize = v
+  emitSync()
+}
+
+function onBatchConcurrentChange(v) {
+  if (props.readonly) return
+  props.node.data.concurrent_size = v
+  props.node.data.concurrentSize = v
+  emitSync()
+}
+
+function onBatchErrorStrategyChange(v) {
+  if (props.readonly) return
+  props.node.data.error_strategy = v
+  props.node.data.errorStrategy = v
+  emitSync()
+}
+
+function syncBatchOutputParams() {
+  props.node.data.outputParams = props.node.data.output_params
+  emitSync()
+}
+
+function addBatchOutputParam() {
+  ensureBatchOutputParams()
+  props.node.data.output_params.push({ key: '', type: 'Array' })
+  syncBatchOutputParams()
+}
+
+function removeBatchOutputParam(idx) {
+  props.node.data.output_params.splice(idx, 1)
+  syncBatchOutputParams()
+}
+
+function hint(nodeType, fieldKey) {
+  return getFieldHint(nodeType, fieldKey)
+}
+
+function copyBuiltinVar(example) {
+  if (props.readonly) return
+  navigator.clipboard?.writeText(example).then(() => {
+    message.success(`已复制 ${example}`)
+  }).catch(() => {
+    message.info(example)
+  })
+}
+
+watch(
+  () => [props.node?.id, props.node?.type, props.edges?.length],
+  () => {
+    if (props.node?.type !== 'condition' || !props.node?.data) return
+    if (!props.node.data.conditionGroups?.length) {
+      props.node.data.conditionGroups = ensureConditionGroups(props.node.data)
+    }
+    syncConditionBranches(props.node.data, props.edges, props.node.id)
+  },
+  { immediate: true }
+)
+
+function onConditionGroupsChange() {
+  syncConditionBranches(props.node.data, props.edges, props.node.id)
+  emitSync()
+}
+
+/** 切换脚本语言：直接切换为对应语言的示例模板 */
+function onScriptLanguageChange(lang) {
+  if (props.readonly || props.node.type !== 'script') return
+  const example = getScriptExampleConfig(lang)
+  props.node.data.scriptLanguage = lang
+  props.node.data.scriptContent = example.scriptContent
+  if (example.inputParams?.length) {
+    props.node.data.inputParams = JSON.parse(JSON.stringify(example.inputParams))
+  }
+  if (example.outputParams?.length) {
+    props.node.data.outputParams = JSON.parse(JSON.stringify(example.outputParams))
+  }
+  emitSync()
+}
 
 function emitSync() {
   if (props.readonly) return
@@ -491,16 +880,25 @@ function removeIntent(idx) {
   emitSync()
 }
 
-function addBranch() {
-  if (props.readonly) return
-  if (!props.node.data.branches) props.node.data.branches = []
-  props.node.data.branches.push({ condition: '', targetNodeId: '' })
+function addScriptInput() {
+  if (!props.node.data.inputParams) props.node.data.inputParams = []
+  props.node.data.inputParams.push({ key: '', value: '{{query}}' })
   emitSync()
 }
 
-function removeBranch(idx) {
-  if (props.readonly) return
-  props.node.data.branches.splice(idx, 1)
+function removeScriptInput(idx) {
+  props.node.data.inputParams.splice(idx, 1)
+  emitSync()
+}
+
+function addScriptOutput() {
+  if (!props.node.data.outputParams) props.node.data.outputParams = []
+  props.node.data.outputParams.push({ key: 'result', type: 'String' })
+  emitSync()
+}
+
+function removeScriptOutput(idx) {
+  props.node.data.outputParams.splice(idx, 1)
   emitSync()
 }
 
@@ -578,8 +976,63 @@ function removeGroupVar(idx) {
 .kb-config-field :deep(.ant-input-number) { width: 100%; }
 .kb-config-readonly-hint { margin-top: 10px; font-size: 11px; color: #94a3b8; }
 
-.param-row, .extract-param-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-.param-row .ant-input, .extract-param-row .ant-input { flex: 1; min-width: 80px; }
+.param-row,
+.extract-param-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+.param-row .ant-input,
+.extract-param-row .ant-input {
+  flex: 1 1 120px;
+  min-width: 72px;
+}
+.param-row :deep(.variable-picker-input),
+.extract-param-row :deep(.variable-picker-input) {
+  flex: 2 1 160px;
+  min-width: 120px;
+  flex-wrap: nowrap;
+}
+.param-row :deep(.variable-picker-input .ant-input) {
+  font-size: 12px;
+}
+.param-row :deep(.ant-select) {
+  flex: 0 0 96px;
+  width: 96px !important;
+}
+.param-row :deep(.ant-btn) {
+  flex-shrink: 0;
+}
+.workflow-node-config-form :deep(.ant-form-item) {
+  margin-bottom: 16px;
+}
+.builtin-vars-form-item { margin-bottom: 8px !important; }
+.builtin-vars-form-item :deep(.ant-form-item-label) { padding-bottom: 4px; }
+.builtin-vars-inline { display: flex; flex-wrap: wrap; gap: 6px; }
+.builtin-var-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f9fafb;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.builtin-var-tag:hover:not(:disabled) {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+.builtin-var-tag code { font-size: 11px; color: #6366f1; }
+.builtin-var-tag .copy-icon { font-size: 10px; color: #9ca3af; }
+.config-section { margin-bottom: 16px; }
+.config-section-title { margin-bottom: 8px; font-size: 13px; font-weight: 500; color: rgba(0, 0, 0, 0.88); }
+.param-add-btn { margin-top: 8px; margin-bottom: 16px; }
 .config-readonly {
   position: relative;
 }

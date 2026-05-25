@@ -46,10 +46,14 @@ const nodeClass = computed(() => ({
 
 <style scoped>
 .generic-node {
-  min-width: 180px;
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  box-sizing: border-box;
   background: #fff;
   border: 2px solid #e5e7eb;
   border-radius: 12px;
+  position: relative;
 }
 .generic-node.selected { border-color: #6366f1; }
 .generic-node.debug-executing { animation: wf-executing 1.2s linear infinite; border-color: #6366f1; }

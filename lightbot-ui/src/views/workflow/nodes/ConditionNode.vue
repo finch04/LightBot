@@ -1,9 +1,9 @@
 <template>
   <div class="workflow-node condition-node" :class="nodeClass" @dblclick="$emit('edit')">
     <WorkflowHandle type="target" position="left" />
-    <WorkflowHandle type="source" position="top" id="a" />
-    <WorkflowHandle type="source" position="bottom" id="b" />
-    <WorkflowHandle type="source" position="right" id="c" />
+    <WorkflowHandle type="source" position="top" id="out_a" />
+    <WorkflowHandle type="source" position="bottom" id="out_b" />
+    <WorkflowHandle type="source" position="right" id="out_c" />
     <div class="node-header">
       <div class="node-icon">
         <ForkOutlined />
@@ -11,9 +11,9 @@
       <div class="node-title">{{ data.label || '条件判断' }}</div>
     </div>
     <div class="node-body">
-      <div v-if="data.branches && data.branches.length > 0" class="node-config">
-        <span class="config-label">分支数:</span>
-        <span class="config-value">{{ data.branches.length }}</span>
+      <div v-if="data.conditionGroups?.length || data.branches?.length" class="node-config">
+        <span class="config-label">条件组:</span>
+        <span class="config-value">{{ (data.conditionGroups || data.branches || []).length }}</span>
       </div>
       <div v-else class="node-placeholder">点击配置分支条件</div>
     </div>

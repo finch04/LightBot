@@ -51,6 +51,13 @@
             <version>${mybatis-plus.version}</version>
         </dependency>
 
+        <!-- JavaScript 脚本节点（Nashorn，供 ScriptNodeProcessor 使用） -->
+        <dependency>
+            <groupId>org.openjdk.nashorn</groupId>
+            <artifactId>nashorn-core</artifactId>
+            <version>15.4</version>
+        </dependency>
+
         <!-- PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>

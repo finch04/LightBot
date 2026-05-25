@@ -1,7 +1,7 @@
 <template>
   <div class="workflow-node tool-node" :class="{ selected }" @dblclick="$emit('edit')">
-    <Handle type="target" position="left" />
-    <Handle type="source" position="right" />
+    <WorkflowHandle type="target" position="left" />
+    <WorkflowHandle type="source" position="right" />
     <div class="node-header">
       <div class="node-icon">
         <ToolOutlined />
@@ -19,7 +19,7 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
+import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { ToolOutlined } from '@ant-design/icons-vue'
 
 defineProps({
