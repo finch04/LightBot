@@ -145,8 +145,8 @@
           </div>
         </div>
       </div>
-      <!-- 流式输出中但还没有内容时，也显示加载动画 -->
-      <div v-if="loading && streaming && !hasStreamContent" class="message assistant">
+      <!-- 流式输出中但尚未创建助手消息时显示加载动画（避免与消息列表中的助手气泡重复） -->
+      <div v-if="loading && streaming && !hasStreamContent && !hasStreamingAssistantMessage" class="message assistant">
         <div class="message-avatar">
           <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
           <span v-else class="bot-avatar">LB</span>
@@ -190,6 +190,23 @@
           </template>
         </a-dropdown>
 
+        <a-select
+          v-if="selectedAgentId && configVersionOptions.length > 0"
+          v-model:value="selectedConfigVersion"
+          size="small"
+          class="config-version-select"
+          :disabled="loading"
+          :dropdown-match-select-width="false"
+        >
+          <a-select-option
+            v-for="opt in configVersionOptions"
+            :key="opt.value === null ? 'online' : String(opt.value)"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </a-select-option>
+        </a-select>
+
         <textarea
           ref="inputRef"
           v-model="input"
@@ -228,7 +245,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
-import { getAgents, getAgent } from '../api/agent'
+import { getAgents, getAgent, listAgentVersions } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
@@ -257,10 +274,18 @@ const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
 const hasStreamContent = ref(false)
+
+/** 消息列表中是否已有流式中的助手消息（与占位加载条互斥） */
+const hasStreamingAssistantMessage = computed(() =>
+  messages.value.some(m => m.role === 'assistant' && m._streaming)
+)
 const abortController = ref(null)
 const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
+/** 对话使用的配置版本：null=线上最新，0=暂存草稿，>0=历史发布版本 */
+const selectedConfigVersion = ref(null)
+const configVersionOptions = ref([])
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -308,6 +333,40 @@ function autoResize() {
 function handleAgentSelect({ key }) {
   selectedAgentId.value = key
   loadCurrentAgent(key)
+  loadAgentConfigVersions(key)
+}
+
+async function loadAgentConfigVersions(agentId) {
+  if (!agentId) {
+    configVersionOptions.value = []
+    selectedConfigVersion.value = null
+    return
+  }
+  try {
+    const agent = agents.value.find(a => String(a.id) === String(agentId)) || currentAgent.value
+    const publishedVer = agent?.version || 0
+    const status = agent?.status?.code || agent?.status || 'draft'
+    const opts = []
+    if (publishedVer > 0 && (status === 'published' || status === 'published_editing')) {
+      opts.push({ value: null, label: '线上最新' })
+    }
+    opts.push({ value: 0, label: '暂存草稿' })
+    const res = await listAgentVersions(agentId)
+    const versions = res.data || []
+    for (const v of versions) {
+      const num = v.version
+      if (num == null || num <= 0) continue
+      opts.push({
+        value: num,
+        label: v.current ? `v${num}（线上）` : `v${num}`,
+      })
+    }
+    configVersionOptions.value = opts
+    selectedConfigVersion.value = opts.length > 0 && opts[0].value === null ? null : 0
+  } catch {
+    configVersionOptions.value = [{ value: null, label: '默认' }, { value: 0, label: '暂存草稿' }]
+    selectedConfigVersion.value = null
+  }
 }
 
 /**
@@ -408,7 +467,8 @@ async function loadHistory() {
     const session = sessionRes.data
     if (session?.agentId) {
       selectedAgentId.value = session.agentId
-      loadCurrentAgent(session.agentId)
+      await loadCurrentAgent(session.agentId)
+      await loadAgentConfigVersions(session.agentId)
     }
     scrollToBottom()
   } catch (e) {
@@ -502,8 +562,12 @@ async function sendMessage() {
       router.replace(`/chat/${sid}`)
     }
 
+    const chatPayload = { message: text, sessionId: sid, agentId: currentAgentId || undefined }
+    if (selectedConfigVersion.value != null) {
+      chatPayload.configVersion = selectedConfigVersion.value
+    }
     await chatStream(
-      { message: text, sessionId: sid, agentId: currentAgentId || undefined },
+      chatPayload,
       {
         // onChunk: 文本内容
         onChunk: (chunk) => {
@@ -527,6 +591,7 @@ async function sendMessage() {
             messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
+            hasStreamContent.value = true
           }
           if (event.type === 'tool_complete') {
             const offset = event.contentOffset ?? assistantMsg._currentToolOffset
@@ -760,12 +825,16 @@ async function loadAgents(preferredAgentId) {
     if (!sessionId.value) {
       if (preferredAgentId) {
         selectedAgentId.value = String(preferredAgentId)
+        await loadAgentConfigVersions(preferredAgentId)
       } else {
         const defaultAgent = agents.value.find(a => a.isDefault)
         if (defaultAgent) {
           selectedAgentId.value = String(defaultAgent.id)
         } else if (agents.value.length > 0) {
           selectedAgentId.value = String(agents.value[0].id)
+        }
+        if (selectedAgentId.value) {
+          await loadAgentConfigVersions(selectedAgentId.value)
         }
       }
     }
@@ -780,7 +849,10 @@ onMounted(async () => {
   await loadAgents(queryAgentId || undefined)
   if (queryAgentId) {
     await loadCurrentAgent(queryAgentId)
+    await loadAgentConfigVersions(queryAgentId)
     router.replace({ path: '/chat' })
+  } else if (selectedAgentId.value) {
+    await loadAgentConfigVersions(selectedAgentId.value)
   }
 
   // 滚动到顶部自动加载更早的消息
@@ -1203,6 +1275,15 @@ watch(sessionId, (newVal, oldVal) => {
   color: #2563eb;
   border-radius: 100px;
   flex-shrink: 0;
+}
+
+.config-version-select {
+  flex-shrink: 0;
+  width: 118px;
+}
+.config-version-select :deep(.ant-select-selector) {
+  border-radius: 8px !important;
+  font-size: 12px;
 }
 
 .input-textarea {

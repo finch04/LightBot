@@ -30,6 +30,11 @@ public final class ConfigKeys {
         public static final String SUMMARY_THRESHOLD_KB = "summaryThresholdKb";
         /** 提示词自定义变量列表 [{key,label,defaultValue,description}] */
         public static final String PROMPT_VARIABLES = "promptVariables";
+        /** 敏感词过滤 */
+        public static final String SENSITIVE_FILTER_ENABLED = "sensitiveFilterEnabled";
+        public static final String SENSITIVE_FILTER_STRATEGY = "sensitiveFilterStrategy";
+        public static final String SENSITIVE_FILTER_REPLACE_TEXT = "sensitiveFilterReplaceText";
+        public static final String SENSITIVE_WORDS = "sensitiveWords";
     }
 
     /**

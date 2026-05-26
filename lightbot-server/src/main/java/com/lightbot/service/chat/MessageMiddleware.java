@@ -51,20 +51,36 @@ public class MessageMiddleware implements ChatMiddleware {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /** 平台统一回复约束（追加到所有 Agent 系统提示词后） */
+    private static final String PLATFORM_REPLY_CONSTRAINTS = """
+
+            ## 知识库检索后如何回答（重要）
+            - 调用 query_knowledge 等检索工具后，**用自己的话概括、总结**检索结果，禁止大段照搬原文
+            - 只提炼与**当前用户问题**直接相关的要点；可简要说明来源，无需粘贴全文
+            - 检索内容较多时：先给 1–2 句结论，再用 3–5 条短列表列要点
+            - 可在文末补充：「如需了解【某主题】的更多细节，可以继续问我」
+
+            ## 篇幅与表达
+            - 简单、明确的问题：1–3 句话直接回答，避免客套空话和重复铺垫
+            - 一般回答建议控制在约 **150–400 字**；除非用户明确要求「详细说明」「完整列出」「逐条解释」，否则不写长文
+            - 复杂问题可用小标题 + 短列表，避免连续多个大段落
+            - 遇到不确定的信息请如实告知
+
+            ## 对话聚焦
+            - **只回答当前用户最后一条消息中的问题**；历史消息仅作背景，勿复述无关旧话题
+            """;
+
     private static final String DEFAULT_SYSTEM_PROMPT = """
-            你是 LightBot 智能助手。请根据用户的提问，利用可用的工具来提供准确、详细的回答。
+            你是 LightBot 智能助手。请根据用户的提问，利用可用的工具来提供准确、清晰的回答。
 
             ## 工具使用原则
-            - 当工具返回了检索结果或参考资料时，必须基于这些结果来回答用户，不要忽略工具返回的内容
-            - 调用工具后，将工具返回的结果作为回答的主要依据
-            - 如果工具返回了参考文献，在回答末尾标注来源
-            - 如果工具返回"未找到相关内容"，再根据自身知识回答并说明知识库中未找到
+            - 当工具返回了检索结果时，必须基于这些结果回答，但须**总结归纳**，不要原文复述
+            - 工具返回"未找到相关内容"时，再基于自身知识回答，并说明知识库中未找到
+            - 有参考文献时，可在回答末尾简要标注来源（文档名即可）
 
             ## 回答规范
             - 使用中文回答
-            - 回答应简洁准确
-            - 遇到不确定的信息请如实告知
-            - **只回答当前用户最后一条消息中的问题**；历史消息仅作背景参考，若与当前问题无关不要复述、不要展开历史中的其他问题
+            - 优先简洁、准确、可读
 
             ## 输出格式要求（必须严格遵守，这是最重要的规则）
             你必须使用标准 Markdown 格式输出，严禁输出纯文本段落。
@@ -97,9 +113,9 @@ public class MessageMiddleware implements ChatMiddleware {
         // 1. 保存用户消息
         saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
 
-        // 2. 构建消息列表
+        // 2. 构建消息列表（使用 InitMiddleware 已解析的 configMap，含版本选择）
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
-                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest());
+                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
         ctx.setMessages(messages);
 
         return next.proceed(ctx);
@@ -111,7 +127,7 @@ public class MessageMiddleware implements ChatMiddleware {
     public void prepare(ChatContext ctx) {
         saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
-                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest());
+                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
         ctx.setMessages(messages);
     }
 
@@ -119,13 +135,14 @@ public class MessageMiddleware implements ChatMiddleware {
      * 构建消息列表：系统提示词 + 工具使用引导 + 历史消息 + 当前用户消息
      */
     private List<org.springframework.ai.chat.messages.Message> buildMessages(
-            Long sessionId, String userMessage, Agent agent, ChatRequest request) {
+            Long sessionId, String userMessage, Agent agent, ChatRequest request,
+            Map<String, Object> agentConfigMap) {
         List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
 
-        // 1. 解析Agent配置，获取上下文条数
-        Map<String, Object> agentConfigMap = agent != null
-                ? initMiddleware.resolveRuntimeConfigMap(agent)
-                : Map.of();
+        // 1. 使用已解析的 Agent 配置（含版本选择），获取上下文条数
+        if (agentConfigMap == null) {
+            agentConfigMap = agent != null ? initMiddleware.resolveRuntimeConfigMap(agent, request) : Map.of();
+        }
         int maxContextMessages = 20;
         if (agentConfigMap.containsKey("maxContextMessages")) {
             Object v = agentConfigMap.get("maxContextMessages");
@@ -154,6 +171,7 @@ public class MessageMiddleware implements ChatMiddleware {
                 ? request.getBizParams() : Map.of();
         Map<String, Object> varValues = PromptTemplateUtil.mergeVariableValues(promptVarDefs, bizParams);
         systemPrompt = PromptTemplateUtil.render(systemPrompt, varValues);
+        systemPrompt = systemPrompt + PLATFORM_REPLY_CONSTRAINTS;
 
         messages.add(new org.springframework.ai.chat.messages.SystemMessage(systemPrompt));
 
@@ -217,8 +235,8 @@ public class MessageMiddleware implements ChatMiddleware {
         }
         sb.append("""
                 2. 必须等待工具执行完成后，才能基于工具返回的结果生成最终回答
-                3. 工具返回的结果必须作为你回答的主要依据，不得忽略或跳过工具返回的内容
-                4. 如果工具返回了参考文献或搜索结果，必须在回答中引用这些内容
+                3. 工具返回的结果须**概括总结后**写入回答，不得大段复制粘贴工具原文
+                4. 若调用了 query_knowledge：先给简短结论，再列要点；内容多时可提示用户「如需某部分细节可继续问我」
                 5. 如果工具返回"未找到相关内容"，请基于自身知识回答并说明知识库中未找到相关信息
                 6. 禁止在工具尚未返回结果时就提前结束对话
                 7. **重要：只根据当前用户的问题来决定调用哪些工具，不要根据历史对话中的无关内容来调用工具**

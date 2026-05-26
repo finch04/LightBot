@@ -3,6 +3,7 @@ package com.lightbot.service.chat;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
+import com.lightbot.util.SensitiveWordFilter;
 import lombok.Data;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
@@ -51,6 +52,9 @@ public class ChatContext {
     private List<Map<String, Object>> workflowEventsList;
     private List<LlmTraceSpan> spans;
     private long startTime;
+
+    /** 流式敏感词过滤状态（按累积全文过滤，避免分片漏拦） */
+    private SensitiveWordFilter.StreamState sensitiveStreamState;
 
     /**
      * 工厂方法：创建上下文并初始化所有累加器

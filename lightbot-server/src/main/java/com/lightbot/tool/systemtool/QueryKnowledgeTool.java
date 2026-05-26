@@ -58,26 +58,18 @@ public class QueryKnowledgeTool {
     private static final ConcurrentHashMap<String, List<Map<String, Object>>> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
 
     @Tool(name = "query_knowledge",
-          description = "搜索智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。\n\n注意：agentId参数由系统自动注入，请勿填写或猜测该参数值。")
+          description = "搜索当前对话智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。只需传入 question，不要传入 agentId。")
     public String queryKnowledge(
             @ToolParam(description = "搜索问题")
-            @ToolParamMeta(example = "如何配置模型参数") String question,
-            @ToolParam(description = "智能体ID（系统自动注入，请勿填写）")
-            @ToolParamMeta(example = "", required = false) Long agentId,
+            @ToolParamMeta(example = "如何配置模型参数", required = true) String question,
             ToolContext context) {
-        // requestId 从 ToolContext 获取
         String requestId = (String) context.getContext().get("requestId");
-        // agentId 优先从 ToolContext 获取（LLM调用时系统注入正确值）
-        // 仅当 ToolContext 为空时才使用参数值（前端测试场景）
-        Long finalAgentId = null;
-        Object agentIdObj = context.getContext().get("agentId");
-        if (agentIdObj != null) {
-            finalAgentId = ((Number) agentIdObj).longValue();
-        }
-        if (finalAgentId == null && agentId != null) {
-            finalAgentId = agentId;
-        }
+        Long finalAgentId = resolveAgentId(context);
         log.info("[Tool:query_knowledge] 开始检索: agentId={}, question={}", finalAgentId, question);
+
+        if (finalAgentId == null) {
+            return "无法确定当前智能体，知识库检索已跳过。请从对话页选择 Agent 后重试。";
+        }
 
         // 1. 获取Agent绑定的知识库ID列表
         List<Long> knowledgeIds = agentService.getKnowledgeIds(finalAgentId);
@@ -158,6 +150,26 @@ public class QueryKnowledgeTool {
             log.error("[Tool:query_knowledge] 检索异常: agentId={}, error={}", finalAgentId, e.getMessage(), e);
             return "知识库检索过程中发生错误：" + e.getMessage();
         }
+    }
+
+    private static Long resolveAgentId(ToolContext context) {
+        if (context == null || context.getContext() == null) {
+            return null;
+        }
+        Object agentIdObj = context.getContext().get("agentId");
+        if (agentIdObj instanceof Number num) {
+            long id = num.longValue();
+            return id > 0 ? id : null;
+        }
+        if (agentIdObj instanceof String str && !str.isBlank()) {
+            try {
+                long id = Long.parseLong(str.trim());
+                return id > 0 ? id : null;
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private float[] embedText(String text) {

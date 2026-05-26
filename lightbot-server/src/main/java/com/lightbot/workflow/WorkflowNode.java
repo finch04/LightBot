@@ -38,4 +38,9 @@ public class WorkflowNode {
      * 节点配置数据（不同类型节点有不同配置）
      */
     private Map<String, Object> data;
+
+    /**
+     * 父容器节点 ID（循环/批处理子节点）
+     */
+    private String parentNode;
 }

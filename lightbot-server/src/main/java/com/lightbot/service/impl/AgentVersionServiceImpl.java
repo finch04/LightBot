@@ -372,6 +372,80 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     }
 
     @Override
+    public Map<String, Object> resolveRuntimeForChat(Agent agent, Integer configVersion) {
+        requireAgent(agent.getId());
+        migrateLegacyIfNeeded(agent);
+
+        if (configVersion == null) {
+            return WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
+        }
+        if (configVersion == 0) {
+            return resolveFromVersionRow(agent, getDraftRow(agent.getId()));
+        }
+        if (configVersion > 0) {
+            return resolveFromVersionRow(agent, requirePublishedRow(agent.getId(), configVersion));
+        }
+        throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "无效的配置版本: " + configVersion);
+    }
+
+    @Override
+    public WorkflowDefinition loadWorkflowDefinitionForChat(Long agentId, Integer configVersion) {
+        Agent agent = requireAgent(agentId);
+        migrateLegacyIfNeeded(agent);
+        if (configVersion == null) {
+            return loadWorkflowDefinition(agentId, false);
+        }
+        if (configVersion == 0) {
+            return loadWorkflowDefinition(agentId, true);
+        }
+        if (configVersion > 0) {
+            AgentVersion row = requirePublishedRow(agentId, configVersion);
+            Map<String, Object> graph = extractWorkflowGraph(row);
+            return WorkflowConfigParser.toDefinition(graph, objectMapper);
+        }
+        throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "无效的配置版本: " + configVersion);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> resolveFromVersionRow(Agent agent, AgentVersion row) {
+        if (row == null || row.getConfig() == null || row.getConfig().isBlank()) {
+            return WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
+        }
+        Map<String, Object> snap = parseJsonMap(row.getConfig());
+        if (KIND_CHAT.equals(snap.get("kind"))) {
+            Map<String, Object> payload = snap.get("payload") instanceof Map
+                    ? (Map<String, Object>) snap.get("payload") : Map.of();
+            applyChatPayloadToAgent(agent, payload);
+            Object cfg = payload.get("config");
+            if (cfg instanceof Map<?, ?> cfgMap) {
+                return new HashMap<>((Map<String, Object>) cfgMap);
+            }
+            return WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
+        }
+        return WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyChatPayloadToAgent(Agent agent, Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return;
+        }
+        if (payload.get("systemPrompt") instanceof String sp && !sp.isBlank()) {
+            agent.setSystemPrompt(sp);
+        }
+        if (payload.get("welcomeMessage") instanceof String wm) {
+            agent.setWelcomeMessage(wm);
+        }
+        if (payload.get("recommendedQuestions") != null) {
+            try {
+                agent.setRecommendedQuestions(objectMapper.writeValueAsString(payload.get("recommendedQuestions")));
+            } catch (Exception ignored) {
+                // 保持原值
+            }
+        }
+    }
+
+    @Override
     public void initDraftOnCreate(Agent agent) {
         if (agent.getId() == null) {
             return;

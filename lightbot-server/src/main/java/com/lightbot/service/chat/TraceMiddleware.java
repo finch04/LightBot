@@ -11,6 +11,7 @@ import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.*;
+import com.lightbot.util.SensitiveWordFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -57,8 +58,12 @@ public class TraceMiddleware implements ChatMiddleware {
                     long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
 
                     // 1. 持久化AI回复
+                    String replyToSave = SensitiveWordFilter.filter(
+                            ctx.getFullReply().toString(), ctx.getConfigMap()).text();
                     messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
-                            ctx.getFullReply().toString(), ctx.getRagMetadataHolder()[0], (int) totalTokens);
+                            replyToSave, ctx.getRagMetadataHolder()[0], (int) totalTokens);
+                    ctx.getFullReply().setLength(0);
+                    ctx.getFullReply().append(replyToSave);
 
                     // 2. 异步生成标题
                     taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent()));

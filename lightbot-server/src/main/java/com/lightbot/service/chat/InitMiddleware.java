@@ -54,8 +54,8 @@ public class InitMiddleware implements ChatMiddleware {
         ctx.getSpans().add(buildSpan("s2", "s1", "agent_load", t1, t2 - t1, "OK",
                 Map.of("agentId", agent != null ? agent.getId() : null, "agentName", agent != null ? agent.getName() : null)));
 
-        // 3. 解析 config（对话已发布时优先用 agent_version 快照）
-        Map<String, Object> configMap = resolveRuntimeConfigMap(agent);
+        // 3. 解析 config（支持指定版本 / 草稿 / 默认线上）
+        Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest());
         ctx.setConfigMap(configMap);
         ctx.setProviderId(getProviderId(configMap));
 
@@ -73,19 +73,27 @@ public class InitMiddleware implements ChatMiddleware {
         Agent agent = loadAgent(ctx.getRequest().getAgentId());
         ctx.setAgent(agent);
 
-        Map<String, Object> configMap = resolveRuntimeConfigMap(agent);
+        Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest());
         ctx.setConfigMap(configMap);
         ctx.setProviderId(getProviderId(configMap));
     }
 
     /**
-     * 对话运行时配置：已发布版本用 agent_version 快照，否则用 agent 表当前值。
+     * 对话运行时配置：支持 configVersion；未指定时已发布版本用 agent_version 快照，否则用 agent 表当前值。
      */
     public Map<String, Object> resolveRuntimeConfigMap(Agent agent) {
+        return resolveRuntimeConfigMap(agent, null);
+    }
+
+    public Map<String, Object> resolveRuntimeConfigMap(Agent agent, com.lightbot.dto.ChatRequest request) {
         if (agent == null) {
             return Map.of();
         }
+        if (request != null && request.getConfigVersion() != null) {
+            return agentVersionService.resolveRuntimeForChat(agent, request.getConfigVersion());
+        }
         Map<String, Object> configMap = parseConfig(agent.getConfig());
+        Map<String, Object> draftConfig = parseConfig(agent.getConfig());
         if (agent.getVersion() != null && agent.getVersion() > 0
                 && (agent.getStatus() == AgentStatus.PUBLISHED || agent.getStatus() == AgentStatus.PUBLISHED_EDITING)) {
             Map<String, Object> published = agentVersionService.loadPublishedRuntimeConfig(agent.getId());
@@ -99,7 +107,32 @@ public class InitMiddleware implements ChatMiddleware {
                 }
             }
         }
+        // 模型配置（敏感词、上下文条数等）以 agent 表当前暂存值为准，避免已发布 Agent 对话仍用旧快照
+        overlayModelBehaviorConfig(configMap, draftConfig);
         return configMap;
+    }
+
+    /**
+     * 将编排页「模型配置」类字段从暂存 config 覆盖到运行时 config
+     */
+    private void overlayModelBehaviorConfig(Map<String, Object> target, Map<String, Object> draft) {
+        if (target == null || draft == null || draft.isEmpty()) {
+            return;
+        }
+        String[] keys = {
+                ConfigKeys.Agent.SENSITIVE_FILTER_ENABLED,
+                ConfigKeys.Agent.SENSITIVE_FILTER_STRATEGY,
+                ConfigKeys.Agent.SENSITIVE_FILTER_REPLACE_TEXT,
+                ConfigKeys.Agent.SENSITIVE_WORDS,
+                "maxContextMessages",
+                ConfigKeys.Agent.ENABLE_SUMMARY,
+                ConfigKeys.Agent.SUMMARY_THRESHOLD_KB
+        };
+        for (String key : keys) {
+            if (draft.containsKey(key)) {
+                target.put(key, draft.get(key));
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -3,6 +3,8 @@ package com.lightbot.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
+import com.lightbot.util.SensitiveWordFilter;
+import com.lightbot.util.ToolArgsSanitizer;
 import com.lightbot.entity.Agent;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.systemtool.QueryKnowledgeTool;
@@ -84,6 +86,7 @@ public class ChatServiceImpl implements ChatService {
         // 2. 调用模型获取回复
         ChatResponse response = ctx.getChatModel().call(new Prompt(ctx.getMessages(), ctx.getToolOptions()));
         String reply = response.getResult().getOutput().getText();
+        reply = SensitiveWordFilter.filter(reply, ctx.getConfigMap()).text();
 
         log.info("[Chat] AI回复: sessionId={}, length={}", ctx.getSessionId(), reply != null ? reply.length() : 0);
 
@@ -114,6 +117,7 @@ public class ChatServiceImpl implements ChatService {
      */
     private Flux<String> streamCore(ChatContext ctx) {
         ctx.setStartTime(System.currentTimeMillis());
+        ctx.setSensitiveStreamState(new SensitiveWordFilter.StreamState(ctx.getConfigMap()));
         return processToolCallsRecursively(ctx, 0, System.currentTimeMillis());
     }
 
@@ -177,7 +181,12 @@ public class ChatServiceImpl implements ChatService {
 
                         String stripped = stripThinkingTags(text);
                         if (stripped.isEmpty()) return Flux.empty();
-                        text = stripped;
+                        String delta = ctx.getSensitiveStreamState() != null
+                                ? ctx.getSensitiveStreamState().processChunk(stripped)
+                                : SensitiveWordFilter.filter(stripped, ctx.getConfigMap()).text();
+                        if (delta.isEmpty()) {
+                            return Flux.empty();
+                        }
 
                         // 提取 Token 用量
                         if (response != null && response.getMetadata() != null) {
@@ -188,7 +197,7 @@ public class ChatServiceImpl implements ChatService {
                             }
                         }
 
-                        fullReply.append(text);
+                        fullReply.append(delta);
                         if (!llmSpanAdded[0]) {
                             spans.add(traceMiddleware.buildSpan(llmSpanId, "s1", "llm_call", llmCallStart,
                                     System.currentTimeMillis() - llmCallStart, "OK",
@@ -197,7 +206,7 @@ public class ChatServiceImpl implements ChatService {
                                             "replyPreview", fullReply.length() > 500 ? fullReply.substring(0, 500) + "..." : fullReply.toString())));
                             llmSpanAdded[0] = true;
                         }
-                        return Flux.just(text);
+                        return Flux.just(delta);
                     }
 
                     // 3. 有工具调用 → 执行工具
@@ -240,13 +249,14 @@ public class ChatServiceImpl implements ChatService {
                             statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(tc.name(), tcArgs, toolContentOffset)));
                             toolCallCountHolder[0]++;
                             final String tcName = tc.name();
+                            final String safeTcArgs = ToolArgsSanitizer.forChatCall(tcArgs);
                             futures.add(CompletableFuture.supplyAsync(() -> {
                                 long tStart = System.currentTimeMillis();
                                 String result;
                                 ToolCallback cb = toolCallbackMap.get(tcName);
                                 if (cb != null) {
                                     try {
-                                        result = cb.call(tcArgs, new ToolContext(Map.of("agentId", agent.getId(), "requestId", requestId)));
+                                        result = cb.call(safeTcArgs, new ToolContext(Map.of("agentId", agent.getId(), "requestId", requestId)));
                                     } catch (Exception e) {
                                         log.error("[Chat] 工具执行异常: name={}, error={}", tcName, e.getMessage(), e);
                                         result = "工具执行失败: " + e.getMessage();
@@ -285,6 +295,7 @@ public class ChatServiceImpl implements ChatService {
                         toolCallCountHolder[0]++;
 
                         String safeArgs = toolArgs != null ? toolArgs : "";
+                        String callArgs = ToolArgsSanitizer.forChatCall(safeArgs);
                         toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args",
                                 safeArgs, "contentOffset", toolContentOffset));
                         statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(toolName, safeArgs, toolContentOffset)));
@@ -294,7 +305,7 @@ public class ChatServiceImpl implements ChatService {
                         ToolCallback callback = toolCallbackMap.get(toolName);
                         if (callback != null) {
                             try {
-                                toolResult = callback.call(toolArgs, new ToolContext(Map.of(
+                                toolResult = callback.call(callArgs, new ToolContext(Map.of(
                                         "agentId", agent.getId(),
                                         "requestId", requestId)));
                             } catch (Exception e) {

@@ -3,9 +3,11 @@ package com.lightbot.workflow;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.Message;
 import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
+import com.lightbot.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,8 +34,10 @@ import java.util.regex.Pattern;
 public class WorkflowExecutorService {
 
     private final NodeProcessorRegistry registry;
+    private final WorkflowNodeRunner nodeRunner;
     private final AgentService agentService;
     private final AgentVersionService agentVersionService;
+    private final MessageService messageService;
     private final ObjectMapper objectMapper;
     private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^}]+)}}");
 
@@ -105,6 +109,9 @@ public class WorkflowExecutorService {
 
         // 2. 注入全局配置中的会话变量默认值
         applyGlobalConfig(context, workflow.getGlobalConfig());
+
+        // 2.0 注入会话历史（与对话型一致，供工作流节点使用 history_list / input）
+        injectSessionHistory(context, sessionId, userInput);
 
         // 2.1 调试运行预置变量（query / history_list 等）
         if (initialVariables != null && !initialVariables.isEmpty()) {
@@ -223,6 +230,13 @@ public class WorkflowExecutorService {
     }
 
     /**
+     * 执行单个节点（供子图迭代复用，不推送 workflow 事件）
+     */
+    public NodeExecutionResult executeNodeInContext(NodeExecutionContext context, String nodeId) {
+        return nodeRunner.executeNodeInContext(context, nodeId);
+    }
+
+    /**
      * 构建节点入参预览，用于对话页展示链路传参。
      */
     @SuppressWarnings("unchecked")
@@ -330,6 +344,33 @@ public class WorkflowExecutorService {
      * 将全局配置中的会话变量写入执行上下文
      */
     @SuppressWarnings("unchecked")
+    /**
+     * 将会话历史注入工作流变量，与对话型多轮一致（input / query / history_list）
+     */
+    private void injectSessionHistory(NodeExecutionContext context, Long sessionId, String userInput) {
+        if (sessionId == null) {
+            if (userInput != null) {
+                context.getVariables().put("input", userInput);
+                context.getVariables().put("query", userInput);
+            }
+            return;
+        }
+        List<Message> rows = messageService.listBySessionId(sessionId);
+        List<Map<String, Object>> historyList = new ArrayList<>();
+        for (Message row : rows) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            String role = row.getRole() != null ? row.getRole().getCode() : "user";
+            item.put("role", role);
+            item.put("content", row.getContent() != null ? row.getContent() : "");
+            historyList.add(item);
+        }
+        context.getVariables().put("history_list", historyList);
+        if (userInput != null) {
+            context.getVariables().put("input", userInput);
+            context.getVariables().put("query", userInput);
+        }
+    }
+
     private void applyGlobalConfig(NodeExecutionContext context, Map<String, Object> globalConfig) {
         if (globalConfig == null) {
             return;

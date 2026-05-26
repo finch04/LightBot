@@ -51,6 +51,18 @@ public interface AgentVersionService {
     WorkflowDefinition loadWorkflowDefinition(Long agentId, boolean useDraft);
 
     /**
+     * 对话运行时按版本加载配置（会同步 systemPrompt 等字段到 agent）
+     *
+     * @param configVersion null=默认；0=草稿；&gt;0=指定发布版本
+     */
+    Map<String, Object> resolveRuntimeForChat(Agent agent, Integer configVersion);
+
+    /**
+     * 对话运行时按版本加载工作流定义
+     */
+    WorkflowDefinition loadWorkflowDefinitionForChat(Long agentId, Integer configVersion);
+
+    /**
      * Agent 创建后初始化草稿版本行
      */
     void initDraftOnCreate(Agent agent);

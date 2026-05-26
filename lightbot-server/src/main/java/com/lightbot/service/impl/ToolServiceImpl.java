@@ -284,8 +284,13 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             if (args != null && !args.isBlank()) {
                 try {
                     var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(args);
-                    if (node.has("agentId")) {
-                        agentId = node.get("agentId").asLong(0);
+                    if (node.has("agentId") && !node.get("agentId").isNull()) {
+                        var idNode = node.get("agentId");
+                        if (idNode.isNumber()) {
+                            agentId = idNode.asLong(0);
+                        } else if (idNode.isTextual() && !idNode.asText().isBlank()) {
+                            agentId = Long.parseLong(idNode.asText().trim());
+                        }
                     }
                 } catch (Exception ignored) {}
             }
@@ -302,7 +307,8 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                     new org.springframework.ai.chat.model.ToolContext(Map.of(
                             "agentId", agentId,
                             "requestId", "test-" + System.nanoTime()));
-            String result = callback.call(args != null ? args : "{}", testContext);
+            String callArgs = com.lightbot.util.ToolArgsSanitizer.forTestCall(args != null ? args : "{}");
+            String result = callback.call(callArgs, testContext);
             log.info("[ToolService] 工具测试完成: name={}, resultLength={}", toolName, result.length());
             return result;
         } catch (Exception e) {

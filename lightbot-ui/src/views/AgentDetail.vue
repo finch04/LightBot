@@ -225,6 +225,14 @@
             <a-input v-else v-model:value="agentConfig[field.key]" placeholder="请输入" />
             <div v-if="field.hint" class="param-hint">{{ field.hint }}</div>
           </a-form-item>
+        </a-form>
+
+        <div class="model-config-card">
+          <div class="model-config-card-header">
+            <h4>模型配置</h4>
+            <span class="model-config-card-tip">对话上下文、摘要与输出安全策略</span>
+          </div>
+          <a-form :model="agentConfig" :label-col="{ span: 6 }">
           <a-form-item label="上下文条数">
             <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
               <a-input-number
@@ -282,7 +290,45 @@
             </div>
             <div class="param-hint">上下文超过该大小时自动摘要，默认 100KB</div>
           </a-form-item>
-        </a-form>
+          <a-form-item>
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>敏感词过滤</span>
+              </div>
+            </template>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <a-switch v-model:checked="agentConfig.sensitiveFilterEnabled" />
+              <span class="tool-option-value">{{ agentConfig.sensitiveFilterEnabled ? '已启用' : '未启用' }}</span>
+              <a-tooltip
+                  title="对模型输出内容进行敏感词检测。替换策略会将命中词替换为指定文本；拦截策略命中后直接输出拦截提示"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+            </div>
+          </a-form-item>
+          <template v-if="agentConfig.sensitiveFilterEnabled">
+            <a-form-item label="处理策略">
+              <a-select v-model:value="agentConfig.sensitiveFilterStrategy" style="width: 100%">
+                <a-select-option value="replace">替换为指定文本</a-select-option>
+                <a-select-option value="block">拦截输出</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item v-if="agentConfig.sensitiveFilterStrategy !== 'block'" label="替换文本">
+              <a-input v-model:value="agentConfig.sensitiveFilterReplaceText" placeholder="默认 ***" />
+            </a-form-item>
+            <a-form-item label="敏感词列表">
+              <div v-for="(word, idx) in sensitiveWords" :key="'sw-' + idx" class="param-row" style="margin-bottom: 8px;">
+                <a-input v-model:value="sensitiveWords[idx]" placeholder="输入敏感词" />
+                <a-button type="text" danger @click="removeSensitiveWord(idx)"><DeleteOutlined /></a-button>
+              </div>
+              <a-button type="dashed" block size="small" @click="addSensitiveWord"><PlusOutlined /> 添加敏感词</a-button>
+            </a-form-item>
+          </template>
+          </a-form>
+        </div>
       </div>
 
       <!-- WORKFLOW 类型：工作流配置（右侧面板） -->
@@ -773,7 +819,13 @@ const agent = reactive({
 // 模型配置（存储在 config JSONB 中）
 const agentConfig = reactive({
   providerId: null,
+  sensitiveFilterEnabled: false,
+  sensitiveFilterStrategy: 'replace',
+  sensitiveFilterReplaceText: '***',
+  sensitiveWords: [],
 })
+
+const sensitiveWords = ref([''])
 
 const providerList = ref([])
 const configFields = ref([])
@@ -864,6 +916,35 @@ function syncPromptVariablesFromConfig(parsed) {
     }))
   } else {
     promptVariables.value = []
+  }
+}
+
+function syncSensitiveWordsFromConfig(parsed) {
+  const list = parsed?.sensitiveWords
+  if (Array.isArray(list) && list.length) {
+    sensitiveWords.value = list.map(w => String(w || ''))
+  } else {
+    sensitiveWords.value = ['']
+  }
+  if (agentConfig.sensitiveFilterEnabled == null) {
+    agentConfig.sensitiveFilterEnabled = false
+  }
+  if (!agentConfig.sensitiveFilterStrategy) {
+    agentConfig.sensitiveFilterStrategy = 'replace'
+  }
+  if (!agentConfig.sensitiveFilterReplaceText) {
+    agentConfig.sensitiveFilterReplaceText = '***'
+  }
+}
+
+function addSensitiveWord() {
+  sensitiveWords.value.push('')
+}
+
+function removeSensitiveWord(idx) {
+  sensitiveWords.value.splice(idx, 1)
+  if (sensitiveWords.value.length === 0) {
+    sensitiveWords.value.push('')
   }
 }
 
@@ -1052,6 +1133,7 @@ async function loadAgent() {
         const parsed = typeof config === 'string' ? JSON.parse(config) : config
         Object.assign(agentConfig, parsed)
         syncPromptVariablesFromConfig(parsed)
+        syncSensitiveWordsFromConfig(parsed)
       } catch (e) {
         // ignore
       }
@@ -1363,7 +1445,15 @@ async function handleSave() {
   saving.value = true
   try {
     // 1. 构建 config JSONB（包含 provider + 所有配置项）
-    const configObj = { ...agentConfig, promptVariables: serializedVars }
+    const serializedVars = serializePromptVariables()
+    const serializedSensitiveWords = sensitiveWords.value
+      .map(w => (w || '').trim())
+      .filter(Boolean)
+    const configObj = {
+      ...agentConfig,
+      promptVariables: serializedVars,
+      sensitiveWords: serializedSensitiveWords,
+    }
     const configStr = JSON.stringify(configObj)
 
     // 2. 更新 Agent
@@ -2066,6 +2156,32 @@ onMounted(async () => {
   font-size: 12px;
   color: #a1a1aa;
   margin-top: 4px;
+}
+
+.model-config-card {
+  margin-top: 20px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+}
+.model-config-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebebeb;
+}
+.model-config-card-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
+.model-config-card-tip {
+  font-size: 12px;
+  color: #a1a1aa;
 }
 
 .knowledge-bind {
