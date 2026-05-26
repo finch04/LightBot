@@ -3,9 +3,12 @@ package com.lightbot.task;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Document;
+import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.DocumentStatus;
 import com.lightbot.service.DocumentService;
+import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.TaskService;
+import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
 import com.lightbot.util.TikaUtil;
@@ -30,10 +33,12 @@ import java.nio.file.Path;
 public class DocumentUploadExecutor implements TaskExecutor {
 
     private final DocumentService documentService;
+    private final KnowledgeService knowledgeService;
     private final TaskService taskService;
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
     private final OcrUtil ocrUtil;
+    private final DocumentSecurityScanUtil documentSecurityScanUtil;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -80,7 +85,14 @@ public class DocumentUploadExecutor implements TaskExecutor {
                 }
             }
 
-            // 4. 上传 Markdown 到 MinIO
+            // 4. 内容安全扫描（知识库开启时）
+            if (markdownContent != null && !markdownContent.isBlank()) {
+                taskService.updateProgress(task.getId(), 70, "正在进行内容安全扫描...");
+                Knowledge knowledge = knowledgeService.getById(doc.getKnowledgeId());
+                documentSecurityScanUtil.scanIfEnabled(knowledge, markdownContent);
+            }
+
+            // 5. 上传 Markdown 到 MinIO
             taskService.updateProgress(task.getId(), 80, "正在保存解析结果...");
             if (markdownContent != null) {
                 String markdownPath = generateMarkdownPath(doc.getKnowledgeId(), doc.getFilePath());
@@ -88,13 +100,13 @@ public class DocumentUploadExecutor implements TaskExecutor {
                 doc.setMarkdownPath(markdownPath);
             }
 
-            // 5. 更新文档状态为 UPLOADED，清空错误消息
+            // 6. 更新文档状态为 UPLOADED，清空错误消息
             doc.setStatus(DocumentStatus.UPLOADED);
             doc.setErrorMessage(null);
             documentService.updateById(doc);
             taskService.updateProgress(task.getId(), 95, "处理完成");
 
-            // 6. 清理临时文件
+            // 7. 清理临时文件
             try {
                 Files.deleteIfExists(temp);
             } catch (Exception e) {

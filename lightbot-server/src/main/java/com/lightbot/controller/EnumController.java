@@ -1,6 +1,7 @@
 package com.lightbot.controller;
 
 import com.lightbot.common.Result;
+import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.enums.ToolType;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,12 @@ public class EnumController {
     @GetMapping("/model-provider-types")
     public Result<List<EnumVO>> getModelProviderTypes() {
         return Result.ok(toEnumVOList(ModelProviderType.values()));
+    }
+
+    @Operation(summary = "获取 Agent 状态枚举")
+    @GetMapping("/agent-statuses")
+    public Result<List<EnumVO>> getAgentStatuses() {
+        return Result.ok(toEnumVOList(AgentStatus.values()));
     }
 
     /**

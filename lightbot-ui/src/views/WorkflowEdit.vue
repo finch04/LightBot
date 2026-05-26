@@ -13,6 +13,7 @@
       :last-auto-save-time="lastAutoSaveTime"
       :get-node-title-by-id="getNodeTitleById"
       :format-auto-save-time="formatAutoSaveTime"
+      :get-status-label="getWorkflowStatusLabel"
       @back="goBack"
       @format-layout="formatWorkflowLayout"
       @validate="validateWorkflow"
@@ -214,6 +215,7 @@ import {
 import NodeSingleTestDrawer from '../views/workflow/components/NodeSingleTestDrawer.vue'
 import NodeExampleModal from '../views/workflow/components/NodeExampleModal.vue'
 import WorkflowEditToolbar from '../views/workflow/components/edit/WorkflowEditToolbar.vue'
+import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 import WorkflowEditLeftPanel from '../views/workflow/components/edit/WorkflowEditLeftPanel.vue'
 import WorkflowEditCanvas from '../views/workflow/components/edit/WorkflowEditCanvas.vue'
 import WorkflowEdgeDetailPanel from '../views/workflow/components/edit/WorkflowEdgeDetailPanel.vue'
@@ -347,6 +349,7 @@ const publishModalVisible = ref(false)
 const publishDescription = ref('')
 const lastAutoSaveTime = ref(null)
 const autoSaving = ref(false)
+const agentStatusLabels = ref(null)
 const workflowLoaded = ref(false)
 let autoSaveTimer = null
 const versionList = ref([])
@@ -558,16 +561,22 @@ function formatAutoSaveTime(d) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
+function getWorkflowStatusLabel(code) {
+  if (code === 'draft') return '未发布'
+  return formatAgentStatus(code, publishedVersion.value, agentStatusLabels.value)
+}
+
 function scheduleAutoSave() {
   if (!workflowLoaded.value || isVersionPreview.value) return
   if (!isDirty.value) return
   clearTimeout(autoSaveTimer)
-  autoSaveTimer = setTimeout(() => doAutoSave(true), 600)
+  autoSaveTimer = setTimeout(() => doAutoSave(true), 2500)
 }
 
 async function doAutoSave(silent = true) {
   if (autoSaving.value || !isDirty.value || isVersionPreview.value) return
-  autoSaving.value = true
+  // 静默自动保存不展示「保存中...」，避免顶栏频繁闪烁
+  if (!silent) autoSaving.value = true
   try {
     await saveWorkflowDraft(agentId, buildWorkflowPayload())
     markWorkflowSaved()
@@ -580,7 +589,7 @@ async function doAutoSave(silent = true) {
       notification.error({ message: '自动保存失败', description: e.message })
     }
   } finally {
-    autoSaving.value = false
+    if (!silent) autoSaving.value = false
   }
 }
 
@@ -701,6 +710,7 @@ function undoAction() {
 // 初始化加载
 onMounted(async () => {
   try {
+    agentStatusLabels.value = await loadAgentStatusLabels()
     // 加载 Agent 数据
     const res = await getAgentDetail(agentId)
     agent.value = res.data.agent
@@ -1163,10 +1173,11 @@ watch(
   }
 )
 
-// 实时校验工作流配置
+// 实时校验工作流配置（拖拽中跳过，避免顶栏状态闪烁）
 watch(
   () => getWorkflowSnapshot(),
   () => {
+    if (isNodeDragging.value) return
     validateWorkflow(false)
     scheduleAutoSave()
   }
@@ -1653,6 +1664,8 @@ function onNodeDragStop({ node, nodes: draggedNodes, event }) {
   isNodeDragging.value = false
   dragOverTrash.value = false
   draggingNode.value = null
+  validateWorkflow(false)
+  scheduleAutoSave()
 }
 
 function removeNodeById(nodeId, { skipHistory = false } = {}) {

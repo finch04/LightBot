@@ -17,8 +17,10 @@ import lombok.Getter;
 public enum AgentType {
 
     CHAT("chat", "对话型"),
-    WORKFLOW("workflow", "工作流型"),
-    ASSISTANT("assistant", "助手型");
+    WORKFLOW("workflow", "工作流型");
+
+    /** 已废弃类型，兼容旧数据 */
+    private static final String LEGACY_ASSISTANT = "assistant";
 
     @EnumValue
     private final String code;
@@ -32,6 +34,9 @@ public enum AgentType {
 
     @JsonCreator
     public static AgentType fromValue(String value) {
+        if (value != null && LEGACY_ASSISTANT.equalsIgnoreCase(value)) {
+            return CHAT;
+        }
         for (AgentType e : values()) {
             if (e.code.equalsIgnoreCase(value) || e.desc.equalsIgnoreCase(value) || e.name().equalsIgnoreCase(value)) {
                 return e;

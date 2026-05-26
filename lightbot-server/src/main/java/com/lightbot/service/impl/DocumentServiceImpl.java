@@ -23,8 +23,10 @@ import com.lightbot.model.chunking.ChunkStrategyFactory;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.TaskType;
 import com.lightbot.service.*;
+import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
+import com.lightbot.util.TextNormalizeUtil;
 import com.lightbot.util.TikaUtil;
 import com.lightbot.util.WebFetchUtil;
 import lombok.RequiredArgsConstructor;
@@ -89,6 +91,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final TaskService taskService;
     /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
+    private final DocumentSecurityScanUtil documentSecurityScanUtil;
 
     @Override
     public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled) {
@@ -269,7 +272,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             progressCallback.accept(30, "正在保存分块...");
             long totalTokens = 0;
             for (int i = 0; i < chunks.size(); i++) {
-                String chunkContent = chunks.get(i);
+                String chunkContent = TextNormalizeUtil.normalizeChunkContent(chunks.get(i));
                 chunkService.saveChunk(doc.getId(), doc.getKnowledgeId(), i, chunkContent, ChunkStatus.CHUNKED);
                 totalTokens += estimateTokens(chunkContent);
             }
@@ -513,6 +516,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (content == null || content.isBlank()) {
             throw new BizException(ErrorCode.DOCUMENT_PARSE_FAILED, "网页内容为空");
         }
+
+        Knowledge knowledge = knowledgeServiceProvider.getObject().getById(knowledgeId);
+        documentSecurityScanUtil.scanIfEnabled(knowledge, content);
 
         String fileName = buildUrlFileName(title, url);
         String contentHash = calculateContentHash(content);

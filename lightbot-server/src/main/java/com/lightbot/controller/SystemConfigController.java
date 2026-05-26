@@ -22,16 +22,55 @@ public class SystemConfigController {
 
     private final SystemConfigService systemConfigService;
 
-    @Operation(summary = "获取默认AI配置")
+    @Operation(summary = "获取默认AI配置（兼容旧接口，等同于默认对话模型）")
     @GetMapping("/default-ai")
     public Result<DefaultAiConfigDTO> getDefaultAiConfig() {
         return Result.ok(systemConfigService.getDefaultAiConfig());
     }
 
-    @Operation(summary = "更新默认AI配置")
+    @Operation(summary = "更新默认AI配置（兼容旧接口）")
     @PutMapping("/default-ai")
     public Result<Void> updateDefaultAiConfig(@RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultAiConfig(config);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取默认对话模型配置")
+    @GetMapping("/default-chat-model")
+    public Result<DefaultAiConfigDTO> getDefaultChatModel() {
+        return Result.ok(systemConfigService.getDefaultChatModelConfig());
+    }
+
+    @Operation(summary = "更新默认对话模型配置")
+    @PutMapping("/default-chat-model")
+    public Result<Void> updateDefaultChatModel(@RequestBody DefaultAiConfigDTO config) {
+        systemConfigService.updateDefaultChatModelConfig(config);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取默认向量模型配置")
+    @GetMapping("/default-embedding-model")
+    public Result<DefaultAiConfigDTO> getDefaultEmbeddingModel() {
+        return Result.ok(systemConfigService.getDefaultEmbeddingModelConfig());
+    }
+
+    @Operation(summary = "更新默认向量模型配置")
+    @PutMapping("/default-embedding-model")
+    public Result<Void> updateDefaultEmbeddingModel(@RequestBody DefaultAiConfigDTO config) {
+        systemConfigService.updateDefaultEmbeddingModelConfig(config);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取默认TTS模型配置")
+    @GetMapping("/default-tts-model")
+    public Result<DefaultAiConfigDTO> getDefaultTtsModel() {
+        return Result.ok(systemConfigService.getDefaultTtsModelConfig());
+    }
+
+    @Operation(summary = "更新默认TTS模型配置")
+    @PutMapping("/default-tts-model")
+    public Result<Void> updateDefaultTtsModel(@RequestBody DefaultAiConfigDTO config) {
+        systemConfigService.updateDefaultTtsModelConfig(config);
         return Result.ok();
     }
 }

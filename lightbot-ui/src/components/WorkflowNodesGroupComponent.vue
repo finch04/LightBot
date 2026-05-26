@@ -74,15 +74,6 @@ const props = defineProps({
 const isExpanded = ref(props.defaultExpanded)
 
 watch(
-  () => props.isDone,
-  (done, prev) => {
-    if (prev === false && done === true) {
-      isExpanded.value = false
-    }
-  }
-)
-
-watch(
   () => props.defaultExpanded,
   (val) => { isExpanded.value = val },
   { immediate: true }

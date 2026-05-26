@@ -67,6 +67,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                     .build();
             return OpenAiChatModel.builder()
                     .openAiApi(openAiApi)
+                    .defaultOptions(OpenAiChatOptions.builder().streamUsage(true).build())
                     .build();
         } else {
             // 使用 DashScope SDK（原生模式）
@@ -105,6 +106,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
             if (config.containsKey("maxTokens")) {
                 builder.maxTokens(toInt(config.get("maxTokens")));
             }
+            OpenAiStreamUsageSupport.enableStreamUsage(builder);
             return builder.build();
         } else {
             // 使用 DashScope ChatOptions

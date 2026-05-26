@@ -220,4 +220,11 @@ public class AgentController {
         agentVersionService.restorePublishedToDraft(id, version);
         return Result.ok();
     }
+
+    @Operation(summary = "删除已发布版本")
+    @DeleteMapping("/{id}/versions/{version}")
+    public Result<Void> deleteVersion(@PathVariable Long id, @PathVariable Integer version) {
+        agentVersionService.deletePublishedVersion(id, version);
+        return Result.ok();
+    }
 }

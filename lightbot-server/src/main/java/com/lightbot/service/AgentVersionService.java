@@ -34,6 +34,12 @@ public interface AgentVersionService {
     void restorePublishedToDraft(Long agentId, Integer version);
 
     /**
+     * 删除已发布版本（逻辑删除）
+     * 注意：当前线上版本不允许删除
+     */
+    void deletePublishedVersion(Long agentId, Integer version);
+
+    /**
      * 对话型 Agent 发布（快照当前配置）
      */
     Map<String, Object> publishChatAgent(Long agentId, String description);

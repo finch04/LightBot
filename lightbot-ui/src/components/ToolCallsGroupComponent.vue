@@ -56,27 +56,26 @@ import { CheckCircleOutlined, LoadingOutlined, RightOutlined, SearchOutlined } f
 const props = defineProps({
   toolEvents: { type: Array, default: () => [] },
   isDone: { type: Boolean, default: true },
-  defaultExpanded: { type: Boolean, default: false }
+  defaultExpanded: { type: Boolean, default: true }
 })
 
 const isExpanded = ref(props.defaultExpanded)
 const expandedResults = ref(new Set())
 
-// 流式进行中自动展开，完成后收起
-watch(
-  () => props.isDone,
-  (done, prev) => {
-    if (prev === false && done === true) {
-      isExpanded.value = false
+function syncExpandedResults() {
+  const s = new Set()
+  props.toolEvents.forEach((e, i) => {
+    if (e.type === 'tool_result' && e.result) {
+      s.add(i)
     }
-  }
-)
+  })
+  expandedResults.value = s
+}
 
-// 初始化控制
 watch(
-  () => props.defaultExpanded,
-  (val) => { isExpanded.value = val },
-  { immediate: true }
+  () => props.toolEvents,
+  () => syncExpandedResults(),
+  { immediate: true, deep: true }
 )
 
 const uniqueToolNames = computed(() => {

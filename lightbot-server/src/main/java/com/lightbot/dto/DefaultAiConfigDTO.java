@@ -1,5 +1,6 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -8,7 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 默认AI配置DTO
+ * 默认AI配置DTO（单个模型配置）
  *
  * @author finch
  * @since 2026-05-24

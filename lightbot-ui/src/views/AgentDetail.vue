@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page">
     <div class="page-header">
       <div>
@@ -15,6 +15,14 @@
         </button>
         <button class="btn-outline" @click="startChat">
           <MessageOutlined /> 对话
+        </button>
+        <button
+          v-if="agent.agentType === 'workflow'"
+          class="btn-outline"
+          @click="handleSaveWorkflowBasic"
+          :disabled="saving || isVersionPreview"
+        >
+          <SaveOutlined /> 保存
         </button>
         <button
           v-if="agent.agentType !== 'workflow'"
@@ -51,12 +59,13 @@
 
     <div class="content-grid" :class="{ 'is-version-preview': isVersionPreview }">
       <!-- 基本信息 -->
-      <div class="panel panel-stretch">
+      <div class="panel panel-stretch panel--basic">
         <div class="panel-header">
           <h3>基本信息</h3>
         </div>
         <div class="panel-body">
         <a-form :model="agent" :label-col="{ span: 6 }">
+
           <a-form-item label="智能体ID">
             <div class="id-field">
               <span class="id-value">{{ agent.id || '新建后生成' }}</span>
@@ -85,7 +94,6 @@
           <a-form-item label="类型">
             <a-select v-model:value="agent.agentType" style="width: 100%" :disabled="!!agentId">
               <a-select-option value="chat">对话型</a-select-option>
-              <a-select-option value="assistant">助手型</a-select-option>
               <a-select-option value="workflow">工作流型</a-select-option>
             </a-select>
             <div v-if="agentId" class="param-hint">Agent 类型创建后不可修改</div>
@@ -154,11 +162,11 @@
               </div>
             </template>
           </div>
-          <!-- 欢迎语和推荐问题：仅非工作流类型显示 -->
-          <a-form-item v-if="agent.agentType !== 'workflow'" label="欢迎语">
+          <!-- 欢迎语和推荐问题：对话页展示，工作流型也可配置 -->
+          <a-form-item label="欢迎语">
             <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" />
           </a-form-item>
-          <a-form-item v-if="agent.agentType !== 'workflow'" label="推荐问题">
+          <a-form-item label="推荐问题">
             <div class="inline-field-block">
               <div class="inline-field-toolbar">
                 <button class="btn-ai-sm" :disabled="generatingQuestions" @click="handleGenerateQuestions">
@@ -185,17 +193,17 @@
               </div>
             </div>
           </a-form-item>
-        </a-form>
+                </a-form>
         </div>
       </div>
 
-      <!-- 模型参数调优 + 对话配置：仅 CHAT/ASSISTANT 类型显示 -->
+      <!-- 模型参数 + 对话配置 -->
       <div v-if="agent.agentType !== 'workflow'" class="content-grid-side">
-        <div class="panel">
+        <div class="panel panel--model">
           <div class="panel-header">
-            <h3>模型参数调优</h3>
+            <h3>模型参数</h3>
             <div class="panel-header-actions">
-              <button class="btn-ai-sm" @click="restoreDefaults" :disabled="!agentConfig.providerId">
+              <button class="btn-ai-sm" @click="confirmRestoreDefaults" :disabled="!agentConfig.providerId">
                 <UndoOutlined /> 恢复默认
               </button>
               <span class="panel-tip">根据提供商动态显示</span>
@@ -203,6 +211,7 @@
           </div>
           <div class="panel-body">
         <a-form :model="agentConfig" :label-col="{ span: 6 }">
+
           <a-form-item label="提供商">
             <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" @change="onProviderChange">
               <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
@@ -245,23 +254,43 @@
             </div>
             <!-- number -->
             <a-input-number v-else-if="field.type === 'number'" v-model:value="agentConfig[field.key]" :min="field.min" :max="field.max" :step="field.step" style="width: 100%" />
+            <!-- switch -->
+            <div v-else-if="field.type === 'switch'" style="display: flex; align-items: center; gap: 8px;">
+              <a-switch v-model:checked="agentConfig[field.key]" />
+              <span class="tool-option-value">{{ agentConfig[field.key] ? '已开启' : '已关闭' }}</span>
+            </div>
             <!-- text -->
             <a-input v-else v-model:value="agentConfig[field.key]" placeholder="请输入" />
             <div v-if="field.hint" class="param-hint">{{ field.hint }}</div>
           </a-form-item>
-        </a-form>
+                </a-form>
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel panel--chat">
           <div class="panel-header panel-header--stack">
             <div>
               <h3>对话配置</h3>
-              <p class="panel-subtitle">上下文管理、摘要与敏感词策略</p>
             </div>
           </div>
-          <div class="panel-body">
-            <a-form :model="agentConfig" :label-col="{ span: 6 }">
+          <div class="panel-body panel-body--chat">
+            <a-form :model="agentConfig" :label-col="{ span: 6 }" class="panel-form">
+
+              <a-form-item label="流式输出">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <a-switch v-model:checked="agentConfig.streamOutput" />
+                  <span class="tool-option-value">{{ agentConfig.streamOutput !== false ? '已启用' : '未启用' }}</span>
+                  <a-tooltip
+                    title="开启后模型回复逐字流式展示；关闭后等待完整回复再一次性展示"
+                    overlay-class-name="no-flip-tooltip"
+                    :overlay-style="{ maxWidth: '320px' }"
+                    placement="topLeft"
+                  >
+                    <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                  </a-tooltip>
+                </div>
+                <div class="param-hint">默认开启流式输出</div>
+              </a-form-item>
           <a-form-item label="上下文条数">
             <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
               <a-input-number
@@ -344,7 +373,7 @@
                 <button type="button" class="btn-add-inline btn-add-inline--block" @click="addUserSensitiveWord">
                   <PlusOutlined /> 添加敏感词
                 </button>
-                <div class="config-list-scroll config-list-scroll--two-rows">
+                <div class="sensitive-word-list">
                   <div v-for="(word, idx) in userSensitiveWords" :key="'usw-' + idx" class="list-table-row list-table-row--2col">
                     <a-input v-model:value="userSensitiveWords[idx]" placeholder="命中则拦截用户消息" size="small" />
                     <button type="button" class="btn-icon-sm danger" title="删除" @click="removeUserSensitiveWord(idx)">
@@ -389,7 +418,7 @@
                 <button type="button" class="btn-add-inline btn-add-inline--block" @click="addSensitiveWord">
                   <PlusOutlined /> 添加敏感词
                 </button>
-                <div class="config-list-scroll config-list-scroll--two-rows">
+                <div class="sensitive-word-list">
                   <div v-for="(word, idx) in sensitiveWords" :key="'sw-' + idx" class="list-table-row list-table-row--2col">
                     <a-input v-model:value="sensitiveWords[idx]" placeholder="AI 输出命中则处理" size="small" />
                     <button type="button" class="btn-icon-sm danger" title="删除" @click="removeSensitiveWord(idx)">
@@ -400,18 +429,19 @@
               </div>
             </a-form-item>
           </template>
-            </a-form>
+                        </a-form>
           </div>
         </div>
       </div>
 
-      <!-- WORKFLOW 类型：工作流配置（右侧面板） -->
-      <div class="panel panel-stretch" v-if="agent.agentType === 'workflow'">
+      <!-- 工作流配置 -->
+      <div class="panel panel-stretch panel--workflow" v-if="agent.agentType === 'workflow'">
         <div class="panel-header">
           <h3>工作流配置</h3>
         </div>
         <div class="panel-body">
         <div class="workflow-entry-content">
+
           <!-- 配置说明 -->
           <div class="workflow-guide">
             <div class="guide-title">
@@ -464,103 +494,19 @@
             <span class="status-text">{{ hasWorkflowConfig ? '已配置工作流' : '尚未配置工作流' }}</span>
           </div>
 
+          <div class="workflow-entry-hint">
+            <InfoCircleOutlined />
+            <span>点击右上角「工作流编排」按钮进入工作流画布界面</span>
+          </div>
         </div>
         </div>
       </div>
     </div>
 
-    <a-modal
-      v-model:open="publishModalVisible"
-      title="发布 Agent"
-      ok-text="确认发布"
-      cancel-text="取消"
-      class="publish-modal"
-      :confirm-loading="publishing"
-      @ok="confirmPublishAgent"
-    >
-      <div class="publish-modal-content">
-        <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
-        <a-textarea
-          v-model:value="publishDescription"
-          class="publish-modal-textarea"
-          :maxlength="50"
-          show-count
-          :rows="3"
-          placeholder="例如：优化系统提示词、调整模型参数"
-        />
-      </div>
-    </a-modal>
-
-    <a-drawer
-      v-model:open="versionDrawerVisible"
-      title="版本历史"
-      placement="right"
-      :width="400"
-      class="agent-version-drawer"
-    >
-      <div
-        class="version-drawer-item draft"
-        :class="{ active: selectedVersion === 'draft' }"
-        @click="selectAgentVersion('draft')"
-      >
-        <div class="version-drawer-title">当前编辑</div>
-        <div class="version-drawer-desc">继续编辑未发布的修改</div>
-      </div>
-      <a-divider style="margin: 12px 0" />
-      <a-spin :spinning="versionLoading">
-        <div
-          v-for="(item, idx) in versionList"
-          :key="item.version"
-          class="version-drawer-item"
-          :class="{ active: selectedVersion === item.version }"
-          @click="selectAgentVersion(item.version)"
-        >
-          <div class="version-drawer-header">
-            <span class="version-drawer-title">{{ idx === 0 ? '线上版本' : `v${item.version}` }}</span>
-            <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
-          </div>
-          <div v-if="item.description" class="version-drawer-note">{{ item.description }}</div>
-          <div class="version-drawer-desc">{{ formatVersionDesc(item) }}</div>
-        </div>
-        <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
-      </a-spin>
-
-      <div v-if="versionPreview" class="version-preview-detail">
-        <h4 class="preview-detail-title">版本配置快照</h4>
-        <div class="preview-field">
-          <label>系统提示词</label>
-          <div class="preview-value pre">{{ versionPreview.systemPrompt || '（空）' }}</div>
-        </div>
-        <div class="preview-field">
-          <label>欢迎语</label>
-          <div class="preview-value">{{ versionPreview.welcomeMessage || '（空）' }}</div>
-        </div>
-        <div class="preview-field">
-          <label>模型</label>
-          <div class="preview-value">{{ previewModelLabel }}</div>
-        </div>
-        <div class="preview-field">
-          <label>绑定</label>
-          <div class="preview-value">
-            知识库 {{ (versionPreview.knowledgeIds || []).length }} ·
-            工具 {{ (versionPreview.toolIds || []).length }} ·
-            MCP {{ (versionPreview.mcpServerIds || []).length }} ·
-            SubAgent {{ (versionPreview.subAgentIds || []).length }}
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <a-button v-if="selectedVersion !== 'draft'" type="primary" block @click="confirmRestoreVersion">
-          恢复到此版本
-        </a-button>
-      </template>
-    </a-drawer>
-
-    <!-- CHAT/ASSISTANT 类型：绑定配置 Tabs -->
-    <a-tabs v-if="agent.agentType !== 'workflow'" v-model:activeKey="activeTab" @change="onTabChange" class="binding-tabs">
+    <!-- 绑定扩展 -->
+    <a-tabs v-if="agent.agentType !== 'workflow'" v-model:activeKey="bindingTab" @change="onBindingTabChange" class="binding-tabs">
       <!-- 工具绑定 -->
-      <a-tab-pane key="tools" tab="工具绑定">
+      <a-tab-pane key="tools" tab="工具">
         <div class="tool-options-bar">
           <div class="tool-option-item">
             <span class="tool-option-label">工具调用模式</span>
@@ -652,68 +598,6 @@
         </div>
       </a-tab-pane>
 
-      <!-- MCP 工具 -->
-      <a-tab-pane key="mcp" tab="MCP Server">
-        <div class="knowledge-bind">
-          <div class="selected-knowledge">
-            <div class="selected-header">
-              <span class="selected-label">已绑定 {{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }} 个 MCP Server</span>
-              <button v-if="selectedMcpServers.length > 0" class="btn-clear" @click="clearSelectedMcpServers">
-                <DeleteOutlined /> 清空
-              </button>
-            </div>
-            <div class="selected-knowledge-tags">
-              <div v-if="selectedMcpServers.length === 0" class="empty-tip">
-                暂未绑定 MCP Server，请从下方列表选择
-              </div>
-              <div v-for="s in selectedMcpServers" :key="s.id" class="knowledge-tag mcp-tag">
-                <ApiOutlined />
-                <span>{{ s.name }}</span>
-                <button class="tag-remove" @click="removeMcpServer(s.id)">
-                  <CloseOutlined />
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="knowledge-list">
-            <div class="list-header">
-              <span>可用 MCP Server（{{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }}）</span>
-              <a-input
-                v-model:value="mcpSearchText"
-                placeholder="搜索 MCP Server..."
-                size="small"
-                style="width: 200px"
-              >
-                <template #prefix><SearchOutlined /></template>
-              </a-input>
-            </div>
-            <div class="list-body">
-              <div
-                v-for="s in filteredMcpServerList"
-                :key="s.id"
-                class="knowledge-item"
-                :class="{ selected: selectedMcpServerIds.has(s.id) }"
-                @click="toggleMcpServer(s)"
-              >
-                <div class="item-icon mcp-icon-bg">
-                  <ApiOutlined />
-                </div>
-                <div class="item-info">
-                  <div class="item-name">{{ s.name }}</div>
-                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
-                </div>
-                <div class="item-check" v-if="selectedMcpServerIds.has(s.id)">
-                  <CheckOutlined />
-                </div>
-              </div>
-              <div v-if="filteredMcpServerList.length === 0" class="empty-tip">
-                暂无可用 MCP Server
-              </div>
-            </div>
-          </div>
-        </div>
-      </a-tab-pane>
-
       <!-- 知识库绑定 -->
       <a-tab-pane key="knowledge" tab="知识库">
         <div class="knowledge-bind">
@@ -774,6 +658,69 @@
           </div>
         </div>
       </a-tab-pane>
+
+      <!-- MCP -->
+      <a-tab-pane key="mcp" tab="MCP">
+        <div class="knowledge-bind">
+          <div class="selected-knowledge">
+            <div class="selected-header">
+              <span class="selected-label">已绑定 {{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }} 个 MCP Server</span>
+              <button v-if="selectedMcpServers.length > 0" class="btn-clear" @click="clearSelectedMcpServers">
+                <DeleteOutlined /> 清空
+              </button>
+            </div>
+            <div class="selected-knowledge-tags">
+              <div v-if="selectedMcpServers.length === 0" class="empty-tip">
+                暂未绑定 MCP Server，请从下方列表选择
+              </div>
+              <div v-for="s in selectedMcpServers" :key="s.id" class="knowledge-tag mcp-tag">
+                <ApiOutlined />
+                <span>{{ s.name }}</span>
+                <button class="tag-remove" @click="removeMcpServer(s.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="knowledge-list">
+            <div class="list-header">
+              <span>可用 MCP Server（{{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }}）</span>
+              <a-input
+                v-model:value="mcpSearchText"
+                placeholder="搜索 MCP Server..."
+                size="small"
+                style="width: 200px"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="s in filteredMcpServerList"
+                :key="s.id"
+                class="knowledge-item"
+                :class="{ selected: selectedMcpServerIds.has(s.id) }"
+                @click="toggleMcpServer(s)"
+              >
+                <div class="item-icon mcp-icon-bg">
+                  <ApiOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">{{ s.name }}</div>
+                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                </div>
+                <div class="item-check" v-if="selectedMcpServerIds.has(s.id)">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredMcpServerList.length === 0" class="empty-tip">
+                暂无可用 MCP Server
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+
 
       <!-- SubAgent 绑定 -->
       <a-tab-pane key="subagents" tab="SubAgents">
@@ -840,16 +787,269 @@
           </div>
         </div>
       </a-tab-pane>
+      <!-- Skill（暂未开发） -->
+      <a-tab-pane key="skill" tab="Skill">
+        <div class="empty-tip skill-placeholder">Skill 能力开发中，敬请期待</div>
+      </a-tab-pane>
+
     </a-tabs>
+    <a-modal
+      v-model:open="publishModalVisible"
+      title="发布 Agent"
+      ok-text="确认发布"
+      cancel-text="取消"
+      class="publish-modal"
+      :confirm-loading="publishing"
+      @ok="confirmPublishAgent"
+    >
+      <div class="publish-modal-content">
+        <p class="publish-modal-tip">选填发布说明（最多 50 字），可在版本历史中查看。</p>
+        <a-textarea
+          v-model:value="publishDescription"
+          class="publish-modal-textarea"
+          :maxlength="50"
+          show-count
+          :rows="3"
+          placeholder="例如：优化系统提示词、调整模型参数"
+        />
+      </div>
+    </a-modal>
+
+    <a-drawer
+      v-model:open="versionDrawerVisible"
+      title="版本历史"
+      placement="right"
+      :width="480"
+      class="agent-version-drawer"
+    >
+      <div
+        class="version-drawer-item draft"
+        :class="{ active: selectedVersion === 'draft' }"
+        @click="selectAgentVersion('draft')"
+      >
+        <div class="version-drawer-title">当前编辑</div>
+        <div class="version-drawer-desc">继续编辑未发布的修改</div>
+      </div>
+      <a-divider style="margin: 12px 0" />
+      <a-spin :spinning="versionLoading">
+        <div
+          v-for="(item, idx) in versionList"
+          :key="item.version"
+          class="version-drawer-item"
+          :class="{ active: selectedVersion === item.version }"
+          @click="selectAgentVersion(item.version)"
+        >
+          <div class="version-drawer-header">
+            <span class="version-drawer-title">{{ idx === 0 ? '线上版本' : `v${item.version}` }}</span>
+            <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
+            <span class="version-drawer-spacer"></span>
+            <a-tooltip v-if="idx !== 0" title="删除该版本" :overlayStyle="{ maxWidth: '200px' }">
+              <button
+                type="button"
+                class="btn-icon-sm danger version-delete-btn"
+                @click.stop="confirmDeleteVersion(item)"
+              >
+                <DeleteOutlined />
+              </button>
+            </a-tooltip>
+          </div>
+          <div v-if="item.description" class="version-drawer-note">{{ item.description }}</div>
+          <div class="version-drawer-desc">{{ formatVersionDesc(item) }}</div>
+        </div>
+        <a-empty v-if="!versionLoading && versionList.length === 0" description="暂无发布版本" />
+      </a-spin>
+
+      <div v-if="versionPreview" class="version-preview-detail">
+        <h4 class="preview-detail-title">版本配置快照</h4>
+
+        <!-- 1. 基本信息 -->
+        <div class="preview-section">
+          <div class="preview-section-title">基本信息</div>
+          <div class="preview-field">
+            <label>系统提示词</label>
+            <div class="preview-value pre">{{ versionPreview.basicInfo?.systemPrompt || '（空）' }}</div>
+          </div>
+          <div class="preview-field" v-if="versionPreview.basicInfo?.welcomeMessage">
+            <label>欢迎语</label>
+            <div class="preview-value">{{ versionPreview.basicInfo.welcomeMessage }}</div>
+          </div>
+          <div class="preview-field" v-if="recommendedQuestionsPreview.length > 0">
+            <label>推荐问题</label>
+            <div class="preview-value">
+              <div v-for="(q, i) in recommendedQuestionsPreview" :key="i" class="preview-tag">{{ q }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 模型参数 -->
+        <div class="preview-section">
+          <div class="preview-section-title">模型参数</div>
+          <div class="preview-field">
+            <label>提供商 / 模型</label>
+            <div class="preview-value">{{ previewModelLabel }}</div>
+          </div>
+          <div class="preview-field-grid">
+            <div class="preview-field" v-if="versionPreview.modelParams?.temperature !== undefined">
+              <label>Temperature</label>
+              <div class="preview-value">{{ versionPreview.modelParams.temperature }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.modelParams?.topP !== undefined">
+              <label>Top P</label>
+              <div class="preview-value">{{ versionPreview.modelParams.topP }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.modelParams?.maxTokens !== undefined">
+              <label>Max Tokens</label>
+              <div class="preview-value">{{ versionPreview.modelParams.maxTokens }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.modelParams?.presencePenalty !== undefined">
+              <label>Presence Penalty</label>
+              <div class="preview-value">{{ versionPreview.modelParams.presencePenalty }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.modelParams?.frequencyPenalty !== undefined">
+              <label>Frequency Penalty</label>
+              <div class="preview-value">{{ versionPreview.modelParams.frequencyPenalty }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.modelParams?.repetitionPenalty !== undefined">
+              <label>Repetition Penalty</label>
+              <div class="preview-value">{{ versionPreview.modelParams.repetitionPenalty }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 对话配置 -->
+        <div class="preview-section">
+          <div class="preview-section-title">对话配置</div>
+          <div class="preview-field-grid">
+            <div class="preview-field">
+              <label>流式输出</label>
+              <div class="preview-value">{{ versionPreview.chatConfig?.streamOutput !== false ? '开启' : '关闭' }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.chatConfig?.maxContextMessages !== undefined">
+              <label>上下文条数</label>
+              <div class="preview-value">{{ versionPreview.chatConfig.maxContextMessages }}</div>
+            </div>
+            <div class="preview-field">
+              <label>上下文摘要</label>
+              <div class="preview-value">{{ versionPreview.chatConfig?.enableSummary ? '开启' : '关闭' }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.chatConfig?.enableSummary && versionPreview.chatConfig?.summaryThresholdKb !== undefined">
+              <label>摘要触发阈值</label>
+              <div class="preview-value">{{ versionPreview.chatConfig.summaryThresholdKb }} KB</div>
+            </div>
+            <div class="preview-field">
+              <label>用户敏感词</label>
+              <div class="preview-value">{{ versionPreview.chatConfig?.userSensitiveFilterEnabled ? '开启' : '关闭' }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.chatConfig?.userSensitiveFilterEnabled && userSensitiveWordsPreview.length > 0">
+              <label>用户敏感词列表</label>
+              <div class="preview-value">
+                <div v-for="(w, i) in userSensitiveWordsPreview" :key="i" class="preview-tag danger">{{ w }}</div>
+              </div>
+            </div>
+            <div class="preview-field">
+              <label>AI输出敏感词</label>
+              <div class="preview-value">{{ versionPreview.chatConfig?.sensitiveFilterEnabled ? '开启' : '关闭' }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.chatConfig?.sensitiveFilterEnabled">
+              <label>处理策略</label>
+              <div class="preview-value">{{ versionPreview.chatConfig?.sensitiveFilterStrategy === 'replace' ? '替换为 ' + (versionPreview.chatConfig?.sensitiveFilterReplaceText || '***') : '拦截并提示' }}</div>
+            </div>
+            <div class="preview-field" v-if="versionPreview.chatConfig?.sensitiveFilterEnabled && sensitiveWordsPreview.length > 0">
+              <label>AI敏感词列表</label>
+              <div class="preview-value">
+                <div v-for="(w, i) in sensitiveWordsPreview" :key="i" class="preview-tag danger">{{ w }}</div>
+              </div>
+            </div>
+            <div class="preview-field">
+              <label>工具调用模式</label>
+              <div class="preview-value">{{ versionPreview.chatConfig?.asyncToolCalls ? '异步（并行）' : '串行（逐个）' }}</div>
+            </div>
+          </div>
+          <!-- 变量配置 -->
+          <div class="preview-field" v-if="promptVariablesPreview.length > 0">
+            <label>变量配置</label>
+            <div class="preview-value">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th>变量名</th>
+                    <th>显示名称</th>
+                    <th>默认值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(v, i) in promptVariablesPreview" :key="i">
+                    <td><code>{{ v.key }}</code></td>
+                    <td>{{ v.label || '-' }}</td>
+                    <td>{{ v.defaultValue || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 绑定关系 -->
+        <div class="preview-section">
+          <div class="preview-section-title">绑定关系</div>
+          <div class="preview-field">
+            <label>知识库</label>
+            <div class="preview-value">
+              <div v-if="previewKnowledgeList.length === 0" class="preview-empty">未绑定</div>
+              <div v-else>
+                <div v-for="k in previewKnowledgeList" :key="k.id" class="preview-tag">{{ k.name }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="preview-field">
+            <label>工具</label>
+            <div class="preview-value">
+              <div v-if="previewToolList.length === 0" class="preview-empty">未绑定</div>
+              <div v-else>
+                <div v-for="t in previewToolList" :key="t.id" class="preview-tag">
+                  {{ t.displayName || t.name }}
+                  <span class="preview-tag-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="preview-field">
+            <label>MCP Server</label>
+            <div class="preview-value">
+              <div v-if="previewMcpList.length === 0" class="preview-empty">未绑定</div>
+              <div v-else>
+                <div v-for="m in previewMcpList" :key="m.id" class="preview-tag mcp">{{ m.name }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="preview-field">
+            <label>SubAgent</label>
+            <div class="preview-value">
+              <div v-if="previewSubAgentList.length === 0" class="preview-empty">未绑定</div>
+              <div v-else>
+                <div v-for="s in previewSubAgentList" :key="s.id" class="preview-tag subagent">{{ s.displayName }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <a-button v-if="selectedVersion !== 'draft'" type="primary" block @click="confirmRestoreVersion">
+          恢复到此版本
+        </a-button>
+      </template>
+    </a-drawer>
+
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
 import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -862,6 +1062,7 @@ import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
+
 const avatarInputRef = ref(null)
 
 const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5 }
@@ -874,13 +1075,101 @@ const validPromptVariables = computed(() =>
 const isVersionPreview = computed(() => selectedVersion.value !== 'draft' && selectedVersion.value != null)
 
 const previewModelLabel = computed(() => {
-  const cfg = versionPreview.value?.config
-  if (!cfg) return '—'
-  const modelId = cfg.modelId || '—'
-  const providerId = cfg.providerId
+  const modelParams = versionPreview.value?.modelParams
+  if (!modelParams) return '—'
+  const modelId = modelParams.modelId || '—'
+  const providerId = modelParams.providerId
   const provider = providerList.value.find(p => String(p.id) === String(providerId))
   const name = provider?.name || providerId || '—'
   return `${name} / ${modelId}`
+})
+
+// 版本预览 - 推荐问题
+const recommendedQuestionsPreview = computed(() => {
+  const questions = versionPreview.value?.basicInfo?.recommendedQuestions
+  if (!questions) return []
+  if (Array.isArray(questions)) return questions
+  try {
+    return JSON.parse(questions)
+  } catch {
+    return []
+  }
+})
+
+// 版本预览 - 用户敏感词
+const userSensitiveWordsPreview = computed(() => {
+  const words = versionPreview.value?.chatConfig?.userSensitiveWords
+  if (!words) return []
+  if (Array.isArray(words)) return words.filter(w => w)
+  try {
+    const parsed = JSON.parse(words)
+    return Array.isArray(parsed) ? parsed.filter(w => w) : []
+  } catch {
+    return []
+  }
+})
+
+// 版本预览 - AI敏感词
+const sensitiveWordsPreview = computed(() => {
+  const words = versionPreview.value?.chatConfig?.sensitiveWords
+  if (!words) return []
+  if (Array.isArray(words)) return words.filter(w => w)
+  try {
+    const parsed = JSON.parse(words)
+    return Array.isArray(parsed) ? parsed.filter(w => w) : []
+  } catch {
+    return []
+  }
+})
+
+// 版本预览 - 变量配置
+const promptVariablesPreview = computed(() => {
+  const vars = versionPreview.value?.chatConfig?.promptVariables
+  if (!vars) return []
+  if (Array.isArray(vars)) return vars
+  try {
+    const parsed = JSON.parse(vars)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+})
+
+// 版本预览 - 绑定列表（优先使用后端按 ID 回查的实体，否则回退本地列表匹配）
+const previewKnowledgeList = computed(() => {
+  if (versionPreview.value?.knowledges?.length) {
+    return versionPreview.value.knowledges
+  }
+  const ids = versionPreview.value?.knowledgeIds || []
+  const idList = Array.isArray(ids) ? ids.map(String) : []
+  return knowledgeList.value.filter(k => idList.includes(String(k.id)))
+})
+
+const previewToolList = computed(() => {
+  if (versionPreview.value?.tools?.length) {
+    return versionPreview.value.tools
+  }
+  const ids = versionPreview.value?.toolIds || []
+  const idList = Array.isArray(ids) ? ids.map(String) : []
+  return toolList.value.filter(t => idList.includes(String(t.id)))
+})
+
+const previewMcpList = computed(() => {
+  if (versionPreview.value?.mcpServers?.length) {
+    return versionPreview.value.mcpServers
+  }
+  const ids = versionPreview.value?.mcpServerIds || []
+  const idList = Array.isArray(ids) ? ids.map(String) : []
+  return mcpServerList.value.filter(m => idList.includes(String(m.id)))
+})
+
+const previewSubAgentList = computed(() => {
+  if (versionPreview.value?.subAgents?.length) {
+    return versionPreview.value.subAgents
+  }
+  const ids = versionPreview.value?.subAgentIds || []
+  const idList = Array.isArray(ids) ? ids.map(String) : []
+  return subAgentList.value.filter(s => idList.includes(String(s.id)))
 })
 
 const agent = reactive({
@@ -895,6 +1184,7 @@ const agent = reactive({
 // 模型配置（存储在 config JSONB 中）
 const agentConfig = reactive({
   providerId: null,
+  streamOutput: true,
   userSensitiveFilterEnabled: false,
   userSensitiveWords: [],
   sensitiveFilterEnabled: false,
@@ -936,8 +1226,8 @@ const versionLoading = ref(false)
 const selectedVersion = ref('draft')
 const versionPreview = ref(null)
 const agentStatus = ref('draft')
+const bindingTab = ref('tools')
 const agentVersion = ref(0)
-const activeTab = ref('tools')
 
 // MCP Server 绑定
 const selectedMcpServerIds = ref(new Set())
@@ -1205,6 +1495,29 @@ async function onProviderChange(providerId) {
   await Promise.all([loadConfigFields(providerId), loadModels(providerId)])
 }
 
+function confirmRestoreDefaults() {
+  Modal.confirm({
+    title: '恢复默认配置',
+    content: '确定要将当前提供商下的模型参数恢复为默认值吗？未保存的修改将被覆盖。',
+    okText: '继续',
+    cancelText: '取消',
+    onOk: () => new Promise((resolve, reject) => {
+      Modal.confirm({
+        title: '再次确认',
+        content: '恢复后将无法撤销，是否继续恢复默认配置？',
+        okText: '确定恢复',
+        okType: 'danger',
+        cancelText: '取消',
+        onOk: () => {
+          restoreDefaults()
+          resolve()
+        },
+        onCancel: () => reject(new Error('cancel')),
+      })
+    }),
+  })
+}
+
 function restoreDefaults() {
   for (const field of configFields.value) {
     // 恢复默认不切换模型
@@ -1229,6 +1542,9 @@ async function loadAgent() {
     } else if (agentType) {
       agent.agentType = agentType
     }
+    if (agent.agentType === 'assistant') {
+      agent.agentType = 'chat'
+    }
     agentStatus.value = agentData.status?.code || agentData.status || 'draft'
     agentVersion.value = agentData.version || 0
 
@@ -1239,6 +1555,9 @@ async function loadAgent() {
         Object.assign(agentConfig, parsed)
         syncPromptVariablesFromConfig(parsed)
         syncSensitiveWordsFromConfig(parsed)
+        if (agentConfig.streamOutput === undefined) {
+          agentConfig.streamOutput = true
+        }
       } catch (e) {
         // ignore
       }
@@ -1400,7 +1719,7 @@ async function loadSubAgentList() {
 }
 
 // Tab 切换刷新
-async function onTabChange(tab) {
+async function onBindingTabChange(tab) {
   if (tab === 'tools') {
     await Promise.all([loadToolTypes(), loadToolList(toolTypeFilter.value || undefined)])
   } else if (tab === 'mcp') {
@@ -1481,6 +1800,40 @@ async function onAvatarFileChange(e) {
   }
 }
 
+async function handleSaveWorkflowBasic() {
+  if (!agent.name?.trim()) {
+    message.warning('请输入 Agent 名称')
+    return false
+  }
+  const questions = recommendedQuestions.value.filter(q => q && q.trim())
+  if (questions.length > 3) {
+    message.warning('推荐问题最多3个')
+    return false
+  }
+  for (const q of questions) {
+    if (q.length > 30) {
+      message.warning('每个推荐问题不超过30字')
+      return false
+    }
+  }
+
+  saving.value = true
+  try {
+    await updateAgent({
+      ...agent,
+      agentType: agent.agentType?.code || agent.agentType,
+      recommendedQuestions: JSON.stringify(questions),
+    })
+    message.success('保存成功')
+    await loadAgent()
+    return true
+  } catch {
+    return false
+  } finally {
+    saving.value = false
+  }
+}
+
 async function handleSave() {
   if (!agent.name?.trim()) {
     message.warning('请输入 Agent 名称')
@@ -1491,8 +1844,7 @@ async function handleSave() {
     return false
   }
   if (agent.agentType === 'workflow') {
-    message.info('工作流型请在编排页发布')
-    return false
+    return handleSaveWorkflowBasic()
   }
   if (!agentConfig.providerId) {
     message.warning('请选择模型提供商')
@@ -1652,12 +2004,161 @@ async function openVersionDrawer() {
   versionDrawerVisible.value = true
   versionLoading.value = true
   try {
-    const res = await listAgentVersions(agentId)
-    versionList.value = res.data || []
+    await Promise.all([
+      loadKnowledgeList(),
+      loadMcpServerList(),
+      loadSubAgentList(),
+      listAgentVersions(agentId).then(res => {
+        versionList.value = res.data || []
+      })
+    ])
   } catch (e) {
     message.error(e.message || '加载版本失败')
   } finally {
     versionLoading.value = false
+  }
+}
+
+/** 将版本详情应用到页面表单（只读预览态下回显完整配置与绑定） */
+function applyVersionPreviewToForm(data) {
+  const basic = data.basicInfo || {}
+  const modelParams = data.modelParams || {}
+  const chatConfig = data.chatConfig || {}
+
+  if (basic.systemPrompt !== undefined) agent.systemPrompt = basic.systemPrompt || ''
+  if (basic.welcomeMessage !== undefined) agent.welcomeMessage = basic.welcomeMessage || ''
+
+  if (basic.recommendedQuestions !== undefined) {
+    try {
+      recommendedQuestions.value = typeof basic.recommendedQuestions === 'string'
+        ? JSON.parse(basic.recommendedQuestions)
+        : (basic.recommendedQuestions || [])
+    } catch {
+      recommendedQuestions.value = []
+    }
+  }
+
+  const mergedConfig = { ...modelParams, ...chatConfig }
+  Object.keys(mergedConfig).forEach(key => {
+    if (mergedConfig[key] !== undefined) {
+      agentConfig[key] = mergedConfig[key]
+    }
+  })
+  if (agentConfig.providerId != null) agentConfig.providerId = String(agentConfig.providerId)
+  if (agentConfig.modelId != null) agentConfig.modelId = String(agentConfig.modelId)
+  syncPromptVariablesFromConfig(agentConfig)
+  syncSensitiveWordsFromConfig(agentConfig)
+
+  const knowledgeIds = (data.knowledgeIds || []).map(String)
+  const toolIds = (data.toolIds || []).map(String)
+  const mcpIds = (data.mcpServerIds || []).map(String)
+  const subIds = (data.subAgentIds || []).map(String)
+  selectedKnowledgeIds.value = new Set(knowledgeIds)
+  selectedMcpServerIds.value = new Set(mcpIds)
+  selectedSubAgentIds.value = new Set(subIds)
+  selectedToolIds.value = new Set(toolIds)
+
+  if (data.tools?.length) {
+    for (const t of data.tools) {
+      if (!toolList.value.some(x => String(x.id) === String(t.id))) {
+        toolList.value.push({ ...t, id: String(t.id) })
+      }
+    }
+  }
+  if (data.knowledges?.length) {
+    for (const k of data.knowledges) {
+      if (!knowledgeList.value.some(x => String(x.id) === String(k.id))) {
+        knowledgeList.value.push({ ...k, id: String(k.id) })
+      }
+    }
+  }
+  if (data.mcpServers?.length) {
+    for (const m of data.mcpServers) {
+      if (!mcpServerList.value.some(x => String(x.id) === String(m.id))) {
+        mcpServerList.value.push({ ...m, id: String(m.id) })
+      }
+    }
+  }
+  if (data.subAgents?.length) {
+    for (const s of data.subAgents) {
+      if (!subAgentList.value.some(x => String(x.id) === String(s.id))) {
+        subAgentList.value.push({ ...s, id: String(s.id) })
+      }
+    }
+  }
+
+  const providerId = agentConfig.providerId
+  if (providerId) {
+    loadConfigFields(providerId)
+    loadModels(providerId)
+  }
+}
+
+function normalizeVersionDetailData(data) {
+  const payload = data.payload || {}
+  const basicInfo = data.basicInfo || (payload.systemPrompt !== undefined ? {
+    systemPrompt: payload.systemPrompt,
+    welcomeMessage: payload.welcomeMessage,
+    recommendedQuestions: payload.recommendedQuestions
+  } : {})
+
+  let modelParams = data.modelParams || {}
+  let chatConfig = data.chatConfig || {}
+  if (!data.modelParams && payload.config) {
+    const cfg = payload.config
+    modelParams = {
+      providerId: cfg.providerId,
+      modelId: cfg.modelId,
+      temperature: cfg.temperature,
+      topP: cfg.topP,
+      maxTokens: cfg.maxTokens,
+      presencePenalty: cfg.presencePenalty,
+      frequencyPenalty: cfg.frequencyPenalty,
+      repetitionPenalty: cfg.repetitionPenalty
+    }
+    chatConfig = {
+      streamOutput: cfg.streamOutput,
+      maxContextMessages: cfg.maxContextMessages,
+      enableSummary: cfg.enableSummary,
+      summaryThresholdKb: cfg.summaryThresholdKb,
+      userSensitiveFilterEnabled: cfg.userSensitiveFilterEnabled,
+      userSensitiveWords: cfg.userSensitiveWords,
+      sensitiveFilterEnabled: cfg.sensitiveFilterEnabled,
+      sensitiveFilterStrategy: cfg.sensitiveFilterStrategy,
+      sensitiveFilterReplaceText: cfg.sensitiveFilterReplaceText,
+      sensitiveWords: cfg.sensitiveWords,
+      asyncToolCalls: cfg.asyncToolCalls,
+      promptVariables: cfg.promptVariables
+    }
+  }
+
+  const knowledgeIds = data.knowledgeIds?.length
+    ? data.knowledgeIds
+    : (payload.knowledgeIds || payload.knowledges || [])
+  const toolIds = data.toolIds?.length
+    ? data.toolIds
+    : (payload.toolIds || payload.tools || [])
+  const mcpServerIds = data.mcpServerIds?.length
+    ? data.mcpServerIds
+    : (payload.mcpServerIds || payload.mcpServers || [])
+  const subAgentIds = data.subAgentIds?.length
+    ? data.subAgentIds
+    : (payload.subAgentIds || payload.subagents || [])
+
+  return {
+    basicInfo,
+    modelParams,
+    chatConfig,
+    knowledgeIds: (knowledgeIds || []).map(String),
+    toolIds: (toolIds || []).map(String),
+    mcpServerIds: (mcpServerIds || []).map(String),
+    subAgentIds: (subAgentIds || []).map(String),
+    knowledges: data.knowledges || [],
+    tools: data.tools || [],
+    mcpServers: data.mcpServers || [],
+    subAgents: data.subAgents || [],
+    description: data.description,
+    payload
   }
 }
 
@@ -1672,23 +2173,44 @@ async function selectAgentVersion(version) {
   try {
     const res = await getAgentVersionDetail(agentId, version)
     const data = res.data || {}
-    const payload = data.payload || {}
-    versionPreview.value = {
-      systemPrompt: payload.systemPrompt,
-      welcomeMessage: payload.welcomeMessage,
-      recommendedQuestions: payload.recommendedQuestions,
-      config: payload.config || {},
-      knowledgeIds: payload.knowledgeIds || [],
-      toolIds: payload.toolIds || [],
-      mcpServerIds: payload.mcpServerIds || [],
-      subAgentIds: payload.subAgentIds || [],
-      description: data.description,
+    if (data.kind === 'workflow') {
+      message.info('工作流版本请在编排页查看')
+      versionPreview.value = null
+      return
     }
+
+    const normalized = normalizeVersionDetailData(data)
+    versionPreview.value = normalized
+    applyVersionPreviewToForm(normalized)
   } catch (e) {
     message.error(e.message || '加载版本失败')
   } finally {
     versionLoading.value = false
   }
+}
+
+function confirmDeleteVersion(item) {
+  const version = item.version
+  Modal.confirm({
+    title: '删除版本',
+    content: `确定要删除 v${version} 版本吗？删除后无法恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await deleteAgentVersion(agentId, version)
+        message.success(`已删除 v${version}`)
+        // 如果当前预览的就是被删除版本，回到草稿
+        if (selectedVersion.value === version) {
+          await selectAgentVersion('draft')
+        }
+        await openVersionDrawer()
+      } catch (e) {
+        message.error(e.message || '删除失败')
+      }
+    },
+  })
 }
 
 function confirmRestoreVersion() {
@@ -1743,13 +2265,12 @@ function startChat() {
 }
 
 onMounted(async () => {
-  // 编辑模式才加载Agent数据，新建模式使用默认值
   if (agentId) {
     await loadAgent()
   }
-  // 加载初始 tab（工具绑定）的数据
   await Promise.all([loadToolTypes(), loadToolList()])
 })
+
 </script>
 
 <style scoped>
@@ -1764,6 +2285,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
+  gap: 16px;
 }
 .btn-back {
   background: none;
@@ -1897,6 +2419,16 @@ onMounted(async () => {
   gap: 8px;
   margin-bottom: 4px;
 }
+.version-drawer-spacer {
+  flex: 1;
+}
+.version-delete-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.agent-version-drawer .version-drawer-item:hover .version-delete-btn {
+  opacity: 1;
+}
 .version-drawer-title {
   font-weight: 600;
   font-size: 14px;
@@ -1918,13 +2450,31 @@ onMounted(async () => {
   border-top: 1px solid #e5e7eb;
 }
 .preview-detail-title {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
 }
+.preview-section {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+.preview-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
 .preview-field {
   margin-bottom: 12px;
+}
+.preview-field:last-child {
+  margin-bottom: 0;
 }
 .preview-field label {
   display: block;
@@ -1939,12 +2489,89 @@ onMounted(async () => {
 }
 .preview-value.pre {
   white-space: pre-wrap;
-  max-height: 160px;
+  max-height: 200px;
   overflow-y: auto;
-  background: #f8fafc;
+  background: #fff;
   padding: 8px;
   border-radius: 6px;
   border: 1px solid #e2e8f0;
+}
+.preview-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.preview-field-grid .preview-field {
+  margin-bottom: 0;
+}
+.preview-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  margin: 0 4px 4px 0;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 100px;
+  font-size: 12px;
+  color: #1e40af;
+}
+.preview-tag.danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+.preview-tag.mcp {
+  background: #fdf4ff;
+  border-color: #e9d5ff;
+  color: #7c3aed;
+}
+.preview-tag.subagent {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
+}
+.preview-tag-type {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 100px;
+  color: #6b7280;
+}
+.preview-empty {
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+.preview-table th,
+.preview-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+.preview-table th {
+  background: #f1f5f9;
+  font-weight: 500;
+  color: #475569;
+}
+.preview-table td {
+  color: #334155;
+}
+.preview-table code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #0f172a;
 }
 .prompt-var-tip {
   margin-top: 8px;
@@ -2104,8 +2731,9 @@ onMounted(async () => {
 .config-list-scroll {
   max-height: 200px;
   overflow-y: auto;
-  padding: 2px 4px 2px 0;
-  margin-right: -4px;
+  padding: 2px 12px 2px 0;
+  margin-right: 0;
+  scrollbar-gutter: stable;
 }
 .config-list-scroll--compact {
   max-height: 132px;
@@ -2273,13 +2901,36 @@ onMounted(async () => {
 }
 .panel-stretch .panel-body {
   flex: 1;
-  min-height: 0;
+  min-height: auto;
+  overflow-y: visible;
 }
 .content-grid-side > .panel:first-child .panel-body {
-  min-height: 420px;
+  min-height: auto;
+  max-height: none;
+  overflow-y: visible;
 }
 .content-grid-side > .panel:last-child .panel-body {
-  min-height: 620px;
+  min-height: auto;
+  max-height: none;
+  overflow-y: visible;
+}
+.panel--basic {
+  min-height: auto;
+  max-height: none;
+}
+.panel--basic .panel-body {
+  max-height: none;
+  overflow-y: visible;
+}
+.panel--model,
+.panel--chat {
+  max-height: none;
+}
+.panel--workflow {
+  max-height: calc(100vh - 96px);
+}
+.panel--workflow .panel-body {
+  max-height: calc(100vh - 176px);
 }
 .panel {
   display: flex;
@@ -2288,21 +2939,33 @@ onMounted(async () => {
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  overflow: visible;
+}
+.panel--workflow {
   overflow: hidden;
 }
 .panel-body {
   flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-  margin-right: -4px;
+  min-height: auto;
+  overflow-y: visible;
+  padding: 8px 20px 12px 8px;
+  margin-right: 0;
 }
 .panel-body::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+}
+.panel-body--chat {
+  max-height: none;
+  overflow-y: visible;
+}
+.panel-form {
+  padding-bottom: 16px;
 }
 .panel-body::-webkit-scrollbar-thumb {
   background: #d4d4d8;
-  border-radius: 3px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 .panel-header-actions {
   display: flex;
@@ -2639,6 +3302,34 @@ onMounted(async () => {
   border-radius: 12px;
   padding: 0 20px 20px;
 }
+
+.sensitive-word-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sensitive-word-list .list-table-row--2col {
+  margin-bottom: 0;
+}
+.workflow-entry-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1d4ed8;
+}
+.skill-placeholder {
+  padding: 48px 0;
+  text-align: center;
+}
+.panel--workflow-flat .panel-body {
+  padding: 0;
+}
 .binding-tabs {
   background: #fff;
   border: 1px solid #ebebeb;
@@ -2679,16 +3370,6 @@ onMounted(async () => {
 }
 
 /* SubAgent 绑定 */
-.subagent-bind {
-  display: flex;
-  gap: 24px;
-}
-.selected-subagents {
-  width: 300px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-}
 .selected-subagents-tags {
   display: flex;
   flex-wrap: wrap;
@@ -2738,7 +3419,6 @@ onMounted(async () => {
 
 /* 工作流配置样式 */
 .workflow-entry-content {
-  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;

@@ -140,4 +140,21 @@ public final class ToolEventGenerator {
             return "{\"type\":\"workflow_complete\",\"contentOffset\":" + contentOffset + "}";
         }
     }
+
+    /**
+     * 敏感词拦截事件
+     *
+     * @param scope   拦截范围：user_input / ai_output
+     * @param message 拦截提示文本
+     */
+    public static String sensitiveBlockEvent(String scope, String message) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "sensitive_block",
+                    "scope", scope,
+                    "message", message != null ? message : ""));
+        } catch (Exception e) {
+            return "{\"type\":\"sensitive_block\",\"scope\":\"" + scope + "\",\"message\":\"\"}";
+        }
+    }
 }

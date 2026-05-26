@@ -46,6 +46,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
         OpenAiApi api = apiBuilder.build();
         return OpenAiChatModel.builder()
                 .openAiApi(api)
+                .defaultOptions(OpenAiChatOptions.builder().streamUsage(true).build())
                 .build();
     }
 
@@ -72,6 +73,8 @@ public class OpenAIModelHandler implements ModelProviderHandler {
         if (config.containsKey("frequencyPenalty")) {
             builder.frequencyPenalty(toDouble(config.get("frequencyPenalty")));
         }
+
+        OpenAiStreamUsageSupport.enableStreamUsage(builder);
 
         return builder.build();
     }

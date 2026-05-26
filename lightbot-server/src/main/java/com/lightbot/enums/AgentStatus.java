@@ -18,7 +18,7 @@ public enum AgentStatus {
 
     DRAFT("draft", "草稿"),
     PUBLISHED("published", "已发布"),
-    PUBLISHED_EDITING("published_editing", "已发布编辑中"),
+    PUBLISHED_EDITING("published_editing", "编辑中"),
     ARCHIVED("archived", "已归档");
 
     @EnumValue

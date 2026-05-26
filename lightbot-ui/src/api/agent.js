@@ -99,3 +99,7 @@ export function getAgentVersionDetail(id, version) {
 export function restoreAgentVersion(id, version) {
   return request.post(`/agents/${id}/versions/${version}/restore`)
 }
+
+export function deleteAgentVersion(id, version) {
+  return request.delete(`/agents/${id}/versions/${version}`)
+}

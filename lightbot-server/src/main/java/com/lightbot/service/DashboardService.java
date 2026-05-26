@@ -36,5 +36,12 @@ public interface DashboardService {
      *
      * @return 包含会话数、消息数和近7天趋势的Map
      */
-    Map<String, Object> getChatStats();
+    /**
+     * 获取对话统计
+     *
+     * @param days      近 N 天（与自定义区间二选一，days 优先）
+     * @param startDate 自定义开始日期 yyyy-MM-dd
+     * @param endDate   自定义结束日期 yyyy-MM-dd
+     */
+    Map<String, Object> getChatStats(Integer days, String startDate, String endDate);
 }

@@ -2,81 +2,159 @@
   <div class="page">
     <div class="page-header">
       <h1 class="page-title">系统设置</h1>
-      <p class="page-desc">配置系统默认AI模型，用于生成提示词、推荐问题等功能</p>
+      <p class="page-desc">配置系统默认 AI 模型，用于 Agent 配置之外的系统级 AI 调用</p>
     </div>
 
     <div class="content-grid">
-      <!-- 默认AI配置 -->
+      <!-- 默认对话模型 -->
       <div class="panel">
         <div class="panel-header">
-          <h3>默认AI模型</h3>
-          <span class="panel-desc">系统级AI调用使用的模型配置</span>
+          <div class="panel-title-wrap">
+            <h3>默认对话模型</h3>
+            <span class="panel-desc">系统级对话/生成场景使用</span>
+          </div>
         </div>
         <div class="panel-body">
           <a-form :label-col="{ span: 6 }">
             <a-form-item label="模型提供商">
               <a-select
-                v-model:value="config.providerId"
+                v-model:value="chatConfig.providerId"
                 placeholder="选择提供商"
                 style="width: 100%"
-                @change="handleProviderChange"
+                allow-clear
+                @change="(val) => onProviderChange('chat', val)"
               >
-                <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
+                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
                   {{ p.name }}
                 </a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item label="模型">
               <a-select
-                v-model:value="config.modelId"
-                placeholder="选择模型"
+                v-model:value="chatConfig.modelId"
+                placeholder="选择对话模型"
                 style="width: 100%"
-                :disabled="!config.providerId || modelList.length === 0"
+                allow-clear
+                :disabled="!chatConfig.providerId"
               >
-                <a-select-option v-for="m in modelList" :key="m.modelId" :value="m.modelId">
+                <a-select-option v-for="m in chatModels" :key="m.modelId" :value="m.modelId">
                   {{ m.name || m.modelId }}
                 </a-select-option>
               </a-select>
-              <span v-if="!config.providerId" class="form-tip">请先选择模型提供商</span>
-              <span v-else-if="modelList.length === 0" class="form-tip warn">该提供商暂无可用模型，请先在"模型管理"中添加</span>
+              <span v-if="!chatConfig.providerId" class="form-tip">请先选择模型提供商</span>
+              <span v-else-if="chatModels.length === 0" class="form-tip warn">该提供商暂无可用对话模型</span>
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" @click="handleSave" :disabled="saving">
-                <SaveOutlined /> {{ saving ? '保存中...' : '保存配置' }}
+              <button class="btn-primary" :disabled="chatSaving" @click="saveChatModel">
+                <SaveOutlined /> {{ chatSaving ? '保存中...' : '保存配置' }}
               </button>
             </a-form-item>
           </a-form>
+          <div class="panel-tip">
+            <BulbOutlined />
+            <span>用于：AI 生成系统提示词、AI 生成推荐问题、知识库思维导图、内容安全扫描等</span>
+          </div>
         </div>
       </div>
 
-      <!-- 使用说明 -->
+      <!-- 默认向量模型 -->
       <div class="panel">
         <div class="panel-header">
-          <h3>使用说明</h3>
+          <div class="panel-title-wrap">
+            <h3>默认向量模型</h3>
+            <span class="panel-desc">向量化与检索场景使用</span>
+          </div>
         </div>
         <div class="panel-body">
-          <div class="info-list">
-            <div class="info-item">
-              <div class="info-icon"><BulbOutlined /></div>
-              <div class="info-content">
-                <h4>AI生成提示词</h4>
-                <p>在Agent详情页点击"AI生成"按钮，系统将使用此配置自动生成系统提示词</p>
-              </div>
-            </div>
-            <div class="info-item">
-              <div class="info-icon"><BulbOutlined /></div>
-              <div class="info-content">
-                <h4>AI生成推荐问题</h4>
-                <p>在Agent详情页点击"生成推荐问题"按钮，系统将使用此配置生成推荐问题列表</p>
-              </div>
-            </div>
-            <div class="info-item">
-              <div class="info-icon"><BulbOutlined /></div>
-              <div class="info-content">
-                <h4>思维导图生成</h4>
-                <p>系统将使用此配置生成思维导图等AI辅助内容</p>
-              </div>
-            </div>
+          <a-form :label-col="{ span: 6 }">
+            <a-form-item label="模型提供商">
+              <a-select
+                v-model:value="embeddingConfig.providerId"
+                placeholder="选择提供商"
+                style="width: 100%"
+                allow-clear
+                @change="(val) => onProviderChange('embedding', val)"
+              >
+                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
+                  {{ p.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="模型">
+              <a-select
+                v-model:value="embeddingConfig.modelId"
+                placeholder="选择向量模型"
+                style="width: 100%"
+                allow-clear
+                :disabled="!embeddingConfig.providerId"
+              >
+                <a-select-option v-for="m in embeddingModels" :key="m.modelId" :value="m.modelId">
+                  {{ m.name || m.modelId }}
+                </a-select-option>
+              </a-select>
+              <span v-if="!embeddingConfig.providerId" class="form-tip">请先选择模型提供商</span>
+              <span v-else-if="embeddingModels.length === 0" class="form-tip warn">该提供商暂无可用向量模型</span>
+            </a-form-item>
+            <a-form-item :wrapper-col="{ offset: 6 }">
+              <button class="btn-primary" :disabled="embeddingSaving" @click="saveEmbeddingModel">
+                <SaveOutlined /> {{ embeddingSaving ? '保存中...' : '保存配置' }}
+              </button>
+            </a-form-item>
+          </a-form>
+          <div class="panel-tip">
+            <BulbOutlined />
+            <span>用于：知识库默认 Embedding（新建知识库未指定时使用）、文本相似度计算等</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 默认TTS模型 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <h3>默认 TTS 模型</h3>
+            <span class="panel-desc">语音合成场景使用</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <a-form :label-col="{ span: 6 }">
+            <a-form-item label="模型提供商">
+              <a-select
+                v-model:value="ttsConfig.providerId"
+                placeholder="选择提供商"
+                style="width: 100%"
+                allow-clear
+                @change="(val) => onProviderChange('tts', val)"
+              >
+                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
+                  {{ p.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="模型">
+              <a-select
+                v-model:value="ttsConfig.modelId"
+                placeholder="选择 TTS 模型"
+                style="width: 100%"
+                allow-clear
+                :disabled="!ttsConfig.providerId"
+              >
+                <a-select-option v-for="m in ttsModels" :key="m.modelId" :value="m.modelId">
+                  {{ m.name || m.modelId }}
+                </a-select-option>
+              </a-select>
+              <span v-if="!ttsConfig.providerId" class="form-tip">请先选择模型提供商</span>
+              <span v-else-if="ttsModels.length === 0" class="form-tip warn">该提供商暂无可用 TTS 模型</span>
+            </a-form-item>
+            <a-form-item :wrapper-col="{ offset: 6 }">
+              <button class="btn-primary" :disabled="ttsSaving" @click="saveTtsModel">
+                <SaveOutlined /> {{ ttsSaving ? '保存中...' : '保存配置' }}
+              </button>
+            </a-form-item>
+          </a-form>
+          <div class="panel-tip">
+            <BulbOutlined />
+            <span>用于：文本转语音播放、AI 回复语音化等</span>
           </div>
         </div>
       </div>
@@ -88,22 +166,30 @@
 import { ref, reactive, onMounted } from 'vue'
 import { SaveOutlined, BulbOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getDefaultAiConfig, updateDefaultAiConfig } from '../api/systemConfig'
+import {
+  getDefaultChatModel, updateDefaultChatModel,
+  getDefaultEmbeddingModel, updateDefaultEmbeddingModel,
+  getDefaultTtsModel, updateDefaultTtsModel,
+} from '../api/systemConfig'
 import { getModelProviders } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
 
 const providerList = ref([])
-const modelList = ref([])
-const saving = ref(false)
+const chatModels = ref([])
+const embeddingModels = ref([])
+const ttsModels = ref([])
 
-const config = reactive({
-  providerId: null,
-  modelId: null
-})
+const chatConfig = reactive({ providerId: null, modelId: null })
+const embeddingConfig = reactive({ providerId: null, modelId: null })
+const ttsConfig = reactive({ providerId: null, modelId: null })
+
+const chatSaving = ref(false)
+const embeddingSaving = ref(false)
+const ttsSaving = ref(false)
 
 onMounted(async () => {
   await loadProviders()
-  await loadConfig()
+  await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig()])
 })
 
 async function loadProviders() {
@@ -115,64 +201,113 @@ async function loadProviders() {
   }
 }
 
-async function loadConfig() {
-  try {
-    const res = await getDefaultAiConfig()
-    if (res.data) {
-      config.providerId = res.data.providerId
-      config.modelId = res.data.modelId
-      if (config.providerId) {
-        await loadModels(config.providerId)
-      }
-    }
-  } catch (e) {
-    console.error('[Settings] 加载配置失败:', e)
-  }
-}
-
-async function handleProviderChange(providerId) {
-  config.modelId = null
-  if (providerId) {
-    await loadModels(providerId)
-  }
-}
-
-async function loadModels(providerId) {
+/**
+ * 加载某类型的模型列表（统一处理 Long ID 字符串化）
+ */
+async function loadModelsByType(providerId, modelType) {
+  if (!providerId) return []
   try {
     const res = await getModelsByProvider(providerId)
-    // 只显示对话型模型（LLM）
-    const allModels = res.data || []
-    modelList.value = allModels.filter(m => {
-      const typeCode = m.type?.code || m.type
-      return typeCode === 'llm'
-    })
+    const all = res.data || []
+    return all.filter(m => (m.type?.code || m.type) === modelType)
   } catch (e) {
     console.error('[Settings] 加载模型失败:', e)
-    modelList.value = []
+    return []
   }
 }
 
-async function handleSave() {
-  if (!config.providerId) {
-    message.warning('请选择模型提供商')
-    return
-  }
-  if (!config.modelId) {
-    message.warning('请选择模型')
-    return
-  }
-
-  saving.value = true
+async function loadChatConfig() {
   try {
-    await updateDefaultAiConfig({
-      providerId: config.providerId,
-      modelId: config.modelId
-    })
-    message.success('配置已保存')
+    const res = await getDefaultChatModel()
+    // 后端 providerId 已用 ToStringSerializer 输出为字符串，但仍兜底转换避免精度丢失
+    chatConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
+    chatConfig.modelId = res.data?.modelId || null
+    if (chatConfig.providerId) {
+      chatModels.value = await loadModelsByType(chatConfig.providerId, 'llm')
+    }
+  } catch (e) {
+    console.error('[Settings] 加载对话模型配置失败:', e)
+  }
+}
+
+async function loadEmbeddingConfig() {
+  try {
+    const res = await getDefaultEmbeddingModel()
+    embeddingConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
+    embeddingConfig.modelId = res.data?.modelId || null
+    if (embeddingConfig.providerId) {
+      embeddingModels.value = await loadModelsByType(embeddingConfig.providerId, 'embedding')
+    }
+  } catch (e) {
+    console.error('[Settings] 加载向量模型配置失败:', e)
+  }
+}
+
+async function loadTtsConfig() {
+  try {
+    const res = await getDefaultTtsModel()
+    ttsConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
+    ttsConfig.modelId = res.data?.modelId || null
+    if (ttsConfig.providerId) {
+      ttsModels.value = await loadModelsByType(ttsConfig.providerId, 'tts')
+    }
+  } catch (e) {
+    console.error('[Settings] 加载TTS模型配置失败:', e)
+  }
+}
+
+async function onProviderChange(kind, providerId) {
+  if (kind === 'chat') {
+    chatConfig.modelId = null
+    chatModels.value = await loadModelsByType(providerId, 'llm')
+  } else if (kind === 'embedding') {
+    embeddingConfig.modelId = null
+    embeddingModels.value = await loadModelsByType(providerId, 'embedding')
+  } else if (kind === 'tts') {
+    ttsConfig.modelId = null
+    ttsModels.value = await loadModelsByType(providerId, 'tts')
+  }
+}
+
+async function saveChatModel() {
+  if (!chatConfig.providerId) return message.warning('请选择模型提供商')
+  if (!chatConfig.modelId) return message.warning('请选择模型')
+  chatSaving.value = true
+  try {
+    await updateDefaultChatModel({ providerId: chatConfig.providerId, modelId: chatConfig.modelId })
+    message.success('默认对话模型已保存')
   } catch (e) {
     message.error(e.response?.data?.message || '保存失败')
   } finally {
-    saving.value = false
+    chatSaving.value = false
+  }
+}
+
+async function saveEmbeddingModel() {
+  if (!embeddingConfig.providerId) return message.warning('请选择模型提供商')
+  if (!embeddingConfig.modelId) return message.warning('请选择模型')
+  embeddingSaving.value = true
+  try {
+    await updateDefaultEmbeddingModel({ providerId: embeddingConfig.providerId, modelId: embeddingConfig.modelId })
+    message.success('默认向量模型已保存')
+  } catch (e) {
+    message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    embeddingSaving.value = false
+  }
+}
+
+async function saveTtsModel() {
+  if (!ttsConfig.providerId) return message.warning('请选择模型提供商')
+  if (!ttsConfig.modelId) return message.warning('请选择模型')
+  ttsSaving.value = true
+  try {
+    await updateDefaultTtsModel({ providerId: ttsConfig.providerId, modelId: ttsConfig.modelId })
+    message.success('默认 TTS 模型已保存')
+  } catch (e) {
+    message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    ttsSaving.value = false
   }
 }
 </script>
@@ -210,12 +345,17 @@ async function handleSave() {
 }
 .panel-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid #ebebeb;
 }
-.panel-header h3 {
+.panel-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.panel-title-wrap h3 {
   font-size: 16px;
   font-weight: 600;
   color: #171717;
@@ -241,7 +381,7 @@ async function handleSave() {
   font-weight: 500;
   cursor: pointer;
 }
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: #27272a;
 }
 .btn-primary:disabled {
@@ -252,41 +392,24 @@ async function handleSave() {
   font-size: 12px;
   color: #71717a;
   margin-top: 4px;
+  display: block;
 }
 .form-tip.warn {
   color: #f59e0b;
 }
-
-/* 使用说明 */
-.info-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.info-item {
-  display: flex;
-  gap: 12px;
-}
-.info-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #007cf0, #00dfd8);
-  color: #fff;
+.panel-tip {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #1d4ed8;
+}
+.panel-tip :deep(svg) {
   flex-shrink: 0;
-}
-.info-content h4 {
-  font-size: 14px;
-  font-weight: 500;
-  color: #171717;
-  margin: 0 0 4px;
-}
-.info-content p {
-  font-size: 13px;
-  color: #71717a;
-  margin: 0;
 }
 </style>

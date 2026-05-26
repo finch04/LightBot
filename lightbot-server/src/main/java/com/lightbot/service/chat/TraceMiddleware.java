@@ -57,12 +57,13 @@ public class TraceMiddleware implements ChatMiddleware {
                     long tEnd = System.currentTimeMillis();
                     long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
 
-                    // 1. 持久化AI回复
+                    // 1. 持久化AI回复（合并 reasoningContent 到 metadata）
                     Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
                     String replyToSave = SensitiveWordFilter.filterAiOutput(
                             ctx.getFullReply().toString(), ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
+                    String metadataStr = buildPersistMetadata(ctx);
                     messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
-                            replyToSave, ctx.getRagMetadataHolder()[0], (int) totalTokens);
+                            replyToSave, metadataStr, (int) totalTokens);
                     ctx.getFullReply().setLength(0);
                     ctx.getFullReply().append(replyToSave);
 
@@ -216,6 +217,34 @@ public class TraceMiddleware implements ChatMiddleware {
             }
         }
         return initMiddleware.getDefaultProviderId();
+    }
+
+    /**
+     * 构建持久化 metadata：合并 ragMetadata + reasoningContent
+     */
+    private String buildPersistMetadata(ChatContext ctx) {
+        try {
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            // 解析现有 ragMetadata（toolEvents、toolBlockOffsets、ragReferences 等）
+            String ragMeta = ctx.getRagMetadataHolder()[0];
+            if (ragMeta != null && !ragMeta.isBlank()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> existing = OBJECT_MAPPER.readValue(ragMeta, Map.class);
+                meta.putAll(existing);
+            }
+            // 追加 reasoningContent
+            if (ctx.getReasoningContent().length() > 0) {
+                meta.put("reasoningContent", ctx.getReasoningContent().toString());
+            }
+            // 追加 sensitiveBlock 标记（AI 输出被拦截时）
+            if (ctx.getSensitiveStreamState() != null && ctx.getSensitiveStreamState().isBlocked()) {
+                meta.put("sensitiveBlock", "ai_output");
+            }
+            return meta.isEmpty() ? null : OBJECT_MAPPER.writeValueAsString(meta);
+        } catch (Exception e) {
+            log.warn("[Chat] 构建持久化metadata失败: {}", e.getMessage());
+            return ctx.getRagMetadataHolder()[0];
+        }
     }
 
     /**

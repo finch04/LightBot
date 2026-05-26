@@ -10,6 +10,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -52,15 +56,24 @@ public class DashboardServiceImpl implements DashboardService {
         Map<String, Object> stats = new LinkedHashMap<>();
 
         // 1. 总数
-        stats.put("total", agentMapper.selectCount(null));
+        long total = agentMapper.selectCount(null);
+        stats.put("total", total);
 
-        // 2. 按状态分组计数
-        Map<String, Long> statusCounts = new LinkedHashMap<>();
+        // 2. 按状态分组计数（返回带中文label的列表）
+        List<Map<String, Object>> statusList = new ArrayList<>();
         for (AgentStatus status : AgentStatus.values()) {
             Long count = agentMapper.selectCount(
                     new LambdaQueryWrapper<Agent>().eq(Agent::getStatus, status));
-            statusCounts.put(status.getCode(), count);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("code", status.getCode());
+            item.put("label", status.getDesc());  // 中文描述
+            item.put("count", count);
+            statusList.add(item);
         }
+        stats.put("statusList", statusList);
+        // 保留旧字段兼容
+        Map<String, Long> statusCounts = new LinkedHashMap<>();
+        statusList.forEach(item -> statusCounts.put((String) item.get("code"), ((Number) item.get("count")).longValue()));
         stats.put("statusCounts", statusCounts);
 
         // 3. 最近5个Agent
@@ -72,7 +85,9 @@ public class DashboardServiceImpl implements DashboardService {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", a.getId().toString());
             item.put("name", a.getName());
-            item.put("status", a.getStatus() != null ? a.getStatus().getCode() : "draft");
+            AgentStatus status = a.getStatus();
+            item.put("status", status != null ? status.getCode() : "draft");
+            item.put("statusLabel", status != null ? status.getDesc() : "草稿");
             item.put("createTime", a.getCreateTime());
             return item;
         }).collect(Collectors.toList());
@@ -103,11 +118,29 @@ public class DashboardServiceImpl implements DashboardService {
         }
         stats.put("documentStatusCounts", docStatusCounts);
 
+        // 5. 最近 3 个文档
+        List<Document> recentDocs = documentMapper.selectList(
+                new LambdaQueryWrapper<Document>()
+                        .orderByDesc(Document::getCreateTime)
+                        .last("LIMIT 3"));
+        List<Map<String, Object>> recentDocList = recentDocs.stream().map(d -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", d.getId().toString());
+            item.put("name", d.getName());
+            item.put("knowledgeId", d.getKnowledgeId() != null ? d.getKnowledgeId().toString() : null);
+            item.put("createTime", d.getCreateTime());
+            return item;
+        }).collect(Collectors.toList());
+        stats.put("recentDocuments", recentDocList);
+
         return stats;
     }
 
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final int MAX_TREND_DAYS = 90;
+
     @Override
-    public Map<String, Object> getChatStats() {
+    public Map<String, Object> getChatStats(Integer days, String startDate, String endDate) {
         Map<String, Object> stats = new LinkedHashMap<>();
 
         // 1. 会话总数
@@ -116,10 +149,65 @@ public class DashboardServiceImpl implements DashboardService {
         // 2. 消息总数
         stats.put("totalMessages", messageMapper.selectCount(null));
 
-        // 3. 近7天消息趋势
-        List<Map<String, Object>> trend = messageMapper.countMessagesPerDay(7);
-        stats.put("messagesPerDay", trend);
+        // 3. 消息趋势
+        LocalDate rangeStart;
+        LocalDate rangeEnd;
+        if (startDate != null && !startDate.isBlank() && endDate != null && !endDate.isBlank()) {
+            rangeStart = parseDate(startDate);
+            rangeEnd = parseDate(endDate);
+            if (rangeEnd.isBefore(rangeStart)) {
+                LocalDate tmp = rangeStart;
+                rangeStart = rangeEnd;
+                rangeEnd = tmp;
+            }
+        } else {
+            int trendDays = days != null && days > 0 ? Math.min(days, MAX_TREND_DAYS) : 7;
+            rangeEnd = LocalDate.now();
+            rangeStart = rangeEnd.minusDays(trendDays - 1L);
+            stats.put("trendDays", trendDays);
+        }
+
+        long span = ChronoUnit.DAYS.between(rangeStart, rangeEnd) + 1;
+        if (span > MAX_TREND_DAYS) {
+            rangeStart = rangeEnd.minusDays(MAX_TREND_DAYS - 1L);
+        }
+
+        List<Map<String, Object>> raw = messageMapper.countMessagesPerDayRange(
+                rangeStart.format(DATE_FMT), rangeEnd.format(DATE_FMT));
+        stats.put("messagesPerDay", fillMissingDays(raw, rangeStart, rangeEnd));
+        stats.put("trendStartDate", rangeStart.format(DATE_FMT));
+        stats.put("trendEndDate", rangeEnd.format(DATE_FMT));
 
         return stats;
+    }
+
+    private LocalDate parseDate(String dateStr) {
+        try {
+            return LocalDate.parse(dateStr, DATE_FMT);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("日期格式无效，应为 yyyy-MM-dd: " + dateStr);
+        }
+    }
+
+    private List<Map<String, Object>> fillMissingDays(List<Map<String, Object>> trend,
+                                                      LocalDate start, LocalDate end) {
+        Map<String, Long> countMap = new HashMap<>();
+        if (trend != null) {
+            for (Map<String, Object> row : trend) {
+                String date = String.valueOf(row.get("date"));
+                Object countObj = row.get("count");
+                long count = countObj instanceof Number n ? n.longValue() : 0L;
+                countMap.put(date, count);
+            }
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            String key = d.format(DATE_FMT);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("date", key);
+            item.put("count", countMap.getOrDefault(key, 0L));
+            result.add(item);
+        }
+        return result;
     }
 }

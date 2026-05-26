@@ -62,6 +62,7 @@ public class MimoModelHandler implements ModelProviderHandler {
 
         return OpenAiChatModel.builder()
                 .openAiApi(api)
+                .defaultOptions(OpenAiChatOptions.builder().streamUsage(true).build())
                 .build();
     }
 
@@ -87,6 +88,15 @@ public class MimoModelHandler implements ModelProviderHandler {
         if (config.containsKey("frequencyPenalty")) {
             builder.frequencyPenalty(toDouble(config.get("frequencyPenalty")));
         }
+
+        // 深度思考：MiMo v2.5 Pro 支持 reasoning_effort 参数
+        if (Boolean.TRUE.equals(config.get("enableReasoning"))) {
+            // 通过 metadata 传递，实际调用时由框架或自定义拦截器处理
+            // MiMo 兼容 OpenAI 的 reasoning_effort 参数
+            builder.metadata(java.util.Map.of("reasoning_effort", "medium"));
+        }
+
+        OpenAiStreamUsageSupport.enableStreamUsage(builder);
 
         return builder.build();
     }
@@ -149,6 +159,13 @@ public class MimoModelHandler implements ModelProviderHandler {
                         .min(-2.0).max(2.0).step(0.1)
                         .defaultValue(0.0)
                         .hint("正值降低重复用词的概率")
+                        .build(),
+                ConfigField.builder()
+                        .key("enableReasoning")
+                        .label("深度思考")
+                        .type("switch")
+                        .defaultValue(false)
+                        .hint("开启后模型会输出思考过程（仅 MiMo v2.5 Pro 支持）")
                         .build()
         );
     }

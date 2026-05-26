@@ -75,7 +75,6 @@
         <a-form-item label="类型">
           <a-select v-model:value="form.agentType" style="width: 100%">
             <a-select-option value="chat">对话型</a-select-option>
-            <a-select-option value="assistant">助手型</a-select-option>
             <a-select-option value="workflow">工作流型</a-select-option>
           </a-select>
         </a-form-item>
@@ -103,9 +102,11 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, SearchOutlin
 import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent } from '../api/agent'
 import { getModelProviders } from '../api/modelProvider'
+import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 
 const router = useRouter()
 const list = ref([])
+const agentStatusLabels = ref(null)
 const searchText = ref('')
 const providerList = ref([])
 const dialogVisible = ref(false)
@@ -192,19 +193,12 @@ async function handleSetDefault(id) {
 
 function agentTypeLabel(t) {
   const code = t?.code || t || ''
-  const map = { chat: '对话型', assistant: '助手型', workflow: '工作流型' }
+  const map = { chat: '对话型', assistant: '对话型', workflow: '工作流型' }
   return map[code] || code || '对话型'
 }
 
 function statusText(s, version) {
-  const code = s?.code || s || 'draft'
-  const map = {
-    draft: '草稿',
-    published: version > 0 ? `已发布 v${version}` : '已发布',
-    published_editing: version > 0 ? `已发布编辑中 v${version}` : '已发布编辑中',
-    archived: '已归档',
-  }
-  return map[code] || code
+  return formatAgentStatus(s, version || 0, agentStatusLabels.value)
 }
 
 function formatTime(t) {
@@ -212,7 +206,8 @@ function formatTime(t) {
   return new Date(t).toLocaleDateString('zh-CN')
 }
 
-onMounted(() => {
+onMounted(async () => {
+  agentStatusLabels.value = await loadAgentStatusLabels()
   loadData()
   loadProviders()
 })

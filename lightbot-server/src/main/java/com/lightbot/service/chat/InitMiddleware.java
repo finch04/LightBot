@@ -128,7 +128,8 @@ public class InitMiddleware implements ChatMiddleware {
                 ConfigKeys.Agent.SENSITIVE_WORDS,
                 "maxContextMessages",
                 ConfigKeys.Agent.ENABLE_SUMMARY,
-                ConfigKeys.Agent.SUMMARY_THRESHOLD_KB
+                ConfigKeys.Agent.SUMMARY_THRESHOLD_KB,
+                ConfigKeys.Agent.STREAM_OUTPUT
         };
         for (String key : keys) {
             if (draft.containsKey(key)) {

@@ -42,8 +42,13 @@
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
           <div class="message-content-wrapper">
+            <!-- 敏感词拦截提示（独立样式，与正常内容区分） -->
+            <div v-if="msg._sensitiveBlock" class="sensitive-block-alert" :class="msg._sensitiveBlock">
+              <WarningOutlined class="sensitive-block-icon" />
+              <span class="sensitive-block-text">{{ msg.content }}</span>
+            </div>
             <!-- 深度思考面板 -->
-            <div v-if="msg._reasoningContent" class="reasoning-panel">
+            <div v-if="msg._reasoningContent && !msg._sensitiveBlock" class="reasoning-panel">
               <div class="reasoning-header" @click="msg._reasoningExpanded = !msg._reasoningExpanded">
                 <BulbOutlined class="reasoning-icon" />
                 <span class="reasoning-title">深度思考</span>
@@ -53,43 +58,43 @@
               <div v-show="msg._reasoningExpanded" class="reasoning-content">{{ msg._reasoningContent }}</div>
             </div>
             <!-- 工作流节点执行（工作流型智能体） -->
-            <div v-if="msg._workflowEvents?.length > 0" class="workflow-block-inline">
+            <div v-if="msg._workflowEvents?.length > 0 && !msg._sensitiveBlock" class="workflow-block-inline">
               <WorkflowNodesGroupComponent
                 :workflow-events="msg._workflowEvents"
                 :is-done="!msg._streaming"
-                :default-expanded="msg._streaming"
+                :default-expanded="true"
               />
             </div>
             <!-- 有工具事件：按 offset 位置插入工具块（流式/历史统一逻辑，支持多轮工具调用） -->
-            <template v-if="msg._toolEvents?.length > 0 && getToolBlockOffsets(msg).length > 0">
+            <template v-if="!msg._sensitiveBlock && msg._toolEvents?.length > 0 && getToolBlockOffsets(msg).length > 0">
               <template v-for="(segment, si) in splitContentByOffsets(msg)" :key="si">
                 <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!msg._streaming" /></div>
                 <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
                   <ToolCallsGroupComponent
                     :tool-events="getToolEventsForOffset(msg, segment.offset)"
                     :is-done="isToolBlockDone(msg, segment.offset)"
-                    :default-expanded="msg._streaming && !isToolBlockDone(msg, segment.offset)"
+                    :default-expanded="true"
                   />
                 </div>
               </template>
             </template>
             <!-- 有工具事件但 offset 尚未到达：临时追加在末尾 -->
-            <template v-else-if="msg._toolEvents?.length > 0">
+            <template v-else-if="!msg._sensitiveBlock && msg._toolEvents?.length > 0">
               <div v-if="msg.content" class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
               <div class="tool-block-inline">
                 <ToolCallsGroupComponent
                   :tool-events="msg._toolEvents"
                   :is-done="msg._toolsDone"
-                  :default-expanded="msg._streaming"
+                  :default-expanded="true"
                 />
               </div>
             </template>
             <!-- 无工具事件：正常渲染 -->
-            <template v-else>
+            <template v-else-if="!msg._sensitiveBlock">
               <div class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
             </template>
-            <!-- 复制按钮（仅流式结束后显示） -->
-            <a-tooltip v-if="!msg._streaming && msg.content" :title="msg._copied ? '已复制' : '复制'">
+            <!-- 复制按钮（仅流式结束后显示，敏感词拦截时不显示） -->
+            <a-tooltip v-if="!msg._streaming && msg.content && !msg._sensitiveBlock" :title="msg._copied ? '已复制' : '复制'">
               <button
                 class="btn-copy"
                 :class="{ copied: msg._copied }"
@@ -242,7 +247,7 @@
 <script setup>
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined } from '@ant-design/icons-vue'
 import { chatStream } from '../api/chat'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgent, listAgentVersions } from '../api/agent'
@@ -405,6 +410,7 @@ function parseMessage(m) {
   let workflowEvents = []
   let toolBlockOffsets = []
   let reasoningContent = ''
+  let sensitiveBlock = null
   if (m.metadata) {
     try {
       const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
@@ -412,6 +418,7 @@ function parseMessage(m) {
       if (metadata?.workflowEvents) workflowEvents = metadata.workflowEvents
       if (metadata?.toolBlockOffsets) toolBlockOffsets = metadata.toolBlockOffsets
       if (metadata?.reasoningContent) reasoningContent = metadata.reasoningContent
+      if (metadata?.sensitiveBlock) sensitiveBlock = metadata.sensitiveBlock
     } catch {}
   }
   return {
@@ -425,8 +432,9 @@ function parseMessage(m) {
     _toolExpanded: false,
     _toolsDone: true,
     _reasoningContent: reasoningContent,
-    _reasoningExpanded: false,
+    _reasoningExpanded: true,
     _reasoningDone: true,
+    _sensitiveBlock: sensitiveBlock,
   }
 }
 
@@ -568,7 +576,7 @@ async function sendMessage() {
         // onChunk: 文本内容
         onChunk: (chunk) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
             hasStreamContent.value = true
@@ -584,7 +592,7 @@ async function sendMessage() {
         // onToolEvent: 工具调用/结果/状态事件
         onToolEvent: (event) => {
           if (!pushed) {
-            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: false })
+            messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
             pushed = true
             hasStreamContent.value = true
@@ -597,6 +605,20 @@ async function sendMessage() {
           if (event.type === 'reasoning_content') {
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
             assistantMsg._reasoningDone = true
+            return
+          }
+          // 敏感词拦截事件：标记消息为拦截状态
+          if (event.type === 'sensitive_block') {
+            assistantMsg._sensitiveBlock = event.scope || 'ai_output'
+            assistantMsg.content = event.message || assistantMsg.content
+            assistantMsg._streaming = false
+            assistantMsg._toolsDone = true
+            loading.value = false
+            streaming.value = false
+            hasStreamContent.value = false
+            currentStatus.value = ''
+            lastReplyElapsed.value = Date.now() - sendStartTime
+            abortController.value = null
             return
           }
           // 工作流节点执行事件（实时推送，无需等待最终回复）
@@ -672,14 +694,14 @@ async function sendMessage() {
     // 用户主动中断
     if (e.name === 'AbortError') {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content += '\n\n*AI 输出已终止*'
       assistantMsg._streaming = false
     } else {
       if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: false, _reasoningDone: true })
+        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
       assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
@@ -1383,6 +1405,15 @@ watch(sessionId, (newVal, oldVal) => {
   font-size: 12px;
   animation: spin 1s linear infinite;
 }
+.reasoning-header .tool-expand-icon {
+  margin-left: auto;
+  font-size: 12px;
+  color: #ca8a04;
+  transition: transform 0.2s ease;
+}
+.reasoning-header .tool-expand-icon.expanded {
+  transform: rotate(90deg);
+}
 .reasoning-content {
   padding: 10px 12px;
   background: #fffbeb;
@@ -1393,6 +1424,42 @@ watch(sessionId, (newVal, oldVal) => {
   word-break: break-word;
   max-height: 300px;
   overflow-y: auto;
+}
+
+/* 敏感词拦截提示 */
+.sensitive-block-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  animation: fadeIn 0.3s ease;
+}
+.sensitive-block-alert.user_input {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.sensitive-block-alert.user_input .sensitive-block-icon {
+  color: #ef4444;
+}
+.sensitive-block-alert.ai_output {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+.sensitive-block-alert.ai_output .sensitive-block-icon {
+  color: #f97316;
+}
+.sensitive-block-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.sensitive-block-text {
+  flex: 1;
 }
 .input-hint {
   text-align: center;

@@ -7,3 +7,7 @@ export function getToolTypes() {
 export function getModelProviderTypes() {
   return request.get('/enums/model-provider-types')
 }
+
+export function getAgentStatuses() {
+  return request.get('/enums/agent-statuses')
+}

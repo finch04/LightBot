@@ -3,9 +3,9 @@
     <button class="btn-back" @click="$emit('back')">
       <ArrowLeftOutlined /> 返回
     </button>
-    <a-tag v-if="workflowStatus === 'draft'" color="orange" class="publish-tag">未发布</a-tag>
-    <a-tag v-else-if="workflowStatus === 'published_editing'" color="gold" class="publish-tag">已发布编辑中</a-tag>
-    <a-tag v-else color="green" class="publish-tag">已发布 v{{ publishedVersion }}</a-tag>
+    <a-tag v-if="workflowStatus === 'draft'" color="orange" class="publish-tag">{{ getStatusLabel('draft') }}</a-tag>
+    <a-tag v-else-if="workflowStatus === 'published_editing'" color="gold" class="publish-tag">{{ getStatusLabel('published_editing') }}</a-tag>
+    <a-tag v-else color="green" class="publish-tag">{{ getStatusLabel('published') }}</a-tag>
     <h1 class="workflow-title">{{ agentName || '工作流配置' }}</h1>
     <div class="toolbar-status">
       <a-dropdown v-if="validationErrors.length > 0" :trigger="['click']">
@@ -26,10 +26,10 @@
           </div>
         </template>
       </a-dropdown>
-      <span v-else-if="validationErrors.length === 0 && nodeCount >= 2" class="status-valid">
+      <span v-else-if="validationErrors.length === 0 && nodeCount >= 2" class="status-valid status-badge">
         <CheckCircleOutlined /> 配置完整
       </span>
-      <span v-else class="status-empty">请添加节点并配置</span>
+      <span v-else class="status-empty status-badge">请添加节点并配置</span>
       <WorkflowTooltip title="格式化" placement="bottom">
         <a-button type="text" size="small" class="btn-validate" :disabled="isVersionPreview || nodeCount < 2" @click="$emit('format-layout')">
           <ApartmentOutlined />
@@ -88,6 +88,7 @@ defineProps({
   lastAutoSaveTime: [Date, String, Number, null],
   getNodeTitleById: { type: Function, required: true },
   formatAutoSaveTime: { type: Function, required: true },
+  getStatusLabel: { type: Function, required: true },
 })
 
 defineEmits([
@@ -134,9 +135,18 @@ defineEmits([
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  min-height: 32px;
 }
 .status-valid { color: #22c55e; font-size: 13px; }
 .status-error { color: #ef4444; font-size: 13px; }
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 120px;
+  justify-content: center;
+  white-space: nowrap;
+}
 .status-error.clickable {
   cursor: pointer;
   padding: 4px 8px;
@@ -185,6 +195,6 @@ defineEmits([
 .error-msg { color: #dc2626; flex: 1; }
 .toolbar-actions { display: flex; gap: 8px; }
 .btn-validate { color: #6366f1; }
-.auto-save-hint { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+.auto-save-hint { font-size: 12px; color: #94a3b8; white-space: nowrap; min-width: 128px; text-align: center; }
 .auto-save-hint.saving { color: #6366f1; }
 </style>

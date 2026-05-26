@@ -35,6 +35,7 @@ public final class SensitiveWordFilter {
         private final Long sessionId;
         private final StringBuilder raw = new StringBuilder();
         private int filteredEmittedLength;
+        private boolean lastBlocked;
 
         public StreamState(Map<String, Object> configMap, Long agentId, Long sessionId) {
             this.configMap = configMap;
@@ -48,6 +49,7 @@ public final class SensitiveWordFilter {
             }
             raw.append(chunk);
             FilterResult result = filterAiOutput(raw.toString(), configMap, agentId, sessionId);
+            lastBlocked = result.blocked();
             String filtered = result.text();
             if (filtered.length() <= filteredEmittedLength) {
                 return "";
@@ -55,6 +57,11 @@ public final class SensitiveWordFilter {
             String delta = filtered.substring(filteredEmittedLength);
             filteredEmittedLength = filtered.length();
             return delta;
+        }
+
+        /** 最近一次 processChunk 是否触发了 block 拦截 */
+        public boolean isBlocked() {
+            return lastBlocked;
         }
     }
 

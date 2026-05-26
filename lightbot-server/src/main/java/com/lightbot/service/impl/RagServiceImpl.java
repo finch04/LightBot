@@ -9,6 +9,8 @@ import com.lightbot.model.ModelFactory;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.RagService;
+import com.lightbot.service.SystemConfigService;
+import com.lightbot.util.TextNormalizeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
@@ -45,6 +47,7 @@ public class RagServiceImpl implements RagService {
     private final KnowledgeService knowledgeService;
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
+    private final SystemConfigService systemConfigService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int DEFAULT_TOP_K = 5;
@@ -95,7 +98,8 @@ public class RagServiceImpl implements RagService {
 
         // 4. 构建参考资料上下文
         String context = results.stream()
-                .map(row -> String.format("【%s】\n%s", row.get("document_name"), row.get("content")))
+                .map(row -> String.format("【%s】\n%s", row.get("document_name"),
+                        TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")))))
                 .collect(Collectors.joining("\n\n---\n\n"));
 
         // 5. 通过 ModelFactory 获取 ChatModel 并调用
@@ -148,7 +152,8 @@ public class RagServiceImpl implements RagService {
 
         // 4. 构建参考资料上下文
         String context = results.stream()
-                .map(row -> String.format("【%s】\n%s", row.get("document_name"), row.get("content")))
+                .map(row -> String.format("【%s】\n%s", row.get("document_name"),
+                        TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")))))
                 .collect(Collectors.joining("\n\n---\n\n"));
 
         // 5. 通过 ModelFactory 获取 ChatModel 并流式调用
@@ -212,12 +217,21 @@ public class RagServiceImpl implements RagService {
     }
 
     /**
-     * 解析providerId，为空时使用默认提供商（第一个可用的）
+     * 解析providerId，为空时使用系统默认配置（或第一个可用的）
      */
     private Long resolveProviderId(Long providerId) {
+        // 1. 优先使用传入的 providerId
         if (providerId != null) {
             return providerId;
         }
+
+        // 2. 其次使用系统默认AI配置
+        var defaultConfig = systemConfigService.getDefaultAiConfig();
+        if (defaultConfig.getProviderId() != null) {
+            return defaultConfig.getProviderId();
+        }
+
+        // 3. 最后使用第一个可用的提供商
         var providers = modelFactory.getAvailableProviderIds();
         if (providers.isEmpty()) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);

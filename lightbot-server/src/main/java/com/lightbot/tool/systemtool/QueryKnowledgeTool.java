@@ -4,6 +4,7 @@ import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.util.TextNormalizeUtil;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
@@ -140,8 +141,9 @@ public class QueryKnowledgeTool {
             sb.append(String.format("在知识库中找到 %d 条相关内容：\n\n", allResults.size()));
             for (int i = 0; i < allResults.size(); i++) {
                 Map<String, Object> row = allResults.get(i);
+                String content = TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")));
                 sb.append(String.format("【%d. %s】\n%s\n\n",
-                        i + 1, row.get("document_name"), row.get("content")));
+                        i + 1, row.get("document_name"), content));
             }
 
             log.info("[Tool:query_knowledge] 检索完成: agentId={}, results={}", finalAgentId, allResults.size());

@@ -12,6 +12,6 @@ export function getDashboardKnowledge() {
   return request.get('/dashboard/knowledge')
 }
 
-export function getDashboardChat() {
-  return request.get('/dashboard/chat')
+export function getDashboardChat(params) {
+  return request.get('/dashboard/chat', { params })
 }

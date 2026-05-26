@@ -38,6 +38,8 @@ public final class ConfigKeys {
         public static final String SENSITIVE_FILTER_STRATEGY = "sensitiveFilterStrategy";
         public static final String SENSITIVE_FILTER_REPLACE_TEXT = "sensitiveFilterReplaceText";
         public static final String SENSITIVE_WORDS = "sensitiveWords";
+        /** 是否流式输出模型回复，默认 true */
+        public static final String STREAM_OUTPUT = "streamOutput";
     }
 
     /**
@@ -46,5 +48,17 @@ public final class ConfigKeys {
     public static final class Knowledge {
         public static final String RAG_TOP_K = "ragTopK";
         public static final String RAG_THRESHOLD = "ragThreshold";
+    }
+
+    /**
+     * SystemConfig 系统配置的 key
+     */
+    public static final class System {
+        /** 默认对话模型配置 */
+        public static final String DEFAULT_CHAT_MODEL = "default_chat_model";
+        /** 默认向量模型配置 */
+        public static final String DEFAULT_EMBEDDING_MODEL = "default_embedding_model";
+        /** 默认TTS模型配置 */
+        public static final String DEFAULT_TTS_MODEL = "default_tts_model";
     }
 }

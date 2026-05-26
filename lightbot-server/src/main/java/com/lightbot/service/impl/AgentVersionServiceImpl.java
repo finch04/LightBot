@@ -7,6 +7,10 @@ import com.lightbot.dto.WorkflowGraphDTO;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.AgentVersion;
+import com.lightbot.entity.Knowledge;
+import com.lightbot.entity.McpServer;
+import com.lightbot.entity.SubAgent;
+import com.lightbot.entity.Tool;
 import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.AgentType;
 import com.lightbot.enums.AgentVersionStatus;
@@ -15,6 +19,10 @@ import com.lightbot.mapper.AgentMapper;
 import com.lightbot.mapper.AgentVersionMapper;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
+import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.McpServerService;
+import com.lightbot.service.SubAgentService;
+import com.lightbot.service.ToolService;
 import com.lightbot.workflow.WorkflowConfigKeys;
 import com.lightbot.workflow.WorkflowConfigParser;
 import com.lightbot.workflow.WorkflowDefinition;
@@ -28,8 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Agent 版本：草稿与发布历史存 agent_version 表
@@ -45,6 +56,10 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     private final AgentMapper agentMapper;
     private final AgentVersionMapper agentVersionMapper;
     private final ObjectMapper objectMapper;
+    private final KnowledgeService knowledgeService;
+    private final ToolService toolService;
+    private final McpServerService mcpServerService;
+    private final SubAgentService subAgentService;
 
     @Lazy
     @Autowired
@@ -168,17 +183,242 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         result.put("description", row.getDescription());
         result.put("publishedAt", row.getPublishTime());
 
-        if (KIND_CHAT.equals(snap.get("kind"))) {
-            result.put("kind", KIND_CHAT);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> payload = snap.get("payload") instanceof Map
-                    ? (Map<String, Object>) snap.get("payload") : Map.of();
-            result.put("payload", payload);
-        } else {
+        if (KIND_WORKFLOW.equals(snap.get("kind"))) {
             result.put("kind", KIND_WORKFLOW);
             result.put("graph", extractWorkflowGraph(row));
+        } else {
+            // 对话型：含 kind=chat 与旧版无 kind 的扁平快照
+            fillChatVersionDetail(result, snap);
         }
         return result;
+    }
+
+    /**
+     * 填充对话型版本详情，并按快照中的 ID 回查绑定实体
+     */
+    private void fillChatVersionDetail(Map<String, Object> result, Map<String, Object> snap) {
+        result.put("kind", KIND_CHAT);
+        Map<String, Object> payload = extractChatPayload(snap);
+
+        // 1. 基本信息
+        Map<String, Object> basicInfo = new HashMap<>();
+        basicInfo.put("systemPrompt", payload.get("systemPrompt"));
+        basicInfo.put("welcomeMessage", payload.get("welcomeMessage"));
+        basicInfo.put("recommendedQuestions", payload.get("recommendedQuestions"));
+        result.put("basicInfo", basicInfo);
+
+        // 2. 模型参数（包含在 config 中）
+        @SuppressWarnings("unchecked")
+        Map<String, Object> config = payload.get("config") instanceof Map
+                ? (Map<String, Object>) payload.get("config") : new HashMap<>();
+        Map<String, Object> modelParams = new HashMap<>();
+        modelParams.put("providerId", stringifyId(config.get("providerId")));
+        modelParams.put("modelId", stringifyId(config.get("modelId")));
+        modelParams.put("temperature", config.get("temperature"));
+        modelParams.put("topP", config.get("topP"));
+        modelParams.put("maxTokens", config.get("maxTokens"));
+        modelParams.put("presencePenalty", config.get("presencePenalty"));
+        modelParams.put("frequencyPenalty", config.get("frequencyPenalty"));
+        modelParams.put("repetitionPenalty", config.get("repetitionPenalty"));
+        result.put("modelParams", modelParams);
+
+        // 3. 对话配置
+        Map<String, Object> chatConfig = new HashMap<>();
+        chatConfig.put("streamOutput", config.get("streamOutput"));
+        chatConfig.put("maxContextMessages", config.get("maxContextMessages"));
+        chatConfig.put("enableSummary", config.get("enableSummary"));
+        chatConfig.put("summaryThresholdKb", config.get("summaryThresholdKb"));
+        chatConfig.put("userSensitiveFilterEnabled", config.get("userSensitiveFilterEnabled"));
+        chatConfig.put("userSensitiveWords", config.get("userSensitiveWords"));
+        chatConfig.put("sensitiveFilterEnabled", config.get("sensitiveFilterEnabled"));
+        chatConfig.put("sensitiveFilterStrategy", config.get("sensitiveFilterStrategy"));
+        chatConfig.put("sensitiveFilterReplaceText", config.get("sensitiveFilterReplaceText"));
+        chatConfig.put("sensitiveWords", config.get("sensitiveWords"));
+        chatConfig.put("asyncToolCalls", config.get("asyncToolCalls"));
+        chatConfig.put("promptVariables", config.get("promptVariables"));
+        result.put("chatConfig", chatConfig);
+
+        // 4. 绑定 ID（字符串，避免 JS 精度丢失）
+        List<String> knowledgeIds = resolveBindingIdStrings(payload, "knowledgeIds", "knowledges");
+        List<String> toolIds = resolveBindingIdStrings(payload, "toolIds", "tools");
+        List<String> mcpServerIds = resolveBindingIdStrings(payload, "mcpServerIds", "mcpServers");
+        List<String> subAgentIds = resolveBindingIdStrings(payload, "subAgentIds", "subagents");
+        result.put("knowledgeIds", knowledgeIds);
+        result.put("toolIds", toolIds);
+        result.put("mcpServerIds", mcpServerIds);
+        result.put("subAgentIds", subAgentIds);
+
+        // 5. 按 ID 回查绑定实体（供版本预览展示名称）
+        result.put("knowledges", resolveKnowledgeSummaries(knowledgeIds));
+        result.put("tools", resolveToolSummaries(toolIds));
+        result.put("mcpServers", resolveMcpServerSummaries(mcpServerIds));
+        result.put("subAgents", resolveSubAgentSummaries(subAgentIds));
+
+        // 6. 兼容旧前端：保留 payload
+        Map<String, Object> compatPayload = new HashMap<>(payload);
+        compatPayload.put("knowledgeIds", knowledgeIds);
+        compatPayload.put("toolIds", toolIds);
+        compatPayload.put("mcpServerIds", mcpServerIds);
+        compatPayload.put("subAgentIds", subAgentIds);
+        result.put("payload", compatPayload);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractChatPayload(Map<String, Object> snap) {
+        if (snap == null || snap.isEmpty()) {
+            return new HashMap<>();
+        }
+        if (KIND_CHAT.equals(snap.get("kind")) && snap.get("payload") instanceof Map<?, ?> outer) {
+            Map<String, Object> payload = new HashMap<>();
+            outer.forEach((k, v) -> payload.put(String.valueOf(k), v));
+            // 兼容 initDraft 时误嵌套的双层 payload
+            if (KIND_CHAT.equals(payload.get("kind")) && payload.get("payload") instanceof Map<?, ?> inner) {
+                Map<String, Object> nested = new HashMap<>();
+                inner.forEach((k, v) -> nested.put(String.valueOf(k), v));
+                return nested;
+            }
+            return payload;
+        }
+        if (snap.containsKey("systemPrompt") || snap.containsKey("config")
+                || snap.containsKey("knowledgeIds") || snap.containsKey("knowledges")) {
+            return snap;
+        }
+        return new HashMap<>();
+    }
+
+    private List<String> resolveBindingIdStrings(Map<String, Object> payload, String idField, String configField) {
+        List<String> ids = toStringIdList(payload.get(idField));
+        if (!ids.isEmpty()) {
+            return ids;
+        }
+        return toStringIdList(payload.get(configField));
+    }
+
+    private List<Map<String, Object>> resolveKnowledgeSummaries(List<String> ids) {
+        List<Long> longIds = toLongListFromStrings(ids);
+        if (longIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Knowledge> byId = knowledgeService.listByIds(longIds).stream()
+                .collect(Collectors.toMap(Knowledge::getId, Function.identity(), (a, b) -> a));
+        return buildOrderedSummaries(ids, longIds, byId, k -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", String.valueOf(k.getId()));
+            m.put("name", k.getName());
+            m.put("description", k.getDescription());
+            return m;
+        });
+    }
+
+    private List<Map<String, Object>> resolveToolSummaries(List<String> ids) {
+        List<Long> longIds = toLongListFromStrings(ids);
+        if (longIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Tool> byId = toolService.listByIds(longIds).stream()
+                .collect(Collectors.toMap(Tool::getId, Function.identity(), (a, b) -> a));
+        return buildOrderedSummaries(ids, longIds, byId, t -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", String.valueOf(t.getId()));
+            m.put("name", t.getName());
+            m.put("displayName", t.getDisplayName());
+            m.put("description", t.getDescription());
+            if (t.getToolType() != null) {
+                m.put("toolType", t.getToolType().getCode());
+            }
+            return m;
+        });
+    }
+
+    private List<Map<String, Object>> resolveMcpServerSummaries(List<String> ids) {
+        List<Long> longIds = toLongListFromStrings(ids);
+        if (longIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, McpServer> byId = mcpServerService.listByIds(longIds).stream()
+                .collect(Collectors.toMap(McpServer::getId, Function.identity(), (a, b) -> a));
+        return buildOrderedSummaries(ids, longIds, byId, s -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", String.valueOf(s.getId()));
+            m.put("name", s.getName());
+            m.put("description", s.getDescription());
+            return m;
+        });
+    }
+
+    private List<Map<String, Object>> resolveSubAgentSummaries(List<String> ids) {
+        List<Long> longIds = toLongListFromStrings(ids);
+        if (longIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, SubAgent> byId = subAgentService.listByIds(longIds).stream()
+                .collect(Collectors.toMap(SubAgent::getId, Function.identity(), (a, b) -> a));
+        return buildOrderedSummaries(ids, longIds, byId, s -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", String.valueOf(s.getId()));
+            m.put("name", s.getName());
+            m.put("displayName", s.getDisplayName());
+            m.put("description", s.getDescription());
+            return m;
+        });
+    }
+
+    private <T> List<Map<String, Object>> buildOrderedSummaries(
+            List<String> idStrs, List<Long> longIds, Map<Long, T> byId, Function<T, Map<String, Object>> mapper) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (int i = 0; i < longIds.size(); i++) {
+            T entity = byId.get(longIds.get(i));
+            if (entity != null) {
+                list.add(mapper.apply(entity));
+            } else if (i < idStrs.size()) {
+                Map<String, Object> missing = new LinkedHashMap<>();
+                missing.put("id", idStrs.get(i));
+                missing.put("name", "（已删除 #" + idStrs.get(i) + "）");
+                list.add(missing);
+            }
+        }
+        return list;
+    }
+
+    private List<Long> toLongListFromStrings(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> result = new ArrayList<>();
+        for (String id : ids) {
+            if (id != null && !id.isBlank()) {
+                result.add(Long.parseLong(id.trim()));
+            }
+        }
+        return result;
+    }
+
+    private String stringifyId(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            return String.valueOf(n.longValue());
+        }
+        String text = String.valueOf(raw);
+        return text.isBlank() ? null : text;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deletePublishedVersion(Long agentId, Integer version) {
+        Agent agent = requireAgent(agentId);
+        AgentVersion row = requirePublishedRow(agentId, version);
+
+        // 当前线上版本不允许删除（避免对话运行时无法回放）
+        int currentVersion = agent.getVersion() != null ? agent.getVersion() : 0;
+        if (row.getVersion() != null && row.getVersion() == currentVersion) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                    "当前线上版本不允许删除，请先发布新版本后再删除");
+        }
+
+        agentVersionMapper.deleteById(row.getId());
+        log.info("[AgentVersion] 已删除发布版本: agentId={}, version={}", agentId, version);
     }
 
     @Override
@@ -215,8 +455,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
 
     @SuppressWarnings("unchecked")
     private void restoreChatSnapshotToDraft(Agent agent, Map<String, Object> snap) {
-        Map<String, Object> payload = snap.get("payload") instanceof Map
-                ? (Map<String, Object>) snap.get("payload") : Map.of();
+        Map<String, Object> payload = extractChatPayload(snap);
 
         if (payload.get("systemPrompt") != null) {
             agent.setSystemPrompt(String.valueOf(payload.get("systemPrompt")));
@@ -459,8 +698,9 @@ public class AgentVersionServiceImpl implements AgentVersionService {
             snapshot.put("kind", KIND_WORKFLOW);
             snapshot.put("graph", Map.of("nodes", List.of(), "edges", List.of(), "globalConfig", Map.of()));
         } else {
+            Map<String, Object> chatSnap = buildChatSnapshot(agent);
             snapshot.put("kind", KIND_CHAT);
-            snapshot.put("payload", buildChatSnapshot(agent));
+            snapshot.put("payload", chatSnap.get("payload"));
         }
         AgentVersion draft = new AgentVersion();
         draft.setAgentId(agent.getId());
@@ -613,15 +853,47 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         payload.put("welcomeMessage", agent.getWelcomeMessage());
         payload.put("recommendedQuestions", agent.getRecommendedQuestions());
         payload.put("config", WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper));
-        payload.put("knowledgeIds", readBindingIds(agent, "knowledges"));
-        payload.put("toolIds", readBindingIds(agent, "tools"));
-        payload.put("mcpServerIds", readBindingIds(agent, "mcpServers"));
-        payload.put("subAgentIds", readBindingIds(agent, "subagents"));
+        // ID转为字符串存储，避免JavaScript精度丢失
+        payload.put("knowledgeIds", readBindingIdsAsStrings(agent, "knowledges"));
+        payload.put("toolIds", readBindingIdsAsStrings(agent, "tools"));
+        payload.put("mcpServerIds", readBindingIdsAsStrings(agent, "mcpServers"));
+        payload.put("subAgentIds", readBindingIdsAsStrings(agent, "subagents"));
 
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("kind", KIND_CHAT);
         snapshot.put("payload", payload);
         return snapshot;
+    }
+
+    /**
+     * 读取绑定ID列表并转为字符串列表（避免前端精度丢失）
+     */
+    private List<String> readBindingIdsAsStrings(Agent agent, String field) {
+        List<Long> ids = readBindingIds(agent, field);
+        return ids.stream().map(String::valueOf).toList();
+    }
+
+    /**
+     * 将任意ID列表（可能是Number或String）统一转为字符串列表
+     * 用于版本详情返回时避免JavaScript精度丢失
+     */
+    private List<String> toStringIdList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (Object item : list) {
+            if (item == null) continue;
+            if (item instanceof Number n) {
+                result.add(String.valueOf(n.longValue()));
+            } else {
+                String text = String.valueOf(item);
+                if (!text.isBlank()) {
+                    result.add(text);
+                }
+            }
+        }
+        return result;
     }
 
     private String resolveWorkflowStatusCode(Agent agent) {
@@ -712,22 +984,18 @@ public class AgentVersionServiceImpl implements AgentVersionService {
             if (!configNode.has(field)) {
                 return List.of();
             }
-            var arr = configNode.get(field);
-            if ("knowledges".equals(field)) {
-                List<Long> ids = new ArrayList<>();
-                for (var node : arr) {
-                    if (node.isNumber()) {
-                        ids.add(node.longValue());
-                    } else if (node.isTextual()) {
-                        String text = node.asText();
-                        if (text != null && !text.isBlank()) {
-                            ids.add(Long.parseLong(text));
-                        }
+            List<Long> ids = new ArrayList<>();
+            for (var node : configNode.get(field)) {
+                if (node.isNumber()) {
+                    ids.add(node.longValue());
+                } else if (node.isTextual()) {
+                    String text = node.asText();
+                    if (text != null && !text.isBlank()) {
+                        ids.add(Long.parseLong(text));
                     }
                 }
-                return ids;
             }
-            return objectMapper.convertValue(arr, new com.fasterxml.jackson.core.type.TypeReference<List<Long>>() {});
+            return ids;
         } catch (Exception e) {
             log.warn("[AgentVersion] 解析 config.{} 失败: agentId={}, error={}", field, agent.getId(), e.getMessage());
             return List.of();

@@ -506,9 +506,27 @@
         <a-form-item label="RAG 相似度阈值">
           <a-input-number v-model:value="editForm.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="自动生成问题">
+        <a-form-item>
+          <template #label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>自动生成问题</span>
+              <a-tooltip title="入库文档时AI自动生成示例问题">
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+          </template>
           <a-switch v-model:checked="editForm.autoGenerateQuestions" />
-          <span class="form-hint" style="margin-left: 8px">入库文档时AI自动生成示例问题</span>
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>内容安全扫描</span>
+              <a-tooltip title="上传文件/网页抓取时使用系统默认模型检测 Prompt 注入">
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+          </template>
+          <a-switch v-model:checked="editForm.contentScanEnabled" />
         </a-form-item>
         <!-- 示例问题管理 -->
         <a-form-item label="示例问题">
@@ -776,6 +794,7 @@ const editForm = reactive({
   ragTopK: 5,
   ragThreshold: 0.7,
   autoGenerateQuestions: false,
+  contentScanEnabled: false,
 })
 const editExampleQuestions = ref([])
 const editQuestionLoading = ref(false)
@@ -1193,6 +1212,7 @@ async function openEditDialog() {
     ragTopK: config.ragTopK ?? 5,
     ragThreshold: config.ragThreshold ?? 0.7,
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
+    contentScanEnabled: config.contentScanEnabled ?? false,
   })
 
   // 加载示例问题
@@ -1219,6 +1239,7 @@ async function handleEdit() {
       ragTopK: editForm.ragTopK,
       ragThreshold: editForm.ragThreshold,
       autoGenerateQuestions: editForm.autoGenerateQuestions,
+      contentScanEnabled: editForm.contentScanEnabled,
     })
     await updateKnowledge({
       id: knowledgeId,
