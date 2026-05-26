@@ -283,8 +283,8 @@ const abortController = ref(null)
 const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
-/** 对话使用的配置版本：null=线上最新，0=暂存草稿，>0=历史发布版本 */
-const selectedConfigVersion = ref(null)
+/** 对话配置版本：0=暂存草稿，>0=指定已发布版本号 */
+const selectedConfigVersion = ref(0)
 const configVersionOptions = ref([])
 
 const userInitial = computed(() => {
@@ -339,18 +339,11 @@ function handleAgentSelect({ key }) {
 async function loadAgentConfigVersions(agentId) {
   if (!agentId) {
     configVersionOptions.value = []
-    selectedConfigVersion.value = null
+    selectedConfigVersion.value = 0
     return
   }
   try {
-    const agent = agents.value.find(a => String(a.id) === String(agentId)) || currentAgent.value
-    const publishedVer = agent?.version || 0
-    const status = agent?.status?.code || agent?.status || 'draft'
-    const opts = []
-    if (publishedVer > 0 && (status === 'published' || status === 'published_editing')) {
-      opts.push({ value: null, label: '线上最新' })
-    }
-    opts.push({ value: 0, label: '暂存草稿' })
+    const opts = [{ value: 0, label: '暂存草稿' }]
     const res = await listAgentVersions(agentId)
     const versions = res.data || []
     for (const v of versions) {
@@ -358,14 +351,15 @@ async function loadAgentConfigVersions(agentId) {
       if (num == null || num <= 0) continue
       opts.push({
         value: num,
-        label: v.current ? `v${num}（线上）` : `v${num}`,
+        label: v.current ? `v${num}（当前线上）` : `v${num}`,
       })
     }
     configVersionOptions.value = opts
-    selectedConfigVersion.value = opts.length > 0 && opts[0].value === null ? null : 0
+    const currentPublished = versions.find(v => v.current)
+    selectedConfigVersion.value = currentPublished?.version ?? 0
   } catch {
-    configVersionOptions.value = [{ value: null, label: '默认' }, { value: 0, label: '暂存草稿' }]
-    selectedConfigVersion.value = null
+    configVersionOptions.value = [{ value: 0, label: '暂存草稿' }]
+    selectedConfigVersion.value = 0
   }
 }
 
@@ -562,9 +556,11 @@ async function sendMessage() {
       router.replace(`/chat/${sid}`)
     }
 
-    const chatPayload = { message: text, sessionId: sid, agentId: currentAgentId || undefined }
-    if (selectedConfigVersion.value != null) {
-      chatPayload.configVersion = selectedConfigVersion.value
+    const chatPayload = {
+      message: text,
+      sessionId: sid,
+      agentId: currentAgentId || undefined,
+      configVersion: selectedConfigVersion.value ?? 0,
     }
     await chatStream(
       chatPayload,

@@ -58,6 +58,7 @@ public class ChatServiceImpl implements ChatService {
 
     // 中间件
     private final InitMiddleware initMiddleware;
+    private final UserSensitiveMiddleware userSensitiveMiddleware;
     private final WorkflowMiddleware workflowMiddleware;
     private final MessageMiddleware messageMiddleware;
     private final ToolPrepMiddleware toolPrepMiddleware;
@@ -77,16 +78,23 @@ public class ChatServiceImpl implements ChatService {
         // 1. 初始化上下文
         ChatContext ctx = ChatContext.of(request);
         initMiddleware.init(ctx);
+        Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
+        SensitiveWordFilter.FilterResult userCheck = SensitiveWordFilter.checkUserInput(
+                request.getMessage(), ctx.getConfigMap(), agentId, ctx.getSessionId());
+        if (userCheck.blocked()) {
+            messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT, userCheck.text());
+            return userCheck.text();
+        }
         messageMiddleware.prepare(ctx);
         toolPrepMiddleware.prepare(ctx);
 
         log.info("[Chat] 用户消息: sessionId={}, agentId={}, message={}", ctx.getSessionId(),
-                ctx.getAgent() != null ? ctx.getAgent().getId() : null, request.getMessage());
+                agentId, request.getMessage());
 
         // 2. 调用模型获取回复
         ChatResponse response = ctx.getChatModel().call(new Prompt(ctx.getMessages(), ctx.getToolOptions()));
         String reply = response.getResult().getOutput().getText();
-        reply = SensitiveWordFilter.filter(reply, ctx.getConfigMap()).text();
+        reply = SensitiveWordFilter.filterAiOutput(reply, ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
 
         log.info("[Chat] AI回复: sessionId={}, length={}", ctx.getSessionId(), reply != null ? reply.length() : 0);
 
@@ -104,8 +112,10 @@ public class ChatServiceImpl implements ChatService {
         ChatContext ctx = ChatContext.of(request);
         ctx.setRequestId(String.valueOf(System.nanoTime()));
 
-        // 构建中间件链：Init → Workflow → Message → ToolPrep → Trace → [core]
-        List<ChatMiddleware> middlewares = List.of(initMiddleware, workflowMiddleware, messageMiddleware, toolPrepMiddleware, traceMiddleware);
+        // Init → 用户敏感词 → Workflow → Message → ToolPrep → Trace → [core]
+        List<ChatMiddleware> middlewares = List.of(
+                initMiddleware, userSensitiveMiddleware, workflowMiddleware,
+                messageMiddleware, toolPrepMiddleware, traceMiddleware);
         ChatServiceCore core = this::streamCore;
 
         return ChatMiddlewareChain.of(middlewares, core).proceed(ctx)
@@ -117,7 +127,9 @@ public class ChatServiceImpl implements ChatService {
      */
     private Flux<String> streamCore(ChatContext ctx) {
         ctx.setStartTime(System.currentTimeMillis());
-        ctx.setSensitiveStreamState(new SensitiveWordFilter.StreamState(ctx.getConfigMap()));
+        Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
+        ctx.setSensitiveStreamState(new SensitiveWordFilter.StreamState(
+                ctx.getConfigMap(), agentId, ctx.getSessionId()));
         return processToolCallsRecursively(ctx, 0, System.currentTimeMillis());
     }
 
@@ -183,7 +195,7 @@ public class ChatServiceImpl implements ChatService {
                         if (stripped.isEmpty()) return Flux.empty();
                         String delta = ctx.getSensitiveStreamState() != null
                                 ? ctx.getSensitiveStreamState().processChunk(stripped)
-                                : SensitiveWordFilter.filter(stripped, ctx.getConfigMap()).text();
+                                : SensitiveWordFilter.filterAiOutput(stripped, ctx.getConfigMap(), agent.getId(), ctx.getSessionId()).text();
                         if (delta.isEmpty()) {
                             return Flux.empty();
                         }

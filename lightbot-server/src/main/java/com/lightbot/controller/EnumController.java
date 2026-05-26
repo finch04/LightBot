@@ -1,6 +1,7 @@
 package com.lightbot.controller;
 
 import com.lightbot.common.Result;
+import com.lightbot.enums.ModelProviderType;
 import com.lightbot.enums.ToolType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +25,12 @@ public class EnumController {
     @GetMapping("/tool-types")
     public Result<List<EnumVO>> getToolTypes() {
         return Result.ok(toEnumVOList(ToolType.values()));
+    }
+
+    @Operation(summary = "获取模型提供商类型枚举")
+    @GetMapping("/model-provider-types")
+    public Result<List<EnumVO>> getModelProviderTypes() {
+        return Result.ok(toEnumVOList(ModelProviderType.values()));
     }
 
     /**

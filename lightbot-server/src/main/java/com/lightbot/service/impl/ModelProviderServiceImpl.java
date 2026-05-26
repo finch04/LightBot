@@ -93,6 +93,19 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         syncAllProvidersCache();
     }
 
+    @Override
+    public void updateStatus(Long id, String status) {
+        ModelProvider provider = getById(id);
+        if (provider == null) {
+            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+        }
+        provider.setStatus(CommonStatus.fromValue(status));
+        updateById(provider);
+        // 同步缓存
+        cacheUtil.cacheProvider(provider);
+        syncAllProvidersCache();
+    }
+
     /**
      * 刷新全部提供商列表缓存
      */

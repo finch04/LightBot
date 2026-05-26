@@ -16,7 +16,7 @@
     </div>
 
     <div class="provider-grid">
-      <div v-for="p in list" :key="p.id" class="provider-card">
+      <div v-for="p in list" :key="p.id" :class="['provider-card', { disabled: p.status?.code === 'disabled' || p.status === 'disabled' }]">
         <div class="card-top">
           <div class="card-icon">{{ p.name[0] }}</div>
           <div class="card-info">
@@ -24,6 +24,13 @@
             <span class="card-type">{{ p.type?.code || p.type }}</span>
           </div>
           <div class="card-actions">
+            <a-switch
+              :checked="p.status?.code === 'active' || p.status === 'active'"
+              checked-children="启用"
+              un-checked-children="禁用"
+              size="small"
+              @change="(checked) => handleToggleStatus(p, checked)"
+            />
             <button class="btn-icon" @click="openDialog(p)"><EditOutlined /></button>
             <button class="btn-icon danger" @click="handleDelete(p.id)"><DeleteOutlined /></button>
           </div>
@@ -33,7 +40,7 @@
           <span v-if="p.baseUrl">URL: {{ p.baseUrl }}</span>
         </div>
         <div class="card-footer">
-          <button class="btn-link" @click="openModelModal(p)">管理模型</button>
+          <button class="btn-link" :disabled="p.status?.code === 'disabled' || p.status === 'disabled'" @click="openModelModal(p)">管理模型</button>
         </div>
       </div>
     </div>
@@ -45,11 +52,10 @@
           <a-input v-model:value="form.name" placeholder="如：通义千问" />
         </a-form-item>
         <a-form-item label="类型" required>
-          <a-select v-model:value="form.type" style="width: 100%">
-            <a-select-option value="DASHSCOPE">通义千问 (DashScope)</a-select-option>
-            <a-select-option value="OPENAI">OpenAI</a-select-option>
-            <a-select-option value="DEEPSEEK">DeepSeek</a-select-option>
-            <a-select-option value="OLLAMA">Ollama</a-select-option>
+          <a-select v-model:value="form.type" style="width: 100%" placeholder="选择提供商类型">
+            <a-select-option v-for="t in providerTypes" :key="t.value" :value="t.value">
+              {{ t.label }}
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="API Key">
@@ -188,16 +194,18 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache } from '../api/modelProvider'
+import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus } from '../api/modelProvider'
+import { getModelProviderTypes } from '../api/enum'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
+const providerTypes = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
 const refreshing = ref(false)
-const form = reactive({ id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
+const form = reactive({ id: null, name: '', type: '', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
 const showAdvanced = ref(false)
 
 // 模型管理
@@ -247,6 +255,23 @@ function selectAllFiltered() {
   selectedFetchedModels.value = filteredFetchedModels.value.map(m => m.modelId)
 }
 
+function resolveDefaultProviderType() {
+  const preferred = providerTypes.value.find(t => t.value === 'DASHSCOPE')
+  return preferred?.value || providerTypes.value[0]?.value || ''
+}
+
+async function loadProviderTypes() {
+  try {
+    const res = await getModelProviderTypes()
+    providerTypes.value = res.data || []
+    if (!form.type) {
+      form.type = resolveDefaultProviderType()
+    }
+  } catch {
+    providerTypes.value = []
+  }
+}
+
 async function loadData() {
   const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
   list.value = res.data.records || []
@@ -266,7 +291,16 @@ function openDialog(row) {
     })
     showAdvanced.value = false
   } else {
-    Object.assign(form, { id: null, name: '', type: 'DASHSCOPE', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
+    Object.assign(form, {
+      id: null,
+      name: '',
+      type: resolveDefaultProviderType(),
+      apiKey: '',
+      baseUrl: '',
+      modelsEndpoint: '',
+      headersJson: '{}',
+      extraJson: '{}',
+    })
     showAdvanced.value = false
   }
   dialogVisible.value = true
@@ -305,6 +339,17 @@ function handleDelete(id) {
       loadData()
     },
   })
+}
+
+async function handleToggleStatus(provider, checked) {
+  const status = checked ? 'active' : 'disabled'
+  try {
+    await toggleProviderStatus(provider.id, status)
+    message.success(checked ? '已启用' : '已禁用')
+    await loadData()
+  } catch {
+    // interceptor已处理错误提示
+  }
 }
 
 async function handleCheck() {
@@ -461,7 +506,10 @@ async function handleRefreshCache() {
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadProviderTypes()
+  await loadData()
+})
 </script>
 
 <style scoped>
@@ -550,6 +598,14 @@ onMounted(loadData)
   padding: 20px;
   display: flex;
   flex-direction: column;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+.provider-card.disabled {
+  opacity: 0.6;
+  border-color: #e4e4e7;
+}
+.provider-card.disabled .card-icon {
+  background: #a1a1aa;
 }
 .card-top {
   display: flex;
@@ -630,6 +686,13 @@ onMounted(loadData)
 }
 .btn-link:hover {
   text-decoration: underline;
+}
+.btn-link:disabled {
+  color: #a1a1aa;
+  cursor: not-allowed;
+}
+.btn-link:disabled:hover {
+  text-decoration: none;
 }
 
 /* 模型管理弹窗 */

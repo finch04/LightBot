@@ -39,3 +39,7 @@ export function fetchProviderModels(id) {
 export function refreshModelProviderCache() {
   return request.post('/model-providers/refresh-cache')
 }
+
+export function toggleProviderStatus(id, status) {
+  return request.patch(`/model-providers/${id}/status`, null, { params: { status } })
+}

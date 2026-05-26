@@ -84,7 +84,8 @@ public class WorkflowMiddleware implements ChatMiddleware {
 
                 result = resolveAssistantContent(result, workflowEvents);
                 if (result != null) {
-                    SensitiveWordFilter.FilterResult filtered = SensitiveWordFilter.filter(result, ctx.getConfigMap());
+                    SensitiveWordFilter.FilterResult filtered = SensitiveWordFilter.filterAiOutput(
+                            result, ctx.getConfigMap(), ctx.getAgent().getId(), ctx.getSessionId());
                     result = filtered.text();
                     ctx.getFullReply().append(result);
                 }

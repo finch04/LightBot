@@ -44,4 +44,12 @@ public interface ModelProviderService extends IService<ModelProvider> {
      * @param id 主键ID
      */
     void deleteById(Long id);
+
+    /**
+     * 切换提供商状态
+     *
+     * @param id     主键ID
+     * @param status 目标状态（active / disabled）
+     */
+    void updateStatus(Long id, String status);
 }

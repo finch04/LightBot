@@ -120,6 +120,8 @@ public class InitMiddleware implements ChatMiddleware {
             return;
         }
         String[] keys = {
+                ConfigKeys.Agent.USER_SENSITIVE_FILTER_ENABLED,
+                ConfigKeys.Agent.USER_SENSITIVE_WORDS,
                 ConfigKeys.Agent.SENSITIVE_FILTER_ENABLED,
                 ConfigKeys.Agent.SENSITIVE_FILTER_STRATEGY,
                 ConfigKeys.Agent.SENSITIVE_FILTER_REPLACE_TEXT,

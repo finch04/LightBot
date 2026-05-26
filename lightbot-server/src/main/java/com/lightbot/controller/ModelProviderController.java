@@ -88,6 +88,13 @@ public class ModelProviderController {
         return Result.ok(modelFactory.fetchModels(id));
     }
 
+    @Operation(summary = "切换模型提供商状态（启用/禁用）")
+    @PatchMapping("/{id}/status")
+    public Result<Void> toggleStatus(@PathVariable Long id, @RequestParam String status) {
+        modelProviderService.updateStatus(id, status);
+        return Result.ok();
+    }
+
     @Operation(summary = "刷新模型提供商缓存（从数据库重新加载）")
     @PostMapping("/refresh-cache")
     public Result<Void> refreshCache() {

@@ -19,7 +19,8 @@ public enum ModelProviderType {
     OPENAI("OPENAI", "OpenAI"),
     DASHSCOPE("DASHSCOPE", "通义千问"),
     DEEPSEEK("DEEPSEEK", "DeepSeek"),
-    OLLAMA("OLLAMA", "Ollama");
+    OLLAMA("OLLAMA", "Ollama"),
+    MIMO("MIMO", "小米MiMo");
 
     @EnumValue
     private final String code;

@@ -51,10 +51,11 @@
 
     <div class="content-grid" :class="{ 'is-version-preview': isVersionPreview }">
       <!-- 基本信息 -->
-      <div class="panel">
+      <div class="panel panel-stretch">
         <div class="panel-header">
           <h3>基本信息</h3>
         </div>
+        <div class="panel-body">
         <a-form :model="agent" :label-col="{ span: 6 }">
           <a-form-item label="智能体ID">
             <div class="id-field">
@@ -121,63 +122,86 @@
             </div>
           </a-form-item>
           <!-- 变量配置 -->
-          <div v-if="agent.agentType !== 'workflow'" class="variable-config-panel">
-            <div class="variable-config-header">
-              <h4 class="variable-config-title">变量配置</h4>
-              <button type="button" class="btn-add-var" @click="addPromptVariable">
-                <PlusOutlined /> 添加变量
+          <div v-if="agent.agentType !== 'workflow'" class="sub-config-card">
+            <div class="sub-config-card-header">
+              <div>
+                <h4 class="sub-config-card-title">变量配置</h4>
+                <p class="sub-config-card-desc">
+                  变量名仅支持英文、数字、下划线；在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
+                </p>
+              </div>
+              <button type="button" class="btn-add-inline" @click="addPromptVariable">
+                <PlusOutlined /> 添加
               </button>
             </div>
-            <p class="variable-config-desc">
-              允许自定义变量。变量名仅支持英文、数字、下划线，在系统提示词中使用 <code v-pre>{{变量名}}</code> 引用。
-            </p>
-            <div v-if="promptVariables.length === 0" class="empty-tip">暂无变量，点击「添加变量」创建</div>
-            <div v-for="(v, idx) in promptVariables" :key="v._id" class="variable-row">
-              <a-input v-model:value="v.key" placeholder="变量名（如 company_name）" />
-              <a-input v-model:value="v.label" placeholder="显示名称" />
-              <a-input v-model:value="v.defaultValue" placeholder="默认值（可选）" />
-              <button type="button" class="btn-icon-sm danger" @click="removePromptVariable(idx)">
-                <DeleteOutlined />
-              </button>
-            </div>
+            <div v-if="promptVariables.length === 0" class="sub-config-empty">暂无变量</div>
+            <template v-else>
+              <div class="list-table-head list-table-head--4col">
+                <span>变量名</span>
+                <span>显示名称</span>
+                <span>默认值</span>
+                <span class="col-action">操作</span>
+              </div>
+              <div class="config-list-scroll">
+                <div v-for="(v, idx) in promptVariables" :key="v._id" class="list-table-row list-table-row--4col">
+                  <a-input v-model:value="v.key" placeholder="company_name" size="small" />
+                  <a-input v-model:value="v.label" placeholder="显示名称" size="small" />
+                  <a-input v-model:value="v.defaultValue" placeholder="可选" size="small" />
+                  <button type="button" class="btn-icon-sm danger" title="删除" @click="removePromptVariable(idx)">
+                    <DeleteOutlined />
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
           <!-- 欢迎语和推荐问题：仅非工作流类型显示 -->
           <a-form-item v-if="agent.agentType !== 'workflow'" label="欢迎语">
             <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" />
           </a-form-item>
           <a-form-item v-if="agent.agentType !== 'workflow'" label="推荐问题">
-            <div class="questions-header">
-              <button class="btn-ai-sm" :disabled="generatingQuestions" @click="handleGenerateQuestions">
-                <ThunderboltOutlined :spin="generatingQuestions" />
-                {{ generatingQuestions ? '生成中...' : 'AI生成推荐问题' }}
-              </button>
-            </div>
-            <div class="recommended-questions">
-              <div v-for="(q, i) in recommendedQuestions" :key="i" class="question-row">
-                <a-input v-model:value="recommendedQuestions[i]" placeholder="推荐问题" size="small" />
-                <button class="btn-icon-sm danger" @click="recommendedQuestions.splice(i, 1)">
-                  <CloseOutlined />
+            <div class="inline-field-block">
+              <div class="inline-field-toolbar">
+                <button class="btn-ai-sm" :disabled="generatingQuestions" @click="handleGenerateQuestions">
+                  <ThunderboltOutlined :spin="generatingQuestions" />
+                  {{ generatingQuestions ? '生成中...' : 'AI 生成' }}
+                </button>
+                <button
+                  v-if="recommendedQuestions.length < 3"
+                  type="button"
+                  class="btn-add-inline"
+                  @click="recommendedQuestions.push('')"
+                >
+                  <PlusOutlined /> 添加
                 </button>
               </div>
-              <button v-if="recommendedQuestions.length < 3" class="btn-add-question" @click="recommendedQuestions.push('')">
-                <PlusOutlined /> 添加推荐问题
-              </button>
+              <div v-if="recommendedQuestions.length === 0" class="sub-config-empty">暂无推荐问题，最多 3 条</div>
+              <div v-else class="config-list-scroll config-list-scroll--compact">
+                <div v-for="(q, i) in recommendedQuestions" :key="i" class="list-table-row list-table-row--2col">
+                  <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" size="small" />
+                  <button type="button" class="btn-icon-sm danger" title="删除" @click="recommendedQuestions.splice(i, 1)">
+                    <CloseOutlined />
+                  </button>
+                </div>
+              </div>
             </div>
           </a-form-item>
         </a-form>
+        </div>
       </div>
 
-      <!-- 模型参数调优：仅 CHAT/ASSISTANT 类型显示 -->
-      <div class="panel" v-if="agent.agentType !== 'workflow'">
-        <div class="panel-header">
-          <h3>模型参数调优</h3>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="btn-ai-sm" @click="restoreDefaults" :disabled="!agentConfig.providerId">
-              <UndoOutlined /> 恢复默认
-            </button>
-            <span class="panel-tip">根据提供商动态显示可用配置</span>
+      <!-- 模型参数调优 + 对话配置：仅 CHAT/ASSISTANT 类型显示 -->
+      <div v-if="agent.agentType !== 'workflow'" class="content-grid-side">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>模型参数调优</h3>
+            <div class="panel-header-actions">
+              <button class="btn-ai-sm" @click="restoreDefaults" :disabled="!agentConfig.providerId">
+                <UndoOutlined /> 恢复默认
+              </button>
+              <span class="panel-tip">根据提供商动态显示</span>
+            </div>
           </div>
-        </div>
+          <div class="panel-body">
         <a-form :model="agentConfig" :label-col="{ span: 6 }">
           <a-form-item label="提供商">
             <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" @change="onProviderChange">
@@ -226,13 +250,18 @@
             <div v-if="field.hint" class="param-hint">{{ field.hint }}</div>
           </a-form-item>
         </a-form>
-
-        <div class="model-config-card">
-          <div class="model-config-card-header">
-            <h4>模型配置</h4>
-            <span class="model-config-card-tip">对话上下文、摘要与输出安全策略</span>
           </div>
-          <a-form :model="agentConfig" :label-col="{ span: 6 }">
+        </div>
+
+        <div class="panel">
+          <div class="panel-header panel-header--stack">
+            <div>
+              <h3>对话配置</h3>
+              <p class="panel-subtitle">上下文管理、摘要与敏感词策略</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <a-form :model="agentConfig" :label-col="{ span: 6 }">
           <a-form-item label="上下文条数">
             <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
               <a-input-number
@@ -293,14 +322,50 @@
           <a-form-item>
             <template #label>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <span>敏感词过滤</span>
+                <span>用户输入敏感词</span>
+              </div>
+            </template>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <a-switch v-model:checked="agentConfig.userSensitiveFilterEnabled" />
+              <span class="tool-option-value">{{ agentConfig.userSensitiveFilterEnabled ? '已启用' : '未启用' }}</span>
+              <a-tooltip
+                  title="检测用户发送的消息。命中后拒绝发送并提示用户修改，不会调用模型"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+            </div>
+          </a-form-item>
+          <template v-if="agentConfig.userSensitiveFilterEnabled">
+            <a-form-item label="用户敏感词">
+              <div class="inline-field-block">
+                <button type="button" class="btn-add-inline btn-add-inline--block" @click="addUserSensitiveWord">
+                  <PlusOutlined /> 添加敏感词
+                </button>
+                <div class="config-list-scroll config-list-scroll--two-rows">
+                  <div v-for="(word, idx) in userSensitiveWords" :key="'usw-' + idx" class="list-table-row list-table-row--2col">
+                    <a-input v-model:value="userSensitiveWords[idx]" placeholder="命中则拦截用户消息" size="small" />
+                    <button type="button" class="btn-icon-sm danger" title="删除" @click="removeUserSensitiveWord(idx)">
+                      <DeleteOutlined />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </a-form-item>
+          </template>
+          <a-form-item>
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>AI 输出敏感词</span>
               </div>
             </template>
             <div style="display: flex; align-items: center; gap: 8px;">
               <a-switch v-model:checked="agentConfig.sensitiveFilterEnabled" />
               <span class="tool-option-value">{{ agentConfig.sensitiveFilterEnabled ? '已启用' : '未启用' }}</span>
-              <a-tooltip
-                  title="对模型输出内容进行敏感词检测。替换策略会将命中词替换为指定文本；拦截策略命中后直接输出拦截提示"
+                <a-tooltip
+                  title="检测模型回复。拦截策略会停止输出并展示拦截提示；替换策略将命中词替换为指定文本"
                   overlay-class-name="no-flip-tooltip"
                   :overlay-style="{ maxWidth: '320px' }"
                   placement="topLeft"
@@ -313,29 +378,39 @@
             <a-form-item label="处理策略">
               <a-select v-model:value="agentConfig.sensitiveFilterStrategy" style="width: 100%">
                 <a-select-option value="replace">替换为指定文本</a-select-option>
-                <a-select-option value="block">拦截输出</a-select-option>
+                <a-select-option value="block">拦截并提示</a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item v-if="agentConfig.sensitiveFilterStrategy !== 'block'" label="替换文本">
               <a-input v-model:value="agentConfig.sensitiveFilterReplaceText" placeholder="默认 ***" />
             </a-form-item>
-            <a-form-item label="敏感词列表">
-              <div v-for="(word, idx) in sensitiveWords" :key="'sw-' + idx" class="param-row" style="margin-bottom: 8px;">
-                <a-input v-model:value="sensitiveWords[idx]" placeholder="输入敏感词" />
-                <a-button type="text" danger @click="removeSensitiveWord(idx)"><DeleteOutlined /></a-button>
+            <a-form-item label="AI 敏感词列表">
+              <div class="inline-field-block">
+                <button type="button" class="btn-add-inline btn-add-inline--block" @click="addSensitiveWord">
+                  <PlusOutlined /> 添加敏感词
+                </button>
+                <div class="config-list-scroll config-list-scroll--two-rows">
+                  <div v-for="(word, idx) in sensitiveWords" :key="'sw-' + idx" class="list-table-row list-table-row--2col">
+                    <a-input v-model:value="sensitiveWords[idx]" placeholder="AI 输出命中则处理" size="small" />
+                    <button type="button" class="btn-icon-sm danger" title="删除" @click="removeSensitiveWord(idx)">
+                      <DeleteOutlined />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <a-button type="dashed" block size="small" @click="addSensitiveWord"><PlusOutlined /> 添加敏感词</a-button>
             </a-form-item>
           </template>
-          </a-form>
+            </a-form>
+          </div>
         </div>
       </div>
 
       <!-- WORKFLOW 类型：工作流配置（右侧面板） -->
-      <div class="panel" v-if="agent.agentType === 'workflow'">
+      <div class="panel panel-stretch" v-if="agent.agentType === 'workflow'">
         <div class="panel-header">
           <h3>工作流配置</h3>
         </div>
+        <div class="panel-body">
         <div class="workflow-entry-content">
           <!-- 配置说明 -->
           <div class="workflow-guide">
@@ -389,6 +464,7 @@
             <span class="status-text">{{ hasWorkflowConfig ? '已配置工作流' : '尚未配置工作流' }}</span>
           </div>
 
+        </div>
         </div>
       </div>
     </div>
@@ -819,12 +895,15 @@ const agent = reactive({
 // 模型配置（存储在 config JSONB 中）
 const agentConfig = reactive({
   providerId: null,
+  userSensitiveFilterEnabled: false,
+  userSensitiveWords: [],
   sensitiveFilterEnabled: false,
   sensitiveFilterStrategy: 'replace',
   sensitiveFilterReplaceText: '***',
   sensitiveWords: [],
 })
 
+const userSensitiveWords = ref([''])
 const sensitiveWords = ref([''])
 
 const providerList = ref([])
@@ -920,6 +999,15 @@ function syncPromptVariablesFromConfig(parsed) {
 }
 
 function syncSensitiveWordsFromConfig(parsed) {
+  const userList = parsed?.userSensitiveWords
+  if (Array.isArray(userList) && userList.length) {
+    userSensitiveWords.value = userList.map(w => String(w || ''))
+  } else {
+    userSensitiveWords.value = ['']
+  }
+  if (agentConfig.userSensitiveFilterEnabled == null) {
+    agentConfig.userSensitiveFilterEnabled = false
+  }
   const list = parsed?.sensitiveWords
   if (Array.isArray(list) && list.length) {
     sensitiveWords.value = list.map(w => String(w || ''))
@@ -934,6 +1022,17 @@ function syncSensitiveWordsFromConfig(parsed) {
   }
   if (!agentConfig.sensitiveFilterReplaceText) {
     agentConfig.sensitiveFilterReplaceText = '***'
+  }
+}
+
+function addUserSensitiveWord() {
+  userSensitiveWords.value.push('')
+}
+
+function removeUserSensitiveWord(idx) {
+  userSensitiveWords.value.splice(idx, 1)
+  if (userSensitiveWords.value.length === 0) {
+    userSensitiveWords.value.push('')
   }
 }
 
@@ -1060,6 +1159,8 @@ async function loadConfigFields(providerId) {
   try {
     const res = await getProviderConfigFields(providerId)
     configFields.value = res.data || []
+    // 记录 configFields 的 key，用于切换提供商时精准清除
+    currentConfigFieldKeys.value = new Set(configFields.value.map(f => f.key))
     // 为缺失的字段设置默认值
     for (const field of configFields.value) {
       if (agentConfig[field.key] === undefined && field.defaultValue !== undefined) {
@@ -1068,6 +1169,7 @@ async function loadConfigFields(providerId) {
     }
   } catch (e) {
     configFields.value = []
+    currentConfigFieldKeys.value = new Set()
   }
 }
 
@@ -1088,10 +1190,13 @@ async function loadModels(providerId) {
   }
 }
 
+// 记录当前 configFields 的 key，用于切换提供商时只清除模型参数
+const currentConfigFieldKeys = ref(new Set())
+
 async function onProviderChange(providerId) {
-  // 切换提供商时，清空模型和旧配置项
+  // 切换提供商时，只清除模型参数调优字段，保留对话配置
   agentConfig.modelId = undefined
-  for (const key of Object.keys(agentConfig)) {
+  for (const key of currentConfigFieldKeys.value) {
     if (key !== 'providerId' && key !== 'modelId') {
       delete agentConfig[key]
     }
@@ -1108,7 +1213,7 @@ function restoreDefaults() {
       agentConfig[field.key] = field.defaultValue
     }
   }
-  message.success('已恢复默认配置')
+  message.success('已恢复模型参数默认值')
 }
 
 async function loadAgent() {
@@ -1446,12 +1551,16 @@ async function handleSave() {
   try {
     // 1. 构建 config JSONB（包含 provider + 所有配置项）
     const serializedVars = serializePromptVariables()
+    const serializedUserSensitiveWords = userSensitiveWords.value
+      .map(w => (w || '').trim())
+      .filter(Boolean)
     const serializedSensitiveWords = sensitiveWords.value
       .map(w => (w || '').trim())
       .filter(Boolean)
     const configObj = {
       ...agentConfig,
       promptVariables: serializedVars,
+      userSensitiveWords: serializedUserSensitiveWords,
       sensitiveWords: serializedSensitiveWords,
     }
     const configStr = JSON.stringify(configObj)
@@ -1872,53 +1981,150 @@ onMounted(async () => {
 .var-insert-btn:hover {
   background: #e0e7ff;
 }
-.variable-config-panel {
-  margin: 0 0 20px;
+/* 子配置卡片（变量、模型配置等） */
+.sub-config-card {
+  margin: 8px 0 16px;
   padding: 14px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
   border-radius: 10px;
 }
-.variable-config-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+.sub-config-card--model {
+  margin-top: 16px;
 }
-.variable-config-title {
-  margin: 0;
+.sub-config-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.sub-config-card-title {
+  margin: 0 0 4px;
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: #171717;
 }
-.btn-add-var {
+.sub-config-card-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #71717a;
+  line-height: 1.5;
+}
+.sub-config-card-desc code {
+  font-size: 11px;
+  background: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #e4e4e7;
+}
+.sub-config-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #a1a1aa;
+  background: #fff;
+  border: 1px dashed #e4e4e7;
+  border-radius: 8px;
+}
+.btn-add-inline {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
   padding: 4px 10px;
   font-size: 12px;
-  border: 1px dashed #94a3b8;
+  border: 1px solid #e4e4e7;
   background: #fff;
   border-radius: 6px;
   cursor: pointer;
-  color: #475569;
+  color: #52525b;
+  transition: border-color 0.15s, color 0.15s;
 }
-.btn-add-var:hover {
-  border-color: #6366f1;
-  color: #6366f1;
+.btn-add-inline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
-.variable-config-desc {
-  margin: 0 0 12px;
-  font-size: 12px;
-  color: #64748b;
-  line-height: 1.5;
+.btn-add-inline--block {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 8px;
+  border-style: dashed;
 }
-.variable-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
+.inline-field-block {
+  width: 100%;
+}
+.inline-field-toolbar {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 8px;
+}
+.list-table-head {
+  display: grid;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #ebebeb;
+}
+.list-table-head--4col {
+  grid-template-columns: 1fr 1fr 1fr 36px;
+}
+.list-table-row {
+  display: grid;
+  gap: 8px;
   align-items: center;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+}
+.list-table-row:last-child {
+  margin-bottom: 0;
+}
+.list-table-row--4col {
+  grid-template-columns: 1fr 1fr 1fr 36px;
+}
+.list-table-row--2col {
+  grid-template-columns: 1fr 36px;
+}
+.list-table-head .col-action,
+.list-table-row--4col > :last-child,
+.list-table-row--2col > :last-child {
+  justify-self: center;
+}
+.config-list-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 2px 4px 2px 0;
+  margin-right: -4px;
+}
+.config-list-scroll--compact {
+  max-height: 132px;
+}
+.config-list-scroll--two-rows {
+  max-height: 92px;
+}
+.config-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.config-list-scroll::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+.config-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+.model-config-form :deep(.ant-form-item) {
+  margin-bottom: 16px;
 }
 .btn-outline {
   display: flex;
@@ -1986,9 +2192,6 @@ onMounted(async () => {
   background: #f5f5f5;
   cursor: not-allowed;
 }
-.questions-header {
-  margin-bottom: 8px;
-}
 .id-field {
   display: flex;
   align-items: center;
@@ -2041,34 +2244,6 @@ onMounted(async () => {
   color: #a1a1aa;
   font-weight: normal;
 }
-.recommended-questions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-.question-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.btn-add-question {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  background: none;
-  border: 1px dashed #d4d4d8;
-  border-radius: 6px;
-  color: #71717a;
-  font-size: 13px;
-  cursor: pointer;
-  align-self: flex-start;
-}
-.btn-add-question:hover {
-  border-color: #0070f3;
-  color: #0070f3;
-}
 .btn-primary:hover:not(:disabled) {
   background: #27272a;
 }
@@ -2081,13 +2256,59 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  align-items: stretch;
 }
-/* tab 内容不再需要 grid，panel 宽度自适应 */
+.content-grid-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.content-grid-side > .panel {
+  flex: 0 0 auto;
+}
+.panel-stretch {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+.panel-stretch .panel-body {
+  flex: 1;
+  min-height: 0;
+}
+.content-grid-side > .panel:first-child .panel-body {
+  min-height: 420px;
+}
+.content-grid-side > .panel:last-child .panel-body {
+  min-height: 620px;
+}
 .panel {
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  overflow: hidden;
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-right: -4px;
+}
+.panel-body::-webkit-scrollbar {
+  width: 6px;
+}
+.panel-body::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .panel.full-width {
   grid-column: 1 / -1;
@@ -2097,6 +2318,17 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.panel-header--stack {
+  align-items: flex-start;
+}
+.panel-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #71717a;
+  line-height: 1.5;
+  font-weight: normal;
 }
 .panel-header h3 {
   font-size: 16px;
@@ -2156,32 +2388,6 @@ onMounted(async () => {
   font-size: 12px;
   color: #a1a1aa;
   margin-top: 4px;
-}
-
-.model-config-card {
-  margin-top: 20px;
-  padding: 16px;
-  background: #fafafa;
-  border: 1px solid #ebebeb;
-  border-radius: 10px;
-}
-.model-config-card-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ebebeb;
-}
-.model-config-card-header h4 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #171717;
-}
-.model-config-card-tip {
-  font-size: 12px;
-  color: #a1a1aa;
 }
 
 .knowledge-bind {

@@ -58,17 +58,7 @@ public class ModelFactory {
      */
     public ChatModel getChatModel(Long providerId) {
         return chatModelCache.computeIfAbsent(providerId, id -> {
-            // 1. 优先从缓存获取
-            ModelProvider provider = cacheUtil.getProvider(id);
-            // 2. 缓存未命中时回源数据库
-            if (provider == null) {
-                provider = modelProviderService.getById(id);
-                if (provider == null) {
-                    throw new IllegalArgumentException("模型提供商不存在: " + id);
-                }
-                cacheUtil.cacheProvider(provider);
-                log.info("[ModelFactory] 缓存未命中，从数据库加载提供商: id={}", id);
-            }
+            ModelProvider provider = resolveProvider(id);
             ModelProviderHandler handler = getHandler(provider.getType());
             log.info("[ModelFactory] 创建 ChatModel: providerId={}, type={}", id, provider.getType());
             return handler.createChatModel(provider);
@@ -83,14 +73,7 @@ public class ModelFactory {
      * @return ChatOptions 实例
      */
     public ChatOptions buildChatOptions(Long providerId, Map<String, Object> config) {
-        ModelProvider provider = cacheUtil.getProvider(providerId);
-        if (provider == null) {
-            provider = modelProviderService.getById(providerId);
-            if (provider == null) {
-                throw new IllegalArgumentException("模型提供商不存在: " + providerId);
-            }
-            cacheUtil.cacheProvider(provider);
-        }
+        ModelProvider provider = resolveProvider(providerId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.buildChatOptions(provider, config);
     }
@@ -102,10 +85,7 @@ public class ModelFactory {
      * @return 配置字段列表
      */
     public List<ConfigField> getConfigFields(Long providerId) {
-        ModelProvider provider = cacheUtil.getProvider(providerId);
-        if (provider == null) {
-            throw new IllegalArgumentException("模型提供商不存在: " + providerId);
-        }
+        ModelProvider provider = resolveProvider(providerId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.getConfigFields();
     }
@@ -137,11 +117,8 @@ public class ModelFactory {
      * @return 检查结果消息
      */
     public String checkConnectivity(Long providerId) {
-        // 1. 校验提供商存在性
-        ModelProvider provider = cacheUtil.getProvider(providerId);
-        if (provider == null) {
-            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
-        }
+        // 1. 校验提供商存在性（缓存 → 数据库）
+        ModelProvider provider = resolveProvider(providerId);
 
         // 2. 清除缓存后重新创建ChatModel（确保使用最新凭证）
         invalidateCache(providerId);
@@ -176,10 +153,7 @@ public class ModelFactory {
      * @return 模型信息列表（含类型推断）
      */
     public List<FetchedModel> fetchModels(Long providerId) {
-        ModelProvider provider = cacheUtil.getProvider(providerId);
-        if (provider == null) {
-            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
-        }
+        ModelProvider provider = resolveProvider(providerId);
         ModelProviderHandler handler = getHandler(provider.getType());
         // 按 modelId 去重，保留首次出现的
         return handler.fetchModels(provider).stream()
@@ -224,6 +198,27 @@ public class ModelFactory {
             cacheUtil.cacheAllProviders(providers);
         }
         return providers.stream().map(ModelProvider::getId).collect(Collectors.toList());
+    }
+
+    /**
+     * 解析提供商（缓存优先，未命中回源数据库并回填缓存）
+     *
+     * @param providerId 提供商ID
+     * @return 提供商实体
+     */
+    private ModelProvider resolveProvider(Long providerId) {
+        // 1. 优先从缓存获取
+        ModelProvider provider = cacheUtil.getProvider(providerId);
+        // 2. 缓存未命中时回源数据库
+        if (provider == null) {
+            provider = modelProviderService.getById(providerId);
+            if (provider == null) {
+                throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+            }
+            cacheUtil.cacheProvider(provider);
+            log.info("[ModelFactory] 缓存未命中，从数据库加载提供商: id={}", providerId);
+        }
+        return provider;
     }
 
     private ModelProviderHandler getHandler(ModelProviderType type) {

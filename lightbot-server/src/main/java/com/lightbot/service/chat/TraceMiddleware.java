@@ -58,8 +58,9 @@ public class TraceMiddleware implements ChatMiddleware {
                     long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
 
                     // 1. 持久化AI回复
-                    String replyToSave = SensitiveWordFilter.filter(
-                            ctx.getFullReply().toString(), ctx.getConfigMap()).text();
+                    Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
+                    String replyToSave = SensitiveWordFilter.filterAiOutput(
+                            ctx.getFullReply().toString(), ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
                     messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
                             replyToSave, ctx.getRagMetadataHolder()[0], (int) totalTokens);
                     ctx.getFullReply().setLength(0);
