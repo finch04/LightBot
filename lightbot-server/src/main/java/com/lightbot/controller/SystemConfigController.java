@@ -73,4 +73,17 @@ public class SystemConfigController {
         systemConfigService.updateDefaultTtsModelConfig(config);
         return Result.ok();
     }
+
+    @Operation(summary = "获取默认重排模型配置")
+    @GetMapping("/default-rerank-model")
+    public Result<DefaultAiConfigDTO> getDefaultRerankModel() {
+        return Result.ok(systemConfigService.getDefaultRerankModelConfig());
+    }
+
+    @Operation(summary = "更新默认重排模型配置")
+    @PutMapping("/default-rerank-model")
+    public Result<Void> updateDefaultRerankModel(@RequestBody DefaultAiConfigDTO config) {
+        systemConfigService.updateDefaultRerankModelConfig(config);
+        return Result.ok();
+    }
 }

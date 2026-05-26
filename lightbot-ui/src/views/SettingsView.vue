@@ -108,6 +108,57 @@
         </div>
       </div>
 
+      <!-- 默认重排模型 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <h3>默认重排模型</h3>
+            <span class="panel-desc">RAG 召回后精排使用</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <a-form :label-col="{ span: 6 }">
+            <a-form-item label="模型提供商">
+              <a-select
+                v-model:value="rerankConfig.providerId"
+                placeholder="选择提供商"
+                style="width: 100%"
+                allow-clear
+                @change="(val) => onProviderChange('rerank', val)"
+              >
+                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
+                  {{ p.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="模型">
+              <a-select
+                v-model:value="rerankConfig.modelId"
+                placeholder="选择重排模型"
+                style="width: 100%"
+                allow-clear
+                :disabled="!rerankConfig.providerId"
+              >
+                <a-select-option v-for="m in rerankModels" :key="m.modelId" :value="m.modelId">
+                  {{ m.name || m.modelId }}
+                </a-select-option>
+              </a-select>
+              <span v-if="!rerankConfig.providerId" class="form-tip">请先选择模型提供商</span>
+              <span v-else-if="rerankModels.length === 0" class="form-tip warn">该提供商暂无可用重排模型</span>
+            </a-form-item>
+            <a-form-item :wrapper-col="{ offset: 6 }">
+              <button class="btn-primary" :disabled="rerankSaving" @click="saveRerankModel">
+                <SaveOutlined /> {{ rerankSaving ? '保存中...' : '保存配置' }}
+              </button>
+            </a-form-item>
+          </a-form>
+          <div class="panel-tip">
+            <BulbOutlined />
+            <span>用于：知识库检索结果重排序（如 DashScope gte-rerank 系列）</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 默认TTS模型 -->
       <div class="panel">
         <div class="panel-header">
@@ -170,6 +221,7 @@ import {
   getDefaultChatModel, updateDefaultChatModel,
   getDefaultEmbeddingModel, updateDefaultEmbeddingModel,
   getDefaultTtsModel, updateDefaultTtsModel,
+  getDefaultRerankModel, updateDefaultRerankModel,
 } from '../api/systemConfig'
 import { getModelProviders } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
@@ -178,18 +230,21 @@ const providerList = ref([])
 const chatModels = ref([])
 const embeddingModels = ref([])
 const ttsModels = ref([])
+const rerankModels = ref([])
 
 const chatConfig = reactive({ providerId: null, modelId: null })
 const embeddingConfig = reactive({ providerId: null, modelId: null })
 const ttsConfig = reactive({ providerId: null, modelId: null })
+const rerankConfig = reactive({ providerId: null, modelId: null })
 
 const chatSaving = ref(false)
 const embeddingSaving = ref(false)
 const ttsSaving = ref(false)
+const rerankSaving = ref(false)
 
 onMounted(async () => {
   await loadProviders()
-  await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig()])
+  await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig(), loadRerankConfig()])
 })
 
 async function loadProviders() {
@@ -243,6 +298,19 @@ async function loadEmbeddingConfig() {
   }
 }
 
+async function loadRerankConfig() {
+  try {
+    const res = await getDefaultRerankModel()
+    rerankConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
+    rerankConfig.modelId = res.data?.modelId || null
+    if (rerankConfig.providerId) {
+      rerankModels.value = await loadModelsByType(rerankConfig.providerId, 'rerank')
+    }
+  } catch (e) {
+    console.error('[Settings] 加载重排模型配置失败:', e)
+  }
+}
+
 async function loadTtsConfig() {
   try {
     const res = await getDefaultTtsModel()
@@ -266,6 +334,9 @@ async function onProviderChange(kind, providerId) {
   } else if (kind === 'tts') {
     ttsConfig.modelId = null
     ttsModels.value = await loadModelsByType(providerId, 'tts')
+  } else if (kind === 'rerank') {
+    rerankConfig.modelId = null
+    rerankModels.value = await loadModelsByType(providerId, 'rerank')
   }
 }
 
@@ -294,6 +365,20 @@ async function saveEmbeddingModel() {
     message.error(e.response?.data?.message || '保存失败')
   } finally {
     embeddingSaving.value = false
+  }
+}
+
+async function saveRerankModel() {
+  if (!rerankConfig.providerId) return message.warning('请选择模型提供商')
+  if (!rerankConfig.modelId) return message.warning('请选择模型')
+  rerankSaving.value = true
+  try {
+    await updateDefaultRerankModel({ providerId: rerankConfig.providerId, modelId: rerankConfig.modelId })
+    message.success('默认重排模型已保存')
+  } catch (e) {
+    message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    rerankSaving.value = false
   }
 }
 

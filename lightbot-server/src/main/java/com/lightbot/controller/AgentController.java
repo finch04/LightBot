@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -72,11 +73,11 @@ public class AgentController {
     @PutMapping("/{id}/knowledge")
     public Result<Void> updateKnowledgeBindings(
             @PathVariable Long id,
-            @RequestBody List<Long> knowledgeIds) {
+            @RequestBody List<String> knowledgeIds) {
         if (knowledgeIds != null && knowledgeIds.size() > 10) {
             throw new BizException(ErrorCode.AGENT_KNOWLEDGE_LIMIT);
         }
-        agentService.updateKnowledgeBindings(id, knowledgeIds);
+        agentService.updateKnowledgeBindings(id, parseBindingIdStrings(knowledgeIds));
         return Result.ok();
     }
 
@@ -90,11 +91,11 @@ public class AgentController {
     @PutMapping("/{id}/tools")
     public Result<Void> updateToolBindings(
             @PathVariable Long id,
-            @RequestBody List<Long> toolIds) {
+            @RequestBody List<String> toolIds) {
         if (toolIds != null && toolIds.size() > 10) {
             throw new BizException(ErrorCode.AGENT_TOOL_LIMIT);
         }
-        agentService.updateToolBindings(id, toolIds);
+        agentService.updateToolBindings(id, parseBindingIdStrings(toolIds));
         return Result.ok();
     }
 
@@ -124,11 +125,11 @@ public class AgentController {
     @PutMapping("/{id}/mcp-servers")
     public Result<Void> updateMcpServerBindings(
             @PathVariable Long id,
-            @RequestBody List<Long> mcpServerIds) {
+            @RequestBody List<String> mcpServerIds) {
         if (mcpServerIds != null && mcpServerIds.size() > 5) {
             throw new BizException(ErrorCode.AGENT_MCP_LIMIT);
         }
-        agentService.updateMcpServerBindings(id, mcpServerIds);
+        agentService.updateMcpServerBindings(id, parseBindingIdStrings(mcpServerIds));
         return Result.ok();
     }
 
@@ -150,12 +151,26 @@ public class AgentController {
     @PutMapping("/{id}/subagents")
     public Result<Void> updateSubAgentBindings(
             @PathVariable Long id,
-            @RequestBody List<Long> subAgentIds) {
+            @RequestBody List<String> subAgentIds) {
         if (subAgentIds != null && subAgentIds.size() > 5) {
             throw new BizException(ErrorCode.AGENT_SUBAGENT_LIMIT);
         }
-        agentService.updateSubAgentBindings(id, subAgentIds);
+        agentService.updateSubAgentBindings(id, parseBindingIdStrings(subAgentIds));
         return Result.ok();
+    }
+
+    /** 绑定 ID 统一按字符串接收，避免前端 Long 精度丢失 */
+    private List<Long> parseBindingIdStrings(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> result = new ArrayList<>();
+        for (String id : ids) {
+            if (id != null && !id.isBlank()) {
+                result.add(Long.parseLong(id.trim()));
+            }
+        }
+        return result;
     }
 
     @Operation(summary = "删除Agent")

@@ -3,7 +3,12 @@ package com.lightbot.service.chat;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
+import com.lightbot.common.BizException;
+import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.dto.ChatRequest;
+import com.lightbot.enums.ErrorCode;
+import com.lightbot.util.ChatMessageMediaUtil;
+import com.lightbot.util.MinioUtil;
 import com.lightbot.util.PromptTemplateUtil;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Message;
@@ -48,6 +53,7 @@ public class MessageMiddleware implements ChatMiddleware {
     private final ChatSessionService chatSessionService;
     private final ModelFactory modelFactory;
     private final InitMiddleware initMiddleware;
+    private final MinioUtil minioUtil;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -110,12 +116,11 @@ public class MessageMiddleware implements ChatMiddleware {
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
-        // 1. 保存用户消息
-        saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
+        String userText = resolveUserText(ctx.getRequest());
+        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
 
-        // 2. 构建消息列表（使用 InitMiddleware 已解析的 configMap，含版本选择）
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
-                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
+                ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
         ctx.setMessages(messages);
 
         return next.proceed(ctx);
@@ -125,10 +130,35 @@ public class MessageMiddleware implements ChatMiddleware {
      * 同步路径专用：保存用户消息 + 构建消息列表
      */
     public void prepare(ChatContext ctx) {
-        saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
+        String userText = resolveUserText(ctx.getRequest());
+        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
-                ctx.getSessionId(), ctx.getRequest().getMessage(), ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
+                ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
         ctx.setMessages(messages);
+    }
+
+    private String resolveUserText(ChatRequest request) {
+        String msg = request.getMessage();
+        if (msg != null && !msg.isBlank()) {
+            return msg.trim();
+        }
+        if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+            return "请根据附件内容回答。";
+        }
+        throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "消息不能为空");
+    }
+
+    private void saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            saveMessage(sessionId, MessageRole.USER, content);
+            return;
+        }
+        try {
+            String metadata = OBJECT_MAPPER.writeValueAsString(Map.of("attachments", attachments));
+            saveMessage(sessionId, MessageRole.USER, content, metadata, 0);
+        } catch (Exception e) {
+            saveMessage(sessionId, MessageRole.USER, content);
+        }
     }
 
     /**
@@ -207,8 +237,13 @@ public class MessageMiddleware implements ChatMiddleware {
             }
         }
 
-        // 6. 当前用户消息
-        messages.add(new UserMessage(userMessage));
+        // 6. 当前用户消息（含多模态附件）
+        List<ChatAttachmentDTO> attachments = request != null ? request.getAttachments() : null;
+        if (attachments != null && !attachments.isEmpty()) {
+            messages.add(ChatMessageMediaUtil.buildUserMessage(userMessage, attachments, minioUtil));
+        } else {
+            messages.add(new UserMessage(userMessage));
+        }
         return messages;
     }
 

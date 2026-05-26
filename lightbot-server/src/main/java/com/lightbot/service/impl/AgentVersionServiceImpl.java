@@ -3,6 +3,7 @@ package com.lightbot.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.WorkflowGraphDTO;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.entity.Agent;
@@ -196,6 +197,30 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     /**
      * 填充对话型版本详情，并按快照中的 ID 回查绑定实体
      */
+    /** 模型能力字段：写入版本详情的 modelParams，供历史回显 */
+    private static final String[] MODEL_CAPABILITY_KEYS = {
+            ConfigKeys.Agent.MULTIMODAL_ENABLED,
+            ConfigKeys.Agent.ENABLE_IMAGE_INPUT,
+            ConfigKeys.Agent.ENABLE_VIDEO_INPUT,
+            ConfigKeys.Agent.ENABLE_AUDIO_INPUT,
+            ConfigKeys.Agent.ENABLE_WEB_SEARCH,
+            ConfigKeys.Agent.WEB_SEARCH_FORCE,
+            ConfigKeys.Agent.WEB_SEARCH_MAX_KEYWORD,
+            ConfigKeys.Agent.ENABLE_TTS,
+            ConfigKeys.Agent.ENABLE_REASONING,
+    };
+
+    private void putModelCapabilityParams(Map<String, Object> modelParams, Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return;
+        }
+        for (String key : MODEL_CAPABILITY_KEYS) {
+            if (config.containsKey(key)) {
+                modelParams.put(key, config.get(key));
+            }
+        }
+    }
+
     private void fillChatVersionDetail(Map<String, Object> result, Map<String, Object> snap) {
         result.put("kind", KIND_CHAT);
         Map<String, Object> payload = extractChatPayload(snap);
@@ -220,6 +245,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         modelParams.put("presencePenalty", config.get("presencePenalty"));
         modelParams.put("frequencyPenalty", config.get("frequencyPenalty"));
         modelParams.put("repetitionPenalty", config.get("repetitionPenalty"));
+        putModelCapabilityParams(modelParams, config);
         result.put("modelParams", modelParams);
 
         // 3. 对话配置

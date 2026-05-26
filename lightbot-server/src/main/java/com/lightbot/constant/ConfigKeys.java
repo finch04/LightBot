@@ -40,6 +40,25 @@ public final class ConfigKeys {
         public static final String SENSITIVE_WORDS = "sensitiveWords";
         /** 是否流式输出模型回复，默认 true */
         public static final String STREAM_OUTPUT = "streamOutput";
+
+        /** 多模态总开关（开启后对话页可上传媒体/语音输入，需模型支持） */
+        public static final String MULTIMODAL_ENABLED = "multimodalEnabled";
+        /** 图像输入 */
+        public static final String ENABLE_IMAGE_INPUT = "enableImageInput";
+        /** 视频输入 */
+        public static final String ENABLE_VIDEO_INPUT = "enableVideoInput";
+        /** 音频输入（浏览器语音转文字） */
+        public static final String ENABLE_AUDIO_INPUT = "enableAudioInput";
+        /** 联网搜索（MiMo web_search） */
+        public static final String ENABLE_WEB_SEARCH = "enableWebSearch";
+        /** 联网搜索：强制搜索 */
+        public static final String WEB_SEARCH_FORCE = "webSearchForceSearch";
+        /** 联网搜索：最大关键词数 */
+        public static final String WEB_SEARCH_MAX_KEYWORD = "webSearchMaxKeyword";
+        /** 语音合成（回复 TTS，预留） */
+        public static final String ENABLE_TTS = "enableTts";
+        /** 深度思考 */
+        public static final String ENABLE_REASONING = "enableReasoning";
     }
 
     /**
@@ -60,5 +79,7 @@ public final class ConfigKeys {
         public static final String DEFAULT_EMBEDDING_MODEL = "default_embedding_model";
         /** 默认TTS模型配置 */
         public static final String DEFAULT_TTS_MODEL = "default_tts_model";
+        /** 默认重排模型配置 */
+        public static final String DEFAULT_RERANK_MODEL = "default_rerank_model";
     }
 }

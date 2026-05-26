@@ -2,6 +2,7 @@ package com.lightbot.model;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -89,11 +91,8 @@ public class MimoModelHandler implements ModelProviderHandler {
             builder.frequencyPenalty(toDouble(config.get("frequencyPenalty")));
         }
 
-        // 深度思考：MiMo v2.5 Pro 支持 reasoning_effort 参数
-        if (Boolean.TRUE.equals(config.get("enableReasoning"))) {
-            // 通过 metadata 传递，实际调用时由框架或自定义拦截器处理
-            // MiMo 兼容 OpenAI 的 reasoning_effort 参数
-            builder.metadata(java.util.Map.of("reasoning_effort", "medium"));
+        if (Boolean.TRUE.equals(config.get(ConfigKeys.Agent.ENABLE_REASONING))) {
+            builder.metadata(java.util.Map.of("mimoThinking", "enabled"));
         }
 
         OpenAiStreamUsageSupport.enableStreamUsage(builder);
@@ -108,66 +107,63 @@ public class MimoModelHandler implements ModelProviderHandler {
 
     @Override
     public List<ConfigField> getConfigFields() {
-        return List.of(
-                ConfigField.builder()
-                        .key("modelId")
-                        .label("模型")
-                        .type("select")
-                        .options(List.of(
-                                ConfigField.Option.builder().value("mimo-v2.5-pro").label("MiMo v2.5 Pro").build(),
-                                ConfigField.Option.builder().value("MiMo-7B-RL").label("MiMo-7B-RL").build(),
-                                ConfigField.Option.builder().value("MiMo-7B").label("MiMo-7B").build()
-                        ))
-                        .defaultValue("mimo-v2.5-pro")
-                        .build(),
-                ConfigField.builder()
-                        .key("temperature")
-                        .label("温度")
-                        .type("slider")
-                        .min(0.0).max(2.0).step(0.1)
-                        .defaultValue(1.0)
-                        .hint("值越高回答越随机创造性，值越低回答越确定")
-                        .build(),
-                ConfigField.builder()
-                        .key("topP")
-                        .label("核采样")
-                        .type("slider")
-                        .min(0.0).max(1.0).step(0.05)
-                        .defaultValue(0.95)
-                        .hint("控制词汇选择的多样性")
-                        .build(),
-                ConfigField.builder()
-                        .key("maxTokens")
-                        .label("最大 Token")
-                        .type("number")
-                        .min(256.0).max(32768.0).step(256.0)
-                        .defaultValue(4096)
-                        .hint("单次回答的最大长度")
-                        .build(),
-                ConfigField.builder()
-                        .key("presencePenalty")
-                        .label("存在惩罚")
-                        .type("slider")
-                        .min(-2.0).max(2.0).step(0.1)
-                        .defaultValue(0.0)
-                        .hint("正值降低重复话题的概率")
-                        .build(),
-                ConfigField.builder()
-                        .key("frequencyPenalty")
-                        .label("频率惩罚")
-                        .type("slider")
-                        .min(-2.0).max(2.0).step(0.1)
-                        .defaultValue(0.0)
-                        .hint("正值降低重复用词的概率")
-                        .build(),
-                ConfigField.builder()
-                        .key("enableReasoning")
-                        .label("深度思考")
-                        .type("switch")
-                        .defaultValue(false)
-                        .hint("开启后模型会输出思考过程（仅 MiMo v2.5 Pro 支持）")
-                        .build()
-        );
+        List<ConfigField> fields = new ArrayList<>();
+        fields.add(ConfigField.builder()
+                .key("modelId")
+                .label("模型")
+                .type("select")
+                .options(List.of(
+                        ConfigField.Option.builder().value("mimo-v2.5-pro").label("MiMo v2.5 Pro").build(),
+                        ConfigField.Option.builder().value("mimo-v2.5").label("MiMo v2.5").build(),
+                        ConfigField.Option.builder().value("mimo-v2-omni").label("MiMo v2 Omni（多模态）").build(),
+                        ConfigField.Option.builder().value("MiMo-7B-RL").label("MiMo-7B-RL").build(),
+                        ConfigField.Option.builder().value("MiMo-7B").label("MiMo-7B").build()
+                ))
+                .defaultValue("mimo-v2.5-pro")
+                .hint("多模态建议选用 mimo-v2.5 或 mimo-v2-omni")
+                .build());
+        fields.addAll(AgentCapabilityConfigFields.mimoFields());
+        fields.add(ConfigField.builder()
+                .key("temperature")
+                .label("温度")
+                .type("slider")
+                .min(0.0).max(2.0).step(0.1)
+                .defaultValue(1.0)
+                .hint("值越高回答越随机创造性，值越低回答越确定")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("topP")
+                .label("核采样")
+                .type("slider")
+                .min(0.0).max(1.0).step(0.05)
+                .defaultValue(0.95)
+                .hint("控制词汇选择的多样性")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("maxTokens")
+                .label("最大 Token")
+                .type("number")
+                .min(256.0).max(32768.0).step(256.0)
+                .defaultValue(4096)
+                .hint("单次回答的最大长度")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("presencePenalty")
+                .label("存在惩罚")
+                .type("slider")
+                .min(-2.0).max(2.0).step(0.1)
+                .defaultValue(0.0)
+                .hint("正值降低重复话题的概率")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("frequencyPenalty")
+                .label("频率惩罚")
+                .type("slider")
+                .min(-2.0).max(2.0).step(0.1)
+                .defaultValue(0.0)
+                .hint("正值降低重复用词的概率")
+                .build());
+        return fields;
     }
 
     @Override

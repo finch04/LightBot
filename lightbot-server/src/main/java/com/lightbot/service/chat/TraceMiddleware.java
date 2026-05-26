@@ -18,12 +18,14 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -68,7 +70,7 @@ public class TraceMiddleware implements ChatMiddleware {
                     ctx.getFullReply().append(replyToSave);
 
                     // 2. 异步生成标题
-                    taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent()));
+                    taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
 
                     // 3. 记录发送给LLM的消息列表（用于可观测性排查）
                     if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
@@ -156,6 +158,15 @@ public class TraceMiddleware implements ChatMiddleware {
      * 异步生成对话标题：标题仍为"新对话"且消息数>=2时，调用AI生成简短标题
      */
     public void generateTitle(Long sessionId, Agent agent) {
+        generateTitle(sessionId, agent, null);
+    }
+
+    /**
+     * 异步生成对话标题
+     *
+     * @param runtimeConfig 对话运行时 config（含 configVersion / 线上快照），为空则回退 agent 表 config
+     */
+    public void generateTitle(Long sessionId, Agent agent, Map<String, Object> runtimeConfig) {
         try {
             // 1. 检查会话是否存在且标题仍为默认值
             ChatSession session = chatSessionService.getById(sessionId);
@@ -180,13 +191,24 @@ public class TraceMiddleware implements ChatMiddleware {
                 conversationText.append(role).append("：").append(msg.getContent()).append("\n");
             }
 
-            // 4. 使用会话绑定的Agent模型生成标题
-            Long providerId = resolveTitleProviderId(agent);
+            // 4. 使用对话运行时模型配置（必须带 modelId，否则会 fallback 为 unknown-model）
+            Map<String, Object> titleConfig = new HashMap<>();
+            if (runtimeConfig != null && !runtimeConfig.isEmpty()) {
+                titleConfig.putAll(runtimeConfig);
+            } else if (agent != null && agent.getConfig() != null) {
+                titleConfig.putAll(initMiddleware.parseConfig(agent.getConfig()));
+            }
+            Long providerId = titleConfig.isEmpty()
+                    ? resolveTitleProviderId(agent)
+                    : initMiddleware.getProviderId(titleConfig);
+            modelFactory.ensureModelIdInConfig(providerId, titleConfig);
+            ChatOptions options = modelFactory.buildChatOptions(providerId, titleConfig);
+
             List<org.springframework.ai.chat.messages.Message> promptMessages = new ArrayList<>();
             promptMessages.add(new SystemMessage("你是一个标题生成助手，只输出标题，不要任何其他内容。"));
             promptMessages.add(new UserMessage("请根据以下对话内容生成一个简短的标题（不超过20个字，不要加引号）：\n" + conversationText));
 
-            ChatResponse response = modelFactory.getChatModel(providerId).call(new Prompt(promptMessages));
+            ChatResponse response = modelFactory.getChatModel(providerId).call(new Prompt(promptMessages, options));
             String title = response.getResult().getOutput().getText().trim();
 
             // 5. 清理标题

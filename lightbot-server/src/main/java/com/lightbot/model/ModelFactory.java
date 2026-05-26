@@ -16,6 +16,7 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -219,6 +220,22 @@ public class ModelFactory {
             log.info("[ModelFactory] 缓存未命中，从数据库加载提供商: id={}", providerId);
         }
         return provider;
+    }
+
+    /**
+     * 确保 config 含有效 modelId（标题生成等旁路调用避免 unknown-model）
+     */
+    public void ensureModelIdInConfig(Long providerId, Map<String, Object> config) {
+        if (config == null || providerId == null) {
+            return;
+        }
+        Object modelId = config.get("modelId");
+        if (modelId != null && !modelId.toString().isBlank()
+                && !"unknown-model".equalsIgnoreCase(modelId.toString().trim())) {
+            return;
+        }
+        ModelProvider provider = resolveProvider(providerId);
+        config.put("modelId", getHandler(provider.getType()).getCheapestModel());
     }
 
     private ModelProviderHandler getHandler(ModelProviderType type) {

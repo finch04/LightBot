@@ -83,4 +83,14 @@ public interface SystemConfigService extends IService<SystemConfig> {
      * @param config 默认TTS模型配置
      */
     void updateDefaultTtsModelConfig(DefaultAiConfigDTO config);
+
+    /**
+     * 获取默认重排模型配置
+     */
+    DefaultAiConfigDTO getDefaultRerankModelConfig();
+
+    /**
+     * 更新默认重排模型配置
+     */
+    void updateDefaultRerankModelConfig(DefaultAiConfigDTO config);
 }

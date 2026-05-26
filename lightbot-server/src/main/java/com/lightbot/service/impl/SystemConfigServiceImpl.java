@@ -110,6 +110,22 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         }
     }
 
+    @Override
+    public DefaultAiConfigDTO getDefaultRerankModelConfig() {
+        String value = getConfigValue(ConfigKeys.System.DEFAULT_RERANK_MODEL);
+        return parseModelConfig(value);
+    }
+
+    @Override
+    public void updateDefaultRerankModelConfig(DefaultAiConfigDTO config) {
+        try {
+            String value = objectMapper.writeValueAsString(config);
+            updateConfigValue(ConfigKeys.System.DEFAULT_RERANK_MODEL, value);
+        } catch (Exception e) {
+            log.error("[SystemConfig] 更新默认重排模型配置失败: {}", e.getMessage());
+        }
+    }
+
     /**
      * 解析模型配置JSON
      */

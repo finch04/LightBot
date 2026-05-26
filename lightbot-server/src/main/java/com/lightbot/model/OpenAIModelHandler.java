@@ -13,6 +13,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -86,60 +87,64 @@ public class OpenAIModelHandler implements ModelProviderHandler {
 
     @Override
     public List<ConfigField> getConfigFields() {
-        return List.of(
-                ConfigField.builder()
-                        .key("modelId")
-                        .label("模型")
-                        .type("select")
-                        .options(List.of(
-                                ConfigField.Option.builder().value("gpt-3.5-turbo").label("GPT-3.5 Turbo").build(),
-                                ConfigField.Option.builder().value("gpt-4").label("GPT-4").build(),
-                                ConfigField.Option.builder().value("gpt-4o").label("GPT-4o").build(),
-                                ConfigField.Option.builder().value("gpt-4o-mini").label("GPT-4o Mini").build()
-                        ))
-                        .defaultValue("gpt-4o-mini")
-                        .build(),
-                ConfigField.builder()
-                        .key("temperature")
-                        .label("温度")
-                        .type("slider")
-                        .min(0.0).max(2.0).step(0.1)
-                        .defaultValue(0.7)
-                        .hint("值越高回答越随机创造性，值越低回答越确定")
-                        .build(),
-                ConfigField.builder()
-                        .key("topP")
-                        .label("核采样")
-                        .type("slider")
-                        .min(0.0).max(1.0).step(0.05)
-                        .defaultValue(1.0)
-                        .hint("控制词汇选择的多样性")
-                        .build(),
-                ConfigField.builder()
-                        .key("maxTokens")
-                        .label("最大 Token")
-                        .type("number")
-                        .min(256.0).max(8192.0).step(256.0)
-                        .defaultValue(2048)
-                        .hint("单次回答的最大长度")
-                        .build(),
-                ConfigField.builder()
-                        .key("presencePenalty")
-                        .label("存在惩罚")
-                        .type("slider")
-                        .min(-2.0).max(2.0).step(0.1)
-                        .defaultValue(0.0)
-                        .hint("正值降低重复话题的概率")
-                        .build(),
-                ConfigField.builder()
-                        .key("frequencyPenalty")
-                        .label("频率惩罚")
-                        .type("slider")
-                        .min(-2.0).max(2.0).step(0.1)
-                        .defaultValue(0.0)
-                        .hint("正值降低重复用词的概率")
-                        .build()
-        );
+        List<ConfigField> fields = new ArrayList<>();
+        fields.add(ConfigField.builder()
+                .key("modelId")
+                .label("模型")
+                .type("select")
+                .options(List.of(
+                        ConfigField.Option.builder().value("gpt-4o-mini").label("GPT-4o Mini（视觉）").build(),
+                        ConfigField.Option.builder().value("gpt-4o").label("GPT-4o（视觉）").build(),
+                        ConfigField.Option.builder().value("gpt-4-turbo").label("GPT-4 Turbo（视觉）").build(),
+                        ConfigField.Option.builder().value("gpt-4-vision-preview").label("GPT-4 Vision Preview").build(),
+                        ConfigField.Option.builder().value("gpt-4").label("GPT-4").build(),
+                        ConfigField.Option.builder().value("gpt-3.5-turbo").label("GPT-3.5 Turbo").build()
+                ))
+                .defaultValue("gpt-4o-mini")
+                .hint("多模态请选用 gpt-4o / gpt-4o-mini / gpt-4-turbo 等视觉模型")
+                .build());
+        fields.addAll(AgentCapabilityConfigFields.openAiFields());
+        fields.add(ConfigField.builder()
+                .key("temperature")
+                .label("温度")
+                .type("slider")
+                .min(0.0).max(2.0).step(0.1)
+                .defaultValue(0.7)
+                .hint("值越高回答越随机创造性，值越低回答越确定")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("topP")
+                .label("核采样")
+                .type("slider")
+                .min(0.0).max(1.0).step(0.05)
+                .defaultValue(1.0)
+                .hint("控制词汇选择的多样性")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("maxTokens")
+                .label("最大 Token")
+                .type("number")
+                .min(256.0).max(8192.0).step(256.0)
+                .defaultValue(2048)
+                .hint("单次回答的最大长度")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("presencePenalty")
+                .label("存在惩罚")
+                .type("slider")
+                .min(-2.0).max(2.0).step(0.1)
+                .defaultValue(0.0)
+                .hint("正值降低重复话题的概率")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("frequencyPenalty")
+                .label("频率惩罚")
+                .type("slider")
+                .min(-2.0).max(2.0).step(0.1)
+                .defaultValue(0.0)
+                .hint("正值降低重复用词的概率")
+                .build());
+        return fields;
     }
 
     @Override

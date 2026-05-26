@@ -1,7 +1,11 @@
 package com.lightbot.service.chat;
 
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.Agent;
+import com.lightbot.enums.ModelProviderType;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.entity.ModelProvider;
+import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.McpClientService;
 import com.lightbot.service.ToolService;
@@ -32,6 +36,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private final AgentService agentService;
     private final ToolService toolService;
     private final McpClientService mcpClientService;
+    private final ModelProviderService modelProviderService;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -84,7 +89,15 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             toolBuilder.maxTokens(v instanceof Number n ? n.intValue() : Integer.parseInt(v.toString()));
         }
 
-        if (agent != null) {
+        // MiMo 联网搜索使用内置 web_search，不与 Agent 自定义工具混用
+        boolean mimoWebSearch = false;
+        if (providerId != null) {
+            ModelProvider provider = modelProviderService.getById(providerId);
+            mimoWebSearch = provider != null && provider.getType() == ModelProviderType.MIMO
+                    && Boolean.TRUE.equals(configMap.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH));
+        }
+
+        if (agent != null && !mimoWebSearch) {
             List<ToolCallback> allCallbacks = new java.util.ArrayList<>();
 
             // 1. 加载内置/自定义工具（从 tool 表）

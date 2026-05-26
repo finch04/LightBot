@@ -34,3 +34,12 @@ export function getDefaultTtsModel() {
 export function updateDefaultTtsModel(data) {
   return request.put('/system-config/default-tts-model', data)
 }
+
+// 默认重排模型
+export function getDefaultRerankModel() {
+  return request.get('/system-config/default-rerank-model')
+}
+
+export function updateDefaultRerankModel(data) {
+  return request.put('/system-config/default-rerank-model', data)
+}

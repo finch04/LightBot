@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/agents')">
+        <button class="btn-back" @click="handleGoBack">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ agent.name || 'Agent 详情' }}</h1>
@@ -57,7 +57,9 @@
       </template>
     </a-alert>
 
-    <div class="content-grid" :class="{ 'is-version-preview': isVersionPreview }">
+    <div class="agent-edit-surface" :class="{ 'is-version-preview': isVersionPreview }">
+    <div class="content-grid">
+      <div class="content-grid-main">
       <!-- 基本信息 -->
       <div class="panel panel-stretch panel--basic">
         <div class="panel-header">
@@ -135,7 +137,8 @@
               <div>
                 <h4 class="sub-config-card-title">变量配置</h4>
                 <p class="sub-config-card-desc">
-                  变量名仅支持英文、数字、下划线；在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
+                  变量名仅支持英文、数字、下划线<br/>
+                  在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
                 </p>
               </div>
               <button type="button" class="btn-add-inline" @click="addPromptVariable">
@@ -197,13 +200,15 @@
         </div>
       </div>
 
+      </div>
+
       <!-- 模型参数 + 对话配置 -->
       <div v-if="agent.agentType !== 'workflow'" class="content-grid-side">
         <div class="panel panel--model">
           <div class="panel-header">
             <h3>模型参数</h3>
             <div class="panel-header-actions">
-              <button class="btn-ai-sm" @click="confirmRestoreDefaults" :disabled="!agentConfig.providerId">
+              <button class="btn-ai-sm" @click="confirmRestoreDefaults" :disabled="!agentConfig.providerId || isVersionPreview">
                 <UndoOutlined /> 恢复默认
               </button>
               <span class="panel-tip">根据提供商动态显示</span>
@@ -234,34 +239,191 @@
               </a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item v-for="field in configFields.filter(f => f.key !== 'modelId')" :key="field.key">
-            <template #label>
-              <div class="config-label-wrap">
-                <span class="config-label">{{ field.label }}</span>
-                <span class="config-key">{{ field.key }}</span>
+
+          <!-- 模型能力（嵌套在模型参数内，参考变量配置） -->
+          <div v-if="capabilityFields.length" class="sub-config-card sub-config-card--model">
+            <div class="sub-config-card-header">
+              <div class="sub-config-card-title-row">
+                <h4 class="sub-config-card-title">模型能力</h4>
+                <a-tooltip
+                  title="多模态、联网搜索等由模型提供商动态提供；开启后对话页将显示对应入口。需先开启「多模态」才能配置图片/视频/语音输入。"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined class="field-hint-icon" />
+                </a-tooltip>
               </div>
-            </template>
-            <!-- select -->
-            <a-select v-if="field.type === 'select'" v-model:value="agentConfig[field.key]" placeholder="请选择" style="width: 100%">
-              <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </a-select-option>
-            </a-select>
-            <!-- slider -->
-            <div v-else-if="field.type === 'slider'" class="param-row">
-              <a-slider v-model:value="agentConfig[field.key]" :min="field.min" :max="field.max" :step="field.step" style="flex: 1" />
-              <span class="param-value">{{ agentConfig[field.key] }}</span>
+              <button
+                type="button"
+                class="btn-add-inline"
+                :disabled="isVersionPreview || !hasCapabilitySwitches"
+                @click="toggleAllCapabilities"
+              >
+                <CheckOutlined v-if="!allCapabilitiesEnabled" />
+                <CloseOutlined v-else />
+                {{ allCapabilitiesEnabled ? '全部关闭' : '全部开启' }}
+              </button>
             </div>
-            <!-- number -->
-            <a-input-number v-else-if="field.type === 'number'" v-model:value="agentConfig[field.key]" :min="field.min" :max="field.max" :step="field.step" style="width: 100%" />
-            <!-- switch -->
-            <div v-else-if="field.type === 'switch'" style="display: flex; align-items: center; gap: 8px;">
+            <div class="capability-grid">
+              <div class="capability-grid-primary">
+                <template v-for="field in primaryCapabilityFields" :key="field.key">
+                  <div
+                    v-if="field.type === 'switch'"
+                    class="capability-option-item"
+                    :class="{ 'is-disabled': isCapabilityFieldDisabled(field) }"
+                  >
+                    <span class="capability-option-label">{{ field.label }}</span>
+                    <a-switch
+                      v-model:checked="agentConfig[field.key]"
+                      size="small"
+                      :disabled="isCapabilityFieldDisabled(field)"
+                    />
+                    <span class="capability-option-status">{{ agentConfig[field.key] ? '开' : '关' }}</span>
+                    <a-tooltip
+                      v-if="field.hint"
+                      :title="field.hint"
+                      overlay-class-name="no-flip-tooltip"
+                      :overlay-style="{ maxWidth: '320px' }"
+                      placement="topLeft"
+                    >
+                      <QuestionCircleOutlined class="tool-option-help" />
+                    </a-tooltip>
+                  </div>
+                </template>
+              </div>
+              <div v-if="webSearchSubFields.length" class="capability-grid-sub">
+                <div class="capability-sub-header">联网搜索配置</div>
+                <div class="capability-grid-sub-items">
+                  <template v-for="field in webSearchSubFields" :key="field.key">
+                    <div v-if="field.type === 'switch'" class="capability-option-item">
+                      <span class="capability-option-label">{{ field.label }}</span>
+                      <a-switch
+                        v-model:checked="agentConfig[field.key]"
+                        size="small"
+                        :disabled="isVersionPreview"
+                      />
+                      <span class="capability-option-status">{{ agentConfig[field.key] ? '开' : '关' }}</span>
+                      <a-tooltip
+                        v-if="field.hint"
+                        :title="field.hint"
+                        overlay-class-name="no-flip-tooltip"
+                        :overlay-style="{ maxWidth: '320px' }"
+                        placement="topLeft"
+                      >
+                        <QuestionCircleOutlined class="tool-option-help" />
+                      </a-tooltip>
+                    </div>
+                    <div v-else-if="field.type === 'number'" class="capability-option-item capability-option-item--number">
+                      <span class="capability-option-label">{{ field.label }}</span>
+                      <a-input-number
+                        v-model:value="agentConfig[field.key]"
+                        :min="field.min"
+                        :max="field.max"
+                        :step="field.step"
+                        size="small"
+                        class="capability-number-input"
+                        :disabled="isVersionPreview"
+                      />
+                      <a-tooltip
+                        v-if="field.hint"
+                        :title="field.hint"
+                        overlay-class-name="no-flip-tooltip"
+                        :overlay-style="{ maxWidth: '320px' }"
+                        placement="topLeft"
+                      >
+                        <QuestionCircleOutlined class="tool-option-help" />
+                      </a-tooltip>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <a-form-item v-for="field in modelTuneFields" :key="field.key" :label="field.label">
+            <div v-if="field.type === 'select'" class="field-control-row">
+              <a-select
+                v-model:value="agentConfig[field.key]"
+                placeholder="请选择"
+                class="field-control-grow"
+              >
+                <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+              <a-tooltip
+                v-if="field.hint"
+                :title="field.hint"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined class="field-hint-icon" />
+              </a-tooltip>
+            </div>
+            <div v-else-if="field.type === 'slider'" class="field-control-row field-control-row--slider">
+              <a-slider
+                v-model:value="agentConfig[field.key]"
+                :min="field.min"
+                :max="field.max"
+                :step="field.step"
+                class="field-control-grow"
+              />
+              <span class="param-value">{{ agentConfig[field.key] }}</span>
+              <a-tooltip
+                v-if="field.hint"
+                :title="field.hint"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined class="field-hint-icon" />
+              </a-tooltip>
+            </div>
+            <div v-else-if="field.type === 'number'" class="field-control-row">
+              <a-input-number
+                v-model:value="agentConfig[field.key]"
+                :min="field.min"
+                :max="field.max"
+                :step="field.step"
+                class="field-control-grow"
+              />
+              <a-tooltip
+                v-if="field.hint"
+                :title="field.hint"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined class="field-hint-icon" />
+              </a-tooltip>
+            </div>
+            <div v-else-if="field.type === 'switch'" class="field-control-row">
               <a-switch v-model:checked="agentConfig[field.key]" />
               <span class="tool-option-value">{{ agentConfig[field.key] ? '已开启' : '已关闭' }}</span>
+              <a-tooltip
+                v-if="field.hint"
+                :title="field.hint"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined class="field-hint-icon" />
+              </a-tooltip>
             </div>
-            <!-- text -->
-            <a-input v-else v-model:value="agentConfig[field.key]" placeholder="请输入" />
-            <div v-if="field.hint" class="param-hint">{{ field.hint }}</div>
+            <div v-else class="field-control-row">
+              <a-input v-model:value="agentConfig[field.key]" placeholder="请输入" class="field-control-grow" />
+              <a-tooltip
+                v-if="field.hint"
+                :title="field.hint"
+                overlay-class-name="no-flip-tooltip"
+                :overlay-style="{ maxWidth: '320px' }"
+                placement="topLeft"
+              >
+                <QuestionCircleOutlined class="field-hint-icon" />
+              </a-tooltip>
+            </div>
           </a-form-item>
                 </a-form>
           </div>
@@ -503,8 +665,14 @@
       </div>
     </div>
 
-    <!-- 绑定扩展 -->
-    <a-tabs v-if="agent.agentType !== 'workflow'" v-model:activeKey="bindingTab" @change="onBindingTabChange" class="binding-tabs">
+    <!-- 绑定扩展（预览时 Tab 可切换查看，仅内容区只读） -->
+    <a-tabs
+      v-if="agent.agentType !== 'workflow'"
+      v-model:activeKey="bindingTab"
+      @change="onBindingTabChange"
+      class="binding-tabs"
+      :class="{ 'binding-tabs--preview': isVersionPreview }"
+    >
       <!-- 工具绑定 -->
       <a-tab-pane key="tools" tab="工具">
         <div class="tool-options-bar">
@@ -573,7 +741,7 @@
                 v-for="t in filteredToolList"
                 :key="t.name"
                 class="knowledge-item"
-                :class="{ selected: selectedToolIds.has(t.id) }"
+                :class="{ selected: selectedToolIds.has(toBindingId(t.id)) }"
                 @click="toggleTool(t)"
               >
                 <div class="item-icon tool-icon-bg">
@@ -586,7 +754,7 @@
                   </div>
                   <div class="item-desc">{{ t.description || '暂无描述' }}</div>
                 </div>
-                <div class="item-check" v-if="selectedToolIds.has(t.id)">
+                <div class="item-check" v-if="selectedToolIds.has(toBindingId(t.id))">
                   <CheckOutlined />
                 </div>
               </div>
@@ -637,7 +805,7 @@
                 v-for="k in filteredKnowledgeList"
                 :key="k.id"
                 class="knowledge-item"
-                :class="{ selected: selectedKnowledgeIds.has(k.id) }"
+                :class="{ selected: selectedKnowledgeIds.has(toBindingId(k.id)) }"
                 @click="toggleKnowledge(k)"
               >
                 <div class="item-icon knowledge-icon">
@@ -647,7 +815,7 @@
                   <div class="item-name">{{ k.name }}</div>
                   <div class="item-desc">{{ k.description || '暂无描述' }}</div>
                 </div>
-                <div class="item-check" v-if="selectedKnowledgeIds.has(k.id)">
+                <div class="item-check" v-if="selectedKnowledgeIds.has(toBindingId(k.id))">
                   <CheckOutlined />
                 </div>
               </div>
@@ -699,7 +867,7 @@
                 v-for="s in filteredMcpServerList"
                 :key="s.id"
                 class="knowledge-item"
-                :class="{ selected: selectedMcpServerIds.has(s.id) }"
+                :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)) }"
                 @click="toggleMcpServer(s)"
               >
                 <div class="item-icon mcp-icon-bg">
@@ -709,7 +877,7 @@
                   <div class="item-name">{{ s.name }}</div>
                   <div class="item-desc">{{ s.description || '暂无描述' }}</div>
                 </div>
-                <div class="item-check" v-if="selectedMcpServerIds.has(s.id)">
+                <div class="item-check" v-if="selectedMcpServerIds.has(toBindingId(s.id))">
                   <CheckOutlined />
                 </div>
               </div>
@@ -762,7 +930,7 @@
                 v-for="s in filteredSubAgentList"
                 :key="s.id"
                 class="subagent-item"
-                :class="{ selected: selectedSubAgentIds.has(s.id) }"
+                :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)) }"
                 @click="toggleSubAgent(s)"
               >
                 <div class="item-icon subagent-icon">
@@ -776,7 +944,7 @@
                     工具: {{ JSON.parse(s.tools).join(', ') }}
                   </div>
                 </div>
-                <div class="item-check" v-if="selectedSubAgentIds.has(s.id)">
+                <div class="item-check" v-if="selectedSubAgentIds.has(toBindingId(s.id))">
                   <CheckOutlined />
                 </div>
               </div>
@@ -793,6 +961,7 @@
       </a-tab-pane>
 
     </a-tabs>
+    </div>
     <a-modal
       v-model:open="publishModalVisible"
       title="发布 Agent"
@@ -912,6 +1081,19 @@
             <div class="preview-field" v-if="versionPreview.modelParams?.repetitionPenalty !== undefined">
               <label>Repetition Penalty</label>
               <div class="preview-value">{{ versionPreview.modelParams.repetitionPenalty }}</div>
+            </div>
+          </div>
+          <div v-if="capabilityPreviewItems.length" class="preview-field-grid preview-field-grid--capabilities">
+            <div
+              v-for="item in capabilityPreviewItems"
+              :key="item.key"
+              class="preview-field"
+            >
+              <label>{{ item.label }}</label>
+              <div class="preview-value">
+                {{ item.display }}
+                <span v-if="item.fromDefault" class="preview-default-tag">默认</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1045,8 +1227,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
@@ -1058,6 +1240,8 @@ import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
 import { getEnabledSubAgents } from '../api/subagent'
+import { safeJsonParse } from '../utils/request'
+import { toBindingId, toBindingIdSet, stripBindingKeysFromConfig } from '../utils/bindingId'
 import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 const route = useRoute()
 const router = useRouter()
@@ -1198,6 +1382,120 @@ const sensitiveWords = ref([''])
 
 const providerList = ref([])
 const configFields = ref([])
+
+/** 模型能力卡片字段（与温度、TopP 等调参分离） */
+const CAPABILITY_FIELD_KEYS = new Set([
+  'multimodalEnabled',
+  'enableImageInput',
+  'enableVideoInput',
+  'enableAudioInput',
+  'enableWebSearch',
+  'webSearchForceSearch',
+  'webSearchMaxKeyword',
+  'enableTts',
+  'enableReasoning',
+])
+
+/** 依赖多模态总开关的子能力 */
+const MULTIMODAL_DEPENDENT_KEYS = new Set(['enableImageInput', 'enableVideoInput', 'enableAudioInput'])
+
+/** 依赖联网搜索的子配置 */
+const WEB_SEARCH_SUB_KEYS = new Set(['webSearchForceSearch', 'webSearchMaxKeyword'])
+
+const CAPABILITY_PRIMARY_ORDER = [
+  'multimodalEnabled',
+  'enableImageInput',
+  'enableVideoInput',
+  'enableAudioInput',
+  'enableWebSearch',
+  'enableTts',
+  'enableReasoning',
+]
+
+const capabilityFields = computed(() =>
+  configFields.value.filter(f => CAPABILITY_FIELD_KEYS.has(f.key))
+)
+
+const modelTuneFields = computed(() =>
+  configFields.value.filter(f => f.key !== 'modelId' && !CAPABILITY_FIELD_KEYS.has(f.key))
+)
+
+const hasCapabilitySwitches = computed(() =>
+  capabilityFields.value.some(f => f.type === 'switch')
+)
+
+const primaryCapabilityFields = computed(() => {
+  const map = new Map(capabilityFields.value.map(f => [f.key, f]))
+  return CAPABILITY_PRIMARY_ORDER.map(k => map.get(k)).filter(Boolean)
+})
+
+const webSearchSubFields = computed(() => {
+  if (!agentConfig.enableWebSearch) return []
+  return capabilityFields.value.filter(f => WEB_SEARCH_SUB_KEYS.has(f.key))
+})
+
+const capabilitySwitchFields = computed(() =>
+  capabilityFields.value.filter(f => f.type === 'switch')
+)
+
+const allCapabilitiesEnabled = computed(() => {
+  const switches = capabilitySwitchFields.value
+  return switches.length > 0 && switches.every(f => !!agentConfig[f.key])
+})
+
+function isCapabilityFieldDisabled(field) {
+  if (isVersionPreview.value) return true
+  if (MULTIMODAL_DEPENDENT_KEYS.has(field.key) && !agentConfig.multimodalEnabled) return true
+  return false
+}
+
+watch(
+  () => agentConfig.multimodalEnabled,
+  (enabled) => {
+    if (enabled) return
+    for (const key of MULTIMODAL_DEPENDENT_KEYS) {
+      if (agentConfig[key]) agentConfig[key] = false
+    }
+  }
+)
+
+watch(
+  () => agentConfig.enableWebSearch,
+  (enabled) => {
+    if (enabled) return
+    agentConfig.webSearchForceSearch = false
+    for (const field of capabilityFields.value) {
+      if (field.key === 'webSearchMaxKeyword' && field.defaultValue !== undefined) {
+        agentConfig.webSearchMaxKeyword = field.defaultValue
+      }
+    }
+  }
+)
+
+/** 从 config 合并模型能力字段到 modelParams（兼容旧版快照） */
+function mergeCapabilityFromConfig(target, cfg) {
+  if (!cfg || !target) return
+  for (const key of CAPABILITY_FIELD_KEYS) {
+    if (cfg[key] !== undefined) {
+      target[key] = cfg[key]
+    }
+  }
+}
+
+function formatCapabilityPreviewDisplay(field, value) {
+  if (field.type === 'switch') return value ? '开启' : '关闭'
+  if (value === undefined || value === null) return '—'
+  return String(value)
+}
+
+function toggleAllCapabilities() {
+  const enable = !allCapabilitiesEnabled.value
+  for (const field of capabilitySwitchFields.value) {
+    agentConfig[field.key] = enable
+  }
+  message.success(enable ? '已开启全部模型能力' : '已关闭全部模型能力')
+}
+
 const modelList = ref([])
 const modelSearchText = ref('')
 const selectedKnowledgeIds = ref(new Set())
@@ -1225,6 +1523,32 @@ const versionList = ref([])
 const versionLoading = ref(false)
 const selectedVersion = ref('draft')
 const versionPreview = ref(null)
+/** 草稿编辑基线快照，用于离开页未保存提示 */
+const formBaselineSnapshot = ref(null)
+
+/** 版本快照中的模型能力展示（缺失字段用提供商默认值填充） */
+const capabilityPreviewItems = computed(() => {
+  if (!versionPreview.value) return []
+  const mp = versionPreview.value.modelParams || {}
+  const webSearchOn = mp.enableWebSearch !== undefined
+    ? !!mp.enableWebSearch
+    : !!capabilityFields.value.find(f => f.key === 'enableWebSearch')?.defaultValue
+  const previewFields = [
+    ...primaryCapabilityFields.value,
+    ...(webSearchOn ? webSearchSubFields.value : []),
+  ]
+  return previewFields.map(field => {
+    const fromSnapshot = mp[field.key] !== undefined && mp[field.key] !== null
+    const raw = fromSnapshot ? mp[field.key] : field.defaultValue
+    return {
+      key: field.key,
+      label: field.label,
+      display: formatCapabilityPreviewDisplay(field, raw),
+      fromDefault: !fromSnapshot,
+    }
+  })
+})
+
 const agentStatus = ref('draft')
 const bindingTab = ref('tools')
 const agentVersion = ref(0)
@@ -1382,7 +1706,7 @@ const filteredModels = computed(() => {
 })
 
 const selectedKnowledge = computed(() => {
-  return knowledgeList.value.filter(k => selectedKnowledgeIds.value.has(k.id))
+  return knowledgeList.value.filter(k => selectedKnowledgeIds.value.has(toBindingId(k.id)))
 })
 
 const filteredKnowledgeList = computed(() => {
@@ -1395,7 +1719,7 @@ const filteredKnowledgeList = computed(() => {
 })
 
 const selectedTools = computed(() => {
-  return toolList.value.filter(t => selectedToolIds.value.has(t.id))
+  return toolList.value.filter(t => selectedToolIds.value.has(toBindingId(t.id)))
 })
 
 const filteredToolList = computed(() => {
@@ -1409,7 +1733,7 @@ const filteredToolList = computed(() => {
 })
 
 const selectedMcpServers = computed(() => {
-  return mcpServerList.value.filter(s => selectedMcpServerIds.value.has(s.id))
+  return mcpServerList.value.filter(s => selectedMcpServerIds.value.has(toBindingId(s.id)))
 })
 
 const filteredMcpServerList = computed(() => {
@@ -1422,7 +1746,7 @@ const filteredMcpServerList = computed(() => {
 })
 
 const selectedSubAgents = computed(() => {
-  return subAgentList.value.filter(s => selectedSubAgentIds.value.has(s.id))
+  return subAgentList.value.filter(s => selectedSubAgentIds.value.has(toBindingId(s.id)))
 })
 
 const filteredSubAgentList = computed(() => {
@@ -1451,8 +1775,11 @@ async function loadConfigFields(providerId) {
     configFields.value = res.data || []
     // 记录 configFields 的 key，用于切换提供商时精准清除
     currentConfigFieldKeys.value = new Set(configFields.value.map(f => f.key))
-    // 为缺失的字段设置默认值
+    // 为缺失的字段设置默认值（版本预览时模型能力不自动填默认，由快照决定）
     for (const field of configFields.value) {
+      if (isVersionPreview.value && CAPABILITY_FIELD_KEYS.has(field.key)) {
+        continue
+      }
       if (agentConfig[field.key] === undefined && field.defaultValue !== undefined) {
         agentConfig[field.key] = field.defaultValue
       }
@@ -1519,9 +1846,7 @@ function confirmRestoreDefaults() {
 }
 
 function restoreDefaults() {
-  for (const field of configFields.value) {
-    // 恢复默认不切换模型
-    if (field.key === 'modelId') continue
+  for (const field of modelTuneFields.value) {
     if (field.defaultValue !== undefined) {
       agentConfig[field.key] = field.defaultValue
     }
@@ -1551,10 +1876,14 @@ async function loadAgent() {
     // 解析 config JSONB
     if (config) {
       try {
-        const parsed = typeof config === 'string' ? JSON.parse(config) : config
-        Object.assign(agentConfig, parsed)
-        syncPromptVariablesFromConfig(parsed)
-        syncSensitiveWordsFromConfig(parsed)
+        const parsed = typeof config === 'string' ? safeJsonParse(config) : config
+        if (parsed) {
+          stripBindingKeysFromConfig(parsed)
+          Object.assign(agentConfig, parsed)
+          stripBindingKeysFromConfig(agentConfig)
+        }
+        syncPromptVariablesFromConfig(parsed || {})
+        syncSensitiveWordsFromConfig(parsed || {})
         if (agentConfig.streamOutput === undefined) {
           agentConfig.streamOutput = true
         }
@@ -1580,25 +1909,85 @@ async function loadAgent() {
     await loadProviders()
     await Promise.all([loadConfigFields(agentConfig.providerId), loadModels(agentConfig.providerId)])
 
-    selectedKnowledgeIds.value = new Set((knowledgeIds || []).map(String))
-    selectedSubAgentIds.value = new Set((subAgentIds || []).map(String))
+    selectedKnowledgeIds.value = toBindingIdSet(knowledgeIds)
+    selectedSubAgentIds.value = toBindingIdSet(subAgentIds)
 
     // 加载绑定的工具详情
     const toolRes = await getAgentToolDetails(agentId)
     const boundTools = toolRes.data || []
-    selectedToolIds.value = new Set(boundTools.map(t => t.id))
+    selectedToolIds.value = toBindingIdSet(boundTools.map(t => t.id))
 
-    // MCP Server IDs（从 detail 接口获取）
-    selectedMcpServerIds.value = new Set((mcpServerIds || []).map(String))
+    // MCP Server IDs（从 detail 接口获取，统一字符串避免精度丢失）
+    selectedMcpServerIds.value = toBindingIdSet(mcpServerIds)
+    refreshFormBaseline()
   } catch (e) {
     // interceptor已处理错误提示
   }
 }
 
+function captureFormSnapshot() {
+  const sortedIds = (set) => [...set].map(toBindingId).filter(Boolean).sort()
+  return JSON.stringify({
+    agent: {
+      name: agent.name,
+      description: agent.description,
+      systemPrompt: agent.systemPrompt,
+      welcomeMessage: agent.welcomeMessage,
+      avatar: agent.avatar,
+      agentType: agent.agentType,
+    },
+    agentConfig: { ...agentConfig },
+    recommendedQuestions: [...recommendedQuestions.value],
+    promptVariables: promptVariables.value.map(v => ({ key: v.key, label: v.label, defaultValue: v.defaultValue })),
+    knowledgeIds: sortedIds(selectedKnowledgeIds.value),
+    toolIds: sortedIds(selectedToolIds.value),
+    mcpServerIds: sortedIds(selectedMcpServerIds.value),
+    subAgentIds: sortedIds(selectedSubAgentIds.value),
+    userSensitiveWords: [...userSensitiveWords.value],
+    sensitiveWords: [...sensitiveWords.value],
+  })
+}
+
+function refreshFormBaseline() {
+  formBaselineSnapshot.value = captureFormSnapshot()
+}
+
+function isFormDirty() {
+  if (isVersionPreview.value || !formBaselineSnapshot.value) return false
+  return captureFormSnapshot() !== formBaselineSnapshot.value
+}
+
+function confirmLeaveUnsaved(onConfirm) {
+  Modal.confirm({
+    title: '未保存的修改',
+    content: '当前有未保存的修改，离开后将丢失，是否继续？',
+    okText: '离开',
+    okType: 'danger',
+    cancelText: '继续编辑',
+    onOk: onConfirm,
+  })
+}
+
+function handleGoBack() {
+  if (isFormDirty()) {
+    confirmLeaveUnsaved(() => router.push('/agents'))
+  } else {
+    router.push('/agents')
+  }
+}
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!isFormDirty()) {
+    next()
+    return
+  }
+  confirmLeaveUnsaved(() => next())
+})
+
 async function loadKnowledgeList() {
   try {
     const res = await getKnowledgeList({ pageNum: 1, pageSize: 100 })
-    knowledgeList.value = res.data.records || []
+    knowledgeList.value = (res.data.records || []).map(k => ({ ...k, id: toBindingId(k.id) }))
   } catch (e) {
     // ignore
   }
@@ -1618,101 +2007,114 @@ async function loadToolList(toolType) {
     const params = { pageNum: 1, pageSize: 100, isSystem: false }
     if (toolType) params.toolType = toolType
     const res = await getTools(params)
-    toolList.value = res.data?.records || []
+    toolList.value = (res.data?.records || []).map(t => ({ ...t, id: toBindingId(t.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载工具列表失败:', e)
   }
 }
 
 function toggleKnowledge(k) {
+  if (isVersionPreview.value) return
+  const kid = toBindingId(k.id)
   const ids = new Set(selectedKnowledgeIds.value)
-  if (ids.has(k.id)) {
-    ids.delete(k.id)
+  if (ids.has(kid)) {
+    ids.delete(kid)
   } else {
     if (ids.size >= BIND_LIMITS.knowledge) {
       message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.knowledge} 个知识库`)
       return
     }
-    ids.add(k.id)
+    ids.add(kid)
   }
   selectedKnowledgeIds.value = ids
 }
 
 function removeKnowledge(id) {
+  if (isVersionPreview.value) return
   const ids = new Set(selectedKnowledgeIds.value)
-  ids.delete(id)
+  ids.delete(toBindingId(id))
   selectedKnowledgeIds.value = ids
 }
 
 function toggleTool(t) {
+  if (isVersionPreview.value) return
+  const tid = toBindingId(t.id)
   const ids = new Set(selectedToolIds.value)
-  if (ids.has(t.id)) {
-    ids.delete(t.id)
+  if (ids.has(tid)) {
+    ids.delete(tid)
   } else {
     if (ids.size >= BIND_LIMITS.tool) {
       message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.tool} 个工具`)
       return
     }
-    ids.add(t.id)
+    ids.add(tid)
   }
   selectedToolIds.value = ids
 }
 
 function removeTool(id) {
+  if (isVersionPreview.value) return
   const ids = new Set(selectedToolIds.value)
-  ids.delete(id)
+  ids.delete(toBindingId(id))
   selectedToolIds.value = ids
 }
 
 function toggleMcpServer(s) {
+  if (isVersionPreview.value) return
+  const sid = toBindingId(s.id)
   const ids = new Set(selectedMcpServerIds.value)
-  if (ids.has(s.id)) {
-    ids.delete(s.id)
+  if (ids.has(sid)) {
+    ids.delete(sid)
   } else {
     if (ids.size >= BIND_LIMITS.mcp) {
       message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.mcp} 个 MCP Server`)
       return
     }
-    ids.add(s.id)
+    ids.add(sid)
   }
   selectedMcpServerIds.value = ids
 }
 
 function removeMcpServer(id) {
+  if (isVersionPreview.value) return
   const ids = new Set(selectedMcpServerIds.value)
-  ids.delete(id)
+  ids.delete(toBindingId(id))
   selectedMcpServerIds.value = ids
 }
 
 // SubAgent 操作
 function toggleSubAgent(s) {
+  if (isVersionPreview.value) return
+  const sid = toBindingId(s.id)
   const ids = new Set(selectedSubAgentIds.value)
-  if (ids.has(s.id)) {
-    ids.delete(s.id)
+  if (ids.has(sid)) {
+    ids.delete(sid)
   } else {
     if (ids.size >= BIND_LIMITS.subAgent) {
       message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.subAgent} 个 SubAgent`)
       return
     }
-    ids.add(s.id)
+    ids.add(sid)
   }
   selectedSubAgentIds.value = ids
 }
 
 function removeSubAgent(id) {
+  if (isVersionPreview.value) return
   const ids = new Set(selectedSubAgentIds.value)
-  ids.delete(id)
+  ids.delete(toBindingId(id))
   selectedSubAgentIds.value = ids
 }
 
 function clearSelectedSubAgents() {
+  if (isVersionPreview.value) return
   selectedSubAgentIds.value = new Set()
 }
 
 async function loadSubAgentList() {
   try {
     const res = await getEnabledSubAgents()
-    subAgentList.value = res.data || []
+    subAgentList.value = (res.data || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载SubAgent列表失败:', e)
   }
@@ -1734,21 +2136,24 @@ async function onBindingTabChange(tab) {
 async function loadMcpServerList() {
   try {
     const res = await getMcpServers({ pageNum: 1, pageSize: 100 })
-    mcpServerList.value = res.data?.records || []
+    mcpServerList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载MCP Server列表失败:', e)
   }
 }
 
 function clearSelectedTools() {
+  if (isVersionPreview.value) return
   selectedToolIds.value = new Set()
 }
 
 function clearSelectedMcpServers() {
+  if (isVersionPreview.value) return
   selectedMcpServerIds.value = new Set()
 }
 
 function clearSelectedKnowledge() {
+  if (isVersionPreview.value) return
   selectedKnowledgeIds.value = new Set()
 }
 
@@ -1835,6 +2240,7 @@ async function handleSaveWorkflowBasic() {
 }
 
 async function handleSave() {
+  if (isVersionPreview.value) return false
   if (!agent.name?.trim()) {
     message.warning('请输入 Agent 名称')
     return false
@@ -1915,6 +2321,7 @@ async function handleSave() {
       userSensitiveWords: serializedUserSensitiveWords,
       sensitiveWords: serializedSensitiveWords,
     }
+    stripBindingKeysFromConfig(configObj)
     const configStr = JSON.stringify(configObj)
 
     // 2. 更新 Agent
@@ -1952,7 +2359,7 @@ const agentStatusText = computed(() => {
   const map = {
     draft: '草稿',
     published: agentVersion.value > 0 ? `已发布 v${agentVersion.value}` : '已发布',
-    published_editing: agentVersion.value > 0 ? `已发布编辑中 v${agentVersion.value}` : '已发布编辑中',
+    published_editing: agentVersion.value > 0 ? `编辑中 v${agentVersion.value}` : '编辑中',
   }
   return map[agentStatus.value] || agentStatus.value
 })
@@ -2020,7 +2427,7 @@ async function openVersionDrawer() {
 }
 
 /** 将版本详情应用到页面表单（只读预览态下回显完整配置与绑定） */
-function applyVersionPreviewToForm(data) {
+async function applyVersionPreviewToForm(data) {
   const basic = data.basicInfo || {}
   const modelParams = data.modelParams || {}
   const chatConfig = data.chatConfig || {}
@@ -2049,14 +2456,10 @@ function applyVersionPreviewToForm(data) {
   syncPromptVariablesFromConfig(agentConfig)
   syncSensitiveWordsFromConfig(agentConfig)
 
-  const knowledgeIds = (data.knowledgeIds || []).map(String)
-  const toolIds = (data.toolIds || []).map(String)
-  const mcpIds = (data.mcpServerIds || []).map(String)
-  const subIds = (data.subAgentIds || []).map(String)
-  selectedKnowledgeIds.value = new Set(knowledgeIds)
-  selectedMcpServerIds.value = new Set(mcpIds)
-  selectedSubAgentIds.value = new Set(subIds)
-  selectedToolIds.value = new Set(toolIds)
+  selectedKnowledgeIds.value = toBindingIdSet(data.knowledgeIds)
+  selectedMcpServerIds.value = toBindingIdSet(data.mcpServerIds)
+  selectedSubAgentIds.value = toBindingIdSet(data.subAgentIds)
+  selectedToolIds.value = toBindingIdSet(data.toolIds)
 
   if (data.tools?.length) {
     for (const t of data.tools) {
@@ -2089,8 +2492,13 @@ function applyVersionPreviewToForm(data) {
 
   const providerId = agentConfig.providerId
   if (providerId) {
-    loadConfigFields(providerId)
-    loadModels(providerId)
+    await Promise.all([loadConfigFields(providerId), loadModels(providerId)])
+    // 快照未记录的模型能力字段保持不填，避免沿用上一版本残留
+    for (const field of capabilityFields.value) {
+      if (modelParams[field.key] === undefined) {
+        delete agentConfig[field.key]
+      }
+    }
   }
 }
 
@@ -2114,8 +2522,9 @@ function normalizeVersionDetailData(data) {
       maxTokens: cfg.maxTokens,
       presencePenalty: cfg.presencePenalty,
       frequencyPenalty: cfg.frequencyPenalty,
-      repetitionPenalty: cfg.repetitionPenalty
+      repetitionPenalty: cfg.repetitionPenalty,
     }
+    mergeCapabilityFromConfig(modelParams, cfg)
     chatConfig = {
       streamOutput: cfg.streamOutput,
       maxContextMessages: cfg.maxContextMessages,
@@ -2144,6 +2553,10 @@ function normalizeVersionDetailData(data) {
   const subAgentIds = data.subAgentIds?.length
     ? data.subAgentIds
     : (payload.subAgentIds || payload.subagents || [])
+
+  if (payload.config) {
+    mergeCapabilityFromConfig(modelParams, payload.config)
+  }
 
   return {
     basicInfo,
@@ -2181,7 +2594,7 @@ async function selectAgentVersion(version) {
 
     const normalized = normalizeVersionDetailData(data)
     versionPreview.value = normalized
-    applyVersionPreviewToForm(normalized)
+    await applyVersionPreviewToForm(normalized)
   } catch (e) {
     message.error(e.message || '加载版本失败')
   } finally {
@@ -2390,10 +2803,54 @@ onMounted(async () => {
   padding: 0;
   font-size: 13px;
 }
-.content-grid.is-version-preview {
-  opacity: 0.92;
+.agent-edit-surface {
+  position: relative;
+}
+.agent-edit-surface.is-version-preview .content-grid {
+  position: relative;
+  opacity: 0.72;
   pointer-events: none;
   user-select: none;
+  filter: grayscale(0.06);
+}
+.agent-edit-surface.is-version-preview .content-grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(248, 250, 252, 0.45);
+  cursor: not-allowed;
+  border-radius: 12px;
+  z-index: 2;
+}
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content-holder) {
+  position: relative;
+  opacity: 0.72;
+  pointer-events: none;
+  user-select: none;
+  filter: grayscale(0.06);
+}
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content-holder)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(248, 250, 252, 0.45);
+  cursor: not-allowed;
+  z-index: 2;
+}
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-nav) {
+  opacity: 1;
+  pointer-events: auto;
+  filter: none;
+  cursor: default;
+}
+.agent-edit-surface.is-version-preview :deep(.ant-tabs-tab) {
+  cursor: pointer !important;
+}
+.agent-edit-surface.is-version-preview .content-grid :deep(.ant-input),
+.agent-edit-surface.is-version-preview .content-grid :deep(.ant-switch),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-switch) {
+  cursor: not-allowed !important;
 }
 .version-preview-banner-top {
   margin-bottom: 16px;
@@ -2861,8 +3318,19 @@ onMounted(async () => {
 }
 .config-label-wrap {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
   line-height: 1.3;
+}
+.config-label-wrap .config-key {
+  flex-basis: 100%;
+}
+.config-hint-icon {
+  margin-left: 4px;
+  color: #a1a1aa;
+  font-size: 13px;
+  cursor: help;
 }
 .config-label {
   font-size: 14px;
@@ -2884,7 +3352,127 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
+}
+.content-grid-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.sub-config-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sub-config-card-title-row .sub-config-card-title {
+  margin-bottom: 0;
+}
+.capability-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.capability-grid-primary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.capability-grid-sub {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #e4e4e7;
+}
+.capability-sub-header {
+  font-size: 12px;
+  font-weight: 500;
+  color: #71717a;
+  margin-bottom: 10px;
+}
+.capability-grid-sub-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.preview-field-grid--capabilities {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e4e4e7;
+}
+.preview-default-tag {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #a1a1aa;
+  background: #f4f4f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.capability-option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  transition: border-color 0.2s, opacity 0.2s;
+}
+.capability-option-item:hover:not(.is-disabled) {
+  border-color: #d4d4d8;
+}
+.capability-option-item.is-disabled {
+  opacity: 0.55;
+}
+.capability-option-item .capability-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.capability-option-label {
+  font-size: 13px;
+  color: #3f3f46;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.capability-option-status {
+  font-size: 12px;
+  color: #71717a;
+  min-width: 20px;
+}
+.capability-number-input {
+  width: 64px !important;
+}
+.capability-text-input {
+  width: 100px;
+}
+.field-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.field-control-row--slider {
+  gap: 12px;
+}
+.field-control-grow {
+  flex: 1;
+  min-width: 0;
+}
+.field-hint-icon {
+  font-size: 14px;
+  color: #a1a1aa;
+  cursor: help;
+  flex-shrink: 0;
+}
+.field-hint-icon:hover {
+  color: #1890ff;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .content-grid-side {
   display: flex;

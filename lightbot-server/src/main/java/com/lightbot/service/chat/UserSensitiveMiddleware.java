@@ -28,6 +28,10 @@ public class UserSensitiveMiddleware implements ChatMiddleware {
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
         String userMessage = ctx.getRequest().getMessage();
+        if ((userMessage == null || userMessage.isBlank())
+                && ctx.getRequest().getAttachments() != null && !ctx.getRequest().getAttachments().isEmpty()) {
+            userMessage = "请根据附件内容回答。";
+        }
         Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
         SensitiveWordFilter.FilterResult check = SensitiveWordFilter.checkUserInput(
                 userMessage, ctx.getConfigMap(), agentId, ctx.getSessionId());

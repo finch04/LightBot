@@ -1,14 +1,14 @@
 package com.lightbot.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+import java.util.List;
 import java.util.Map;
 
 @Data
 public class ChatRequest {
 
-    @NotBlank(message = "消息不能为空")
+    /** 文本内容；仅有附件时可留空，由服务端补默认提示 */
     private String message;
 
     private Long sessionId;
@@ -25,4 +25,9 @@ public class ChatRequest {
      * 0=暂存草稿；正整数=指定已发布版本号（用于调试/对比）
      */
     private Integer configVersion;
+
+    /**
+     * 多模态附件（先调用上传接口获得）
+     */
+    private List<ChatAttachmentDTO> attachments;
 }

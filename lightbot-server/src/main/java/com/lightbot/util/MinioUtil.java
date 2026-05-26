@@ -127,6 +127,18 @@ public class MinioUtil {
     }
 
     /**
+     * 下载文件为字节数组
+     */
+    public byte[] downloadBytes(String filePath) {
+        try (InputStream in = download(filePath)) {
+            return in.readAllBytes();
+        } catch (Exception e) {
+            log.error("[MinIO] 下载字节失败, path={}", filePath, e);
+            throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
+        }
+    }
+
+    /**
      * 删除文件
      *
      * @param filePath 文件路径

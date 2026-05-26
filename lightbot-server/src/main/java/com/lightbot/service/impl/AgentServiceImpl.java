@@ -14,7 +14,10 @@ import org.springframework.util.StringUtils;
 import com.lightbot.mapper.AgentMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.entity.McpServer;
+import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.service.AgentService;
+import com.lightbot.util.AgentChatCapabilitiesUtil;
+import com.lightbot.workflow.WorkflowConfigParser;
 import com.lightbot.service.McpServerService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.ToolService;
@@ -150,12 +153,17 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 .map(String::valueOf)
                 .toList();
 
-        // 5. 组装返回结果
+        // 5. 对话能力（多模态/联网等）
+        Map<String, Object> configMap = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
+        AgentChatCapabilitiesDTO chatCapabilities = AgentChatCapabilitiesUtil.fromConfigMap(configMap);
+
+        // 6. 组装返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("agent", agent);
         result.put("knowledgeIds", knowledgeIdStrs);
         result.put("mcpServerIds", mcpServerIdStrs);
         result.put("subAgentIds", subAgentIdStrs);
+        result.put("chatCapabilities", chatCapabilities);
         return result;
     }
 
@@ -313,44 +321,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     public List<Long> getToolIds(Long agentId) {
-        Agent agent = getById(agentId);
-        if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
-            return List.of();
-        }
-        try {
-            var configNode = objectMapper.readTree(agent.getConfig());
-            if (!configNode.has("tools")) {
-                return List.of();
-            }
-            return objectMapper.convertValue(configNode.get("tools"),
-                    new TypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("[Agent] 解析config.tools失败: agentId={}, error={}", agentId, e.getMessage());
-            return List.of();
-        }
+        return readBindingIdsFromConfig(agentId, "tools");
     }
 
     @Override
     public void updateToolBindings(Long agentId, List<Long> toolIds) {
-        Agent agent = getById(agentId);
-        if (agent == null) {
-            return;
-        }
-        try {
-            // 1. 解析现有config
-            var configNode = objectMapper.readTree(
-                    agent.getConfig() != null ? agent.getConfig() : "{}");
-
-            // 2. 更新tools字段
-            var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
-            configMap.put("tools", toolIds != null ? toolIds : List.of());
-
-            // 3. 保存回agent
-            agent.setConfig(objectMapper.writeValueAsString(configMap));
-            updateById(agent);
-        } catch (Exception e) {
-            log.error("[Agent] 更新工具绑定失败: agentId={}, error={}", agentId, e.getMessage());
-        }
+        writeBindingIdsToConfig(agentId, "tools", toolIds);
     }
 
     @Override
@@ -364,44 +340,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     public List<Long> getMcpServerIds(Long agentId) {
-        Agent agent = getById(agentId);
-        if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
-            return List.of();
-        }
-        try {
-            var configNode = objectMapper.readTree(agent.getConfig());
-            if (!configNode.has("mcpServers")) {
-                return List.of();
-            }
-            return objectMapper.convertValue(configNode.get("mcpServers"),
-                    new TypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("[Agent] 解析config.mcpServers失败: agentId={}, error={}", agentId, e.getMessage());
-            return List.of();
-        }
+        return readBindingIdsFromConfig(agentId, "mcpServers");
     }
 
     @Override
     public void updateMcpServerBindings(Long agentId, List<Long> mcpServerIds) {
-        Agent agent = getById(agentId);
-        if (agent == null) {
-            return;
-        }
-        try {
-            // 1. 解析现有config
-            var configNode = objectMapper.readTree(
-                    agent.getConfig() != null ? agent.getConfig() : "{}");
-
-            // 2. 更新mcpServers字段
-            var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
-            configMap.put("mcpServers", mcpServerIds != null ? mcpServerIds : List.of());
-
-            // 3. 保存回agent
-            agent.setConfig(objectMapper.writeValueAsString(configMap));
-            updateById(agent);
-        } catch (Exception e) {
-            log.error("[Agent] 更新MCP Server绑定失败: agentId={}, error={}", agentId, e.getMessage());
-        }
+        writeBindingIdsToConfig(agentId, "mcpServers", mcpServerIds);
     }
 
     @Override
@@ -415,43 +359,65 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     public List<Long> getSubAgentIds(Long agentId) {
+        return readBindingIdsFromConfig(agentId, "subagents");
+    }
+
+    @Override
+    public void updateSubAgentBindings(Long agentId, List<Long> subAgentIds) {
+        writeBindingIdsToConfig(agentId, "subagents", subAgentIds);
+    }
+
+    /**
+     * 从 config JSONB 读取绑定 ID（字符串存储，避免大整数精度丢失）
+     */
+    private List<Long> readBindingIdsFromConfig(Long agentId, String field) {
         Agent agent = getById(agentId);
         if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
             return List.of();
         }
         try {
             var configNode = objectMapper.readTree(agent.getConfig());
-            if (!configNode.has("subagents")) {
+            if (!configNode.has(field)) {
                 return List.of();
             }
-            return objectMapper.convertValue(configNode.get("subagents"),
-                    new TypeReference<>() {});
+            List<Long> ids = new ArrayList<>();
+            for (var node : configNode.get(field)) {
+                if (node.isNumber()) {
+                    ids.add(node.longValue());
+                } else if (node.isTextual()) {
+                    String text = node.asText();
+                    if (text != null && !text.isBlank()) {
+                        ids.add(Long.parseLong(text.trim()));
+                    }
+                }
+            }
+            return ids;
         } catch (Exception e) {
-            log.warn("[Agent] 解析config.subagents失败: agentId={}, error={}", agentId, e.getMessage());
+            log.warn("[Agent] 解析config.{}失败: agentId={}, error={}", field, agentId, e.getMessage());
             return List.of();
         }
     }
 
-    @Override
-    public void updateSubAgentBindings(Long agentId, List<Long> subAgentIds) {
+    /**
+     * 写入绑定 ID 到 config（统一存字符串，与 knowledges 字段一致）
+     */
+    private void writeBindingIdsToConfig(Long agentId, String field, List<Long> ids) {
         Agent agent = getById(agentId);
         if (agent == null) {
             return;
         }
         try {
-            // 1. 解析现有config
             var configNode = objectMapper.readTree(
                     agent.getConfig() != null ? agent.getConfig() : "{}");
-
-            // 2. 更新subagents字段
             var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
-            configMap.put("subagents", subAgentIds != null ? subAgentIds : List.of());
-
-            // 3. 保存回agent
+            List<String> idStrs = ids != null
+                    ? ids.stream().map(String::valueOf).distinct().toList()
+                    : List.of();
+            configMap.put(field, idStrs);
             agent.setConfig(objectMapper.writeValueAsString(configMap));
             updateById(agent);
         } catch (Exception e) {
-            log.error("[Agent] 更新SubAgent绑定失败: agentId={}, error={}", agentId, e.getMessage());
+            log.error("[Agent] 更新config.{}失败: agentId={}, error={}", field, agentId, e.getMessage());
         }
     }
 

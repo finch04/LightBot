@@ -136,51 +136,57 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
     @Override
     public List<ConfigField> getConfigFields() {
-        return List.of(
-                ConfigField.builder()
-                        .key("modelId")
-                        .label("模型")
-                        .type("select")
-                        .options(List.of(
-                                ConfigField.Option.builder().value("qwen-turbo").label("通义千问 Turbo").build(),
-                                ConfigField.Option.builder().value("qwen-plus").label("通义千问 Plus").build(),
-                                ConfigField.Option.builder().value("qwen-max").label("通义千问 Max").build()
-                        ))
-                        .defaultValue("qwen-plus")
-                        .build(),
-                ConfigField.builder()
-                        .key("temperature")
-                        .label("温度")
-                        .type("slider")
-                        .min(0.0).max(2.0).step(0.1)
-                        .defaultValue(0.7)
-                        .hint("值越高回答越随机创造性，值越低回答越确定")
-                        .build(),
-                ConfigField.builder()
-                        .key("topP")
-                        .label("核采样")
-                        .type("slider")
-                        .min(0.0).max(1.0).step(0.05)
-                        .defaultValue(0.9)
-                        .hint("控制词汇选择的多样性，建议与温度二选一调整")
-                        .build(),
-                ConfigField.builder()
-                        .key("maxTokens")
-                        .label("最大 Token")
-                        .type("number")
-                        .min(256.0).max(8192.0).step(256.0)
-                        .defaultValue(2048)
-                        .hint("单次回答的最大长度")
-                        .build(),
-                ConfigField.builder()
-                        .key("repetitionPenalty")
-                        .label("重复惩罚")
-                        .type("slider")
-                        .min(0.0).max(2.0).step(0.1)
-                        .defaultValue(1.0)
-                        .hint("值越高越不容易重复")
-                        .build()
-        );
+        List<ConfigField> fields = new ArrayList<>();
+        fields.add(ConfigField.builder()
+                .key("modelId")
+                .label("模型")
+                .type("select")
+                .options(List.of(
+                        ConfigField.Option.builder().value("qwen-plus").label("通义千问 Plus").build(),
+                        ConfigField.Option.builder().value("qwen-max").label("通义千问 Max").build(),
+                        ConfigField.Option.builder().value("qwen-turbo").label("通义千问 Turbo").build(),
+                        ConfigField.Option.builder().value("qwen-vl-max").label("通义千问 VL Max（视觉）").build(),
+                        ConfigField.Option.builder().value("qwen-vl-plus").label("通义千问 VL Plus（视觉）").build(),
+                        ConfigField.Option.builder().value("qwen2-vl-72b-instruct").label("Qwen2-VL 72B（视觉）").build(),
+                        ConfigField.Option.builder().value("qwen2.5-vl-72b-instruct").label("Qwen2.5-VL 72B（视觉）").build()
+                ))
+                .defaultValue("qwen-plus")
+                .hint("多模态请选用 qwen-vl-max / qwen-vl-plus / qwen2-vl 等视觉模型")
+                .build());
+        fields.addAll(AgentCapabilityConfigFields.dashScopeFields());
+        fields.add(ConfigField.builder()
+                .key("temperature")
+                .label("温度")
+                .type("slider")
+                .min(0.0).max(2.0).step(0.1)
+                .defaultValue(0.7)
+                .hint("值越高回答越随机创造性，值越低回答越确定")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("topP")
+                .label("核采样")
+                .type("slider")
+                .min(0.0).max(1.0).step(0.05)
+                .defaultValue(0.9)
+                .hint("控制词汇选择的多样性，建议与温度二选一调整")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("maxTokens")
+                .label("最大 Token")
+                .type("number")
+                .min(256.0).max(8192.0).step(256.0)
+                .defaultValue(2048)
+                .hint("单次回答的最大长度")
+                .build());
+        fields.add(ConfigField.builder()
+                .key("repetitionPenalty")
+                .label("重复惩罚")
+                .type("slider")
+                .min(0.0).max(2.0).step(0.1)
+                .defaultValue(1.0)
+                .hint("值越高越不容易重复")
+                .build());
+        return fields;
     }
 
     @Override
@@ -254,7 +260,8 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
         // 对话模型
         for (String id : List.of("qwen-turbo", "qwen-plus", "qwen-max", "qwen-long",
-                "qwen-turbo-latest", "qwen-plus-latest", "qwen-max-latest")) {
+                "qwen-turbo-latest", "qwen-plus-latest", "qwen-max-latest",
+                "qwen-vl-max", "qwen-vl-plus", "qwen2-vl-72b-instruct", "qwen2.5-vl-72b-instruct")) {
             if (!existing.contains(id)) list.add(FetchedModel.of(id));
         }
         // 嵌入模型

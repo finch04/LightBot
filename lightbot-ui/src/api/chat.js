@@ -107,3 +107,14 @@ export function getRagReferences(sessionId, agentId, question) {
     params: { sessionId, agentId, question }
   })
 }
+
+export function uploadChatAttachment(agentId, sessionId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const params = { agentId }
+  if (sessionId) params.sessionId = sessionId
+  return request.post('/chat/attachments', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params,
+  })
+}

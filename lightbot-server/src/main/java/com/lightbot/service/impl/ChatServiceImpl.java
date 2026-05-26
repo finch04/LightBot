@@ -7,6 +7,9 @@ import com.lightbot.dto.RagReferenceVO;
 import com.lightbot.util.SensitiveWordFilter;
 import com.lightbot.util.ToolArgsSanitizer;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.ModelProvider;
+import com.lightbot.enums.ModelProviderType;
+import com.lightbot.model.MimoChatClient;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.systemtool.QueryKnowledgeTool;
 import com.lightbot.entity.Knowledge;
@@ -64,6 +67,8 @@ public class ChatServiceImpl implements ChatService {
     private final MessageMiddleware messageMiddleware;
     private final ToolPrepMiddleware toolPrepMiddleware;
     private final TraceMiddleware traceMiddleware;
+    private final MimoChatClient mimoChatClient;
+    private final ModelProviderService modelProviderService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -103,7 +108,7 @@ public class ChatServiceImpl implements ChatService {
         messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT, reply);
 
         // 4. 异步生成标题
-        taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent()));
+        taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
 
         return reply;
     }
@@ -166,6 +171,15 @@ public class ChatServiceImpl implements ChatService {
 
         if (!isStreamOutputEnabled(configMap)) {
             return processBlockingRound(ctx, depth, llmCallStart);
+        }
+
+        // MiMo 直连：联网搜索 / 视频等多模态
+        ModelProvider provider = ctx.getProviderId() != null
+                ? modelProviderService.getById(ctx.getProviderId()) : null;
+        if (provider != null && provider.getType() == ModelProviderType.MIMO
+                && mimoChatClient.shouldUseDirectApi(configMap, ctx.getRequest().getAttachments())
+                && depth == 0) {
+            return streamMimoDirect(ctx, depth, llmCallStart, provider, messages);
         }
 
         // 1. 调用LLM（流式）
@@ -667,6 +681,40 @@ public class ChatServiceImpl implements ChatService {
             }
             return Flux.empty();
         });
+    }
+
+    /**
+     * MiMo 直连流式（联网搜索 / 视频理解等）
+     */
+    private Flux<String> streamMimoDirect(ChatContext ctx, int depth, long llmCallStart,
+                                          ModelProvider provider,
+                                          List<org.springframework.ai.chat.messages.Message> messages) {
+        StringBuilder fullReply = ctx.getFullReply();
+        Map<String, Object> configMap = ctx.getConfigMap();
+        SensitiveWordFilter.StreamState sensitiveState = ctx.getSensitiveStreamState();
+
+        return mimoChatClient.streamChat(provider, configMap, messages, ctx.getRequest().getAttachments())
+                .concatMap(chunk -> {
+                    if (chunk.startsWith(STATUS_PREFIX)) {
+                        return Flux.just(chunk);
+                    }
+                    String delta = sensitiveState != null ? sensitiveState.processChunk(chunk) : chunk;
+                    if (delta.isEmpty()) {
+                        return Flux.empty();
+                    }
+                    fullReply.append(delta);
+                    return Flux.just(delta);
+                })
+                .doOnComplete(() -> {
+                    long elapsed = System.currentTimeMillis() - llmCallStart;
+                    log.info("[Chat][MiMo] 直连完成: depth={}, elapsed={}ms, length={}",
+                            depth, elapsed, fullReply.length());
+                    if (fullReply.length() == 0) {
+                        log.warn("[Chat][MiMo] 直连返回空内容: modelId={}, webSearch={}",
+                                configMap.get("modelId"), configMap.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH));
+                    }
+                })
+                .doOnError(e -> log.error("[Chat][MiMo] 直连失败: {}", e.getMessage()));
     }
 
     private boolean isStreamOutputEnabled(Map<String, Object> configMap) {

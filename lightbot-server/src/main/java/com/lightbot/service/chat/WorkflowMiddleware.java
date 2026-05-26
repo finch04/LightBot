@@ -110,7 +110,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
                 }
                 messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
                         contentToSave, ctx.getRagMetadataHolder()[0], 0);
-                taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent()));
+                taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
 
                 log.info("[WorkflowMiddleware] 工作流执行完成: agentId={}, nodes={}, resultLength={}",
                         ctx.getAgent().getId(), workflowEvents.size(), contentToSave.length());

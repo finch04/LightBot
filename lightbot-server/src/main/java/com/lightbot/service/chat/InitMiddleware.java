@@ -120,6 +120,13 @@ public class InitMiddleware implements ChatMiddleware {
             return;
         }
         String[] keys = {
+                ConfigKeys.Agent.PROVIDER_ID,
+                "modelId",
+                "temperature",
+                "topP",
+                "maxTokens",
+                "presencePenalty",
+                "frequencyPenalty",
                 ConfigKeys.Agent.USER_SENSITIVE_FILTER_ENABLED,
                 ConfigKeys.Agent.USER_SENSITIVE_WORDS,
                 ConfigKeys.Agent.SENSITIVE_FILTER_ENABLED,
@@ -129,7 +136,16 @@ public class InitMiddleware implements ChatMiddleware {
                 "maxContextMessages",
                 ConfigKeys.Agent.ENABLE_SUMMARY,
                 ConfigKeys.Agent.SUMMARY_THRESHOLD_KB,
-                ConfigKeys.Agent.STREAM_OUTPUT
+                ConfigKeys.Agent.STREAM_OUTPUT,
+                ConfigKeys.Agent.MULTIMODAL_ENABLED,
+                ConfigKeys.Agent.ENABLE_IMAGE_INPUT,
+                ConfigKeys.Agent.ENABLE_VIDEO_INPUT,
+                ConfigKeys.Agent.ENABLE_AUDIO_INPUT,
+                ConfigKeys.Agent.ENABLE_WEB_SEARCH,
+                ConfigKeys.Agent.WEB_SEARCH_FORCE,
+                ConfigKeys.Agent.WEB_SEARCH_MAX_KEYWORD,
+                ConfigKeys.Agent.ENABLE_TTS,
+                ConfigKeys.Agent.ENABLE_REASONING
         };
         for (String key : keys) {
             if (draft.containsKey(key)) {

@@ -170,74 +170,112 @@
 
     <!-- 输入区 -->
     <div class="chat-input-wrapper">
-      <div class="chat-input">
-        <!-- Agent 选择按钮 -->
-        <a-dropdown :trigger="['click']" placement="topLeft">
-          <a-tooltip :title="currentAgent?.name || '选择 Agent'">
-            <button class="btn-agent">
-              <RobotOutlined v-if="!currentAgent" />
-              <img v-else-if="currentAgent.avatar" :src="currentAgent.avatar" alt="" class="btn-agent-avatar" />
-              <span v-else class="btn-agent-initial">{{ currentAgent.name[0] }}</span>
+      <div class="chat-input-shell">
+        <div class="chat-input-toolbar">
+          <a-dropdown :trigger="['click']" placement="topLeft">
+            <a-tooltip :title="currentAgent?.name || '选择 Agent'">
+              <button type="button" class="btn-agent">
+                <RobotOutlined v-if="!currentAgent" />
+                <img v-else-if="currentAgent.avatar" :src="currentAgent.avatar" alt="" class="btn-agent-avatar" />
+                <span v-else class="btn-agent-initial">{{ currentAgent.name[0] }}</span>
+              </button>
+            </a-tooltip>
+            <template #overlay>
+              <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : []">
+                <a-menu-item v-for="a in agents" :key="String(a.id)">
+                  <div class="agent-menu-item">
+                    <img v-if="a.avatar" :src="a.avatar" alt="" class="agent-menu-icon" />
+                    <span v-else class="agent-menu-icon">{{ a.name[0] }}</span>
+                    <span class="agent-menu-name">{{ a.name }}</span>
+                    <span v-if="agentVersionLabel(a)" class="agent-version-tag">{{ agentVersionLabel(a) }}</span>
+                    <span v-if="a.isDefault" class="agent-default-tag">默认</span>
+                  </div>
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+          <span v-if="currentAgent?.name" class="chat-toolbar-agent-name">{{ currentAgent.name }}</span>
+          <div
+            v-if="selectedAgentId && configVersionOptions.length > 0"
+            class="config-version-tags"
+          >
+            <a-tag
+              v-for="opt in configVersionOptions"
+              :key="opt.value === null ? 'online' : String(opt.value)"
+              class="config-version-tag"
+              :class="{ active: selectedConfigVersion === opt.value }"
+              :color="selectedConfigVersion === opt.value ? 'processing' : 'default'"
+              @click="onConfigVersionTagClick(opt.value)"
+            >
+              {{ opt.shortLabel || opt.label }}
+            </a-tag>
+          </div>
+        </div>
+        <div class="chat-input">
+          <input
+            ref="fileInputRef"
+            type="file"
+            class="hidden-file-input"
+            :accept="fileAcceptTypes"
+            @change="onFileSelected"
+          />
+          <a-tooltip
+            v-if="showFileUploadBtn"
+            :title="fileUploadHint || '上传图片或视频'"
+            overlay-class-name="no-flip-tooltip"
+            :overlay-style="{ maxWidth: '360px' }"
+          >
+            <button type="button" class="btn-attach" :disabled="loading || uploading" @click="triggerFileUpload">
+              <PaperClipOutlined />
             </button>
           </a-tooltip>
-          <template #overlay>
-            <a-menu @click="handleAgentSelect" :selectedKeys="selectedAgentId ? [String(selectedAgentId)] : []">
-              <a-menu-item v-for="a in agents" :key="String(a.id)">
-                <div class="agent-menu-item">
-                  <img v-if="a.avatar" :src="a.avatar" alt="" class="agent-menu-icon" />
-                  <span v-else class="agent-menu-icon">{{ a.name[0] }}</span>
-                  <span class="agent-menu-name">{{ a.name }}</span>
-                  <span v-if="agentVersionLabel(a)" class="agent-version-tag">{{ agentVersionLabel(a) }}</span>
-                  <span v-if="a.isDefault" class="agent-default-tag">默认</span>
-                </div>
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
-
-        <a-select
-          v-if="selectedAgentId && configVersionOptions.length > 0"
-          v-model:value="selectedConfigVersion"
-          size="small"
-          class="config-version-select"
-          :disabled="loading"
-          :dropdown-match-select-width="false"
-        >
-          <a-select-option
-            v-for="opt in configVersionOptions"
-            :key="opt.value === null ? 'online' : String(opt.value)"
-            :value="opt.value"
-          >
-            {{ opt.label }}
-          </a-select-option>
-        </a-select>
-
-        <textarea
-          ref="inputRef"
-          v-model="input"
-          class="input-textarea"
-          placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-          rows="1"
-          spellcheck="false"
-          @keydown="handleKeydown"
-          @input="autoResize"
-        />
-        <button
-          v-if="loading"
-          class="btn-stop"
-          @click="stopGenerating"
-          title="停止生成"
-        >
-          <PauseCircleOutlined />
-        </button>
-        <button
-          v-else
-          class="btn-send"
-          :disabled="!input.trim()"
-          @click="sendMessage"
-        >
-          <SendOutlined />
-        </button>
+          <textarea
+            ref="inputRef"
+            v-model="input"
+            class="input-textarea"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+            rows="1"
+            spellcheck="false"
+            @keydown="handleKeydown"
+            @input="autoResize"
+          />
+          <div class="chat-input-actions">
+            <a-tooltip v-if="showVoiceInputBtn" title="语音输入">
+              <button
+                type="button"
+                class="btn-voice"
+                :class="{ listening: voiceListening }"
+                :disabled="loading"
+                @click="toggleVoiceInput"
+              >
+                <AudioOutlined />
+              </button>
+            </a-tooltip>
+            <button
+              v-if="loading"
+              class="btn-stop"
+              @click="stopGenerating"
+              title="停止生成"
+            >
+              <PauseCircleOutlined />
+            </button>
+            <button
+              v-else
+              class="btn-send"
+              :disabled="!canSend"
+              @click="sendMessage"
+            >
+              <SendOutlined />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div v-if="pendingAttachments.length > 0" class="pending-attachments">
+        <div v-for="(att, i) in pendingAttachments" :key="att.id || i" class="pending-att-item">
+          <img v-if="att.type === 'image' && att.previewUrl" :src="att.previewUrl" alt="" class="att-thumb" />
+          <span v-else class="att-name">{{ att.fileName || att.type }}</span>
+          <button type="button" class="att-remove" @click="removeAttachment(i)"><CloseOutlined /></button>
+        </div>
       </div>
       <div class="input-hint">LightBot 可能会犯错，请核实重要信息。</div>
     </div>
@@ -247,10 +285,12 @@
 <script setup>
 import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined } from '@ant-design/icons-vue'
-import { chatStream } from '../api/chat'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { chatStream, uploadChatAttachment } from '../api/chat'
+import { buildUploadHint, validateChatAttachmentFile } from '../utils/chatAttachment'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
-import { getAgents, getAgent, listAgentVersions } from '../api/agent'
+import { getAgents, getAgentDetail, listAgentVersions } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
@@ -275,6 +315,12 @@ const messagePage = ref(1)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 const currentAgent = ref(null)
+const chatCapabilities = ref({})
+const pendingAttachments = ref([])
+const fileInputRef = ref(null)
+const uploading = ref(false)
+const voiceListening = ref(false)
+let speechRecognition = null
 const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
@@ -291,6 +337,17 @@ const expandedRefsMap = ref(new Map())
 /** 对话配置版本：0=暂存草稿，>0=指定已发布版本号 */
 const selectedConfigVersion = ref(0)
 const configVersionOptions = ref([])
+
+const showFileUploadBtn = computed(() => Boolean(chatCapabilities.value?.allowFileUpload))
+const showVoiceInputBtn = computed(() =>
+  Boolean(chatCapabilities.value?.multimodalEnabled && chatCapabilities.value?.enableAudioInput))
+const fileAcceptTypes = computed(() => {
+  const mimes = chatCapabilities.value?.allowedFileMimeTypes || []
+  return mimes.length ? mimes.join(',') : ''
+})
+const fileUploadHint = computed(() => buildUploadHint(chatCapabilities.value))
+const canSend = computed(() =>
+  !loading.value && (input.value.trim().length > 0 || pendingAttachments.value.length > 0))
 
 const userInitial = computed(() => {
   const name = userStore.user?.nickname || userStore.user?.username || 'U'
@@ -337,8 +394,14 @@ function autoResize() {
 
 function handleAgentSelect({ key }) {
   selectedAgentId.value = key
+  pendingAttachments.value = []
   loadCurrentAgent(key)
   loadAgentConfigVersions(key)
+}
+
+function onConfigVersionTagClick(value) {
+  if (loading.value) return
+  selectedConfigVersion.value = value
 }
 
 async function loadAgentConfigVersions(agentId) {
@@ -348,7 +411,7 @@ async function loadAgentConfigVersions(agentId) {
     return
   }
   try {
-    const opts = [{ value: 0, label: '暂存草稿' }]
+    const opts = [{ value: 0, label: '暂存草稿', shortLabel: '草稿' }]
     const res = await listAgentVersions(agentId)
     const versions = res.data || []
     for (const v of versions) {
@@ -357,13 +420,14 @@ async function loadAgentConfigVersions(agentId) {
       opts.push({
         value: num,
         label: v.current ? `v${num}（当前线上）` : `v${num}`,
+        shortLabel: v.current ? `v${num}·线上` : `v${num}`,
       })
     }
     configVersionOptions.value = opts
     const currentPublished = versions.find(v => v.current)
     selectedConfigVersion.value = currentPublished?.version ?? 0
   } catch {
-    configVersionOptions.value = [{ value: 0, label: '暂存草稿' }]
+    configVersionOptions.value = [{ value: 0, label: '暂存草稿', shortLabel: '草稿' }]
     selectedConfigVersion.value = 0
   }
 }
@@ -518,22 +582,88 @@ async function loadOlderMessages() {
 async function loadCurrentAgent(agentId) {
   if (!agentId) {
     currentAgent.value = null
+    chatCapabilities.value = {}
     return
   }
   try {
-    const res = await getAgent(agentId)
-    currentAgent.value = res.data
+    const res = await getAgentDetail(agentId)
+    currentAgent.value = res.data?.agent || null
+    chatCapabilities.value = res.data?.chatCapabilities || {}
   } catch {
     currentAgent.value = null
+    chatCapabilities.value = {}
   }
+}
+
+function triggerFileUpload() {
+  fileInputRef.value?.click()
+}
+
+async function onFileSelected(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file || !selectedAgentId.value) return
+
+  const validation = validateChatAttachmentFile(file, chatCapabilities.value)
+  if (!validation.ok) {
+    message.warning(validation.message)
+    return
+  }
+
+  uploading.value = true
+  try {
+    const res = await uploadChatAttachment(selectedAgentId.value, sessionId.value, file)
+    pendingAttachments.value.push(res.data)
+  } catch (err) {
+    message.error(err.message || '上传失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
+function removeAttachment(index) {
+  pendingAttachments.value.splice(index, 1)
+}
+
+function toggleVoiceInput() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) {
+    message.warning('当前浏览器不支持语音识别，请使用 Chrome/Edge')
+    return
+  }
+  if (voiceListening.value && speechRecognition) {
+    speechRecognition.stop()
+    return
+  }
+  speechRecognition = new SR()
+  speechRecognition.lang = 'zh-CN'
+  speechRecognition.interimResults = true
+  speechRecognition.continuous = false
+  speechRecognition.onstart = () => { voiceListening.value = true }
+  speechRecognition.onend = () => { voiceListening.value = false }
+  speechRecognition.onerror = () => { voiceListening.value = false }
+  speechRecognition.onresult = (event) => {
+    let text = ''
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      text += event.results[i][0].transcript
+    }
+    if (text) {
+      input.value = (input.value ? input.value + ' ' : '') + text
+      autoResize()
+    }
+  }
+  speechRecognition.start()
 }
 
 async function sendMessage() {
   const text = input.value.trim()
-  if (!text || loading.value) return
+  const attachments = [...pendingAttachments.value]
+  if ((!text && attachments.length === 0) || loading.value) return
 
-  messages.value.push({ role: 'user', content: text })
+  const displayContent = text || (attachments.length ? '[附件]' : '')
+  messages.value.push({ role: 'user', content: displayContent, _attachments: attachments })
   input.value = ''
+  pendingAttachments.value = []
   loading.value = true
   streaming.value = true
   hasStreamContent.value = false
@@ -565,10 +695,18 @@ async function sendMessage() {
     }
 
     const chatPayload = {
-      message: text,
+      message: text || undefined,
       sessionId: sid,
       agentId: currentAgentId || undefined,
       configVersion: selectedConfigVersion.value ?? 0,
+      attachments: attachments.length ? attachments.map(a => ({
+        id: a.id,
+        type: a.type,
+        mimeType: a.mimeType,
+        objectKey: a.objectKey,
+        previewUrl: a.previewUrl,
+        fileName: a.fileName,
+      })) : undefined,
     }
     await chatStream(
       chatPayload,
@@ -1202,18 +1340,47 @@ watch(sessionId, (newVal, oldVal) => {
   margin: 0 auto;
   width: 100%;
 }
-.chat-input {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.chat-input-shell {
   border: 1px solid #e4e4e7;
   border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.chat-input-shell:focus-within {
+  border-color: #0070f3;
+  box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.08);
+}
+.chat-input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+.chat-toolbar-agent-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3f3f46;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
   padding: 8px 8px 8px 4px;
   background: #fff;
-  transition: border-color 0.15s;
 }
-.chat-input:focus-within {
-  border-color: #0070f3;
+.chat-input-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* Agent 选择按钮 */
@@ -1295,13 +1462,28 @@ watch(sessionId, (newVal, oldVal) => {
   flex-shrink: 0;
 }
 
-.config-version-select {
+.config-version-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
   flex-shrink: 0;
-  width: 118px;
 }
-.config-version-select :deep(.ant-select-selector) {
-  border-radius: 8px !important;
+.config-version-tag {
+  margin: 0;
+  cursor: pointer;
+  border-radius: 6px;
   font-size: 12px;
+  line-height: 20px;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+.config-version-tag:not(.active):hover {
+  opacity: 0.85;
+}
+.config-version-tag.active {
+  font-weight: 500;
 }
 
 .input-textarea {
@@ -1321,6 +1503,71 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .input-textarea::placeholder {
   color: #a1a1aa;
+}
+.hidden-file-input {
+  display: none;
+}
+.btn-attach,
+.btn-voice {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: #f4f4f5;
+  color: #52525b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.btn-attach:hover:not(:disabled),
+.btn-voice:hover:not(:disabled) {
+  background: #e4e4e7;
+}
+.btn-attach:disabled,
+.btn-voice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-voice.listening {
+  background: #fef2f2;
+  color: #ef4444;
+  animation: voice-pulse 1s infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.pending-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pending-att-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #f4f4f5;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.att-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.att-remove {
+  border: none;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
 }
 .btn-send {
   width: 36px;
