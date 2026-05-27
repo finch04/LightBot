@@ -5,6 +5,7 @@ import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.service.ModelProviderService;
+import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.ModelProviderCacheUtil;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -173,7 +174,8 @@ public class ModelFactory {
             ChatModel chatModel = handler.createChatModel(provider);
             // 使用最便宜的模型进行连通性检查，避免消耗高价值配额
             ChatOptions options = handler.buildChatOptions(provider, Map.of("modelId", handler.getCheapestModel()));
-            ChatResponse response = chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT), options));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
+                    chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT), options)));
             log.info("[ModelFactory] 连通性检查通过: type={}, model={}", provider.getType(), handler.getCheapestModel());
             return "连接成功，API Key 有效";
         } catch (Exception e) {

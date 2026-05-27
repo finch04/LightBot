@@ -2,6 +2,7 @@ package com.lightbot.workflow;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.util.LlmTraceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.Message;
@@ -36,7 +37,8 @@ public class WorkflowLlmSupport {
         }
         ChatOptions chatOptions = modelFactory.buildChatOptions(providerId, configParams);
         ChatModel chatModel = modelFactory.getChatModel(providerId);
-        ChatResponse response = chatModel.call(new Prompt(messages, chatOptions));
+        ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
+                chatModel.call(new Prompt(messages, chatOptions)));
         return response.getResult().getOutput().getText();
     }
 

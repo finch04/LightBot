@@ -121,7 +121,8 @@ public class DocumentSecurityScanUtil {
 
         String result;
         try {
-            ChatResponse response = chatModel.call(new Prompt(messages, chatOptions));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
+                    chatModel.call(new Prompt(messages, chatOptions)));
             result = response.getResult().getOutput().getText();
             if (result != null) {
                 result = result.trim();

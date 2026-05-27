@@ -10,6 +10,7 @@ import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.RagService;
 import com.lightbot.service.SystemConfigService;
+import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.TextNormalizeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -109,7 +110,7 @@ public class RagServiceImpl implements RagService {
         messages.add(new UserMessage(question));
 
         ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-        ChatResponse response = chatModel.call(new Prompt(messages));
+        ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
         String answer = response.getResult().getOutput().getText();
         log.info("[RAG] 问答完成: answerLength={}", answer != null ? answer.length() : 0);
         return answer;

@@ -96,7 +96,7 @@ public class MindmapUtil {
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         String json;
         try {
-            ChatResponse response = chatModel.call(new Prompt(messages));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
             json = response.getResult().getOutput().getText().trim();
         } catch (BizException e) {
             throw e;

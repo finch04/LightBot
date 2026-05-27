@@ -53,6 +53,10 @@ public class LlmTrace {
     @Schema(description = "模型标识")
     private String model;
 
+    @TableField("trace_source")
+    @Schema(description = "来源：chat=用户对话，其它辅助能力不写入")
+    private String traceSource;
+
     @TableField("status")
     @Schema(description = "状态: running/completed/failed")
     private String status;

@@ -13,6 +13,7 @@ import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.*;
+import com.lightbot.util.LlmTraceMessageSerializer;
 import com.lightbot.util.SensitiveWordFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,14 +78,23 @@ public class TraceMiddleware implements ChatMiddleware {
                     // 3. 记录本轮用户输入（含附件，便于 Trace 排查）
                     recordUserInputSpan(ctx);
 
-                    // 4. 记录发送给LLM的消息列表（用于可观测性排查）
+                    // 4. 记录发送给 LLM 的完整消息（系统提示词、历史、用户图文等，不截断）
+                    ChatRequest chatRequest = ctx.getRequest();
                     if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
-                        List<Map<String, Object>> messageList = ctx.getMessages().stream()
-                                .map(this::buildTraceMessageItem)
-                                .toList();
+                        boolean lastUserHasAttachments = chatRequest != null && chatRequest.getAttachments() != null
+                                && !chatRequest.getAttachments().isEmpty();
+                        List<Map<String, Object>> messageList = LlmTraceMessageSerializer.toTraceMessages(
+                                ctx.getMessages(), chatRequest, lastUserHasAttachments);
+                        Map<String, Object> llmInputAttrs = new java.util.LinkedHashMap<>();
+                        llmInputAttrs.put("messageCount", messageList.size());
+                        llmInputAttrs.put("messages", messageList);
+                        ctx.getMessages().stream()
+                                .filter(org.springframework.ai.chat.messages.SystemMessage.class::isInstance)
+                                .map(org.springframework.ai.chat.messages.SystemMessage.class::cast)
+                                .findFirst()
+                                .ifPresent(sm -> llmInputAttrs.put("systemPrompt", sm.getText()));
                         ctx.getSpans().add(buildSpan("llm_input", null, "messages_to_llm",
-                                ctx.getStartTime(), 0, "OK",
-                                Map.of("messageCount", messageList.size(), "messages", messageList)));
+                                ctx.getStartTime(), 0, "OK", llmInputAttrs));
                     }
 
                     // 5. 追加AI思考内容到spans
@@ -116,6 +126,9 @@ public class TraceMiddleware implements ChatMiddleware {
         String text = request.getMessage();
         if (text != null && !text.isBlank()) {
             attrs.put("content", text);
+        }
+        if (request.getBizParams() != null && !request.getBizParams().isEmpty()) {
+            attrs.put("bizParams", request.getBizParams());
         }
         List<ChatAttachmentDTO> attachments = request.getAttachments();
         if (attachments != null && !attachments.isEmpty()) {
@@ -151,36 +164,6 @@ public class TraceMiddleware implements ChatMiddleware {
         return m;
     }
 
-    private Map<String, Object> buildTraceMessageItem(org.springframework.ai.chat.messages.Message msg) {
-        Map<String, Object> item = new java.util.LinkedHashMap<>();
-        item.put("role", msg.getMessageType().getValue());
-        String content = extractMessageContent(msg);
-        if (content != null && content.length() > 2000) {
-            content = content.substring(0, 2000) + "...(截断)";
-        }
-        item.put("content", content);
-        if (msg instanceof UserMessage um && um.getMedia() != null && !um.getMedia().isEmpty()) {
-            item.put("mediaCount", um.getMedia().size());
-            item.put("hasMedia", true);
-        }
-        return item;
-    }
-
-    /**
-     * 提取消息内容（兼容各类 Message 类型）
-     */
-    private String extractMessageContent(org.springframework.ai.chat.messages.Message msg) {
-        if (msg instanceof org.springframework.ai.chat.messages.SystemMessage sm) {
-            return sm.getText();
-        } else if (msg instanceof UserMessage um) {
-            return um.getText();
-        } else if (msg instanceof org.springframework.ai.chat.messages.AssistantMessage am) {
-            return am.getText();
-        } else {
-            return msg.toString();
-        }
-    }
-
     /**
      * 持久化Trace记录
      */
@@ -196,6 +179,7 @@ public class TraceMiddleware implements ChatMiddleware {
         trace.setAgentId(ctx.getAgent() != null ? ctx.getAgent().getId() : null);
         trace.setAgentName(ctx.getAgent() != null ? ctx.getAgent().getName() : null);
         trace.setModel(modelName);
+        trace.setTraceSource("chat");
         trace.setStatus(status);
         trace.setInputTokens(ctx.getInputTokenHolder()[0]);
         trace.setOutputTokens(ctx.getOutputTokenHolder()[0]);
@@ -266,7 +250,8 @@ public class TraceMiddleware implements ChatMiddleware {
             promptMessages.add(new SystemMessage("你是一个标题生成助手，只输出标题，不要任何其他内容。"));
             promptMessages.add(new UserMessage("请根据以下对话内容生成一个简短的标题（不超过20个字，不要加引号）：\n" + conversationText));
 
-            ChatResponse response = modelFactory.getChatModel(providerId).call(new Prompt(promptMessages, options));
+            ChatResponse response = com.lightbot.util.LlmTraceContext.callWithoutTrace(() ->
+                    modelFactory.getChatModel(providerId).call(new Prompt(promptMessages, options)));
             String title = response.getResult().getOutput().getText().trim();
 
             // 5. 清理标题

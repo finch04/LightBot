@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.enums.NodeType;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.util.LlmTraceContext;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
@@ -91,7 +92,8 @@ public class ClassifierNodeProcessor extends AbstractFlowNodeProcessor implement
             messages.add(new SystemMessage(systemPrompt));
             messages.add(new UserMessage(userPrompt));
 
-            ChatResponse response = chatModel.call(new Prompt(messages, chatOptions));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
+                    chatModel.call(new Prompt(messages, chatOptions)));
             String raw = response.getResult().getOutput().getText();
             ClassificationResult parsed = parseClassificationResult(raw, conditions);
 

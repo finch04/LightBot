@@ -3,13 +3,14 @@
     v-model:open="visible"
     :title="title"
     :footer="null"
-    width="auto"
+    :width="modalWidth"
     centered
     destroy-on-close
     class="chat-media-preview-modal"
+    :class="{ 'is-video-preview': mediaType === 'video' }"
     @cancel="handleClose"
   >
-    <div class="preview-body">
+    <div class="preview-body" :class="{ 'preview-body--video': mediaType === 'video' }">
       <div v-if="mediaType === 'image'" class="image-preview-wrap">
         <div class="image-toolbar">
           <button type="button" class="toolbar-btn" :disabled="scale <= 0.5" @click="zoomOut">
@@ -19,17 +20,25 @@
           <button type="button" class="toolbar-btn" :disabled="scale >= 3" @click="zoomIn">
             <ZoomInOutlined />
           </button>
-          <button type="button" class="toolbar-btn" @click="resetZoom">
+          <button type="button" class="toolbar-btn" @click="resetView">
             <FullscreenOutlined />
           </button>
         </div>
-        <div class="image-scroll" @wheel.prevent="onImageWheel">
+        <div
+          ref="viewportRef"
+          class="image-viewport"
+          :class="{ 'is-dragging': dragging }"
+          @wheel.prevent="onImageWheel"
+          @mousedown="onPanStart"
+        >
           <img
+            ref="imageRef"
             :src="src"
             :alt="fileName"
             class="preview-image"
-            :style="{ transform: `scale(${scale})` }"
+            :style="imageTransformStyle"
             draggable="false"
+            @load="onImageLoad"
           />
         </div>
       </div>
@@ -49,7 +58,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import { ZoomInOutlined, ZoomOutOutlined, FullscreenOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -67,20 +76,46 @@ const visible = computed({
 })
 
 const scale = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const dragging = ref(false)
+const dragStart = ref({ x: 0, y: 0, panX: 0, panY: 0 })
 const videoRef = ref(null)
+const imageRef = ref(null)
+const viewportRef = ref(null)
+const videoModalWidth = ref(720)
 
 const title = computed(() => {
   if (props.fileName) return props.fileName
   return props.mediaType === 'video' ? '视频预览' : '图片预览'
 })
 
+const modalWidth = computed(() => {
+  if (props.mediaType === 'video') return videoModalWidth.value
+  return 'auto'
+})
+
+const imageTransformStyle = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${scale.value})`,
+}))
+
 watch(() => props.open, (open) => {
   if (open) {
-    scale.value = 1
-  } else if (videoRef.value) {
-    videoRef.value.pause()
+    resetView()
+    videoModalWidth.value = 720
+  } else {
+    if (videoRef.value) {
+      videoRef.value.pause()
+    }
+    stopPan()
   }
 })
+
+function resetView() {
+  scale.value = 1
+  panX.value = 0
+  panY.value = 0
+}
 
 function zoomIn() {
   scale.value = Math.min(3, +(scale.value + 0.25).toFixed(2))
@@ -90,31 +125,93 @@ function zoomOut() {
   scale.value = Math.max(0.5, +(scale.value - 0.25).toFixed(2))
 }
 
-function resetZoom() {
-  scale.value = 1
-}
-
 function onImageWheel(e) {
   if (e.deltaY < 0) zoomIn()
   else zoomOut()
 }
 
-function onVideoLoaded() {
-  videoRef.value?.play?.().catch(() => {})
+function onImageLoad() {
+  resetView()
+}
+
+function onPanStart(e) {
+  if (e.button !== 0) return
+  dragging.value = true
+  dragStart.value = {
+    x: e.clientX,
+    y: e.clientY,
+    panX: panX.value,
+    panY: panY.value,
+  }
+  document.addEventListener('mousemove', onPanMove)
+  document.addEventListener('mouseup', onPanEnd)
+}
+
+function onPanMove(e) {
+  if (!dragging.value) return
+  panX.value = dragStart.value.panX + (e.clientX - dragStart.value.x)
+  panY.value = dragStart.value.panY + (e.clientY - dragStart.value.y)
+}
+
+function onPanEnd() {
+  stopPan()
+}
+
+function stopPan() {
+  dragging.value = false
+  document.removeEventListener('mousemove', onPanMove)
+  document.removeEventListener('mouseup', onPanEnd)
+}
+
+function onVideoLoaded(e) {
+  const el = e.target
+  const vw = el.videoWidth || 960
+  const vh = el.videoHeight || 540
+  const bodyPad = 48
+  const maxW = window.innerWidth * 0.92 - bodyPad
+  const maxH = window.innerHeight * 0.88 - 120
+  let w = vw
+  let h = vh
+  const ratio = w / h
+  if (w > maxW) {
+    w = maxW
+    h = w / ratio
+  }
+  if (h > maxH) {
+    h = maxH
+    w = h * ratio
+  }
+  w = Math.max(320, Math.round(w))
+  h = Math.max(180, Math.round(h))
+  el.style.width = `${w}px`
+  el.style.height = `${h}px`
+  videoModalWidth.value = w + bodyPad
+  el.play?.().catch(() => {})
 }
 
 function handleClose() {
   if (videoRef.value) {
     videoRef.value.pause()
     videoRef.value.currentTime = 0
+    videoRef.value.style.width = ''
+    videoRef.value.style.height = ''
   }
+  stopPan()
 }
+
+onUnmounted(() => {
+  stopPan()
+})
 </script>
 
 <style scoped>
 .preview-body {
   min-width: 280px;
-  max-width: min(90vw, 960px);
+  max-width: min(92vw, 1200px);
+}
+.preview-body--video {
+  min-width: 0;
+  max-width: none;
 }
 .image-preview-wrap {
   display: flex;
@@ -153,29 +250,38 @@ function handleClose() {
   min-width: 48px;
   text-align: center;
 }
-.image-scroll {
-  max-height: 70vh;
-  overflow: auto;
+.image-viewport {
+  width: min(88vw, 1100px);
+  height: min(78vh, 720px);
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f4f4f5;
   border-radius: 8px;
-  padding: 12px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.image-viewport.is-dragging {
+  cursor: grabbing;
 }
 .preview-image {
   max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
   transform-origin: center center;
-  transition: transform 0.15s ease;
-  user-select: none;
+  transition: transform 0.08s ease-out;
+  will-change: transform;
+  pointer-events: none;
 }
 .video-preview-wrap {
   display: flex;
   justify-content: center;
+  align-items: center;
 }
 .preview-video {
-  max-width: min(85vw, 880px);
-  max-height: 70vh;
+  display: block;
   border-radius: 8px;
   background: #000;
 }
@@ -184,5 +290,11 @@ function handleClose() {
 <style>
 .chat-media-preview-modal .ant-modal-body {
   padding-top: 12px;
+}
+.chat-media-preview-modal.is-video-preview .ant-modal-body {
+  padding: 12px 24px 20px;
+}
+.chat-media-preview-modal.is-video-preview .ant-modal-content {
+  max-width: 96vw;
 }
 </style>

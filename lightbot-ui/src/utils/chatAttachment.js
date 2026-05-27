@@ -23,7 +23,7 @@ export function getFileExtension(filename) {
 
 /** 根据 Agent 能力生成上传说明（大小文案由后端 maxImageSizeLabel / maxVideoSizeLabel 提供） */
 /** 单条消息默认最大附件数（与后端 ChatAttachmentConstants 一致） */
-export const DEFAULT_MAX_ATTACHMENTS_PER_MESSAGE = 4
+export const DEFAULT_MAX_ATTACHMENTS_PER_MESSAGE = 3
 
 export function getMaxAttachmentsPerMessage(capabilities) {
   const n = capabilities?.maxAttachmentsPerMessage
@@ -59,7 +59,7 @@ export function buildUploadHint(capabilities) {
   if (maxCount > 0) {
     parts.push(`最多 ${maxCount} 个/条`)
   }
-  return parts.join('；')
+  return parts.join('\n')
 }
 
 /**

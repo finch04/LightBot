@@ -222,6 +222,8 @@ public class MimoChatClient {
         body.put("thinking", thinking);
 
         if (Boolean.TRUE.equals(config.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH))) {
+            // MiMo 要求：请求体含 web_search 工具时必须显式开启 webSearchEnabled
+            body.put("webSearchEnabled", true);
             Map<String, Object> webSearch = new HashMap<>();
             webSearch.put("type", "web_search");
             if (config.containsKey(ConfigKeys.Agent.WEB_SEARCH_MAX_KEYWORD)) {

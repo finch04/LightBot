@@ -10,6 +10,7 @@ import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.util.ChatMessageMediaUtil;
+import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.PromptTemplateUtil;
 import com.lightbot.entity.Agent;
@@ -354,7 +355,7 @@ public class MessageMiddleware implements ChatMiddleware {
             summaryPrompt.add(new SystemMessage("你是一个对话摘要助手。请将以下对话内容压缩为简明摘要，保留关键信息、决策和上下文要点。只输出摘要，不要添加额外说明。"));
             summaryPrompt.add(new UserMessage("请对以下对话进行摘要：\n\n" + conversationText));
 
-            ChatResponse response = chatModel.call(new Prompt(summaryPrompt));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(summaryPrompt)));
             String summary = response.getResult().getOutput().getText().trim();
 
             if (summary.isBlank()) {

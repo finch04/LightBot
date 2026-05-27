@@ -22,6 +22,7 @@ import com.lightbot.service.DocumentService;
 import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.SystemConfigService;
+import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MindmapUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -260,7 +261,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             messages.add(new SystemMessage(QUESTION_GEN_SYSTEM_PROMPT));
             messages.add(new UserMessage(userPrompt));
 
-            ChatResponse response = chatModel.call(new Prompt(messages));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
             String reply = response.getResult().getOutput().getText();
 
             // 6. 解析JSON提取问题
@@ -409,7 +410,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
         String reply;
         try {
-            ChatResponse response = chatModel.call(new Prompt(messages));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
             reply = response.getResult().getOutput().getText();
         } catch (BizException e) {
             throw e;

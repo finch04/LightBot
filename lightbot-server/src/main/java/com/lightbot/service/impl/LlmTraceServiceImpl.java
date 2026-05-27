@@ -13,6 +13,7 @@ import com.lightbot.entity.LlmTrace;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.LlmTraceMapper;
 import com.lightbot.service.LlmTraceService;
+import com.lightbot.util.LlmTraceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.scheduling.annotation.Async;
@@ -57,6 +58,9 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         if (StringUtils.hasText(request.getEndTime())) {
             wrapper.le(LlmTrace::getCreateTime, LocalDateTime.parse(request.getEndTime(), FORMATTER));
         }
+
+        // 仅展示用户对话 trace（排除辅助能力：生成提示词、向量化、TTS 等）
+        wrapper.and(w -> w.eq(LlmTrace::getTraceSource, "chat").or().isNull(LlmTrace::getTraceSource));
 
         wrapper.orderByDesc(LlmTrace::getCreateTime);
 
@@ -109,19 +113,18 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
      */
     @Override
     public Map<String, Object> getOverview() {
-        // 1. 总请求数
-        long totalCount = count();
+        LambdaQueryWrapper<LlmTrace> chatOnly = chatTraceWrapper();
+
+        // 1. 总请求数（仅对话）
+        long totalCount = count(chatOnly);
 
         // 2. 成功/失败数
-        long successCount = count(new LambdaQueryWrapper<LlmTrace>()
-                .eq(LlmTrace::getStatus, "completed"));
-        long failedCount = count(new LambdaQueryWrapper<LlmTrace>()
-                .eq(LlmTrace::getStatus, "failed"));
+        long successCount = count(chatOnly.clone().eq(LlmTrace::getStatus, "completed"));
+        long failedCount = count(chatOnly.clone().eq(LlmTrace::getStatus, "failed"));
 
         // 3. 总Token数、平均耗时 — 通过SQL聚合
-        Map<String, Object> aggregate = lambdaQuery()
-                .select(LlmTrace::getTotalTokens, LlmTrace::getTotalDurationMs, LlmTrace::getToolCallCount)
-                .list()
+        Map<String, Object> aggregate = list(chatOnly.clone()
+                .select(LlmTrace::getTotalTokens, LlmTrace::getTotalDurationMs, LlmTrace::getToolCallCount))
                 .stream()
                 .reduce(new HashMap<>(), (acc, trace) -> {
                     acc.merge("totalTokens", trace.getTotalTokens() != null ? trace.getTotalTokens() : 0, (a, b) -> (int) a + (int) b);
@@ -143,9 +146,24 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
     /**
      * 异步写入调用链记录
      */
+    private LambdaQueryWrapper<LlmTrace> chatTraceWrapper() {
+        return new LambdaQueryWrapper<LlmTrace>()
+                .and(w -> w.eq(LlmTrace::getTraceSource, "chat").or().isNull(LlmTrace::getTraceSource));
+    }
+
     @Async
     @Override
     public void recordTrace(LlmTrace trace) {
+        if (LlmTraceContext.isSuppressed()) {
+            log.debug("[LLMTrace] 跳过辅助能力 trace: requestId={}", trace.getRequestId());
+            return;
+        }
+        if (trace.getTraceSource() == null) {
+            trace.setTraceSource("chat");
+        }
+        if (!"chat".equals(trace.getTraceSource())) {
+            return;
+        }
         try {
             save(trace);
         } catch (Exception e) {

@@ -22,6 +22,7 @@ import com.lightbot.service.McpServerService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.ToolService;
 import com.lightbot.entity.Tool;
+import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.service.AgentVersionService;
 import lombok.RequiredArgsConstructor;
@@ -208,7 +209,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         String result;
         try {
-            ChatResponse response = chatModel.call(new Prompt(messages));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
             result = response.getResult().getOutput().getText().trim();
         } catch (BizException e) {
             throw e;
@@ -243,7 +244,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         String json;
         try {
-            ChatResponse response = chatModel.call(new Prompt(messages));
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
             json = response.getResult().getOutput().getText().trim();
         } catch (BizException e) {
             throw e;

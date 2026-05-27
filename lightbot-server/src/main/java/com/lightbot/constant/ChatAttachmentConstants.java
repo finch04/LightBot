@@ -12,7 +12,7 @@ public final class ChatAttachmentConstants {
     }
 
     /** 单条用户消息最多附件数（图片+视频合计） */
-    public static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
+    public static final int MAX_ATTACHMENTS_PER_MESSAGE = 3;
 
     public static final long MAX_IMAGE_BYTES = 4L * 1024 * 1024;
     public static final long MAX_VIDEO_BYTES = 20L * 1024 * 1024;

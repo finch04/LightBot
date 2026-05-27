@@ -66,11 +66,11 @@
           <div
             v-for="s in sessions"
             :key="s.id"
-            :class="['session-item', { active: currentSessionId === s.id }]"
+            :class="['session-item', { active: currentSessionId === s.id, 'session-item--pinned': s.pinned }]"
             @click="switchSession(s)"
           >
-            <span v-if="s.pinned" class="session-pin">📌</span>
             <span class="session-title">{{ s.title || '新对话' }}</span>
+            <PushpinFilled v-if="s.pinned" class="session-pin-icon" aria-label="已置顶" />
             <a-dropdown :trigger="['click']" placement="bottomRight">
               <EllipsisOutlined class="session-more" @click.stop />
               <template #overlay>
@@ -151,6 +151,7 @@ import {
   DownOutlined,
   UpOutlined,
   EllipsisOutlined,
+  PushpinFilled,
   RobotOutlined,
   DatabaseOutlined,
   ToolOutlined,
@@ -599,11 +600,12 @@ watch(() => route.path, (path) => {
 .session-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 8px 10px 8px 12px;
   border-radius: 6px;
+  border-left: 2px solid transparent;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 .session-item:hover {
   background: #27272a;
@@ -611,18 +613,34 @@ watch(() => route.path, (path) => {
 .session-item.active {
   background: #27272a;
 }
+.session-item--pinned {
+  background: rgba(99, 102, 241, 0.1);
+  border-left-color: #6366f1;
+}
+.session-item--pinned:hover {
+  background: rgba(99, 102, 241, 0.16);
+}
+.session-item--pinned.active {
+  background: rgba(99, 102, 241, 0.22);
+}
 .session-title {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
   color: #d4d4d8;
 }
-.session-pin {
-  font-size: 12px;
-  margin-right: 4px;
+.session-item--pinned .session-title {
+  color: #e4e4e7;
+  font-weight: 500;
+}
+.session-pin-icon {
   flex-shrink: 0;
+  font-size: 12px;
+  color: #818cf8;
+  opacity: 0.95;
 }
 .session-more {
   opacity: 0;

@@ -88,7 +88,7 @@
     <a-drawer
       v-model:open="detailVisible"
       title="Trace 详情"
-      :width="780"
+      :width="860"
       placement="right"
     >
       <template v-if="detailTrace">
@@ -124,13 +124,66 @@
           </div>
           <div v-if="detailTrace.errorMessage" class="info-row error-row">
             <span class="info-label">错误</span>
-            <span class="info-value error-text">{{ detailTrace.errorMessage }}</span>
+            <div class="error-content-wrap">
+              <span class="info-value error-text">{{ detailTrace.errorMessage }}</span>
+              <button class="btn-copy btn-copy-inline" @click="copyToClipboard(detailTrace.errorMessage, 'error')">
+                <CheckOutlined v-if="copiedKey === 'error'" style="color: #52c41a" />
+                <CopyOutlined v-else />
+                {{ copiedKey === 'error' ? '已复制' : '复制' }}
+              </button>
+            </div>
           </div>
           <div v-if="detailTrace.sessionId" class="info-row" style="grid-column: 1 / -1;">
             <span class="info-label">会话</span>
             <a-button type="link" size="small" @click="goToChat(detailTrace.sessionId)" style="padding: 0; height: auto;">
               跳转到对话 →
             </a-button>
+          </div>
+        </div>
+
+        <!-- 用户提问与完整模型输入 -->
+        <div v-if="traceModelInput.hasData" class="model-input-section">
+          <h4>用户提问与模型输入</h4>
+
+          <div v-if="traceModelInput.userContent || traceModelInput.userAttachments.length || traceModelInput.bizParams" class="mi-block">
+            <div class="mi-block-title">本轮用户输入</div>
+            <div v-if="traceModelInput.userContent" class="mi-pre-wrap">{{ traceModelInput.userContent }}</div>
+            <div v-if="traceModelInput.bizParams && Object.keys(traceModelInput.bizParams).length" class="mi-sub">
+              <span class="mi-sub-label">入参变量 biz_params</span>
+              <pre class="mi-pre">{{ JSON.stringify(traceModelInput.bizParams, null, 2) }}</pre>
+            </div>
+            <div v-if="traceModelInput.userAttachments.length" class="trace-att-thumbs">
+              <MediaAttachmentThumb
+                v-for="(att, ai) in traceModelInput.userAttachments"
+                :key="'ua-' + ai"
+                :att="att"
+              />
+            </div>
+          </div>
+
+          <div v-if="traceModelInput.systemPrompt" class="mi-block">
+            <div class="mi-block-title">系统提示词（含工具引导等）</div>
+            <pre class="mi-pre">{{ traceModelInput.systemPrompt }}</pre>
+          </div>
+
+          <div v-if="traceModelInput.llmMessages.length" class="mi-block">
+            <div class="mi-block-title">发送给模型的消息（{{ traceModelInput.llmMessages.length }} 条）</div>
+            <div v-for="(m, mi) in traceModelInput.llmMessages" :key="'lm-' + mi" class="mi-msg">
+              <div class="mi-msg-head">
+                <a-tag size="small" :color="roleTagColor(m.role)">{{ roleLabel(m.role) }}</a-tag>
+              </div>
+              <pre v-if="m.content" class="mi-pre">{{ m.content }}</pre>
+              <div v-else class="mi-empty-text">（无文本内容）</div>
+              <div v-if="m.media && m.media.length" class="trace-att-thumbs">
+                <template v-for="(med, mdi) in m.media" :key="'med-' + mi + '-' + mdi">
+                  <MediaAttachmentThumb v-if="traceMediaCanThumb(med)" :att="med" />
+                  <span v-else class="msg-att-file-tag trace-inline-tag">
+                    {{ med.fileName || med.mimeType || '多模态附件' }}
+                    <span v-if="med.inlineData">（内联 base64，约 {{ med.approxChars }} 字符）</span>
+                  </span>
+                </template>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -247,22 +300,16 @@
                     <div class="sd-section-title">用户问题</div>
                     <div v-if="sub.attributes?.content" class="sd-content-box">{{ sub.attributes.content }}</div>
                     <div v-if="traceAttachments(sub.attributes).length" class="sd-section-title" style="margin-top: 10px;">用户附件</div>
-                    <div v-if="traceAttachments(sub.attributes).length" class="trace-att-grid">
+                    <div v-if="traceAttachments(sub.attributes).length" class="trace-att-thumbs">
                       <template v-for="(att, ti) in traceAttachments(sub.attributes)" :key="ti">
-                        <img v-if="att.type === 'image' && att.previewUrl" :src="att.previewUrl" class="trace-att-img" alt="" />
-                        <video v-else-if="att.type === 'video' && att.previewUrl" :src="att.previewUrl" controls class="trace-att-video" />
-                        <span v-else class="trace-att-label">{{ att.fileName || att.type || '附件' }}</span>
+                        <MediaAttachmentThumb v-if="traceMediaCanThumb(att)" :att="att" />
+                        <span v-else class="msg-att-file-tag trace-inline-tag">{{ att.fileName || att.type || '附件' }}</span>
                       </template>
                     </div>
                   </div>
-                  <!-- 发送给 LLM 的消息列表 -->
+                  <!-- 发送给 LLM 的消息列表（瀑布图内展开，完整内容见上方「用户提问与模型输入」） -->
                   <div v-if="sub.name === 'messages_to_llm' && traceLlmMessages(sub.attributes).length" class="sd-section">
-                    <div class="sd-section-title">发送给模型的消息（{{ traceLlmMessages(sub.attributes).length }} 条）</div>
-                    <div v-for="(m, mi) in traceLlmMessages(sub.attributes)" :key="mi" class="trace-llm-msg">
-                      <div class="trace-llm-role">{{ m.role }}</div>
-                      <div class="sd-content-box trace-llm-content">{{ m.content || '（空）' }}</div>
-                      <span v-if="m.hasMedia" class="trace-llm-media-hint">含多模态附件</span>
-                    </div>
+                    <div class="sd-section-title">发送给模型的消息（{{ traceLlmMessages(sub.attributes).length }} 条，详见上方完整输入区）</div>
                   </div>
                   <!-- 其他属性 -->
                   <div v-if="sub.attributes && Object.keys(sub.attributes).filter(k => !traceHiddenAttrKeys(k)).length" class="sd-section">
@@ -291,6 +338,7 @@ import {
   CopyOutlined,
   CheckOutlined,
 } from '@ant-design/icons-vue'
+import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
 import { getTraces, getTraceDetail, getTraceOverview } from '../api/observability'
 import { useRouter } from 'vue-router'
 
@@ -337,13 +385,38 @@ const columns = [
   { title: '操作', key: 'action', width: 80 },
 ]
 
-const waterfallGroups = computed(() => {
+function parseSpansFromDetail() {
   if (!detailTrace.value?.spans) return []
-  let spans
   try {
     const raw = detailTrace.value.spans
-    spans = Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw) : [])
-  } catch { return [] }
+    return Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw) : [])
+  } catch {
+    return []
+  }
+}
+
+const traceModelInput = computed(() => {
+  const spans = parseSpansFromDetail()
+  const userSpan = spans.find(s => s.name === 'user_message')
+  const llmSpan = spans.find(s => s.name === 'messages_to_llm')
+  const userAttrs = userSpan?.attributes || {}
+  const llmAttrs = llmSpan?.attributes || {}
+  const userAttachments = traceAttachments(userAttrs)
+  const llmMessages = traceLlmMessages(llmAttrs)
+  const systemPrompt = llmAttrs.systemPrompt || llmMessages.find(m => m.role === 'system')?.content || ''
+  return {
+    hasData: !!(userAttrs.content || userAttachments.length || userAttrs.bizParams
+      || systemPrompt || llmMessages.length),
+    userContent: userAttrs.content || '',
+    userAttachments,
+    bizParams: userAttrs.bizParams || null,
+    systemPrompt,
+    llmMessages,
+  }
+})
+
+const waterfallGroups = computed(() => {
+  const spans = parseSpansFromDetail()
   if (spans.length === 0) return []
 
   const totalDuration = detailTrace.value.totalDurationMs || 1
@@ -426,7 +499,26 @@ function spanNameLabel(name) {
 }
 
 function traceHiddenAttrKeys(k) {
-  return ['replyPreview', 'content', 'toolNames', 'attachments', 'messages', 'messageCount'].includes(k)
+  return ['replyPreview', 'content', 'toolNames', 'attachments', 'messages', 'messageCount', 'systemPrompt', 'bizParams'].includes(k)
+}
+
+function roleLabel(role) {
+  const map = { system: '系统', user: '用户', assistant: '助手', tool: '工具' }
+  return map[role] || role || '未知'
+}
+
+function roleTagColor(role) {
+  if (role === 'system') return 'purple'
+  if (role === 'user') return 'blue'
+  if (role === 'assistant') return 'green'
+  return 'default'
+}
+
+/** 是否可用缩略图预览（有 previewUrl 的图片/视频） */
+function traceMediaCanThumb(med) {
+  if (!med?.previewUrl) return false
+  const t = (med.type || med.mimeType || '').toLowerCase()
+  return t === 'image' || t === 'video' || t.includes('image') || t.includes('video')
 }
 
 function traceAttachments(attrs) {
@@ -743,8 +835,16 @@ onMounted(() => {
 .info-row { display: flex; align-items: center; gap: 8px; }
 .info-label { color: #8c8c8c; font-size: 13px; min-width: 50px; }
 .info-value { font-size: 13px; }
-.error-row { grid-column: 1 / -1; }
-.error-text { color: #ff4d4f; font-size: 12px; }
+.error-row { grid-column: 1 / -1; align-items: flex-start; }
+.error-content-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.error-text { color: #ff4d4f; font-size: 12px; word-break: break-word; white-space: pre-wrap; }
+.btn-copy-inline { align-self: flex-start; }
 
 .empty-spans {
   text-align: center;
@@ -753,32 +853,95 @@ onMounted(() => {
   font-size: 13px;
 }
 
-/* AI回复内容 */
-.trace-att-grid {
+/* 用户提问与模型输入 */
+.model-input-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.model-input-section h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.mi-block {
+  margin-bottom: 16px;
+}
+.mi-block:last-child {
+  margin-bottom: 0;
+}
+.mi-block-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 8px;
+}
+.mi-pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1e293b;
+}
+.mi-pre {
+  margin: 0;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.mi-sub {
+  margin-top: 10px;
+}
+.mi-sub-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.mi-msg {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.mi-msg:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.mi-msg-head {
+  margin-bottom: 6px;
+}
+.mi-empty-text {
+  font-size: 12px;
+  color: #94a3b8;
+}
+/* 附件缩略图（与对话页一致） */
+.trace-att-thumbs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
-.trace-att-img {
-  max-width: 200px;
-  max-height: 140px;
-  border-radius: 6px;
-  border: 1px solid #e4e4e7;
-  object-fit: contain;
-}
-.trace-att-video {
-  max-width: 220px;
-  max-height: 120px;
-  border-radius: 6px;
-}
-.trace-att-label {
+.trace-inline-tag {
   font-size: 12px;
-  padding: 4px 8px;
-  background: #f4f4f5;
-  border-radius: 4px;
   color: #52525b;
+  padding: 4px 10px;
+  background: #f4f4f5;
+  border-radius: 6px;
+  max-width: 100%;
+  word-break: break-all;
 }
+
+/* AI回复内容 */
 .trace-llm-msg {
   margin-bottom: 10px;
 }

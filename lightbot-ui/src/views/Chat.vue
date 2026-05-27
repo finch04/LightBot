@@ -269,10 +269,12 @@
           />
           <a-tooltip
             v-if="showFileUploadBtn"
-            :title="fileUploadHint || '上传图片或视频'"
-            overlay-class-name="no-flip-tooltip"
+            overlay-class-name="no-flip-tooltip chat-upload-tooltip"
             :overlay-style="{ maxWidth: '360px' }"
           >
+            <template #title>
+              <span class="chat-upload-hint">{{ fileUploadHint || '上传图片或视频' }}</span>
+            </template>
             <button type="button" class="btn-attach" :disabled="loading || uploading" @click="triggerFileUpload">
               <PaperClipOutlined />
             </button>
@@ -288,7 +290,11 @@
             @input="autoResize"
           />
           <div class="chat-input-actions">
-            <a-tooltip v-if="showVoiceInputBtn" title="语音转文字（识别结果填入输入框）">
+            <div v-if="voiceListening" class="voice-listening-indicator">
+              <VoiceMicVisualizer :active="voiceListening" />
+              <span class="voice-listening-text">聆听中</span>
+            </div>
+            <a-tooltip v-if="showVoiceInputBtn" title="语音转文字">
               <button
                 type="button"
                 class="btn-voice"
@@ -368,6 +374,7 @@ import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
 import ChatMediaPreview from '../components/ChatMediaPreview.vue'
+import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -537,7 +544,7 @@ async function loadChatCapabilities(agentId, configVersion) {
     pendingAttachments.value = []
   }
   if (!showVoiceInputBtn.value && voiceListening.value) {
-    speechRecognition?.stop()
+    stopVoiceInput()
   }
 }
 
@@ -863,7 +870,7 @@ function toggleVoiceInput() {
     return
   }
   if (voiceListening.value && speechRecognition) {
-    speechRecognition.stop()
+    stopVoiceInput()
     return
   }
   voiceInputBase.value = input.value
@@ -872,8 +879,8 @@ function toggleVoiceInput() {
   speechRecognition.interimResults = true
   speechRecognition.continuous = true
   speechRecognition.onstart = () => { voiceListening.value = true }
-  speechRecognition.onend = () => { voiceListening.value = false }
-  speechRecognition.onerror = () => { voiceListening.value = false }
+  speechRecognition.onend = () => { stopVoiceInput() }
+  speechRecognition.onerror = () => { stopVoiceInput() }
   speechRecognition.onresult = (event) => {
     let finalText = ''
     let interimText = ''
@@ -892,6 +899,15 @@ function toggleVoiceInput() {
     nextTick(() => inputRef.value?.focus())
   }
   speechRecognition.start()
+}
+
+function stopVoiceInput() {
+  voiceListening.value = false
+  try {
+    speechRecognition?.stop()
+  } catch {
+    /* ignore */
+  }
 }
 
 async function sendMessage() {
@@ -1242,7 +1258,7 @@ async function loadAgents(preferredAgentId) {
 
 onUnmounted(() => {
   window.speechSynthesis?.cancel()
-  speechRecognition?.stop()
+  stopVoiceInput()
 })
 
 onMounted(async () => {
@@ -1808,11 +1824,22 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-voice.listening {
   background: #fef2f2;
   color: #ef4444;
-  animation: voice-pulse 1s infinite;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
 }
-@keyframes voice-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+.voice-listening-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+.voice-listening-text {
+  font-size: 12px;
+  color: #ef4444;
+  white-space: nowrap;
+  user-select: none;
 }
 .msg-att-thumb {
   position: relative;
@@ -2219,5 +2246,13 @@ watch(sessionId, (newVal, oldVal) => {
   margin-top: 8px;
   font-size: 12px;
   color: #a1a1aa;
+}
+</style>
+
+<style>
+.chat-upload-tooltip .chat-upload-hint {
+  display: block;
+  white-space: pre-line;
+  line-height: 1.5;
 }
 </style>
