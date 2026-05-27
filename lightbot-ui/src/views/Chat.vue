@@ -41,7 +41,30 @@
           <div class="message-meta">
             {{ msg.role === 'user' ? '你' : 'LightBot' }}
           </div>
-          <div class="message-content-wrapper">
+          <div class="message-content-wrapper" :class="{ 'user-message-stack': msg.role === 'user' }">
+            <!-- 用户附件：固定在用户气泡上方、右对齐（发送后与历史记录一致） -->
+            <div
+              v-if="msg.role === 'user' && getMsgAttachments(msg).length && !msg._sensitiveBlock"
+              class="user-message-attachments"
+            >
+              <template v-for="(att, ai) in getMsgAttachments(msg)" :key="att.id || ai">
+                <button
+                  v-if="(att.type === 'image' || att.type === 'video') && getAttThumbUrl(att)"
+                  type="button"
+                  class="msg-att-thumb"
+                  :class="{ 'msg-att-thumb--video': att.type === 'video' }"
+                  @click="openMediaPreview(att)"
+                >
+                  <img :src="getAttThumbUrl(att)" :alt="att.fileName || att.type" />
+                  <span class="msg-att-hover-mask">
+                    <EyeOutlined class="mask-icon" />
+                    <span class="mask-text">预览</span>
+                  </span>
+                  <span v-if="att.type === 'video'" class="msg-att-play-badge"><PlayCircleOutlined /></span>
+                </button>
+                <span v-else class="msg-att-file-tag">{{ att.fileName || att.type }}</span>
+              </template>
+            </div>
             <!-- 敏感词拦截提示（独立样式，与正常内容区分） -->
             <div v-if="msg._sensitiveBlock" class="sensitive-block-alert" :class="msg._sensitiveBlock">
               <WarningOutlined class="sensitive-block-icon" />
@@ -91,19 +114,38 @@
             </template>
             <!-- 无工具事件：正常渲染 -->
             <template v-else-if="!msg._sensitiveBlock">
-              <div class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
+              <div v-if="msg.content && msg.content !== '[附件]'" class="message-content">
+                <MarkdownPreview :content="msg.content" :finalized="!msg._streaming" />
+              </div>
             </template>
-            <!-- 复制按钮（仅流式结束后显示，敏感词拦截时不显示） -->
-            <a-tooltip v-if="!msg._streaming && msg.content && !msg._sensitiveBlock" :title="msg._copied ? '已复制' : '复制'">
-              <button
-                class="btn-copy"
-                :class="{ copied: msg._copied }"
-                @click="copyMessage(msg)"
+            <!-- 朗读（仅助手且版本支持 TTS）/ 复制 -->
+            <div
+              v-if="!msg._streaming && msg.content && !msg._sensitiveBlock"
+              class="message-actions"
+            >
+              <a-tooltip
+                v-if="msg.role === 'assistant' && showTtsBtn"
+                :title="speakingMsgKey === i ? '停止朗读' : '朗读'"
               >
-                <CheckOutlined v-if="msg._copied" />
-                <CopyOutlined v-else />
-              </button>
-            </a-tooltip>
+                <button
+                  class="btn-copy"
+                  :class="{ speaking: speakingMsgKey === i }"
+                  @click="speakMessage(msg, i)"
+                >
+                  <SoundOutlined />
+                </button>
+              </a-tooltip>
+              <a-tooltip :title="msg._copied ? '已复制' : '复制'">
+                <button
+                  class="btn-copy"
+                  :class="{ copied: msg._copied }"
+                  @click="copyMessage(msg)"
+                >
+                  <CheckOutlined v-if="msg._copied" />
+                  <CopyOutlined v-else />
+                </button>
+              </a-tooltip>
+            </div>
           </div>
           <!-- RAG引用列表（从消息metadata中解析） -->
           <div v-if="msg.role === 'assistant' && getMsgRagRefs(msg).length > 0 && !msg._streaming" class="rag-references">
@@ -195,21 +237,27 @@
             </template>
           </a-dropdown>
           <span v-if="currentAgent?.name" class="chat-toolbar-agent-name">{{ currentAgent.name }}</span>
-          <div
+          <a-select
             v-if="selectedAgentId && configVersionOptions.length > 0"
-            class="config-version-tags"
+            v-model:value="selectedConfigVersion"
+            class="config-version-select"
+            :disabled="loading"
+            popup-class-name="config-version-select-dropdown"
+            @change="onConfigVersionChange"
           >
-            <a-tag
+            <a-select-option
               v-for="opt in configVersionOptions"
-              :key="opt.value === null ? 'online' : String(opt.value)"
-              class="config-version-tag"
-              :class="{ active: selectedConfigVersion === opt.value }"
-              :color="selectedConfigVersion === opt.value ? 'processing' : 'default'"
-              @click="onConfigVersionTagClick(opt.value)"
+              :key="String(opt.value)"
+              :value="opt.value"
+              :label="opt.selectLabel"
             >
-              {{ opt.shortLabel || opt.label }}
-            </a-tag>
-          </div>
+              <span class="version-option-row">
+                <span class="version-option-num">{{ opt.versionLabel }}</span>
+                <a-tag v-if="opt.badge === 'draft'" class="version-status-tag draft" :bordered="false">草稿</a-tag>
+                <a-tag v-else-if="opt.badge === 'online'" class="version-status-tag online" color="success" :bordered="false">线上</a-tag>
+              </span>
+            </a-select-option>
+          </a-select>
         </div>
         <div class="chat-input">
           <input
@@ -240,7 +288,7 @@
             @input="autoResize"
           />
           <div class="chat-input-actions">
-            <a-tooltip v-if="showVoiceInputBtn" title="语音输入">
+            <a-tooltip v-if="showVoiceInputBtn" title="语音转文字（识别结果填入输入框）">
               <button
                 type="button"
                 class="btn-voice"
@@ -271,31 +319,55 @@
         </div>
       </div>
       <div v-if="pendingAttachments.length > 0" class="pending-attachments">
-        <div v-for="(att, i) in pendingAttachments" :key="att.id || i" class="pending-att-item">
-          <img v-if="att.type === 'image' && att.previewUrl" :src="att.previewUrl" alt="" class="att-thumb" />
-          <span v-else class="att-name">{{ att.fileName || att.type }}</span>
-          <button type="button" class="att-remove" @click="removeAttachment(i)"><CloseOutlined /></button>
+        <span class="pending-att-count">已选 {{ pendingAttachments.length }} 个附件</span>
+        <div class="pending-att-thumbs">
+          <div v-for="(att, i) in pendingAttachments" :key="att.id || i" class="pending-att-item">
+            <button
+              v-if="getAttThumbUrl(att)"
+              type="button"
+              class="att-thumb-wrap"
+              @click="openMediaPreview(att)"
+            >
+              <img :src="getAttThumbUrl(att)" :alt="att.fileName || ''" class="att-thumb" />
+              <span class="msg-att-hover-mask">
+                <EyeOutlined class="mask-icon" />
+                <span class="mask-text">预览</span>
+              </span>
+              <span v-if="att.type === 'video'" class="msg-att-play-badge sm"><PlayCircleOutlined /></span>
+            </button>
+            <span v-else class="att-name">{{ att.fileName || att.type }}</span>
+            <button type="button" class="att-remove" @click="removeAttachment(i)"><CloseOutlined /></button>
+          </div>
         </div>
       </div>
       <div class="input-hint">LightBot 可能会犯错，请核实重要信息。</div>
     </div>
+
+    <ChatMediaPreview
+      v-model:open="mediaPreviewOpen"
+      :src="mediaPreviewSrc"
+      :media-type="mediaPreviewType"
+      :file-name="mediaPreviewName"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { chatStream, uploadChatAttachment } from '../api/chat'
-import { buildUploadHint, validateChatAttachmentFile } from '../utils/chatAttachment'
+import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
+import { buildUploadHint, validateChatAttachmentFile, validateAttachmentCount } from '../utils/chatAttachment'
+import { captureVideoThumbnail, enrichVideoThumbnails } from '../utils/videoThumbnail'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
-import { getAgents, getAgentDetail, listAgentVersions } from '../api/agent'
+import { getAgents, getAgentDetail, getAgentChatCapabilities, listAgentVersions } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
+import ChatMediaPreview from '../components/ChatMediaPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -320,7 +392,13 @@ const pendingAttachments = ref([])
 const fileInputRef = ref(null)
 const uploading = ref(false)
 const voiceListening = ref(false)
+const voiceInputBase = ref('')
 let speechRecognition = null
+const mediaPreviewOpen = ref(false)
+const mediaPreviewSrc = ref('')
+const mediaPreviewType = ref('image')
+const mediaPreviewName = ref('')
+const speakingMsgKey = ref(null)
 const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
@@ -341,6 +419,7 @@ const configVersionOptions = ref([])
 const showFileUploadBtn = computed(() => Boolean(chatCapabilities.value?.allowFileUpload))
 const showVoiceInputBtn = computed(() =>
   Boolean(chatCapabilities.value?.multimodalEnabled && chatCapabilities.value?.enableAudioInput))
+const showTtsBtn = computed(() => Boolean(chatCapabilities.value?.enableTts))
 const fileAcceptTypes = computed(() => {
   const mimes = chatCapabilities.value?.allowedFileMimeTypes || []
   return mimes.length ? mimes.join(',') : ''
@@ -399,9 +478,75 @@ function handleAgentSelect({ key }) {
   loadAgentConfigVersions(key)
 }
 
-function onConfigVersionTagClick(value) {
+function openMediaPreview(att) {
+  const url = att.type === 'video'
+    ? (att.previewUrl || '')
+    : (att.previewUrl || getAttThumbUrl(att))
+  if (!url) return
+  mediaPreviewSrc.value = url
+  mediaPreviewType.value = att.type === 'video' ? 'video' : 'image'
+  mediaPreviewName.value = att.fileName || ''
+  mediaPreviewOpen.value = true
+}
+
+function messagePlainText(content) {
+  if (!content) return ''
+  return content
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/[#*_~>[\]()!]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function speakMessage(msg, index) {
+  if (!showTtsBtn.value) return
+  const text = messagePlainText(msg.content)
+  if (!text) return
+  if (!window.speechSynthesis) {
+    message.warning('当前浏览器不支持语音朗读')
+    return
+  }
+  if (speakingMsgKey.value === index) {
+    window.speechSynthesis.cancel()
+    speakingMsgKey.value = null
+    return
+  }
+  window.speechSynthesis.cancel()
+  const utter = new SpeechSynthesisUtterance(text)
+  utter.lang = 'zh-CN'
+  utter.rate = 1
+  speakingMsgKey.value = index
+  utter.onend = () => { speakingMsgKey.value = null }
+  utter.onerror = () => { speakingMsgKey.value = null }
+  window.speechSynthesis.speak(utter)
+}
+
+async function loadChatCapabilities(agentId, configVersion) {
+  if (!agentId) {
+    chatCapabilities.value = {}
+    return
+  }
+  try {
+    const res = await getAgentChatCapabilities(agentId, configVersion ?? 0)
+    chatCapabilities.value = res.data || {}
+  } catch {
+    chatCapabilities.value = {}
+  }
+  if (!showFileUploadBtn.value) {
+    pendingAttachments.value = []
+  }
+  if (!showVoiceInputBtn.value && voiceListening.value) {
+    speechRecognition?.stop()
+  }
+}
+
+async function onConfigVersionChange(version) {
   if (loading.value) return
-  selectedConfigVersion.value = value
+  selectedConfigVersion.value = version
+  if (selectedAgentId.value) {
+    await loadChatCapabilities(selectedAgentId.value, version)
+  }
 }
 
 async function loadAgentConfigVersions(agentId) {
@@ -411,24 +556,38 @@ async function loadAgentConfigVersions(agentId) {
     return
   }
   try {
-    const opts = [{ value: 0, label: '暂存草稿', shortLabel: '草稿' }]
+    const opts = [{
+      value: 0,
+      versionLabel: '暂存草稿',
+      selectLabel: '暂存草稿',
+      badge: 'draft',
+    }]
     const res = await listAgentVersions(agentId)
     const versions = res.data || []
     for (const v of versions) {
       const num = v.version
       if (num == null || num <= 0) continue
+      const ver = `v${num}`
       opts.push({
         value: num,
-        label: v.current ? `v${num}（当前线上）` : `v${num}`,
-        shortLabel: v.current ? `v${num}·线上` : `v${num}`,
+        versionLabel: ver,
+        selectLabel: v.current ? `${ver} · 线上` : ver,
+        badge: v.current ? 'online' : null,
       })
     }
     configVersionOptions.value = opts
     const currentPublished = versions.find(v => v.current)
     selectedConfigVersion.value = currentPublished?.version ?? 0
+    await loadChatCapabilities(agentId, selectedConfigVersion.value)
   } catch {
-    configVersionOptions.value = [{ value: 0, label: '暂存草稿', shortLabel: '草稿' }]
+    configVersionOptions.value = [{
+      value: 0,
+      versionLabel: '暂存草稿',
+      selectLabel: '暂存草稿',
+      badge: 'draft',
+    }]
     selectedConfigVersion.value = 0
+    await loadChatCapabilities(agentId, 0)
   }
 }
 
@@ -469,12 +628,60 @@ function toggleReference(msg, index) {
   expandedRefsMap.value = newMap
 }
 
+function parseAttachmentsFromMetadata(metadata) {
+  if (!metadata) return []
+  try {
+    const meta = typeof metadata === 'string' ? safeJsonParse(metadata) : metadata
+    return Array.isArray(meta?.attachments) ? meta.attachments : []
+  } catch {
+    return []
+  }
+}
+
+function getMsgAttachments(msg) {
+  return msg._attachments || []
+}
+
+function getAttThumbUrl(att) {
+  if (!att) return ''
+  if (att.type === 'image') return att.thumbnailUrl || att.previewUrl || ''
+  if (att.type === 'video') return att.thumbnailUrl || ''
+  return ''
+}
+
+async function enrichMessagesAttachments(msgs) {
+  const needRefresh = []
+  for (const msg of msgs) {
+    if (msg.role !== 'user') continue
+    const atts = msg._attachments || []
+    for (const a of atts) {
+      if (a?.objectKey) needRefresh.push(a)
+    }
+  }
+  if (!needRefresh.length) return
+  try {
+    const res = await refreshChatAttachmentPreviews(needRefresh)
+    const urlByKey = new Map((res.data || []).map(a => [a.objectKey, a.previewUrl]))
+    for (const msg of msgs) {
+      if (!msg._attachments?.length) continue
+      msg._attachments = msg._attachments.map(a => ({
+        ...a,
+        previewUrl: urlByKey.get(a.objectKey) || a.previewUrl,
+      }))
+      await enrichVideoThumbnails(msg._attachments)
+    }
+  } catch {
+    // 预览 URL 刷新失败时仍展示文件名
+  }
+}
+
 function parseMessage(m) {
   let toolEvents = []
   let workflowEvents = []
   let toolBlockOffsets = []
   let reasoningContent = ''
   let sensitiveBlock = null
+  let attachments = []
   if (m.metadata) {
     try {
       const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
@@ -483,12 +690,16 @@ function parseMessage(m) {
       if (metadata?.toolBlockOffsets) toolBlockOffsets = metadata.toolBlockOffsets
       if (metadata?.reasoningContent) reasoningContent = metadata.reasoningContent
       if (metadata?.sensitiveBlock) sensitiveBlock = metadata.sensitiveBlock
+      attachments = parseAttachmentsFromMetadata(metadata)
     } catch {}
   }
+  const roleRaw = m.role?.code || m.role
+  const role = roleRaw != null ? String(roleRaw).toLowerCase() : ''
   return {
-    role: m.role?.code || m.role,
+    role,
     content: m.content,
     metadata: m.metadata,
+    _attachments: attachments,
     _toolEvents: toolEvents,
     _workflowEvents: workflowEvents,
     _toolBlockOffsets: toolBlockOffsets,
@@ -526,7 +737,9 @@ async function loadHistory() {
     ])
     const records = msgRes.data?.records || []
     // API 按创建时间倒序返回，前端正序显示（旧→新）
-    messages.value = records.reverse().map(m => parseMessage(m))
+    const parsed = records.reverse().map(m => parseMessage(m))
+    await enrichMessagesAttachments(parsed)
+    messages.value = parsed
     hasMoreMessages.value = records.length === 10
 
     // 从会话中恢复 agentId
@@ -562,6 +775,7 @@ async function loadOlderMessages() {
     const records = res.data?.records || []
     if (records.length > 0) {
       const olderMessages = records.reverse().map(m => parseMessage(m))
+      await enrichMessagesAttachments(olderMessages)
       messages.value = [...olderMessages, ...messages.value]
       hasMoreMessages.value = records.length === 10
       // 保持滚动位置
@@ -588,7 +802,7 @@ async function loadCurrentAgent(agentId) {
   try {
     const res = await getAgentDetail(agentId)
     currentAgent.value = res.data?.agent || null
-    chatCapabilities.value = res.data?.chatCapabilities || {}
+    await loadChatCapabilities(agentId, selectedConfigVersion.value)
   } catch {
     currentAgent.value = null
     chatCapabilities.value = {}
@@ -604,6 +818,11 @@ async function onFileSelected(e) {
   e.target.value = ''
   if (!file || !selectedAgentId.value) return
 
+  const countCheck = validateAttachmentCount(pendingAttachments.value.length, chatCapabilities.value)
+  if (!countCheck.ok) {
+    message.warning(countCheck.message)
+    return
+  }
   const validation = validateChatAttachmentFile(file, chatCapabilities.value)
   if (!validation.ok) {
     message.warning(validation.message)
@@ -613,7 +832,19 @@ async function onFileSelected(e) {
   uploading.value = true
   try {
     const res = await uploadChatAttachment(selectedAgentId.value, sessionId.value, file)
-    pendingAttachments.value.push(res.data)
+    const att = { ...res.data }
+    if (att.type === 'video') {
+      try {
+        att.thumbnailUrl = await captureVideoThumbnail(file, { maxWidth: 112, maxHeight: 72 })
+      } catch {
+        if (att.previewUrl) {
+          try {
+            att.thumbnailUrl = await captureVideoThumbnail(att.previewUrl, { maxWidth: 112, maxHeight: 72 })
+          } catch { /* 跨域等 */ }
+        }
+      }
+    }
+    pendingAttachments.value.push(att)
   } catch (err) {
     message.error(err.message || '上传失败')
   } finally {
@@ -635,22 +866,30 @@ function toggleVoiceInput() {
     speechRecognition.stop()
     return
   }
+  voiceInputBase.value = input.value
   speechRecognition = new SR()
   speechRecognition.lang = 'zh-CN'
   speechRecognition.interimResults = true
-  speechRecognition.continuous = false
+  speechRecognition.continuous = true
   speechRecognition.onstart = () => { voiceListening.value = true }
   speechRecognition.onend = () => { voiceListening.value = false }
   speechRecognition.onerror = () => { voiceListening.value = false }
   speechRecognition.onresult = (event) => {
-    let text = ''
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      text += event.results[i][0].transcript
+    let finalText = ''
+    let interimText = ''
+    for (let i = 0; i < event.results.length; i++) {
+      const part = event.results[i][0].transcript
+      if (event.results[i].isFinal) {
+        finalText += part
+      } else {
+        interimText += part
+      }
     }
-    if (text) {
-      input.value = (input.value ? input.value + ' ' : '') + text
-      autoResize()
-    }
+    const base = voiceInputBase.value
+    const merged = `${base}${base && finalText ? ' ' : ''}${finalText}${interimText}`
+    input.value = merged.trim() ? merged : base
+    autoResize()
+    nextTick(() => inputRef.value?.focus())
   }
   speechRecognition.start()
 }
@@ -661,7 +900,9 @@ async function sendMessage() {
   if ((!text && attachments.length === 0) || loading.value) return
 
   const displayContent = text || (attachments.length ? '[附件]' : '')
-  messages.value.push({ role: 'user', content: displayContent, _attachments: attachments })
+  const sentAttachments = attachments.map(a => ({ ...a }))
+  await enrichVideoThumbnails(sentAttachments)
+  messages.value.push({ role: 'user', content: displayContent, _attachments: sentAttachments })
   input.value = ''
   pendingAttachments.value = []
   loading.value = true
@@ -999,6 +1240,11 @@ async function loadAgents(preferredAgentId) {
   }
 }
 
+onUnmounted(() => {
+  window.speechSynthesis?.cancel()
+  speechRecognition?.stop()
+})
+
 onMounted(async () => {
   const queryAgentId = route.query.agentId
   loadHistory()
@@ -1206,6 +1452,23 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .message-content-wrapper {
   position: relative;
+}
+/* 用户消息：附件在上、气泡在下，整体靠右与头像侧对齐 */
+.message.user .message-content-wrapper.user-message-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+}
+.message.user .user-message-attachments {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  flex-wrap: wrap-reverse;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+  max-width: 80%;
 }
 .message-content {
   font-size: 15px;
@@ -1462,28 +1725,39 @@ watch(sessionId, (newVal, oldVal) => {
   flex-shrink: 0;
 }
 
-.config-version-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+.config-version-select {
   margin-left: auto;
   flex-shrink: 0;
+  min-width: 128px;
+  max-width: 200px;
 }
-.config-version-tag {
+.version-option-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.version-option-num {
+  font-size: 13px;
+  color: #171717;
+}
+.version-status-tag {
   margin: 0;
-  cursor: pointer;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 20px;
-  user-select: none;
-  transition: opacity 0.15s;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
 }
-.config-version-tag:not(.active):hover {
-  opacity: 0.85;
+.version-status-tag.draft {
+  background: #f4f4f5;
+  color: #52525b;
 }
-.config-version-tag.active {
-  font-weight: 500;
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.btn-copy.speaking {
+  color: #0070f3;
 }
 
 .input-textarea {
@@ -1540,26 +1814,135 @@ watch(sessionId, (newVal, oldVal) => {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
-.pending-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-.pending-att-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+.msg-att-thumb {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  flex-shrink: 0;
+  display: block;
   background: #f4f4f5;
-  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+}
+.msg-att-hover-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.48);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.msg-att-thumb:hover .msg-att-hover-mask,
+.att-thumb-wrap:hover .msg-att-hover-mask {
+  opacity: 1;
+}
+.msg-att-hover-mask .mask-icon {
+  font-size: 16px;
+}
+.msg-att-hover-mask .mask-text {
+  font-size: 11px;
+  line-height: 1;
+}
+.msg-att-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.msg-att-thumb--video {
+  background: #18181b;
+}
+.msg-att-play-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.msg-att-play-badge.sm {
   font-size: 12px;
 }
+.msg-att-file-tag {
+  font-size: 12px;
+  color: #52525b;
+  padding: 4px 10px;
+  background: #f4f4f5;
+  border-radius: 6px;
+}
+.pending-attachments {
+  margin-top: 8px;
+}
+.pending-att-count {
+  font-size: 12px;
+  color: #71717a;
+  display: block;
+  margin-bottom: 6px;
+}
+.pending-att-thumbs {
+  display: flex;
+  flex-direction: row-reverse;
+  flex-wrap: wrap-reverse;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.pending-att-item {
+  position: relative;
+  flex-shrink: 0;
+}
+.att-thumb-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  padding: 0;
+  background: #f4f4f5;
+  cursor: pointer;
+}
 .att-thumb {
-  width: 40px;
-  height: 40px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  display: block;
+}
+.pending-att-item .att-name {
+  font-size: 12px;
+  color: #52525b;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pending-att-item .att-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  padding: 0;
+  cursor: pointer;
+  color: #71717a;
+  z-index: 1;
 }
 .att-remove {
   border: none;

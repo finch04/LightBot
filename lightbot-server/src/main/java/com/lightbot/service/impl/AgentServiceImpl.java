@@ -168,6 +168,16 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    public AgentChatCapabilitiesDTO getChatCapabilities(Long id, Integer configVersion) {
+        Agent agent = getById(id);
+        if (agent == null) {
+            throw new BizException(ErrorCode.AGENT_NOT_FOUND);
+        }
+        Map<String, Object> runtimeConfig = agentVersionService.resolveRuntimeForChat(agent, configVersion);
+        return AgentChatCapabilitiesUtil.fromConfigMap(runtimeConfig);
+    }
+
+    @Override
     public void deleteById(Long id) {
         Agent agent = getById(id);
         if (agent == null) {

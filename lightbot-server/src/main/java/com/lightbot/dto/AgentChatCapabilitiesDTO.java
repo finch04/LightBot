@@ -48,4 +48,7 @@ public class AgentChatCapabilitiesDTO {
 
     @Schema(description = "视频最大体积展示文案，如 20MB")
     private String maxVideoSizeLabel;
+
+    @Schema(description = "单条消息最多附件数")
+    private Integer maxAttachmentsPerMessage;
 }

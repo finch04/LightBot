@@ -85,6 +85,12 @@ public class ChatController {
         return Result.ok(chatAttachmentService.upload(agentId, sessionId, file));
     }
 
+    @Operation(summary = "刷新对话附件预览 URL")
+    @PostMapping("/attachments/refresh-preview")
+    public Result<List<ChatAttachmentDTO>> refreshAttachmentPreview(@RequestBody List<ChatAttachmentDTO> attachments) {
+        return Result.ok(chatAttachmentService.refreshPreviewUrls(attachments));
+    }
+
     @Operation(summary = "获取RAG引用信息")
     @GetMapping("/rag-references")
     public Result<List<RagReferenceVO>> getRagReferences(

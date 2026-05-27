@@ -22,6 +22,27 @@ export function getFileExtension(filename) {
 }
 
 /** 根据 Agent 能力生成上传说明（大小文案由后端 maxImageSizeLabel / maxVideoSizeLabel 提供） */
+/** 单条消息默认最大附件数（与后端 ChatAttachmentConstants 一致） */
+export const DEFAULT_MAX_ATTACHMENTS_PER_MESSAGE = 4
+
+export function getMaxAttachmentsPerMessage(capabilities) {
+  const n = capabilities?.maxAttachmentsPerMessage
+  if (n != null && n > 0) return Number(n)
+  return DEFAULT_MAX_ATTACHMENTS_PER_MESSAGE
+}
+
+/**
+ * 校验待发送附件数量
+ * @returns {{ ok: boolean, message?: string }}
+ */
+export function validateAttachmentCount(currentCount, capabilities) {
+  const max = getMaxAttachmentsPerMessage(capabilities)
+  if (currentCount >= max) {
+    return { ok: false, message: `单条消息最多上传 ${max} 个附件` }
+  }
+  return { ok: true }
+}
+
 export function buildUploadHint(capabilities) {
   const mimes = capabilities?.allowedFileMimeTypes || []
   if (!mimes.length) return ''
@@ -33,6 +54,10 @@ export function buildUploadHint(capabilities) {
   }
   if (hasVideo && capabilities?.maxVideoSizeLabel) {
     parts.push(`视频 MP4/WebM/MOV（≤${capabilities.maxVideoSizeLabel}）`)
+  }
+  const maxCount = getMaxAttachmentsPerMessage(capabilities)
+  if (maxCount > 0) {
+    parts.push(`最多 ${maxCount} 个/条`)
   }
   return parts.join('；')
 }

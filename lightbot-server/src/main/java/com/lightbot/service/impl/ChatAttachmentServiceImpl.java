@@ -81,6 +81,33 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         return dto;
     }
 
+    @Override
+    public java.util.List<ChatAttachmentDTO> refreshPreviewUrls(java.util.List<ChatAttachmentDTO> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.List<ChatAttachmentDTO> result = new java.util.ArrayList<>();
+        for (ChatAttachmentDTO att : attachments) {
+            if (att == null || att.getObjectKey() == null || att.getObjectKey().isBlank()) {
+                continue;
+            }
+            ChatAttachmentDTO copy = new ChatAttachmentDTO();
+            copy.setId(att.getId());
+            copy.setType(att.getType());
+            copy.setMimeType(att.getMimeType());
+            copy.setObjectKey(att.getObjectKey());
+            copy.setFileName(att.getFileName());
+            try {
+                String mime = att.getMimeType() != null ? att.getMimeType() : "application/octet-stream";
+                copy.setPreviewUrl(minioUtil.getPresignedUrl(att.getObjectKey(), mime));
+            } catch (Exception e) {
+                log.warn("[ChatAttachment] 刷新预览 URL 失败: key={}, error={}", att.getObjectKey(), e.getMessage());
+            }
+            result.add(copy);
+        }
+        return result;
+    }
+
     private String resolveMime(MultipartFile file) {
         String mime = file.getContentType() != null ? file.getContentType().toLowerCase() : "";
         if (ChatAttachmentConstants.IMAGE_MIMES.contains(mime)

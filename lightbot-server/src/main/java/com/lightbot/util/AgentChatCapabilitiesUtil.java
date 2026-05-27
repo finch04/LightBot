@@ -72,6 +72,7 @@ public final class AgentChatCapabilitiesUtil {
         dto.setMaxVideoBytes(ChatAttachmentConstants.MAX_VIDEO_BYTES);
         dto.setMaxImageSizeLabel(formatSizeLabel(ChatAttachmentConstants.MAX_IMAGE_BYTES));
         dto.setMaxVideoSizeLabel(formatSizeLabel(ChatAttachmentConstants.MAX_VIDEO_BYTES));
+        dto.setMaxAttachmentsPerMessage(ChatAttachmentConstants.MAX_ATTACHMENTS_PER_MESSAGE);
     }
 
     private static String formatSizeLabel(long bytes) {

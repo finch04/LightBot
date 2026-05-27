@@ -1,7 +1,9 @@
 package com.lightbot.service.chat;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.constant.ChatAttachmentConstants;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.ChatAttachmentDTO;
@@ -116,6 +118,7 @@ public class MessageMiddleware implements ChatMiddleware {
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
+        validateAttachments(ctx.getRequest().getAttachments());
         String userText = resolveUserText(ctx.getRequest());
         saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
 
@@ -130,11 +133,22 @@ public class MessageMiddleware implements ChatMiddleware {
      * 同步路径专用：保存用户消息 + 构建消息列表
      */
     public void prepare(ChatContext ctx) {
+        validateAttachments(ctx.getRequest().getAttachments());
         String userText = resolveUserText(ctx.getRequest());
         saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
                 ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
         ctx.setMessages(messages);
+    }
+
+    private void validateAttachments(List<ChatAttachmentDTO> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return;
+        }
+        if (attachments.size() > ChatAttachmentConstants.MAX_ATTACHMENTS_PER_MESSAGE) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                    "单条消息最多上传 " + ChatAttachmentConstants.MAX_ATTACHMENTS_PER_MESSAGE + " 个附件");
+        }
     }
 
     private String resolveUserText(ChatRequest request) {
@@ -229,7 +243,12 @@ public class MessageMiddleware implements ChatMiddleware {
 
         for (Message msg : history) {
             if (msg.getRole() == MessageRole.USER) {
-                messages.add(new UserMessage(msg.getContent()));
+                List<ChatAttachmentDTO> histAttachments = parseAttachmentsFromMetadata(msg.getMetadata());
+                if (!histAttachments.isEmpty()) {
+                    messages.add(ChatMessageMediaUtil.buildUserMessage(msg.getContent(), histAttachments, minioUtil));
+                } else {
+                    messages.add(new UserMessage(msg.getContent()));
+                }
             } else if (msg.getRole() == MessageRole.ASSISTANT) {
                 messages.add(new AssistantMessage(msg.getContent()));
             } else if (msg.getRole() == MessageRole.SYSTEM && msg.getContent() != null && !msg.getContent().isBlank()) {
@@ -378,5 +397,29 @@ public class MessageMiddleware implements ChatMiddleware {
      */
     public void saveMessage(Long sessionId, MessageRole role, String content) {
         saveMessage(sessionId, role, content, null, 0);
+    }
+
+    /**
+     * 从消息 metadata 解析用户附件列表
+     */
+    @SuppressWarnings("unchecked")
+    private List<ChatAttachmentDTO> parseAttachmentsFromMetadata(String metadata) {
+        if (metadata == null || metadata.isBlank()) {
+            return List.of();
+        }
+        try {
+            Map<String, Object> meta = OBJECT_MAPPER.readValue(metadata, new TypeReference<>() {});
+            Object raw = meta.get("attachments");
+            if (raw instanceof List<?> list) {
+                List<ChatAttachmentDTO> result = new ArrayList<>();
+                for (Object item : list) {
+                    result.add(OBJECT_MAPPER.convertValue(item, ChatAttachmentDTO.class));
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.debug("[Chat] 解析消息附件 metadata 失败: {}", e.getMessage());
+        }
+        return List.of();
     }
 }

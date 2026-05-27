@@ -3,6 +3,7 @@ package com.lightbot.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
+import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.AgentPublishRequest;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.entity.Agent;
@@ -61,6 +62,14 @@ public class AgentController {
     @GetMapping("/{id}/detail")
     public Result<Map<String, Object>> getDetail(@PathVariable Long id) {
         return Result.ok(agentService.getAgentDetail(id));
+    }
+
+    @Operation(summary = "获取Agent对话能力（按配置版本）")
+    @GetMapping("/{id}/chat-capabilities")
+    public Result<AgentChatCapabilitiesDTO> getChatCapabilities(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer configVersion) {
+        return Result.ok(agentService.getChatCapabilities(id, configVersion));
     }
 
     @Operation(summary = "获取Agent详情")

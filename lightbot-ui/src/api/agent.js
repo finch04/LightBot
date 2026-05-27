@@ -12,6 +12,13 @@ export function getAgentDetail(id) {
   return request.get(`/agents/${id}/detail`)
 }
 
+/** 按对话配置版本获取能力（configVersion: 0=暂存草稿，>0=发布版本） */
+export function getAgentChatCapabilities(id, configVersion) {
+  return request.get(`/agents/${id}/chat-capabilities`, {
+    params: { configVersion },
+  })
+}
+
 export function createAgent(data) {
   return request.post('/agents', data)
 }

@@ -108,6 +108,10 @@ export function getRagReferences(sessionId, agentId, question) {
   })
 }
 
+export function refreshChatAttachmentPreviews(attachments) {
+  return request.post('/chat/attachments/refresh-preview', attachments || [])
+}
+
 export function uploadChatAttachment(agentId, sessionId, file) {
   const formData = new FormData()
   formData.append('file', file)

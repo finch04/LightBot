@@ -242,8 +242,30 @@
                     <div class="sd-section-title">调用工具</div>
                     <div class="sd-content-box">{{ sub.attributes.toolNames }}</div>
                   </div>
+                  <!-- 用户输入（含附件） -->
+                  <div v-if="sub.name === 'user_message'" class="sd-section">
+                    <div class="sd-section-title">用户问题</div>
+                    <div v-if="sub.attributes?.content" class="sd-content-box">{{ sub.attributes.content }}</div>
+                    <div v-if="traceAttachments(sub.attributes).length" class="sd-section-title" style="margin-top: 10px;">用户附件</div>
+                    <div v-if="traceAttachments(sub.attributes).length" class="trace-att-grid">
+                      <template v-for="(att, ti) in traceAttachments(sub.attributes)" :key="ti">
+                        <img v-if="att.type === 'image' && att.previewUrl" :src="att.previewUrl" class="trace-att-img" alt="" />
+                        <video v-else-if="att.type === 'video' && att.previewUrl" :src="att.previewUrl" controls class="trace-att-video" />
+                        <span v-else class="trace-att-label">{{ att.fileName || att.type || '附件' }}</span>
+                      </template>
+                    </div>
+                  </div>
+                  <!-- 发送给 LLM 的消息列表 -->
+                  <div v-if="sub.name === 'messages_to_llm' && traceLlmMessages(sub.attributes).length" class="sd-section">
+                    <div class="sd-section-title">发送给模型的消息（{{ traceLlmMessages(sub.attributes).length }} 条）</div>
+                    <div v-for="(m, mi) in traceLlmMessages(sub.attributes)" :key="mi" class="trace-llm-msg">
+                      <div class="trace-llm-role">{{ m.role }}</div>
+                      <div class="sd-content-box trace-llm-content">{{ m.content || '（空）' }}</div>
+                      <span v-if="m.hasMedia" class="trace-llm-media-hint">含多模态附件</span>
+                    </div>
+                  </div>
                   <!-- 其他属性 -->
-                  <div v-if="sub.attributes && Object.keys(sub.attributes).filter(k => !['replyPreview','content','toolNames'].includes(k)).length" class="sd-section">
+                  <div v-if="sub.attributes && Object.keys(sub.attributes).filter(k => !traceHiddenAttrKeys(k)).length" class="sd-section">
                     <div class="sd-section-title">属性</div>
                     <pre class="sd-json">{{ formatAttrs(sub.attributes) }}</pre>
                   </div>
@@ -392,6 +414,8 @@ function spanNameLabel(name) {
     agent_load: 'Agent加载',
     build_messages: '消息构建',
     load_model_tools: '模型+工具加载',
+    user_message: '用户输入',
+    messages_to_llm: '模型输入',
     llm_call: 'LLM调用',
     tool_execute: '工具执行',
     rag_search: 'RAG检索',
@@ -399,6 +423,20 @@ function spanNameLabel(name) {
     ai_reply: 'AI回复',
   }
   return map[name] || name
+}
+
+function traceHiddenAttrKeys(k) {
+  return ['replyPreview', 'content', 'toolNames', 'attachments', 'messages', 'messageCount'].includes(k)
+}
+
+function traceAttachments(attrs) {
+  if (!attrs?.attachments || !Array.isArray(attrs.attachments)) return []
+  return attrs.attachments
+}
+
+function traceLlmMessages(attrs) {
+  if (!attrs?.messages || !Array.isArray(attrs.messages)) return []
+  return attrs.messages
 }
 
 function spanTypeClass(name) {
@@ -420,7 +458,7 @@ function toggleSpanDetail(group) {
 
 function formatAttrs(attrs) {
   const filtered = Object.fromEntries(
-    Object.entries(attrs).filter(([k]) => !['replyPreview', 'content', 'toolNames'].includes(k))
+    Object.entries(attrs).filter(([k]) => !traceHiddenAttrKeys(k))
   )
   return JSON.stringify(filtered, null, 2)
 }
@@ -716,6 +754,53 @@ onMounted(() => {
 }
 
 /* AI回复内容 */
+.trace-att-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.trace-att-img {
+  max-width: 200px;
+  max-height: 140px;
+  border-radius: 6px;
+  border: 1px solid #e4e4e7;
+  object-fit: contain;
+}
+.trace-att-video {
+  max-width: 220px;
+  max-height: 120px;
+  border-radius: 6px;
+}
+.trace-att-label {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: #f4f4f5;
+  border-radius: 4px;
+  color: #52525b;
+}
+.trace-llm-msg {
+  margin-bottom: 10px;
+}
+.trace-llm-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: #71717a;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.trace-llm-content {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.trace-llm-media-hint {
+  font-size: 11px;
+  color: #a1a1aa;
+  margin-top: 4px;
+  display: inline-block;
+}
+
 .reply-section { margin-bottom: 20px; }
 .reply-header {
   display: flex;

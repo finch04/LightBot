@@ -1,12 +1,21 @@
 ﻿<template>
   <div class="page">
     <div class="page-header">
-      <div>
-        <button class="btn-back" @click="handleGoBack">
-          <ArrowLeftOutlined /> 返回
-        </button>
-        <h1 class="page-title">{{ agent.name || 'Agent 详情' }}</h1>
-        <p class="page-desc">{{ agent.description || '暂无描述' }}</p>
+      <div class="page-header-left">
+        <div class="page-header-titles">
+          <button class="btn-back" @click="handleGoBack">
+            <ArrowLeftOutlined /> 返回
+          </button>
+          <div class="page-title-row">
+            <h1 class="page-title">{{ agent.name || 'Agent 详情' }}</h1>
+            <a-tooltip :title="agent.id ? `ID：${agent.id}` : '新建保存后生成 ID'">
+              <button type="button" class="btn-agent-id" @click="copyAgentId">
+                <IdcardOutlined />
+              </button>
+            </a-tooltip>
+          </div>
+          <p class="page-desc">{{ agent.description || '暂无描述' }}</p>
+        </div>
       </div>
       <div class="header-actions">
         <span class="agent-status-badge" :class="agentStatusClass">{{ agentStatusText }}</span>
@@ -57,7 +66,13 @@
       </template>
     </a-alert>
 
-    <div class="agent-edit-surface" :class="{ 'is-version-preview': isVersionPreview }">
+    <div
+      class="agent-edit-surface"
+      :class="{ 'is-version-preview': isVersionPreview }"
+      @mousedown.capture="blockPreviewInteraction"
+      @click.capture="blockPreviewInteraction"
+      @keydown.capture="blockPreviewKeydown"
+    >
     <div class="content-grid">
       <div class="content-grid-main">
       <!-- 基本信息 -->
@@ -67,34 +82,28 @@
         </div>
         <div class="panel-body">
         <a-form :model="agent" :label-col="{ span: 6 }">
-
-          <a-form-item label="智能体ID">
-            <div class="id-field">
-              <span class="id-value">{{ agent.id || '新建后生成' }}</span>
-            </div>
-          </a-form-item>
           <a-form-item label="名称">
-            <a-input v-model:value="agent.name" placeholder="Agent 名称" />
+            <a-input v-model:value="agent.name" placeholder="Agent 名称" :disabled="isVersionPreview" />
           </a-form-item>
           <a-form-item label="头像">
-            <div class="avatar-upload">
+            <div class="avatar-upload" :class="{ 'is-readonly': isVersionPreview }">
               <div class="avatar-preview" :class="{ 'has-avatar': avatarUrl }">
                 <img v-if="avatarUrl" :src="avatarUrl" alt="avatar" class="avatar-img" @error="agent.avatar = ''" />
                 <span v-else class="avatar-placeholder">{{ (agent.name || 'A')[0] }}</span>
-                <div class="avatar-overlay" @click="triggerAvatarUpload">
+                <div v-if="!isVersionPreview" class="avatar-overlay" @click="triggerAvatarUpload">
                   <UploadOutlined />
                 </div>
               </div>
-              <input ref="avatarInputRef" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp" style="display: none" @change="onAvatarFileChange" />
+              <input ref="avatarInputRef" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp" style="display: none" :disabled="isVersionPreview" @change="onAvatarFileChange" />
               <span class="avatar-tip">支持 jpg/jpeg/png/gif/webp，建议 200x200</span>
             </div>
           </a-form-item>
           <a-form-item label="描述">
-            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" />
+            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" :disabled="isVersionPreview" />
           </a-form-item>
           <!-- 类型选择：放在前面，影响后续字段显示 -->
           <a-form-item label="类型">
-            <a-select v-model:value="agent.agentType" style="width: 100%" :disabled="!!agentId">
+            <a-select v-model:value="agent.agentType" style="width: 100%" :disabled="!!agentId || isVersionPreview">
               <a-select-option value="chat">对话型</a-select-option>
               <a-select-option value="workflow">工作流型</a-select-option>
             </a-select>
@@ -107,9 +116,10 @@
                 v-model:value="agent.systemPrompt"
                 :rows="6"
                 placeholder="定义 Agent 的行为和角色，可使用 {{变量名}} 引用下方配置的变量..."
+                :disabled="isVersionPreview"
               />
               <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
-                <button class="btn-ai-icon" :disabled="generatingPrompt" @click="handleGeneratePrompt">
+                <button class="btn-ai-icon" :disabled="generatingPrompt || isVersionPreview" @click="handleGeneratePrompt">
                   <ThunderboltOutlined :spin="generatingPrompt" />
                 </button>
               </a-tooltip>
@@ -125,6 +135,7 @@
                 :key="v.key"
                 type="button"
                 class="var-insert-btn"
+                :disabled="isVersionPreview"
                 @click="insertPromptVariable(v.key)"
               >
                 {{ v.label || v.key }}
@@ -141,7 +152,7 @@
                   在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
                 </p>
               </div>
-              <button type="button" class="btn-add-inline" @click="addPromptVariable">
+              <button type="button" class="btn-add-inline" :disabled="isVersionPreview" @click="addPromptVariable">
                 <PlusOutlined /> 添加
               </button>
             </div>
@@ -155,10 +166,10 @@
               </div>
               <div class="config-list-scroll">
                 <div v-for="(v, idx) in promptVariables" :key="v._id" class="list-table-row list-table-row--4col">
-                  <a-input v-model:value="v.key" placeholder="company_name" size="small" />
-                  <a-input v-model:value="v.label" placeholder="显示名称" size="small" />
-                  <a-input v-model:value="v.defaultValue" placeholder="可选" size="small" />
-                  <button type="button" class="btn-icon-sm danger" title="删除" @click="removePromptVariable(idx)">
+                  <a-input v-model:value="v.key" placeholder="company_name" size="small" :disabled="isVersionPreview" />
+                  <a-input v-model:value="v.label" placeholder="显示名称" size="small" :disabled="isVersionPreview" />
+                  <a-input v-model:value="v.defaultValue" placeholder="可选" size="small" :disabled="isVersionPreview" />
+                  <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removePromptVariable(idx)">
                     <DeleteOutlined />
                   </button>
                 </div>
@@ -167,12 +178,12 @@
           </div>
           <!-- 欢迎语和推荐问题：对话页展示，工作流型也可配置 -->
           <a-form-item label="欢迎语">
-            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" />
+            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" :disabled="isVersionPreview" />
           </a-form-item>
           <a-form-item label="推荐问题">
             <div class="inline-field-block">
               <div class="inline-field-toolbar">
-                <button class="btn-ai-sm" :disabled="generatingQuestions" @click="handleGenerateQuestions">
+                <button class="btn-ai-sm" :disabled="generatingQuestions || isVersionPreview" @click="handleGenerateQuestions">
                   <ThunderboltOutlined :spin="generatingQuestions" />
                   {{ generatingQuestions ? '生成中...' : 'AI 生成' }}
                 </button>
@@ -180,6 +191,7 @@
                   v-if="recommendedQuestions.length < 3"
                   type="button"
                   class="btn-add-inline"
+                  :disabled="isVersionPreview"
                   @click="recommendedQuestions.push('')"
                 >
                   <PlusOutlined /> 添加
@@ -188,8 +200,8 @@
               <div v-if="recommendedQuestions.length === 0" class="sub-config-empty">暂无推荐问题，最多 3 条</div>
               <div v-else class="config-list-scroll config-list-scroll--compact">
                 <div v-for="(q, i) in recommendedQuestions" :key="i" class="list-table-row list-table-row--2col">
-                  <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" size="small" />
-                  <button type="button" class="btn-icon-sm danger" title="删除" @click="recommendedQuestions.splice(i, 1)">
+                  <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" size="small" :disabled="isVersionPreview" />
+                  <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="recommendedQuestions.splice(i, 1)">
                     <CloseOutlined />
                   </button>
                 </div>
@@ -202,23 +214,35 @@
 
       </div>
 
-      <!-- 模型参数 + 对话配置 -->
+      <!-- 模型参数 + 对话配置（同一卡片 Tab 切换） -->
       <div v-if="agent.agentType !== 'workflow'" class="content-grid-side">
-        <div class="panel panel--model">
+        <div class="panel panel-stretch panel--config-unified">
           <div class="panel-header">
-            <h3>模型参数</h3>
-            <div class="panel-header-actions">
-              <button class="btn-ai-sm" @click="confirmRestoreDefaults" :disabled="!agentConfig.providerId || isVersionPreview">
+            <h3>模型配置</h3>
+          </div>
+          <a-tabs
+            v-model:activeKey="configTab"
+            class="config-panel-tabs"
+            :class="{ 'config-panel-tabs--preview': isVersionPreview }"
+          >
+            <template #rightExtra>
+              <button
+                v-if="configTab === 'model'"
+                type="button"
+                class="btn-ai-sm"
+                @click="confirmRestoreDefaults"
+                :disabled="!agentConfig.providerId || isVersionPreview"
+              >
                 <UndoOutlined /> 恢复默认
               </button>
-              <span class="panel-tip">根据提供商动态显示</span>
-            </div>
-          </div>
-          <div class="panel-body">
+              <span v-if="configTab === 'model'" class="panel-tip">根据提供商动态显示</span>
+            </template>
+            <a-tab-pane key="model" tab="模型参数">
+              <div class="config-tab-pane-body">
         <a-form :model="agentConfig" :label-col="{ span: 6 }">
 
           <a-form-item label="提供商">
-            <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" @change="onProviderChange">
+            <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" :disabled="isVersionPreview" @change="onProviderChange">
               <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
                 {{ p.name }} ({{ p.type?.code || p.type }})
               </a-select-option>
@@ -230,6 +254,7 @@
               placeholder="选择模型"
               show-search
               :filter-option="false"
+              :disabled="isVersionPreview"
               @search="val => modelSearchText = val"
               style="width: 100%"
               allow-clear
@@ -301,7 +326,7 @@
                       <a-switch
                         v-model:checked="agentConfig[field.key]"
                         size="small"
-                        :disabled="isVersionPreview"
+                        :disabled="isCapabilityFieldDisabled(field)"
                       />
                       <span class="capability-option-status">{{ agentConfig[field.key] ? '开' : '关' }}</span>
                       <a-tooltip
@@ -347,6 +372,7 @@
                 v-model:value="agentConfig[field.key]"
                 placeholder="请选择"
                 class="field-control-grow"
+                :disabled="isVersionPreview"
               >
                 <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">
                   {{ opt.label }}
@@ -369,6 +395,7 @@
                 :max="field.max"
                 :step="field.step"
                 class="field-control-grow"
+                :disabled="isVersionPreview"
               />
               <span class="param-value">{{ agentConfig[field.key] }}</span>
               <a-tooltip
@@ -388,6 +415,7 @@
                 :max="field.max"
                 :step="field.step"
                 class="field-control-grow"
+                :disabled="isVersionPreview"
               />
               <a-tooltip
                 v-if="field.hint"
@@ -400,7 +428,7 @@
               </a-tooltip>
             </div>
             <div v-else-if="field.type === 'switch'" class="field-control-row">
-              <a-switch v-model:checked="agentConfig[field.key]" />
+              <a-switch v-model:checked="agentConfig[field.key]" :disabled="isVersionPreview" />
               <span class="tool-option-value">{{ agentConfig[field.key] ? '已开启' : '已关闭' }}</span>
               <a-tooltip
                 v-if="field.hint"
@@ -413,7 +441,7 @@
               </a-tooltip>
             </div>
             <div v-else class="field-control-row">
-              <a-input v-model:value="agentConfig[field.key]" placeholder="请输入" class="field-control-grow" />
+              <a-input v-model:value="agentConfig[field.key]" placeholder="请输入" class="field-control-grow" :disabled="isVersionPreview" />
               <a-tooltip
                 v-if="field.hint"
                 :title="field.hint"
@@ -426,21 +454,15 @@
             </div>
           </a-form-item>
                 </a-form>
-          </div>
-        </div>
-
-        <div class="panel panel--chat">
-          <div class="panel-header panel-header--stack">
-            <div>
-              <h3>对话配置</h3>
-            </div>
-          </div>
-          <div class="panel-body panel-body--chat">
+              </div>
+            </a-tab-pane>
+            <a-tab-pane key="chat" tab="对话配置">
+              <div class="config-tab-pane-body config-tab-pane-body--chat">
             <a-form :model="agentConfig" :label-col="{ span: 6 }" class="panel-form">
 
               <a-form-item label="流式输出">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <a-switch v-model:checked="agentConfig.streamOutput" />
+                  <a-switch v-model:checked="agentConfig.streamOutput" :disabled="isVersionPreview" />
                   <span class="tool-option-value">{{ agentConfig.streamOutput !== false ? '已启用' : '未启用' }}</span>
                   <a-tooltip
                     title="开启后模型回复逐字流式展示；关闭后等待完整回复再一次性展示"
@@ -462,6 +484,7 @@
                 :step="5"
                 placeholder="默认20"
                 style="flex: 1"
+                :disabled="isVersionPreview"
               />
               <a-tooltip
                 title="与模型对话时最多携带的历史消息条数。条数越多上下文越完整，但消耗的Token也越多"
@@ -476,7 +499,7 @@
           </a-form-item>
           <a-form-item label="上下文摘要">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <a-switch v-model:checked="agentConfig.enableSummary" />
+              <a-switch v-model:checked="agentConfig.enableSummary" :disabled="isVersionPreview" />
               <span class="tool-option-value">{{ agentConfig.enableSummary ? '已启用' : '未启用' }}</span>
               <a-tooltip
                 title="当上下文大小超过阈值时，自动对早期对话进行摘要，以优化Token使用"
@@ -497,6 +520,7 @@
                 :step="10"
                 placeholder="100"
                 style="flex: 1"
+                :disabled="isVersionPreview"
               />
               <span style="font-size: 13px; color: #71717a; white-space: nowrap;">KB</span>
               <a-tooltip
@@ -517,7 +541,7 @@
               </div>
             </template>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <a-switch v-model:checked="agentConfig.userSensitiveFilterEnabled" />
+              <a-switch v-model:checked="agentConfig.userSensitiveFilterEnabled" :disabled="isVersionPreview" />
               <span class="tool-option-value">{{ agentConfig.userSensitiveFilterEnabled ? '已启用' : '未启用' }}</span>
               <a-tooltip
                   title="检测用户发送的消息。命中后拒绝发送并提示用户修改，不会调用模型"
@@ -532,13 +556,13 @@
           <template v-if="agentConfig.userSensitiveFilterEnabled">
             <a-form-item label="用户敏感词">
               <div class="inline-field-block">
-                <button type="button" class="btn-add-inline btn-add-inline--block" @click="addUserSensitiveWord">
+                <button type="button" class="btn-add-inline btn-add-inline--block" :disabled="isVersionPreview" @click="addUserSensitiveWord">
                   <PlusOutlined /> 添加敏感词
                 </button>
                 <div class="sensitive-word-list">
                   <div v-for="(word, idx) in userSensitiveWords" :key="'usw-' + idx" class="list-table-row list-table-row--2col">
-                    <a-input v-model:value="userSensitiveWords[idx]" placeholder="命中则拦截用户消息" size="small" />
-                    <button type="button" class="btn-icon-sm danger" title="删除" @click="removeUserSensitiveWord(idx)">
+                    <a-input v-model:value="userSensitiveWords[idx]" placeholder="命中则拦截用户消息" size="small" :disabled="isVersionPreview" />
+                    <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeUserSensitiveWord(idx)">
                       <DeleteOutlined />
                     </button>
                   </div>
@@ -553,7 +577,7 @@
               </div>
             </template>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <a-switch v-model:checked="agentConfig.sensitiveFilterEnabled" />
+              <a-switch v-model:checked="agentConfig.sensitiveFilterEnabled" :disabled="isVersionPreview" />
               <span class="tool-option-value">{{ agentConfig.sensitiveFilterEnabled ? '已启用' : '未启用' }}</span>
                 <a-tooltip
                   title="检测模型回复。拦截策略会停止输出并展示拦截提示；替换策略将命中词替换为指定文本"
@@ -567,23 +591,23 @@
           </a-form-item>
           <template v-if="agentConfig.sensitiveFilterEnabled">
             <a-form-item label="处理策略">
-              <a-select v-model:value="agentConfig.sensitiveFilterStrategy" style="width: 100%">
+              <a-select v-model:value="agentConfig.sensitiveFilterStrategy" style="width: 100%" :disabled="isVersionPreview">
                 <a-select-option value="replace">替换为指定文本</a-select-option>
                 <a-select-option value="block">拦截并提示</a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item v-if="agentConfig.sensitiveFilterStrategy !== 'block'" label="替换文本">
-              <a-input v-model:value="agentConfig.sensitiveFilterReplaceText" placeholder="默认 ***" />
+              <a-input v-model:value="agentConfig.sensitiveFilterReplaceText" placeholder="默认 ***" :disabled="isVersionPreview" />
             </a-form-item>
             <a-form-item label="AI 敏感词列表">
               <div class="inline-field-block">
-                <button type="button" class="btn-add-inline btn-add-inline--block" @click="addSensitiveWord">
+                <button type="button" class="btn-add-inline btn-add-inline--block" :disabled="isVersionPreview" @click="addSensitiveWord">
                   <PlusOutlined /> 添加敏感词
                 </button>
                 <div class="sensitive-word-list">
                   <div v-for="(word, idx) in sensitiveWords" :key="'sw-' + idx" class="list-table-row list-table-row--2col">
-                    <a-input v-model:value="sensitiveWords[idx]" placeholder="AI 输出命中则处理" size="small" />
-                    <button type="button" class="btn-icon-sm danger" title="删除" @click="removeSensitiveWord(idx)">
+                    <a-input v-model:value="sensitiveWords[idx]" placeholder="AI 输出命中则处理" size="small" :disabled="isVersionPreview" />
+                    <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeSensitiveWord(idx)">
                       <DeleteOutlined />
                     </button>
                   </div>
@@ -592,7 +616,9 @@
             </a-form-item>
           </template>
                         </a-form>
-          </div>
+              </div>
+            </a-tab-pane>
+          </a-tabs>
         </div>
       </div>
 
@@ -666,6 +692,36 @@
     </div>
 
     <!-- 绑定扩展（预览时 Tab 可切换查看，仅内容区只读） -->
+    <a-alert
+      v-if="agent.agentType !== 'workflow' && deletedBindingCount > 0 && !isVersionPreview"
+      type="warning"
+      show-icon
+      class="binding-deleted-alert"
+      :message="`共有 ${deletedBindingCount} 个已绑定的资源已被删除`"
+    >
+      <template #description>
+        <div class="binding-deleted-detail-row">
+          <div class="binding-deleted-detail-text">
+            <div
+              v-for="(line, li) in deletedBindingDetailLines"
+              :key="li"
+              class="binding-deleted-detail-line"
+            >{{ line }}</div>
+            <p class="binding-deleted-detail-hint">这些绑定仍保留在配置中，运行时可能无法调用。暂存或发布前将提示确认。</p>
+          </div>
+          <a-button
+            type="primary"
+            danger
+            size="small"
+            class="btn-remove-deleted-bindings"
+            @click="removeAllDeletedBindings"
+          >
+            <DeleteOutlined />
+            移除失效绑定
+          </a-button>
+        </div>
+      </template>
+    </a-alert>
     <a-tabs
       v-if="agent.agentType !== 'workflow'"
       v-model:activeKey="bindingTab"
@@ -678,7 +734,7 @@
         <div class="tool-options-bar">
           <div class="tool-option-item">
             <span class="tool-option-label">工具调用模式</span>
-            <a-switch v-model:checked="agentConfig.asyncToolCalls" size="default" />
+            <a-switch v-model:checked="agentConfig.asyncToolCalls" size="default" :disabled="isVersionPreview" />
             <span class="tool-option-value">{{ agentConfig.asyncToolCalls ? '异步（并行）' : '串行（逐个）' }}</span>
             <a-tooltip
               title="串行模式：每次只调用一个工具，等待结果后再决定是否继续调用；异步模式：AI可同时调用多个工具，提升效率但可能消耗更多Token"
@@ -694,7 +750,7 @@
           <div class="selected-knowledge">
             <div class="selected-header">
               <span class="selected-label">已绑定 {{ selectedTools.length }}/{{ BIND_LIMITS.tool }} 个工具</span>
-              <button v-if="selectedTools.length > 0" class="btn-clear" @click="clearSelectedTools">
+              <button v-if="!isVersionPreview && selectedTools.length > 0" class="btn-clear" @click="clearSelectedTools">
                 <DeleteOutlined /> 清空
               </button>
             </div>
@@ -702,11 +758,18 @@
               <div v-if="selectedTools.length === 0" class="empty-tip">
                 暂未绑定工具，请从下方列表选择
               </div>
-              <div v-for="t in selectedTools" :key="t.id" class="knowledge-tag tool-tag">
+              <div
+                v-for="t in selectedTools"
+                :key="t.id"
+                class="knowledge-tag tool-tag"
+                :class="{ 'binding-tag--deleted': t._deleted }"
+              >
                 <ToolOutlined />
                 <span>{{ t.displayName || t.name }}</span>
-                <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
-                <button class="tag-remove" @click="removeTool(t.id)">
+                <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
+                <span v-else-if="isSystemTool(t)" class="tool-system-badge">系统工具</span>
+                <span v-else class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                <button v-if="!isVersionPreview" class="tag-remove" @click="removeTool(t.id)">
                   <CloseOutlined />
                 </button>
               </div>
@@ -716,12 +779,13 @@
             <div class="list-header">
               <span>可选工具（{{ selectedTools.length }}/{{ BIND_LIMITS.tool }}）</span>
               <div class="list-header-actions">
-                <SystemToolDrawer placement="bottomRight" />
+                <SystemToolDrawer v-if="!isVersionPreview" placement="bottomRight" />
                 <a-input
                   v-model:value="toolSearchText"
                   placeholder="搜索工具..."
                   size="small"
                   style="width: 200px"
+                  :disabled="isVersionPreview"
                 >
                   <template #prefix><SearchOutlined /></template>
                 </a-input>
@@ -733,6 +797,7 @@
                 :key="opt.value"
                 class="type-filter-btn"
                 :class="{ active: toolTypeFilter === opt.value }"
+                :disabled="isVersionPreview"
                 @click="toolTypeFilter = opt.value; loadToolList(opt.value || undefined)"
               >{{ opt.label }}</button>
             </div>
@@ -741,7 +806,7 @@
                 v-for="t in filteredToolList"
                 :key="t.name"
                 class="knowledge-item"
-                :class="{ selected: selectedToolIds.has(toBindingId(t.id)) }"
+                :class="{ selected: selectedToolIds.has(toBindingId(t.id)), 'is-preview-locked': isVersionPreview }"
                 @click="toggleTool(t)"
               >
                 <div class="item-icon tool-icon-bg">
@@ -750,7 +815,8 @@
                 <div class="item-info">
                   <div class="item-name">
                     {{ t.displayName || t.name }}
-                    <span class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                    <span v-if="isSystemTool(t)" class="tool-system-badge">系统工具</span>
+                    <span v-else class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
                   </div>
                   <div class="item-desc">{{ t.description || '暂无描述' }}</div>
                 </div>
@@ -772,7 +838,7 @@
           <div class="selected-knowledge">
             <div class="selected-header">
               <span class="selected-label">已绑定 {{ selectedKnowledge.length }}/{{ BIND_LIMITS.knowledge }} 个知识库</span>
-              <button v-if="selectedKnowledge.length > 0" class="btn-clear" @click="clearSelectedKnowledge">
+              <button v-if="!isVersionPreview && selectedKnowledge.length > 0" class="btn-clear" @click="clearSelectedKnowledge">
                 <DeleteOutlined /> 清空
               </button>
             </div>
@@ -780,9 +846,15 @@
               <div v-if="selectedKnowledge.length === 0" class="empty-tip">
                 暂未绑定知识库，请从下方列表选择
               </div>
-              <div v-for="k in selectedKnowledge" :key="k.id" class="knowledge-tag">
+              <div
+                v-for="k in selectedKnowledge"
+                :key="k.id"
+                class="knowledge-tag"
+                :class="{ 'binding-tag--deleted': k._deleted }"
+              >
                 <span>{{ k.name }}</span>
-                <button class="tag-remove" @click="removeKnowledge(k.id)">
+                <span v-if="k._deleted" class="binding-deleted-tag">已删除</span>
+                <button v-if="!isVersionPreview" class="tag-remove" @click="removeKnowledge(k.id)">
                   <CloseOutlined />
                 </button>
               </div>
@@ -796,6 +868,7 @@
                 placeholder="搜索知识库..."
                 size="small"
                 style="width: 200px"
+                :disabled="isVersionPreview"
               >
                 <template #prefix><SearchOutlined /></template>
               </a-input>
@@ -805,7 +878,7 @@
                 v-for="k in filteredKnowledgeList"
                 :key="k.id"
                 class="knowledge-item"
-                :class="{ selected: selectedKnowledgeIds.has(toBindingId(k.id)) }"
+                :class="{ selected: selectedKnowledgeIds.has(toBindingId(k.id)), 'is-preview-locked': isVersionPreview }"
                 @click="toggleKnowledge(k)"
               >
                 <div class="item-icon knowledge-icon">
@@ -833,7 +906,7 @@
           <div class="selected-knowledge">
             <div class="selected-header">
               <span class="selected-label">已绑定 {{ selectedMcpServers.length }}/{{ BIND_LIMITS.mcp }} 个 MCP Server</span>
-              <button v-if="selectedMcpServers.length > 0" class="btn-clear" @click="clearSelectedMcpServers">
+              <button v-if="!isVersionPreview && selectedMcpServers.length > 0" class="btn-clear" @click="clearSelectedMcpServers">
                 <DeleteOutlined /> 清空
               </button>
             </div>
@@ -841,10 +914,16 @@
               <div v-if="selectedMcpServers.length === 0" class="empty-tip">
                 暂未绑定 MCP Server，请从下方列表选择
               </div>
-              <div v-for="s in selectedMcpServers" :key="s.id" class="knowledge-tag mcp-tag">
+              <div
+                v-for="s in selectedMcpServers"
+                :key="s.id"
+                class="knowledge-tag mcp-tag"
+                :class="{ 'binding-tag--deleted': s._deleted }"
+              >
                 <ApiOutlined />
                 <span>{{ s.name }}</span>
-                <button class="tag-remove" @click="removeMcpServer(s.id)">
+                <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                <button v-if="!isVersionPreview" class="tag-remove" @click="removeMcpServer(s.id)">
                   <CloseOutlined />
                 </button>
               </div>
@@ -858,6 +937,7 @@
                 placeholder="搜索 MCP Server..."
                 size="small"
                 style="width: 200px"
+                :disabled="isVersionPreview"
               >
                 <template #prefix><SearchOutlined /></template>
               </a-input>
@@ -867,7 +947,7 @@
                 v-for="s in filteredMcpServerList"
                 :key="s.id"
                 class="knowledge-item"
-                :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)) }"
+                :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
                 @click="toggleMcpServer(s)"
               >
                 <div class="item-icon mcp-icon-bg">
@@ -896,7 +976,7 @@
           <div class="selected-subagents">
             <div class="selected-header">
               <span class="selected-label">已绑定 {{ selectedSubAgents.length }}/{{ BIND_LIMITS.subAgent }} 个 SubAgent</span>
-              <button v-if="selectedSubAgents.length > 0" class="btn-clear" @click="clearSelectedSubAgents">
+              <button v-if="!isVersionPreview && selectedSubAgents.length > 0" class="btn-clear" @click="clearSelectedSubAgents">
                 <DeleteOutlined /> 清空
               </button>
             </div>
@@ -904,10 +984,16 @@
               <div v-if="selectedSubAgents.length === 0" class="empty-tip">
                 暂未绑定 SubAgent，从下方列表选择
               </div>
-              <div v-for="s in selectedSubAgents" :key="s.id" class="knowledge-tag subagent-tag">
+              <div
+                v-for="s in selectedSubAgents"
+                :key="s.id"
+                class="knowledge-tag subagent-tag"
+                :class="{ 'binding-tag--deleted': s._deleted }"
+              >
                 <RobotOutlined />
-                <span>{{ s.displayName }}</span>
-                <button class="tag-remove" @click="removeSubAgent(s.id)">
+                <span>{{ s.displayName || s.name }}</span>
+                <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                <button v-if="!isVersionPreview" class="tag-remove" @click="removeSubAgent(s.id)">
                   <CloseOutlined />
                 </button>
               </div>
@@ -921,6 +1007,7 @@
                 placeholder="搜索 SubAgent..."
                 size="small"
                 style="width: 200px"
+                :disabled="isVersionPreview"
               >
                 <template #prefix><SearchOutlined /></template>
               </a-input>
@@ -930,7 +1017,7 @@
                 v-for="s in filteredSubAgentList"
                 :key="s.id"
                 class="subagent-item"
-                :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)) }"
+                :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
                 @click="toggleSubAgent(s)"
               >
                 <div class="item-icon subagent-icon">
@@ -1102,49 +1189,28 @@
         <div class="preview-section">
           <div class="preview-section-title">对话配置</div>
           <div class="preview-field-grid">
-            <div class="preview-field">
-              <label>流式输出</label>
-              <div class="preview-value">{{ versionPreview.chatConfig?.streamOutput !== false ? '开启' : '关闭' }}</div>
+            <div
+              v-for="row in chatConfigPreviewRows"
+              :key="row.label"
+              class="preview-field"
+            >
+              <label>{{ row.label }}</label>
+              <div class="preview-value">
+                {{ row.text }}
+                <span v-if="row.fromDefault" class="preview-default-tag">默认</span>
+              </div>
             </div>
-            <div class="preview-field" v-if="versionPreview.chatConfig?.maxContextMessages !== undefined">
-              <label>上下文条数</label>
-              <div class="preview-value">{{ versionPreview.chatConfig.maxContextMessages }}</div>
-            </div>
-            <div class="preview-field">
-              <label>上下文摘要</label>
-              <div class="preview-value">{{ versionPreview.chatConfig?.enableSummary ? '开启' : '关闭' }}</div>
-            </div>
-            <div class="preview-field" v-if="versionPreview.chatConfig?.enableSummary && versionPreview.chatConfig?.summaryThresholdKb !== undefined">
-              <label>摘要触发阈值</label>
-              <div class="preview-value">{{ versionPreview.chatConfig.summaryThresholdKb }} KB</div>
-            </div>
-            <div class="preview-field">
-              <label>用户敏感词</label>
-              <div class="preview-value">{{ versionPreview.chatConfig?.userSensitiveFilterEnabled ? '开启' : '关闭' }}</div>
-            </div>
-            <div class="preview-field" v-if="versionPreview.chatConfig?.userSensitiveFilterEnabled && userSensitiveWordsPreview.length > 0">
+            <div class="preview-field" v-if="userSensitiveWordsPreview.length > 0">
               <label>用户敏感词列表</label>
               <div class="preview-value">
                 <div v-for="(w, i) in userSensitiveWordsPreview" :key="i" class="preview-tag danger">{{ w }}</div>
               </div>
             </div>
-            <div class="preview-field">
-              <label>AI输出敏感词</label>
-              <div class="preview-value">{{ versionPreview.chatConfig?.sensitiveFilterEnabled ? '开启' : '关闭' }}</div>
-            </div>
-            <div class="preview-field" v-if="versionPreview.chatConfig?.sensitiveFilterEnabled">
-              <label>处理策略</label>
-              <div class="preview-value">{{ versionPreview.chatConfig?.sensitiveFilterStrategy === 'replace' ? '替换为 ' + (versionPreview.chatConfig?.sensitiveFilterReplaceText || '***') : '拦截并提示' }}</div>
-            </div>
-            <div class="preview-field" v-if="versionPreview.chatConfig?.sensitiveFilterEnabled && sensitiveWordsPreview.length > 0">
+            <div class="preview-field" v-if="sensitiveWordsPreview.length > 0">
               <label>AI敏感词列表</label>
               <div class="preview-value">
                 <div v-for="(w, i) in sensitiveWordsPreview" :key="i" class="preview-tag danger">{{ w }}</div>
               </div>
-            </div>
-            <div class="preview-field">
-              <label>工具调用模式</label>
-              <div class="preview-value">{{ versionPreview.chatConfig?.asyncToolCalls ? '异步（并行）' : '串行（逐个）' }}</div>
             </div>
           </div>
           <!-- 变量配置 -->
@@ -1179,7 +1245,15 @@
             <div class="preview-value">
               <div v-if="previewKnowledgeList.length === 0" class="preview-empty">未绑定</div>
               <div v-else>
-                <div v-for="k in previewKnowledgeList" :key="k.id" class="preview-tag">{{ k.name }}</div>
+                <div
+                  v-for="k in previewKnowledgeList"
+                  :key="k.id"
+                  class="preview-tag"
+                  :class="{ 'preview-tag--deleted': k._deleted }"
+                >
+                  {{ k.name }}
+                  <span v-if="k._deleted" class="binding-deleted-tag">已删除</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1188,9 +1262,16 @@
             <div class="preview-value">
               <div v-if="previewToolList.length === 0" class="preview-empty">未绑定</div>
               <div v-else>
-                <div v-for="t in previewToolList" :key="t.id" class="preview-tag">
+                <div
+                  v-for="t in previewToolList"
+                  :key="t.id"
+                  class="preview-tag"
+                  :class="{ 'preview-tag--deleted': t._deleted }"
+                >
                   {{ t.displayName || t.name }}
-                  <span class="preview-tag-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+                  <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
+                  <span v-else-if="isSystemTool(t)" class="tool-system-badge">系统工具</span>
+                  <span v-else class="preview-tag-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
                 </div>
               </div>
             </div>
@@ -1200,7 +1281,15 @@
             <div class="preview-value">
               <div v-if="previewMcpList.length === 0" class="preview-empty">未绑定</div>
               <div v-else>
-                <div v-for="m in previewMcpList" :key="m.id" class="preview-tag mcp">{{ m.name }}</div>
+                <div
+                  v-for="m in previewMcpList"
+                  :key="m.id"
+                  class="preview-tag mcp"
+                  :class="{ 'preview-tag--deleted': m._deleted }"
+                >
+                  {{ m.name }}
+                  <span v-if="m._deleted" class="binding-deleted-tag">已删除</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1209,7 +1298,15 @@
             <div class="preview-value">
               <div v-if="previewSubAgentList.length === 0" class="preview-empty">未绑定</div>
               <div v-else>
-                <div v-for="s in previewSubAgentList" :key="s.id" class="preview-tag subagent">{{ s.displayName }}</div>
+                <div
+                  v-for="s in previewSubAgentList"
+                  :key="s.id"
+                  class="preview-tag subagent"
+                  :class="{ 'preview-tag--deleted': s._deleted }"
+                >
+                  {{ s.displayName || s.name }}
+                  <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1227,11 +1324,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
 import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -1241,7 +1338,16 @@ import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
 import { getEnabledSubAgents } from '../api/subagent'
 import { safeJsonParse } from '../utils/request'
-import { toBindingId, toBindingIdSet, stripBindingKeysFromConfig } from '../utils/bindingId'
+import {
+  toBindingId,
+  toBindingIdSet,
+  stripBindingKeysFromConfig,
+  resolveBindingItems,
+  countDeletedBindingItems,
+  markBindingItemDeletedFlag,
+  formatDeletedBindingDetailLines,
+  removeDeletedIdsFromSet,
+} from '../utils/bindingId'
 import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 const route = useRoute()
 const router = useRouter()
@@ -1250,6 +1356,8 @@ const agentId = route.params.id
 const avatarInputRef = ref(null)
 
 const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5 }
+/** 右侧配置卡片：模型参数 / 对话配置 */
+const configTab = ref('model')
 
 const promptVariables = ref([])
 const validPromptVariables = computed(() =>
@@ -1257,6 +1365,50 @@ const validPromptVariables = computed(() =>
 )
 
 const isVersionPreview = computed(() => selectedVersion.value !== 'draft' && selectedVersion.value != null)
+
+/** 版本预览下禁止操作的交互元素（Tab 切换除外） */
+const PREVIEW_BLOCK_SELECTOR = [
+  '.ant-input',
+  '.ant-input-affix-wrapper',
+  '.ant-input-number',
+  '.ant-select',
+  '.ant-switch',
+  '.ant-slider',
+  'button',
+  '.knowledge-item',
+  '.subagent-item',
+  '.avatar-overlay',
+  '.avatar-upload',
+  '.type-filter-btn',
+  '.btn-clear',
+  '.tag-remove',
+  '.btn-add-inline',
+  '.btn-ai-sm',
+  '.btn-ai-icon',
+  '.var-insert-btn',
+  '.tool-options-bar',
+  '.prompt-wrapper button',
+].join(', ')
+
+function blockPreviewInteraction(e) {
+  if (!isVersionPreview.value) return
+  if (e.target.closest('.ant-tabs-nav, .version-preview-banner-top')) return
+  const hit = e.target.closest(PREVIEW_BLOCK_SELECTOR)
+  if (!hit) return
+  if (hit.closest('.ant-tabs-tab')) return
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+function blockPreviewKeydown(e) {
+  if (!isVersionPreview.value) return
+  if (e.target.closest('.ant-tabs-nav')) return
+  const tag = e.target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.closest('.ant-input')) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+}
 
 const previewModelLabel = computed(() => {
   const modelParams = versionPreview.value?.modelParams
@@ -1322,38 +1474,46 @@ const promptVariablesPreview = computed(() => {
 // 版本预览 - 绑定列表（优先使用后端按 ID 回查的实体，否则回退本地列表匹配）
 const previewKnowledgeList = computed(() => {
   if (versionPreview.value?.knowledges?.length) {
-    return versionPreview.value.knowledges
+    return versionPreview.value.knowledges.map(markBindingItemDeletedFlag)
   }
-  const ids = versionPreview.value?.knowledgeIds || []
-  const idList = Array.isArray(ids) ? ids.map(String) : []
-  return knowledgeList.value.filter(k => idList.includes(String(k.id)))
+  return resolveBindingItems(
+    toBindingIdSet(versionPreview.value?.knowledgeIds),
+    knowledgeList.value,
+    { entityLabel: '知识库' }
+  )
 })
 
 const previewToolList = computed(() => {
   if (versionPreview.value?.tools?.length) {
-    return versionPreview.value.tools
+    return versionPreview.value.tools.map(markBindingItemDeletedFlag)
   }
-  const ids = versionPreview.value?.toolIds || []
-  const idList = Array.isArray(ids) ? ids.map(String) : []
-  return toolList.value.filter(t => idList.includes(String(t.id)))
+  return resolveBindingItems(
+    toBindingIdSet(versionPreview.value?.toolIds),
+    toolList.value,
+    { entityLabel: '工具' }
+  )
 })
 
 const previewMcpList = computed(() => {
   if (versionPreview.value?.mcpServers?.length) {
-    return versionPreview.value.mcpServers
+    return versionPreview.value.mcpServers.map(markBindingItemDeletedFlag)
   }
-  const ids = versionPreview.value?.mcpServerIds || []
-  const idList = Array.isArray(ids) ? ids.map(String) : []
-  return mcpServerList.value.filter(m => idList.includes(String(m.id)))
+  return resolveBindingItems(
+    toBindingIdSet(versionPreview.value?.mcpServerIds),
+    mcpServerList.value,
+    { entityLabel: 'MCP Server' }
+  )
 })
 
 const previewSubAgentList = computed(() => {
   if (versionPreview.value?.subAgents?.length) {
-    return versionPreview.value.subAgents
+    return versionPreview.value.subAgents.map(markBindingItemDeletedFlag)
   }
-  const ids = versionPreview.value?.subAgentIds || []
-  const idList = Array.isArray(ids) ? ids.map(String) : []
-  return subAgentList.value.filter(s => idList.includes(String(s.id)))
+  return resolveBindingItems(
+    toBindingIdSet(versionPreview.value?.subAgentIds),
+    subAgentList.value,
+    { entityLabel: 'SubAgent' }
+  )
 })
 
 const agent = reactive({
@@ -1489,6 +1649,7 @@ function formatCapabilityPreviewDisplay(field, value) {
 }
 
 function toggleAllCapabilities() {
+  if (isVersionPreview.value) return
   const enable = !allCapabilitiesEnabled.value
   for (const field of capabilitySwitchFields.value) {
     agentConfig[field.key] = enable
@@ -1500,6 +1661,8 @@ const modelList = ref([])
 const modelSearchText = ref('')
 const selectedKnowledgeIds = ref(new Set())
 const knowledgeList = ref([])
+/** 绑定资源目录是否已加载（避免 Tab 懒加载导致误判「已删除」） */
+const bindingCatalogsLoaded = ref(false)
 const searchText = ref('')
 const selectedToolIds = ref(new Set())
 const toolList = ref([])
@@ -1525,6 +1688,70 @@ const selectedVersion = ref('draft')
 const versionPreview = ref(null)
 /** 草稿编辑基线快照，用于离开页未保存提示 */
 const formBaselineSnapshot = ref(null)
+
+/** 对话配置版本快照默认值（与编排页表单默认一致） */
+const CHAT_CONFIG_PREVIEW_DEFAULTS = {
+  streamOutput: true,
+  maxContextMessages: 20,
+  enableSummary: false,
+  summaryThresholdKb: 100,
+  userSensitiveFilterEnabled: false,
+  sensitiveFilterEnabled: false,
+  sensitiveFilterStrategy: 'replace',
+  sensitiveFilterReplaceText: '***',
+  asyncToolCalls: false,
+}
+
+function chatConfigPreviewValue(key) {
+  const cfg = versionPreview.value?.chatConfig
+  if (cfg && Object.prototype.hasOwnProperty.call(cfg, key) && cfg[key] !== null) {
+    return { value: cfg[key], fromDefault: false }
+  }
+  return { value: CHAT_CONFIG_PREVIEW_DEFAULTS[key], fromDefault: true }
+}
+
+/** 版本快照对话配置展示行 */
+const chatConfigPreviewRows = computed(() => {
+  if (!versionPreview.value) return []
+  const stream = chatConfigPreviewValue('streamOutput')
+  const ctx = chatConfigPreviewValue('maxContextMessages')
+  const summary = chatConfigPreviewValue('enableSummary')
+  const threshold = chatConfigPreviewValue('summaryThresholdKb')
+  const userSens = chatConfigPreviewValue('userSensitiveFilterEnabled')
+  const aiSens = chatConfigPreviewValue('sensitiveFilterEnabled')
+  const strategy = chatConfigPreviewValue('sensitiveFilterStrategy')
+  const replaceText = chatConfigPreviewValue('sensitiveFilterReplaceText')
+  const asyncTools = chatConfigPreviewValue('asyncToolCalls')
+  const rows = [
+    { label: '流式输出', text: stream.value !== false ? '开启' : '关闭', fromDefault: stream.fromDefault },
+    { label: '上下文条数', text: String(ctx.value ?? 20), fromDefault: ctx.fromDefault },
+    { label: '上下文摘要', text: summary.value ? '开启' : '关闭', fromDefault: summary.fromDefault },
+  ]
+  if (summary.value) {
+    rows.push({
+      label: '摘要触发阈值',
+      text: `${threshold.value ?? 100} KB`,
+      fromDefault: threshold.fromDefault,
+    })
+  }
+  rows.push(
+    { label: '用户敏感词', text: userSens.value ? '开启' : '关闭', fromDefault: userSens.fromDefault },
+    { label: 'AI输出敏感词', text: aiSens.value ? '开启' : '关闭', fromDefault: aiSens.fromDefault },
+  )
+  if (aiSens.value) {
+    rows.push({
+      label: '处理策略',
+      text: strategy.value === 'block' ? '拦截并提示' : `替换为 ${replaceText.value || '***'}`,
+      fromDefault: strategy.fromDefault || replaceText.fromDefault,
+    })
+  }
+  rows.push({
+    label: '工具调用模式',
+    text: asyncTools.value ? '异步（并行）' : '串行（逐个）',
+    fromDefault: asyncTools.fromDefault,
+  })
+  return rows
+})
 
 /** 版本快照中的模型能力展示（缺失字段用提供商默认值填充） */
 const capabilityPreviewItems = computed(() => {
@@ -1673,6 +1900,7 @@ function serializePromptVariables() {
 }
 
 function addPromptVariable() {
+  if (isVersionPreview.value) return
   promptVariables.value.push({
     _id: `var-${Date.now()}-${Math.random()}`,
     key: '',
@@ -1683,10 +1911,12 @@ function addPromptVariable() {
 }
 
 function removePromptVariable(idx) {
+  if (isVersionPreview.value) return
   promptVariables.value.splice(idx, 1)
 }
 
 function insertPromptVariable(key) {
+  if (isVersionPreview.value) return
   const token = `{{${key}}}`
   agent.systemPrompt = (agent.systemPrompt || '') + (agent.systemPrompt ? ' ' : '') + token
 }
@@ -1705,9 +1935,12 @@ const filteredModels = computed(() => {
   )
 })
 
-const selectedKnowledge = computed(() => {
-  return knowledgeList.value.filter(k => selectedKnowledgeIds.value.has(toBindingId(k.id)))
-})
+const selectedKnowledge = computed(() =>
+  resolveBindingItems(selectedKnowledgeIds.value, knowledgeList.value, {
+    entityLabel: '知识库',
+    catalogReady: bindingCatalogsLoaded.value,
+  })
+)
 
 const filteredKnowledgeList = computed(() => {
   if (!searchText.value) return knowledgeList.value
@@ -1718,23 +1951,36 @@ const filteredKnowledgeList = computed(() => {
   )
 })
 
-const selectedTools = computed(() => {
-  return toolList.value.filter(t => selectedToolIds.value.has(toBindingId(t.id)))
-})
+const selectedTools = computed(() =>
+  resolveBindingItems(selectedToolIds.value, toolList.value, {
+    entityLabel: '工具',
+    catalogReady: bindingCatalogsLoaded.value,
+  })
+)
 
 const filteredToolList = computed(() => {
-  if (!toolSearchText.value) return toolList.value
+  let list = toolList.value
+  if (toolTypeFilter.value) {
+    list = list.filter(t => {
+      const type = t.toolType?.code || t.toolType
+      return type === toolTypeFilter.value
+    })
+  }
+  if (!toolSearchText.value) return list
   const keyword = toolSearchText.value.toLowerCase()
-  return toolList.value.filter(t =>
+  return list.filter(t =>
     t.name?.toLowerCase().includes(keyword) ||
     t.displayName?.toLowerCase().includes(keyword) ||
     t.description?.toLowerCase().includes(keyword)
   )
 })
 
-const selectedMcpServers = computed(() => {
-  return mcpServerList.value.filter(s => selectedMcpServerIds.value.has(toBindingId(s.id)))
-})
+const selectedMcpServers = computed(() =>
+  resolveBindingItems(selectedMcpServerIds.value, mcpServerList.value, {
+    entityLabel: 'MCP Server',
+    catalogReady: bindingCatalogsLoaded.value,
+  })
+)
 
 const filteredMcpServerList = computed(() => {
   if (!mcpSearchText.value) return mcpServerList.value
@@ -1745,9 +1991,45 @@ const filteredMcpServerList = computed(() => {
   )
 })
 
-const selectedSubAgents = computed(() => {
-  return subAgentList.value.filter(s => selectedSubAgentIds.value.has(toBindingId(s.id)))
+const selectedSubAgents = computed(() =>
+  resolveBindingItems(selectedSubAgentIds.value, subAgentList.value, {
+    entityLabel: 'SubAgent',
+    catalogReady: bindingCatalogsLoaded.value,
+  })
+)
+
+const deletedBindingCount = computed(() => {
+  if (!bindingCatalogsLoaded.value) return 0
+  return (
+    countDeletedBindingItems(selectedKnowledge.value)
+    + countDeletedBindingItems(selectedTools.value)
+    + countDeletedBindingItems(selectedMcpServers.value)
+    + countDeletedBindingItems(selectedSubAgents.value)
+  )
 })
+
+/** 已删除绑定分类型明细（Alert / 保存弹窗） */
+const deletedBindingSections = computed(() => [
+  { label: '知识库', items: selectedKnowledge.value },
+  { label: '工具', items: selectedTools.value },
+  { label: 'MCP', items: selectedMcpServers.value },
+  { label: 'SubAgent', items: selectedSubAgents.value },
+])
+
+const deletedBindingDetailLines = computed(() =>
+  formatDeletedBindingDetailLines(deletedBindingSections.value)
+)
+
+function removeAllDeletedBindings() {
+  let n = 0
+  n += removeDeletedIdsFromSet(selectedKnowledgeIds.value, selectedKnowledge.value)
+  n += removeDeletedIdsFromSet(selectedToolIds.value, selectedTools.value)
+  n += removeDeletedIdsFromSet(selectedMcpServerIds.value, selectedMcpServers.value)
+  n += removeDeletedIdsFromSet(selectedSubAgentIds.value, selectedSubAgents.value)
+  if (n > 0) {
+    message.success(`已移除 ${n} 个已删除的绑定`)
+  }
+}
 
 const filteredSubAgentList = computed(() => {
   if (!subAgentSearchText.value) return subAgentList.value
@@ -1912,15 +2194,22 @@ async function loadAgent() {
     selectedKnowledgeIds.value = toBindingIdSet(knowledgeIds)
     selectedSubAgentIds.value = toBindingIdSet(subAgentIds)
 
-    // 加载绑定的工具详情
-    const toolRes = await getAgentToolDetails(agentId)
-    const boundTools = toolRes.data || []
-    selectedToolIds.value = toBindingIdSet(boundTools.map(t => t.id))
+    // 工具绑定 ID（须从接口读取，已删除的工具不会出现在 detail 列表中）
+    const toolIdsRes = await getAgentToolIds(agentId)
+    selectedToolIds.value = toBindingIdSet(toolIdsRes.data)
 
     // MCP Server IDs（从 detail 接口获取，统一字符串避免精度丢失）
     selectedMcpServerIds.value = toBindingIdSet(mcpServerIds)
+
+    if (agent.agentType !== 'workflow') {
+      await loadBindingCatalogs()
+      await mergeBoundToolDetails()
+    } else {
+      bindingCatalogsLoaded.value = true
+    }
     refreshFormBaseline()
   } catch (e) {
+    bindingCatalogsLoaded.value = false
     // interceptor已处理错误提示
   }
 }
@@ -1968,11 +2257,46 @@ function confirmLeaveUnsaved(onConfirm) {
   })
 }
 
+/** 保存/发布前确认：仍绑定已删除的资源 */
+function confirmSaveWithDeletedBindings() {
+  const lines = deletedBindingDetailLines.value
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title: '存在已删除的绑定',
+      width: 480,
+      content: h('div', { class: 'deleted-binding-modal' }, [
+        h('p', { class: 'deleted-binding-modal-tip' },
+          `仍有 ${deletedBindingCount.value} 个已删除的资源处于选中状态，保存后 Agent 可能无法正常使用：`),
+        ...lines.map(line => h('div', { class: 'deleted-binding-modal-line' }, line)),
+        h('p', { class: 'deleted-binding-modal-foot' }, '建议先点击「一键移除已删除绑定」或手动解绑后再保存。'),
+      ]),
+      okText: '仍然保存',
+      okType: 'danger',
+      cancelText: '返回修改',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    })
+  })
+}
+
 function handleGoBack() {
   if (isFormDirty()) {
     confirmLeaveUnsaved(() => router.push('/agents'))
   } else {
     router.push('/agents')
+  }
+}
+
+async function copyAgentId() {
+  if (!agent.id) {
+    message.info('新建保存后生成 ID')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(String(agent.id))
+    message.success('已复制智能体 ID')
+  } catch {
+    message.info(`智能体 ID：${agent.id}`)
   }
 }
 
@@ -2002,12 +2326,46 @@ async function loadToolTypes() {
   }
 }
 
+function normalizeToolRecord(t) {
+  if (!t) return t
+  return {
+    ...t,
+    id: toBindingId(t.id),
+    isSystem: t.isSystem === true || t.isSystem === 1,
+  }
+}
+
+function isSystemTool(t) {
+  return t?.isSystem === true || t?.isSystem === 1
+}
+
+/** 合并工具目录（不整表覆盖，避免切换 Tab 时丢失已绑定/系统工具） */
+function mergeToolsIntoCatalog(incoming) {
+  const byId = new Map()
+  for (const t of toolList.value) {
+    const id = toBindingId(t.id)
+    if (id) byId.set(id, normalizeToolRecord(t))
+  }
+  for (const t of incoming || []) {
+    const id = toBindingId(t.id)
+    if (id) byId.set(id, normalizeToolRecord(t))
+  }
+  for (const id of selectedToolIds.value) {
+    if (!id || byId.has(id)) continue
+    const prev = toolList.value.find(x => toBindingId(x.id) === id)
+    if (prev) byId.set(id, normalizeToolRecord(prev))
+  }
+  toolList.value = [...byId.values()]
+}
+
 async function loadToolList(toolType) {
   try {
-    const params = { pageNum: 1, pageSize: 100, isSystem: false }
+    const params = { pageNum: 1, pageSize: 200 }
     if (toolType) params.toolType = toolType
     const res = await getTools(params)
-    toolList.value = (res.data?.records || []).map(t => ({ ...t, id: toBindingId(t.id) }))
+    const incoming = (res.data?.records || []).map(normalizeToolRecord)
+    mergeToolsIntoCatalog(incoming)
+    await mergeBoundToolDetails()
   } catch (e) {
     console.error('[AgentDetail] 加载工具列表失败:', e)
   }
@@ -2120,6 +2478,33 @@ async function loadSubAgentList() {
   }
 }
 
+/** 进入详情时预加载全部绑定目录，避免未点 Tab 误判「已删除」 */
+async function loadBindingCatalogs() {
+  bindingCatalogsLoaded.value = false
+  try {
+    await Promise.all([
+      loadKnowledgeList(),
+      loadMcpServerList(),
+      loadSubAgentList(),
+      loadToolTypes(),
+      loadToolList(toolTypeFilter.value || undefined),
+    ])
+  } finally {
+    bindingCatalogsLoaded.value = true
+  }
+}
+
+/** 将已绑定工具实体并入目录（listByIds 结果，不受分页/筛选影响） */
+async function mergeBoundToolDetails() {
+  if (!agentId) return
+  try {
+    const res = await getAgentToolDetails(agentId)
+    mergeToolsIntoCatalog((res.data || []).map(normalizeToolRecord))
+  } catch {
+    // ignore
+  }
+}
+
 // Tab 切换刷新
 async function onBindingTabChange(tab) {
   if (tab === 'tools') {
@@ -2185,10 +2570,12 @@ async function handleGenerateQuestions() {
 }
 
 function triggerAvatarUpload() {
+  if (isVersionPreview.value) return
   avatarInputRef.value?.click()
 }
 
 async function onAvatarFileChange(e) {
+  if (isVersionPreview.value) return
   const file = e.target.files[0]
   if (!file) return
   avatarUploading.value = true
@@ -2239,7 +2626,8 @@ async function handleSaveWorkflowBasic() {
   }
 }
 
-async function handleSave() {
+async function handleSave(options = {}) {
+  const { skipDeletedBindingCheck = false } = options
   if (isVersionPreview.value) return false
   if (!agent.name?.trim()) {
     message.warning('请输入 Agent 名称')
@@ -2303,6 +2691,11 @@ async function handleSave() {
       message.warning(`变量名格式不正确: ${v.key}`)
       return false
     }
+  }
+
+  if (!skipDeletedBindingCheck && deletedBindingCount.value > 0) {
+    const proceed = await confirmSaveWithDeletedBindings()
+    if (!proceed) return false
   }
 
   saving.value = true
@@ -2648,7 +3041,11 @@ function confirmRestoreVersion() {
   })
 }
 
-function handlePublish() {
+async function handlePublish() {
+  if (deletedBindingCount.value > 0) {
+    const proceed = await confirmSaveWithDeletedBindings()
+    if (!proceed) return
+  }
   publishDescription.value = ''
   publishModalVisible.value = true
 }
@@ -2656,7 +3053,7 @@ function handlePublish() {
 async function confirmPublishAgent() {
   publishing.value = true
   try {
-    const saved = await handleSave()
+    const saved = await handleSave({ skipDeletedBindingCheck: true })
     if (!saved) {
       return Promise.reject()
     }
@@ -2680,8 +3077,10 @@ function startChat() {
 onMounted(async () => {
   if (agentId) {
     await loadAgent()
+  } else {
+    await Promise.all([loadToolTypes(), loadToolList()])
+    bindingCatalogsLoaded.value = true
   }
-  await Promise.all([loadToolTypes(), loadToolList()])
 })
 
 </script>
@@ -2699,6 +3098,46 @@ onMounted(async () => {
   align-items: flex-start;
   margin-bottom: 24px;
   gap: 16px;
+}
+.page-header-left {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  flex: 1;
+}
+.page-header-titles {
+  min-width: 0;
+  flex: 1;
+}
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.page-title-row .page-title {
+  margin-bottom: 0;
+}
+.btn-agent-id {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+.btn-agent-id:hover {
+  color: #0070f3;
+  background: #f0f7ff;
 }
 .btn-back {
   background: none;
@@ -2806,51 +3245,64 @@ onMounted(async () => {
 .agent-edit-surface {
   position: relative;
 }
-.agent-edit-surface.is-version-preview .content-grid {
-  position: relative;
-  opacity: 0.72;
-  pointer-events: none;
-  user-select: none;
-  filter: grayscale(0.06);
-}
-.agent-edit-surface.is-version-preview .content-grid::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(248, 250, 252, 0.45);
-  cursor: not-allowed;
-  border-radius: 12px;
-  z-index: 2;
-}
+/* 版本预览：仅视觉只读，容器可滚动；交互控件单独禁用 */
+.agent-edit-surface.is-version-preview .content-grid-main .panel-body,
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content-holder),
 .agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content-holder) {
   position: relative;
   opacity: 0.72;
-  pointer-events: none;
   user-select: none;
   filter: grayscale(0.06);
 }
+.agent-edit-surface.is-version-preview .content-grid-main .panel-body::after,
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content-holder)::after,
 .agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content-holder)::after {
   content: '';
   position: absolute;
   inset: 0;
   background: rgba(248, 250, 252, 0.45);
-  cursor: not-allowed;
+  border-radius: 8px;
   z-index: 2;
+  pointer-events: none;
 }
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-nav),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-extra-content),
 .agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-nav) {
   opacity: 1;
-  pointer-events: auto;
   filter: none;
-  cursor: default;
+  position: relative;
+  z-index: 3;
 }
 .agent-edit-surface.is-version-preview :deep(.ant-tabs-tab) {
   cursor: pointer !important;
 }
-.agent-edit-surface.is-version-preview .content-grid :deep(.ant-input),
-.agent-edit-surface.is-version-preview .content-grid :deep(.ant-switch),
+/* 禁止编辑：仅拦截可操作的子元素，不阻断滚动 */
+.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-input),
+.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-input-affix-wrapper),
+.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-select),
+.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-switch),
+.agent-edit-surface.is-version-preview .content-grid-main :deep(textarea),
+.agent-edit-surface.is-version-preview .content-grid-main :deep(button),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input-affix-wrapper),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-select),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-switch),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(textarea),
+.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(button),
 .agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-switch) {
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-switch),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.knowledge-item),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.subagent-item),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.btn-clear),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.tag-remove),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.type-filter-btn),
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.tool-options-bar .ant-switch) {
+  pointer-events: none !important;
   cursor: not-allowed !important;
+}
+/* 绑定列表区域保留滚轮滚动 */
+.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.list-body) {
+  pointer-events: auto;
 }
 .version-preview-banner-top {
   margin-bottom: 16px;
@@ -2900,6 +3352,10 @@ onMounted(async () => {
 .version-drawer-desc {
   font-size: 12px;
   color: #9ca3af;
+}
+.agent-version-drawer :deep(.ant-drawer-body) {
+  overflow-y: auto;
+  max-height: calc(100vh - 108px);
 }
 .version-preview-detail {
   margin-top: 20px;
@@ -3352,13 +3808,19 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 .content-grid-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
+}
+.content-grid-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .sub-config-card-title-row {
   display: flex;
@@ -3474,45 +3936,70 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
 }
-.content-grid-side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.content-grid-side > .panel {
-  flex: 0 0 auto;
-}
 .panel-stretch {
   display: flex;
   flex-direction: column;
-  align-self: stretch;
-}
-.panel-stretch .panel-body {
   flex: 1;
-  min-height: auto;
-  overflow-y: visible;
+  min-height: calc(100vh - 200px);
 }
-.content-grid-side > .panel:first-child .panel-body {
-  min-height: auto;
-  max-height: none;
-  overflow-y: visible;
+.panel--basic.panel-stretch,
+.panel--config-unified.panel-stretch {
+  height: 100%;
 }
-.content-grid-side > .panel:last-child .panel-body {
-  min-height: auto;
-  max-height: none;
-  overflow-y: visible;
+.panel--basic .panel-body,
+.config-tab-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+}
+.panel--config-unified {
+  padding: 0;
+  overflow: hidden;
+}
+.panel-header--config {
+  padding: 20px 20px 0;
+  margin-bottom: 0;
+}
+.config-panel-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+.config-panel-tabs :deep(.ant-tabs-nav) {
+  margin: 0;
+  padding: 12px 20px 0;
+}
+.config-panel-tabs :deep(.ant-tabs-nav)::before {
+  border-bottom-color: #f0f0f0;
+}
+.config-panel-tabs :deep(.ant-tabs-extra-content) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.config-panel-tabs :deep(.ant-tabs-content-holder) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.config-panel-tabs :deep(.ant-tabs-content),
+.config-panel-tabs :deep(.ant-tabs-tabpane) {
+  height: 100%;
+}
+.config-tab-pane-body {
+  padding: 16px 20px 16px 12px;
+}
+.config-tab-pane-body--chat {
+  padding-top: 16px;
 }
 .panel--basic {
-  min-height: auto;
   max-height: none;
 }
 .panel--basic .panel-body {
-  max-height: none;
-  overflow-y: visible;
-}
-.panel--model,
-.panel--chat {
-  max-height: none;
+  padding: 8px 20px 12px 8px;
 }
 .panel--workflow {
   max-height: calc(100vh - 96px);
@@ -3670,6 +4157,61 @@ onMounted(async () => {
   border-radius: 100px;
   font-size: 13px;
   color: #1e40af;
+}
+.binding-deleted-alert {
+  margin-top: 16px;
+}
+.binding-deleted-detail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 4px;
+}
+.binding-deleted-detail-text {
+  flex: 1;
+  min-width: 0;
+}
+.binding-deleted-detail-line {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #52525b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.binding-deleted-detail-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #71717a;
+}
+.btn-remove-deleted-bindings {
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.btn-remove-deleted-bindings:hover {
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25);
+}
+.binding-tag--deleted,
+.preview-tag--deleted {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+.binding-deleted-tag {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 500;
 }
 .tag-remove {
   background: none;
@@ -3847,6 +4389,15 @@ onMounted(async () => {
   border-radius: 100px;
   background: rgba(0, 0, 0, 0.06);
   color: #71717a;
+}
+.tool-system-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 100px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  font-weight: 500;
 }
 .tool-icon-bg {
   background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
@@ -4093,4 +4644,24 @@ onMounted(async () => {
   color: #52525b;
 }
 
+</style>
+
+<style>
+.deleted-binding-modal-tip {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #3f3f46;
+}
+.deleted-binding-modal-line {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #52525b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.deleted-binding-modal-foot {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: #71717a;
+}
 </style>

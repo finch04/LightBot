@@ -2,6 +2,8 @@ package com.lightbot.service.chat;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.dto.ChatAttachmentDTO;
+import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.ChatSession;
@@ -72,33 +74,27 @@ public class TraceMiddleware implements ChatMiddleware {
                     // 2. 异步生成标题
                     taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
 
-                    // 3. 记录发送给LLM的消息列表（用于可观测性排查）
+                    // 3. 记录本轮用户输入（含附件，便于 Trace 排查）
+                    recordUserInputSpan(ctx);
+
+                    // 4. 记录发送给LLM的消息列表（用于可观测性排查）
                     if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
                         List<Map<String, Object>> messageList = ctx.getMessages().stream()
-                                .map(msg -> {
-                                    Map<String, Object> item = new java.util.LinkedHashMap<>();
-                                    item.put("role", msg.getMessageType().getValue());
-                                    String content = extractMessageContent(msg);
-                                    // 截断超长内容（单条消息超过2000字符只保留前2000）
-                                    if (content != null && content.length() > 2000) {
-                                        content = content.substring(0, 2000) + "...(截断)";
-                                    }
-                                    item.put("content", content);
-                                    return item;
-                                }).toList();
+                                .map(this::buildTraceMessageItem)
+                                .toList();
                         ctx.getSpans().add(buildSpan("llm_input", null, "messages_to_llm",
                                 ctx.getStartTime(), 0, "OK",
                                 Map.of("messageCount", messageList.size(), "messages", messageList)));
                     }
 
-                    // 4. 追加AI思考内容到spans
+                    // 5. 追加AI思考内容到spans
                     if (ctx.getReasoningContent().length() > 0) {
                         ctx.getSpans().add(buildSpan("reasoning", null, "ai_reasoning",
                                 ctx.getStartTime(), tEnd - ctx.getStartTime(), "OK",
                                 Map.of("content", ctx.getReasoningContent().toString())));
                     }
 
-                    // 5. 构建Trace并异步写库
+                    // 6. 构建Trace并异步写库
                     persistTrace(ctx, "completed", tEnd - ctx.getStartTime(), null);
                 })
                 .doOnError(e -> {
@@ -109,12 +105,74 @@ public class TraceMiddleware implements ChatMiddleware {
     }
 
     /**
+     * 记录本轮用户问题与附件
+     */
+    private void recordUserInputSpan(ChatContext ctx) {
+        ChatRequest request = ctx.getRequest();
+        if (request == null) {
+            return;
+        }
+        Map<String, Object> attrs = new java.util.LinkedHashMap<>();
+        String text = request.getMessage();
+        if (text != null && !text.isBlank()) {
+            attrs.put("content", text);
+        }
+        List<ChatAttachmentDTO> attachments = request.getAttachments();
+        if (attachments != null && !attachments.isEmpty()) {
+            attrs.put("attachments", attachments.stream().map(this::attachmentToTraceMap).toList());
+        }
+        if (attrs.isEmpty()) {
+            return;
+        }
+        ctx.getSpans().add(buildSpan("user_input", null, "user_message",
+                ctx.getStartTime(), 0, "OK", attrs));
+    }
+
+    private Map<String, Object> attachmentToTraceMap(ChatAttachmentDTO att) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        if (att.getId() != null) {
+            m.put("id", att.getId());
+        }
+        if (att.getType() != null) {
+            m.put("type", att.getType());
+        }
+        if (att.getFileName() != null) {
+            m.put("fileName", att.getFileName());
+        }
+        if (att.getMimeType() != null) {
+            m.put("mimeType", att.getMimeType());
+        }
+        if (att.getPreviewUrl() != null) {
+            m.put("previewUrl", att.getPreviewUrl());
+        }
+        if (att.getObjectKey() != null) {
+            m.put("objectKey", att.getObjectKey());
+        }
+        return m;
+    }
+
+    private Map<String, Object> buildTraceMessageItem(org.springframework.ai.chat.messages.Message msg) {
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("role", msg.getMessageType().getValue());
+        String content = extractMessageContent(msg);
+        if (content != null && content.length() > 2000) {
+            content = content.substring(0, 2000) + "...(截断)";
+        }
+        item.put("content", content);
+        if (msg instanceof UserMessage um && um.getMedia() != null && !um.getMedia().isEmpty()) {
+            item.put("mediaCount", um.getMedia().size());
+            item.put("hasMedia", true);
+        }
+        return item;
+    }
+
+    /**
      * 提取消息内容（兼容各类 Message 类型）
      */
     private String extractMessageContent(org.springframework.ai.chat.messages.Message msg) {
         if (msg instanceof org.springframework.ai.chat.messages.SystemMessage sm) {
             return sm.getText();
-        } else if (msg instanceof org.springframework.ai.chat.messages.UserMessage um) {
+        } else if (msg instanceof UserMessage um) {
             return um.getText();
         } else if (msg instanceof org.springframework.ai.chat.messages.AssistantMessage am) {
             return am.getText();

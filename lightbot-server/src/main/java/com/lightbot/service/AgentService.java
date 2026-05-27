@@ -2,6 +2,7 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
@@ -65,6 +66,14 @@ public interface AgentService extends IService<Agent> {
      * @return Agent 信息和绑定的知识库 ID 列表
      */
     Map<String, Object> getAgentDetail(Long id);
+
+    /**
+     * 按对话配置版本解析 Agent 对话能力（上传/语音/TTS 等）
+     *
+     * @param id            Agent ID
+     * @param configVersion null 或省略=与线上一致；0=暂存草稿；&gt;0=指定发布版本
+     */
+    AgentChatCapabilitiesDTO getChatCapabilities(Long id, Integer configVersion);
 
     /**
      * 删除Agent（逻辑删除）
