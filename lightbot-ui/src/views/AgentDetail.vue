@@ -72,6 +72,8 @@
       @mousedown.capture="blockPreviewInteraction"
       @click.capture="blockPreviewInteraction"
       @keydown.capture="blockPreviewKeydown"
+      @input.capture="blockPreviewInput"
+      @change.capture="blockPreviewInput"
     >
     <div class="content-grid">
       <div class="content-grid-main">
@@ -80,10 +82,10 @@
         <div class="panel-header">
           <h3>基本信息</h3>
         </div>
-        <div class="panel-body">
+        <div class="panel-body" :class="{ 'preview-lock-zone': isVersionPreview }">
         <a-form :model="agent" :label-col="{ span: 6 }">
           <a-form-item label="名称">
-            <a-input v-model:value="agent.name" placeholder="Agent 名称" :disabled="isVersionPreview" />
+            <a-input v-model:value="agent.name" placeholder="Agent 名称" :disabled="isVersionPreview" :readonly="isVersionPreview" />
           </a-form-item>
           <a-form-item label="头像">
             <div class="avatar-upload" :class="{ 'is-readonly': isVersionPreview }">
@@ -99,7 +101,7 @@
             </div>
           </a-form-item>
           <a-form-item label="描述">
-            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" :disabled="isVersionPreview" />
+            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" :disabled="isVersionPreview" :readonly="isVersionPreview" />
           </a-form-item>
           <!-- 类型选择：放在前面，影响后续字段显示 -->
           <a-form-item label="类型">
@@ -117,6 +119,7 @@
                 :rows="6"
                 placeholder="定义 Agent 的行为和角色，可使用 {{变量名}} 引用下方配置的变量..."
                 :disabled="isVersionPreview"
+                :readonly="isVersionPreview"
               />
               <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
                 <button class="btn-ai-icon" :disabled="generatingPrompt || isVersionPreview" @click="handleGeneratePrompt">
@@ -178,7 +181,7 @@
           </div>
           <!-- 欢迎语和推荐问题：对话页展示，工作流型也可配置 -->
           <a-form-item label="欢迎语">
-            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" :disabled="isVersionPreview" />
+            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" :disabled="isVersionPreview" :readonly="isVersionPreview" />
           </a-form-item>
           <a-form-item label="推荐问题">
             <div class="inline-field-block">
@@ -192,7 +195,7 @@
                   type="button"
                   class="btn-add-inline"
                   :disabled="isVersionPreview"
-                  @click="recommendedQuestions.push('')"
+                  @click="addRecommendedQuestion"
                 >
                   <PlusOutlined /> 添加
                 </button>
@@ -201,7 +204,7 @@
               <div v-else class="config-list-scroll config-list-scroll--compact">
                 <div v-for="(q, i) in recommendedQuestions" :key="i" class="list-table-row list-table-row--2col">
                   <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" size="small" :disabled="isVersionPreview" />
-                  <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="recommendedQuestions.splice(i, 1)">
+                  <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeRecommendedQuestion(i)">
                     <CloseOutlined />
                   </button>
                 </div>
@@ -238,7 +241,7 @@
               <span v-if="configTab === 'model'" class="panel-tip">根据提供商动态显示</span>
             </template>
             <a-tab-pane key="model" tab="模型参数">
-              <div class="config-tab-pane-body">
+              <div class="config-tab-pane-body" :class="{ 'preview-lock-zone': isVersionPreview }">
         <a-form :model="agentConfig" :label-col="{ span: 6 }">
 
           <a-form-item label="提供商">
@@ -457,7 +460,7 @@
               </div>
             </a-tab-pane>
             <a-tab-pane key="chat" tab="对话配置">
-              <div class="config-tab-pane-body config-tab-pane-body--chat">
+              <div class="config-tab-pane-body config-tab-pane-body--chat" :class="{ 'preview-lock-zone': isVersionPreview }">
             <a-form :model="agentConfig" :label-col="{ span: 6 }" class="panel-form">
 
               <a-form-item label="流式输出">
@@ -731,6 +734,7 @@
     >
       <!-- 工具绑定 -->
       <a-tab-pane key="tools" tab="工具">
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
         <div class="tool-options-bar">
           <div class="tool-option-item">
             <span class="tool-option-label">工具调用模式</span>
@@ -807,7 +811,7 @@
                 :key="t.name"
                 class="knowledge-item"
                 :class="{ selected: selectedToolIds.has(toBindingId(t.id)), 'is-preview-locked': isVersionPreview }"
-                @click="toggleTool(t)"
+                @click="!isVersionPreview && toggleTool(t)"
               >
                 <div class="item-icon tool-icon-bg">
                   <ToolOutlined />
@@ -830,10 +834,12 @@
             </div>
           </div>
         </div>
+        </div>
       </a-tab-pane>
 
       <!-- 知识库绑定 -->
       <a-tab-pane key="knowledge" tab="知识库">
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div class="selected-header">
@@ -879,7 +885,7 @@
                 :key="k.id"
                 class="knowledge-item"
                 :class="{ selected: selectedKnowledgeIds.has(toBindingId(k.id)), 'is-preview-locked': isVersionPreview }"
-                @click="toggleKnowledge(k)"
+                @click="!isVersionPreview && toggleKnowledge(k)"
               >
                 <div class="item-icon knowledge-icon">
                   <BookOutlined />
@@ -898,10 +904,12 @@
             </div>
           </div>
         </div>
+        </div>
       </a-tab-pane>
 
       <!-- MCP -->
       <a-tab-pane key="mcp" tab="MCP">
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
         <div class="knowledge-bind">
           <div class="selected-knowledge">
             <div class="selected-header">
@@ -948,7 +956,7 @@
                 :key="s.id"
                 class="knowledge-item"
                 :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
-                @click="toggleMcpServer(s)"
+                @click="!isVersionPreview && toggleMcpServer(s)"
               >
                 <div class="item-icon mcp-icon-bg">
                   <ApiOutlined />
@@ -967,11 +975,13 @@
             </div>
           </div>
         </div>
+        </div>
       </a-tab-pane>
 
 
       <!-- SubAgent 绑定 -->
       <a-tab-pane key="subagents" tab="SubAgents">
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
         <div class="subagent-bind">
           <div class="selected-subagents">
             <div class="selected-header">
@@ -1018,7 +1028,7 @@
                 :key="s.id"
                 class="subagent-item"
                 :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
-                @click="toggleSubAgent(s)"
+                @click="!isVersionPreview && toggleSubAgent(s)"
               >
                 <div class="item-icon subagent-icon">
                   <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
@@ -1040,6 +1050,7 @@
               </div>
             </div>
           </div>
+        </div>
         </div>
       </a-tab-pane>
       <!-- Skill（暂未开发） -->
@@ -1367,47 +1378,28 @@ const validPromptVariables = computed(() =>
 const isVersionPreview = computed(() => selectedVersion.value !== 'draft' && selectedVersion.value != null)
 
 /** 版本预览下禁止操作的交互元素（Tab 切换除外） */
-const PREVIEW_BLOCK_SELECTOR = [
-  '.ant-input',
-  '.ant-input-affix-wrapper',
-  '.ant-input-number',
-  '.ant-select',
-  '.ant-switch',
-  '.ant-slider',
-  'button',
-  '.knowledge-item',
-  '.subagent-item',
-  '.avatar-overlay',
-  '.avatar-upload',
-  '.type-filter-btn',
-  '.btn-clear',
-  '.tag-remove',
-  '.btn-add-inline',
-  '.btn-ai-sm',
-  '.btn-ai-icon',
-  '.var-insert-btn',
-  '.tool-options-bar',
-  '.prompt-wrapper button',
-].join(', ')
+/** 预览态下仍允许交互的区域（Tab 切换、返回编辑链接） */
+const PREVIEW_ALLOW_SELECTOR = '.ant-tabs-nav, .ant-tabs-tab, .version-preview-banner-top, .version-preview-banner-top .link-btn'
 
 function blockPreviewInteraction(e) {
   if (!isVersionPreview.value) return
-  if (e.target.closest('.ant-tabs-nav, .version-preview-banner-top')) return
-  const hit = e.target.closest(PREVIEW_BLOCK_SELECTOR)
-  if (!hit) return
-  if (hit.closest('.ant-tabs-tab')) return
+  if (e.target.closest(PREVIEW_ALLOW_SELECTOR)) return
   e.preventDefault()
-  e.stopPropagation()
+  e.stopImmediatePropagation()
 }
 
 function blockPreviewKeydown(e) {
   if (!isVersionPreview.value) return
-  if (e.target.closest('.ant-tabs-nav')) return
-  const tag = e.target.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.closest('.ant-input')) {
-    e.preventDefault()
-    e.stopPropagation()
-  }
+  if (e.target.closest(PREVIEW_ALLOW_SELECTOR)) return
+  e.preventDefault()
+  e.stopImmediatePropagation()
+}
+
+function blockPreviewInput(e) {
+  if (!isVersionPreview.value) return
+  if (e.target.closest(PREVIEW_ALLOW_SELECTOR)) return
+  e.preventDefault()
+  e.stopImmediatePropagation()
 }
 
 const previewModelLabel = computed(() => {
@@ -1867,10 +1859,12 @@ function syncSensitiveWordsFromConfig(parsed) {
 }
 
 function addUserSensitiveWord() {
+  if (isVersionPreview.value) return
   userSensitiveWords.value.push('')
 }
 
 function removeUserSensitiveWord(idx) {
+  if (isVersionPreview.value) return
   userSensitiveWords.value.splice(idx, 1)
   if (userSensitiveWords.value.length === 0) {
     userSensitiveWords.value.push('')
@@ -1878,10 +1872,12 @@ function removeUserSensitiveWord(idx) {
 }
 
 function addSensitiveWord() {
+  if (isVersionPreview.value) return
   sensitiveWords.value.push('')
 }
 
 function removeSensitiveWord(idx) {
+  if (isVersionPreview.value) return
   sensitiveWords.value.splice(idx, 1)
   if (sensitiveWords.value.length === 0) {
     sensitiveWords.value.push('')
@@ -1919,6 +1915,18 @@ function insertPromptVariable(key) {
   if (isVersionPreview.value) return
   const token = `{{${key}}}`
   agent.systemPrompt = (agent.systemPrompt || '') + (agent.systemPrompt ? ' ' : '') + token
+}
+
+function addRecommendedQuestion() {
+  if (isVersionPreview.value) return
+  if (recommendedQuestions.value.length < 3) {
+    recommendedQuestions.value.push('')
+  }
+}
+
+function removeRecommendedQuestion(idx) {
+  if (isVersionPreview.value) return
+  recommendedQuestions.value.splice(idx, 1)
 }
 
 const avatarUrl = computed(() => {
@@ -2021,6 +2029,7 @@ const deletedBindingDetailLines = computed(() =>
 )
 
 function removeAllDeletedBindings() {
+  if (isVersionPreview.value) return
   let n = 0
   n += removeDeletedIdsFromSet(selectedKnowledgeIds.value, selectedKnowledge.value)
   n += removeDeletedIdsFromSet(selectedToolIds.value, selectedTools.value)
@@ -2093,6 +2102,7 @@ async function loadModels(providerId) {
 const currentConfigFieldKeys = ref(new Set())
 
 async function onProviderChange(providerId) {
+  if (isVersionPreview.value) return
   // 切换提供商时，只清除模型参数调优字段，保留对话配置
   agentConfig.modelId = undefined
   for (const key of currentConfigFieldKeys.value) {
@@ -2105,6 +2115,7 @@ async function onProviderChange(providerId) {
 }
 
 function confirmRestoreDefaults() {
+  if (isVersionPreview.value) return
   Modal.confirm({
     title: '恢复默认配置',
     content: '确定要将当前提供商下的模型参数恢复为默认值吗？未保存的修改将被覆盖。',
@@ -2128,6 +2139,7 @@ function confirmRestoreDefaults() {
 }
 
 function restoreDefaults() {
+  if (isVersionPreview.value) return
   for (const field of modelTuneFields.value) {
     if (field.defaultValue !== undefined) {
       agentConfig[field.key] = field.defaultValue
@@ -2543,6 +2555,7 @@ function clearSelectedKnowledge() {
 }
 
 async function handleGeneratePrompt() {
+  if (isVersionPreview.value) return
   generatingPrompt.value = true
   try {
     const res = await generateAgentPrompt(agentId)
@@ -2556,6 +2569,7 @@ async function handleGeneratePrompt() {
 }
 
 async function handleGenerateQuestions() {
+  if (isVersionPreview.value) return
   generatingQuestions.value = true
   try {
     const res = await generateAgentQuestions(agentId)
@@ -3245,64 +3259,31 @@ onMounted(async () => {
 .agent-edit-surface {
   position: relative;
 }
-/* 版本预览：仅视觉只读，容器可滚动；交互控件单独禁用 */
-.agent-edit-surface.is-version-preview .content-grid-main .panel-body,
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content-holder),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content-holder) {
+/* 版本预览：锁定区内所有子元素不可点，容器本身可滚动 */
+.agent-edit-surface.is-version-preview .preview-lock-zone {
   position: relative;
   opacity: 0.72;
   user-select: none;
   filter: grayscale(0.06);
+  pointer-events: auto;
 }
-.agent-edit-surface.is-version-preview .content-grid-main .panel-body::after,
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content-holder)::after,
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content-holder)::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(248, 250, 252, 0.45);
-  border-radius: 8px;
-  z-index: 2;
-  pointer-events: none;
+.agent-edit-surface.is-version-preview .preview-lock-zone * {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
 }
 .agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-nav),
 .agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-extra-content),
 .agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-nav) {
   opacity: 1;
   filter: none;
-  position: relative;
-  z-index: 3;
+  pointer-events: auto;
 }
 .agent-edit-surface.is-version-preview :deep(.ant-tabs-tab) {
   cursor: pointer !important;
+  pointer-events: auto !important;
 }
-/* 禁止编辑：仅拦截可操作的子元素，不阻断滚动 */
-.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-input),
-.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-input-affix-wrapper),
-.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-select),
-.agent-edit-surface.is-version-preview .content-grid-main :deep(.ant-switch),
-.agent-edit-surface.is-version-preview .content-grid-main :deep(textarea),
-.agent-edit-surface.is-version-preview .content-grid-main :deep(button),
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input),
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input-affix-wrapper),
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-select),
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(.ant-switch),
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(textarea),
-.agent-edit-surface.is-version-preview .config-panel-tabs--preview :deep(.ant-tabs-content) :deep(button),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-input),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.ant-tabs-content) :deep(.ant-switch),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.knowledge-item),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.subagent-item),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.btn-clear),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.tag-remove),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.type-filter-btn),
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.tool-options-bar .ant-switch) {
-  pointer-events: none !important;
-  cursor: not-allowed !important;
-}
-/* 绑定列表区域保留滚轮滚动 */
-.agent-edit-surface.is-version-preview .binding-tabs--preview :deep(.list-body) {
-  pointer-events: auto;
+.agent-edit-surface.is-version-preview .avatar-upload.is-readonly {
+  pointer-events: none;
 }
 .version-preview-banner-top {
   margin-bottom: 16px;
