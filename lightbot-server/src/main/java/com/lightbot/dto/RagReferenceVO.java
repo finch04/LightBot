@@ -1,5 +1,7 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -24,11 +26,14 @@ public class RagReferenceVO {
     private Double score;
 
     @Schema(description = "知识库ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeId;
 
     @Schema(description = "文档ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long documentId;
 
     @Schema(description = "分块ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long chunkId;
 }

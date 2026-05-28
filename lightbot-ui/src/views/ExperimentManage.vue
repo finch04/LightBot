@@ -14,8 +14,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <button class="btn-primary" @click="openCreateDialog()">
           <PlusOutlined /> 创建实验
@@ -29,6 +29,7 @@
       :pagination="{ pageSize: 20 }"
       rowKey="id"
       size="middle"
+      :loading="loading"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
@@ -242,6 +243,7 @@ import { getEvaluators, getEvaluatorVersions } from '../api/evaluator'
 
 const router = useRouter()
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const createDialogVisible = ref(false)
 const submitting = ref(false)
@@ -284,10 +286,15 @@ onMounted(() => {
 watch(searchText, () => loadData())
 
 async function loadData() {
-  const params = { pageNum: 1, pageSize: 100 }
-  if (searchText.value) params.keyword = searchText.value
-  const res = await getExperiments(params)
-  list.value = res.data?.records || []
+  loading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 100 }
+    if (searchText.value) params.keyword = searchText.value
+    const res = await getExperiments(params)
+    list.value = res.data?.records || []
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadDropdowns() {

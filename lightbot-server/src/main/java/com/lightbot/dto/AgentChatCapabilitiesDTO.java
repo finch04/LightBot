@@ -1,5 +1,7 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -47,9 +49,11 @@ public class AgentChatCapabilitiesDTO {
     private java.util.List<String> allowedFileMimeTypes;
 
     @Schema(description = "图片最大字节数（上传校验用）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long maxImageBytes;
 
     @Schema(description = "视频最大字节数（上传校验用）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long maxVideoBytes;
 
     @Schema(description = "图片最大体积展示文案，如 4MB")
@@ -62,6 +66,7 @@ public class AgentChatCapabilitiesDTO {
     private Integer maxAttachmentsPerMessage;
 
     @Schema(description = "文档最大字节数")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long maxDocumentBytes;
 
     @Schema(description = "文档最大体积展示文案")

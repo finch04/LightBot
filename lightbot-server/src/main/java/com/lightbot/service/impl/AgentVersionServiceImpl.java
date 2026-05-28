@@ -536,6 +536,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         agentService.updateToolBindings(agentId, toLongList(payload.get("toolIds")));
         agentService.updateMcpServerBindings(agentId, toLongList(payload.get("mcpServerIds")));
         agentService.updateSubAgentBindings(agentId, toLongList(payload.get("subAgentIds")));
+        agentService.updateSkillBindings(agentId, toLongList(payload.get("skillIds")));
 
         saveDraftConfig(agent, snap, 0, 0);
         updateAgentStatusAfterRestore(agent);

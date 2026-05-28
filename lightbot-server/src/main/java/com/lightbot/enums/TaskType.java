@@ -19,7 +19,9 @@ public enum TaskType {
     DOCUMENT_UPLOAD("document_upload", "文档上传", "documentUploadExecutor"),
     DOCUMENT_INGEST("document_ingest", "文档入库", "documentIngestExecutor"),
     DOCUMENT_OCR("document_ocr", "文档OCR", "documentOcrExecutor"),
-    EXPERIMENT_RUN("experiment_run", "实验执行", "experimentRunExecutor");
+    EXPERIMENT_RUN("experiment_run", "实验执行", "experimentRunExecutor"),
+    BENCHMARK_GENERATE("benchmark_generate", "基准生成", "benchmarkGenerateExecutor"),
+    RAG_EVALUATION("rag_evaluation", "RAG评估", "ragEvaluationExecutor");
 
     @EnumValue
     private final String code;

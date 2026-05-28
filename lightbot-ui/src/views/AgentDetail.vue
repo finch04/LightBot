@@ -244,28 +244,12 @@
               <div class="config-tab-pane-body" :class="{ 'preview-lock-zone': isVersionPreview }">
         <a-form :model="agentConfig" :label-col="{ span: 6 }">
 
-          <a-form-item label="提供商">
-            <a-select v-model:value="agentConfig.providerId" placeholder="选择提供商" style="width: 100%" :disabled="isVersionPreview" @change="onProviderChange">
-              <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
-                {{ p.name }} ({{ p.type?.code || p.type }})
-              </a-select-option>
-            </a-select>
-          </a-form-item>
           <a-form-item label="模型">
-            <a-select
-              v-model:value="agentConfig.modelId"
-              placeholder="选择模型"
-              show-search
-              :filter-option="false"
+            <ModelSelect
+              :model-value="modelSelectValue"
               :disabled="isVersionPreview"
-              @search="val => modelSearchText = val"
-              style="width: 100%"
-              allow-clear
-            >
-              <a-select-option v-for="m in filteredModels" :key="m.modelId" :value="m.modelId">
-                {{ m.name || m.modelId }}
-              </a-select-option>
-            </a-select>
+              @change="onModelSelectChange"
+            />
           </a-form-item>
 
           <!-- 模型能力（嵌套在模型参数内，参考变量配置） -->
@@ -477,6 +461,20 @@
                   </a-tooltip>
                 </div>
                 <div class="param-hint">支持 MD/TXT/PDF/Word/PPT/Excel/CSV/HTML 等</div>
+              </a-form-item>
+              <a-form-item label="内容安全扫描" v-if="agentConfig.enableFileRead">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <a-switch v-model:checked="agentConfig.enableContentSecurityScan" :disabled="isVersionPreview" />
+                  <span class="tool-option-value">{{ agentConfig.enableContentSecurityScan ? '已启用' : '未启用' }}</span>
+                  <a-tooltip
+                    title="扫描上传文件中的提示词注入和敏感信息，开启后检测到风险将拒绝处理"
+                    overlay-class-name="no-flip-tooltip"
+                    :overlay-style="{ maxWidth: '360px' }"
+                    placement="topLeft"
+                  >
+                    <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                  </a-tooltip>
+                </div>
               </a-form-item>
               <a-form-item label="流式输出">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -1449,7 +1447,7 @@ import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
 import { getModelProviders, getProviderConfigFields, getProviderModelCapabilities } from '../api/modelProvider'
-import { getModelsByProvider } from '../api/model'
+import ModelSelect from '../components/ModelSelect.vue'
 import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
 import { getEnabledSubAgents } from '../api/subagent'
@@ -1638,6 +1636,7 @@ const agent = reactive({
 const agentConfig = reactive({
   providerId: null,
   enableFileRead: false,
+  enableContentSecurityScan: true,
   streamOutput: true,
   userSensitiveFilterEnabled: false,
   userSensitiveWords: [],
@@ -1768,7 +1767,6 @@ function toggleAllCapabilities() {
 }
 
 const modelList = ref([])
-const modelSearchText = ref('')
 const selectedKnowledgeIds = ref(new Set())
 const knowledgeList = ref([])
 /** 绑定资源目录是否已加载（避免 Tab 懒加载导致误判「已删除」） */
@@ -1802,6 +1800,7 @@ const formBaselineSnapshot = ref(null)
 /** 对话配置版本快照默认值（与编排页表单默认一致） */
 const CHAT_CONFIG_PREVIEW_DEFAULTS = {
   enableFileRead: false,
+  enableContentSecurityScan: true,
   streamOutput: true,
   maxContextMessages: 20,
   enableSummary: false,
@@ -1825,6 +1824,7 @@ function chatConfigPreviewValue(key) {
 const chatConfigPreviewRows = computed(() => {
   if (!versionPreview.value) return []
   const fileRead = chatConfigPreviewValue('enableFileRead')
+  const contentScan = chatConfigPreviewValue('enableContentSecurityScan')
   const stream = chatConfigPreviewValue('streamOutput')
   const ctx = chatConfigPreviewValue('maxContextMessages')
   const summary = chatConfigPreviewValue('enableSummary')
@@ -1836,6 +1836,7 @@ const chatConfigPreviewRows = computed(() => {
   const asyncTools = chatConfigPreviewValue('asyncToolCalls')
   const rows = [
     { label: '文件读取', text: fileRead.value ? '开启' : '关闭', fromDefault: fileRead.fromDefault },
+    { label: '内容安全扫描', text: contentScan.value ? '开启' : '关闭', fromDefault: contentScan.fromDefault },
     { label: '流式输出', text: stream.value !== false ? '开启' : '关闭', fromDefault: stream.fromDefault },
     { label: '上下文条数', text: String(ctx.value ?? 20), fromDefault: ctx.fromDefault },
     { label: '上下文摘要', text: summary.value ? '开启' : '关闭', fromDefault: summary.fromDefault },
@@ -2060,14 +2061,29 @@ const avatarUrl = computed(() => {
   return agent.avatar
 })
 
-const filteredModels = computed(() => {
-  if (!modelSearchText.value) return modelList.value
-  const keyword = modelSearchText.value.toLowerCase()
-  return modelList.value.filter(m =>
-    m.modelId?.toLowerCase().includes(keyword) ||
-    m.name?.toLowerCase().includes(keyword)
-  )
+/** ModelSelect 复合值 */
+const modelSelectValue = computed(() => {
+  const pid = agentConfig.providerId
+  const mid = agentConfig.modelId
+  if (pid && mid) return `${String(pid)}:${String(mid)}`
+  return null
 })
+
+async function onModelSelectChange(providerId, modelId) {
+  if (isVersionPreview.value) return
+  const prevProviderId = agentConfig.providerId
+  agentConfig.providerId = providerId ? String(providerId) : providerId
+  agentConfig.modelId = modelId ? String(modelId) : modelId
+  if (providerId && String(prevProviderId) !== String(providerId)) {
+    // 切换提供商时，清除旧模型参数并加载新配置
+    for (const key of currentConfigFieldKeys.value) {
+      if (key !== 'providerId' && key !== 'modelId') {
+        delete agentConfig[key]
+      }
+    }
+    await loadConfigFields(providerId)
+  }
+}
 
 const selectedKnowledge = computed(() =>
   resolveBindingItems(selectedKnowledgeIds.value, knowledgeList.value, {
@@ -2231,38 +2247,8 @@ async function loadConfigFields(providerId) {
   }
 }
 
-async function loadModels(providerId) {
-  if (!providerId) {
-    modelList.value = []
-    return
-  }
-  try {
-    const res = await getModelsByProvider(providerId)
-    // 只显示对话模型
-    modelList.value = (res.data || []).filter(m => {
-      const type = m.type?.code || m.type
-      return type === 'llm'
-    })
-  } catch (e) {
-    modelList.value = []
-  }
-}
-
 // 记录当前 configFields 的 key，用于切换提供商时只清除模型参数
 const currentConfigFieldKeys = ref(new Set())
-
-async function onProviderChange(providerId) {
-  if (isVersionPreview.value) return
-  // 切换提供商时，只清除模型参数调优字段，保留对话配置
-  agentConfig.modelId = undefined
-  for (const key of currentConfigFieldKeys.value) {
-    if (key !== 'providerId' && key !== 'modelId') {
-      delete agentConfig[key]
-    }
-  }
-  modelSearchText.value = ''
-  await Promise.all([loadConfigFields(providerId), loadModels(providerId)])
-}
 
 function confirmRestoreDefaults() {
   if (isVersionPreview.value) return
@@ -2349,9 +2335,11 @@ async function loadAgent() {
       } catch { recommendedQuestions.value = [] }
     }
 
-    // 加载提供商列表、配置字段和模型列表
+    // 加载提供商列表和配置字段
     await loadProviders()
-    await Promise.all([loadConfigFields(agentConfig.providerId), loadModels(agentConfig.providerId)])
+    if (agentConfig.providerId) {
+      await loadConfigFields(agentConfig.providerId)
+    }
 
     selectedKnowledgeIds.value = toBindingIdSet(knowledgeIds)
     selectedSubAgentIds.value = toBindingIdSet(subAgentIds)
@@ -3014,6 +3002,7 @@ async function openVersionDrawer() {
       loadKnowledgeList(),
       loadMcpServerList(),
       loadSubAgentList(),
+      loadSkillList(),
       listAgentVersions(agentId).then(res => {
         versionList.value = res.data || []
       })
@@ -3059,6 +3048,7 @@ async function applyVersionPreviewToForm(data) {
   selectedMcpServerIds.value = toBindingIdSet(data.mcpServerIds)
   selectedSubAgentIds.value = toBindingIdSet(data.subAgentIds)
   selectedToolIds.value = toBindingIdSet(data.toolIds)
+  selectedSkillIds.value = toBindingIdSet(data.skillIds)
 
   if (data.tools?.length) {
     for (const t of data.tools) {
@@ -3088,10 +3078,17 @@ async function applyVersionPreviewToForm(data) {
       }
     }
   }
+  if (data.skills?.length) {
+    for (const s of data.skills) {
+      if (!skillList.value.some(x => String(x.id) === String(s.id))) {
+        skillList.value.push({ ...s, id: String(s.id) })
+      }
+    }
+  }
 
   const providerId = agentConfig.providerId
   if (providerId) {
-    await Promise.all([loadConfigFields(providerId), loadModels(providerId)])
+    await loadConfigFields(providerId)
     // 快照未记录的模型能力字段保持不填，避免沿用上一版本残留
     for (const field of capabilityFields.value) {
       if (modelParams[field.key] === undefined) {
@@ -3153,6 +3150,9 @@ function normalizeVersionDetailData(data) {
   const subAgentIds = data.subAgentIds?.length
     ? data.subAgentIds
     : (payload.subAgentIds || payload.subagents || [])
+  const skillIds = data.skillIds?.length
+    ? data.skillIds
+    : (payload.skillIds || payload.skills || [])
 
   if (payload.config) {
     mergeCapabilityFromConfig(modelParams, payload.config)
@@ -3166,10 +3166,12 @@ function normalizeVersionDetailData(data) {
     toolIds: (toolIds || []).map(String),
     mcpServerIds: (mcpServerIds || []).map(String),
     subAgentIds: (subAgentIds || []).map(String),
+    skillIds: (skillIds || []).map(String),
     knowledges: data.knowledges || [],
     tools: data.tools || [],
     mcpServers: data.mcpServers || [],
     subAgents: data.subAgents || [],
+    skills: data.skills || [],
     description: data.description,
     payload
   }

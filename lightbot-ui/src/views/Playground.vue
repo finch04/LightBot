@@ -104,29 +104,11 @@
         <div class="config-section">
           <div class="config-section-title">模型配置</div>
           <div class="model-select-row">
-            <a-select
-              v-model:value="inst.providerId"
-              placeholder="选择提供商"
-              style="flex: 1"
+            <ModelSelect
+              :model-value="getInstModelValue(inst)"
               size="small"
-              @change="onProviderChange(inst, $event)"
-            >
-              <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-select-option>
-            </a-select>
-            <a-select
-              v-model:value="inst.modelId"
-              placeholder="选择模型"
-              style="flex: 1"
-              size="small"
-              show-search
-              :filter-option="filterModel"
-            >
-              <a-select-option v-for="m in inst.modelList" :key="m.modelId" :value="m.modelId">
-                {{ m.name || m.modelId }}
-              </a-select-option>
-            </a-select>
+              @change="(pid, mid) => onInstModelChange(inst, pid, mid)"
+            />
           </div>
           <div class="model-params" v-if="inst.configFields.length > 0">
             <div class="param-row" v-for="field in inst.configFields" :key="field.key">
@@ -257,13 +239,12 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getPrompts, getPromptVersions, getPromptVersionDetail, runPromptStream } from '../api/prompt'
-import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
-import { getModelsByProvider } from '../api/model'
+import { getProviderConfigFields } from '../api/modelProvider'
+import ModelSelect from '../components/ModelSelect.vue'
 import CreatePromptModal from '../components/CreatePromptModal.vue'
 
 const router = useRouter()
 const promptList = ref([])
-const providerList = ref([])
 let instanceIdCounter = 1
 const instances = ref([])
 
@@ -302,7 +283,6 @@ function addInstance(src) {
     inst.variables = (src.variables || []).map(v => ({ ...v }))
     inst.toolConfig = src.toolConfig || '{}'
     if (inst.providerId) {
-      loadModelsForInstance(inst, inst.providerId)
       loadConfigFieldsForInstance(inst, inst.providerId)
     }
   }
@@ -349,7 +329,6 @@ async function onVersionChange(inst, version) {
         const cfg = typeof detail.modelConfig === 'string' ? JSON.parse(detail.modelConfig) : detail.modelConfig
         if (cfg.providerId) {
           inst.providerId = cfg.providerId
-          await loadModelsForInstance(inst, cfg.providerId)
           await loadConfigFieldsForInstance(inst, cfg.providerId)
           if (cfg.modelId) inst.modelId = cfg.modelId
           for (const [k, v] of Object.entries(cfg)) {
@@ -376,12 +355,19 @@ async function onVersionChange(inst, version) {
   } catch { /* ignore */ }
 }
 
-// 模型相关
-async function loadModelsForInstance(inst, providerId) {
-  try {
-    const res = await getModelsByProvider(providerId)
-    inst.modelList = (res.data || []).filter(m => m.type === 'llm')
-  } catch { inst.modelList = [] }
+function getInstModelValue(inst) {
+  if (inst.providerId && inst.modelId) return `${String(inst.providerId)}:${String(inst.modelId)}`
+  return undefined
+}
+
+async function onInstModelChange(inst, providerId, modelId) {
+  const prevProviderId = inst.providerId
+  inst.providerId = providerId ? String(providerId) : providerId
+  inst.modelId = modelId ? String(modelId) : modelId
+  if (providerId && String(prevProviderId) !== String(providerId)) {
+    inst.modelConfig = {}
+    await loadConfigFieldsForInstance(inst, providerId)
+  }
 }
 
 async function loadConfigFieldsForInstance(inst, providerId) {
@@ -395,21 +381,6 @@ async function loadConfigFieldsForInstance(inst, providerId) {
       }
     }
   } catch { inst.configFields = [] }
-}
-
-async function onProviderChange(inst, providerId) {
-  inst.modelId = null
-  inst.modelConfig = {}
-  inst.configFields = []
-  inst.modelList = []
-  await Promise.all([
-    loadModelsForInstance(inst, providerId),
-    loadConfigFieldsForInstance(inst, providerId),
-  ])
-}
-
-function filterModel(input, option) {
-  return (option?.value || '').toLowerCase().includes(input.toLowerCase())
 }
 
 // 变量检测
@@ -506,12 +477,8 @@ onMounted(async () => {
   const inst = createInstance()
   instances.value.push(inst)
 
-  const [promptRes, providerRes] = await Promise.all([
-    getPrompts({ pageNum: 1, pageSize: 100 }).catch(() => ({ data: { records: [] } })),
-    getModelProviders({ pageNum: 1, pageSize: 50 }).catch(() => ({ data: { records: [] } })),
-  ])
+  const promptRes = await getPrompts({ pageNum: 1, pageSize: 100 }).catch(() => ({ data: { records: [] } }))
   promptList.value = promptRes.data?.records || []
-  providerList.value = providerRes.data?.records || []
 })
 
 // 快速创建Prompt

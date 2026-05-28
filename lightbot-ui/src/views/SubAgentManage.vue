@@ -1,6 +1,7 @@
 <template>
   <div class="subagent-manage">
     <!-- 卡片列表 -->
+    <a-spin :spinning="loading">
     <div class="subagent-grid">
       <div v-for="s in list" :key="s.id" class="subagent-card" @click="openDetail(s)">
         <div class="card-top">
@@ -43,6 +44,7 @@
         <p>暂无 SubAgent，点击右上角创建</p>
       </div>
     </div>
+    </a-spin>
 
     <!-- 新增/编辑弹窗 -->
     <a-modal

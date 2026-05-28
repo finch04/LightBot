@@ -106,6 +106,13 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         syncAllProvidersCache();
     }
 
+    @Override
+    public List<ModelProvider> listAllActive() {
+        return list(new LambdaQueryWrapper<ModelProvider>()
+                .eq(ModelProvider::getStatus, CommonStatus.ACTIVE)
+                .orderByDesc(ModelProvider::getCreateTime));
+    }
+
     /**
      * 刷新全部提供商列表缓存
      */

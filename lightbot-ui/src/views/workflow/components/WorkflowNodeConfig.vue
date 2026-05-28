@@ -36,29 +36,13 @@
     <template v-if="node.type === 'llm'">
       <a-form-item required>
         <template #label>
-          <ConfigFieldLabel label="模型提供商" :tip="hint('llm', 'providerId')" />
-        </template>
-        <a-select v-model:value="node.data.providerId" placeholder="选择模型提供商" @change="onLlmProviderChange">
-          <a-select-option v-for="p in providers" :key="p.id" :value="p.id">
-            {{ p.name }} ({{ p.type?.code || p.type }})
-          </a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item required>
-        <template #label>
           <ConfigFieldLabel label="模型" :tip="hint('llm', 'modelId')" />
         </template>
-        <a-select
-          v-model:value="node.data.modelId"
-          placeholder="选择具体模型"
-          show-search
-          :disabled="!node.data.providerId"
-          @change="onLlmModelChange"
-        >
-          <a-select-option v-for="m in llmModelList" :key="m.modelId" :value="m.modelId">
-            {{ m.name || m.modelId }}
-          </a-select-option>
-        </a-select>
+        <ModelSelect
+          :model-value="nodeModelSelectValue"
+          :disabled="readonly"
+          @change="onNodeModelChange"
+        />
       </a-form-item>
       <a-form-item>
         <template #label>
@@ -94,22 +78,12 @@
         </template>
         <VariablePickerInput v-model="node.data.inputVariable" placeholder="{{query}}" :disabled="readonly" @change="emitSync" />
       </a-form-item>
-      <a-form-item label="模型提供商" required>
-        <a-select v-model:value="node.data.providerId" placeholder="选择模型" @change="onLlmProviderChange">
-          <a-select-option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</a-select-option>
-        </a-select>
-      </a-form-item>
       <a-form-item label="模型" required>
-        <a-select
-          v-model:value="node.data.modelId"
-          :disabled="!node.data.providerId"
-          placeholder="选择具体模型"
-          @change="onLlmModelChange"
-        >
-          <a-select-option v-for="m in llmModelList" :key="m.modelId" :value="m.modelId">
-            {{ m.name || m.modelId }}
-          </a-select-option>
-        </a-select>
+        <ModelSelect
+          :model-value="nodeModelSelectValue"
+          :disabled="readonly"
+          @change="onNodeModelChange"
+        />
       </a-form-item>
       <a-form-item required>
         <template #label>
@@ -333,15 +307,12 @@
       <a-form-item label="输入变量" required>
         <a-input v-model:value="node.data.inputVariable" placeholder="{{input}}" @change="emitSync" />
       </a-form-item>
-      <a-form-item label="模型提供商" required>
-        <a-select v-model:value="node.data.providerId" @change="onLlmProviderChange">
-          <a-select-option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</a-select-option>
-        </a-select>
-      </a-form-item>
       <a-form-item label="模型" required>
-        <a-select v-model:value="node.data.modelId" :disabled="!node.data.providerId" @change="onLlmModelChange">
-          <a-select-option v-for="m in llmModelList" :key="m.modelId" :value="m.modelId">{{ m.name || m.modelId }}</a-select-option>
-        </a-select>
+        <ModelSelect
+          :model-value="nodeModelSelectValue"
+          :disabled="readonly"
+          @change="onNodeModelChange"
+        />
       </a-form-item>
       <a-form-item label="提取指令">
         <a-textarea v-model:value="node.data.instruction" :rows="3" placeholder="补充提取规则说明" @change="emitSync" />
@@ -683,6 +654,7 @@ import VariablePickerInput from './VariablePickerInput.vue'
 import CodeEditor from './CodeEditor.vue'
 import ConditionGroupForm from './ConditionGroupForm.vue'
 import JsonInput from '../../../components/JsonInput.vue'
+import ModelSelect from '../../../components/ModelSelect.vue'
 import { createConditionId } from '../nodeMeta'
 import { BUILTIN_VARIABLES, getFieldHint, getScriptExampleConfig } from '../nodeConfigMeta'
 import { syncConditionBranches, ensureConditionGroups } from '../conditionUtils'
@@ -691,8 +663,6 @@ const props = defineProps({
   node: { type: Object, required: true },
   edges: { type: Array, default: () => [] },
   readonly: { type: Boolean, default: false },
-  providers: { type: Array, default: () => [] },
-  llmModelList: { type: Array, default: () => [] },
   knowledgeList: { type: Array, default: () => [] },
   tools: { type: Array, default: () => [] },
   targetNodes: { type: Array, default: () => [] },
@@ -703,8 +673,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'sync',
-  'llm-provider-change',
-  'llm-model-change',
   'knowledge-change',
   'tool-change',
 ])
@@ -924,14 +892,18 @@ function emitSync() {
   emit('sync')
 }
 
-function onLlmProviderChange(v) {
-  if (props.readonly) return
-  emit('llm-provider-change', v)
-}
+const nodeModelSelectValue = computed(() => {
+  const pid = props.node?.data?.providerId
+  const mid = props.node?.data?.modelId
+  if (pid != null && mid) return `${String(pid)}:${String(mid)}`
+  return undefined
+})
 
-function onLlmModelChange(v) {
+function onNodeModelChange(providerId, modelId) {
   if (props.readonly) return
-  emit('llm-model-change', v)
+  props.node.data.providerId = providerId ? String(providerId) : providerId
+  props.node.data.modelId = modelId ? String(modelId) : modelId
+  emitSync()
 }
 
 function onKnowledgeChange(v) {

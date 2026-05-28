@@ -71,6 +71,9 @@ public class MimoChatClient {
         return Flux.create(sink -> {
             try {
                 Map<String, Object> body = buildRequestBody(provider, config, messages, currentAttachments, true);
+                try {
+                    log.info("[MimoChat] 请求体: {}", MAPPER.writeValueAsString(body));
+                } catch (Exception ignored) {}
                 RestClient client = buildClient(provider);
                 client.post()
                         .uri("/chat/completions")
@@ -86,8 +89,10 @@ public class MimoChatClient {
                                 } catch (Exception ignored) {
                                     // 忽略读取错误体失败
                                 }
+                                String hint = errBody.contains("webSearchEnabled")
+                                        ? "（请确认已在 MiMo 控制台激活 Web Search Plugin: https://platform.xiaomimimo.com/#/console/plugin）" : "";
                                 sink.error(new IllegalStateException(
-                                        "MiMo API 错误: HTTP " + res.getStatusCode().value() + " " + errBody));
+                                        "MiMo API 错误: HTTP " + res.getStatusCode().value() + " " + errBody + hint));
                                 return null;
                             }
                             try (var stream = res.getBody()) {
@@ -223,7 +228,7 @@ public class MimoChatClient {
         body.put("thinking", thinking);
 
         if (Boolean.TRUE.equals(config.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH))) {
-            // MiMo 要求：请求体含 web_search 工具时必须显式开启 webSearchEnabled
+            // MiMo 联网搜索：同时设置 webSearchEnabled 顶层参数 + tools 数组中的 web_search 类型
             body.put("webSearchEnabled", true);
             Map<String, Object> webSearch = new HashMap<>();
             webSearch.put("type", "web_search");

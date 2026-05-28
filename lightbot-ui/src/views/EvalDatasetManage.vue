@@ -14,8 +14,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新建评测集
@@ -23,6 +23,7 @@
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="card-grid">
       <div
         v-for="item in list"
@@ -54,6 +55,7 @@
         <p v-else>还没有评测集，点击右上角创建一个吧</p>
       </div>
     </div>
+    </a-spin>
 
     <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -98,6 +100,7 @@ import {
 
 const router = useRouter()
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -107,10 +110,15 @@ onMounted(() => loadData())
 watch(searchText, () => loadData())
 
 async function loadData() {
-  const params = { pageNum: 1, pageSize: 100 }
-  if (searchText.value) params.keyword = searchText.value
-  const res = await getEvalDatasets(params)
-  list.value = res.data?.records || []
+  loading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 100 }
+    if (searchText.value) params.keyword = searchText.value
+    const res = await getEvalDatasets(params)
+    list.value = res.data?.records || []
+  } finally {
+    loading.value = false
+  }
 }
 
 function openDialog(row) {

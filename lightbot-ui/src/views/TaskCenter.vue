@@ -19,8 +19,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadTasks">
-          <ReloadOutlined />
+        <button class="btn-outline" @click="loadTasks" :disabled="loading">
+          <ReloadOutlined :spin="loading" />
           刷新
         </button>
       </div>
@@ -161,12 +161,18 @@ const typeMap = {
   document_upload: '文档上传',
   document_ingest: '文档入库',
   document_ocr: '文档OCR',
+  experiment_run: '实验执行',
+  benchmark_generate: '基准生成',
+  rag_evaluation: 'RAG评估',
 }
 
 const typeColor = {
   document_upload: 'blue',
   document_ingest: 'green',
   document_ocr: 'orange',
+  experiment_run: 'cyan',
+  benchmark_generate: 'purple',
+  rag_evaluation: 'magenta',
 }
 
 const statusMap = {

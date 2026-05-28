@@ -45,6 +45,8 @@ public class ChatContext {
     private List<String> activeSkillNames;
     /** 启用的 Skill 详情（用于前端 skill_active 事件展示） */
     private List<Map<String, Object>> activeSkillDetails;
+    /** toolName → Skill 详情映射（用于工具调用时按需推送 skill_active 事件） */
+    private Map<String, Map<String, Object>> toolNameToSkillDetail;
 
     // ===== SubAgentPrepMiddleware 准备 =====
     /** 当前 Agent 绑定的可委派 SubAgent ID 列表 */

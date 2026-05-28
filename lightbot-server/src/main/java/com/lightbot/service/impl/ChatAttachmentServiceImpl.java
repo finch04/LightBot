@@ -2,12 +2,14 @@ package com.lightbot.service.impl;
 
 import com.lightbot.common.BizException;
 import com.lightbot.constant.ChatAttachmentConstants;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatAttachmentService;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
+import com.lightbot.util.ChatContentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.TikaUtil;
 import com.lightbot.workflow.WorkflowConfigParser;
@@ -34,6 +36,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
     private final ObjectMapper objectMapper;
+    private final ChatContentSecurityScanUtil contentSecurityScanUtil;
 
     @Override
     public ChatAttachmentDTO upload(Long agentId, Long sessionId, MultipartFile file) {
@@ -57,7 +60,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         try {
             byte[] bytes = file.getBytes();
             return switch (type) {
-                case "document" -> uploadDocument(file, bytes, mime, ext, agentId, sessionId, caps);
+                case "document" -> uploadDocument(file, bytes, mime, ext, agentId, sessionId, caps, config);
                 case "image", "video" -> uploadMedia(file, bytes, mime, type, agentId, sessionId, caps);
                 default -> throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "不支持的附件类型");
             };
@@ -83,7 +86,8 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
     }
 
     private ChatAttachmentDTO uploadDocument(MultipartFile file, byte[] bytes, String mime, String ext,
-                                             Long agentId, Long sessionId, AgentChatCapabilitiesDTO caps) {
+                                             Long agentId, Long sessionId, AgentChatCapabilitiesDTO caps,
+                                             Map<String, Object> configMap) {
         if (bytes.length > ChatAttachmentConstants.MAX_DOCUMENT_BYTES) {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
                     "文档不能超过 " + caps.getMaxDocumentSizeLabel());
@@ -99,6 +103,15 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         }
         boolean[] truncated = new boolean[1];
         String text = ChatAttachmentConstants.truncateParsedText(parsed.trim(), truncated);
+
+        // 内容安全扫描（prompt 注入 + 敏感词）
+        if (Boolean.TRUE.equals(configMap.get(ConfigKeys.Agent.ENABLE_CONTENT_SECURITY_SCAN))) {
+            ChatContentSecurityScanUtil.ScanResult scanResult = contentSecurityScanUtil.scan(text, configMap);
+            if (!scanResult.safe()) {
+                throw new BizException(ErrorCode.CHAT_FILE_CONTENT_SUSPICIOUS);
+            }
+        }
+
         return storeAndBuildDto(file, bytes, mime, "document", agentId, sessionId, text, truncated[0]);
     }
 

@@ -29,8 +29,8 @@
         <a-tooltip v-if="showSystemTools" title="如何新增系统工具？" :getPopupContainer="getPopupContainer" placement="bottomRight">
           <button class="btn-icon-help" @click="systemToolHelpVisible = true"><QuestionCircleOutlined /></button>
         </a-tooltip>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新增工具
@@ -38,6 +38,7 @@
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="provider-grid">
       <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'system-card': t.isSystem }">
         <div class="card-top">
@@ -69,6 +70,7 @@
         {{ searchText ? '没有匹配的工具' : '暂无工具，点击右上角新增' }}
       </div>
     </div>
+    </a-spin>
 
     <!-- 新增/编辑弹窗 -->
     <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑工具' : '新增工具'" :width="640" :footer="null" :maskClosable="false">
@@ -265,6 +267,7 @@ const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用
 const typeColors = { builtin: '#171717', custom: '#0070f3', api: '#10b981', mcp: '#8b5cf6' }
 
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const toolTypeFilter = ref(undefined)
 const toolTypeList = ref([])
@@ -331,6 +334,7 @@ function generateToolExample(inputSchema) {
 }
 
 async function loadData() {
+  loading.value = true
   try {
     const params = { pageNum: 1, pageSize: 50 }
     if (searchText.value) params.keyword = searchText.value
@@ -340,6 +344,8 @@ async function loadData() {
     list.value = res.data.records || []
   } catch (e) {
     // interceptor handles error
+  } finally {
+    loading.value = false
   }
 }
 

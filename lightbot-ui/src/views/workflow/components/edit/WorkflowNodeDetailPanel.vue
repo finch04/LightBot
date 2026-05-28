@@ -59,8 +59,6 @@
         :readonly="isVersionPreview"
         :node="node"
         :edges="edges"
-        :providers="providers"
-        :llm-model-list="llmModelList"
         :knowledge-list="knowledgeList"
         :tools="tools"
         :target-nodes="targetNodes"
@@ -68,8 +66,6 @@
         :filter-tool-option="filterToolOption"
         :get-tool-type-label="getToolTypeLabel"
         @sync="$emit('sync')"
-        @llm-provider-change="$emit('llm-provider-change', $event)"
-        @llm-model-change="$emit('llm-model-change', $event)"
         @knowledge-change="$emit('knowledge-change', $event)"
         @tool-change="$emit('tool-change', $event)"
       />
@@ -107,8 +103,6 @@ defineProps({
   isVersionPreview: Boolean,
   canTestSelectedNode: Boolean,
   nodeErrors: { type: Array, default: () => [] },
-  providers: { type: Array, default: () => [] },
-  llmModelList: { type: Array, default: () => [] },
   knowledgeList: { type: Array, default: () => [] },
   tools: { type: Array, default: () => [] },
   targetNodes: { type: Array, default: () => [] },
@@ -122,7 +116,7 @@ defineProps({
 
 defineEmits([
   'close', 'open-example', 'open-test', 'copy', 'sync',
-  'llm-provider-change', 'llm-model-change', 'knowledge-change', 'tool-change', 'delete',
+  'knowledge-change', 'tool-change', 'delete',
 ])
 </script>
 

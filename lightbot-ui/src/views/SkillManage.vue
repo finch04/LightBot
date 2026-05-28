@@ -15,8 +15,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新增 Skill
@@ -24,6 +24,7 @@
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="provider-grid">
       <div v-for="s in list" :key="s.id" class="provider-card">
         <div class="card-top">
@@ -60,6 +61,7 @@
         {{ searchText ? '没有匹配的 Skill' : '暂无 Skill，点击右上角新增' }}
       </div>
     </div>
+    </a-spin>
 
     <a-pagination
       v-if="total > pageSize"
@@ -197,6 +199,7 @@ import { getMcpServers } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
+const loading = ref(false)
 const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(20)
@@ -220,6 +223,7 @@ watch(searchText, () => {
 })
 
 async function loadData() {
+  loading.value = true
   try {
     const res = await getSkills({ pageNum: pageNum.value, pageSize: pageSize.value, keyword: searchText.value || undefined })
     const data = res.data || {}
@@ -227,6 +231,8 @@ async function loadData() {
     total.value = data.total || 0
   } catch (e) {
     // interceptor handles error
+  } finally {
+    loading.value = false
   }
 }
 

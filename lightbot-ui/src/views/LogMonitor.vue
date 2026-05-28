@@ -45,6 +45,7 @@
     </div>
 
     <!-- 日志表格 -->
+    <a-spin :spinning="historyLoading">
     <div class="log-table-wrapper">
       <table class="log-table">
         <thead>
@@ -79,6 +80,7 @@
         </table>
       </div>
     </div>
+    </a-spin>
 
     <div class="log-count">共 {{ filteredLogs.length }} 条日志</div>
 
@@ -123,6 +125,7 @@ const levels = [
 ]
 
 const logs = ref([])
+const historyLoading = ref(false)
 const activeLevels = ref(new Set(['INFO', 'DEBUG', 'WARN', 'ERROR']))
 const searchText = ref('')
 const sseConnected = ref(false)
@@ -177,6 +180,7 @@ function clearLogs() {
 }
 
 async function loadHistory() {
+  historyLoading.value = true
   try {
     const res = await getRecentLogs({ limit: 500 })
     logs.value = res.data || []
@@ -184,6 +188,8 @@ async function loadHistory() {
     scrollToBottom()
   } catch (e) {
     // ignore
+  } finally {
+    historyLoading.value = false
   }
 }
 

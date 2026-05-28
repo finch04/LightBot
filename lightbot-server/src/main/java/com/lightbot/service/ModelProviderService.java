@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.ModelProviderRequest;
 import com.lightbot.entity.ModelProvider;
 
+import java.util.List;
+
 /**
  * 模型提供商服务接口
  *
@@ -52,4 +54,11 @@ public interface ModelProviderService extends IService<ModelProvider> {
      * @param status 目标状态（active / disabled）
      */
     void updateStatus(Long id, String status);
+
+    /**
+     * 查询所有启用的提供商
+     *
+     * @return 启用的提供商列表
+     */
+    List<ModelProvider> listAllActive();
 }

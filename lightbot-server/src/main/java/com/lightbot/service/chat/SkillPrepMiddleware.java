@@ -4,9 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Skill;
+import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.SkillService;
+import com.lightbot.service.ToolService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -35,6 +37,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
 
     private final AgentService agentService;
     private final SkillService skillService;
+    private final ToolService toolService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -53,6 +56,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             ctx.setSkillExtraMcpServerIds(List.of());
             ctx.setActiveSkillNames(List.of());
             ctx.setActiveSkillDetails(List.of());
+            ctx.setToolNameToSkillDetail(Map.of());
             return;
         }
 
@@ -63,6 +67,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             ctx.setSkillExtraMcpServerIds(List.of());
             ctx.setActiveSkillNames(List.of());
             ctx.setActiveSkillDetails(List.of());
+            ctx.setToolNameToSkillDetail(Map.of());
             return;
         }
 
@@ -81,6 +86,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             ctx.setSkillExtraMcpServerIds(List.of());
             ctx.setActiveSkillNames(List.of());
             ctx.setActiveSkillDetails(List.of());
+            ctx.setToolNameToSkillDetail(Map.of());
             return;
         }
 
@@ -91,6 +97,8 @@ public class SkillPrepMiddleware implements ChatMiddleware {
         Set<Long> extraMcpServerIds = new LinkedHashSet<>();
         List<String> activeNames = new ArrayList<>();
         List<Map<String, Object>> activeDetails = new ArrayList<>();
+        Map<String, Map<String, Object>> toolNameToSkill = new HashMap<>();
+        Set<Long> allSkillToolIds = new LinkedHashSet<>();
 
         for (Skill skill : skills) {
             activeNames.add(skill.getName());
@@ -99,8 +107,11 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             detail.put("displayName", skill.getDisplayName() != null ? skill.getDisplayName() : skill.getName());
             detail.put("slug", skill.getSlug());
             detail.put("builtin", Integer.valueOf(1).equals(skill.getIsBuiltin()));
+            List<Long> sToolIds = parseIds(skill.getToolIds());
+            detail.put("toolIds", sToolIds.stream().map(String::valueOf).toList());
             activeDetails.add(detail);
-            extraToolIds.addAll(parseIds(skill.getToolIds()));
+            extraToolIds.addAll(sToolIds);
+            allSkillToolIds.addAll(sToolIds);
             extraMcpServerIds.addAll(parseIds(skill.getMcpServerIds()));
             String template = skill.getPromptTemplate();
             if (template != null && !template.isBlank()) {
@@ -111,11 +122,38 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             }
         }
 
+        // 构建 toolName → Skill 详情映射（工具调用时按需推送 skill_active）
+        if (!allSkillToolIds.isEmpty()) {
+            try {
+                List<Tool> tools = toolService.listByIds(new ArrayList<>(allSkillToolIds));
+                Map<Long, String> toolIdToName = new HashMap<>();
+                for (Tool t : tools) {
+                    if (t != null && t.getName() != null) {
+                        toolIdToName.put(t.getId(), t.getName());
+                    }
+                }
+                for (int i = 0; i < skills.size(); i++) {
+                    Skill skill = skills.get(i);
+                    Map<String, Object> detail = activeDetails.get(i);
+                    List<Long> sToolIds = parseIds(skill.getToolIds());
+                    for (Long tid : sToolIds) {
+                        String tName = toolIdToName.get(tid);
+                        if (tName != null && !toolNameToSkill.containsKey(tName)) {
+                            toolNameToSkill.put(tName, detail);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[SkillPrep] 构建 toolName→Skill 映射失败: {}", e.getMessage());
+            }
+        }
+
         ctx.setSkillSystemAppendix(prompt.toString());
         ctx.setSkillExtraToolIds(new ArrayList<>(extraToolIds));
         ctx.setSkillExtraMcpServerIds(new ArrayList<>(extraMcpServerIds));
         ctx.setActiveSkillNames(activeNames);
         ctx.setActiveSkillDetails(activeDetails);
+        ctx.setToolNameToSkillDetail(toolNameToSkill);
 
         log.info("[SkillPrep] agentId={}, skills={}, extraToolIds={}, extraMcpServerIds={}",
                 agent.getId(), activeNames, extraToolIds, extraMcpServerIds);

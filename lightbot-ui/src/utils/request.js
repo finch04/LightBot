@@ -57,7 +57,9 @@ request.interceptors.response.use(
     const res = response.data
     if (res.code && res.code !== 200) {
       // 业务错误（HTTP 200 但 code !== 200）：使用后端返回的 message
-      message.error(res.message || '请求失败')
+      if (!response.config?.silent) {
+        message.error(res.message || '请求失败')
+      }
       if (res.code === 401) {
         localStorage.removeItem('token')
         router.push('/login')
@@ -77,7 +79,9 @@ request.interceptors.response.use(
     const msg = (res?.code && res?.message)
       ? res.message
       : HTTP_STATUS_MSG[status] || '网络异常，请稍后重试'
-    message.error(msg)
+    if (!error.config?.silent) {
+      message.error(msg)
+    }
     return Promise.reject(new Error(msg))
   }
 )

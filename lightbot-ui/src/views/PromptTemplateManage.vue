@@ -17,11 +17,12 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadData"><ReloadOutlined /> 刷新</button>
+        <button class="btn-outline" @click="loadData" :disabled="loading"><ReloadOutlined :spin="loading" /> 刷新</button>
         <button class="btn-primary" @click="openDialog()"><PlusOutlined /> 新建模板</button>
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="template-grid">
       <div v-for="t in filteredTemplates" :key="t.id" class="template-card" @click="previewTemplate(t)">
         <div class="card-top">
@@ -44,6 +45,7 @@
         <p>{{ searchText ? '没有匹配模板' : '暂无模板，点击右上角创建' }}</p>
       </div>
     </div>
+    </a-spin>
 
     <!-- 模板预览弹窗 -->
     <a-modal
@@ -140,6 +142,7 @@ import {
 
 const router = useRouter()
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const dialogVisible = ref(false)
 const previewVisible = ref(false)
@@ -181,11 +184,14 @@ const filteredTemplates = computed(() => {
 onMounted(() => loadData())
 
 async function loadData() {
+  loading.value = true
   try {
     const res = await getPromptTemplates()
     list.value = res.data || []
   } catch {
     list.value = []
+  } finally {
+    loading.value = false
   }
 }
 

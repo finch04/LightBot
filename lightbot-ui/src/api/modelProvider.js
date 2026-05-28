@@ -28,8 +28,8 @@ export function getProviderModelCapabilities(id) {
   return request.get(`/model-providers/${id}/model-capabilities`)
 }
 
-export function checkModelProvider(id) {
-  return request.get(`/model-providers/${id}/check`)
+export function checkModelProvider(id, config) {
+  return request.get(`/model-providers/${id}/check`, config)
 }
 
 export function checkModelProviderByForm(data) {
@@ -40,8 +40,12 @@ export function fetchProviderModels(id) {
   return request.get(`/model-providers/${id}/fetch-models`)
 }
 
-export function refreshModelProviderCache() {
-  return request.post('/model-providers/refresh-cache')
+export function refreshModelProviderCache(config) {
+  return request.post('/model-providers/refresh-cache', null, config)
+}
+
+export function getProvidersWithModels(type) {
+  return request.get('/model-providers/with-models', { params: { type } })
 }
 
 export function toggleProviderStatus(id, status) {

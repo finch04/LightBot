@@ -64,11 +64,7 @@
           <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" />
         </a-form-item>
         <a-form-item label="Embed模型" required>
-          <a-select v-model:value="form.embeddingModel" placeholder="选择嵌入模型" style="width: 100%">
-            <a-select-option v-for="m in embeddingModels" :key="m.id" :value="m.modelId">
-              {{ m.name }} ({{ m.modelId }})
-            </a-select-option>
-          </a-select>
+          <ModelSelect v-model="form.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" />
         </a-form-item>
         <a-form-item label="分块大小">
           <a-input-number v-model:value="form.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
@@ -90,15 +86,13 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
-import { getModelsByType } from '../api/model'
+import ModelSelect from '../components/ModelSelect.vue'
 
 const router = useRouter()
 const list = ref([])
 const searchText = ref('')
 const showCreate = ref(false)
 const submitting = ref(false)
-const embeddingModels = ref([])
-
 const form = reactive({
   name: '',
   description: '',
@@ -109,12 +103,9 @@ const form = reactive({
   ragThreshold: 0.7,
 })
 
-async function openCreateModal() {
+function openCreateModal() {
+  form.embeddingModel = null
   showCreate.value = true
-  try {
-    const res = await getModelsByType('embedding')
-    embeddingModels.value = res.data || []
-  } catch { /* ignore */ }
 }
 
 async function loadData() {
@@ -150,10 +141,11 @@ async function handleCreate() {
     message.warning('请选择 Embed 模型')
     return
   }
+  const embeddingModelId = form.embeddingModel.split(':')[1]
   submitting.value = true
   try {
     const config = JSON.stringify({ ragTopK: form.ragTopK, ragThreshold: form.ragThreshold })
-    await createKnowledge({ ...form, config })
+    await createKnowledge({ ...form, embeddingModel: embeddingModelId, config })
     message.success('创建成功')
     showCreate.value = false
     form.name = ''

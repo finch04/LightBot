@@ -1,5 +1,7 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -25,6 +27,7 @@ public class ChatStreamEvent {
     private String content;
 
     @Schema(description = "耗时（毫秒）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long elapsed;
 
     public enum EventType {

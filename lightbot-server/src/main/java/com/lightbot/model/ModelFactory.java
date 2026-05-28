@@ -231,7 +231,7 @@ public class ModelFactory {
                 throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
             }
             cacheUtil.cacheProvider(provider);
-            log.info("[ModelFactory] 缓存未命中，从数据库加载提供商: id={}", providerId);
+            log.debug("[ModelFactory] 缓存未命中，从数据库加载提供商: id={}", providerId);
         }
         return provider;
     }

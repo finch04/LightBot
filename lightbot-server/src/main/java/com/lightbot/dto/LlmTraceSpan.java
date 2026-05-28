@@ -1,5 +1,7 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -25,9 +27,11 @@ public class LlmTraceSpan {
     private String name;
 
     @Schema(description = "开始时间（毫秒时间戳）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long startTime;
 
     @Schema(description = "耗时（毫秒）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long durationMs;
 
     @Schema(description = "状态: OK/ERROR")

@@ -59,6 +59,7 @@ public class LlmTraceDetailVO {
     private Integer toolCallCount;
 
     @Schema(description = "总耗时（毫秒）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long totalDurationMs;
 
     @Schema(description = "调用链Span列表（已解析为对象）")

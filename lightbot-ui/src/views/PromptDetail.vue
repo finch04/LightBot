@@ -54,30 +54,11 @@
         <div class="config-section">
           <div class="config-section-title">模型配置</div>
           <div class="model-select-row">
-            <a-select
-              v-model:value="inst.providerId"
-              placeholder="选择提供商"
-              style="flex: 1"
+            <ModelSelect
+              :model-value="getInstModelValue(inst)"
               size="small"
-              @change="onProviderChange(inst, $event)"
-            >
-              <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-select-option>
-            </a-select>
-            <a-select
-              v-model:value="inst.modelId"
-              placeholder="选择模型"
-              style="flex: 1"
-              size="small"
-              show-search
-              :filter-option="filterModel"
-              @change="onModelChange(inst, $event)"
-            >
-              <a-select-option v-for="m in inst.modelList" :key="m.modelId" :value="m.modelId">
-                {{ m.name || m.modelId }}
-              </a-select-option>
-            </a-select>
+              @change="(pid, mid) => onInstModelChange(inst, pid, mid)"
+            />
           </div>
           <!-- 动态模型参数 -->
           <div class="model-params" v-if="inst.configFields.length > 0">
@@ -236,8 +217,8 @@ import { message } from 'ant-design-vue'
 import {
   getPrompts, getPromptVersions, createPromptVersion, runPromptStream,
 } from '../api/prompt'
-import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
-import { getModelsByProvider } from '../api/model'
+import { getProviderConfigFields } from '../api/modelProvider'
+import ModelSelect from '../components/ModelSelect.vue'
 import TemplateImportModalLR from '../components/TemplateImportModalLR.vue'
 
 const route = useRoute()
@@ -248,9 +229,6 @@ const versions = ref([])
 const submitting = ref(false)
 
 const latestVersion = computed(() => versions.value.length > 0 ? versions.value[0].version : '')
-
-// 提供商列表（全局共享）
-const providerList = ref([])
 
 // 配置实例
 let instanceIdCounter = 1
@@ -288,9 +266,8 @@ function addInstance() {
   inst.modelConfig = { ...(src?.modelConfig || {}) }
   inst.toolConfig = src?.toolConfig || '{}'
   instances.value.push(inst)
-  // 加载模型列表和配置字段
+  // 加载配置字段
   if (inst.providerId) {
-    loadModelsForInstance(inst, inst.providerId)
     loadConfigFieldsForInstance(inst, inst.providerId)
   }
 }
@@ -309,7 +286,6 @@ const templateImportVisible = ref(false)
 onMounted(async () => {
   await loadPrompt()
   await loadVersions()
-  await loadProviders()
   // 初始化一个配置实例
   const inst = createInstance()
   instances.value.push(inst)
@@ -322,7 +298,6 @@ onMounted(async () => {
         const cfg = typeof latest.modelConfig === 'string' ? JSON.parse(latest.modelConfig) : latest.modelConfig
         if (cfg.providerId) {
           inst.providerId = cfg.providerId
-          await loadModelsForInstance(inst, cfg.providerId)
           await loadConfigFieldsForInstance(inst, cfg.providerId)
           if (cfg.modelId) inst.modelId = cfg.modelId
           // 设置动态参数值
@@ -359,18 +334,19 @@ async function loadVersions() {
   versions.value = res.data || []
 }
 
-async function loadProviders() {
-  try {
-    const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
-    providerList.value = res.data?.records || []
-  } catch { /* ignore */ }
+function getInstModelValue(inst) {
+  if (inst.providerId && inst.modelId) return `${String(inst.providerId)}:${String(inst.modelId)}`
+  return undefined
 }
 
-async function loadModelsForInstance(inst, providerId) {
-  try {
-    const res = await getModelsByProvider(providerId)
-    inst.modelList = (res.data || []).filter(m => m.type === 'llm')
-  } catch { inst.modelList = [] }
+async function onInstModelChange(inst, providerId, modelId) {
+  const prevProviderId = inst.providerId
+  inst.providerId = providerId ? String(providerId) : providerId
+  inst.modelId = modelId ? String(modelId) : modelId
+  if (providerId && String(prevProviderId) !== String(providerId)) {
+    inst.modelConfig = {}
+    await loadConfigFieldsForInstance(inst, providerId)
+  }
 }
 
 async function loadConfigFieldsForInstance(inst, providerId) {
@@ -378,33 +354,12 @@ async function loadConfigFieldsForInstance(inst, providerId) {
     const res = await getProviderConfigFields(providerId)
     const fields = (res.data || []).filter(f => f.key !== 'modelId')
     inst.configFields = fields
-    // 设置默认值
     for (const f of fields) {
       if (inst.modelConfig[f.key] === undefined && f.defaultValue !== undefined) {
         inst.modelConfig[f.key] = f.defaultValue
       }
     }
   } catch { inst.configFields = [] }
-}
-
-async function onProviderChange(inst, providerId) {
-  inst.modelId = null
-  inst.modelConfig = {}
-  inst.configFields = []
-  inst.modelList = []
-  await Promise.all([
-    loadModelsForInstance(inst, providerId),
-    loadConfigFieldsForInstance(inst, providerId),
-  ])
-}
-
-function onModelChange() {
-  // 模型切换时不做额外操作
-}
-
-function filterModel(input, option) {
-  const text = (option?.value || '').toLowerCase()
-  return text.includes(input.toLowerCase())
 }
 
 function onContentChange(inst) {
@@ -441,7 +396,6 @@ async function handleTemplateImport(t) {
         const cfg = typeof t.modelConfig === 'string' ? JSON.parse(t.modelConfig) : t.modelConfig
         if (cfg.providerId) {
           inst.providerId = cfg.providerId
-          await loadModelsForInstance(inst, cfg.providerId)
           await loadConfigFieldsForInstance(inst, cfg.providerId)
           if (cfg.modelId) inst.modelId = cfg.modelId
           if (!inst.modelConfig) inst.modelConfig = {}

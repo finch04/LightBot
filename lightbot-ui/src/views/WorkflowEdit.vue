@@ -117,8 +117,6 @@
         :is-version-preview="isVersionPreview"
         :can-test-selected-node="canTestSelectedNode"
         :node-errors="getNodeErrors(selectedNode.id)"
-        :providers="providers"
-        :llm-model-list="llmModelList"
         :knowledge-list="knowledgeList"
         :tools="tools"
         :target-nodes="getTargetNodes()"
@@ -133,8 +131,6 @@
         @open-test="openNodeTestDrawer"
         @copy="copySelectedNode"
         @sync="syncNodes"
-        @llm-provider-change="onLlmProviderChange"
-        @llm-model-change="onLlmModelChange"
         @knowledge-change="onKnowledgeChange"
         @tool-change="onToolChange"
         @delete="deleteSelectedNode"
@@ -200,8 +196,6 @@ import { getEdgeInsertCenter } from './workflow/workflowEdgeGeometry'
 import { message, notification, Modal } from 'ant-design-vue'
 import { getAgentDetail } from '../api/agent'
 import { getKnowledge, getKnowledgeList } from '../api/knowledge'
-import { getModelProviders } from '../api/modelProvider'
-import { getModelsByProvider } from '../api/model'
 import { getTools } from '../api/tool'
 import {
   getWorkflowConfig,
@@ -476,8 +470,6 @@ function isNodeDeletable(node) {
 }
 
 // 资源列表
-const providers = ref([])
-const llmModelList = ref([])
 const knowledgeList = ref([])
 const tools = ref([])
 
@@ -738,12 +730,10 @@ onMounted(async () => {
     }
 
     // 加载资源列表
-    const [providerRes, knowledgeRes, toolRes] = await Promise.all([
-      getModelProviders({ pageNum: 1, pageSize: 100 }),
+    const [knowledgeRes, toolRes] = await Promise.all([
       getKnowledgeList({ pageNum: 1, pageSize: 100 }),
       getTools({ pageNum: 1, pageSize: 100 })
     ])
-    providers.value = providerRes.data.records || []
     knowledgeList.value = knowledgeRes.data.records || []
     tools.value = toolRes.data.records || []
 
@@ -1154,24 +1144,6 @@ function applyNodeExampleConfig(exampleData) {
 function getDefaultNodeData(type) {
   return buildDefaultNodeData(type)
 }
-
-// 选中 LLM 节点时加载模型列表
-watch(
-  () => {
-    const type = selectedNode.value?.type
-    if (type === 'llm' || type === 'classifier' || type === 'parameter_extractor') {
-      return selectedNode.value?.data?.providerId
-    }
-    return null
-  },
-  async (providerId) => {
-    if (providerId) {
-      await loadLlmModels(providerId)
-    } else {
-      llmModelList.value = []
-    }
-  }
-)
 
 // 实时校验工作流配置（拖拽中跳过，避免顶栏状态闪烁）
 watch(
@@ -1849,40 +1821,6 @@ function onPaneClick() {
 function syncNodes() {
   triggerRef(nodes)
   scheduleAutoSave()
-}
-
-// LLM 提供商变更
-async function onLlmProviderChange(providerId) {
-  if (isVersionPreview.value) return
-  const provider = providers.value.find(p => p.id === providerId)
-  selectedNode.value.data.providerName = provider?.name || ''
-  selectedNode.value.data.modelId = null
-  selectedNode.value.data.modelName = ''
-  await loadLlmModels(providerId)
-  syncNodes()
-}
-
-async function loadLlmModels(providerId) {
-  if (!providerId) {
-    llmModelList.value = []
-    return
-  }
-  try {
-    const res = await getModelsByProvider(providerId)
-    llmModelList.value = (res.data || []).filter(m => {
-      const type = m.type?.code || m.type
-      return type === 'llm'
-    })
-  } catch {
-    llmModelList.value = []
-  }
-}
-
-function onLlmModelChange(modelId) {
-  if (isVersionPreview.value) return
-  const model = llmModelList.value.find(m => m.modelId === modelId)
-  selectedNode.value.data.modelName = model?.name || modelId || ''
-  syncNodes()
 }
 
 // 知识库选择变化：回显知识库 RAG 配置

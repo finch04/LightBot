@@ -14,8 +14,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新增 Server
@@ -23,6 +23,7 @@
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="provider-grid">
       <div v-for="s in list" :key="s.id" class="provider-card">
         <div class="card-top">
@@ -51,6 +52,7 @@
         </div>
       </div>
     </div>
+    </a-spin>
 
     <!-- 新增/编辑弹窗 -->
     <a-modal v-model:open="dialogVisible" :width="560" :footer="null" :maskClosable="false">
@@ -302,6 +304,7 @@ import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testM
 import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -387,10 +390,15 @@ function formatDefaultValue(val) {
 }
 
 async function loadData() {
-  const params = { pageNum: 1, pageSize: 50 }
-  if (searchText.value) params.name = searchText.value
-  const res = await getMcpServers(params)
-  list.value = res.data.records || []
+  loading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 50 }
+    if (searchText.value) params.name = searchText.value
+    const res = await getMcpServers(params)
+    list.value = res.data.records || []
+  } finally {
+    loading.value = false
+  }
 }
 
 watch(searchText, () => loadData())

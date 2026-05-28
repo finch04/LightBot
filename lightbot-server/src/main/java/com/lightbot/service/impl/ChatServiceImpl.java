@@ -193,8 +193,7 @@ public class ChatServiceImpl implements ChatService {
         Prompt prompt = new Prompt(new ArrayList<>(messages), toolOptions);
         boolean[] llmSpanAdded = {false};
 
-        return skillActivePrefixFlux(ctx, depth, toolEventsList)
-                .concatWith(chatModel.stream(prompt)
+        return chatModel.stream(prompt)
                 .concatMap(response -> {
                     Generation gen = response.getResult();
                     AssistantMessage assistantMsg = (gen != null) ? gen.getOutput() : null;
@@ -275,7 +274,7 @@ public class ChatServiceImpl implements ChatService {
                         List<CompletableFuture<String>> futures = new ArrayList<>();
                         for (AssistantMessage.ToolCall tc : toolCalls) {
                             String tcArgs = tc.arguments() != null ? tc.arguments() : "";
-                            appendToolCallStart(toolEventsList, statusFluxes, tc.name(), tcArgs, toolContentOffset);
+                            appendToolCallStart(ctx, toolEventsList, statusFluxes, tc.name(), tcArgs, toolContentOffset);
                             toolCallCountHolder[0]++;
                             final String tcName = tc.name();
                             final String safeTcArgs = ToolArgsSanitizer.forChatCall(tcArgs);
@@ -323,7 +322,7 @@ public class ChatServiceImpl implements ChatService {
 
                         String safeArgs = toolArgs != null ? toolArgs : "";
                         String callArgs = ToolArgsSanitizer.forChatCall(safeArgs);
-                        appendToolCallStart(toolEventsList, statusFluxes, toolName, safeArgs, toolContentOffset);
+                        appendToolCallStart(ctx, toolEventsList, statusFluxes, toolName, safeArgs, toolContentOffset);
 
                         long tToolStart = System.currentTimeMillis();
                         String toolResult;
@@ -426,7 +425,7 @@ public class ChatServiceImpl implements ChatService {
                             .concatWith(Flux.just(STATUS_PREFIX + toolCompleteEvent(resultContentOffset)))
                             .concatWith(afterTool);
                     return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart));
-                }));
+                });
     }
 
     /**
@@ -526,6 +525,11 @@ public class ChatServiceImpl implements ChatService {
             List<CompletableFuture<String>> futures = new ArrayList<>();
             for (AssistantMessage.ToolCall tc : toolCalls) {
                 String tcArgs = tc.arguments() != null ? tc.arguments() : "";
+                // 按需推送 skill_active
+                Flux<String> skFlux = emitSkillActiveIfNeeded(ctx, tc.name(), toolEventsList, toolContentOffset);
+                if (skFlux != null) {
+                    statusFluxes.add(skFlux);
+                }
                 toolEventsList.add(Map.of("type", "tool_call", "toolName", tc.name(), "args",
                         tcArgs, "contentOffset", toolContentOffset));
                 statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(tc.name(), tcArgs, toolContentOffset)));
@@ -567,6 +571,11 @@ public class ChatServiceImpl implements ChatService {
 
             String safeArgs = toolArgs != null ? toolArgs : "";
             String callArgs = ToolArgsSanitizer.forChatCall(safeArgs);
+            // 按需推送 skill_active
+            Flux<String> skillFlux = emitSkillActiveIfNeeded(ctx, toolName, toolEventsList, toolContentOffset);
+            if (skillFlux != null) {
+                statusFluxes.add(skillFlux);
+            }
             toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args",
                     safeArgs, "contentOffset", toolContentOffset));
             statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(toolName, safeArgs, toolContentOffset)));
@@ -827,26 +836,62 @@ public class ChatServiceImpl implements ChatService {
     /**
      * 累加流式响应中的 Token 用量（OpenAI 兼容 API 通常在最后一个空 choices chunk 返回 usage）
      */
-    /** 本轮对话启用的 Skill 事件（仅 depth=0 推送一次） */
-    private Flux<String> skillActivePrefixFlux(ChatContext ctx, int depth, List<Map<String, Object>> toolEventsList) {
-        if (depth != 0) {
+    /**
+     * 按需推送 skill_active 事件：当工具调用属于某个 Skill 时，推送该 Skill 的 metadata。
+     * 同一 Skill 只推送一次。
+     */
+    private Flux<String> emitSkillActiveIfNeeded(ChatContext ctx, String toolName,
+                                                  List<Map<String, Object>> toolEventsList, int contentOffset) {
+        Map<String, Map<String, Object>> mapping = ctx.getToolNameToSkillDetail();
+        if (mapping == null || mapping.isEmpty()) {
             return Flux.empty();
         }
-        List<Map<String, Object>> details = ctx.getActiveSkillDetails();
-        if (details == null || details.isEmpty()) {
+        Map<String, Object> skillDetail = mapping.get(toolName);
+        if (skillDetail == null) {
             return Flux.empty();
         }
-        boolean alreadyEmitted = toolEventsList.stream().anyMatch(e -> "skill_active".equals(e.get("type")));
+        String skillName = (String) skillDetail.get("name");
+        // 同一 Skill 只推送一次
+        boolean alreadyEmitted = toolEventsList.stream()
+                .filter(e -> "skill_active".equals(e.get("type")))
+                .flatMap(e -> {
+                    Object skills = e.get("skills");
+                    if (skills instanceof List<?> list) {
+                        return list.stream();
+                    }
+                    return java.util.stream.Stream.empty();
+                })
+                .anyMatch(s -> {
+                    if (s instanceof Map<?, ?> m) {
+                        return skillName.equals(m.get("name"));
+                    }
+                    return false;
+                });
         if (alreadyEmitted) {
             return Flux.empty();
         }
-        Map<String, Object> evt = Map.of("type", "skill_active", "skills", details, "contentOffset", 0);
+        List<Map<String, Object>> singleSkill = List.of(skillDetail);
+        Map<String, Object> evt = new HashMap<>();
+        evt.put("type", "skill_active");
+        evt.put("skills", singleSkill);
+        evt.put("contentOffset", contentOffset);
         toolEventsList.add(evt);
-        return Flux.just(STATUS_PREFIX + skillActiveEvent(details));
+        try {
+            return Flux.just(STATUS_PREFIX + OBJECT_MAPPER.writeValueAsString(evt));
+        } catch (Exception e) {
+            return Flux.empty();
+        }
     }
 
-    private void appendToolCallStart(List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
-                                   String toolName, String args, int contentOffset) {
+    private void appendToolCallStart(ChatContext ctx, List<Map<String, Object>> toolEventsList,
+                                     List<Flux<String>> statusFluxes,
+                                     String toolName, String args, int contentOffset) {
+        // 按需推送 skill_active（工具属于某个 Skill 时）
+        Flux<String> skillFlux = emitSkillActiveIfNeeded(ctx, toolName, toolEventsList, contentOffset);
+        if (skillFlux != null) {
+            statusFluxes.add(skillFlux);
+        }
+
         if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
             Map<String, String> parsed = parseSubagentArgs(args);
             String subName = parsed.get("subagentName");

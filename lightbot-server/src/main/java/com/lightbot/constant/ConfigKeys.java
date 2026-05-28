@@ -61,6 +61,8 @@ public final class ConfigKeys {
         public static final String ENABLE_TTS = "enableTts";
         /** 深度思考 */
         public static final String ENABLE_REASONING = "enableReasoning";
+        /** 对话附件内容安全扫描（prompt 注入 + 敏感词） */
+        public static final String ENABLE_CONTENT_SECURITY_SCAN = "enableContentSecurityScan";
     }
 
     /**

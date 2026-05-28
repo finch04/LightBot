@@ -16,33 +16,13 @@
         </div>
         <div class="panel-body">
           <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型提供商">
-              <a-select
-                v-model:value="chatConfig.providerId"
-                placeholder="选择提供商"
-                style="width: 100%"
-                allow-clear
-                @change="(val) => onProviderChange('chat', val)"
-              >
-                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
-                  {{ p.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
             <a-form-item label="模型">
-              <a-select
-                v-model:value="chatConfig.modelId"
+              <ModelSelect
+                v-model="chatValue"
+                model-type="llm"
                 placeholder="选择对话模型"
-                style="width: 100%"
-                allow-clear
-                :disabled="!chatConfig.providerId"
-              >
-                <a-select-option v-for="m in chatModels" :key="m.modelId" :value="m.modelId">
-                  {{ m.name || m.modelId }}
-                </a-select-option>
-              </a-select>
-              <span v-if="!chatConfig.providerId" class="form-tip">请先选择模型提供商</span>
-              <span v-else-if="chatModels.length === 0" class="form-tip warn">该提供商暂无可用对话模型</span>
+                @change="(pid, mid) => onModelChange('chat', pid, mid)"
+              />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
               <button class="btn-primary" :disabled="chatSaving" @click="saveChatModel">
@@ -67,33 +47,13 @@
         </div>
         <div class="panel-body">
           <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型提供商">
-              <a-select
-                v-model:value="embeddingConfig.providerId"
-                placeholder="选择提供商"
-                style="width: 100%"
-                allow-clear
-                @change="(val) => onProviderChange('embedding', val)"
-              >
-                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
-                  {{ p.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
             <a-form-item label="模型">
-              <a-select
-                v-model:value="embeddingConfig.modelId"
+              <ModelSelect
+                v-model="embeddingValue"
+                model-type="embedding"
                 placeholder="选择向量模型"
-                style="width: 100%"
-                allow-clear
-                :disabled="!embeddingConfig.providerId"
-              >
-                <a-select-option v-for="m in embeddingModels" :key="m.modelId" :value="m.modelId">
-                  {{ m.name || m.modelId }}
-                </a-select-option>
-              </a-select>
-              <span v-if="!embeddingConfig.providerId" class="form-tip">请先选择模型提供商</span>
-              <span v-else-if="embeddingModels.length === 0" class="form-tip warn">该提供商暂无可用向量模型</span>
+                @change="(pid, mid) => onModelChange('embedding', pid, mid)"
+              />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
               <button class="btn-primary" :disabled="embeddingSaving" @click="saveEmbeddingModel">
@@ -118,33 +78,13 @@
         </div>
         <div class="panel-body">
           <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型提供商">
-              <a-select
-                v-model:value="rerankConfig.providerId"
-                placeholder="选择提供商"
-                style="width: 100%"
-                allow-clear
-                @change="(val) => onProviderChange('rerank', val)"
-              >
-                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
-                  {{ p.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
             <a-form-item label="模型">
-              <a-select
-                v-model:value="rerankConfig.modelId"
+              <ModelSelect
+                v-model="rerankValue"
+                model-type="rerank"
                 placeholder="选择重排模型"
-                style="width: 100%"
-                allow-clear
-                :disabled="!rerankConfig.providerId"
-              >
-                <a-select-option v-for="m in rerankModels" :key="m.modelId" :value="m.modelId">
-                  {{ m.name || m.modelId }}
-                </a-select-option>
-              </a-select>
-              <span v-if="!rerankConfig.providerId" class="form-tip">请先选择模型提供商</span>
-              <span v-else-if="rerankModels.length === 0" class="form-tip warn">该提供商暂无可用重排模型</span>
+                @change="(pid, mid) => onModelChange('rerank', pid, mid)"
+              />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
               <button class="btn-primary" :disabled="rerankSaving" @click="saveRerankModel">
@@ -169,33 +109,13 @@
         </div>
         <div class="panel-body">
           <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型提供商">
-              <a-select
-                v-model:value="ttsConfig.providerId"
-                placeholder="选择提供商"
-                style="width: 100%"
-                allow-clear
-                @change="(val) => onProviderChange('tts', val)"
-              >
-                <a-select-option v-for="p in providerList" :key="p.id" :value="String(p.id)">
-                  {{ p.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
             <a-form-item label="模型">
-              <a-select
-                v-model:value="ttsConfig.modelId"
+              <ModelSelect
+                v-model="ttsValue"
+                model-type="tts"
                 placeholder="选择 TTS 模型"
-                style="width: 100%"
-                allow-clear
-                :disabled="!ttsConfig.providerId"
-              >
-                <a-select-option v-for="m in ttsModels" :key="m.modelId" :value="m.modelId">
-                  {{ m.name || m.modelId }}
-                </a-select-option>
-              </a-select>
-              <span v-if="!ttsConfig.providerId" class="form-tip">请先选择模型提供商</span>
-              <span v-else-if="ttsModels.length === 0" class="form-tip warn">该提供商暂无可用 TTS 模型</span>
+                @change="(pid, mid) => onModelChange('tts', pid, mid)"
+              />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
               <button class="btn-primary" :disabled="ttsSaving" @click="saveTtsModel">
@@ -214,7 +134,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { SaveOutlined, BulbOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
@@ -223,63 +143,49 @@ import {
   getDefaultTtsModel, updateDefaultTtsModel,
   getDefaultRerankModel, updateDefaultRerankModel,
 } from '../api/systemConfig'
-import { getModelProviders } from '../api/modelProvider'
-import { getModelsByProvider } from '../api/model'
+import ModelSelect from '../components/ModelSelect.vue'
 
-const providerList = ref([])
-const chatModels = ref([])
-const embeddingModels = ref([])
-const ttsModels = ref([])
-const rerankModels = ref([])
-
-const chatConfig = reactive({ providerId: null, modelId: null })
-const embeddingConfig = reactive({ providerId: null, modelId: null })
-const ttsConfig = reactive({ providerId: null, modelId: null })
-const rerankConfig = reactive({ providerId: null, modelId: null })
+const chatValue = ref(null)
+const embeddingValue = ref(null)
+const ttsValue = ref(null)
+const rerankValue = ref(null)
 
 const chatSaving = ref(false)
 const embeddingSaving = ref(false)
 const ttsSaving = ref(false)
 const rerankSaving = ref(false)
 
+// 缓存 providerId:modelId 用于保存
+const chatProviderId = ref(null)
+const chatModelId = ref(null)
+const embeddingProviderId = ref(null)
+const embeddingModelId = ref(null)
+const rerankProviderId = ref(null)
+const rerankModelId = ref(null)
+const ttsProviderId = ref(null)
+const ttsModelId = ref(null)
+
 onMounted(async () => {
-  await loadProviders()
   await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig(), loadRerankConfig()])
 })
 
-async function loadProviders() {
-  try {
-    const res = await getModelProviders({ pageNum: 1, pageSize: 100 })
-    providerList.value = res.data?.records || []
-  } catch (e) {
-    console.error('[Settings] 加载提供商失败:', e)
-  }
-}
-
-/**
- * 加载某类型的模型列表（统一处理 Long ID 字符串化）
- */
-async function loadModelsByType(providerId, modelType) {
-  if (!providerId) return []
-  try {
-    const res = await getModelsByProvider(providerId)
-    const all = res.data || []
-    return all.filter(m => (m.type?.code || m.type) === modelType)
-  } catch (e) {
-    console.error('[Settings] 加载模型失败:', e)
-    return []
-  }
+function onModelChange(kind, providerId, modelId) {
+  const pid = providerId ? String(providerId) : providerId
+  const mid = modelId ? String(modelId) : modelId
+  if (kind === 'chat') { chatProviderId.value = pid; chatModelId.value = mid }
+  else if (kind === 'embedding') { embeddingProviderId.value = pid; embeddingModelId.value = mid }
+  else if (kind === 'rerank') { rerankProviderId.value = pid; rerankModelId.value = mid }
+  else if (kind === 'tts') { ttsProviderId.value = pid; ttsModelId.value = mid }
 }
 
 async function loadChatConfig() {
   try {
     const res = await getDefaultChatModel()
-    // 后端 providerId 已用 ToStringSerializer 输出为字符串，但仍兜底转换避免精度丢失
-    chatConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
-    chatConfig.modelId = res.data?.modelId || null
-    if (chatConfig.providerId) {
-      chatModels.value = await loadModelsByType(chatConfig.providerId, 'llm')
-    }
+    const pid = res.data?.providerId ? String(res.data.providerId) : null
+    const mid = res.data?.modelId ? String(res.data.modelId) : null
+    chatProviderId.value = pid
+    chatModelId.value = mid
+    if (pid && mid) chatValue.value = `${pid}:${mid}`
   } catch (e) {
     console.error('[Settings] 加载对话模型配置失败:', e)
   }
@@ -288,11 +194,11 @@ async function loadChatConfig() {
 async function loadEmbeddingConfig() {
   try {
     const res = await getDefaultEmbeddingModel()
-    embeddingConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
-    embeddingConfig.modelId = res.data?.modelId || null
-    if (embeddingConfig.providerId) {
-      embeddingModels.value = await loadModelsByType(embeddingConfig.providerId, 'embedding')
-    }
+    const pid = res.data?.providerId ? String(res.data.providerId) : null
+    const mid = res.data?.modelId ? String(res.data.modelId) : null
+    embeddingProviderId.value = pid
+    embeddingModelId.value = mid
+    if (pid && mid) embeddingValue.value = `${pid}:${mid}`
   } catch (e) {
     console.error('[Settings] 加载向量模型配置失败:', e)
   }
@@ -301,11 +207,11 @@ async function loadEmbeddingConfig() {
 async function loadRerankConfig() {
   try {
     const res = await getDefaultRerankModel()
-    rerankConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
-    rerankConfig.modelId = res.data?.modelId || null
-    if (rerankConfig.providerId) {
-      rerankModels.value = await loadModelsByType(rerankConfig.providerId, 'rerank')
-    }
+    const pid = res.data?.providerId ? String(res.data.providerId) : null
+    const mid = res.data?.modelId ? String(res.data.modelId) : null
+    rerankProviderId.value = pid
+    rerankModelId.value = mid
+    if (pid && mid) rerankValue.value = `${pid}:${mid}`
   } catch (e) {
     console.error('[Settings] 加载重排模型配置失败:', e)
   }
@@ -314,38 +220,21 @@ async function loadRerankConfig() {
 async function loadTtsConfig() {
   try {
     const res = await getDefaultTtsModel()
-    ttsConfig.providerId = res.data?.providerId ? String(res.data.providerId) : null
-    ttsConfig.modelId = res.data?.modelId || null
-    if (ttsConfig.providerId) {
-      ttsModels.value = await loadModelsByType(ttsConfig.providerId, 'tts')
-    }
+    const pid = res.data?.providerId ? String(res.data.providerId) : null
+    const mid = res.data?.modelId ? String(res.data.modelId) : null
+    ttsProviderId.value = pid
+    ttsModelId.value = mid
+    if (pid && mid) ttsValue.value = `${pid}:${mid}`
   } catch (e) {
     console.error('[Settings] 加载TTS模型配置失败:', e)
   }
 }
 
-async function onProviderChange(kind, providerId) {
-  if (kind === 'chat') {
-    chatConfig.modelId = null
-    chatModels.value = await loadModelsByType(providerId, 'llm')
-  } else if (kind === 'embedding') {
-    embeddingConfig.modelId = null
-    embeddingModels.value = await loadModelsByType(providerId, 'embedding')
-  } else if (kind === 'tts') {
-    ttsConfig.modelId = null
-    ttsModels.value = await loadModelsByType(providerId, 'tts')
-  } else if (kind === 'rerank') {
-    rerankConfig.modelId = null
-    rerankModels.value = await loadModelsByType(providerId, 'rerank')
-  }
-}
-
 async function saveChatModel() {
-  if (!chatConfig.providerId) return message.warning('请选择模型提供商')
-  if (!chatConfig.modelId) return message.warning('请选择模型')
+  if (!chatProviderId.value || !chatModelId.value) return message.warning('请选择模型')
   chatSaving.value = true
   try {
-    await updateDefaultChatModel({ providerId: chatConfig.providerId, modelId: chatConfig.modelId })
+    await updateDefaultChatModel({ providerId: chatProviderId.value, modelId: chatModelId.value })
     message.success('默认对话模型已保存')
   } catch (e) {
     message.error(e.response?.data?.message || '保存失败')
@@ -355,11 +244,10 @@ async function saveChatModel() {
 }
 
 async function saveEmbeddingModel() {
-  if (!embeddingConfig.providerId) return message.warning('请选择模型提供商')
-  if (!embeddingConfig.modelId) return message.warning('请选择模型')
+  if (!embeddingProviderId.value || !embeddingModelId.value) return message.warning('请选择模型')
   embeddingSaving.value = true
   try {
-    await updateDefaultEmbeddingModel({ providerId: embeddingConfig.providerId, modelId: embeddingConfig.modelId })
+    await updateDefaultEmbeddingModel({ providerId: embeddingProviderId.value, modelId: embeddingModelId.value })
     message.success('默认向量模型已保存')
   } catch (e) {
     message.error(e.response?.data?.message || '保存失败')
@@ -369,11 +257,10 @@ async function saveEmbeddingModel() {
 }
 
 async function saveRerankModel() {
-  if (!rerankConfig.providerId) return message.warning('请选择模型提供商')
-  if (!rerankConfig.modelId) return message.warning('请选择模型')
+  if (!rerankProviderId.value || !rerankModelId.value) return message.warning('请选择模型')
   rerankSaving.value = true
   try {
-    await updateDefaultRerankModel({ providerId: rerankConfig.providerId, modelId: rerankConfig.modelId })
+    await updateDefaultRerankModel({ providerId: rerankProviderId.value, modelId: rerankModelId.value })
     message.success('默认重排模型已保存')
   } catch (e) {
     message.error(e.response?.data?.message || '保存失败')
@@ -383,11 +270,10 @@ async function saveRerankModel() {
 }
 
 async function saveTtsModel() {
-  if (!ttsConfig.providerId) return message.warning('请选择模型提供商')
-  if (!ttsConfig.modelId) return message.warning('请选择模型')
+  if (!ttsProviderId.value || !ttsModelId.value) return message.warning('请选择模型')
   ttsSaving.value = true
   try {
-    await updateDefaultTtsModel({ providerId: ttsConfig.providerId, modelId: ttsConfig.modelId })
+    await updateDefaultTtsModel({ providerId: ttsProviderId.value, modelId: ttsModelId.value })
     message.success('默认 TTS 模型已保存')
   } catch (e) {
     message.error(e.response?.data?.message || '保存失败')
@@ -472,15 +358,6 @@ async function saveTtsModel() {
 .btn-primary:disabled {
   background: #d4d4d8;
   cursor: not-allowed;
-}
-.form-tip {
-  font-size: 12px;
-  color: #71717a;
-  margin-top: 4px;
-  display: block;
-}
-.form-tip.warn {
-  color: #f59e0b;
 }
 .panel-tip {
   display: flex;

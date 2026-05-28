@@ -26,6 +26,7 @@
       :pagination="false"
       rowKey="id"
       size="middle"
+      :loading="loading"
       :row-selection="{ selectedRowKeys, onChange: onSelectChange }"
     >
       <template #bodyCell="{ column, record, index }">
@@ -183,6 +184,7 @@ const route = useRoute()
 const router = useRouter()
 const promptKey = route.params.promptKey || route.params.id
 const versions = ref([])
+const loading = ref(false)
 
 const columns = [
   { title: '版本号', key: 'version', dataIndex: 'version', width: 180 },
@@ -278,8 +280,13 @@ function formatTime(t) {
 }
 
 onMounted(async () => {
-  const res = await getPromptVersions(promptKey)
-  versions.value = res.data || []
+  loading.value = true
+  try {
+    const res = await getPromptVersions(promptKey)
+    versions.value = res.data || []
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 

@@ -36,13 +36,14 @@
               <template #prefix><SearchOutlined /></template>
             </a-input>
             <a-tooltip title="刷新">
-              <button class="btn-outline-sm" @click="loadDocuments">
-                <ReloadOutlined />
+              <button class="btn-outline-sm" @click="loadDocuments" :disabled="docLoading">
+                <ReloadOutlined :spin="docLoading" />
               </button>
             </a-tooltip>
             <button class="btn-primary-sm" @click="openUploadModal">上传文档</button>
           </div>
         </div>
+        <a-spin :spinning="docLoading">
         <div class="doc-list">
           <div v-for="doc in documents" :key="doc.id" class="doc-item" @click="openDocModal(doc)">
             <a-tooltip :title="statusText(doc.status?.code || doc.status)">
@@ -73,6 +74,7 @@
             {{ docSearch.trim() ? '未找到匹配文档' : '暂无文档' }}
           </div>
         </div>
+        </a-spin>
         <div v-if="docPagination.total > docPagination.pageSize" class="doc-pagination">
           <a-pagination
             v-model:current="docPagination.current"
@@ -159,6 +161,16 @@
                   {{ mindmapLoading ? '生成中...' : '生成思维导图' }}
                 </button>
               </div>
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="eval" tab="RAG 评估">
+            <div class="rag-section">
+              <RAGEvaluationTab :knowledge-id="knowledgeId" />
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="benchmarks" tab="评估基准">
+            <div class="rag-section">
+              <EvaluationBenchmarks :knowledge-id="knowledgeId" />
             </div>
           </a-tab-pane>
         </a-tabs>
@@ -494,11 +506,7 @@
           <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" />
         </a-form-item>
         <a-form-item label="Embed模型" required>
-          <a-select v-model:value="editForm.embeddingModel" placeholder="选择嵌入模型" allow-clear style="width: 100%">
-            <a-select-option v-for="m in embeddingModels" :key="m.id" :value="m.modelId">
-              {{ m.name }} ({{ m.modelId }})
-            </a-select-option>
-          </a-select>
+          <ModelSelect v-model="editForm.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" />
         </a-form-item>
         <a-form-item label="RAG Top K">
           <a-input-number v-model:value="editForm.ragTopK" :min="1" :max="20" style="width: 100%" />
@@ -666,11 +674,14 @@ import {
   fetchUrlDocument, previewUrlDocument, saveUrlDocument,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
-import { getModelsByType } from '../api/model'
+import { getProvidersWithModels } from '../api/modelProvider'
+import ModelSelect from '../components/ModelSelect.vue'
 import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 import FilePreview from '../components/FilePreview.vue'
+import RAGEvaluationTab from '../components/eval/RAGEvaluationTab.vue'
+import EvaluationBenchmarks from '../components/eval/EvaluationBenchmarks.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -679,6 +690,7 @@ const knowledgeId = route.params.id
 
 const knowledge = ref({})
 const documents = ref([])
+const docLoading = ref(false)
 const docSearch = ref('')
 const docPagination = reactive({
   current: 1,
@@ -786,7 +798,6 @@ const ingestForm = reactive({
 // 编辑弹窗
 const editVisible = ref(false)
 const editSubmitting = ref(false)
-const embeddingModels = ref([])
 const editForm = reactive({
   name: '',
   description: '',
@@ -856,13 +867,18 @@ async function loadKnowledge() {
 }
 
 async function loadDocuments() {
-  const res = await getDocuments(knowledgeId, {
-    keyword: docSearch.value.trim() || undefined,
-    pageNum: docPagination.current,
-    pageSize: docPagination.pageSize,
-  })
-  documents.value = res.data?.records || []
-  docPagination.total = res.data?.total || 0
+  docLoading.value = true
+  try {
+    const res = await getDocuments(knowledgeId, {
+      keyword: docSearch.value.trim() || undefined,
+      pageNum: docPagination.current,
+      pageSize: docPagination.pageSize,
+    })
+    documents.value = res.data?.records || []
+    docPagination.total = res.data?.total || 0
+  } finally {
+    docLoading.value = false
+  }
 }
 
 async function handleUpload(file) {
@@ -1205,10 +1221,24 @@ async function openEditDialog() {
     config = typeof k.config === 'string' ? JSON.parse(k.config) : (k.config || {})
   } catch { config = {} }
 
+  // 解析当前 embeddingModel 对应的 providerId，构造复合值
+  let embeddingComposite = null
+  if (k.embeddingModel) {
+    try {
+      const provRes = await getProvidersWithModels('embedding')
+      for (const p of (provRes.data || [])) {
+        if ((p.models || []).some(m => m.modelId === k.embeddingModel)) {
+          embeddingComposite = `${String(p.id)}:${k.embeddingModel}`
+          break
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
   Object.assign(editForm, {
     name: k.name || '',
     description: k.description || '',
-    embeddingModel: k.embeddingModel || '',
+    embeddingModel: embeddingComposite,
     ragTopK: config.ragTopK ?? 5,
     ragThreshold: config.ragThreshold ?? 0.7,
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
@@ -1222,17 +1252,12 @@ async function openEditDialog() {
   } catch { editExampleQuestions.value = [] }
 
   editVisible.value = true
-
-  // 加载嵌入模型列表
-  try {
-    const res = await getModelsByType('embedding')
-    embeddingModels.value = res.data || []
-  } catch { /* ignore */ }
 }
 
 async function handleEdit() {
   if (!editForm.name.trim()) return message.warning('请输入名称')
   if (!editForm.embeddingModel) return message.warning('请选择 Embed 模型')
+  const embeddingModelId = editForm.embeddingModel.split(':')[1]
   editSubmitting.value = true
   try {
     const config = JSON.stringify({
@@ -1245,7 +1270,7 @@ async function handleEdit() {
       id: knowledgeId,
       name: editForm.name,
       description: editForm.description,
-      embeddingModel: editForm.embeddingModel,
+      embeddingModel: embeddingModelId,
       config,
     })
     // 保存示例问题
