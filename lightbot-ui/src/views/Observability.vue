@@ -34,6 +34,7 @@
 
     <!-- 筛选栏 -->
     <div class="filter-bar">
+      <a-input v-model:value="filter.requestId" placeholder="Request ID" :style="{ width: '200px' }" allow-clear />
       <a-input-number v-model:value="filter.sessionId" placeholder="会话ID" :style="{ width: '160px' }" />
       <a-select v-model:value="filter.status" placeholder="状态" :style="{ width: '120px' }" allowClear>
         <a-select-option value="completed">成功</a-select-option>
@@ -94,6 +95,15 @@
       <template v-if="detailTrace">
         <!-- 基本信息 -->
         <div class="detail-info">
+          <div v-if="detailTrace.requestId" class="info-row" style="grid-column: 1 / -1;">
+            <span class="info-label">Request ID</span>
+            <span class="info-value request-id-text">{{ detailTrace.requestId }}</span>
+            <button class="btn-copy btn-copy-inline" @click="copyToClipboard(detailTrace.requestId, 'trace_rid')">
+              <CheckOutlined v-if="copiedKey === 'trace_rid'" style="color: #52c41a" />
+              <CopyOutlined v-else />
+              {{ copiedKey === 'trace_rid' ? '已复制' : '复制' }}
+            </button>
+          </div>
           <div class="info-row">
             <span class="info-label">Agent</span>
             <span class="info-value">{{ detailTrace.agentName || '-' }}</span>
@@ -361,6 +371,7 @@ function copyToClipboard(text, key) {
 }
 
 const filter = reactive({
+  requestId: '',
   sessionId: null,
   status: undefined,
   timeRange: null,
@@ -376,6 +387,7 @@ const pagination = reactive({
 
 const columns = [
   { title: '时间', key: 'createTime', width: 100 },
+  { title: 'Request ID', dataIndex: 'requestId', width: 160, ellipsis: true },
   { title: 'Agent', dataIndex: 'agentName', width: 120, ellipsis: true },
   { title: '模型', dataIndex: 'model', width: 140, ellipsis: true },
   { title: 'Token (入/出)', key: 'totalTokens', width: 130 },
@@ -563,6 +575,7 @@ async function loadTraces(page) {
       pageNum: pagination.current,
       pageSize: pagination.pageSize,
     }
+    if (filter.requestId?.trim()) params.requestId = filter.requestId.trim()
     if (filter.sessionId) params.sessionId = filter.sessionId
     if (filter.status) params.status = filter.status
     if (filter.timeRange?.length === 2) {
@@ -844,6 +857,7 @@ onMounted(() => {
   gap: 8px;
 }
 .error-text { color: #ff4d4f; font-size: 12px; word-break: break-word; white-space: pre-wrap; }
+.request-id-text { font-family: 'Geist Mono', Menlo, monospace; font-size: 12px; word-break: break-all; }
 .btn-copy-inline { align-self: flex-start; }
 
 .empty-spans {

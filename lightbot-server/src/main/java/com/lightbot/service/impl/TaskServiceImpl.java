@@ -132,7 +132,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
 
     @Override
     public Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status) {
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Task>()
                         .eq(Task::getUserId, userId)
                         .like(StringUtils.hasText(name), Task::getName, name)

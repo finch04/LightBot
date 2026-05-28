@@ -106,7 +106,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
 
     @Override
     public Page<Tool> listPage(int pageNum, int pageSize, String name) {
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Tool>()
                         .like(StringUtils.hasText(name), Tool::getName, name)
                         .orderByDesc(Tool::getCreateTime));
@@ -114,7 +114,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
 
     @Override
     public Page<Tool> listTools(int pageNum, int pageSize, String toolType) {
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Tool>()
                         .eq(StringUtils.hasText(toolType), Tool::getToolType, toolType)
                         .orderByDesc(Tool::getCreateTime));
@@ -143,7 +143,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             wrapper.eq(Tool::getIsSystem, isSystem);
         }
 
-        return page(new Page<>(pageNum, pageSize), wrapper);
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }
 
     @Override

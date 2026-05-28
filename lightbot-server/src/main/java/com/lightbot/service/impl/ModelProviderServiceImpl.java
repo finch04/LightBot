@@ -79,7 +79,7 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
 
     @Override
     public Page<ModelProvider> listPage(int pageNum, int pageSize) {
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<ModelProvider>().orderByDesc(ModelProvider::getCreateTime));
     }
 

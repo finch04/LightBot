@@ -49,6 +49,8 @@ public final class ConfigKeys {
         public static final String ENABLE_VIDEO_INPUT = "enableVideoInput";
         /** 音频输入（浏览器语音转文字） */
         public static final String ENABLE_AUDIO_INPUT = "enableAudioInput";
+        /** 文件读取（Tika 解析文档为文本注入对话，与多模态图片/视频独立） */
+        public static final String ENABLE_FILE_READ = "enableFileRead";
         /** 联网搜索（MiMo web_search） */
         public static final String ENABLE_WEB_SEARCH = "enableWebSearch";
         /** 联网搜索：强制搜索 */

@@ -9,6 +9,9 @@ import com.lightbot.common.BizException;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.dto.AgentChatCapabilitiesDTO;
+import com.lightbot.util.AgentChatCapabilitiesUtil;
+import com.lightbot.util.ChatDocumentMessageUtil;
 import com.lightbot.util.ChatMessageMediaUtil;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MinioUtil;
@@ -119,9 +122,13 @@ public class MessageMiddleware implements ChatMiddleware {
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
-        validateAttachments(ctx.getRequest().getAttachments());
+        validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
         String userText = resolveUserText(ctx.getRequest());
-        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
+        if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
+            deleteLastAssistantMessage(ctx.getSessionId());
+        } else {
+            saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
+        }
 
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
                 ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
@@ -134,7 +141,7 @@ public class MessageMiddleware implements ChatMiddleware {
      * 同步路径专用：保存用户消息 + 构建消息列表
      */
     public void prepare(ChatContext ctx) {
-        validateAttachments(ctx.getRequest().getAttachments());
+        validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
         String userText = resolveUserText(ctx.getRequest());
         saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
@@ -142,7 +149,10 @@ public class MessageMiddleware implements ChatMiddleware {
         ctx.setMessages(messages);
     }
 
-    private void validateAttachments(List<ChatAttachmentDTO> attachments) {
+    /**
+     * 校验附件数量与类型：文档需开启文件读取；图片/视频需开启多模态对应能力
+     */
+    private void validateAttachments(List<ChatAttachmentDTO> attachments, Map<String, Object> configMap) {
         if (attachments == null || attachments.isEmpty()) {
             return;
         }
@@ -150,6 +160,33 @@ public class MessageMiddleware implements ChatMiddleware {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
                     "单条消息最多上传 " + ChatAttachmentConstants.MAX_ATTACHMENTS_PER_MESSAGE + " 个附件");
         }
+        AgentChatCapabilitiesDTO caps = AgentChatCapabilitiesUtil.fromConfigMap(configMap);
+        for (ChatAttachmentDTO att : attachments) {
+            if (att == null || att.getType() == null) {
+                continue;
+            }
+            if (ChatDocumentMessageUtil.isDocumentAttachment(att)) {
+                if (!Boolean.TRUE.equals(caps.getEnableFileRead())) {
+                    throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启文件读取");
+                }
+                if (att.getParsedText() == null || att.getParsedText().isBlank()) {
+                    throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "文档附件缺少解析内容，请重新上传");
+                }
+            } else if ("image".equals(att.getType())) {
+                if (!Boolean.TRUE.equals(caps.getAllowMediaUpload())
+                        || !Boolean.TRUE.equals(caps.getEnableImageInput())) {
+                    throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启图像输入");
+                }
+            } else if ("video".equals(att.getType())) {
+                if (!Boolean.TRUE.equals(caps.getAllowMediaUpload())
+                        || !Boolean.TRUE.equals(caps.getEnableVideoInput())) {
+                    throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启视频输入");
+                }
+            } else {
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "不支持的附件类型: " + att.getType());
+            }
+        }
+        ChatDocumentMessageUtil.validateMediaMix(attachments);
     }
 
     private String resolveUserText(ChatRequest request) {
@@ -245,11 +282,7 @@ public class MessageMiddleware implements ChatMiddleware {
         for (Message msg : history) {
             if (msg.getRole() == MessageRole.USER) {
                 List<ChatAttachmentDTO> histAttachments = parseAttachmentsFromMetadata(msg.getMetadata());
-                if (!histAttachments.isEmpty()) {
-                    messages.add(ChatMessageMediaUtil.buildUserMessage(msg.getContent(), histAttachments, minioUtil));
-                } else {
-                    messages.add(new UserMessage(msg.getContent()));
-                }
+                messages.add(buildUserMessageForAttachments(msg.getContent(), histAttachments));
             } else if (msg.getRole() == MessageRole.ASSISTANT) {
                 messages.add(new AssistantMessage(msg.getContent()));
             } else if (msg.getRole() == MessageRole.SYSTEM && msg.getContent() != null && !msg.getContent().isBlank()) {
@@ -257,14 +290,28 @@ public class MessageMiddleware implements ChatMiddleware {
             }
         }
 
-        // 6. 当前用户消息（含多模态附件）
+        // 6. 当前用户消息（文档走文本注入，图片/视频走多模态）
         List<ChatAttachmentDTO> attachments = request != null ? request.getAttachments() : null;
-        if (attachments != null && !attachments.isEmpty()) {
-            messages.add(ChatMessageMediaUtil.buildUserMessage(userMessage, attachments, minioUtil));
-        } else {
-            messages.add(new UserMessage(userMessage));
-        }
+        messages.add(buildUserMessageForAttachments(userMessage, attachments));
         return messages;
+    }
+
+    /**
+     * 构建用户消息：document 附件拼入文本，image/video 仍走多模态
+     */
+    private org.springframework.ai.chat.messages.Message buildUserMessageForAttachments(
+            String content, List<ChatAttachmentDTO> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return new UserMessage(content != null ? content : "");
+        }
+        // 文档 → Tika 文本拼入提示词；图片/视频 → 多模态一并发送（可混合）
+        List<ChatAttachmentDTO> documents = ChatDocumentMessageUtil.filterDocuments(attachments);
+        List<ChatAttachmentDTO> media = ChatDocumentMessageUtil.filterMedia(attachments);
+        String text = ChatDocumentMessageUtil.wrapUserMessage(content, documents);
+        if (!media.isEmpty()) {
+            return ChatMessageMediaUtil.buildUserMessage(text, media, minioUtil);
+        }
+        return new UserMessage(text);
     }
 
     /**
@@ -398,6 +445,31 @@ public class MessageMiddleware implements ChatMiddleware {
      */
     public void saveMessage(Long sessionId, MessageRole role, String content) {
         saveMessage(sessionId, role, content, null, 0);
+    }
+
+    /**
+     * 重新生成：删除会话中最近一条助手消息（及统计）
+     */
+    public void deleteLastAssistantMessage(Long sessionId) {
+        Message last = messageMapper.selectOne(
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getSessionId, sessionId)
+                        .eq(Message::getRole, MessageRole.ASSISTANT)
+                        .orderByDesc(Message::getCreateTime)
+                        .last("LIMIT 1"));
+        if (last == null) {
+            return;
+        }
+        messageMapper.deleteById(last.getId());
+        var session = chatSessionService.getById(sessionId);
+        if (session != null && session.getMessageCount() != null && session.getMessageCount() > 0) {
+            session.setMessageCount(session.getMessageCount() - 1);
+            int tokens = last.getTokenCount() != null ? last.getTokenCount() : 0;
+            if (tokens > 0 && session.getTotalTokens() != null) {
+                session.setTotalTokens(Math.max(0L, session.getTotalTokens() - tokens));
+            }
+            chatSessionService.updateById(session);
+        }
     }
 
     /**

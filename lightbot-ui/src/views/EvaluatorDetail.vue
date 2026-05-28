@@ -1,0 +1,444 @@
+<template>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <button class="btn-back" @click="router.push('/eval/evaluators')">
+          <ArrowLeftOutlined /> 返回
+        </button>
+        <h1 class="page-title">{{ evaluator?.name || '评估器详情' }}</h1>
+        <p class="page-desc">{{ evaluator?.description || '' }}</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn-primary-sm" @click="openVersionDialog()">
+          <PlusOutlined /> 新建版本
+        </button>
+      </div>
+    </div>
+
+    <div class="content-grid">
+      <!-- 左侧：版本列表 -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3>版本列表</h3>
+        </div>
+        <div class="version-list">
+          <div v-for="v in versions" :key="v.id" class="version-item" @click="selectVersion(v)">
+            <div class="version-info">
+              <span class="version-tag">{{ v.version }}</span>
+              <a-tag :color="v.status === 'release' ? 'green' : 'blue'" size="small">
+                {{ v.status === 'release' ? '已发布' : '草稿' }}
+              </a-tag>
+            </div>
+            <div class="version-meta">{{ truncate(v.prompt, 80) }}</div>
+          </div>
+          <div v-if="versions.length === 0" class="version-empty">暂无版本，点击右上角创建</div>
+        </div>
+      </div>
+
+      <!-- 右侧：调试区域 -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3>在线调试</h3>
+        </div>
+        <div class="debug-form">
+          <a-form :label-col="{ span: 5 }">
+            <a-form-item label="选择版本" required>
+              <a-select
+                v-model:value="debugForm.versionId"
+                placeholder="选择要调试的版本"
+                style="width: 100%"
+              >
+                <a-select-option v-for="v in versions" :key="v.id" :value="v.id">
+                  {{ v.version }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="输入变量">
+              <a-textarea
+                v-model:value="debugForm.variables"
+                :rows="5"
+                placeholder='JSON 格式，如: {"actual_output":"回答内容","expected_output":"期望内容","input":"用户输入"}'
+              />
+            </a-form-item>
+          </a-form>
+          <div class="debug-actions">
+            <button class="btn-primary-sm" :disabled="debugging" @click="handleDebug">
+              <ThunderboltOutlined /> {{ debugging ? '调试中...' : '执行评测' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 调试结果 -->
+        <div v-if="debugResult" class="debug-result">
+          <div class="result-header">评测结果</div>
+          <div class="result-score" :class="scoreClass(debugResult.score)">
+            <span class="score-label">评分</span>
+            <span class="score-value">{{ debugResult.score?.toFixed(2) ?? '-' }}</span>
+          </div>
+          <div v-if="debugResult.reason" class="result-reason">
+            <div class="reason-label">评分理由</div>
+            <p>{{ debugResult.reason }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新建版本弹窗 -->
+    <a-modal
+      v-model:open="versionDialogVisible"
+      title="新建版本"
+      :width="680"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <a-form :model="versionForm" :label-col="{ span: 4 }">
+        <a-form-item label="版本号" required>
+          <a-input v-model:value="versionForm.version" placeholder="如: v1.0" />
+        </a-form-item>
+        <a-form-item label="版本描述">
+          <a-input v-model:value="versionForm.versionDesc" placeholder="版本说明" />
+        </a-form-item>
+        <a-form-item label="评估模板" required>
+          <a-textarea
+            v-model:value="versionForm.prompt"
+            :rows="8"
+            placeholder="评估器的 Prompt 模板，使用 {{变量名}} 定义变量"
+          />
+        </a-form-item>
+        <a-form-item label="变量定义">
+          <a-textarea
+            v-model:value="versionForm.variables"
+            :rows="3"
+            placeholder='JSON 格式，如: [{"name":"actual_output","description":"实际输出","required":true}]'
+          />
+        </a-form-item>
+        <a-form-item label="模型配置">
+          <a-textarea
+            v-model:value="versionForm.modelConfig"
+            :rows="3"
+            placeholder='JSON 格式，如: {"providerId":"123","modelId":"qwen-max","temperature":0.3}'
+          />
+        </a-form-item>
+      </a-form>
+      <div class="dialog-footer">
+        <div></div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="versionDialogVisible = false">取消</button>
+          <button class="btn-primary-sm" :disabled="submitting" @click="handleCreateVersion">
+            {{ submitting ? '提交中...' : '确定' }}
+          </button>
+        </div>
+      </div>
+    </a-modal>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { PlusOutlined, ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import {
+  getEvaluator,
+  getEvaluatorVersions, createEvaluatorVersion,
+  testEvaluator,
+} from '../api/evaluator'
+
+const route = useRoute()
+const router = useRouter()
+const evaluatorId = route.params.id
+const evaluator = ref(null)
+const versions = ref([])
+const versionDialogVisible = ref(false)
+const submitting = ref(false)
+const debugging = ref(false)
+const debugResult = ref(null)
+
+const versionForm = reactive({
+  version: '',
+  versionDesc: '',
+  prompt: '',
+  variables: '',
+  modelConfig: '',
+})
+
+const debugForm = reactive({
+  versionId: null,
+  variables: '',
+})
+
+onMounted(async () => {
+  await loadEvaluator()
+  await loadVersions()
+})
+
+async function loadEvaluator() {
+  const res = await getEvaluator(evaluatorId)
+  evaluator.value = res.data
+}
+
+async function loadVersions() {
+  const res = await getEvaluatorVersions(evaluatorId)
+  versions.value = res.data || []
+}
+
+function selectVersion(v) {
+  debugForm.versionId = v.id
+}
+
+function openVersionDialog() {
+  Object.assign(versionForm, {
+    version: '', versionDesc: '', prompt: '', variables: '', modelConfig: '',
+  })
+  versionDialogVisible.value = true
+}
+
+async function handleCreateVersion() {
+  if (!versionForm.version.trim()) return message.warning('请输入版本号')
+  if (!versionForm.prompt.trim()) return message.warning('请输入评估模板')
+  submitting.value = true
+  try {
+    await createEvaluatorVersion({
+      evaluatorId,
+      version: versionForm.version,
+      prompt: versionForm.prompt,
+      variables: versionForm.variables,
+      modelConfig: versionForm.modelConfig,
+    })
+    message.success('版本创建成功')
+    versionDialogVisible.value = false
+    loadVersions()
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function handleDebug() {
+  if (!debugForm.versionId) return message.warning('请选择版本')
+  let variables = '{}'
+  if (debugForm.variables.trim()) {
+    try {
+      JSON.parse(debugForm.variables)
+      variables = debugForm.variables
+    } catch {
+      return message.warning('变量 JSON 格式不正确')
+    }
+  }
+  debugging.value = true
+  debugResult.value = null
+  try {
+    const res = await testEvaluator({
+      evaluatorVersionId: debugForm.versionId,
+      variables,
+    })
+    debugResult.value = res.data || {}
+    message.success('评测完成')
+  } catch {
+    // error handled by interceptor
+  } finally {
+    debugging.value = false
+  }
+}
+
+function scoreClass(score) {
+  if (score == null) return ''
+  if (score >= 0.8) return 'score-high'
+  if (score >= 0.5) return 'score-mid'
+  return 'score-low'
+}
+
+function truncate(str, len) {
+  if (!str) return ''
+  return str.length > len ? str.substring(0, len) + '...' : str
+}
+</script>
+
+<style scoped>
+.page {
+  padding: 20px 24px;
+  height: 100vh;
+  overflow-y: auto;
+  background: #fafafa;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.btn-back {
+  background: none;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.btn-back:hover { color: #0070f3; }
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 4px;
+}
+.page-desc {
+  font-size: 14px;
+  color: #71717a;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-primary-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-primary-sm:hover:not(:disabled) { background: #27272a; }
+.btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
+.btn-cancel {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.panel {
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 16px;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.panel-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0;
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+.version-item {
+  padding: 10px 12px;
+  border: 1px solid #f5f5f5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.version-item:hover { border-color: #0070f3; }
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.version-tag {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
+.version-meta {
+  font-size: 12px;
+  color: #a1a1aa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.version-empty {
+  text-align: center;
+  padding: 40px;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+
+.debug-form {
+  margin-bottom: 24px;
+}
+.debug-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.debug-result {
+  border-top: 1px solid #ebebeb;
+  padding-top: 24px;
+}
+.result-header {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 16px;
+}
+.result-score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.result-score.score-high { background: #dcfce7; }
+.result-score.score-mid { background: #fef3c7; }
+.result-score.score-low { background: #fee2e2; }
+.score-label {
+  font-size: 14px;
+  color: #71717a;
+}
+.score-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #171717;
+}
+.result-reason {
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+.reason-label {
+  font-size: 13px;
+  color: #71717a;
+  margin-bottom: 8px;
+}
+.result-reason p {
+  margin: 0;
+  font-size: 14px;
+  color: #171717;
+  line-height: 1.6;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+.dialog-footer-right { display: flex; gap: 8px; }
+</style>

@@ -122,7 +122,6 @@ public class MimoModelHandler implements ModelProviderHandler {
                 .defaultValue("mimo-v2.5-pro")
                 .hint("多模态建议选用 mimo-v2.5 或 mimo-v2-omni")
                 .build());
-        fields.addAll(AgentCapabilityConfigFields.mimoFields());
         fields.add(ConfigField.builder()
                 .key("temperature")
                 .label("温度")
@@ -164,6 +163,11 @@ public class MimoModelHandler implements ModelProviderHandler {
                 .hint("正值降低重复用词的概率")
                 .build());
         return fields;
+    }
+
+    @Override
+    public List<ConfigField> getModelCapabilities() {
+        return AgentCapabilityConfigFields.mimoFields();
     }
 
     @Override

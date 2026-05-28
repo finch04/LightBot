@@ -110,7 +110,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
 
         // 2. 分页查询这些知识库
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Knowledge>()
                         .in(Knowledge::getId, knowledgeIds)
                         .eq(Knowledge::getStatus, CommonStatus.ACTIVE)

@@ -50,8 +50,12 @@ public class WorkflowMiddleware implements ChatMiddleware {
         log.info("[WorkflowMiddleware] 开始执行工作流: agentId={}, sessionId={}, configVersion={}",
                 ctx.getAgent().getId(), ctx.getSessionId(), ctx.getRequest().getConfigVersion());
 
-        // 1. 持久化用户消息（工作流不走 MessageMiddleware 链）
-        messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
+        // 1. 持久化用户消息（工作流不走 MessageMiddleware 链）；重新生成时不重复落库
+        if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
+            messageMiddleware.deleteLastAssistantMessage(ctx.getSessionId());
+        } else {
+            messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.USER, ctx.getRequest().getMessage());
+        }
 
         return Flux.<String>create(sink -> Schedulers.boundedElastic().schedule(() -> {
             try {
@@ -92,6 +96,9 @@ public class WorkflowMiddleware implements ChatMiddleware {
 
                 Map<String, Object> metadataMap = new LinkedHashMap<>();
                 metadataMap.put("workflowEvents", workflowEvents);
+                if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
+                    metadataMap.put("requestId", ctx.getRequestId());
+                }
                 if (ctx.getRequest().getConfigVersion() != null) {
                     metadataMap.put("configVersion", ctx.getRequest().getConfigVersion());
                 }

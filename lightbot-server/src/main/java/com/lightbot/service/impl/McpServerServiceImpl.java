@@ -77,7 +77,7 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
 
     @Override
     public Page<McpServer> listPage(int pageNum, int pageSize, String name) {
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<McpServer>()
                         .like(StringUtils.hasText(name), McpServer::getName, name)
                         .orderByDesc(McpServer::getCreateTime));

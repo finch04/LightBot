@@ -32,38 +32,21 @@
 
       <!-- 消息列表 -->
       <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
-        <div class="message-avatar">
-          <span v-if="msg.role === 'user'">{{ userInitial }}</span>
-          <img v-else-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
-          <span v-else class="bot-avatar">LB</span>
-        </div>
         <div class="message-body">
-          <div class="message-meta">
-            {{ msg.role === 'user' ? '你' : 'LightBot' }}
-          </div>
+          <!-- <div v-if="msg.role === 'assistant'" class="message-meta">回复</div> -->
           <div class="message-content-wrapper" :class="{ 'user-message-stack': msg.role === 'user' }">
             <!-- 用户附件：固定在用户气泡上方、右对齐（发送后与历史记录一致） -->
             <div
               v-if="msg.role === 'user' && getMsgAttachments(msg).length && !msg._sensitiveBlock"
               class="user-message-attachments"
             >
-              <template v-for="(att, ai) in getMsgAttachments(msg)" :key="att.id || ai">
-                <button
-                  v-if="(att.type === 'image' || att.type === 'video') && getAttThumbUrl(att)"
-                  type="button"
-                  class="msg-att-thumb"
-                  :class="{ 'msg-att-thumb--video': att.type === 'video' }"
-                  @click="openMediaPreview(att)"
-                >
-                  <img :src="getAttThumbUrl(att)" :alt="att.fileName || att.type" />
-                  <span class="msg-att-hover-mask">
-                    <EyeOutlined class="mask-icon" />
-                    <span class="mask-text">预览</span>
-                  </span>
-                  <span v-if="att.type === 'video'" class="msg-att-play-badge"><PlayCircleOutlined /></span>
-                </button>
-                <span v-else class="msg-att-file-tag">{{ att.fileName || att.type }}</span>
-              </template>
+              <ChatAttachmentTile
+                v-for="(att, ai) in getMsgAttachments(msg)"
+                :key="att.id || ai"
+                :att="att"
+                :thumb-url="getAttThumbUrl(att)"
+                @preview="openAttachmentPreview"
+              />
             </div>
             <!-- 敏感词拦截提示（独立样式，与正常内容区分） -->
             <div v-if="msg._sensitiveBlock" class="sensitive-block-alert" :class="msg._sensitiveBlock">
@@ -118,7 +101,7 @@
                 <MarkdownPreview :content="msg.content" :finalized="!msg._streaming" />
               </div>
             </template>
-            <!-- 朗读（仅助手且版本支持 TTS）/ 复制 -->
+            <!-- 朗读 / 复制 / 重新生成 / 复制 requestId -->
             <div
               v-if="!msg._streaming && msg.content && !msg._sensitiveBlock"
               class="message-actions"
@@ -143,6 +126,24 @@
                 >
                   <CheckOutlined v-if="msg._copied" />
                   <CopyOutlined v-else />
+                </button>
+              </a-tooltip>
+              <a-tooltip v-if="msg.role === 'assistant' && canRegenerate(i)" title="重新生成">
+                <button class="btn-copy btn-action-text" :disabled="loading" @click="regenerateReply(i)">
+                  <ReloadOutlined />
+                </button>
+              </a-tooltip>
+              <a-tooltip
+                v-if="msg.role === 'assistant' && msg._requestId"
+                :title="msg._requestIdCopied ? '已复制' : '复制 Request ID'"
+              >
+                <button
+                  class="btn-copy btn-action-text"
+                  :class="{ copied: msg._requestIdCopied }"
+                  @click="copyRequestId(msg)"
+                >
+                  <CheckOutlined v-if="msg._requestIdCopied" />
+                  <NumberOutlined v-else />
                 </button>
               </a-tooltip>
             </div>
@@ -176,14 +177,10 @@
         </div>
       </div>
 
-      <!-- 加载中（等待第一个 chunk）- 显示AI头像和加载动画 -->
+      <!-- 加载中（等待第一个 chunk） -->
       <div v-if="loading && !streaming" class="message assistant">
-        <div class="message-avatar">
-          <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
-          <span v-else class="bot-avatar">LB</span>
-        </div>
         <div class="message-body">
-          <div class="message-meta">LightBot</div>
+          <div class="message-meta">回复</div>
           <div class="message-content status-content">
             <div class="status-loading">
               <span class="status-spinner"></span>
@@ -194,12 +191,8 @@
       </div>
       <!-- 流式输出中但尚未创建助手消息时显示加载动画（避免与消息列表中的助手气泡重复） -->
       <div v-if="loading && streaming && !hasStreamContent && !hasStreamingAssistantMessage" class="message assistant">
-        <div class="message-avatar">
-          <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="bot-avatar-img" @error="currentAgent.avatar = ''" />
-          <span v-else class="bot-avatar">LB</span>
-        </div>
         <div class="message-body">
-          <div class="message-meta">LightBot</div>
+          <div class="message-meta">回复</div>
           <div class="message-content status-content">
             <div class="status-loading">
               <span class="status-spinner"></span>
@@ -273,10 +266,17 @@
             :overlay-style="{ maxWidth: '360px' }"
           >
             <template #title>
-              <span class="chat-upload-hint">{{ fileUploadHint || '上传图片或视频' }}</span>
+              <span class="chat-upload-hint">{{ fileUploadHint || '上传附件' }}</span>
             </template>
-            <button type="button" class="btn-attach" :disabled="loading || uploading" @click="triggerFileUpload">
-              <PaperClipOutlined />
+            <button
+              type="button"
+              class="btn-attach"
+              :class="{ 'btn-attach--uploading': uploading }"
+              :disabled="loading || uploading"
+              @click="triggerFileUpload"
+            >
+              <LoadingOutlined v-if="uploading" spin />
+              <PaperClipOutlined v-else />
             </button>
           </a-tooltip>
           <textarea
@@ -324,36 +324,34 @@
           </div>
         </div>
       </div>
-      <div v-if="pendingAttachments.length > 0" class="pending-attachments">
-        <span class="pending-att-count">已选 {{ pendingAttachments.length }} 个附件</span>
+      <div v-if="uploading || pendingAttachments.length > 0" class="pending-attachments">
+        <span class="pending-att-count">
+          <template v-if="uploading">附件上传中…</template>
+          <template v-else>已选 {{ pendingAttachments.length }} 个附件</template>
+        </span>
         <div class="pending-att-thumbs">
-          <div v-for="(att, i) in pendingAttachments" :key="att.id || i" class="pending-att-item">
-            <button
-              v-if="getAttThumbUrl(att)"
-              type="button"
-              class="att-thumb-wrap"
-              @click="openMediaPreview(att)"
-            >
-              <img :src="getAttThumbUrl(att)" :alt="att.fileName || ''" class="att-thumb" />
-              <span class="msg-att-hover-mask">
-                <EyeOutlined class="mask-icon" />
-                <span class="mask-text">预览</span>
-              </span>
-              <span v-if="att.type === 'video'" class="msg-att-play-badge sm"><PlayCircleOutlined /></span>
-            </button>
-            <span v-else class="att-name">{{ att.fileName || att.type }}</span>
-            <button type="button" class="att-remove" @click="removeAttachment(i)"><CloseOutlined /></button>
-          </div>
+          <ChatAttachmentTile
+            v-if="uploading"
+            :att="{ type: 'uploading', fileName: '上传中' }"
+            uploading
+          />
+          <ChatAttachmentTile
+            v-for="(att, i) in pendingAttachments"
+            :key="att.id || i"
+            :att="att"
+            :thumb-url="getAttThumbUrl(att)"
+            removable
+            @preview="openAttachmentPreview"
+            @remove="removeAttachment(i)"
+          />
         </div>
       </div>
       <div class="input-hint">LightBot 可能会犯错，请核实重要信息。</div>
     </div>
 
-    <ChatMediaPreview
-      v-model:open="mediaPreviewOpen"
-      :src="mediaPreviewSrc"
-      :media-type="mediaPreviewType"
-      :file-name="mediaPreviewName"
+    <ChatAttachmentPreview
+      v-model:open="attachmentPreviewOpen"
+      :attachment="attachmentPreviewAtt"
     />
   </div>
 </template>
@@ -361,10 +359,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
-import { buildUploadHint, validateChatAttachmentFile, validateAttachmentCount } from '../utils/chatAttachment'
+import {
+  buildUploadHint,
+  buildFileAcceptTypes,
+  validateChatAttachmentFile,
+  validateAttachmentCount,
+  validateAttachmentMix,
+  validatePendingAttachmentMix,
+} from '../utils/chatAttachment'
 import { captureVideoThumbnail, enrichVideoThumbnails } from '../utils/videoThumbnail'
 import { getSessionMessages, getSession, createSession } from '../api/chatSession'
 import { getAgents, getAgentDetail, getAgentChatCapabilities, listAgentVersions } from '../api/agent'
@@ -373,7 +378,8 @@ import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
-import ChatMediaPreview from '../components/ChatMediaPreview.vue'
+import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
+import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
 
 const route = useRoute()
@@ -401,10 +407,8 @@ const uploading = ref(false)
 const voiceListening = ref(false)
 const voiceInputBase = ref('')
 let speechRecognition = null
-const mediaPreviewOpen = ref(false)
-const mediaPreviewSrc = ref('')
-const mediaPreviewType = ref('image')
-const mediaPreviewName = ref('')
+const attachmentPreviewOpen = ref(false)
+const attachmentPreviewAtt = ref(null)
 const speakingMsgKey = ref(null)
 const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
@@ -423,14 +427,16 @@ const expandedRefsMap = ref(new Map())
 const selectedConfigVersion = ref(0)
 const configVersionOptions = ref([])
 
-const showFileUploadBtn = computed(() => Boolean(chatCapabilities.value?.allowFileUpload))
+/** 未开多模态但开启文件读取时也应显示附件按钮（仅文档） */
+const showFileUploadBtn = computed(() => {
+  const c = chatCapabilities.value
+  if (!c) return false
+  return Boolean(c.allowFileUpload || c.allowDocumentUpload || c.allowMediaUpload)
+})
 const showVoiceInputBtn = computed(() =>
   Boolean(chatCapabilities.value?.multimodalEnabled && chatCapabilities.value?.enableAudioInput))
 const showTtsBtn = computed(() => Boolean(chatCapabilities.value?.enableTts))
-const fileAcceptTypes = computed(() => {
-  const mimes = chatCapabilities.value?.allowedFileMimeTypes || []
-  return mimes.length ? mimes.join(',') : ''
-})
+const fileAcceptTypes = computed(() => buildFileAcceptTypes(chatCapabilities.value))
 const fileUploadHint = computed(() => buildUploadHint(chatCapabilities.value))
 const canSend = computed(() =>
   !loading.value && (input.value.trim().length > 0 || pendingAttachments.value.length > 0))
@@ -485,15 +491,20 @@ function handleAgentSelect({ key }) {
   loadAgentConfigVersions(key)
 }
 
-function openMediaPreview(att) {
-  const url = att.type === 'video'
-    ? (att.previewUrl || '')
-    : (att.previewUrl || getAttThumbUrl(att))
-  if (!url) return
-  mediaPreviewSrc.value = url
-  mediaPreviewType.value = att.type === 'video' ? 'video' : 'image'
-  mediaPreviewName.value = att.fileName || ''
-  mediaPreviewOpen.value = true
+function openAttachmentPreview(att) {
+  if (!att) return
+  if (att.type === 'image' || att.type === 'video') {
+    if (!getAttThumbUrl(att) && !att.previewUrl) return
+  } else if (att.type === 'document') {
+    if (!att.parsedText && !att.previewUrl) {
+      message.warning('暂无可预览内容')
+      return
+    }
+  } else {
+    return
+  }
+  attachmentPreviewAtt.value = att
+  attachmentPreviewOpen.value = true
 }
 
 function messagePlainText(content) {
@@ -668,13 +679,13 @@ async function enrichMessagesAttachments(msgs) {
   if (!needRefresh.length) return
   try {
     const res = await refreshChatAttachmentPreviews(needRefresh)
-    const urlByKey = new Map((res.data || []).map(a => [a.objectKey, a.previewUrl]))
+    const refreshedByKey = new Map((res.data || []).map(a => [a.objectKey, a]))
     for (const msg of msgs) {
       if (!msg._attachments?.length) continue
-      msg._attachments = msg._attachments.map(a => ({
-        ...a,
-        previewUrl: urlByKey.get(a.objectKey) || a.previewUrl,
-      }))
+      msg._attachments = msg._attachments.map(a => {
+        const refreshed = refreshedByKey.get(a.objectKey)
+        return refreshed ? { ...a, ...refreshed } : a
+      })
       await enrichVideoThumbnails(msg._attachments)
     }
   } catch {
@@ -689,6 +700,7 @@ function parseMessage(m) {
   let reasoningContent = ''
   let sensitiveBlock = null
   let attachments = []
+  let requestId = null
   if (m.metadata) {
     try {
       const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
@@ -697,6 +709,7 @@ function parseMessage(m) {
       if (metadata?.toolBlockOffsets) toolBlockOffsets = metadata.toolBlockOffsets
       if (metadata?.reasoningContent) reasoningContent = metadata.reasoningContent
       if (metadata?.sensitiveBlock) sensitiveBlock = metadata.sensitiveBlock
+      if (metadata?.requestId) requestId = metadata.requestId
       attachments = parseAttachmentsFromMetadata(metadata)
     } catch {}
   }
@@ -717,7 +730,16 @@ function parseMessage(m) {
     _reasoningExpanded: true,
     _reasoningDone: true,
     _sensitiveBlock: sensitiveBlock,
+    _requestId: requestId,
   }
+}
+
+/** 仅最后一条助手回复可重新生成（其后无用户新消息） */
+function canRegenerate(index) {
+  if (loading.value || streaming.value) return false
+  const msg = messages.value[index]
+  if (!msg || msg.role !== 'assistant' || msg._streaming || msg._sensitiveBlock) return false
+  return index === messages.value.length - 1
 }
 
 async function loadHistory() {
@@ -835,6 +857,11 @@ async function onFileSelected(e) {
     message.warning(validation.message)
     return
   }
+  const mixCheck = validateAttachmentMix(pendingAttachments.value, validation.type)
+  if (!mixCheck.ok) {
+    message.warning(mixCheck.message)
+    return
+  }
 
   uploading.value = true
   try {
@@ -852,8 +879,8 @@ async function onFileSelected(e) {
       }
     }
     pendingAttachments.value.push(att)
-  } catch (err) {
-    message.error(err.message || '上传失败')
+  } catch {
+    // 业务/网络错误提示由 request 拦截器统一展示，避免重复 toast
   } finally {
     uploading.value = false
   }
@@ -914,6 +941,11 @@ async function sendMessage() {
   const text = input.value.trim()
   const attachments = [...pendingAttachments.value]
   if ((!text && attachments.length === 0) || loading.value) return
+  const mixCheck = validatePendingAttachmentMix(attachments)
+  if (!mixCheck.ok) {
+    message.warning(mixCheck.message)
+    return
+  }
 
   const displayContent = text || (attachments.length ? '[附件]' : '')
   const sentAttachments = attachments.map(a => ({ ...a }))
@@ -921,6 +953,34 @@ async function sendMessage() {
   messages.value.push({ role: 'user', content: displayContent, _attachments: sentAttachments })
   input.value = ''
   pendingAttachments.value = []
+  autoResize()
+  scrollToBottom()
+
+  await runChatStream({
+    message: text,
+    attachments: sentAttachments,
+    regenerate: false,
+  })
+}
+
+async function regenerateReply(assistantIndex) {
+  if (loading.value || !canRegenerate(assistantIndex)) return
+  let userIdx = assistantIndex - 1
+  while (userIdx >= 0 && messages.value[userIdx].role !== 'user') {
+    userIdx--
+  }
+  if (userIdx < 0) return
+  const userMsg = messages.value[userIdx]
+  messages.value.pop()
+  scrollToBottom()
+  await runChatStream({
+    message: userMsg.content === '[附件]' ? '' : (userMsg.content || ''),
+    attachments: userMsg._attachments || [],
+    regenerate: true,
+  })
+}
+
+async function runChatStream({ message, attachments, regenerate }) {
   loading.value = true
   streaming.value = true
   hasStreamContent.value = false
@@ -928,51 +988,61 @@ async function sendMessage() {
   currentStatus.value = '正在思考...'
   toolEvents.value = []
   sendStartTime = Date.now()
-  autoResize()
-  scrollToBottom()
 
-  // 延迟创建 assistant 消息，等第一个 chunk 到达时再 push，避免空头像
   let assistantMsg = null
   let pushed = false
-
-  // 创建 AbortController 用于中断流式请求
+  let pendingRequestId = null
   abortController.value = new AbortController()
+
+  const attachRequestId = (msg) => {
+    if (msg && pendingRequestId) {
+      msg._requestId = pendingRequestId
+    }
+  }
 
   try {
     let sid = sessionId.value
     const currentAgentId = selectedAgentId.value
 
-    // 新对话：先创建会话，再发送消息
     if (!sid) {
       const res = await createSession(currentAgentId || undefined)
       sid = res.data.id
-      // 更新 URL 为 /chat/{sessionId}，跳过 watcher 避免重新加载消息
       skipNextWatch.value = true
       router.replace(`/chat/${sid}`)
     }
 
     const chatPayload = {
-      message: text || undefined,
+      message: message || undefined,
       sessionId: sid,
       agentId: currentAgentId || undefined,
       configVersion: selectedConfigVersion.value ?? 0,
-      attachments: attachments.length ? attachments.map(a => ({
+      regenerate: regenerate || undefined,
+      attachments: attachments?.length ? attachments.map(a => ({
         id: a.id,
         type: a.type,
         mimeType: a.mimeType,
         objectKey: a.objectKey,
         previewUrl: a.previewUrl,
         fileName: a.fileName,
+        parsedText: a.parsedText,
+        parsedTextTruncated: a.parsedTextTruncated,
       })) : undefined,
     }
     await chatStream(
       chatPayload,
       {
+        onRequestId: (requestId) => {
+          if (requestId) {
+            pendingRequestId = requestId
+            attachRequestId(assistantMsg)
+          }
+        },
         // onChunk: 文本内容
         onChunk: (chunk) => {
           if (!pushed) {
             messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
+            attachRequestId(assistantMsg)
             pushed = true
             hasStreamContent.value = true
           }
@@ -989,6 +1059,7 @@ async function sendMessage() {
           if (!pushed) {
             messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
+            attachRequestId(assistantMsg)
             pushed = true
             hasStreamContent.value = true
           }
@@ -1077,10 +1148,9 @@ async function sendMessage() {
           currentStatus.value = ''
           lastReplyElapsed.value = Date.now() - sendStartTime
           abortController.value = null
-          // 通知侧边栏刷新会话标题（异步生成，侧边栏会重试刷新）
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('session-title-updated'))
-        }, 1000)
+          }, 1000)
         },
       },
       abortController.value?.signal
@@ -1115,6 +1185,15 @@ function copyMessage(msg) {
   navigator.clipboard.writeText(msg.content).then(() => {
     msg._copied = true
     setTimeout(() => { msg._copied = false }, 2000)
+  })
+}
+
+function copyRequestId(msg) {
+  if (!msg._requestId) return
+  navigator.clipboard.writeText(msg._requestId).then(() => {
+    msg._requestIdCopied = true
+    message.success('Request ID 已复制')
+    setTimeout(() => { msg._requestIdCopied = false }, 2000)
   })
 }
 
@@ -1413,49 +1492,12 @@ watch(sessionId, (newVal, oldVal) => {
 
 /* 消息 */
 .message {
-  display: flex;
-  gap: 16px;
-  padding: 16px 32px;
+  padding: 12px 32px;
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
 }
-.message.user {
-  flex-direction: row-reverse;
-}
-.message-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  background: #f4f4f5;
-  color: #171717;
-}
-.bot-avatar {
-  background: #0070f3;
-  color: #fff;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-}
-.bot-avatar-img {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-}
 .message-body {
-  flex: 1;
   min-width: 0;
 }
 .message.user .message-body {
@@ -1464,7 +1506,23 @@ watch(sessionId, (newVal, oldVal) => {
 .message-meta {
   font-size: 12px;
   color: #a1a1aa;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+}
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.btn-action-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.btn-action-text span {
+  line-height: 1;
 }
 .message-content-wrapper {
   position: relative;
@@ -1482,7 +1540,7 @@ watch(sessionId, (newVal, oldVal) => {
   flex-wrap: wrap-reverse;
   justify-content: flex-end;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 6px;
   max-width: 80%;
 }
@@ -1524,8 +1582,18 @@ watch(sessionId, (newVal, oldVal) => {
   opacity: 0;
   transition: opacity 0.15s, color 0.15s;
 }
-.message:hover .btn-copy {
+.message:hover .btn-copy,
+.message-actions:hover .btn-copy {
   opacity: 1;
+}
+.message-actions .btn-copy {
+  opacity: 1;
+}
+.message.assistant .message-actions {
+  justify-content: flex-start;
+}
+.message.user .message-actions {
+  justify-content: flex-end;
 }
 .btn-copy:hover {
   color: #52525b;
@@ -1820,6 +1888,15 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-voice:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.btn-attach--uploading {
+  background: #eff6ff;
+  color: #0070f3;
+  animation: attach-btn-pulse 1s ease-in-out infinite;
+}
+@keyframes attach-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 112, 243, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 112, 243, 0); }
 }
 .btn-voice.listening {
   background: #fef2f2;

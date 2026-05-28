@@ -305,6 +305,9 @@ public class TraceMiddleware implements ChatMiddleware {
             if (ctx.getSensitiveStreamState() != null && ctx.getSensitiveStreamState().isBlocked()) {
                 meta.put("sensitiveBlock", "ai_output");
             }
+            if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
+                meta.put("requestId", ctx.getRequestId());
+            }
             return meta.isEmpty() ? null : OBJECT_MAPPER.writeValueAsString(meta);
         } catch (Exception e) {
             log.warn("[Chat] 构建持久化metadata失败: {}", e.getMessage());

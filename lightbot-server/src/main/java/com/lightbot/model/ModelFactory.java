@@ -81,7 +81,7 @@ public class ModelFactory {
     }
 
     /**
-     * 获取指定提供商的配置字段定义
+     * 获取指定提供商的配置字段定义（模型调参：temperature、topP 等）
      *
      * @param providerId 模型提供商ID
      * @return 配置字段列表
@@ -90,6 +90,18 @@ public class ModelFactory {
         ModelProvider provider = resolveProvider(providerId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.getConfigFields();
+    }
+
+    /**
+     * 获取指定提供商的模型能力字段定义（多模态、联网搜索等）
+     *
+     * @param providerId 模型提供商ID
+     * @return 能力字段列表
+     */
+    public List<ConfigField> getModelCapabilities(Long providerId) {
+        ModelProvider provider = resolveProvider(providerId);
+        ModelProviderHandler handler = getHandler(provider.getType());
+        return handler.getModelCapabilities();
     }
 
     /**

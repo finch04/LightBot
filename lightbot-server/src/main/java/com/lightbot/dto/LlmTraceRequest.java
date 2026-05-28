@@ -22,6 +22,9 @@ public class LlmTraceRequest {
     @Schema(description = "会话ID")
     private Long sessionId;
 
+    @Schema(description = "请求ID")
+    private String requestId;
+
     @Schema(description = "AgentID")
     private Long agentId;
 

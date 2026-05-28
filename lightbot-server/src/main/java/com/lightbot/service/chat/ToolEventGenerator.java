@@ -20,6 +20,8 @@ public final class ToolEventGenerator {
     public static final String STATUS_PREFIX = "[STATUS]";
     public static final String DONE_PREFIX = "[DONE]";
     public static final String METADATA_PREFIX = "[METADATA]";
+    /** 请求 ID 前缀，前端用于复制并在可观测中检索 */
+    public static final String REQUEST_ID_PREFIX = "[REQUEST_ID]";
 
     /**
      * 生成工具调用状态事件 JSON

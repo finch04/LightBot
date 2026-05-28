@@ -70,6 +70,12 @@ public class ModelProviderController {
         return Result.ok(modelFactory.getConfigFields(id));
     }
 
+    @Operation(summary = "获取提供商的模型能力字段定义（多模态、联网搜索等）")
+    @GetMapping("/{id}/model-capabilities")
+    public Result<List<ConfigField>> getModelCapabilities(@PathVariable Long id) {
+        return Result.ok(modelFactory.getModelCapabilities(id));
+    }
+
     @Operation(summary = "检查模型提供商连通性（已保存的提供商）")
     @GetMapping("/{id}/check")
     public Result<String> checkConnectivity(@PathVariable Long id) {

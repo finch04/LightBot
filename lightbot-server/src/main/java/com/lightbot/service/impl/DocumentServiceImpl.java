@@ -449,7 +449,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             wrapper.like(Document::getName, keyword);
         }
         wrapper.orderByDesc(Document::getCreateTime);
-        return page(new Page<>(pageNum, pageSize), wrapper);
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }
 
     @Override

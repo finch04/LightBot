@@ -24,6 +24,10 @@ export function getProviderConfigFields(id) {
   return request.get(`/model-providers/${id}/config-fields`)
 }
 
+export function getProviderModelCapabilities(id) {
+  return request.get(`/model-providers/${id}/model-capabilities`)
+}
+
 export function checkModelProvider(id) {
   return request.get(`/model-providers/${id}/check`)
 }

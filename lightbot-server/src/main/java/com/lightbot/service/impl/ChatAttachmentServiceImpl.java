@@ -9,6 +9,7 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatAttachmentService;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
 import com.lightbot.util.MinioUtil;
+import com.lightbot.util.TikaUtil;
 import com.lightbot.workflow.WorkflowConfigParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -16,12 +17,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * 对话附件：校验 Agent 多模态配置、格式与大小后上传 MinIO
+ * 对话附件：校验 Agent 能力、格式与大小；图片/视频走多模态，文档走 Tika 解析
  */
 @Slf4j
 @Service
@@ -30,6 +32,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
 
     private final AgentService agentService;
     private final MinioUtil minioUtil;
+    private final TikaUtil tikaUtil;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -44,26 +47,72 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         Map<String, Object> config = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
         AgentChatCapabilitiesDTO caps = AgentChatCapabilitiesUtil.fromConfigMap(config);
         if (!Boolean.TRUE.equals(caps.getAllowFileUpload())) {
-            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启多模态文件上传");
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启附件上传");
         }
 
         String mime = resolveMime(file);
         String ext = ChatAttachmentConstants.normalizeExtension(file.getOriginalFilename());
         String type = resolveAttachmentType(mime, ext, caps);
-        long maxSize = "image".equals(type) ? ChatAttachmentConstants.MAX_IMAGE_BYTES : ChatAttachmentConstants.MAX_VIDEO_BYTES;
-        if (file.getSize() > maxSize) {
-            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
-                    "image".equals(type) ? "图片不能超过 4MB" : "视频不能超过 20MB");
-        }
-
-        String attachmentId = UUID.randomUUID().toString().replace("-", "");
-        String sessionPart = sessionId != null ? String.valueOf(sessionId) : "temp";
-        String objectKey = "chat/" + agentId + "/" + sessionPart + "/" + attachmentId + extensionFromMime(mime);
 
         try {
-            minioUtil.upload(file.getInputStream(), objectKey, file.getSize(), mime);
+            byte[] bytes = file.getBytes();
+            return switch (type) {
+                case "document" -> uploadDocument(file, bytes, mime, ext, agentId, sessionId, caps);
+                case "image", "video" -> uploadMedia(file, bytes, mime, type, agentId, sessionId, caps);
+                default -> throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "不支持的附件类型");
+            };
+        } catch (BizException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[ChatAttachment] 上传失败: {}", e.getMessage());
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
+    private ChatAttachmentDTO uploadMedia(MultipartFile file, byte[] bytes, String mime, String type,
+                                          Long agentId, Long sessionId, AgentChatCapabilitiesDTO caps) {
+        long maxSize = "image".equals(type)
+                ? ChatAttachmentConstants.MAX_IMAGE_BYTES
+                : ChatAttachmentConstants.MAX_VIDEO_BYTES;
+        if (bytes.length > maxSize) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                    "image".equals(type) ? "图片不能超过 " + caps.getMaxImageSizeLabel()
+                            : "视频不能超过 " + caps.getMaxVideoSizeLabel());
+        }
+        return storeAndBuildDto(file, bytes, mime, type, agentId, sessionId, null, false);
+    }
+
+    private ChatAttachmentDTO uploadDocument(MultipartFile file, byte[] bytes, String mime, String ext,
+                                             Long agentId, Long sessionId, AgentChatCapabilitiesDTO caps) {
+        if (bytes.length > ChatAttachmentConstants.MAX_DOCUMENT_BYTES) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                    "文档不能超过 " + caps.getMaxDocumentSizeLabel());
+        }
+        String extNoDot = ext.startsWith(".") ? ext.substring(1) : ext;
+        if (!tikaUtil.isSupported(extNoDot)) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                    "不支持的文档格式，支持：MD/TXT/PDF/Word/PPT/Excel/CSV/HTML");
+        }
+        String parsed = tikaUtil.parse(new ByteArrayInputStream(bytes), file.getOriginalFilename());
+        if (parsed == null || parsed.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "未能从文件中解析出文本，请换一份文件或检查是否加密/扫描件");
+        }
+        boolean[] truncated = new boolean[1];
+        String text = ChatAttachmentConstants.truncateParsedText(parsed.trim(), truncated);
+        return storeAndBuildDto(file, bytes, mime, "document", agentId, sessionId, text, truncated[0]);
+    }
+
+    private ChatAttachmentDTO storeAndBuildDto(MultipartFile file, byte[] bytes, String mime, String type,
+                                                Long agentId, Long sessionId, String parsedText,
+                                                boolean parsedTruncated) {
+        String attachmentId = UUID.randomUUID().toString().replace("-", "");
+        String sessionPart = sessionId != null ? String.valueOf(sessionId) : "temp";
+        String objectKey = "chat/" + agentId + "/" + sessionPart + "/" + attachmentId + extensionFromMime(mime, type);
+
+        try {
+            minioUtil.upload(new ByteArrayInputStream(bytes), objectKey, bytes.length, mime);
+        } catch (Exception e) {
+            log.error("[ChatAttachment] MinIO 上传失败: {}", e.getMessage());
             throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
 
@@ -73,6 +122,10 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         dto.setMimeType(mime);
         dto.setObjectKey(objectKey);
         dto.setFileName(file.getOriginalFilename());
+        if (parsedText != null) {
+            dto.setParsedText(parsedText);
+            dto.setParsedTextTruncated(parsedTruncated);
+        }
         try {
             dto.setPreviewUrl(minioUtil.getPresignedUrl(objectKey, mime));
         } catch (Exception e) {
@@ -97,6 +150,8 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             copy.setMimeType(att.getMimeType());
             copy.setObjectKey(att.getObjectKey());
             copy.setFileName(att.getFileName());
+            copy.setParsedText(att.getParsedText());
+            copy.setParsedTextTruncated(att.getParsedTextTruncated());
             try {
                 String mime = att.getMimeType() != null ? att.getMimeType() : "application/octet-stream";
                 copy.setPreviewUrl(minioUtil.getPresignedUrl(att.getObjectKey(), mime));
@@ -111,7 +166,8 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
     private String resolveMime(MultipartFile file) {
         String mime = file.getContentType() != null ? file.getContentType().toLowerCase() : "";
         if (ChatAttachmentConstants.IMAGE_MIMES.contains(mime)
-                || ChatAttachmentConstants.VIDEO_MIMES.contains(mime)) {
+                || ChatAttachmentConstants.VIDEO_MIMES.contains(mime)
+                || ChatAttachmentConstants.DOCUMENT_MIMES.contains(mime)) {
             return mime;
         }
         String ext = ChatAttachmentConstants.normalizeExtension(file.getOriginalFilename());
@@ -122,6 +178,8 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
     private String resolveAttachmentType(String mime, String ext, AgentChatCapabilitiesDTO caps) {
         Set<String> allowedMimes = caps.getAllowedFileMimeTypes() != null
                 ? Set.copyOf(caps.getAllowedFileMimeTypes()) : Set.of();
+        Set<String> allowedDocExt = caps.getAllowedDocumentExtensions() != null
+                ? Set.copyOf(caps.getAllowedDocumentExtensions()) : Set.of();
 
         if (ChatAttachmentConstants.IMAGE_MIMES.contains(mime)) {
             if (!ChatAttachmentConstants.IMAGE_EXTENSIONS.contains(ext)) {
@@ -143,11 +201,37 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             }
             return "video";
         }
+        if (ChatAttachmentConstants.DOCUMENT_EXTENSIONS.contains(ext)
+                || ChatAttachmentConstants.DOCUMENT_MIMES.contains(mime)) {
+            if (!Boolean.TRUE.equals(caps.getEnableFileRead())) {
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启文件读取");
+            }
+            if (!allowedDocExt.isEmpty() && !allowedDocExt.contains(ext)) {
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 不允许该文档类型");
+            }
+            return "document";
+        }
         throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
-                "不支持的文件类型，仅支持图片（JPG/PNG/WebP/GIF ≤4MB）或视频（MP4/WebM/MOV ≤20MB）");
+                "不支持的文件类型。可上传：图片/视频（需开启多模态）或文档 MD/TXT/PDF/Office（需开启文件读取）");
     }
 
-    private String extensionFromMime(String mime) {
+    private String extensionFromMime(String mime, String type) {
+        if ("document".equals(type)) {
+            return switch (mime) {
+                case "text/plain" -> ".txt";
+                case "text/markdown" -> ".md";
+                case "application/pdf" -> ".pdf";
+                case "application/msword" -> ".doc";
+                case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> ".docx";
+                case "application/vnd.ms-powerpoint" -> ".ppt";
+                case "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> ".pptx";
+                case "application/vnd.ms-excel" -> ".xls";
+                case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> ".xlsx";
+                case "text/csv" -> ".csv";
+                case "text/html" -> ".html";
+                default -> ".bin";
+            };
+        }
         return switch (mime) {
             case "image/png" -> ".png";
             case "image/webp" -> ".webp";

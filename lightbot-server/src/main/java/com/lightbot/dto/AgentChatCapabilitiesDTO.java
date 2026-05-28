@@ -31,8 +31,17 @@ public class AgentChatCapabilitiesDTO {
     @Schema(description = "深度思考")
     private Boolean enableReasoning;
 
-    @Schema(description = "是否允许上传文件（图像或视频）")
+    @Schema(description = "文件读取（Tika 解析文档为文本）")
+    private Boolean enableFileRead;
+
+    @Schema(description = "是否允许上传附件（文档和/或多模态媒体）")
     private Boolean allowFileUpload;
+
+    @Schema(description = "是否允许上传文档（文件读取）")
+    private Boolean allowDocumentUpload;
+
+    @Schema(description = "是否允许上传图片/视频（多模态）")
+    private Boolean allowMediaUpload;
 
     @Schema(description = "允许的文件 MIME 类型列表")
     private java.util.List<String> allowedFileMimeTypes;
@@ -51,4 +60,13 @@ public class AgentChatCapabilitiesDTO {
 
     @Schema(description = "单条消息最多附件数")
     private Integer maxAttachmentsPerMessage;
+
+    @Schema(description = "文档最大字节数")
+    private Long maxDocumentBytes;
+
+    @Schema(description = "文档最大体积展示文案")
+    private String maxDocumentSizeLabel;
+
+    @Schema(description = "允许的文档扩展名（含点，如 .pdf）")
+    private java.util.List<String> allowedDocumentExtensions;
 }

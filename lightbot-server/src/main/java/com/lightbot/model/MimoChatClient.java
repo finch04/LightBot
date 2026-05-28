@@ -6,6 +6,7 @@ import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.service.chat.ToolEventGenerator;
+import com.lightbot.util.ChatDocumentMessageUtil;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -268,6 +269,9 @@ public class MimoChatClient {
             parts.add(Map.of("type", "text", "text", text));
         }
         for (ChatAttachmentDTO att : attachments) {
+            if (!ChatDocumentMessageUtil.isMediaAttachment(att)) {
+                continue;
+            }
             try {
                 byte[] bytes = minioUtil.downloadBytes(att.getObjectKey());
                 String mime = att.getMimeType() != null ? att.getMimeType() : "application/octet-stream";

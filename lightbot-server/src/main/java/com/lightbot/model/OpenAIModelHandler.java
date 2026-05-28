@@ -103,7 +103,6 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                 .defaultValue("gpt-4o-mini")
                 .hint("多模态请选用 gpt-4o / gpt-4o-mini / gpt-4-turbo 等视觉模型")
                 .build());
-        fields.addAll(AgentCapabilityConfigFields.openAiFields());
         fields.add(ConfigField.builder()
                 .key("temperature")
                 .label("温度")
@@ -145,6 +144,11 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                 .hint("正值降低重复用词的概率")
                 .build());
         return fields;
+    }
+
+    @Override
+    public List<ConfigField> getModelCapabilities() {
+        return AgentCapabilityConfigFields.openAiFields();
     }
 
     @Override

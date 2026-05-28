@@ -63,7 +63,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     @Override
     public Page<ChatSession> listMySessions(int pageNum, int pageSize) {
         long userId = StpUtil.getLoginIdAsLong();
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getUserId, userId)
                         .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
@@ -125,6 +125,23 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
         }
         session.setPinned(Boolean.TRUE.equals(session.getPinned()) ? false : true);
+        updateById(session);
+    }
+
+    @Override
+    public void updateAgentId(Long sessionId, Long agentId) {
+        ChatSession session = getById(sessionId);
+        if (session == null) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        long userId = StpUtil.getLoginIdAsLong();
+        if (userId != session.getUserId()) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        if (agentId == null || agentId.equals(session.getAgentId())) {
+            return;
+        }
+        session.setAgentId(agentId);
         updateById(session);
     }
 }

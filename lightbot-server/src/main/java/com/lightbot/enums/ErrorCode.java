@@ -101,7 +101,28 @@ public enum ErrorCode {
     // ========== 文件存储 ==========
     FILE_UPLOAD_FAILED(80001, "文件上传失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_DOWNLOAD_FAILED(80002, "文件下载失败", HttpStatus.INTERNAL_SERVER_ERROR),
-    FILE_URL_FAILED(80003, "获取文件URL失败", HttpStatus.INTERNAL_SERVER_ERROR);
+    FILE_URL_FAILED(80003, "获取文件URL失败", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // ========== Prompt模块 ==========
+    PROMPT_NOT_FOUND(100001, "Prompt不存在", HttpStatus.BAD_REQUEST),
+    PROMPT_KEY_EXISTS(100002, "Prompt Key已存在", HttpStatus.BAD_REQUEST),
+    PROMPT_VERSION_NOT_FOUND(100003, "Prompt版本不存在", HttpStatus.BAD_REQUEST),
+    PROMPT_VERSION_EXISTS(100004, "该版本已存在正式发布，不可重复发布", HttpStatus.BAD_REQUEST),
+
+    // ========== 评测集模块 ==========
+    EVAL_DATASET_NOT_FOUND(100101, "评测集不存在", HttpStatus.BAD_REQUEST),
+    EVAL_DATASET_VERSION_NOT_FOUND(100102, "评测集版本不存在", HttpStatus.BAD_REQUEST),
+
+    // ========== 评估器模块 ==========
+    EVAL_EVALUATOR_NOT_FOUND(100201, "评估器不存在", HttpStatus.BAD_REQUEST),
+    EVAL_EVALUATOR_VERSION_NOT_FOUND(100202, "评估器版本不存在", HttpStatus.BAD_REQUEST),
+    EVAL_EVALUATOR_TEMPLATE_NOT_FOUND(100203, "评估器模板不存在", HttpStatus.BAD_REQUEST),
+
+    // ========== 实验模块 ==========
+    EVAL_EXPERIMENT_NOT_FOUND(100301, "实验不存在", HttpStatus.BAD_REQUEST),
+    EVAL_EXPERIMENT_STATUS_INVALID(100302, "实验状态不允许此操作", HttpStatus.BAD_REQUEST),
+    EVAL_EXPERIMENT_LLM_CALL_FAILED(100303, "LLM调用失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
+    EVAL_EXPERIMENT_SCORE_PARSE_FAILED(100304, "评分结果解析失败", HttpStatus.INTERNAL_SERVER_ERROR);
 
     /** 业务错误码 */
     private final int code;

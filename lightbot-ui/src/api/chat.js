@@ -4,7 +4,7 @@ export function chat(data) {
   return request.post('/chat', data)
 }
 
-export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEvent, onDone }, signal) {
+export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }, signal) {
   const token = localStorage.getItem('token')
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
@@ -36,7 +36,7 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
     if (done) {
       // 处理 buffer 中残留的数据
       if (buffer.trim()) {
-        processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent, onDone: fireDone })
+        processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone: fireDone })
       }
       fireDone()
       break
@@ -47,7 +47,7 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
     if (lastNewline === -1) continue
     const complete = buffer.substring(0, lastNewline)
     buffer = buffer.substring(lastNewline + 1)
-    processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent, onDone: fireDone })
+    processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone: fireDone })
   }
 }
 
@@ -66,7 +66,7 @@ function decodeSseTextContent(raw) {
   return content.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
 }
 
-function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onDone }) {
+function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }) {
   const lines = text.split('\n')
   for (const line of lines) {
     if (line.startsWith('data:')) {
@@ -94,6 +94,8 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onD
           onStatus?.(statusContent)
         } else if (content.startsWith('[METADATA]')) {
           onMetadata?.(content.substring(10))
+        } else if (content.startsWith('[REQUEST_ID]')) {
+          onRequestId?.(content.substring(12))
         } else {
           onChunk?.(decodeSseTextContent(content))
         }

@@ -120,7 +120,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     @Override
     public Page<Agent> listMyAgents(int pageNum, int pageSize, String name) {
         long userId = StpUtil.getLoginIdAsLong();
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Agent>()
                         .eq(Agent::getUserId, userId)
                         .like(StringUtils.hasText(name), Agent::getName, name)

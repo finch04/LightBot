@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.ChatSession;
 import com.lightbot.enums.AgentStatus;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.AgentService;
@@ -39,9 +40,10 @@ public class InitMiddleware implements ChatMiddleware {
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
         long t0 = System.currentTimeMillis();
 
-        // 1. 解析会话ID
+        // 1. 解析会话ID，并在对话中切换智能体时更新会话绑定
         Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
         ctx.setSessionId(sessionId);
+        bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId());
         long t1 = System.currentTimeMillis();
         log.info("[Chat][Trace] 会话解析: {}ms, sessionId={}", t1 - t0, sessionId);
         ctx.getSpans().add(buildSpan("s1", null, "session_resolve", t0, t1 - t0, "OK", Map.of("sessionId", sessionId)));
@@ -69,6 +71,7 @@ public class InitMiddleware implements ChatMiddleware {
     public void init(ChatContext ctx) {
         Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
         ctx.setSessionId(sessionId);
+        bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId());
 
         Agent agent = loadAgent(ctx.getRequest().getAgentId());
         ctx.setAgent(agent);
@@ -141,6 +144,7 @@ public class InitMiddleware implements ChatMiddleware {
                 ConfigKeys.Agent.ENABLE_IMAGE_INPUT,
                 ConfigKeys.Agent.ENABLE_VIDEO_INPUT,
                 ConfigKeys.Agent.ENABLE_AUDIO_INPUT,
+                ConfigKeys.Agent.ENABLE_FILE_READ,
                 ConfigKeys.Agent.ENABLE_WEB_SEARCH,
                 ConfigKeys.Agent.WEB_SEARCH_FORCE,
                 ConfigKeys.Agent.WEB_SEARCH_MAX_KEYWORD,
@@ -237,6 +241,23 @@ public class InitMiddleware implements ChatMiddleware {
             return sessionId;
         }
         return chatSessionService.createSession(agentId).getId();
+    }
+
+    /**
+     * 已有会话中用户切换智能体并继续对话时，将会话 agentId 同步为当前所选智能体
+     */
+    private void bindSessionAgentIfNeeded(Long sessionId, Long agentId) {
+        if (sessionId == null || agentId == null) {
+            return;
+        }
+        ChatSession session = chatSessionService.getById(sessionId);
+        if (session == null) {
+            return;
+        }
+        if (!agentId.equals(session.getAgentId())) {
+            chatSessionService.updateAgentId(sessionId, agentId);
+            log.info("[Chat] 会话智能体已切换: sessionId={}, agentId={}", sessionId, agentId);
+        }
     }
 
     private LlmTraceSpan buildSpan(String spanId, String parentSpanId, String name,

@@ -1,0 +1,1042 @@
+<template>
+  <div class="page">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <div>
+        <button class="btn-back" @click="router.push('/prompts')">
+          <ArrowLeftOutlined /> 返回
+        </button>
+        <h1 class="page-title">{{ promptKey }} <a-tag v-if="latestVersion" color="blue" size="small">{{ latestVersion }}</a-tag></h1>
+        <p class="page-desc">{{ prompt?.description || '' }}</p>
+        <div class="prompt-tags" v-if="prompt?.tags">
+          <a-tag v-for="tag in prompt.tags.split(',')" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-outline-sm" @click="openTemplateImport()">
+          <ImportOutlined /> 从模板导入
+        </button>
+        <button class="btn-outline-sm" @click="router.push(`/prompts/${promptKey}/versions`)">
+          <HistoryOutlined /> 版本记录
+        </button>
+        <button class="btn-outline-sm" @click="addInstance()" v-if="instances.length < 3">
+          <CopyOutlined /> 复制配置
+        </button>
+        <button class="btn-primary-sm" @click="openVersionDialog()">
+          <CloudUploadOutlined /> 发布版本
+        </button>
+      </div>
+    </div>
+
+    <!-- 配置实例网格 -->
+    <div class="instances-grid" :class="'cols-' + instances.length">
+      <div v-for="(inst, idx) in instances" :key="inst.id" class="instance-card">
+        <!-- 实例头部 -->
+        <div class="instance-header">
+          <span class="instance-title">配置 {{ idx + 1 }}</span>
+          <div class="instance-actions" v-if="instances.length > 1">
+            <button class="btn-icon-sm" title="删除配置" @click="removeInstance(inst.id)">
+              <DeleteOutlined />
+            </button>
+          </div>
+        </div>
+
+        <!-- Prompt 内容编辑器 -->
+        <a-textarea
+          v-model:value="inst.content"
+          :rows="10"
+          placeholder="输入 Prompt 模板内容，使用 {{变量名}} 定义变量"
+          class="template-editor"
+          @change="onContentChange(inst)"
+        />
+
+        <!-- 模型配置 -->
+        <div class="config-section">
+          <div class="config-section-title">模型配置</div>
+          <div class="model-select-row">
+            <a-select
+              v-model:value="inst.providerId"
+              placeholder="选择提供商"
+              style="flex: 1"
+              size="small"
+              @change="onProviderChange(inst, $event)"
+            >
+              <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </a-select-option>
+            </a-select>
+            <a-select
+              v-model:value="inst.modelId"
+              placeholder="选择模型"
+              style="flex: 1"
+              size="small"
+              show-search
+              :filter-option="filterModel"
+              @change="onModelChange(inst, $event)"
+            >
+              <a-select-option v-for="m in inst.modelList" :key="m.modelId" :value="m.modelId">
+                {{ m.name || m.modelId }}
+              </a-select-option>
+            </a-select>
+          </div>
+          <!-- 动态模型参数 -->
+          <div class="model-params" v-if="inst.configFields.length > 0">
+            <div class="param-row" v-for="field in inst.configFields" :key="field.key">
+              <span class="param-label">{{ field.label || field.key }}</span>
+              <a-slider
+                v-if="field.type === 'slider'"
+                v-model:value="inst.modelConfig[field.key]"
+                :min="field.min"
+                :max="field.max"
+                :step="field.step || 0.01"
+                style="flex: 1"
+                size="small"
+              />
+              <a-input-number
+                v-else-if="field.type === 'number'"
+                v-model:value="inst.modelConfig[field.key]"
+                :min="field.min"
+                :max="field.max"
+                size="small"
+                style="width: 100px"
+              />
+              <a-select
+                v-else-if="field.type === 'select'"
+                v-model:value="inst.modelConfig[field.key]"
+                size="small"
+                style="width: 120px"
+              >
+                <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+              <a-switch
+                v-else-if="field.type === 'switch'"
+                v-model:checked="inst.modelConfig[field.key]"
+                size="small"
+              />
+              <a-input
+                v-else
+                v-model:value="inst.modelConfig[field.key]"
+                size="small"
+                style="width: 120px"
+              />
+              <span class="param-value" v-if="field.type === 'slider'">
+                {{ inst.modelConfig[field.key] ?? field.defaultValue }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 参数配置 -->
+        <div class="config-section" v-if="inst.variables.length > 0">
+          <div class="config-section-title">参数配置</div>
+          <div class="variable-row" v-for="v in inst.variables" :key="v.key">
+            <span class="var-key">&lt;{{ v.key }}&gt;</span>
+            <a-input
+              v-model:value="v.defaultValue"
+              size="small"
+              :placeholder="'默认值'"
+              style="flex: 1"
+            />
+          </div>
+        </div>
+
+        <a-divider style="margin: 12px 0" />
+
+        <!-- 调试区域 -->
+        <div class="debug-area">
+          <div class="debug-header">
+            <span class="debug-title">对话测试</span>
+            <span class="debug-meta" v-if="inst.messages.length > 0">{{ inst.messages.length }} 条消息</span>
+          </div>
+          <div class="debug-messages" :ref="el => { if (el) inst.messagesRef = el }">
+            <div v-if="inst.messages.length === 0" class="debug-empty">
+              输入变量值后发送，调试 Prompt 效果
+            </div>
+            <div v-for="(msg, i) in inst.messages" :key="i" :class="['debug-msg', msg.role]">
+              <div class="msg-content">{{ msg.content }}</div>
+            </div>
+            <div v-if="inst.streaming" class="debug-msg assistant">
+              <div class="msg-content">{{ inst.streamContent }}<span class="cursor">|</span></div>
+            </div>
+          </div>
+          <div class="debug-input">
+            <a-textarea
+              v-model:value="inst.userInput"
+              :rows="2"
+              :auto-size="{ minRows: 2, maxRows: 6 }"
+              placeholder='输入变量值（JSON格式），如: {"input":"你好"}'
+              @keydown.enter.ctrl="handleRun(inst)"
+            />
+            <div class="debug-input-actions">
+              <span class="debug-hint">Ctrl+Enter 发送</span>
+              <button
+                class="btn-primary-sm"
+                :disabled="inst.streaming || !inst.content.trim()"
+                @click="handleRun(inst)"
+              >
+                <ThunderboltOutlined /> {{ inst.streaming ? '生成中...' : '运行' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 从模板导入弹窗 -->
+    <a-modal
+      v-model:open="templateImportVisible"
+      title="从模板导入"
+      :width="860"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="template-import">
+        <a-input
+          v-model:value="templateSearch"
+          placeholder="搜索模板名称或描述..."
+          allow-clear
+          style="margin-bottom: 16px"
+        >
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <div class="template-grid">
+          <div
+            v-for="t in filteredTemplates"
+            :key="t.id"
+            class="template-card"
+            :class="{ selected: selectedTemplate?.id === t.id }"
+            @click="selectTemplate(t)"
+          >
+            <div class="template-card-top">
+              <div class="template-card-icon">P</div>
+              <div class="template-card-info">
+                <div class="template-card-name">{{ t.promptTemplateKey }}</div>
+                <p class="template-card-desc">{{ t.templateDesc || '暂无描述' }}</p>
+              </div>
+            </div>
+            <div class="template-card-tags" v-if="t.tags">
+              <a-tag v-for="tag in t.tags.split(',')" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
+            </div>
+          </div>
+        </div>
+        <div v-if="filteredTemplates.length === 0" class="template-empty">
+          <FileTextOutlined class="template-empty-icon" />
+          <p>{{ templateSearch ? '没有匹配的模板' : '暂无可用模板' }}</p>
+        </div>
+        <div v-if="selectedTemplate" class="template-preview">
+          <div class="template-preview-title">模板预览</div>
+          <a-textarea :value="selectedTemplate.template" :rows="8" readonly class="template-editor" />
+          <div class="template-preview-vars" v-if="selectedTemplate.variables">
+            <span class="template-preview-label">参数：</span>
+            <a-tag v-for="v in selectedTemplate.variables.split(',')" :key="v" color="blue" size="small">{{ v.trim() }}</a-tag>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <div></div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="templateImportVisible = false">取消</button>
+          <button class="btn-primary-sm" :disabled="!selectedTemplate" @click="handleTemplateImport">
+            导入模板
+          </button>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 发布版本弹窗 -->
+    <a-modal
+      v-model:open="versionDialogVisible"
+      title="发布版本"
+      :width="480"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <a-form :model="versionForm" :label-col="{ span: 5 }">
+        <a-form-item label="版本号" required>
+          <a-input v-model:value="versionForm.version" placeholder="如: v1.0" />
+        </a-form-item>
+        <a-form-item label="版本描述">
+          <a-input v-model:value="versionForm.versionDesc" placeholder="版本说明" />
+        </a-form-item>
+        <a-form-item label="发布状态">
+          <a-radio-group v-model:value="versionForm.status">
+            <a-radio value="pre">草稿（pre）</a-radio>
+            <a-radio value="release">正式发布（release）</a-radio>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
+      <div class="dialog-footer">
+        <div></div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="versionDialogVisible = false">取消</button>
+          <button class="btn-primary-sm" :disabled="submitting" @click="handlePublishVersion">
+            {{ submitting ? '提交中...' : '发布' }}
+          </button>
+        </div>
+      </div>
+    </a-modal>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  ArrowLeftOutlined, HistoryOutlined, ThunderboltOutlined,
+  ImportOutlined, CloudUploadOutlined, CopyOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined,
+} from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import {
+  getPrompts, getPromptVersions, createPromptVersion, getPromptTemplates, getPromptTemplate, runPromptStream,
+} from '../api/prompt'
+import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
+import { getModelsByProvider } from '../api/model'
+
+const route = useRoute()
+const router = useRouter()
+const promptKey = route.params.id
+const prompt = ref(null)
+const versions = ref([])
+const submitting = ref(false)
+
+const latestVersion = computed(() => versions.value.length > 0 ? versions.value[0].version : '')
+
+// 提供商列表（全局共享）
+const providerList = ref([])
+
+// 配置实例
+let instanceIdCounter = 1
+const instances = ref([])
+
+function createInstance(template = '', modelCfg = {}) {
+  return {
+    id: instanceIdCounter++,
+    content: template,
+    providerId: modelCfg.providerId || null,
+    modelId: modelCfg.modelId || null,
+    modelConfig: {},
+    configFields: [],
+    modelList: [],
+    variables: [],
+    messages: [],
+    userInput: '',
+    streaming: false,
+    streamContent: '',
+    messagesRef: null,
+    abortController: null,
+  }
+}
+
+function addInstance() {
+  if (instances.value.length >= 3) return
+  const src = instances.value[0]
+  const inst = createInstance(src?.content || '', {
+    providerId: src?.providerId,
+    modelId: src?.modelId,
+  })
+  // 复制变量
+  inst.variables = (src?.variables || []).map(v => ({ ...v }))
+  inst.modelConfig = { ...(src?.modelConfig || {}) }
+  instances.value.push(inst)
+  // 加载模型列表和配置字段
+  if (inst.providerId) {
+    loadModelsForInstance(inst, inst.providerId)
+    loadConfigFieldsForInstance(inst, inst.providerId)
+  }
+}
+
+function removeInstance(id) {
+  instances.value = instances.value.filter(i => i.id !== id)
+}
+
+// 版本记录
+const versionDialogVisible = ref(false)
+const versionForm = reactive({ version: '', versionDesc: '', status: 'pre' })
+
+// 模板导入
+const templateImportVisible = ref(false)
+const templateSearch = ref('')
+const templates = ref([])
+const selectedTemplate = ref(null)
+
+const filteredTemplates = computed(() => {
+  if (!templateSearch.value) return templates.value
+  const kw = templateSearch.value.toLowerCase()
+  return templates.value.filter(t =>
+    (t.promptTemplateKey || '').toLowerCase().includes(kw) ||
+    (t.templateDesc || '').toLowerCase().includes(kw)
+  )
+})
+
+onMounted(async () => {
+  await loadPrompt()
+  await loadVersions()
+  await loadProviders()
+  // 初始化一个配置实例
+  const inst = createInstance()
+  instances.value.push(inst)
+  // 如果有版本，加载最新版本
+  if (versions.value.length > 0) {
+    const latest = versions.value[0]
+    inst.content = latest.template || ''
+    if (latest.modelConfig) {
+      try {
+        const cfg = typeof latest.modelConfig === 'string' ? JSON.parse(latest.modelConfig) : latest.modelConfig
+        if (cfg.providerId) {
+          inst.providerId = cfg.providerId
+          await loadModelsForInstance(inst, cfg.providerId)
+          await loadConfigFieldsForInstance(inst, cfg.providerId)
+          if (cfg.modelId) inst.modelId = cfg.modelId
+          // 设置动态参数值
+          for (const [k, v] of Object.entries(cfg)) {
+            if (k !== 'providerId' && k !== 'modelId') {
+              inst.modelConfig[k] = v
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    // 加载变量
+    if (latest.variables) {
+      try {
+        inst.variables = JSON.parse(latest.variables)
+      } catch { /* ignore */ }
+    }
+    onContentChange(inst)
+  }
+})
+
+async function loadPrompt() {
+  const res = await getPrompts({ keyword: promptKey, pageNum: 1, pageSize: 1 })
+  const records = res.data?.records || []
+  prompt.value = records.find(p => p.promptKey === promptKey) || { promptKey }
+}
+
+async function loadVersions() {
+  const res = await getPromptVersions(promptKey)
+  versions.value = res.data || []
+}
+
+async function loadProviders() {
+  try {
+    const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
+    providerList.value = res.data?.records || []
+  } catch { /* ignore */ }
+}
+
+async function loadModelsForInstance(inst, providerId) {
+  try {
+    const res = await getModelsByProvider(providerId)
+    inst.modelList = (res.data || []).filter(m => m.type === 'llm')
+  } catch { inst.modelList = [] }
+}
+
+async function loadConfigFieldsForInstance(inst, providerId) {
+  try {
+    const res = await getProviderConfigFields(providerId)
+    const fields = (res.data || []).filter(f => f.key !== 'modelId')
+    inst.configFields = fields
+    // 设置默认值
+    for (const f of fields) {
+      if (inst.modelConfig[f.key] === undefined && f.defaultValue !== undefined) {
+        inst.modelConfig[f.key] = f.defaultValue
+      }
+    }
+  } catch { inst.configFields = [] }
+}
+
+async function onProviderChange(inst, providerId) {
+  inst.modelId = null
+  inst.modelConfig = {}
+  inst.configFields = []
+  inst.modelList = []
+  await Promise.all([
+    loadModelsForInstance(inst, providerId),
+    loadConfigFieldsForInstance(inst, providerId),
+  ])
+}
+
+function onModelChange() {
+  // 模型切换时不做额外操作
+}
+
+function filterModel(input, option) {
+  const text = (option?.value || '').toLowerCase()
+  return text.includes(input.toLowerCase())
+}
+
+function onContentChange(inst) {
+  const matches = [...(inst.content || '').matchAll(/\{\{(\w+)\}\}/g)]
+  const keys = [...new Set(matches.map(m => m[1]))]
+  inst.variables = keys.map(key => {
+    const existing = inst.variables.find(v => v.key === key)
+    return { key, defaultValue: existing?.defaultValue || '' }
+  })
+}
+
+function buildModelConfigJson(inst) {
+  const cfg = { providerId: inst.providerId, modelId: inst.modelId, ...inst.modelConfig }
+  return JSON.stringify(cfg)
+}
+
+// 模板导入
+async function openTemplateImport() {
+  templateImportVisible.value = true
+  selectedTemplate.value = null
+  templateSearch.value = ''
+  if (templates.value.length === 0) {
+    try {
+      const res = await getPromptTemplates()
+      templates.value = res.data || []
+    } catch { /* ignore */ }
+  }
+}
+
+async function selectTemplate(t) {
+  try {
+    const res = await getPromptTemplate(t.promptTemplateKey)
+    selectedTemplate.value = res.data || t
+  } catch {
+    selectedTemplate.value = t
+  }
+}
+
+async function handleTemplateImport() {
+  if (!selectedTemplate.value) return
+  const t = { ...selectedTemplate.value }
+  // 先关闭弹窗，避免 modal transition 与后续状态更新冲突
+  templateImportVisible.value = false
+  selectedTemplate.value = null
+
+  await nextTick()
+
+  try {
+    const inst = instances.value[0]
+    inst.content = t.template || ''
+    onContentChange(inst)
+    message.success('模板导入成功')
+
+    // 模型配置导入（独立处理，失败不影响模板内容导入）
+    if (t.modelConfig) {
+      try {
+        const cfg = typeof t.modelConfig === 'string' ? JSON.parse(t.modelConfig) : t.modelConfig
+        if (cfg.providerId) {
+          inst.providerId = cfg.providerId
+          await loadModelsForInstance(inst, cfg.providerId)
+          await loadConfigFieldsForInstance(inst, cfg.providerId)
+          if (cfg.modelId) inst.modelId = cfg.modelId
+          if (!inst.modelConfig) inst.modelConfig = {}
+          for (const [k, v] of Object.entries(cfg)) {
+            if (k !== 'providerId' && k !== 'modelId') {
+              inst.modelConfig[k] = v
+            }
+          }
+        }
+      } catch {
+        // 模型配置导入失败不影响模板内容
+      }
+    }
+  } catch (e) {
+    message.error('模板导入失败')
+  }
+}
+
+// 发布版本
+function openVersionDialog() {
+  const inst = instances.value[0]
+  if (!inst?.content.trim()) return message.warning('请先编辑模板内容')
+  Object.assign(versionForm, { version: '', versionDesc: '', status: 'pre' })
+  versionDialogVisible.value = true
+}
+
+async function handlePublishVersion() {
+  if (!versionForm.version.trim()) return message.warning('请输入版本号')
+  const inst = instances.value[0]
+  submitting.value = true
+  try {
+    await createPromptVersion({
+      promptKey,
+      version: versionForm.version,
+      versionDesc: versionForm.versionDesc,
+      template: inst.content,
+      variables: JSON.stringify(inst.variables),
+      modelConfig: buildModelConfigJson(inst),
+      status: versionForm.status,
+    })
+    message.success('版本发布成功')
+    versionDialogVisible.value = false
+    loadVersions()
+  } finally {
+    submitting.value = false
+  }
+}
+
+// 调试运行
+async function handleRun(inst) {
+  if (inst.streaming || !inst.content.trim()) return
+
+  let variables = '{}'
+  // 合并变量默认值
+  if (inst.variables.length > 0) {
+    const vars = {}
+    for (const v of inst.variables) {
+      if (v.key) vars[v.key] = v.defaultValue || ''
+    }
+    variables = JSON.stringify(vars)
+  }
+  if (inst.userInput.trim()) {
+    try {
+      const parsed = JSON.parse(inst.userInput)
+      variables = JSON.stringify({ ...JSON.parse(variables), ...parsed })
+    } catch {
+      return message.warning('变量值必须是有效的 JSON 格式')
+    }
+  }
+
+  inst.messages.push({ role: 'user', content: inst.userInput || variables })
+  inst.userInput = ''
+  inst.streaming = true
+  inst.streamContent = ''
+
+  await nextTick()
+  scrollToBottom(inst)
+
+  inst.abortController = new AbortController()
+  try {
+    await runPromptStream(
+      {
+        promptKey,
+        template: inst.content,
+        variables,
+        modelConfig: buildModelConfigJson(inst),
+      },
+      {
+        onChunk(chunk) {
+          inst.streamContent += chunk
+          nextTick(() => scrollToBottom(inst))
+        },
+        onDone() {
+          if (inst.streamContent) {
+            inst.messages.push({ role: 'assistant', content: inst.streamContent })
+          }
+          inst.streaming = false
+          inst.streamContent = ''
+        },
+        onError(err) {
+          inst.messages.push({ role: 'assistant', content: '[错误] ' + err })
+          inst.streaming = false
+          inst.streamContent = ''
+        },
+      },
+      inst.abortController.signal,
+    )
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      inst.messages.push({ role: 'assistant', content: '[错误] 请求失败' })
+    }
+    inst.streaming = false
+    inst.streamContent = ''
+  }
+}
+
+function scrollToBottom(inst) {
+  if (inst.messagesRef) {
+    inst.messagesRef.scrollTop = inst.messagesRef.scrollHeight
+  }
+}
+</script>
+
+<style scoped>
+.page {
+  padding: 20px 24px;
+  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  background: #fafafa;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.btn-back {
+  background: none;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.btn-back:hover { color: #0070f3; }
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 4px;
+}
+.page-desc {
+  font-size: 14px;
+  color: #71717a;
+  margin-bottom: 4px;
+}
+.prompt-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-outline-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-outline-sm:hover { border-color: #0070f3; color: #0070f3; }
+.btn-primary-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-primary-sm:hover:not(:disabled) { background: #27272a; }
+.btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
+.btn-cancel {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-icon-sm {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  font-size: 12px;
+}
+.btn-icon-sm:hover { background: #f5f5f5; }
+
+/* 实例网格 */
+.instances-grid {
+  display: grid;
+  gap: 16px;
+}
+.instances-grid.cols-1 { grid-template-columns: 1fr; }
+.instances-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.instances-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 1400px) {
+  .instances-grid.cols-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 1100px) {
+  .instances-grid.cols-2,
+  .instances-grid.cols-3 { grid-template-columns: 1fr; }
+}
+
+.instance-card {
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+.instance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.instance-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+}
+.instance-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* 编辑器 */
+.template-editor {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 配置区块 */
+.config-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+.config-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.model-select-row {
+  display: flex;
+  gap: 8px;
+}
+.model-params {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.param-label {
+  font-size: 12px;
+  color: #71717a;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+.param-value {
+  font-size: 12px;
+  color: #171717;
+  min-width: 40px;
+  text-align: right;
+}
+.variable-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.var-key {
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+/* 调试区域 */
+.debug-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.debug-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+}
+.debug-meta {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.debug-messages {
+  height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+  border: 1px solid #f5f5f5;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.debug-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+.debug-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.debug-msg.user {
+  align-self: flex-end;
+  background: #f5f5f5;
+  color: #171717;
+}
+.debug-msg.assistant {
+  align-self: flex-start;
+  background: #eff6ff;
+  color: #171717;
+}
+.cursor {
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.debug-input {
+  border-top: 1px solid #ebebeb;
+  padding-top: 12px;
+}
+.debug-input-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+.debug-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+
+/* 模板导入弹窗 */
+.template-import {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.template-card {
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.template-card:hover {
+  border-color: #0070f3;
+  box-shadow: 0px 2px 4px rgba(0,0,0,0.04);
+}
+.template-card.selected {
+  border-color: #0070f3;
+  background: #f0f7ff;
+}
+.template-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.template-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.template-card-info { flex: 1; min-width: 0; }
+.template-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0 0 2px 0;
+}
+.template-card-desc {
+  font-size: 12px;
+  color: #71717a;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.template-card-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.template-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #a1a1aa;
+}
+.template-empty-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+  display: block;
+}
+.template-preview {
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 4px;
+}
+.template-preview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.template-preview-vars {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.template-preview-label {
+  font-size: 12px;
+  color: #71717a;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+.dialog-footer-right { display: flex; gap: 8px; }
+</style>

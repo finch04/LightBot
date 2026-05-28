@@ -30,4 +30,9 @@ public class ChatRequest {
      * 多模态附件（先调用上传接口获得）
      */
     private List<ChatAttachmentDTO> attachments;
+
+    /**
+     * 重新生成：删除上一轮助手回复后，基于最近一条用户消息再次调用模型（不重复落库用户消息）
+     */
+    private Boolean regenerate;
 }

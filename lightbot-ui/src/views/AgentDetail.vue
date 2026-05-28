@@ -463,6 +463,21 @@
               <div class="config-tab-pane-body config-tab-pane-body--chat" :class="{ 'preview-lock-zone': isVersionPreview }">
             <a-form :model="agentConfig" :label-col="{ span: 6 }" class="panel-form">
 
+              <a-form-item label="文件读取">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <a-switch v-model:checked="agentConfig.enableFileRead" :disabled="isVersionPreview" />
+                  <span class="tool-option-value">{{ agentConfig.enableFileRead ? '已启用' : '未启用' }}</span>
+                  <a-tooltip
+                    title="开启后对话页可上传文档，与多模态图片/视频独立"
+                    overlay-class-name="no-flip-tooltip"
+                    :overlay-style="{ maxWidth: '360px' }"
+                    placement="topLeft"
+                  >
+                    <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                  </a-tooltip>
+                </div>
+                <div class="param-hint">支持 MD/TXT/PDF/Word/PPT/Excel/CSV/HTML 等</div>
+              </a-form-item>
               <a-form-item label="流式输出">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <a-switch v-model:checked="agentConfig.streamOutput" :disabled="isVersionPreview" />
@@ -1343,7 +1358,7 @@ import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, ge
 import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
-import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
+import { getModelProviders, getProviderConfigFields, getProviderModelCapabilities } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
@@ -1520,6 +1535,7 @@ const agent = reactive({
 // 模型配置（存储在 config JSONB 中）
 const agentConfig = reactive({
   providerId: null,
+  enableFileRead: false,
   streamOutput: true,
   userSensitiveFilterEnabled: false,
   userSensitiveWords: [],
@@ -1683,6 +1699,7 @@ const formBaselineSnapshot = ref(null)
 
 /** 对话配置版本快照默认值（与编排页表单默认一致） */
 const CHAT_CONFIG_PREVIEW_DEFAULTS = {
+  enableFileRead: false,
   streamOutput: true,
   maxContextMessages: 20,
   enableSummary: false,
@@ -1705,6 +1722,7 @@ function chatConfigPreviewValue(key) {
 /** 版本快照对话配置展示行 */
 const chatConfigPreviewRows = computed(() => {
   if (!versionPreview.value) return []
+  const fileRead = chatConfigPreviewValue('enableFileRead')
   const stream = chatConfigPreviewValue('streamOutput')
   const ctx = chatConfigPreviewValue('maxContextMessages')
   const summary = chatConfigPreviewValue('enableSummary')
@@ -1715,6 +1733,7 @@ const chatConfigPreviewRows = computed(() => {
   const replaceText = chatConfigPreviewValue('sensitiveFilterReplaceText')
   const asyncTools = chatConfigPreviewValue('asyncToolCalls')
   const rows = [
+    { label: '文件读取', text: fileRead.value ? '开启' : '关闭', fromDefault: fileRead.fromDefault },
     { label: '流式输出', text: stream.value !== false ? '开启' : '关闭', fromDefault: stream.fromDefault },
     { label: '上下文条数', text: String(ctx.value ?? 20), fromDefault: ctx.fromDefault },
     { label: '上下文摘要', text: summary.value ? '开启' : '关闭', fromDefault: summary.fromDefault },
@@ -2062,8 +2081,11 @@ async function loadProviders() {
 async function loadConfigFields(providerId) {
   if (!providerId) return
   try {
-    const res = await getProviderConfigFields(providerId)
-    configFields.value = res.data || []
+    const [configRes, capRes] = await Promise.all([
+      getProviderConfigFields(providerId),
+      getProviderModelCapabilities(providerId),
+    ])
+    configFields.value = [...(configRes.data || []), ...(capRes.data || [])]
     // 记录 configFields 的 key，用于切换提供商时精准清除
     currentConfigFieldKeys.value = new Set(configFields.value.map(f => f.key))
     // 为缺失的字段设置默认值（版本预览时模型能力不自动填默认，由快照决定）
@@ -2292,11 +2314,8 @@ function confirmSaveWithDeletedBindings() {
 }
 
 function handleGoBack() {
-  if (isFormDirty()) {
-    confirmLeaveUnsaved(() => router.push('/agents'))
-  } else {
-    router.push('/agents')
-  }
+  // 未保存提示统一由 onBeforeRouteLeave 处理，避免与返回按钮重复弹窗
+  router.push('/agents')
 }
 
 async function copyAgentId() {
@@ -2944,6 +2963,7 @@ function normalizeVersionDetailData(data) {
       sensitiveFilterReplaceText: cfg.sensitiveFilterReplaceText,
       sensitiveWords: cfg.sensitiveWords,
       asyncToolCalls: cfg.asyncToolCalls,
+      enableFileRead: cfg.enableFileRead,
       promptVariables: cfg.promptVariables
     }
   }

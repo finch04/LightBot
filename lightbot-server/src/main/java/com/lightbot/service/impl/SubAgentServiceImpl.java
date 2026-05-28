@@ -95,7 +95,7 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         if (isBuiltin != null) {
             wrapper.eq(SubAgent::getIsBuiltin, isBuiltin ? 1 : 0);
         }
-        return page(new Page<>(pageNum, pageSize), wrapper);
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }
 
     @Override

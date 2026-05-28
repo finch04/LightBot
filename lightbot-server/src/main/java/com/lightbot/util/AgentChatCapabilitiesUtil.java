@@ -3,7 +3,6 @@ package com.lightbot.util;
 import com.lightbot.constant.ChatAttachmentConstants;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
-import com.lightbot.dto.AgentChatCapabilitiesDTO;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,14 +26,18 @@ public final class AgentChatCapabilitiesUtil {
         dto.setEnableImageInput(toBool(config.get(ConfigKeys.Agent.ENABLE_IMAGE_INPUT)));
         dto.setEnableVideoInput(toBool(config.get(ConfigKeys.Agent.ENABLE_VIDEO_INPUT)));
         dto.setEnableAudioInput(toBool(config.get(ConfigKeys.Agent.ENABLE_AUDIO_INPUT)));
+        dto.setEnableFileRead(toBool(config.get(ConfigKeys.Agent.ENABLE_FILE_READ)));
         dto.setEnableWebSearch(toBool(config.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH)));
         dto.setEnableTts(toBool(config.get(ConfigKeys.Agent.ENABLE_TTS)));
         dto.setEnableReasoning(toBool(config.get(ConfigKeys.Agent.ENABLE_REASONING)));
 
         boolean multimodal = Boolean.TRUE.equals(dto.getMultimodalEnabled());
-        boolean allowFile = multimodal && (Boolean.TRUE.equals(dto.getEnableImageInput())
+        boolean allowMedia = multimodal && (Boolean.TRUE.equals(dto.getEnableImageInput())
                 || Boolean.TRUE.equals(dto.getEnableVideoInput()));
-        dto.setAllowFileUpload(allowFile);
+        boolean allowDoc = Boolean.TRUE.equals(dto.getEnableFileRead());
+        dto.setAllowDocumentUpload(allowDoc);
+        dto.setAllowMediaUpload(allowMedia);
+        dto.setAllowFileUpload(allowMedia || allowDoc);
 
         List<String> mimes = new ArrayList<>();
         if (multimodal && Boolean.TRUE.equals(dto.getEnableImageInput())) {
@@ -49,6 +52,12 @@ public final class AgentChatCapabilitiesUtil {
             mimes.add("video/quicktime");
         }
         dto.setAllowedFileMimeTypes(mimes);
+
+        if (allowDoc) {
+            dto.setAllowedDocumentExtensions(new ArrayList<>(ChatAttachmentConstants.DOCUMENT_EXTENSIONS));
+        } else {
+            dto.setAllowedDocumentExtensions(List.of());
+        }
         fillUploadSizeLimits(dto);
         return dto;
     }
@@ -58,11 +67,15 @@ public final class AgentChatCapabilitiesUtil {
         dto.setEnableImageInput(false);
         dto.setEnableVideoInput(false);
         dto.setEnableAudioInput(false);
+        dto.setEnableFileRead(false);
         dto.setEnableWebSearch(false);
         dto.setEnableTts(false);
         dto.setEnableReasoning(false);
         dto.setAllowFileUpload(false);
+        dto.setAllowDocumentUpload(false);
+        dto.setAllowMediaUpload(false);
         dto.setAllowedFileMimeTypes(List.of());
+        dto.setAllowedDocumentExtensions(List.of());
         fillUploadSizeLimits(dto);
     }
 
@@ -70,8 +83,10 @@ public final class AgentChatCapabilitiesUtil {
     private static void fillUploadSizeLimits(AgentChatCapabilitiesDTO dto) {
         dto.setMaxImageBytes(ChatAttachmentConstants.MAX_IMAGE_BYTES);
         dto.setMaxVideoBytes(ChatAttachmentConstants.MAX_VIDEO_BYTES);
+        dto.setMaxDocumentBytes(ChatAttachmentConstants.MAX_DOCUMENT_BYTES);
         dto.setMaxImageSizeLabel(formatSizeLabel(ChatAttachmentConstants.MAX_IMAGE_BYTES));
         dto.setMaxVideoSizeLabel(formatSizeLabel(ChatAttachmentConstants.MAX_VIDEO_BYTES));
+        dto.setMaxDocumentSizeLabel(formatSizeLabel(ChatAttachmentConstants.MAX_DOCUMENT_BYTES));
         dto.setMaxAttachmentsPerMessage(ChatAttachmentConstants.MAX_ATTACHMENTS_PER_MESSAGE);
     }
 

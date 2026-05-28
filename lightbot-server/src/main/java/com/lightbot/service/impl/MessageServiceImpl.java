@@ -22,7 +22,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
 
     @Override
     public Page<Message> listBySessionIdPage(Long sessionId, int pageNum, int pageSize) {
-        return page(new Page<>(pageNum, pageSize),
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Message>()
                         .eq(Message::getSessionId, sessionId)
                         .orderByDesc(Message::getCreateTime));

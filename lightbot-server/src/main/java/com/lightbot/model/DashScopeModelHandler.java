@@ -153,7 +153,6 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                 .defaultValue("qwen-plus")
                 .hint("多模态请选用 qwen-vl-max / qwen-vl-plus / qwen2-vl 等视觉模型")
                 .build());
-        fields.addAll(AgentCapabilityConfigFields.dashScopeFields());
         fields.add(ConfigField.builder()
                 .key("temperature")
                 .label("温度")
@@ -187,6 +186,11 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                 .hint("值越高越不容易重复")
                 .build());
         return fields;
+    }
+
+    @Override
+    public List<ConfigField> getModelCapabilities() {
+        return AgentCapabilityConfigFields.dashScopeFields();
     }
 
     @Override

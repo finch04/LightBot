@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
+import com.lightbot.util.ChatDocumentMessageUtil;
 import com.lightbot.util.SensitiveWordFilter;
 import com.lightbot.util.ToolArgsSanitizer;
 import com.lightbot.entity.Agent;
@@ -124,7 +125,8 @@ public class ChatServiceImpl implements ChatService {
                 messageMiddleware, toolPrepMiddleware, traceMiddleware);
         ChatServiceCore core = this::streamCore;
 
-        return ChatMiddlewareChain.of(middlewares, core).proceed(ctx)
+        return Flux.just(REQUEST_ID_PREFIX + ctx.getRequestId())
+                .concatWith(ChatMiddlewareChain.of(middlewares, core).proceed(ctx))
                 .concatWith(Flux.just(DONE_PREFIX));
     }
 
@@ -693,7 +695,8 @@ public class ChatServiceImpl implements ChatService {
         Map<String, Object> configMap = ctx.getConfigMap();
         SensitiveWordFilter.StreamState sensitiveState = ctx.getSensitiveStreamState();
 
-        return mimoChatClient.streamChat(provider, configMap, messages, ctx.getRequest().getAttachments())
+        var mediaAttachments = ChatDocumentMessageUtil.filterMedia(ctx.getRequest().getAttachments());
+        return mimoChatClient.streamChat(provider, configMap, messages, mediaAttachments)
                 .concatMap(chunk -> {
                     if (chunk.startsWith(STATUS_PREFIX)) {
                         return Flux.just(chunk);

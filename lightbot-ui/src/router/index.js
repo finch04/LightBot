@@ -90,6 +90,60 @@ const routes = [
         component: () => import('../views/Observability.vue'),
       },
       {
+        path: 'prompts',
+        name: 'Prompts',
+        component: () => import('../views/PromptManage.vue'),
+      },
+      {
+        path: 'prompts/:id',
+        name: 'PromptDetail',
+        component: () => import('../views/PromptDetail.vue'),
+      },
+      {
+        path: 'prompts/:promptKey/versions',
+        name: 'PromptVersionHistory',
+        component: () => import('../views/PromptVersionHistory.vue'),
+      },
+      {
+        path: 'playground',
+        name: 'Playground',
+        component: () => import('../views/Playground.vue'),
+      },
+      {
+        path: 'eval',
+        redirect: '/eval/datasets',
+      },
+      {
+        path: 'eval/datasets',
+        name: 'EvalDatasets',
+        component: () => import('../views/EvalDatasetManage.vue'),
+      },
+      {
+        path: 'eval/datasets/:id',
+        name: 'EvalDatasetDetail',
+        component: () => import('../views/EvalDatasetDetail.vue'),
+      },
+      {
+        path: 'eval/evaluators',
+        name: 'Evaluators',
+        component: () => import('../views/EvaluatorManage.vue'),
+      },
+      {
+        path: 'eval/evaluators/:id',
+        name: 'EvaluatorDetail',
+        component: () => import('../views/EvaluatorDetail.vue'),
+      },
+      {
+        path: 'eval/experiments',
+        name: 'Experiments',
+        component: () => import('../views/ExperimentManage.vue'),
+      },
+      {
+        path: 'eval/experiments/:id',
+        name: 'ExperimentDetail',
+        component: () => import('../views/ExperimentDetail.vue'),
+      },
+      {
         path: 'logs',
         name: 'Logs',
         component: () => import('../views/LogMonitor.vue'),

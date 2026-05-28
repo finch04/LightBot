@@ -65,4 +65,12 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @param tokenCount 本次token消耗
      */
     void updateStats(Long sessionId, int tokenCount);
+
+    /**
+     * 对话中切换智能体后，将会话绑定到新的 Agent
+     *
+     * @param sessionId 会话ID
+     * @param agentId   新 Agent ID
+     */
+    void updateAgentId(Long sessionId, Long agentId);
 }

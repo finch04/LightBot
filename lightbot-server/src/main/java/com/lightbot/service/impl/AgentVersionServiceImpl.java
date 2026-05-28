@@ -261,6 +261,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         chatConfig.put("sensitiveFilterReplaceText", config.get("sensitiveFilterReplaceText"));
         chatConfig.put("sensitiveWords", config.get("sensitiveWords"));
         chatConfig.put("asyncToolCalls", config.get("asyncToolCalls"));
+        chatConfig.put("enableFileRead", config.get(ConfigKeys.Agent.ENABLE_FILE_READ));
         chatConfig.put("promptVariables", config.get("promptVariables"));
         result.put("chatConfig", chatConfig);
 

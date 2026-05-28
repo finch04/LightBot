@@ -49,6 +49,7 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         LambdaQueryWrapper<LlmTrace> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StringUtils.hasText(request.getStatus()), LlmTrace::getStatus, request.getStatus())
                 .eq(request.getSessionId() != null, LlmTrace::getSessionId, request.getSessionId())
+                .eq(StringUtils.hasText(request.getRequestId()), LlmTrace::getRequestId, request.getRequestId())
                 .eq(request.getAgentId() != null, LlmTrace::getAgentId, request.getAgentId());
 
         // 时间范围过滤
@@ -65,7 +66,7 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         wrapper.orderByDesc(LlmTrace::getCreateTime);
 
         // 2. 分页查询
-        Page<LlmTrace> page = page(
+        Page<LlmTrace> page = baseMapper.selectPage(
                 new Page<>(request.getPageNum(), request.getPageSize()),
                 wrapper
         );
