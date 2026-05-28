@@ -674,7 +674,7 @@ defineExpose({ openDialog, search, refresh })
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #171717;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: #fff;
   display: flex;
   align-items: center;

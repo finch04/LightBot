@@ -34,6 +34,7 @@ public enum ErrorCode {
     AGENT_TOOL_LIMIT(30005, "每个Agent最多绑定10个额外工具", HttpStatus.BAD_REQUEST),
     AGENT_MCP_LIMIT(30006, "每个Agent最多绑定5个MCP Server", HttpStatus.BAD_REQUEST),
     AGENT_SUBAGENT_LIMIT(30007, "每个Agent最多绑定5个SubAgent", HttpStatus.BAD_REQUEST),
+    AGENT_SKILL_LIMIT(30008, "每个Agent最多绑定10个Skill", HttpStatus.BAD_REQUEST),
     AVATAR_UNSUPPORTED_TYPE(30004, "头像文件格式不支持: %s", HttpStatus.BAD_REQUEST),
     AI_NO_PROVIDER(30001, "未配置模型提供商，请先添加一个模型提供商", HttpStatus.BAD_REQUEST),
     AI_GENERATE_FAILED(30002, "AI生成失败，请检查模型KEY配置", HttpStatus.INTERNAL_SERVER_ERROR),
@@ -94,6 +95,7 @@ public enum ErrorCode {
     MCP_SERVER_NOT_FOUND(90001, "MCP Server不存在", HttpStatus.BAD_REQUEST),
     MCP_CONNECTION_FAILED(90002, "MCP Server连接失败", HttpStatus.BAD_REQUEST),
     MCP_CONFIG_ERROR(90003, "MCP Server配置错误", HttpStatus.BAD_REQUEST),
+    MCP_TOOLS_FETCH_FAILED(90004, "MCP获取工具失败", HttpStatus.BAD_REQUEST),
 
     // ========== LLM调用链模块 ==========
     LLM_TRACE_NOT_FOUND(93001, "调用链记录不存在", HttpStatus.BAD_REQUEST),

@@ -34,6 +34,22 @@ public class ChatContext {
     // ===== MessageMiddleware 构建 =====
     private List<org.springframework.ai.chat.messages.Message> messages;
 
+    // ===== SkillPrepMiddleware 准备 =====
+    /** 由 Skill 拼接出来的额外系统提示词（追加到 Agent.systemPrompt 之后） */
+    private String skillSystemAppendix;
+    /** 由 Skill 引入的额外 Tool ID（合并入 ToolPrep 的工具集合） */
+    private List<Long> skillExtraToolIds;
+    /** 由 Skill 引入的额外 MCP Server ID */
+    private List<Long> skillExtraMcpServerIds;
+    /** 启用的 Skill 名称列表（用于 trace 与日志） */
+    private List<String> activeSkillNames;
+    /** 启用的 Skill 详情（用于前端 skill_active 事件展示） */
+    private List<Map<String, Object>> activeSkillDetails;
+
+    // ===== SubAgentPrepMiddleware 准备 =====
+    /** 当前 Agent 绑定的可委派 SubAgent ID 列表 */
+    private List<Long> boundSubAgentIds;
+
     // ===== ToolPrepMiddleware 准备 =====
     private ChatModel chatModel;
     private ToolCallingChatOptions toolOptions;

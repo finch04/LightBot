@@ -112,7 +112,13 @@ public class McpClientServiceImpl implements McpClientService {
         McpSyncClient client = null;
         try {
             client = createAndInitClient(server);
-            List<McpSchema.Tool> tools = client.listTools().tools();
+            List<McpSchema.Tool> tools;
+            try {
+                tools = client.listTools().tools();
+            } catch (Exception e) {
+                log.error("[MCP] 获取工具失败: serverId={}, name={}", mcpServerId, server.getName(), e);
+                throw new BizException(ErrorCode.MCP_TOOLS_FETCH_FAILED);
+            }
 
             // 3. 写入 Redis 缓存（不过期，手动刷新才清除）
             try {
@@ -124,6 +130,17 @@ public class McpClientServiceImpl implements McpClientService {
             }
 
             return tools;
+        } catch (BizException e) {
+            if (e.getCode() == ErrorCode.MCP_SERVER_NOT_FOUND.getCode()
+                    || e.getCode() == ErrorCode.MCP_TOOLS_FETCH_FAILED.getCode()) {
+                throw e;
+            }
+            log.warn("[MCP] 获取工具失败: serverId={}, name={}, error={}",
+                    mcpServerId, server.getName(), e.getMessage());
+            throw new BizException(ErrorCode.MCP_TOOLS_FETCH_FAILED);
+        } catch (Exception e) {
+            log.error("[MCP] 获取工具失败: serverId={}, name={}", mcpServerId, server.getName(), e);
+            throw new BizException(ErrorCode.MCP_TOOLS_FETCH_FAILED);
         } finally {
             if (client != null) {
                 try { client.close(); } catch (Exception ignored) {}

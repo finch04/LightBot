@@ -63,6 +63,14 @@
               </div>
               <div v-show="msg._reasoningExpanded" class="reasoning-content">{{ msg._reasoningContent }}</div>
             </div>
+            <!-- Skill 启用（固定在回复顶部） -->
+            <div v-if="getTopCapabilityEvents(msg).length > 0 && !msg._sensitiveBlock" class="capability-block-inline">
+              <AgentCapabilityPanel
+                :events="getTopCapabilityEvents(msg)"
+                :is-done="!msg._streaming || msg._toolsDone"
+                :default-expanded="true"
+              />
+            </div>
             <!-- 工作流节点执行（工作流型智能体） -->
             <div v-if="msg._workflowEvents?.length > 0 && !msg._sensitiveBlock" class="workflow-block-inline">
               <WorkflowNodesGroupComponent
@@ -76,8 +84,15 @@
               <template v-for="(segment, si) in splitContentByOffsets(msg)" :key="si">
                 <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!msg._streaming" /></div>
                 <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
+                  <AgentCapabilityPanel
+                    v-if="getCapabilityEventsForOffset(msg, segment.offset).length > 0"
+                    :events="getCapabilityEventsForOffset(msg, segment.offset)"
+                    :is-done="isToolBlockDone(msg, segment.offset)"
+                    :default-expanded="true"
+                  />
                   <ToolCallsGroupComponent
-                    :tool-events="getToolEventsForOffset(msg, segment.offset)"
+                    v-if="getPureToolEvents(getToolEventsForOffset(msg, segment.offset)).length > 0"
+                    :tool-events="getPureToolEvents(getToolEventsForOffset(msg, segment.offset))"
                     :is-done="isToolBlockDone(msg, segment.offset)"
                     :default-expanded="true"
                   />
@@ -88,8 +103,15 @@
             <template v-else-if="!msg._sensitiveBlock && msg._toolEvents?.length > 0">
               <div v-if="msg.content" class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
               <div class="tool-block-inline">
+                <AgentCapabilityPanel
+                  v-if="getInlineCapabilityEvents(msg).length > 0"
+                  :events="getInlineCapabilityEvents(msg)"
+                  :is-done="msg._toolsDone"
+                  :default-expanded="true"
+                />
                 <ToolCallsGroupComponent
-                  :tool-events="msg._toolEvents"
+                  v-if="getPureToolEvents(msg._toolEvents).length > 0"
+                  :tool-events="getPureToolEvents(msg._toolEvents)"
                   :is-done="msg._toolsDone"
                   :default-expanded="true"
                 />
@@ -378,6 +400,7 @@ import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
+import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
@@ -1111,6 +1134,25 @@ async function runChatStream({ message, attachments, regenerate }) {
           if (event.contentOffset == null) {
             event.contentOffset = offset
           }
+          if (event.type === 'skill_active') {
+            assistantMsg._toolEvents.push(event)
+            hasStreamContent.value = true
+            currentStatus.value = `已启用 ${(event.skills || []).length} 个 Skill`
+            scrollToBottom()
+            return
+          }
+          if (event.type === 'subagent_call' || event.type === 'subagent_result') {
+            assistantMsg._toolEvents.push(event)
+            if (event.type === 'subagent_call') {
+              assistantMsg._toolExpanded = true
+              assistantMsg._currentToolOffset = offset
+              registerToolBlockOffset(assistantMsg, offset)
+              currentStatus.value = `委派 SubAgent: ${event.displayName || event.subagentName || ''}`
+            }
+            hasStreamContent.value = true
+            scrollToBottom()
+            return
+          }
           if (event.type === 'tool_call') {
             assistantMsg._toolExpanded = true
             assistantMsg._currentToolOffset = offset
@@ -1213,10 +1255,35 @@ function registerToolBlockOffset(msg, offset) {
   }
 }
 
+const CAPABILITY_EVENT_TYPES = new Set(['skill_active', 'subagent_call', 'subagent_result'])
+
+function getCapabilityEvents(msg) {
+  return (msg._toolEvents || []).filter(e => CAPABILITY_EVENT_TYPES.has(e.type))
+}
+
+function getTopCapabilityEvents(msg) {
+  return getCapabilityEvents(msg).filter(e => e.type === 'skill_active')
+}
+
+function getCapabilityEventsForOffset(msg, offset) {
+  return getCapabilityEvents(msg).filter(e => e.type !== 'skill_active' && e.contentOffset === offset)
+}
+
+function getInlineCapabilityEvents(msg) {
+  const offsets = getToolBlockOffsets(msg)
+  if (offsets.length > 0) return []
+  return getCapabilityEvents(msg).filter(e => e.type !== 'skill_active')
+}
+
+function getPureToolEvents(events) {
+  return (events || []).filter(e => !CAPABILITY_EVENT_TYPES.has(e.type))
+}
+
 function getToolBlockOffsets(msg) {
   if (msg._toolBlockOffsets?.length > 0) return msg._toolBlockOffsets
   const fromEvents = [...new Set(
     (msg._toolEvents || [])
+      .filter(e => e.type === 'tool_call' || e.type === 'subagent_call')
       .map(e => e.contentOffset)
       .filter(o => o != null && o >= 0)
   )]
@@ -1237,7 +1304,8 @@ function getToolEventsForOffset(msg, offset) {
 function isToolBlockDone(msg, offset) {
   if (msg._toolBlocksDone?.includes(offset)) return true
   if (!msg._streaming) return true
-  return getToolEventsForOffset(msg, offset).some(e => e.type === 'tool_result')
+  const atOffset = getToolEventsForOffset(msg, offset)
+  return atOffset.some(e => e.type === 'tool_result' || e.type === 'subagent_result')
 }
 
 function markToolBlockDone(msg, offset) {

@@ -182,7 +182,7 @@ export function getDefaultNodeData(type) {
       errorStrategy: 'defaultValue',
       defaultOutput: '{"result":""}',
     },
-    mcp: { label: 'MCP', mcpServerName: '', toolName: '', inputParams: '{}' },
+    mcp: { label: 'MCP', mcpServerId: null, mcpServerName: '', toolName: '', inputParams: '{}' },
     input: {
       label: '流程输入',
       outputParams: [{ key: 'query', type: 'String', defaultValue: '' }]

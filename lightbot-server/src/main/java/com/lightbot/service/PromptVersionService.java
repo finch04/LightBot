@@ -22,11 +22,13 @@ public interface PromptVersionService extends IService<PromptVersion> {
      * @param template     提示词模板
      * @param variables    变量定义（JSON）
      * @param modelConfig  模型配置（JSON）
+     * @param toolConfig   工具配置（JSON）
      * @param status       版本状态（pre/release），null时默认pre
      * @param userId       创建者ID
      * @return 提示词版本实体
      */
-    PromptVersion create(String promptKey, String version, String versionDesc, String template, String variables, String modelConfig, String status, Long userId);
+    PromptVersion create(String promptKey, String version, String versionDesc, String template,
+                         String variables, String modelConfig, String toolConfig, String status, Long userId);
 
     /**
      * 根据提示词标识和版本号获取版本详情

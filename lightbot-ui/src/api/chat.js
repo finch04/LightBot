@@ -84,7 +84,8 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
             const parsed = JSON.parse(statusContent)
             if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status' || parsed.type === 'tool_complete' || parsed.type === 'reasoning_content'
                 || parsed.type === 'workflow_node_start' || parsed.type === 'workflow_node_complete' || parsed.type === 'workflow_complete'
-                || parsed.type === 'sensitive_block') {
+                || parsed.type === 'sensitive_block'
+                || parsed.type === 'skill_active' || parsed.type === 'subagent_call' || parsed.type === 'subagent_result') {
               onToolEvent?.(parsed)
               continue
             }

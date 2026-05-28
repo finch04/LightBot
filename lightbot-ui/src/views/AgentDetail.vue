@@ -1068,9 +1068,82 @@
         </div>
         </div>
       </a-tab-pane>
-      <!-- Skill（暂未开发） -->
+      <!-- Skill 绑定 -->
       <a-tab-pane key="skill" tab="Skill">
-        <div class="empty-tip skill-placeholder">Skill 能力开发中，敬请期待</div>
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
+        <div class="subagent-bind">
+          <div class="selected-subagents">
+            <div class="selected-header">
+              <span class="selected-label">已启用 {{ selectedSkills.length }}/{{ BIND_LIMITS.skill }} 个 Skill</span>
+              <button v-if="!isVersionPreview && selectedSkills.length > 0" class="btn-clear" @click="clearSelectedSkills">
+                <DeleteOutlined /> 清空
+              </button>
+            </div>
+            <div class="selected-subagents-tags">
+              <div v-if="selectedSkills.length === 0" class="empty-tip">
+                暂未启用 Skill，从下方列表选择
+              </div>
+              <div
+                v-for="s in selectedSkills"
+                :key="s.id"
+                class="knowledge-tag skill-tag"
+                :class="{ 'binding-tag--deleted': s._deleted }"
+              >
+                <ThunderboltOutlined />
+                <span class="tag-name-wrap">
+                  <span>{{ s.displayName || s.name }}</span>
+                  <span v-if="s.isBuiltin === 1" class="binding-inline-badge">内置</span>
+                </span>
+                <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                <button v-if="!isVersionPreview" class="tag-remove" @click="removeSkill(s.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="subagent-list">
+            <div class="list-header">
+              <span>可用的 Skill（{{ selectedSkills.length }}/{{ BIND_LIMITS.skill }}）</span>
+              <a-input
+                v-model:value="skillSearchText"
+                placeholder="搜索 Skill..."
+                size="small"
+                style="width: 200px"
+                :disabled="isVersionPreview"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="s in filteredSkillList"
+                :key="s.id"
+                class="subagent-item"
+                :class="{ selected: selectedSkillIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
+                @click="!isVersionPreview && toggleSkill(s)"
+              >
+                <div class="item-icon skill-icon">
+                  <ThunderboltOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">
+                    <span v-if="s.isBuiltin === 1" class="binding-inline-badge">内置</span>
+                    {{ s.displayName || s.name }}
+                  </div>
+                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                  <div class="item-tools" v-if="s.slug">slug: {{ s.slug }}</div>
+                </div>
+                <div class="item-check" v-if="selectedSkillIds.has(toBindingId(s.id))">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredSkillList.length === 0" class="empty-tip">
+                暂无可用 Skill
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
       </a-tab-pane>
 
     </a-tabs>
@@ -1336,6 +1409,23 @@
               </div>
             </div>
           </div>
+          <div class="preview-field">
+            <label>Skill</label>
+            <div class="preview-value">
+              <div v-if="previewSkillList.length === 0" class="preview-empty">未启用</div>
+              <div v-else>
+                <div
+                  v-for="s in previewSkillList"
+                  :key="s.id"
+                  class="preview-tag subagent"
+                  :class="{ 'preview-tag--deleted': s._deleted }"
+                >
+                  {{ s.displayName || s.name }}
+                  <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1354,7 +1444,7 @@ import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, updateAgentSkills, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
 import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -1363,6 +1453,7 @@ import { getModelsByProvider } from '../api/model'
 import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
 import { getEnabledSubAgents } from '../api/subagent'
+import { getEnabledSkills } from '../api/skill'
 import { safeJsonParse } from '../utils/request'
 import {
   toBindingId,
@@ -1381,7 +1472,7 @@ const agentId = route.params.id
 
 const avatarInputRef = ref(null)
 
-const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5 }
+const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5, skill: 10 }
 /** 右侧配置卡片：模型参数 / 对话配置 */
 const configTab = ref('model')
 
@@ -1520,6 +1611,17 @@ const previewSubAgentList = computed(() => {
     toBindingIdSet(versionPreview.value?.subAgentIds),
     subAgentList.value,
     { entityLabel: 'SubAgent' }
+  )
+})
+
+const previewSkillList = computed(() => {
+  if (versionPreview.value?.skills?.length) {
+    return versionPreview.value.skills.map(markBindingItemDeletedFlag)
+  }
+  return resolveBindingItems(
+    toBindingIdSet(versionPreview.value?.skillIds),
+    skillList.value,
+    { entityLabel: 'Skill' }
   )
 })
 
@@ -1800,6 +1902,11 @@ const mcpSearchText = ref('')
 const selectedSubAgentIds = ref(new Set())
 const subAgentList = ref([])
 const subAgentSearchText = ref('')
+
+// Skill 绑定
+const selectedSkillIds = ref(new Set())
+const skillList = ref([])
+const skillSearchText = ref('')
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
@@ -2025,6 +2132,13 @@ const selectedSubAgents = computed(() =>
   })
 )
 
+const selectedSkills = computed(() =>
+  resolveBindingItems(selectedSkillIds.value, skillList.value, {
+    entityLabel: 'Skill',
+    catalogReady: bindingCatalogsLoaded.value,
+  })
+)
+
 const deletedBindingCount = computed(() => {
   if (!bindingCatalogsLoaded.value) return 0
   return (
@@ -2032,6 +2146,7 @@ const deletedBindingCount = computed(() => {
     + countDeletedBindingItems(selectedTools.value)
     + countDeletedBindingItems(selectedMcpServers.value)
     + countDeletedBindingItems(selectedSubAgents.value)
+    + countDeletedBindingItems(selectedSkills.value)
   )
 })
 
@@ -2041,6 +2156,7 @@ const deletedBindingSections = computed(() => [
   { label: '工具', items: selectedTools.value },
   { label: 'MCP', items: selectedMcpServers.value },
   { label: 'SubAgent', items: selectedSubAgents.value },
+  { label: 'Skill', items: selectedSkills.value },
 ])
 
 const deletedBindingDetailLines = computed(() =>
@@ -2054,6 +2170,7 @@ function removeAllDeletedBindings() {
   n += removeDeletedIdsFromSet(selectedToolIds.value, selectedTools.value)
   n += removeDeletedIdsFromSet(selectedMcpServerIds.value, selectedMcpServers.value)
   n += removeDeletedIdsFromSet(selectedSubAgentIds.value, selectedSubAgents.value)
+  n += removeDeletedIdsFromSet(selectedSkillIds.value, selectedSkills.value)
   if (n > 0) {
     message.success(`已移除 ${n} 个已删除的绑定`)
   }
@@ -2065,6 +2182,17 @@ const filteredSubAgentList = computed(() => {
   return subAgentList.value.filter(s =>
     s.name?.toLowerCase().includes(keyword) ||
     s.displayName?.toLowerCase().includes(keyword) ||
+    s.description?.toLowerCase().includes(keyword)
+  )
+})
+
+const filteredSkillList = computed(() => {
+  if (!skillSearchText.value) return skillList.value
+  const keyword = skillSearchText.value.toLowerCase()
+  return skillList.value.filter(s =>
+    s.name?.toLowerCase().includes(keyword) ||
+    s.displayName?.toLowerCase().includes(keyword) ||
+    s.slug?.toLowerCase().includes(keyword) ||
     s.description?.toLowerCase().includes(keyword)
   )
 })
@@ -2173,7 +2301,7 @@ function restoreDefaults() {
 async function loadAgent() {
   try {
     const res = await getAgentDetail(agentId)
-    const { agent: agentData, knowledgeIds, mcpServerIds, subAgentIds } = res.data
+    const { agent: agentData, knowledgeIds, mcpServerIds, subAgentIds, skillIds } = res.data
 
     // 分离基本信息和配置
     const { config, agentType, ...basicInfo } = agentData
@@ -2227,6 +2355,7 @@ async function loadAgent() {
 
     selectedKnowledgeIds.value = toBindingIdSet(knowledgeIds)
     selectedSubAgentIds.value = toBindingIdSet(subAgentIds)
+    selectedSkillIds.value = toBindingIdSet(skillIds)
 
     // 工具绑定 ID（须从接口读取，已删除的工具不会出现在 detail 列表中）
     const toolIdsRes = await getAgentToolIds(agentId)
@@ -2266,6 +2395,7 @@ function captureFormSnapshot() {
     toolIds: sortedIds(selectedToolIds.value),
     mcpServerIds: sortedIds(selectedMcpServerIds.value),
     subAgentIds: sortedIds(selectedSubAgentIds.value),
+    skillIds: sortedIds(selectedSkillIds.value),
     userSensitiveWords: [...userSensitiveWords.value],
     sensitiveWords: [...sensitiveWords.value],
   })
@@ -2500,12 +2630,49 @@ function clearSelectedSubAgents() {
   selectedSubAgentIds.value = new Set()
 }
 
+function toggleSkill(s) {
+  if (isVersionPreview.value) return
+  const sid = toBindingId(s.id)
+  const ids = new Set(selectedSkillIds.value)
+  if (ids.has(sid)) {
+    ids.delete(sid)
+  } else {
+    if (ids.size >= BIND_LIMITS.skill) {
+      message.warning(`每个 Agent 最多启用 ${BIND_LIMITS.skill} 个 Skill`)
+      return
+    }
+    ids.add(sid)
+  }
+  selectedSkillIds.value = ids
+}
+
+function removeSkill(id) {
+  if (isVersionPreview.value) return
+  const ids = new Set(selectedSkillIds.value)
+  ids.delete(toBindingId(id))
+  selectedSkillIds.value = ids
+}
+
+function clearSelectedSkills() {
+  if (isVersionPreview.value) return
+  selectedSkillIds.value = new Set()
+}
+
 async function loadSubAgentList() {
   try {
     const res = await getEnabledSubAgents()
     subAgentList.value = (res.data || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载SubAgent列表失败:', e)
+  }
+}
+
+async function loadSkillList() {
+  try {
+    const res = await getEnabledSkills()
+    skillList.value = (res.data || []).map(s => ({ ...s, id: toBindingId(s.id) }))
+  } catch (e) {
+    console.error('[AgentDetail] 加载Skill列表失败:', e)
   }
 }
 
@@ -2517,6 +2684,7 @@ async function loadBindingCatalogs() {
       loadKnowledgeList(),
       loadMcpServerList(),
       loadSubAgentList(),
+      loadSkillList(),
       loadToolTypes(),
       loadToolList(toolTypeFilter.value || undefined),
     ])
@@ -2546,6 +2714,8 @@ async function onBindingTabChange(tab) {
     await loadKnowledgeList()
   } else if (tab === 'subagents') {
     await loadSubAgentList()
+  } else if (tab === 'skill') {
+    await loadSkillList()
   }
 }
 
@@ -2769,6 +2939,9 @@ async function handleSave(options = {}) {
 
     // 6. 更新 SubAgent 绑定
     await updateAgentSubAgents(agentId, Array.from(selectedSubAgentIds.value))
+
+    // 7. 更新 Skill 绑定
+    await updateAgentSkills(agentId, Array.from(selectedSkillIds.value))
 
     message.success('暂存成功')
     await loadAgent()
@@ -4286,15 +4459,38 @@ onMounted(async () => {
 .subagent-icon {
   background: linear-gradient(135deg, #f59e0b, #d97706);
 }
+.skill-icon {
+  background: linear-gradient(135deg, #ec4899, #db2777) !important;
+}
 .builtin-badge {
   position: absolute;
   top: -4px;
   right: -4px;
   font-size: 10px;
   padding: 1px 4px;
-  background: #0070f3;
+  background: #3b82f6;
   color: #fff;
   border-radius: 4px;
+}
+.binding-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  padding: 0 5px;
+  margin-right: 4px;
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 4px;
+  vertical-align: middle;
+  position: static;
+}
+.tag-name-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tag-name-wrap .binding-inline-badge {
+  margin-right: 0;
 }
 .item-info {
   flex: 1;
@@ -4401,7 +4597,7 @@ onMounted(async () => {
   font-weight: 500;
 }
 .tool-icon-bg {
-  background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
+  background: linear-gradient(135deg, #10b981, #059669) !important;
 }
 .mcp-tag {
   background: #fdf4ff;
@@ -4524,6 +4720,11 @@ onMounted(async () => {
   background: #fffbeb;
   border-color: #fcd34d;
   color: #b45309;
+}
+.skill-tag {
+  background: #fdf2f8;
+  border-color: #f9a8d4;
+  color: #be185d;
 }
 .subagent-list {
   flex: 1;

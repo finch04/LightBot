@@ -31,7 +31,10 @@
         <p class="page-desc">测试和调试你的 AI 提示词</p>
       </div>
       <div class="header-actions">
-        <button class="btn-outline" @click="addInstance()" v-if="instances.length < 3">
+        <button class="btn-outline" @click="openCreatePromptModal" title="从当前配置创建新Prompt">
+          <PlusOutlined /> 快速创建 Prompt
+        </button>
+        <button class="btn-outline" @click="addInstance()" :disabled="instances.length >= 3" title="最多同时对比3个配置">
           <CopyOutlined /> 添加配置
         </button>
       </div>
@@ -50,7 +53,7 @@
               v-if="inst.messages.length > 0">
               <ClearOutlined />
             </button>
-            <button class="btn-icon-sm" title="复制配置" @click="addInstance(inst)" v-if="instances.length < 3">
+            <button class="btn-icon-sm" title="复制配置" @click="addInstance(inst)" :disabled="instances.length >= 3">
               <CopyOutlined />
             </button>
             <button class="btn-icon-sm" title="删除配置" @click="removeInstance(inst.id)" v-if="instances.length > 1">
@@ -166,7 +169,7 @@
               </span>
             </div>
           </div>
-        </div>
+</div>
 
         <!-- 参数配置 -->
         <div class="config-section" v-if="inst.variables.length > 0">
@@ -235,6 +238,13 @@
         </div>
       </div>
     </div>
+
+    <!-- 快速创建Prompt弹窗 -->
+    <CreatePromptModal
+      v-model:open="createPromptModalVisible"
+      :current-config="createPromptConfig"
+      @success="handleCreatePromptSuccess"
+    />
   </div>
 </template>
 
@@ -243,12 +253,13 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, CopyOutlined, DeleteOutlined, ClearOutlined, RobotOutlined, SendOutlined,
-  QuestionCircleOutlined,
+  QuestionCircleOutlined, PlusOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getPrompts, getPromptVersions, getPromptVersionDetail, runPromptStream } from '../api/prompt'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
+import CreatePromptModal from '../components/CreatePromptModal.vue'
 
 const router = useRouter()
 const promptList = ref([])
@@ -270,6 +281,7 @@ function createInstance() {
     configFields: [],
     modelList: [],
     variables: [],
+    toolConfig: '{}',
     messages: [],
     userInput: '',
     streaming: false,
@@ -288,6 +300,7 @@ function addInstance(src) {
     inst.modelId = src.modelId
     inst.modelConfig = { ...(src.modelConfig || {}) }
     inst.variables = (src.variables || []).map(v => ({ ...v }))
+    inst.toolConfig = src.toolConfig || '{}'
     if (inst.providerId) {
       loadModelsForInstance(inst, inst.providerId)
       loadConfigFieldsForInstance(inst, inst.providerId)
@@ -324,6 +337,7 @@ async function onVersionChange(inst, version) {
   if (!version || !inst.selectedPromptKey) {
     inst.content = ''
     inst.variables = []
+    inst.toolConfig = '{}'
     return
   }
   try {
@@ -352,6 +366,10 @@ async function onVersionChange(inst, version) {
         } else if (typeof vars === 'object') {
           inst.variables = Object.entries(vars).map(([key, defaultValue]) => ({ key, defaultValue: defaultValue || '' }))
         }
+      }
+      // 加载工具配置
+      if (detail.toolConfig) {
+        inst.toolConfig = detail.toolConfig
       }
       onContentChange(inst)
     }
@@ -495,6 +513,42 @@ onMounted(async () => {
   promptList.value = promptRes.data?.records || []
   providerList.value = providerRes.data?.records || []
 })
+
+// 快速创建Prompt
+const createPromptModalVisible = ref(false)
+const createPromptConfig = ref({})
+
+function openCreatePromptModal() {
+  const inst = instances.value[0]
+  if (!inst?.content.trim()) {
+    message.warning('请先编辑模板内容')
+    return
+  }
+  createPromptConfig.value = {
+    template: inst.content,
+    modelId: inst.modelId,
+    variables: inst.variables,
+    modelConfig: {
+      providerId: inst.providerId,
+      modelId: inst.modelId,
+      ...inst.modelConfig
+    },
+    toolConfig: inst.toolConfig
+  }
+  createPromptModalVisible.value = true
+}
+
+function handleCreatePromptSuccess({ promptKey }) {
+  loadPromptsData()
+  router.push(`/prompts/${promptKey}`)
+}
+
+async function loadPromptsData() {
+  try {
+    const res = await getPrompts({ pageNum: 1, pageSize: 100 })
+    promptList.value = res.data?.records || []
+  } catch { /* ignore */ }
+}
 </script>
 
 <style scoped>
@@ -560,7 +614,8 @@ onMounted(async () => {
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn-outline:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline:hover:not(:disabled) { border-color: #0070f3; color: #0070f3; }
+.btn-outline:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d9d9d9; color: #71717a; }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
@@ -589,7 +644,8 @@ onMounted(async () => {
   color: #71717a;
   font-size: 12px;
 }
-.btn-icon-sm:hover { background: #f5f5f5; }
+.btn-icon-sm:hover:not(:disabled) { background: #f5f5f5; }
+.btn-icon-sm:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-text-xs {
   background: none;
   border: none;

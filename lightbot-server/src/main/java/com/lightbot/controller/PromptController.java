@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.PromptCreateRequest;
 import com.lightbot.dto.PromptRunRequest;
+import com.lightbot.dto.PromptTemplateCreateRequest;
 import com.lightbot.dto.PromptVersionCreateRequest;
 import com.lightbot.entity.Prompt;
 import com.lightbot.entity.PromptBuildTemplate;
@@ -85,7 +86,7 @@ public class PromptController {
         return Result.ok(promptVersionService.create(
                 request.getPromptKey(), request.getVersion(), request.getVersionDesc(),
                 request.getTemplate(), request.getVariables(), request.getModelConfig(),
-                request.getStatus(), null));
+                request.getToolConfig(), request.getStatus(), null));
     }
 
     @Operation(summary = "获取Prompt版本列表")
@@ -111,6 +112,29 @@ public class PromptController {
     @GetMapping("/templates/{key}")
     public Result<PromptBuildTemplate> getTemplate(@PathVariable String key) {
         return Result.ok(promptBuildTemplateService.getByKey(key));
+    }
+
+    @Operation(summary = "创建Prompt构建模板")
+    @PostMapping("/templates")
+    public Result<PromptBuildTemplate> createTemplate(@RequestBody PromptTemplateCreateRequest request) {
+        return Result.ok(promptBuildTemplateService.create(
+                request.getPromptTemplateKey(), request.getTemplateDesc(), request.getTemplate(),
+                request.getVariables(), request.getModelConfig(), request.getTags()));
+    }
+
+    @Operation(summary = "更新Prompt构建模板")
+    @PutMapping("/templates")
+    public Result<Void> updateTemplate(@RequestParam Long id, @RequestBody PromptTemplateCreateRequest request) {
+        promptBuildTemplateService.update(id, request.getTemplateDesc(), request.getTemplate(),
+                request.getVariables(), request.getModelConfig(), request.getTags());
+        return Result.ok();
+    }
+
+    @Operation(summary = "删除Prompt构建模板")
+    @DeleteMapping("/templates/{id}")
+    public Result<Void> deleteTemplate(@PathVariable Long id) {
+        promptBuildTemplateService.removeById(id);
+        return Result.ok();
     }
 
     /**

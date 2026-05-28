@@ -154,16 +154,23 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 .map(String::valueOf)
                 .toList();
 
-        // 5. 对话能力（多模态/联网等）
+        // 5. 获取绑定的 Skill ID 列表
+        List<Long> skillIds = getSkillIds(id);
+        List<String> skillIdStrs = skillIds.stream()
+                .map(String::valueOf)
+                .toList();
+
+        // 6. 对话能力（多模态/联网等）
         Map<String, Object> configMap = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
         AgentChatCapabilitiesDTO chatCapabilities = AgentChatCapabilitiesUtil.fromConfigMap(configMap);
 
-        // 6. 组装返回结果
+        // 7. 组装返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("agent", agent);
         result.put("knowledgeIds", knowledgeIdStrs);
         result.put("mcpServerIds", mcpServerIdStrs);
         result.put("subAgentIds", subAgentIdStrs);
+        result.put("skillIds", skillIdStrs);
         result.put("chatCapabilities", chatCapabilities);
         return result;
     }
@@ -376,6 +383,16 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     @Override
     public void updateSubAgentBindings(Long agentId, List<Long> subAgentIds) {
         writeBindingIdsToConfig(agentId, "subagents", subAgentIds);
+    }
+
+    @Override
+    public List<Long> getSkillIds(Long agentId) {
+        return readBindingIdsFromConfig(agentId, "skills");
+    }
+
+    @Override
+    public void updateSkillBindings(Long agentId, List<Long> skillIds) {
+        writeBindingIdsToConfig(agentId, "skills", skillIds);
     }
 
     /**

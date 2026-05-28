@@ -593,8 +593,77 @@
     </template>
     <!-- MCP -->
     <template v-if="node.type === 'mcp'">
-      <a-form-item label="MCP 服务"><a-input v-model:value="node.data.mcpServerName" @change="emitSync" /></a-form-item>
-      <a-form-item label="工具名称"><a-input v-model:value="node.data.toolName" @change="emitSync" /></a-form-item>
+      <a-form-item label="MCP 服务" required>
+        <a-select
+          v-model:value="node.data.mcpServerId"
+          show-search
+          placeholder="选择 MCP 服务"
+          option-label-prop="label"
+          dropdown-class-name="workflow-resource-dropdown"
+          :filter-option="filterMcpOption"
+          :disabled="readonly"
+          :loading="mcpServersLoading"
+          @change="onMcpServerChange"
+        >
+          <a-select-option
+            v-for="s in mcpServers"
+            :key="s.id"
+            :value="s.id"
+            :label="s.name"
+          >
+            <div class="resource-option">
+              <div class="resource-option-header">
+                <ApiOutlined class="resource-option-icon mcp" />
+                <span class="resource-option-title">{{ s.name }}</span>
+                <span v-if="mcpInstallTypeLabel(s)" class="resource-tag">{{ mcpInstallTypeLabel(s) }}</span>
+              </div>
+              <div v-if="s.description" class="resource-option-desc">{{ s.description }}</div>
+            </div>
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="工具" required>
+        <div class="mcp-tool-picker">
+          <a-select
+            v-model:value="node.data.toolName"
+            show-search
+            placeholder="选择 MCP 工具"
+            option-label-prop="label"
+            dropdown-class-name="workflow-resource-dropdown"
+            :filter-option="filterMcpToolOption"
+            :disabled="readonly || !node.data.mcpServerId"
+            :loading="mcpToolsLoading"
+            @change="emitSync"
+          >
+            <a-select-option
+              v-for="t in enabledMcpTools"
+              :key="t.name"
+              :value="t.name"
+              :label="t.name"
+            >
+              <div class="resource-option">
+                <div class="resource-option-header">
+                  <ToolOutlined class="resource-option-icon tool" />
+                  <span class="resource-option-title">{{ t.name }}</span>
+                  <span v-if="t.enabled === false" class="resource-tag resource-tag--muted">已禁用</span>
+                </div>
+                <div v-if="t.description" class="resource-option-desc">{{ t.description }}</div>
+              </div>
+            </a-select-option>
+          </a-select>
+          <a-button
+            class="mcp-refresh-btn"
+            :disabled="readonly || !node.data.mcpServerId"
+            :loading="mcpToolsRefreshing"
+            @click="handleRefreshMcpTools"
+          >
+            <SyncOutlined /> 刷新工具
+          </a-button>
+        </div>
+        <div v-if="node.data.mcpServerId && !mcpToolsLoading && enabledMcpTools.length === 0" class="mcp-tools-hint">
+          暂无可用工具，请先测试 MCP 连接或点击「刷新工具」
+        </div>
+      </a-form-item>
       <a-form-item label="输入参数 JSON">
         <JsonInput v-model="mcpInputParamsJson" :rows="4" placeholder='{"chat_id":"oc_xxx","text":"{{query}}"}' />
       </a-form-item>
@@ -604,9 +673,10 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, watch, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined, CopyOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined, CopyOutlined, ApiOutlined, SyncOutlined } from '@ant-design/icons-vue'
+import { getMcpServers, getMcpServerTools, refreshMcpServerTools } from '../../../api/mcp'
 import ShortMemoryForm from './ShortMemoryForm.vue'
 import ConfigFieldLabel from './ConfigFieldLabel.vue'
 import VariablePickerInput from './VariablePickerInput.vue'
@@ -638,6 +708,15 @@ const emit = defineEmits([
   'knowledge-change',
   'tool-change',
 ])
+
+const mcpServers = ref([])
+const mcpServersLoading = ref(false)
+const mcpTools = ref([])
+const mcpToolsLoading = ref(false)
+const mcpToolsRefreshing = ref(false)
+const enabledMcpTools = computed(() =>
+  (mcpTools.value || []).filter(t => t.enabled !== false)
+)
 
 const mcpInputParamsJson = computed({
   get() {
@@ -865,6 +944,120 @@ function onToolChange(v) {
   emit('tool-change', v)
 }
 
+function filterMcpOption(input, option) {
+  const label = (option?.label ?? '').toString().toLowerCase()
+  const kw = (input || '').toLowerCase()
+  return !kw || label.includes(kw)
+}
+
+function filterMcpToolOption(input, option) {
+  const label = (option?.label ?? '').toString().toLowerCase()
+  const kw = (input || '').toLowerCase()
+  return !kw || label.includes(kw)
+}
+
+function mcpInstallTypeLabel(server) {
+  const t = server?.installType?.code || server?.installType
+  const map = { npx: 'NPX', uvx: 'UVX', sse: 'SSE' }
+  return map[t] || t || ''
+}
+
+async function loadMcpServers() {
+  mcpServersLoading.value = true
+  try {
+    const res = await getMcpServers({ pageNum: 1, pageSize: 200 })
+    mcpServers.value = res.data?.records || res.data || []
+  } catch (e) {
+    mcpServers.value = []
+  } finally {
+    mcpServersLoading.value = false
+  }
+}
+
+async function loadMcpTools(serverId, silent = false) {
+  if (!serverId) {
+    mcpTools.value = []
+    return
+  }
+  if (!silent) mcpToolsLoading.value = true
+  try {
+    const res = await getMcpServerTools(serverId)
+    mcpTools.value = res.data || []
+  } catch {
+    mcpTools.value = []
+  } finally {
+    mcpToolsLoading.value = false
+  }
+}
+
+function onMcpServerChange(serverId) {
+  if (props.readonly) return
+  const server = mcpServers.value.find(s => String(s.id) === String(serverId))
+  props.node.data.mcpServerId = serverId
+  props.node.data.mcpServerName = server?.name || ''
+  props.node.data.toolName = ''
+  loadMcpTools(serverId)
+  emitSync()
+}
+
+async function handleRefreshMcpTools() {
+  const serverId = props.node.data?.mcpServerId
+  if (!serverId || props.readonly) return
+  mcpToolsRefreshing.value = true
+  try {
+    await refreshMcpServerTools(serverId)
+    message.success('工具列表已刷新')
+    await loadMcpTools(serverId, true)
+  } catch {
+    // 错误由后端统一返回「MCP获取工具失败」，request 拦截器已 toast 一次
+  } finally {
+    mcpToolsRefreshing.value = false
+  }
+}
+
+function resolveMcpServerIdFromName() {
+  const name = props.node.data?.mcpServerName
+  if (!name || props.node.data?.mcpServerId) return
+  const server = mcpServers.value.find(s => s.name === name)
+  if (server) {
+    props.node.data.mcpServerId = server.id
+    loadMcpTools(server.id)
+    emitSync()
+  }
+}
+
+onMounted(async () => {
+  if (props.node?.type === 'mcp') {
+    await loadMcpServers()
+    resolveMcpServerIdFromName()
+    if (props.node.data?.mcpServerId) {
+      await loadMcpTools(props.node.data.mcpServerId, true)
+    }
+  }
+})
+
+watch(
+  () => props.node?.data?.mcpServerId,
+  (id, prev) => {
+    if (props.node?.type !== 'mcp') return
+    if (id && String(id) !== String(prev)) {
+      loadMcpTools(id, true)
+    }
+  }
+)
+
+watch(
+  () => props.node?.id,
+  async () => {
+    if (props.node?.type !== 'mcp') return
+    if (!mcpServers.value.length) await loadMcpServers()
+    resolveMcpServerIdFromName()
+    if (props.node.data?.mcpServerId) {
+      await loadMcpTools(props.node.data.mcpServerId, true)
+    }
+  }
+)
+
 function onOverrideToggle(checked) {
   if (props.readonly) return
   if (!checked && props.node.data.knowledgeBaseTopK != null) {
@@ -964,6 +1157,29 @@ function removeGroupVar(idx) {
 .resource-option-icon { font-size: 14px; flex-shrink: 0; }
 .resource-option-icon.knowledge { color: #4f46e5; }
 .resource-option-icon.tool { color: #059669; }
+.resource-option-icon.mcp { color: #7c3aed; }
+.mcp-tool-picker {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.mcp-tool-picker :deep(.ant-select) {
+  flex: 1;
+  min-width: 0;
+}
+.mcp-refresh-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.mcp-tools-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 6px;
+}
+.resource-tag--muted {
+  background: #f4f4f5;
+  color: #a1a1aa;
+}
 .resource-option-title { font-weight: 600; font-size: 13px; color: #1f2937; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resource-option-desc { font-size: 12px; color: #6b7280; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .resource-option-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #9ca3af; }

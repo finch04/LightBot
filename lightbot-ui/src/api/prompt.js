@@ -40,6 +40,21 @@ export function getPromptTemplate(key) {
   return request.get(`/prompts/templates/${key}`)
 }
 
+// 创建模板
+export function createPromptTemplate(data) {
+  return request.post('/prompts/templates', data)
+}
+
+// 更新模板
+export function updatePromptTemplate(id, data) {
+  return request.put('/prompts/templates', data, { params: { id } })
+}
+
+// 删除模板
+export function deletePromptTemplate(id) {
+  return request.delete(`/prompts/templates/${id}`)
+}
+
 /**
  * 流式运行Prompt调试（SSE）
  */

@@ -186,4 +186,20 @@ public interface AgentService extends IService<Agent> {
      * @param subAgentIds SubAgent ID 列表
      */
     void updateSubAgentBindings(Long agentId, List<Long> subAgentIds);
+
+    /**
+     * 获取 Agent 绑定的 Skill ID 列表
+     *
+     * @param agentId Agent ID
+     * @return Skill ID 列表
+     */
+    List<Long> getSkillIds(Long agentId);
+
+    /**
+     * 更新 Agent 的 Skill 绑定
+     *
+     * @param agentId  Agent ID
+     * @param skillIds Skill ID 列表
+     */
+    void updateSkillBindings(Long agentId, List<Long> skillIds);
 }

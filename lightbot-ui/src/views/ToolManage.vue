@@ -41,7 +41,7 @@
     <div class="provider-grid">
       <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'system-card': t.isSystem }">
         <div class="card-top">
-          <div class="card-icon" :style="{ background: typeColors[t.toolType?.code || t.toolType] || '#171717' }">
+          <div class="card-icon card-icon--tool">
             {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
           </div>
           <div class="card-info">
@@ -553,7 +553,7 @@ defineExpose({ openDialog, search, refresh })
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #171717;
+  background: linear-gradient(135deg, #10b981, #059669);
   color: #fff;
   display: flex;
   align-items: center;

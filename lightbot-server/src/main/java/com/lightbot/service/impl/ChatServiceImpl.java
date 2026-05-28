@@ -11,6 +11,7 @@ import com.lightbot.entity.Agent;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.model.MimoChatClient;
+import com.lightbot.subagent.DelegateSubAgentTool;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.systemtool.QueryKnowledgeTool;
 import com.lightbot.entity.Knowledge;
@@ -36,6 +37,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -65,6 +67,7 @@ public class ChatServiceImpl implements ChatService {
     private final InitMiddleware initMiddleware;
     private final UserSensitiveMiddleware userSensitiveMiddleware;
     private final WorkflowMiddleware workflowMiddleware;
+    private final SkillPrepMiddleware skillPrepMiddleware;
     private final MessageMiddleware messageMiddleware;
     private final ToolPrepMiddleware toolPrepMiddleware;
     private final TraceMiddleware traceMiddleware;
@@ -92,6 +95,7 @@ public class ChatServiceImpl implements ChatService {
             messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT, userCheck.text());
             return userCheck.text();
         }
+        skillPrepMiddleware.prepare(ctx);
         messageMiddleware.prepare(ctx);
         toolPrepMiddleware.prepare(ctx);
 
@@ -119,10 +123,10 @@ public class ChatServiceImpl implements ChatService {
         ChatContext ctx = ChatContext.of(request);
         ctx.setRequestId(String.valueOf(System.nanoTime()));
 
-        // Init → 用户敏感词 → Workflow → Message → ToolPrep → Trace → [core]
+        // Init → 用户敏感词 → Workflow → SkillPrep → Message → ToolPrep → Trace → [core]
         List<ChatMiddleware> middlewares = List.of(
                 initMiddleware, userSensitiveMiddleware, workflowMiddleware,
-                messageMiddleware, toolPrepMiddleware, traceMiddleware);
+                skillPrepMiddleware, messageMiddleware, toolPrepMiddleware, traceMiddleware);
         ChatServiceCore core = this::streamCore;
 
         return Flux.just(REQUEST_ID_PREFIX + ctx.getRequestId())
@@ -189,7 +193,8 @@ public class ChatServiceImpl implements ChatService {
         Prompt prompt = new Prompt(new ArrayList<>(messages), toolOptions);
         boolean[] llmSpanAdded = {false};
 
-        return chatModel.stream(prompt)
+        return skillActivePrefixFlux(ctx, depth, toolEventsList)
+                .concatWith(chatModel.stream(prompt)
                 .concatMap(response -> {
                     Generation gen = response.getResult();
                     AssistantMessage assistantMsg = (gen != null) ? gen.getOutput() : null;
@@ -270,9 +275,7 @@ public class ChatServiceImpl implements ChatService {
                         List<CompletableFuture<String>> futures = new ArrayList<>();
                         for (AssistantMessage.ToolCall tc : toolCalls) {
                             String tcArgs = tc.arguments() != null ? tc.arguments() : "";
-                            toolEventsList.add(Map.of("type", "tool_call", "toolName", tc.name(), "args",
-                                    tcArgs, "contentOffset", toolContentOffset));
-                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(tc.name(), tcArgs, toolContentOffset)));
+                            appendToolCallStart(toolEventsList, statusFluxes, tc.name(), tcArgs, toolContentOffset);
                             toolCallCountHolder[0]++;
                             final String tcName = tc.name();
                             final String safeTcArgs = ToolArgsSanitizer.forChatCall(tcArgs);
@@ -299,9 +302,7 @@ public class ChatServiceImpl implements ChatService {
                                     List<Map<String, Object>> kbResults = QueryKnowledgeTool.getSearchResults(requestId);
                                     synchronized (kbResultsHolder) { kbResultsHolder.addAll(kbResults); }
                                 }
-                                toolEventsList.add(Map.of("type", "tool_result", "toolName", tcName, "result",
-                                        result.length() > 2000 ? result.substring(0, 2000) + "..." : result,
-                                        "contentOffset", toolContentOffset));
+                                appendToolCallResult(toolEventsList, statusFluxes, tcName, tcArgs, result, toolContentOffset);
                                 return result;
                             }, RAG_EXECUTOR));
                         }
@@ -322,9 +323,7 @@ public class ChatServiceImpl implements ChatService {
 
                         String safeArgs = toolArgs != null ? toolArgs : "";
                         String callArgs = ToolArgsSanitizer.forChatCall(safeArgs);
-                        toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args",
-                                safeArgs, "contentOffset", toolContentOffset));
-                        statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(toolName, safeArgs, toolContentOffset)));
+                        appendToolCallStart(toolEventsList, statusFluxes, toolName, safeArgs, toolContentOffset);
 
                         long tToolStart = System.currentTimeMillis();
                         String toolResult;
@@ -361,9 +360,7 @@ public class ChatServiceImpl implements ChatService {
                             statusFluxes.add(Flux.just(STATUS_PREFIX + toolStatusEvent(event, toolContentOffset)));
                         }
 
-                        toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result",
-                                toolResult.length() > 2000 ? toolResult.substring(0, 2000) + "..." : toolResult,
-                                "contentOffset", toolContentOffset));
+                        appendToolCallResult(toolEventsList, statusFluxes, toolName, safeArgs, toolResult, toolContentOffset);
                         toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                                 firstTool.id(), toolName, toolResult));
                     }
@@ -420,14 +417,16 @@ public class ChatServiceImpl implements ChatService {
                     List<Flux<String>> toolResultEvents = new ArrayList<>();
                     final int resultContentOffset = toolContentOffset;
                     for (org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse tr : toolResponses) {
-                        toolResultEvents.add(Flux.just(STATUS_PREFIX + toolResultEvent(tr.name(), tr.responseData(), resultContentOffset)));
+                        if (!DelegateSubAgentTool.TOOL_NAME.equals(tr.name())) {
+                            toolResultEvents.add(Flux.just(STATUS_PREFIX + toolResultEvent(tr.name(), tr.responseData(), resultContentOffset)));
+                        }
                     }
                     Flux<String> toolEventFlux = Flux.concat(statusFluxes)
                             .concatWith(Flux.concat(toolResultEvents))
                             .concatWith(Flux.just(STATUS_PREFIX + toolCompleteEvent(resultContentOffset)))
                             .concatWith(afterTool);
                     return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart));
-                });
+                }));
     }
 
     /**
@@ -828,6 +827,93 @@ public class ChatServiceImpl implements ChatService {
     /**
      * 累加流式响应中的 Token 用量（OpenAI 兼容 API 通常在最后一个空 choices chunk 返回 usage）
      */
+    /** 本轮对话启用的 Skill 事件（仅 depth=0 推送一次） */
+    private Flux<String> skillActivePrefixFlux(ChatContext ctx, int depth, List<Map<String, Object>> toolEventsList) {
+        if (depth != 0) {
+            return Flux.empty();
+        }
+        List<Map<String, Object>> details = ctx.getActiveSkillDetails();
+        if (details == null || details.isEmpty()) {
+            return Flux.empty();
+        }
+        boolean alreadyEmitted = toolEventsList.stream().anyMatch(e -> "skill_active".equals(e.get("type")));
+        if (alreadyEmitted) {
+            return Flux.empty();
+        }
+        Map<String, Object> evt = Map.of("type", "skill_active", "skills", details, "contentOffset", 0);
+        toolEventsList.add(evt);
+        return Flux.just(STATUS_PREFIX + skillActiveEvent(details));
+    }
+
+    private void appendToolCallStart(List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
+                                   String toolName, String args, int contentOffset) {
+        if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
+            Map<String, String> parsed = parseSubagentArgs(args);
+            String subName = parsed.get("subagentName");
+            String displayName = parsed.get("displayName");
+            String task = parsed.get("task");
+            Map<String, Object> evt = new HashMap<>();
+            evt.put("type", "subagent_call");
+            evt.put("subagentName", subName);
+            evt.put("displayName", displayName);
+            evt.put("task", task);
+            evt.put("contentOffset", contentOffset);
+            toolEventsList.add(evt);
+            statusFluxes.add(Flux.just(STATUS_PREFIX + subagentCallEvent(subName, displayName, task, contentOffset)));
+            return;
+        }
+        toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args", args, "contentOffset", contentOffset));
+        statusFluxes.add(Flux.just(STATUS_PREFIX + toolCallEvent(toolName, args, contentOffset)));
+    }
+
+    private void appendToolCallResult(List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
+                                    String toolName, String args, String result, int contentOffset) {
+        String truncated = result != null && result.length() > 2000 ? result.substring(0, 2000) + "..." : (result != null ? result : "");
+        if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
+            Map<String, String> parsed = parseSubagentArgs(args);
+            String subName = parsed.get("subagentName");
+            String displayName = parsed.get("displayName");
+            Map<String, Object> evt = new HashMap<>();
+            evt.put("type", "subagent_result");
+            evt.put("subagentName", subName);
+            evt.put("displayName", displayName);
+            evt.put("result", truncated);
+            evt.put("contentOffset", contentOffset);
+            toolEventsList.add(evt);
+            statusFluxes.add(Flux.just(STATUS_PREFIX + subagentResultEvent(subName, displayName, truncated, contentOffset)));
+            return;
+        }
+        toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result", truncated, "contentOffset", contentOffset));
+    }
+
+    private Map<String, String> parseSubagentArgs(String args) {
+        Map<String, String> out = new HashMap<>();
+        out.put("subagentName", "");
+        out.put("displayName", "");
+        out.put("task", "");
+        if (args == null || args.isBlank()) {
+            return out;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = OBJECT_MAPPER.readValue(args, Map.class);
+            Object nameObj = map.get("subagent_name");
+            if (nameObj == null) {
+                nameObj = map.get("subagentName");
+            }
+            String name = nameObj != null ? nameObj.toString() : "";
+            out.put("subagentName", name);
+            out.put("displayName", name);
+            Object taskObj = map.get("task");
+            if (taskObj != null) {
+                out.put("task", taskObj.toString());
+            }
+        } catch (Exception e) {
+            log.warn("[Chat] 解析 SubAgent 参数失败: {}", e.getMessage());
+        }
+        return out;
+    }
+
     private void accumulateStreamUsage(ChatResponse response, int[] inputTokenHolder, int[] outputTokenHolder) {
         if (response == null || response.getMetadata() == null) {
             return;

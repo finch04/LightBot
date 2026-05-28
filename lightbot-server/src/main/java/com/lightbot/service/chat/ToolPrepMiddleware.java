@@ -9,6 +9,7 @@ import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.McpClientService;
 import com.lightbot.service.ToolService;
+import com.lightbot.subagent.DelegateSubAgentTool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -37,6 +38,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private final ToolService toolService;
     private final McpClientService mcpClientService;
     private final ModelProviderService modelProviderService;
+    private final DelegateSubAgentTool delegateSubAgentTool;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -57,7 +59,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         ctx.setChatModel(chatModel);
 
         // 2. 构建工具选项
-        ToolCallingChatOptions toolOptions = buildChatOptionsWithTools(providerId, configMap, agent);
+        ToolCallingChatOptions toolOptions = buildChatOptionsWithTools(providerId, configMap, agent, ctx);
         toolOptions.setInternalToolExecutionEnabled(false);
         ctx.setToolOptions(toolOptions);
 
@@ -72,7 +74,8 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     /**
      * 构建 ChatOptions，包含 Agent 绑定的工具回调
      */
-    private ToolCallingChatOptions buildChatOptionsWithTools(Long providerId, Map<String, Object> configMap, Agent agent) {
+    private ToolCallingChatOptions buildChatOptionsWithTools(Long providerId, Map<String, Object> configMap,
+                                                              Agent agent, ChatContext ctx) {
         ToolCallingChatOptions.Builder toolBuilder = ToolCallingChatOptions.builder();
         String modelId = configMap.containsKey("modelId") ? configMap.get("modelId").toString() : null;
         if (modelId != null) toolBuilder.model(modelId);
@@ -100,15 +103,21 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         if (agent != null && !mimoWebSearch) {
             List<ToolCallback> allCallbacks = new java.util.ArrayList<>();
 
-            // 1. 加载内置/自定义工具（从 tool 表）
-            List<Long> toolIds = agentService.getToolIds(agent.getId());
-            if (!toolIds.isEmpty()) {
-                allCallbacks.addAll(toolService.resolveToolCallbacksByIds(toolIds));
+            // 1. 加载内置/自定义工具（合并：Agent 自身绑定 + Skill 引入的额外工具）
+            java.util.LinkedHashSet<Long> mergedToolIds = new java.util.LinkedHashSet<>(agentService.getToolIds(agent.getId()));
+            if (ctx != null && ctx.getSkillExtraToolIds() != null) {
+                mergedToolIds.addAll(ctx.getSkillExtraToolIds());
+            }
+            if (!mergedToolIds.isEmpty()) {
+                allCallbacks.addAll(toolService.resolveToolCallbacksByIds(new java.util.ArrayList<>(mergedToolIds)));
             }
 
-            // 2. 加载 MCP Server 工具（运行时获取，不落库）
-            List<Long> mcpServerIds = agentService.getMcpServerIds(agent.getId());
-            for (Long serverId : mcpServerIds) {
+            // 2. 加载 MCP Server 工具（运行时获取，不落库；同样合并 Agent + Skill 来源）
+            java.util.LinkedHashSet<Long> mergedMcpIds = new java.util.LinkedHashSet<>(agentService.getMcpServerIds(agent.getId()));
+            if (ctx != null && ctx.getSkillExtraMcpServerIds() != null) {
+                mergedMcpIds.addAll(ctx.getSkillExtraMcpServerIds());
+            }
+            for (Long serverId : mergedMcpIds) {
                 try {
                     allCallbacks.addAll(mcpClientService.getToolCallbacks(serverId));
                 } catch (Exception e) {
@@ -116,11 +125,23 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                 }
             }
 
+            // 3. SubAgent 委派工具：当 Agent 绑定了至少 1 个 SubAgent 时，注入 delegate_to_subagent 工具
+            List<Long> subAgentIds = ctx != null && ctx.getBoundSubAgentIds() != null
+                    ? ctx.getBoundSubAgentIds() : agentService.getSubAgentIds(agent.getId());
+            if (subAgentIds != null && !subAgentIds.isEmpty()) {
+                if (ctx != null) ctx.setBoundSubAgentIds(subAgentIds);
+                ToolCallback delegateCb = delegateSubAgentTool.buildCallback(subAgentIds);
+                if (delegateCb != null) {
+                    allCallbacks.add(delegateCb);
+                }
+            }
+
             if (!allCallbacks.isEmpty()) {
                 toolBuilder.toolCallbacks(allCallbacks);
                 toolBuilder.toolContext(Map.of("agentId", agent.getId()));
-                log.info("[Chat] 加载Agent工具: agentId={}, 内置工具={}, MCP Servers={}",
-                        agent.getId(), toolIds.size(), mcpServerIds.size());
+                log.info("[Chat] 加载Agent工具: agentId={}, 内置/技能工具={}, MCP Servers={}, SubAgents={}",
+                        agent.getId(), mergedToolIds.size(), mergedMcpIds.size(),
+                        subAgentIds != null ? subAgentIds.size() : 0);
             }
         }
 

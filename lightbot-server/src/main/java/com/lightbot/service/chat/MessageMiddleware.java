@@ -131,7 +131,7 @@ public class MessageMiddleware implements ChatMiddleware {
         }
 
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
-                ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
+                ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap(), ctx);
         ctx.setMessages(messages);
 
         return next.proceed(ctx);
@@ -145,7 +145,7 @@ public class MessageMiddleware implements ChatMiddleware {
         String userText = resolveUserText(ctx.getRequest());
         saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
-                ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap());
+                ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap(), ctx);
         ctx.setMessages(messages);
     }
 
@@ -218,7 +218,7 @@ public class MessageMiddleware implements ChatMiddleware {
      */
     private List<org.springframework.ai.chat.messages.Message> buildMessages(
             Long sessionId, String userMessage, Agent agent, ChatRequest request,
-            Map<String, Object> agentConfigMap) {
+            Map<String, Object> agentConfigMap, ChatContext ctx) {
         List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
 
         // 1. 使用已解析的 Agent 配置（含版本选择），获取上下文条数
@@ -236,14 +236,26 @@ public class MessageMiddleware implements ChatMiddleware {
                 ? agent.getSystemPrompt()
                 : DEFAULT_SYSTEM_PROMPT;
 
-        // 3. 如果Agent绑定了工具，追加工具使用引导到系统提示词
+        // 3. 如果Agent绑定了工具或Skill，追加工具使用引导到系统提示词
         if (agent != null) {
-            List<Long> toolIds = agentService.getToolIds(agent.getId());
+            // 3.1 工具引导：合并 Agent 自身绑定的工具 + Skill 引入的额外工具
+            List<Long> toolIds = new java.util.ArrayList<>(agentService.getToolIds(agent.getId()));
+            if (ctx != null && ctx.getSkillExtraToolIds() != null) {
+                for (Long id : ctx.getSkillExtraToolIds()) {
+                    if (id != null && !toolIds.contains(id)) toolIds.add(id);
+                }
+            }
             if (!toolIds.isEmpty()) {
                 List<ToolCallback> toolCallbacks = toolService.resolveToolCallbacksByIds(toolIds);
                 if (!toolCallbacks.isEmpty()) {
                     systemPrompt = buildToolGuide(toolCallbacks, agentConfigMap) + "\n\n" + systemPrompt;
                 }
+            }
+
+            // 3.2 Skill 提示词追加块
+            if (ctx != null && ctx.getSkillSystemAppendix() != null
+                    && !ctx.getSkillSystemAppendix().isBlank()) {
+                systemPrompt = systemPrompt + ctx.getSkillSystemAppendix();
             }
         }
 

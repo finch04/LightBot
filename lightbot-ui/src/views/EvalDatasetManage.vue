@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">评测集管理</h1>
+        <h1 class="page-title">评测集</h1>
         <p class="page-desc">创建和管理评测数据集</p>
       </div>
       <div class="page-header-actions">

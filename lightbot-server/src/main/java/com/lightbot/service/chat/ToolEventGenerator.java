@@ -149,6 +149,56 @@ public final class ToolEventGenerator {
      * @param scope   拦截范围：user_input / ai_output
      * @param message 拦截提示文本
      */
+    /**
+     * Skill 启用事件（本轮对话 Agent 已绑定的 Skill 清单）
+     *
+     * @param skills 元素含 name、displayName、slug、builtin
+     */
+    public static String skillActiveEvent(java.util.List<java.util.Map<String, Object>> skills) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "skill_active",
+                    "skills", skills != null ? skills : java.util.List.of(),
+                    "contentOffset", 0));
+        } catch (Exception e) {
+            return "{\"type\":\"skill_active\",\"skills\":[],\"contentOffset\":0}";
+        }
+    }
+
+    /**
+     * SubAgent 委派开始
+     */
+    public static String subagentCallEvent(String subagentName, String displayName, String task, int contentOffset) {
+        try {
+            String truncated = task != null && task.length() > 500 ? task.substring(0, 500) + "..." : (task != null ? task : "");
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "subagent_call",
+                    "subagentName", subagentName != null ? subagentName : "",
+                    "displayName", displayName != null ? displayName : subagentName,
+                    "task", truncated,
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"subagent_call\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
+    /**
+     * SubAgent 委派完成
+     */
+    public static String subagentResultEvent(String subagentName, String displayName, String result, int contentOffset) {
+        try {
+            String truncated = result != null && result.length() > 2000 ? result.substring(0, 2000) + "..." : (result != null ? result : "");
+            return OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "subagent_result",
+                    "subagentName", subagentName != null ? subagentName : "",
+                    "displayName", displayName != null ? displayName : subagentName,
+                    "result", truncated,
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"subagent_result\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
     public static String sensitiveBlockEvent(String scope, String message) {
         try {
             return OBJECT_MAPPER.writeValueAsString(Map.of(

@@ -105,6 +105,11 @@ const routes = [
         component: () => import('../views/PromptVersionHistory.vue'),
       },
       {
+        path: 'prompt-templates',
+        name: 'PromptTemplates',
+        component: () => import('../views/PromptTemplateManage.vue'),
+      },
+      {
         path: 'playground',
         name: 'Playground',
         component: () => import('../views/Playground.vue'),

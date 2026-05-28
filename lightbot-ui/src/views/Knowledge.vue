@@ -256,7 +256,7 @@ onMounted(loadData)
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #007cf0, #00dfd8);
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
   color: #fff;
   display: flex;
   align-items: center;

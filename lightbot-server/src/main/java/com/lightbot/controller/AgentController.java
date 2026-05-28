@@ -168,6 +168,25 @@ public class AgentController {
         return Result.ok();
     }
 
+    @Operation(summary = "获取Agent绑定的Skill ID列表")
+    @GetMapping("/{id}/skills")
+    public Result<List<String>> getSkillIds(@PathVariable Long id) {
+        List<Long> skillIds = agentService.getSkillIds(id);
+        return Result.ok(skillIds.stream().map(String::valueOf).toList());
+    }
+
+    @Operation(summary = "更新Agent绑定的Skill")
+    @PutMapping("/{id}/skills")
+    public Result<Void> updateSkillBindings(
+            @PathVariable Long id,
+            @RequestBody List<String> skillIds) {
+        if (skillIds != null && skillIds.size() > 10) {
+            throw new BizException(ErrorCode.AGENT_SKILL_LIMIT);
+        }
+        agentService.updateSkillBindings(id, parseBindingIdStrings(skillIds));
+        return Result.ok();
+    }
+
     /** 绑定 ID 统一按字符串接收，避免前端 Long 精度丢失 */
     private List<Long> parseBindingIdStrings(List<String> ids) {
         if (ids == null || ids.isEmpty()) {

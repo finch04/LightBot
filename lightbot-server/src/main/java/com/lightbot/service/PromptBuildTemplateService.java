@@ -27,4 +27,30 @@ public interface PromptBuildTemplateService extends IService<PromptBuildTemplate
      * @return 模板实体
      */
     PromptBuildTemplate getByKey(String promptTemplateKey);
+
+    /**
+     * 创建提示词构建模板
+     *
+     * @param promptTemplateKey 模板唯一标识
+     * @param templateDesc      模板描述
+     * @param template          模板内容
+     * @param variables         变量定义
+     * @param modelConfig       模型配置
+     * @param tags              标签
+     * @return 创建的模板实体
+     */
+    PromptBuildTemplate create(String promptTemplateKey, String templateDesc, String template,
+                               String variables, String modelConfig, String tags);
+
+    /**
+     * 更新提示词构建模板
+     *
+     * @param id           模板ID
+     * @param templateDesc 模板描述
+     * @param template     模板内容
+     * @param variables    变量定义
+     * @param modelConfig  模型配置
+     * @param tags         标签
+     */
+    void update(Long id, String templateDesc, String template, String variables, String modelConfig, String tags);
 }

@@ -33,7 +33,8 @@ public class PromptVersionServiceImpl extends ServiceImpl<PromptVersionMapper, P
     @Override
     @Transactional
     public PromptVersion create(String promptKey, String version, String versionDesc,
-                                 String template, String variables, String modelConfig, String status, Long userId) {
+                                 String template, String variables, String modelConfig,
+                                 String toolConfig, String status, Long userId) {
         // 1. 校验Prompt存在
         Prompt prompt = promptService.lambdaQuery().eq(Prompt::getPromptKey, promptKey).one();
         if (prompt == null) {
@@ -71,6 +72,7 @@ public class PromptVersionServiceImpl extends ServiceImpl<PromptVersionMapper, P
         pv.setTemplate(template);
         pv.setVariables(variables);
         pv.setModelConfig(modelConfig);
+        pv.setToolConfig(toolConfig);
         pv.setStatus(versionStatus);
         pv.setUserId(userId);
         save(pv);

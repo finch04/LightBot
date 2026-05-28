@@ -3433,6 +3433,9 @@ function goBack() {
 .resource-option-icon.tool {
   color: #059669;
 }
+.resource-option-icon.mcp {
+  color: #7c3aed;
+}
 
 .resource-option-title {
   font-weight: 600;

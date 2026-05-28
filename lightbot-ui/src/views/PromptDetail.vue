@@ -7,7 +7,7 @@
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ promptKey }} <a-tag v-if="latestVersion" color="blue" size="small">{{ latestVersion }}</a-tag></h1>
-        <p class="page-desc">{{ prompt?.description || '' }}</p>
+        <p class="page-desc" v-if="prompt?.description">{{ prompt.description }}</p>
         <div class="prompt-tags" v-if="prompt?.tags">
           <a-tag v-for="tag in prompt.tags.split(',')" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
         </div>
@@ -19,7 +19,7 @@
         <button class="btn-outline-sm" @click="router.push(`/prompts/${promptKey}/versions`)">
           <HistoryOutlined /> 版本记录
         </button>
-        <button class="btn-outline-sm" @click="addInstance()" v-if="instances.length < 3">
+        <button class="btn-outline-sm" @click="addInstance()" :disabled="instances.length >= 3" title="最多同时对比3个配置">
           <CopyOutlined /> 复制配置
         </button>
         <button class="btn-primary-sm" @click="openVersionDialog()">
@@ -126,7 +126,7 @@
               </span>
             </div>
           </div>
-        </div>
+</div>
 
         <!-- 参数配置 -->
         <div class="config-section" v-if="inst.variables.length > 0">
@@ -185,65 +185,10 @@
     </div>
 
     <!-- 从模板导入弹窗 -->
-    <a-modal
+    <TemplateImportModalLR
       v-model:open="templateImportVisible"
-      title="从模板导入"
-      :width="860"
-      :footer="null"
-      :maskClosable="false"
-    >
-      <div class="template-import">
-        <a-input
-          v-model:value="templateSearch"
-          placeholder="搜索模板名称或描述..."
-          allow-clear
-          style="margin-bottom: 16px"
-        >
-          <template #prefix><SearchOutlined /></template>
-        </a-input>
-        <div class="template-grid">
-          <div
-            v-for="t in filteredTemplates"
-            :key="t.id"
-            class="template-card"
-            :class="{ selected: selectedTemplate?.id === t.id }"
-            @click="selectTemplate(t)"
-          >
-            <div class="template-card-top">
-              <div class="template-card-icon">P</div>
-              <div class="template-card-info">
-                <div class="template-card-name">{{ t.promptTemplateKey }}</div>
-                <p class="template-card-desc">{{ t.templateDesc || '暂无描述' }}</p>
-              </div>
-            </div>
-            <div class="template-card-tags" v-if="t.tags">
-              <a-tag v-for="tag in t.tags.split(',')" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
-            </div>
-          </div>
-        </div>
-        <div v-if="filteredTemplates.length === 0" class="template-empty">
-          <FileTextOutlined class="template-empty-icon" />
-          <p>{{ templateSearch ? '没有匹配的模板' : '暂无可用模板' }}</p>
-        </div>
-        <div v-if="selectedTemplate" class="template-preview">
-          <div class="template-preview-title">模板预览</div>
-          <a-textarea :value="selectedTemplate.template" :rows="8" readonly class="template-editor" />
-          <div class="template-preview-vars" v-if="selectedTemplate.variables">
-            <span class="template-preview-label">参数：</span>
-            <a-tag v-for="v in selectedTemplate.variables.split(',')" :key="v" color="blue" size="small">{{ v.trim() }}</a-tag>
-          </div>
-        </div>
-      </div>
-      <div class="dialog-footer">
-        <div></div>
-        <div class="dialog-footer-right">
-          <button class="btn-cancel" @click="templateImportVisible = false">取消</button>
-          <button class="btn-primary-sm" :disabled="!selectedTemplate" @click="handleTemplateImport">
-            导入模板
-          </button>
-        </div>
-      </div>
-    </a-modal>
+      @import="handleTemplateImport"
+    />
 
     <!-- 发布版本弹窗 -->
     <a-modal
@@ -285,14 +230,15 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, HistoryOutlined, ThunderboltOutlined,
-  ImportOutlined, CloudUploadOutlined, CopyOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined,
+  ImportOutlined, CloudUploadOutlined, CopyOutlined, DeleteOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
-  getPrompts, getPromptVersions, createPromptVersion, getPromptTemplates, getPromptTemplate, runPromptStream,
+  getPrompts, getPromptVersions, createPromptVersion, runPromptStream,
 } from '../api/prompt'
 import { getModelProviders, getProviderConfigFields } from '../api/modelProvider'
 import { getModelsByProvider } from '../api/model'
+import TemplateImportModalLR from '../components/TemplateImportModalLR.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -320,6 +266,7 @@ function createInstance(template = '', modelCfg = {}) {
     configFields: [],
     modelList: [],
     variables: [],
+    toolConfig: '{}',
     messages: [],
     userInput: '',
     streaming: false,
@@ -339,6 +286,7 @@ function addInstance() {
   // 复制变量
   inst.variables = (src?.variables || []).map(v => ({ ...v }))
   inst.modelConfig = { ...(src?.modelConfig || {}) }
+  inst.toolConfig = src?.toolConfig || '{}'
   instances.value.push(inst)
   // 加载模型列表和配置字段
   if (inst.providerId) {
@@ -357,18 +305,6 @@ const versionForm = reactive({ version: '', versionDesc: '', status: 'pre' })
 
 // 模板导入
 const templateImportVisible = ref(false)
-const templateSearch = ref('')
-const templates = ref([])
-const selectedTemplate = ref(null)
-
-const filteredTemplates = computed(() => {
-  if (!templateSearch.value) return templates.value
-  const kw = templateSearch.value.toLowerCase()
-  return templates.value.filter(t =>
-    (t.promptTemplateKey || '').toLowerCase().includes(kw) ||
-    (t.templateDesc || '').toLowerCase().includes(kw)
-  )
-})
 
 onMounted(async () => {
   await loadPrompt()
@@ -403,6 +339,10 @@ onMounted(async () => {
       try {
         inst.variables = JSON.parse(latest.variables)
       } catch { /* ignore */ }
+    }
+    // 加载工具配置
+    if (latest.toolConfig) {
+      inst.toolConfig = latest.toolConfig
     }
     onContentChange(inst)
   }
@@ -482,35 +422,12 @@ function buildModelConfigJson(inst) {
 }
 
 // 模板导入
-async function openTemplateImport() {
+function openTemplateImport() {
   templateImportVisible.value = true
-  selectedTemplate.value = null
-  templateSearch.value = ''
-  if (templates.value.length === 0) {
-    try {
-      const res = await getPromptTemplates()
-      templates.value = res.data || []
-    } catch { /* ignore */ }
-  }
 }
 
-async function selectTemplate(t) {
-  try {
-    const res = await getPromptTemplate(t.promptTemplateKey)
-    selectedTemplate.value = res.data || t
-  } catch {
-    selectedTemplate.value = t
-  }
-}
-
-async function handleTemplateImport() {
-  if (!selectedTemplate.value) return
-  const t = { ...selectedTemplate.value }
-  // 先关闭弹窗，避免 modal transition 与后续状态更新冲突
-  templateImportVisible.value = false
-  selectedTemplate.value = null
-
-  await nextTick()
+async function handleTemplateImport(t) {
+  if (!t) return
 
   try {
     const inst = instances.value[0]
@@ -518,7 +435,7 @@ async function handleTemplateImport() {
     onContentChange(inst)
     message.success('模板导入成功')
 
-    // 模型配置导入（独立处理，失败不影响模板内容导入）
+    // 模型配置导入
     if (t.modelConfig) {
       try {
         const cfg = typeof t.modelConfig === 'string' ? JSON.parse(t.modelConfig) : t.modelConfig
@@ -563,6 +480,7 @@ async function handlePublishVersion() {
       template: inst.content,
       variables: JSON.stringify(inst.variables),
       modelConfig: buildModelConfigJson(inst),
+      toolConfig: inst.toolConfig,
       status: versionForm.status,
     })
     message.success('版本发布成功')
@@ -678,16 +596,16 @@ function scrollToBottom(inst) {
   font-size: 24px;
   font-weight: 600;
   color: #171717;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 .page-desc {
   font-size: 14px;
   color: #71717a;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 .prompt-tags {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .header-actions {
@@ -708,7 +626,8 @@ function scrollToBottom(inst) {
   font-weight: 500;
   cursor: pointer;
 }
-.btn-outline-sm:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline-sm:hover:not(:disabled) { border-color: #0070f3; color: #0070f3; }
+.btn-outline-sm:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d4d4d8; color: #71717a; }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
@@ -746,7 +665,8 @@ function scrollToBottom(inst) {
   color: #71717a;
   font-size: 12px;
 }
-.btn-icon-sm:hover { background: #f5f5f5; }
+.btn-icon-sm:hover:not(:disabled) { background: #f5f5f5; }
+.btn-icon-sm:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* 实例网格 */
 .instances-grid {
@@ -932,105 +852,6 @@ function scrollToBottom(inst) {
 .debug-hint {
   font-size: 12px;
   color: #a1a1aa;
-}
-
-/* 模板导入弹窗 */
-.template-import {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.template-card {
-  border: 1px solid #ebebeb;
-  border-radius: 10px;
-  padding: 14px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.template-card:hover {
-  border-color: #0070f3;
-  box-shadow: 0px 2px 4px rgba(0,0,0,0.04);
-}
-.template-card.selected {
-  border-color: #0070f3;
-  background: #f0f7ff;
-}
-.template-card-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.template-card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-.template-card-info { flex: 1; min-width: 0; }
-.template-card-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #171717;
-  margin: 0 0 2px 0;
-}
-.template-card-desc {
-  font-size: 12px;
-  color: #71717a;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.template-card-tags {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.template-empty {
-  text-align: center;
-  padding: 40px 20px;
-  color: #a1a1aa;
-}
-.template-empty-icon {
-  font-size: 36px;
-  margin-bottom: 8px;
-  display: block;
-}
-.template-preview {
-  border: 1px solid #ebebeb;
-  border-radius: 8px;
-  padding: 12px;
-  margin-top: 4px;
-}
-.template-preview-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #171717;
-  margin-bottom: 8px;
-}
-.template-preview-vars {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.template-preview-label {
-  font-size: 12px;
-  color: #71717a;
 }
 
 .dialog-footer {

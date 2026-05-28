@@ -51,6 +51,10 @@ public class PromptVersion {
     @Schema(description = "模型配置")
     private String modelConfig;
 
+    @TableField(value = "tool_config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "工具配置")
+    private String toolConfig;
+
     @TableField("status")
     @Schema(description = "版本状态")
     private PromptVersionStatus status;

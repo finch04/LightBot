@@ -10,6 +10,7 @@ import com.lightbot.entity.Agent;
 import com.lightbot.entity.AgentVersion;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.McpServer;
+import com.lightbot.entity.Skill;
 import com.lightbot.entity.SubAgent;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.AgentStatus;
@@ -22,6 +23,7 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.McpServerService;
+import com.lightbot.service.SkillService;
 import com.lightbot.service.SubAgentService;
 import com.lightbot.service.ToolService;
 import com.lightbot.workflow.WorkflowConfigKeys;
@@ -61,6 +63,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     private final ToolService toolService;
     private final McpServerService mcpServerService;
     private final SubAgentService subAgentService;
+    private final SkillService skillService;
 
     @Lazy
     @Autowired
@@ -270,16 +273,19 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         List<String> toolIds = resolveBindingIdStrings(payload, "toolIds", "tools");
         List<String> mcpServerIds = resolveBindingIdStrings(payload, "mcpServerIds", "mcpServers");
         List<String> subAgentIds = resolveBindingIdStrings(payload, "subAgentIds", "subagents");
+        List<String> skillIds = resolveBindingIdStrings(payload, "skillIds", "skills");
         result.put("knowledgeIds", knowledgeIds);
         result.put("toolIds", toolIds);
         result.put("mcpServerIds", mcpServerIds);
         result.put("subAgentIds", subAgentIds);
+        result.put("skillIds", skillIds);
 
         // 5. 按 ID 回查绑定实体（供版本预览展示名称）
         result.put("knowledges", resolveKnowledgeSummaries(knowledgeIds));
         result.put("tools", resolveToolSummaries(toolIds));
         result.put("mcpServers", resolveMcpServerSummaries(mcpServerIds));
         result.put("subAgents", resolveSubAgentSummaries(subAgentIds));
+        result.put("skills", resolveSkillSummaries(skillIds));
 
         // 6. 兼容旧前端：保留 payload
         Map<String, Object> compatPayload = new HashMap<>(payload);
@@ -287,6 +293,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         compatPayload.put("toolIds", toolIds);
         compatPayload.put("mcpServerIds", mcpServerIds);
         compatPayload.put("subAgentIds", subAgentIds);
+        compatPayload.put("skillIds", skillIds);
         result.put("payload", compatPayload);
     }
 
@@ -369,6 +376,25 @@ public class AgentVersionServiceImpl implements AgentVersionService {
             m.put("id", String.valueOf(s.getId()));
             m.put("name", s.getName());
             m.put("description", s.getDescription());
+            return m;
+        });
+    }
+
+    private List<Map<String, Object>> resolveSkillSummaries(List<String> ids) {
+        List<Long> longIds = toLongListFromStrings(ids);
+        if (longIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Skill> byId = skillService.listByIds(longIds).stream()
+                .collect(Collectors.toMap(Skill::getId, Function.identity(), (a, b) -> a));
+        return buildOrderedSummaries(ids, longIds, byId, s -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", String.valueOf(s.getId()));
+            m.put("slug", s.getSlug());
+            m.put("name", s.getName());
+            m.put("displayName", s.getDisplayName());
+            m.put("description", s.getDescription());
+            m.put("isBuiltin", s.getIsBuiltin());
             return m;
         });
     }
@@ -885,6 +911,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         payload.put("toolIds", readBindingIdsAsStrings(agent, "tools"));
         payload.put("mcpServerIds", readBindingIdsAsStrings(agent, "mcpServers"));
         payload.put("subAgentIds", readBindingIdsAsStrings(agent, "subagents"));
+        payload.put("skillIds", readBindingIdsAsStrings(agent, "skills"));
 
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("kind", KIND_CHAT);

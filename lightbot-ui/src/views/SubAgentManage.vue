@@ -47,12 +47,15 @@
     <!-- 新增/编辑弹窗 -->
     <a-modal
       v-model:open="dialogVisible"
-      :title="editingId ? '编辑 SubAgent' : '新增 SubAgent'"
       :width="720"
       :maskClosable="false"
       @ok="handleSave"
       @cancel="dialogVisible = false"
     >
+      <template #title>
+        <span>{{ editingId ? '编辑 SubAgent' : '新增 SubAgent' }}</span>
+        <QuestionCircleOutlined class="help-icon" @click.stop="guideVisible = true" />
+      </template>
       <a-form :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
         <a-form-item label="标识名称" required>
           <a-input v-model:value="form.name" placeholder="英文标识，如 research-agent" />
@@ -79,6 +82,40 @@
           <a-switch v-model:checked="form.enabled" />
         </a-form-item>
       </a-form>
+    </a-modal>
+
+    <!-- SubAgent 说明弹窗 -->
+    <a-modal v-model:open="guideVisible" title="SubAgent 说明" :width="640" :footer="null">
+      <div class="guide">
+        <div class="guide-section">
+          <div class="guide-h3">SubAgent 在本项目中的作用</div>
+          <p>SubAgent 是<strong>专职子智能体</strong>：拥有独立的系统提示词与可选工具集。主 Agent 在对话中可通过内置工具 <code>delegate_to_subagent</code> 将子任务委派给指定 SubAgent，子智能体在隔离上下文中完成推理与工具调用后，将结果返回主 Agent 继续回复。</p>
+          <p>适用场景：代码审查、深度调研、专项写作等需要<strong>独立人设与工具边界</strong>的任务，避免主对话上下文被拉长。</p>
+        </div>
+        <div class="guide-section">
+          <div class="guide-h3">如何新建 SubAgent</div>
+          <div class="guide-step">
+            <span class="guide-num">1</span>
+            <div><b>填写标识与显示名</b><p>name 为英文标识（委派时引用）；displayName 为界面展示名称。</p></div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">2</span>
+            <div><b>编写描述与系统提示词</b><p>描述帮助主模型判断何时委派；系统提示词定义子智能体的角色与输出规范。</p></div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">3</span>
+            <div><b>（可选）绑定工具</b><p>限制 SubAgent 可调用的工具范围，不绑定则继承主 Agent 工具策略（以实现为准）。</p></div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">4</span>
+            <div><b>在 Agent 中绑定</b><p>进入智能体详情 → SubAgents Tab，勾选要委派的子智能体（有数量上限）。保存并发布后，主 Agent 对话即可委派。</p></div>
+          </div>
+        </div>
+        <div class="guide-section">
+          <div class="guide-h3">内置 SubAgent</div>
+          <p>部分系统预置 SubAgent 仅可启用/禁用，不可删除，用于演示或通用场景。</p>
+        </div>
+      </div>
     </a-modal>
 
     <!-- 详情弹窗 -->
@@ -125,7 +162,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined } from '@ant-design/icons-vue'
+import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
@@ -141,6 +178,7 @@ const list = ref([])
 const searchText = ref('')
 
 const dialogVisible = ref(false)
+const guideVisible = ref(false)
 const editingId = ref(null)
 const form = reactive({
   name: '',
@@ -458,5 +496,72 @@ defineExpose({ openDialog, search, refresh })
   word-break: break-word;
   max-height: 300px;
   overflow-y: auto;
+}
+
+.help-icon {
+  margin-left: 8px;
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 16px;
+  vertical-align: middle;
+}
+.help-icon:hover {
+  color: #d97706;
+}
+.guide {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.guide-section {
+  margin-bottom: 20px;
+}
+.guide-section:last-child {
+  margin-bottom: 0;
+}
+.guide-h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 8px;
+}
+.guide-section p {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.6;
+  margin: 0 0 8px;
+}
+.guide-section code {
+  font-size: 12px;
+  background: #f4f4f5;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.guide-step {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.guide-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.guide-step b {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.guide-step p {
+  margin: 0;
+  font-size: 12px;
+  color: #71717a;
 }
 </style>
