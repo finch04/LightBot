@@ -65,6 +65,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
                 minioUtil.upload(is, doc.getFilePath(), fileSize, "application/octet-stream");
             }
             log.info("[文档上传执行器] MinIO上传完成, documentId={}", documentId);
+            checkCancelled(task.getId());
 
             // 2. Tika 解析为 Markdown
             taskService.updateProgress(task.getId(), 30, "正在解析文档...");
@@ -72,6 +73,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
             try (InputStream is = Files.newInputStream(temp)) {
                 markdownContent = tikaUtil.parseToMarkdown(is, doc.getName());
             }
+            checkCancelled(task.getId());
 
             // 3. OCR 增强
             if (ocrEnabled && isContentTooShort(markdownContent, doc.getFileType())) {
@@ -83,6 +85,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
                         log.info("[文档上传执行器] OCR识别完成, documentId={}, ocrLength={}", documentId, ocrContent.length());
                     }
                 }
+                checkCancelled(task.getId());
             }
 
             // 4. 内容安全扫描（知识库开启时）
@@ -165,6 +168,13 @@ public class DocumentUploadExecutor implements TaskExecutor {
         String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
         String baseName = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
         return String.format("knowledge/%d/parsed/%s.md", knowledgeId, baseName);
+    }
+
+    private void checkCancelled(Long taskId) {
+        Task latest = taskService.getById(taskId);
+        if (latest != null && latest.getCancelRequested() == 1) {
+            throw new RuntimeException("任务已被用户取消");
+        }
     }
 
     private String buildErrorMessage(Exception e) {

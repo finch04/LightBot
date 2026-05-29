@@ -39,6 +39,11 @@ public class OpenAIModelHandler implements ModelProviderHandler {
 
     @Override
     public ChatModel createChatModel(ModelProvider provider) {
+        return createChatModel(provider, getCheapestModel());
+    }
+
+    @Override
+    public ChatModel createChatModel(ModelProvider provider, String defaultModelId) {
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder()
                 .apiKey(provider.getApiKey());
         if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
@@ -47,7 +52,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
         OpenAiApi api = apiBuilder.build();
         return OpenAiChatModel.builder()
                 .openAiApi(api)
-                .defaultOptions(OpenAiChatOptions.builder().streamUsage(true).build())
+                .defaultOptions(OpenAiChatOptions.builder().model(defaultModelId).streamUsage(true).build())
                 .build();
     }
 

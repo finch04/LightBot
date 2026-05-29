@@ -36,4 +36,11 @@ public class RagReferenceVO {
     @Schema(description = "分块ID")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long chunkId;
+
+    @Schema(description = "来源类型：chunk-文档分块，qa_pair-问答对")
+    private String sourceType;
+
+    @Schema(description = "问答对ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long qaPairId;
 }

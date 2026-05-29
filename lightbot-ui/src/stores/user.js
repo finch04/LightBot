@@ -11,6 +11,9 @@ export const useUserStore = defineStore('user', () => {
     token.value = res.data.token
     user.value = res.data.user
     localStorage.setItem('token', res.data.token)
+    if (res.data.user.firstLogin) {
+      localStorage.setItem('first-login', '1')
+    }
     return res
   }
 

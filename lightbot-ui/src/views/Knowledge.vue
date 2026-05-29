@@ -17,6 +17,9 @@
         <button class="btn-outline" @click="loadData">
           <ReloadOutlined /> 刷新
         </button>
+        <button class="btn-outline" @click="router.push('/graph')">
+          <ApartmentOutlined /> 知识图谱
+        </button>
         <button class="btn-primary" @click="openCreateModal">
           <PlusOutlined /> 新建知识库
         </button>
@@ -83,7 +86,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 import ModelSelect from '../components/ModelSelect.vue'

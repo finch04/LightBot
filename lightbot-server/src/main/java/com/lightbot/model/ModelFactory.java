@@ -5,6 +5,7 @@ import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.service.ModelProviderService;
+import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.ModelProviderCacheUtil;
 import jakarta.annotation.PostConstruct;
@@ -39,6 +40,7 @@ public class ModelFactory {
     private final List<ModelProviderHandler> handlers;
     private final ModelProviderService modelProviderService;
     private final ModelProviderCacheUtil cacheUtil;
+    private final SystemConfigService systemConfigService;
 
     private static final String CONNECTIVITY_CHECK_PROMPT = "你好，请回复OK";
 
@@ -59,12 +61,56 @@ public class ModelFactory {
      * @return ChatModel 实例
      */
     public ChatModel getChatModel(Long providerId) {
-        return chatModelCache.computeIfAbsent(providerId, id -> {
+        Long actualId = resolveProviderIdOrDefault(providerId);
+        return chatModelCache.computeIfAbsent(actualId, id -> {
             ModelProvider provider = resolveProvider(id);
             ModelProviderHandler handler = getHandler(provider.getType());
-            log.info("[ModelFactory] 创建 ChatModel: providerId={}, type={}", id, provider.getType());
-            return handler.createChatModel(provider);
+            String defaultModelId = resolveModelId(provider, handler);
+            log.info("[ModelFactory] 创建 ChatModel: providerId={}, type={}, defaultModel={}", id, provider.getType(), defaultModelId);
+            return handler.createChatModel(provider, defaultModelId);
         });
+    }
+
+    /**
+     * 从 provider config 中解析 modelId，未配置时使用 handler 的最便宜模型
+     */
+    private String resolveModelId(ModelProvider provider, ModelProviderHandler handler) {
+        String config = provider.getConfig();
+        if (config != null && !config.isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(config);
+                if (node.has("modelId")) {
+                    String modelId = node.get("modelId").asText("");
+                    if (!modelId.isBlank()) {
+                        return modelId;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return handler.getCheapestModel();
+    }
+
+    /**
+     * 解析 providerId：null 或 0 时自动使用系统默认模型提供商
+     */
+    private Long resolveProviderIdOrDefault(Long providerId) {
+        if (providerId != null && providerId > 0) {
+            return providerId;
+        }
+        // 1. 优先使用系统默认AI配置的 providerId
+        Long defaultId = systemConfigService.getDefaultAiConfig().getProviderId();
+        if (defaultId != null && defaultId > 0) {
+            log.debug("[ModelFactory] providerId 为空，使用系统默认: {}", defaultId);
+            return defaultId;
+        }
+        // 2. fallback 到第一个可用提供商
+        List<Long> available = getAvailableProviderIds();
+        if (!available.isEmpty()) {
+            log.debug("[ModelFactory] 系统默认未配置，使用第一个可用提供商: {}", available.get(0));
+            return available.get(0);
+        }
+        throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
     }
 
     /**
@@ -75,7 +121,8 @@ public class ModelFactory {
      * @return ChatOptions 实例
      */
     public ChatOptions buildChatOptions(Long providerId, Map<String, Object> config) {
-        ModelProvider provider = resolveProvider(providerId);
+        Long actualId = resolveProviderIdOrDefault(providerId);
+        ModelProvider provider = resolveProvider(actualId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.buildChatOptions(provider, config);
     }
@@ -87,7 +134,8 @@ public class ModelFactory {
      * @return 配置字段列表
      */
     public List<ConfigField> getConfigFields(Long providerId) {
-        ModelProvider provider = resolveProvider(providerId);
+        Long actualId = resolveProviderIdOrDefault(providerId);
+        ModelProvider provider = resolveProvider(actualId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.getConfigFields();
     }
@@ -99,7 +147,8 @@ public class ModelFactory {
      * @return 能力字段列表
      */
     public List<ConfigField> getModelCapabilities(Long providerId) {
-        ModelProvider provider = resolveProvider(providerId);
+        Long actualId = resolveProviderIdOrDefault(providerId);
+        ModelProvider provider = resolveProvider(actualId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.getModelCapabilities();
     }

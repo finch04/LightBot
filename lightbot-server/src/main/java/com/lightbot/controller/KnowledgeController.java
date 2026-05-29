@@ -4,8 +4,16 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChunkVO;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.GraphEdgeVO;
+import com.lightbot.dto.GraphImportRequest;
+import com.lightbot.dto.GraphNodeVO;
+import com.lightbot.dto.GraphStatsVO;
+import com.lightbot.dto.GraphSubgraphVO;
 import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.KnowledgeMemberVO;
+import com.lightbot.dto.QaPairCreateDTO;
+import com.lightbot.dto.QaPairUpdateDTO;
+import com.lightbot.dto.QaPairVO;
 import com.lightbot.dto.RagSearchResultVO;
 import com.lightbot.dto.UrlFetchPreviewVO;
 import com.lightbot.dto.UrlSaveRequest;
@@ -45,6 +53,8 @@ public class KnowledgeController {
     private final ChunkService chunkService;
     private final RagService ragService;
     private final KnowledgeMemberService knowledgeMemberService;
+    private final GraphService graphService;
+    private final QaPairService qaPairService;
     private final ObjectMapper objectMapper;
 
     // ========== 知识库 CRUD ==========
@@ -269,6 +279,79 @@ public class KnowledgeController {
         return Result.ok();
     }
 
+    // ========== 知识图谱 ==========
+
+    @Operation(summary = "触发图谱抽取（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/graph/extract")
+    public Result<Long> extractGraph(@PathVariable Long id,
+                                     @RequestParam(required = false) Long documentId,
+                                     @RequestParam(required = false) Long providerId) {
+        return Result.ok(graphService.extractFromDocument(id, documentId, providerId));
+    }
+
+    @Operation(summary = "批量导入三元组（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/graph/import")
+    public Result<GraphStatsVO> importTriples(@PathVariable Long id,
+                                              @RequestBody @jakarta.validation.Valid GraphImportRequest request,
+                                              @RequestParam(required = false) Long providerId) {
+        return Result.ok(graphService.importTriples(id, request.getTriples(), providerId));
+    }
+
+    @Operation(summary = "获取子图数据（可视化用）")
+    @GetMapping("/{id}/graph/subgraph")
+    public Result<GraphSubgraphVO> getSubgraph(@PathVariable Long id,
+                                               @RequestParam(required = false) String keyword,
+                                               @RequestParam(defaultValue = "2") int maxDepth,
+                                               @RequestParam(defaultValue = "50") int maxNodes) {
+        return Result.ok(graphService.getSubgraph(id, keyword, maxDepth, maxNodes));
+    }
+
+    @Operation(summary = "获取图谱统计信息")
+    @GetMapping("/{id}/graph/stats")
+    public Result<GraphStatsVO> getGraphStats(@PathVariable Long id) {
+        return Result.ok(graphService.getStats(id));
+    }
+
+    @Operation(summary = "清空知识库图谱数据（需要MANAGER及以上权限）")
+    @DeleteMapping("/{id}/graph")
+    public Result<Void> deleteGraph(@PathVariable Long id) {
+        graphService.deleteByKnowledgeId(id);
+        return Result.ok();
+    }
+
+    @Operation(summary = "手动创建图谱节点（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/graph/nodes")
+    public Result<GraphNodeVO> createGraphNode(@PathVariable Long id,
+                                               @RequestParam String name,
+                                               @RequestParam(defaultValue = "其他") String entityType,
+                                               @RequestParam(required = false) String description) {
+        return Result.ok(graphService.createNode(id, name, entityType, description));
+    }
+
+    @Operation(summary = "删除图谱节点（需要DEVELOPER及以上权限）")
+    @DeleteMapping("/{id}/graph/nodes/{elementId}")
+    public Result<Void> deleteGraphNode(@PathVariable Long id, @PathVariable String elementId) {
+        graphService.deleteNode(id, elementId);
+        return Result.ok();
+    }
+
+    @Operation(summary = "手动创建图谱关系（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/graph/edges")
+    public Result<GraphEdgeVO> createGraphEdge(@PathVariable Long id,
+                                               @RequestParam String headName,
+                                               @RequestParam String relationType,
+                                               @RequestParam String tailName,
+                                               @RequestParam(required = false) String description) {
+        return Result.ok(graphService.createEdge(id, headName, relationType, tailName, description));
+    }
+
+    @Operation(summary = "删除图谱关系（需要DEVELOPER及以上权限）")
+    @DeleteMapping("/{id}/graph/edges/{elementId}")
+    public Result<Void> deleteGraphEdge(@PathVariable Long id, @PathVariable String elementId) {
+        graphService.deleteEdge(id, elementId);
+        return Result.ok();
+    }
+
     // ========== RAG 问答 ==========
 
     @Operation(summary = "基于知识库RAG问答（同步）")
@@ -309,5 +392,54 @@ public class KnowledgeController {
     public Result<List<RagSearchResultVO>> search(@PathVariable Long id,
                                                   @RequestParam String question) {
         return Result.ok(ragService.search(id, question));
+    }
+
+    // ========== 问答对 ==========
+
+    @Operation(summary = "创建问答对（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/qa-pairs")
+    public Result<QaPairVO> createQaPair(@PathVariable Long id,
+                                          @RequestBody @jakarta.validation.Valid QaPairCreateDTO dto) {
+        return Result.ok(qaPairService.create(id, dto));
+    }
+
+    @Operation(summary = "更新问答对（需要DEVELOPER及以上权限）")
+    @PutMapping("/qa-pairs/{qaPairId}")
+    public Result<QaPairVO> updateQaPair(@PathVariable Long qaPairId,
+                                          @RequestBody @jakarta.validation.Valid QaPairUpdateDTO dto) {
+        dto.setId(qaPairId);
+        return Result.ok(qaPairService.update(dto));
+    }
+
+    @Operation(summary = "分页查询问答对列表（需要成员权限）")
+    @GetMapping("/{id}/qa-pairs")
+    public Result<?> listQaPairs(@PathVariable Long id,
+                                  @RequestParam(defaultValue = "1") int pageNum,
+                                  @RequestParam(defaultValue = "20") int pageSize,
+                                  @RequestParam(required = false) String keyword) {
+        return Result.ok(qaPairService.listByKnowledgeId(id, pageNum, pageSize, keyword));
+    }
+
+    @Operation(summary = "删除问答对（需要DEVELOPER及以上权限）")
+    @DeleteMapping("/qa-pairs/{qaPairId}")
+    public Result<Void> deleteQaPair(@PathVariable Long qaPairId) {
+        qaPairService.deleteById(qaPairId);
+        return Result.ok();
+    }
+
+    @Operation(summary = "批量导入问答对（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/qa-pairs/batch-import")
+    public Result<Integer> batchImportQaPairs(@PathVariable Long id,
+                                               @RequestBody List<QaPairCreateDTO> items) {
+        return Result.ok(qaPairService.batchImport(id, items));
+    }
+
+    @Operation(summary = "AI生成问答对（异步任务，需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/qa-pairs/ai-generate")
+    public Result<Task> generateQaPairs(@PathVariable Long id,
+                                         @RequestParam(defaultValue = "10") Integer count,
+                                         @RequestParam(required = false) Long providerId,
+                                         @RequestParam(required = false) String modelId) {
+        return Result.ok(qaPairService.generateByAI(id, count, providerId, modelId));
     }
 }

@@ -76,6 +76,14 @@ public interface DocumentService extends IService<Document> {
     String previewDocument(Long documentId);
 
     /**
+     * 读取文档内容（内部使用，跳过权限校验，供后台任务调用）
+     *
+     * @param documentId 文档ID
+     * @return 文档内容
+     */
+    String readDocumentContent(Long documentId);
+
+    /**
      * 查询知识库下的文档列表
      *
      * @param knowledgeId 知识库ID

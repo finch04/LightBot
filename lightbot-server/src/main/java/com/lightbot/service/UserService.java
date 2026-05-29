@@ -74,4 +74,12 @@ public interface UserService {
      * @param request 修改密码请求
      */
     void changePassword(ChangePasswordRequest request);
+
+    /**
+     * 判断是否首次登录（lastLoginAt 为 null）
+     *
+     * @param username 用户名
+     * @return true=首次登录
+     */
+    boolean isFirstLogin(String username);
 }

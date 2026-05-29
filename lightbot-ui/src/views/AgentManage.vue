@@ -82,16 +82,13 @@
         <a-form-item v-if="form.agentType !== 'workflow'" label="系统提示词">
           <a-textarea v-model:value="form.systemPrompt" :rows="4" placeholder="定义 Agent 的行为和角色..." />
         </a-form-item>
-        <!-- 模型提供商：仅新建且非工作流类型显示 -->
-        <a-form-item v-if="!form.id && form.agentType !== 'workflow'" label="模型提供商" required>
-          <a-select v-model:value="form.providerId" placeholder="选择模型提供商" style="width: 100%">
-            <a-select-option v-for="p in providerList" :key="p.id" :value="p.id">
-              {{ p.name }} ({{ p.type?.code || p.type }})
-            </a-select-option>
-          </a-select>
+        <!-- 模型：仅新建且非工作流类型显示 -->
+        <a-form-item v-if="!form.id && form.agentType !== 'workflow'" label="模型" required>
+          <ModelSelect v-model="form.model" placeholder="选择模型" />
         </a-form-item>
       </a-form>
     </a-modal>
+
   </div>
 </template>
 
@@ -101,17 +98,16 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent } from '../api/agent'
-import { getModelProviders } from '../api/modelProvider'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
+import ModelSelect from '../components/ModelSelect.vue'
 
 const router = useRouter()
 const list = ref([])
 const agentStatusLabels = ref(null)
 const searchText = ref('')
-const providerList = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', providerId: null })
+const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', model: null })
 
 async function loadData() {
   const params = { pageNum: 1, pageSize: 50 }
@@ -122,13 +118,6 @@ async function loadData() {
 
 watch(searchText, () => loadData())
 
-async function loadProviders() {
-  try {
-    const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
-    providerList.value = res.data.records || []
-  } catch { /* ignore */ }
-}
-
 function openDialog(row) {
   if (row) {
     Object.assign(form, {
@@ -137,25 +126,27 @@ function openDialog(row) {
       description: row.description || '',
       agentType: row.agentType?.code || row.agentType || 'chat',
       systemPrompt: row.systemPrompt || '',
-      providerId: null,
+      model: null,
     })
   } else {
-    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', providerId: null })
+    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', model: null })
   }
   dialogVisible.value = true
 }
 
 async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入名称')
-  // 工作流类型不需要模型提供商，在LLM节点中配置
-  if (!form.id && form.agentType !== 'workflow' && !form.providerId) return message.warning('请选择模型提供商')
+  // 工作流类型不需要模型，在LLM节点中配置
+  if (!form.id && form.agentType !== 'workflow' && !form.model) return message.warning('请选择模型')
   submitting.value = true
   try {
     if (form.id) {
       await updateAgent(form)
       message.success('更新成功')
     } else {
-      const config = form.agentType === 'workflow' ? '{}' : JSON.stringify({ providerId: form.providerId })
+      // form.model 格式为 providerId:modelId，拆分后存入 config
+      const [providerId] = form.model ? form.model.split(':') : [null]
+      const config = form.agentType === 'workflow' ? '{}' : JSON.stringify({ providerId })
       await createAgent({ ...form, config })
       message.success('创建成功')
     }
@@ -181,14 +172,18 @@ function handleDelete(id) {
   })
 }
 
-async function handleSetDefault(id) {
-  try {
-    await setDefaultAgent(id)
-    message.success('已设为默认')
-    loadData()
-  } catch {
-    // ignore
-  }
+function handleSetDefault(id) {
+  Modal.confirm({
+    title: '设为默认智能体',
+    content: '设置为默认智能体后，该智能体将对所有用户公开访问。确认继续？',
+    okText: '确认',
+    cancelText: '取消',
+    async onOk() {
+      await setDefaultAgent(id)
+      message.success('已设为默认')
+      loadData()
+    },
+  })
 }
 
 function agentTypeLabel(t) {
@@ -209,7 +204,6 @@ function formatTime(t) {
 onMounted(async () => {
   agentStatusLabels.value = await loadAgentStatusLabels()
   loadData()
-  loadProviders()
 })
 </script>
 
@@ -218,6 +212,7 @@ onMounted(async () => {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: #fafafa;
 }
 .page-header {
@@ -414,4 +409,5 @@ onMounted(async () => {
   margin-bottom: 16px;
   display: block;
 }
+
 </style>

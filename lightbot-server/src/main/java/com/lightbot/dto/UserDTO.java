@@ -28,6 +28,7 @@ public class UserDTO {
     private UserRole role;
     private UserStatus status;
     private LocalDateTime createTime;
+    private Boolean firstLogin;
 
     public static UserDTO from(User user) {
         UserDTO dto = new UserDTO();

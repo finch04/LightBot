@@ -1,9 +1,11 @@
 package com.lightbot.tool.systemtool;
 
+import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.QaPairService;
 import com.lightbot.util.TextNormalizeUtil;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.annotation.SystemTool;
@@ -43,6 +45,7 @@ public class QueryKnowledgeTool {
     private final AgentService agentService;
     private final KnowledgeService knowledgeService;
     private final EmbeddingService embeddingService;
+    private final QaPairService qaPairService;
     private final EmbeddingModel embeddingModel;
 
     private static final ExecutorService SEARCH_EXECUTOR = Executors.newCachedThreadPool(r -> {
@@ -98,18 +101,58 @@ public class QueryKnowledgeTool {
                             ToolEventEmitter.emit("正在检索知识库「" + kbName + "」...");
                             int topK = parseTopK(knowledge);
                             double threshold = parseThreshold(knowledge);
-                            log.info("[Tool:query_knowledge] 检索知识库: name={}, knowledgeId={}, topK={}, threshold={}",
-                                    kbName, knowledgeId, topK, threshold);
-                            List<Map<String, Object>> results = embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold);
-                            log.info("[Tool:query_knowledge] 知识库检索结果: name={}, count={}", kbName, results.size());
-                            for (int i = 0; i < Math.min(results.size(), 5); i++) {
-                                Map<String, Object> row = results.get(i);
-                                log.info("[Tool:query_knowledge]   结果#{}: document={}, score={}, contentLength={}",
-                                        i + 1, row.get("document_name"), row.get("score"),
-                                        row.get("content") != null ? ((String) row.get("content")).length() : 0);
-                            }
-                            ToolEventEmitter.emit("知识库「" + kbName + "」找到 " + results.size() + " 条结果");
-                            return results;
+                            int qaTopK = parseQaTopK(knowledge);
+                            double qaThreshold = parseQaThreshold(knowledge);
+                            log.info("[Tool:query_knowledge] 检索知识库: name={}, knowledgeId={}, topK={}, threshold={}, qaTopK={}, qaThreshold={}",
+                                    kbName, knowledgeId, topK, threshold, qaTopK, qaThreshold);
+
+                            // 并行检索 Chunk 和 QA Pair
+                            CompletableFuture<List<Map<String, Object>>> chunkFuture = CompletableFuture.supplyAsync(() -> {
+                                try {
+                                    return embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold);
+                                } catch (Exception e) {
+                                    log.warn("[Tool:query_knowledge] Chunk检索失败: knowledgeId={}", knowledgeId);
+                                    return List.<Map<String, Object>>of();
+                                }
+                            }, SEARCH_EXECUTOR);
+
+                            CompletableFuture<List<Map<String, Object>>> qaFuture = CompletableFuture.supplyAsync(() -> {
+                                try {
+                                    List<QaPairSearchResultVO> qaResults = qaPairService.searchSimilar(knowledgeId, queryVector, qaTopK, qaThreshold);
+                                    // 转换为统一的 Map 格式
+                                    return qaResults.stream().map(qa -> {
+                                        Map<String, Object> row = new java.util.HashMap<>();
+                                        row.put("id", qa.getId());
+                                        row.put("question", qa.getQuestion());
+                                        row.put("content", qa.getAnswer());
+                                        row.put("answer", qa.getAnswer());
+                                        row.put("score", qa.getScore());
+                                        row.put("knowledge_id", knowledgeId);
+                                        row.put("document_name", "问答对");
+                                        row.put("result_type", "qa_pair");
+                                        return row;
+                                    }).toList();
+                                } catch (Exception e) {
+                                    log.warn("[Tool:query_knowledge] QA Pair检索失败: knowledgeId={}", knowledgeId);
+                                    return List.<Map<String, Object>>of();
+                                }
+                            }, SEARCH_EXECUTOR);
+
+                            // 合并结果
+                            List<Map<String, Object>> chunkResults = chunkFuture.join();
+                            List<Map<String, Object>> qaResults = qaFuture.join();
+
+                            // 标记 chunk 结果类型
+                            chunkResults.forEach(row -> row.putIfAbsent("result_type", "chunk"));
+
+                            List<Map<String, Object>> allKbResults = new ArrayList<>();
+                            allKbResults.addAll(qaResults);
+                            allKbResults.addAll(chunkResults);
+
+                            log.info("[Tool:query_knowledge] 知识库检索结果: name={}, chunkCount={}, qaCount={}",
+                                    kbName, chunkResults.size(), qaResults.size());
+                            ToolEventEmitter.emit("知识库「" + kbName + "」找到 " + allKbResults.size() + " 条结果");
+                            return allKbResults;
                         } catch (Exception e) {
                             log.warn("[Tool:query_knowledge] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage(), e);
                             return List.<Map<String, Object>>of();
@@ -142,8 +185,9 @@ public class QueryKnowledgeTool {
             for (int i = 0; i < allResults.size(); i++) {
                 Map<String, Object> row = allResults.get(i);
                 String content = TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")));
-                sb.append(String.format("【%d. %s】\n%s\n\n",
-                        i + 1, row.get("document_name"), content));
+                String resultType = (String) row.get("result_type");
+                String label = "qa_pair".equals(resultType) ? "问答对" : String.valueOf(row.get("document_name"));
+                sb.append(String.format("【%d. %s】\n%s\n\n", i + 1, label, content));
             }
 
             log.info("[Tool:query_knowledge] 检索完成: agentId={}, results={}", finalAgentId, allResults.size());
@@ -198,6 +242,26 @@ public class QueryKnowledgeTool {
             return node.has("ragThreshold") ? node.get("ragThreshold").asDouble(0.5) : 0.5;
         } catch (Exception e) {
             return 0.5;
+        }
+    }
+
+    private int parseQaTopK(Knowledge knowledge) {
+        if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 3;
+        try {
+            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+            return node.has("qaTopK") ? node.get("qaTopK").asInt(3) : 3;
+        } catch (Exception e) {
+            return 3;
+        }
+    }
+
+    private double parseQaThreshold(Knowledge knowledge) {
+        if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 0.85;
+        try {
+            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+            return node.has("qaThreshold") ? node.get("qaThreshold").asDouble(0.85) : 0.85;
+        } catch (Exception e) {
+            return 0.85;
         }
     }
 

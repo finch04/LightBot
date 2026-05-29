@@ -20,10 +20,13 @@ public interface EvalRagResultService extends IService<EvalRagResult> {
 
     /**
      * 执行评估（同步，由任务执行器调用）
+     *
+     * @param progressCallback 进度回调（百分比, 消息），可为 null
      */
     void executeEvaluation(Long resultId, Long benchmarkId, Long knowledgeId,
                            Long answerProviderId, String answerModelId,
-                           Long judgeProviderId, String judgeModelId);
+                           Long judgeProviderId, String judgeModelId,
+                           java.util.function.BiConsumer<Integer, String> progressCallback);
 
     /**
      * 查询知识库的评估历史

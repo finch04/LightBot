@@ -96,9 +96,11 @@ public class TaskConsumerConfig {
                     String result = executor.execute(task);
                     taskService.markSuccess(taskId, result);
                 } catch (Exception e) {
-                    String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    // 构建详细的错误信息
+                    String error = buildErrorMessage(e);
+                    log.error("[任务消费者] 执行失败, taskId={}, error={}", taskId, error, e);
                     // 区分用户取消和其他失败
-                    if ("任务已被用户取消".equals(error)) {
+                    if ("任务已被用户取消".equals(e.getMessage())) {
                         taskService.markCancelled(taskId, "任务被用户取消");
                     } else {
                         taskService.markFailed(taskId, error);
@@ -121,5 +123,28 @@ public class TaskConsumerConfig {
             log.error("[任务消费者] 获取执行器失败, beanName={}", taskType.getBeanName(), e);
             return null;
         }
+    }
+
+    /**
+     * 构建详细的错误信息（对NPE等getMessage为null的异常做特殊处理）
+     */
+    private String buildErrorMessage(Exception e) {
+        String msg = e.getMessage();
+        if (msg != null && !msg.isBlank()) {
+            return msg;
+        }
+        // NPE 等 getMessage 为 null 的异常，尝试从 cause 或堆栈提取信息
+        Throwable cause = e.getCause();
+        if (cause != null && cause.getMessage() != null) {
+            return e.getClass().getSimpleName() + ": " + cause.getMessage();
+        }
+        // 从堆栈中提取异常发生位置
+        StackTraceElement[] stackTrace = e.getStackTrace();
+        if (stackTrace.length > 0) {
+            StackTraceElement top = stackTrace[0];
+            return e.getClass().getSimpleName() + " at " + top.getClassName() + "." + top.getMethodName()
+                    + "(" + top.getFileName() + ":" + top.getLineNumber() + ")";
+        }
+        return e.getClass().getSimpleName();
     }
 }

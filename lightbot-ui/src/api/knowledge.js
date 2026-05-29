@@ -143,3 +143,67 @@ export function generateExampleQuestions(knowledgeId) {
 export function checkOcrHealth() {
   return request.get('/ocr/health')
 }
+
+// ========== 知识图谱 ==========
+
+export function getGraphSubgraph(knowledgeId, params) {
+  return request.get(`/knowledge/${knowledgeId}/graph/subgraph`, { params })
+}
+
+export function getGraphStats(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/graph/stats`)
+}
+
+export function extractGraph(knowledgeId, params) {
+  return request.post(`/knowledge/${knowledgeId}/graph/extract`, null, { params })
+}
+
+export function importGraphTriples(knowledgeId, data) {
+  return request.post(`/knowledge/${knowledgeId}/graph/import`, data)
+}
+
+export function deleteGraph(knowledgeId) {
+  return request.delete(`/knowledge/${knowledgeId}/graph`)
+}
+
+export function createGraphNode(knowledgeId, params) {
+  return request.post(`/knowledge/${knowledgeId}/graph/nodes`, null, { params })
+}
+
+export function deleteGraphNode(knowledgeId, elementId) {
+  return request.delete(`/knowledge/${knowledgeId}/graph/nodes/${elementId}`)
+}
+
+export function createGraphEdge(knowledgeId, params) {
+  return request.post(`/knowledge/${knowledgeId}/graph/edges`, null, { params })
+}
+
+export function deleteGraphEdge(knowledgeId, elementId) {
+  return request.delete(`/knowledge/${knowledgeId}/graph/edges/${elementId}`)
+}
+
+// ========== 问答对 ==========
+
+export function getQAPairs(knowledgeId, params) {
+  return request.get(`/knowledge/${knowledgeId}/qa-pairs`, { params })
+}
+
+export function createQAPair(knowledgeId, data) {
+  return request.post(`/knowledge/${knowledgeId}/qa-pairs`, data)
+}
+
+export function updateQAPair(qaPairId, data) {
+  return request.put(`/knowledge/qa-pairs/${qaPairId}`, data)
+}
+
+export function deleteQAPair(qaPairId) {
+  return request.delete(`/knowledge/qa-pairs/${qaPairId}`)
+}
+
+export function batchImportQAPairs(knowledgeId, items) {
+  return request.post(`/knowledge/${knowledgeId}/qa-pairs/batch-import`, items)
+}
+
+export function generateQAPairs(knowledgeId, params) {
+  return request.post(`/knowledge/${knowledgeId}/qa-pairs/ai-generate`, null, { params })
+}

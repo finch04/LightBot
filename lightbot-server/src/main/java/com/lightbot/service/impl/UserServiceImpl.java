@@ -114,7 +114,6 @@ public class UserServiceImpl implements UserService {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
-        String like = "%" + keyword.trim() + "%";
         List<User> users = userMapper.selectList(
                 new LambdaQueryWrapper<User>()
                         .and(w -> w.like(User::getUsername, keyword.trim()).or().like(User::getNickname, keyword.trim()))
@@ -163,5 +162,12 @@ public class UserServiceImpl implements UserService {
         // 3. 更新密码
         user.setPassword(cn.dev33.satoken.secure.BCrypt.hashpw(request.getNewPassword(), cn.dev33.satoken.secure.BCrypt.gensalt()));
         userMapper.updateById(user);
+    }
+
+    @Override
+    public boolean isFirstLogin(String username) {
+        User user = userMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getUsername, username));
+        return user != null && user.getLastLoginAt() == null;
     }
 }

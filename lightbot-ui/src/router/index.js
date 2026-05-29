@@ -39,6 +39,11 @@ const routes = [
         component: () => import('../views/KnowledgeDetail.vue'),
       },
       {
+        path: 'graph',
+        name: 'StandaloneGraph',
+        component: () => import('../views/StandaloneGraph.vue'),
+      },
+      {
         path: 'model-providers',
         name: 'ModelProviders',
         component: () => import('../views/ModelProviderManage.vue'),

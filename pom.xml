@@ -30,6 +30,7 @@
         <springdoc.version>2.6.0</springdoc.version>
         <minio.version>8.5.7</minio.version>
         <pgvector.version>0.1.6</pgvector.version>
+        <neo4j.version>5.26.0</neo4j.version>
     </properties>
 
     <dependencyManagement>
@@ -75,6 +76,11 @@
                 <groupId>com.pgvector</groupId>
                 <artifactId>pgvector</artifactId>
                 <version>${pgvector.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.neo4j.driver</groupId>
+                <artifactId>neo4j-java-driver</artifactId>
+                <version>${neo4j.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -140,6 +140,7 @@
     <main class="main-content">
       <router-view :key="route.path.startsWith('/chat') ? '/chat' : route.path" />
     </main>
+
   </div>
 </template>
 
@@ -181,12 +182,12 @@ const sessionsCollapsed = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 const sidebarHidden = ref(false)
 let sidebarStateBeforeWorkflow = null
-const runningTaskCount = ref(0)
+const taskActiveCount = ref(0)
 let taskSSE = null
 
 const taskBadgeCount = computed(() => {
-  if (runningTaskCount.value <= 0) return 0
-  return runningTaskCount.value > 10 ? '10+' : runningTaskCount.value
+  if (taskActiveCount.value <= 0) return 0
+  return taskActiveCount.value > 10 ? '10+' : taskActiveCount.value
 })
 
 const taskBadgeStyle = computed(() => sidebarCollapsed.value
@@ -351,7 +352,7 @@ function connectTaskSSE() {
   taskSSE = new EventSource(`/api/tasks/stream?userId=${userId}`)
 
   taskSSE.addEventListener('count', (e) => {
-    runningTaskCount.value = Number(e.data) || 0
+    taskActiveCount.value = Number(e.data) || 0
   })
 
   taskSSE.onerror = () => {

@@ -11,3 +11,7 @@ export function getModelProviderTypes() {
 export function getAgentStatuses() {
   return request.get('/enums/agent-statuses')
 }
+
+export function getModelTypes() {
+  return request.get('/enums/model-types')
+}

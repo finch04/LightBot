@@ -76,6 +76,12 @@
             <artifactId>minio</artifactId>
         </dependency>
 
+        <!-- Neo4j -->
+        <dependency>
+            <groupId>org.neo4j.driver</groupId>
+            <artifactId>neo4j-java-driver</artifactId>
+        </dependency>
+
         <!-- Spring AI 文档解析器 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

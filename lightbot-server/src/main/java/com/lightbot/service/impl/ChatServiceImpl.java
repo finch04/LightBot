@@ -406,7 +406,16 @@ public class ChatServiceImpl implements ChatService {
                             if (!kbResultsRef.isEmpty()) {
                                 List<RagReferenceVO> refs = kbResultsRef.stream().map(row -> {
                                     RagReferenceVO vo = new RagReferenceVO();
-                                    vo.setDocumentName((String) row.get("document_name"));
+                                    String resultType = (String) row.get("result_type");
+                                    if ("qa_pair".equals(resultType)) {
+                                        vo.setSourceType("qa_pair");
+                                        vo.setDocumentName("问答对");
+                                        Object qaPairId = row.get("id");
+                                        vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                                    } else {
+                                        vo.setSourceType("chunk");
+                                        vo.setDocumentName((String) row.get("document_name"));
+                                    }
                                     String content = (String) row.get("content");
                                     vo.setContentPreview(content != null && content.length() > 200
                                             ? content.substring(0, 200) + "..." : content);
@@ -686,7 +695,16 @@ public class ChatServiceImpl implements ChatService {
                 if (!kbResultsRef.isEmpty()) {
                     List<RagReferenceVO> refs = kbResultsRef.stream().map(row -> {
                         RagReferenceVO vo = new RagReferenceVO();
-                        vo.setDocumentName((String) row.get("document_name"));
+                        String resultType = (String) row.get("result_type");
+                        if ("qa_pair".equals(resultType)) {
+                            vo.setSourceType("qa_pair");
+                            vo.setDocumentName("问答对");
+                            Object qaPairId = row.get("id");
+                            vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                        } else {
+                            vo.setSourceType("chunk");
+                            vo.setDocumentName((String) row.get("document_name"));
+                        }
                         String content = (String) row.get("content");
                         vo.setContentPreview(content != null && content.length() > 200
                                 ? content.substring(0, 200) + "..." : content);
@@ -798,7 +816,16 @@ public class ChatServiceImpl implements ChatService {
         List<Map<String, Object>> searchResults = getRagSearchResults(agent.getId(), question);
         return searchResults.stream().map(row -> {
             RagReferenceVO vo = new RagReferenceVO();
-            vo.setDocumentName((String) row.get("document_name"));
+            String resultType = (String) row.get("result_type");
+            if ("qa_pair".equals(resultType)) {
+                vo.setSourceType("qa_pair");
+                vo.setDocumentName("问答对");
+                Object qaPairId = row.get("id");
+                vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+            } else {
+                vo.setSourceType("chunk");
+                vo.setDocumentName((String) row.get("document_name"));
+            }
             String content = (String) row.get("content");
             vo.setContentPreview(content != null && content.length() > 200
                     ? content.substring(0, 200) + "..." : content);

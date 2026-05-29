@@ -168,6 +168,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+        // 1.1 权限校验：需要DEVELOPER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
 
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
@@ -201,6 +203,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+        // 权限校验：需要成员权限
+        checkMember(knowledgeId);
         String data = knowledge.getMindmapData();
         if (data == null || data.isBlank()) {
             return null;
@@ -353,12 +357,19 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         if (knowledge == null) {
             return List.of();
         }
+        // 权限校验：需要成员权限
+        checkMember(knowledgeId);
         return parseExampleQuestions(knowledge.getExampleQuestions());
     }
 
     @Override
     public void updateExampleQuestions(Long knowledgeId, List<String> questions) {
-        Knowledge knowledge = getByIdWithPermission(knowledgeId);
+        // 权限校验：需要DEVELOPER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
+        }
 
         // 最多保留10个，超出删最早的
         List<String> trimmed = new ArrayList<>(questions);
@@ -378,6 +389,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     @Override
     public String generateOneExampleQuestion(Long knowledgeId) {
+        // 权限校验：需要DEVELOPER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         Knowledge knowledge = getById(knowledgeId);
         if (knowledge == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);

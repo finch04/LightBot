@@ -112,6 +112,16 @@ minio:
   secret-key: minioadmin
   bucket: lightbot
 
+# ========================================
+# Neo4j 图数据库配置（知识图谱）
+# uri：Bolt 协议地址
+# username / password：认证凭证
+# ========================================
+neo4j:
+  uri: bolt://localhost:7687
+  username: neo4j
+  password: ${NEO4J_PASSWORD:neo4j123}
+
 # 系统配置
 lightbot:
 # ========================================

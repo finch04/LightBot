@@ -201,7 +201,6 @@ const statusMap = { RUNNING: '运行中', COMPLETED: '已完成', FAILED: '失�
 const statusColor = { RUNNING: 'blue', COMPLETED: 'green', FAILED: 'red' }
 
 const detailColumns = [
-  { title: '#', dataIndex: 'sortOrder', width: 60, minWidth: 40, customRender: ({ index }) => index + 1 },
   { title: '问题', dataIndex: 'query', key: 'query', width: 220, minWidth: 120, ellipsis: true },
   { title: 'AI 答案', dataIndex: 'generatedAnswer', key: 'generatedAnswer', width: 260, minWidth: 120, ellipsis: true },
   { title: '检索指标', key: 'retrievalScores', width: 120, minWidth: 80 },
@@ -338,8 +337,6 @@ watch(() => props.open, (val) => {
   font-size: 14px;
 }
 .analysis-content {
-  max-height: 300px;
-  overflow-y: auto;
 }
 .metric-help-content {
   display: flex;

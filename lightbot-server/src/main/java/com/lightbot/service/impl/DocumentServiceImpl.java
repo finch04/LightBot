@@ -22,6 +22,7 @@ import com.lightbot.model.chunking.ChunkStrategy;
 import com.lightbot.model.chunking.ChunkStrategyFactory;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.TaskType;
+import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
 import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
@@ -92,9 +93,13 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
     private final DocumentSecurityScanUtil documentSecurityScanUtil;
+    private final KnowledgePermissionHelper permissionHelper;
 
     @Override
     public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
+
         long userId = StpUtil.getLoginIdAsLong();
         String fileName = file.getOriginalFilename();
 
@@ -172,6 +177,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(doc.getKnowledgeId(), KnowledgeRole.DEVELOPER);
         if (doc.getStatus() != DocumentStatus.UPLOADED && doc.getStatus() != DocumentStatus.FAILED
                 && doc.getStatus() != DocumentStatus.COMPLETED) {
             throw new BizException(ErrorCode.DOCUMENT_INVALID_STATUS);
@@ -195,6 +202,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(doc.getKnowledgeId());
 
         // 1. 优先使用上传阶段生成的解析文本（含OCR结果），否则解析原文件
         String content = null;
@@ -415,6 +424,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             return null;
         }
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(doc.getKnowledgeId());
         // 1. 优先读取已转换的Markdown文件
         if (doc.getMarkdownPath() != null) {
             try (InputStream is = minioUtil.download(doc.getMarkdownPath())) {
@@ -433,7 +444,32 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     @Override
+    public String readDocumentContent(Long documentId) {
+        Document doc = getById(documentId);
+        if (doc == null) {
+            return null;
+        }
+        // 1. 优先读取已转换的Markdown文件
+        if (doc.getMarkdownPath() != null) {
+            try (InputStream is = minioUtil.download(doc.getMarkdownPath())) {
+                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                log.warn("[文档读取] 读取Markdown文件失败，回退到实时转换, documentId={}", documentId, e);
+            }
+        }
+        // 2. 回退：实时转换
+        try (InputStream is = minioUtil.download(doc.getFilePath())) {
+            return tikaUtil.parseToMarkdown(is, doc.getName());
+        } catch (Exception e) {
+            log.warn("[文档读取] 解析失败, documentId={}", documentId, e);
+            return null;
+        }
+    }
+
+    @Override
     public List<Document> listByKnowledgeId(Long knowledgeId) {
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
         return list(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getDeleted, 0)
@@ -442,6 +478,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     @Override
     public Page<Document> listByKnowledgeIdWithPage(Long knowledgeId, String keyword, int pageNum, int pageSize) {
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
         LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getDeleted, 0);
@@ -458,6 +496,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(doc.getKnowledgeId(), KnowledgeRole.DEVELOPER);
         // 1. 删除MinIO中的文件
         try {
             minioUtil.delete(doc.getFilePath());
@@ -476,6 +516,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         if (doc == null) {
             throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
         }
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(doc.getKnowledgeId());
         String contentType = getContentType(doc.getFileType());
         // 预签名URL中携带正确的Content-Type，浏览器才能内联展示而非下载
         String url = minioUtil.getPresignedUrl(doc.getFilePath(), contentType);
@@ -484,6 +526,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     @Override
     public UrlFetchPreviewVO previewUrlDocument(Long knowledgeId, String url) {
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
         WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
         return UrlFetchPreviewVO.builder()
                 .url(result.getUrl())
@@ -498,11 +542,15 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     @Override
     public Document saveUrlDocument(Long knowledgeId, UrlSaveRequest request) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         return persistUrlContent(knowledgeId, request.getUrl(), request.getTitle(), request.getContent(), System.currentTimeMillis());
     }
 
     @Override
     public Document fetchUrlDocument(Long knowledgeId, String url) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
         return persistUrlContent(knowledgeId, url, result.getTitle(), result.getContent(), result.getFetchedAt());
     }

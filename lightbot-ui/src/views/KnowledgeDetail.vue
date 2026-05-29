@@ -174,13 +174,13 @@
             </div>
           </a-tab-pane>
           <a-tab-pane key="knowledge-graph" tab="知识图谱">
-            <div class="rag-section">
+            <div v-if="activeTab === 'knowledge-graph'" class="rag-section">
               <KnowledgeGraphTab :knowledge-id="knowledgeId" />
             </div>
           </a-tab-pane>
           <a-tab-pane key="qa-pairs" tab="问答对">
             <div class="rag-section">
-              <QAPairsTab :knowledge-id="knowledgeId" />
+              <QAPairsTab ref="qaPairsTabRef" :knowledge-id="knowledgeId" />
             </div>
           </a-tab-pane>
         </a-tabs>
@@ -507,7 +507,7 @@
     </a-modal>
 
     <!-- 编辑知识库弹窗 -->
-    <a-modal v-model:open="editVisible" title="编辑知识库" :width="520" @ok="handleEdit" :confirm-loading="editSubmitting">
+    <a-modal v-model:open="editVisible" title="编辑知识库" :width="520" @ok="handleEdit" :confirm-loading="editSubmitting" :bodyStyle="{ maxHeight: '70vh', overflowY: 'auto', paddingRight: '24px' }">
       <a-form :model="editForm" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="editForm.name" placeholder="知识库名称" />
@@ -583,7 +583,14 @@
     </a-modal>
 
     <!-- 成员管理弹窗 -->
-    <a-modal v-model:open="membersVisible" title="成员管理" :width="560" :footer="null">
+    <a-modal v-model:open="membersVisible" :width="560" :footer="null">
+      <template #title>
+        <span>成员管理</span>
+        <QuestionCircleOutlined
+          style="margin-left: 8px; color: #999; font-size: 14px; cursor: pointer;"
+          @click="permHelpVisible = true"
+        />
+      </template>
       <div class="members-section">
         <div class="member-list">
           <div v-for="member in membersWithInfo" :key="member.userId" class="member-item">
@@ -661,6 +668,40 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 权限说明弹窗 -->
+    <a-modal v-model:open="permHelpVisible" title="权限说明" :width="520" :footer="null">
+      <div class="perm-help">
+        <p>知识库采用四级角色权限体系，高权限包含低权限的所有能力：</p>
+        <table class="perm-table">
+          <thead>
+            <tr>
+              <th>功能</th>
+              <th>查看者</th>
+              <th>开发者</th>
+              <th>管理者</th>
+              <th>创建者</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>查看文档/检索/问答</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>查看评估/基准/思维导图</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>上传/删除/入库文档</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>生成思维导图/示例问题</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>创建/删除评估基准</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>运行/删除评估</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>图谱抽取/编辑</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>查看问答对</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>新增/编辑/删除问答对</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>AI生成问答对</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>清空图谱数据</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>编辑知识库设置</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>添加/移除成员</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+            <tr><td>删除知识库</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -732,6 +773,7 @@ const knowledgeDefaultStrategy = computed(() => {
 const activeTab = ref('ask')
 const evalTabRef = ref(null)
 const benchmarksTabRef = ref(null)
+const qaPairsTabRef = ref(null)
 const ragQuestion = ref('')
 const ragMessages = ref([])
 const ragLoading = ref(false)
@@ -851,6 +893,7 @@ const members = ref([])
 const membersWithInfo = ref([])
 const currentMemberRole = ref(null)
 const membersVisible = ref(false)
+const permHelpVisible = ref(false)
 const inviteVisible = ref(false)
 const inviteKeyword = ref('')
 const inviteResults = ref([])
@@ -1473,6 +1516,8 @@ watch(activeTab, (tab) => {
     })
   } else if (tab === 'benchmarks') {
     nextTick(() => benchmarksTabRef.value?.loadBenchmarks())
+  } else if (tab === 'qa-pairs') {
+    nextTick(() => qaPairsTabRef.value?.loadData())
   }
 })
 
@@ -2422,6 +2467,30 @@ onUnmounted(() => {
   color: #a1a1aa;
   font-size: 13px;
 }
+
+/* 权限说明 */
+.perm-help p { margin-bottom: 12px; font-size: 13px; color: #595959; line-height: 1.6; }
+.perm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.perm-table th, .perm-table td {
+  border: 1px solid #f0f0f0;
+  padding: 6px 8px;
+  text-align: center;
+}
+.perm-table th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #262626;
+}
+.perm-table td:first-child {
+  text-align: left;
+  color: #595959;
+}
+.perm-table .yes { color: #52c41a; font-weight: 600; }
+.perm-table .no { color: #d9d9d9; }
 
 /* 上传弹窗 */
 .upload-section {

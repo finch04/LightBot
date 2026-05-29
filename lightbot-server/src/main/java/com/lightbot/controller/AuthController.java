@@ -35,7 +35,12 @@ public class AuthController {
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
+        // 1. 先判断是否首次登录（login 会更新 lastLoginAt）
+        boolean firstLogin = userService.isFirstLogin(request.getUsername());
+        // 2. 执行登录
         UserDTO user = userService.login(request);
+        user.setFirstLogin(firstLogin);
+        // 3. 返回
         Map<String, Object> data = new HashMap<>();
         data.put("token", cn.dev33.satoken.stp.StpUtil.getTokenValue());
         data.put("user", user);

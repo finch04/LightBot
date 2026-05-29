@@ -20,6 +20,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 任务队列服务实现
@@ -136,7 +137,8 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 new LambdaQueryWrapper<Task>()
                         .eq(Task::getUserId, userId)
                         .like(StringUtils.hasText(name), Task::getName, name)
-                        .eq(StringUtils.hasText(status), Task::getStatus, status)
+                        .eq(StringUtils.hasText(status) && !"active".equals(status), Task::getStatus, status)
+                        .in(StringUtils.hasText(status) && "active".equals(status), Task::getStatus, List.of("pending", "running"))
                         .orderByDesc(Task::getCreateTime));
     }
 

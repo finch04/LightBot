@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.EvalRagBenchmark;
 import com.lightbot.entity.EvalRagBenchmarkItem;
+import com.lightbot.entity.Task;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -35,12 +36,29 @@ public interface EvalRagBenchmarkService extends IService<EvalRagBenchmark> {
      * AI 生成基准题目并填充到已有基准记录（异步任务调用）
      */
     void generateBenchmarkItems(Long benchmarkId, Long knowledgeId, Integer count,
-                                Long providerId, String modelId, Integer neighborCount);
+                                Long providerId, String modelId, Integer neighborCount,
+                                java.util.function.Consumer<Integer> progressCallback);
 
     /**
-     * 上传 JSONL 评估基准
+     * 上传 JSONL 评估基准（同步）
      */
     EvalRagBenchmark uploadBenchmark(Long knowledgeId, String name, String description, MultipartFile file);
+
+    /**
+     * 异步上传 JSONL 评估基准：创建空基准 + 保存临时文件 + 创建任务
+     *
+     * @return 创建的任务
+     */
+    Task uploadBenchmarkAsync(Long knowledgeId, String name, String description, MultipartFile file, Long userId);
+
+    /**
+     * 从临时文件导入基准题目（异步任务执行器调用）
+     *
+     * @param tempFilePath     临时文件绝对路径
+     * @param progressCallback 进度回调 (0-100)
+     */
+    void importBenchmarkItems(Long benchmarkId, String tempFilePath,
+                              java.util.function.Consumer<Integer> progressCallback);
 
     /**
      * 删除评估基准

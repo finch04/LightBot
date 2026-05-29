@@ -160,9 +160,7 @@
           </a-form-item>
           <a-form-item label="模型类型" required>
             <a-select v-model:value="modelForm.type" style="width: 100%">
-              <a-select-option value="llm">对话模型</a-select-option>
-              <a-select-option value="embedding">嵌入模型</a-select-option>
-              <a-select-option value="rerank">重排模型</a-select-option>
+              <a-select-option v-for="t in modelTypes" :key="t.value" :value="t.value">{{ t.label }}</a-select-option>
             </a-select>
           </a-form-item>
         </a-form>
@@ -178,8 +176,12 @@
       <div class="model-list" v-if="modelList.length > 0">
         <div v-for="m in modelList" :key="m.id" class="model-item">
           <div class="model-info">
-            <span class="model-id">{{ m.modelId }}</span>
-            <span class="model-name">{{ m.name }}</span>
+            <a-tooltip :title="m.modelId" placement="topLeft">
+              <span class="model-id ellipsis">{{ m.modelId }}</span>
+            </a-tooltip>
+            <a-tooltip :title="m.name" placement="topLeft">
+              <span class="model-name ellipsis">{{ m.name }}</span>
+            </a-tooltip>
             <span class="model-type-tag">{{ modelTypeText(m.type?.code || m.type) }}</span>
           </div>
           <button class="btn-icon danger" @click="handleDeleteModel(m.id)"><DeleteOutlined /></button>
@@ -187,6 +189,7 @@
       </div>
       <div v-else-if="!showFetchPanel && !showAddModel" class="model-empty">暂无模型，点击上方按钮添加</div>
     </a-modal>
+
   </div>
 </template>
 
@@ -195,12 +198,13 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus } from '../api/modelProvider'
-import { getModelProviderTypes } from '../api/enum'
+import { getModelProviderTypes, getModelTypes } from '../api/enum'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 import JsonInput from '../components/JsonInput.vue'
 
 const list = ref([])
 const providerTypes = ref([])
+const modelTypes = ref([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
@@ -241,14 +245,11 @@ const fetchTypeTabs = computed(() => {
   for (const m of fetchedModels.value) {
     counts[m.type] = (counts[m.type] || 0) + 1
   }
-  return [
-    { value: 'all', label: '全部', count: counts.all },
-    { value: 'llm', label: '对话', count: counts.llm || 0 },
-    { value: 'embedding', label: '嵌入', count: counts.embedding || 0 },
-    { value: 'rerank', label: '重排', count: counts.rerank || 0 },
-    { value: 'tts', label: '语音合成', count: counts.tts || 0 },
-    { value: 'stt', label: '语音识别', count: counts.stt || 0 },
-  ].filter(t => t.count > 0 || t.value === 'all')
+  const tabs = modelTypes.value.map(t => ({
+    value: t.value, label: t.label, count: counts[t.value] || 0
+  }))
+  return [{ value: 'all', label: '全部', count: counts.all }, ...tabs]
+      .filter(t => t.count > 0 || t.value === 'all')
 })
 
 function selectAllFiltered() {
@@ -269,6 +270,15 @@ async function loadProviderTypes() {
     }
   } catch {
     providerTypes.value = []
+  }
+}
+
+async function loadModelTypes() {
+  try {
+    const res = await getModelTypes()
+    modelTypes.value = res.data || []
+  } catch {
+    modelTypes.value = []
   }
 }
 
@@ -490,8 +500,8 @@ async function handleBatchAddModels() {
 }
 
 function modelTypeText(type) {
-  const map = { llm: '对话', embedding: '嵌入', rerank: '重排', tts: '语音合成', stt: '语音识别' }
-  return map[type] || type
+  const found = modelTypes.value.find(t => t.value === type)
+  return found?.label || type
 }
 
 async function handleRefreshCache() {
@@ -507,7 +517,7 @@ async function handleRefreshCache() {
 }
 
 onMounted(async () => {
-  await loadProviderTypes()
+  await Promise.all([loadProviderTypes(), loadModelTypes()])
   await loadData()
 })
 </script>
@@ -741,16 +751,30 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.model-info :deep(.ant-tooltip-wrapper) {
+  min-width: 0;
+  overflow: hidden;
 }
 .model-id {
   font-size: 14px;
   font-weight: 600;
   color: #171717;
   font-family: monospace;
+  max-width: 180px;
 }
 .model-name {
   font-size: 13px;
   color: #71717a;
+  max-width: 180px;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .model-type-tag {
   font-size: 11px;
@@ -758,6 +782,7 @@ onMounted(async () => {
   background: #f5f5f5;
   padding: 1px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 .model-empty {
   text-align: center;

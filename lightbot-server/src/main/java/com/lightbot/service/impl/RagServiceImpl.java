@@ -7,6 +7,7 @@ import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.EmbeddingService;
+import com.lightbot.service.KnowledgePermissionHelper;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.RagService;
 import com.lightbot.service.SystemConfigService;
@@ -46,6 +47,7 @@ public class RagServiceImpl implements RagService {
 
     private final EmbeddingService embeddingService;
     private final KnowledgeService knowledgeService;
+    private final KnowledgePermissionHelper permissionHelper;
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
     private final SystemConfigService systemConfigService;
@@ -69,6 +71,8 @@ public class RagServiceImpl implements RagService {
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+        // 1.1 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
 
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
@@ -123,6 +127,8 @@ public class RagServiceImpl implements RagService {
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+        // 1.1 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
 
         // 1.1 解析providerId（为空时使用默认提供商）
         Long actualProviderId = resolveProviderId(providerId);
@@ -177,6 +183,8 @@ public class RagServiceImpl implements RagService {
         if (knowledge == null) {
             throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
         }
+        // 1.1 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
 
         // 2. 解析检索参数
         int topK = parseRagTopK(knowledge);

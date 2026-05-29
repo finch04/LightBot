@@ -33,6 +33,17 @@ public interface ModelProviderHandler {
     ChatModel createChatModel(ModelProvider provider);
 
     /**
+     * 创建 ChatModel 并设置默认 modelId（避免 unknown-model）
+     *
+     * @param provider 提供商实体
+     * @param defaultModelId 默认模型ID
+     * @return ChatModel 实例
+     */
+    default ChatModel createChatModel(ModelProvider provider, String defaultModelId) {
+        return createChatModel(provider);
+    }
+
+    /**
      * 根据 Agent config 构建 ChatOptions
      *
      * @param provider 提供商实体（含 baseUrl 用于判断模式）

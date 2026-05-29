@@ -29,6 +29,11 @@ public class Embedding {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long chunkId;
 
+    @TableField("qa_pair_id")
+    @Schema(description = "问答对ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long qaPairId;
+
     @TableField("model_name")
     @Schema(description = "模型名称")
     private String modelName;

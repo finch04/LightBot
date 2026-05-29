@@ -58,7 +58,7 @@ public enum ErrorCode {
     KNOWLEDGE_MEMBER_NOT_FOUND(50005, "该用户不是知识库成员", HttpStatus.BAD_REQUEST),
     KNOWLEDGE_CREATOR_ROLE_IMMUTABLE(50006, "不能修改创建者角色", HttpStatus.BAD_REQUEST),
     KNOWLEDGE_CREATOR_CANNOT_REMOVE(50007, "不能移除创建者", HttpStatus.BAD_REQUEST),
-    KNOWLEDGE_NO_DOCUMENT(50008, "知识库暂无文档，无法生成思维导图", HttpStatus.BAD_REQUEST),
+    KNOWLEDGE_NO_DOCUMENT(50008, "知识库暂无已完成的文档", HttpStatus.BAD_REQUEST),
 
     // ========== 文档模块 ==========
     DOCUMENT_UNSUPPORTED_TYPE(60001, "不支持的文件类型，支持: md/txt/pdf/doc/docx/ppt/pptx/xls/xlsx/csv/html", HttpStatus.BAD_REQUEST),
@@ -80,6 +80,17 @@ public enum ErrorCode {
 
     // ========== RAG 模块 ==========
     RAG_KNOWLEDGE_NOT_FOUND(70001, "知识库不存在", HttpStatus.BAD_REQUEST),
+
+    // ========== 知识图谱模块 ==========
+    GRAPH_NEO4J_UNAVAILABLE(71001, "图数据库连接不可用", HttpStatus.SERVICE_UNAVAILABLE),
+    GRAPH_EXTRACTION_FAILED(71002, "图谱抽取失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
+    GRAPH_IMPORT_FAILED(71003, "图谱导入失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
+    GRAPH_NODE_NOT_FOUND(71004, "图谱节点不存在", HttpStatus.BAD_REQUEST),
+    GRAPH_EDGE_NOT_FOUND(71005, "图谱关系不存在", HttpStatus.BAD_REQUEST),
+    GRAPH_NOT_ENABLED(71006, "知识库未启用图谱功能", HttpStatus.BAD_REQUEST),
+    GRAPH_JSONL_TOO_LARGE(71007, "JSONL文件大小超过5MB限制", HttpStatus.BAD_REQUEST),
+    GRAPH_JSONL_INVALID_FORMAT(71008, "JSONL文件格式错误: 每行必须是合法JSON且包含head/relation/tail字段", HttpStatus.BAD_REQUEST),
+    GRAPH_JSONL_INVALID_TYPE(71009, "仅支持 .jsonl 格式文件", HttpStatus.BAD_REQUEST),
 
     // ========== Tool模块 ==========
     TOOL_NOT_FOUND(91001, "工具不存在", HttpStatus.BAD_REQUEST),

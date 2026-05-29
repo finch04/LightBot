@@ -68,6 +68,18 @@ public class Knowledge {
     @Schema(description = "总Token数")
     private Long totalTokens;
 
+    @TableField("graph_enabled")
+    @Schema(description = "是否启用知识图谱")
+    private Boolean graphEnabled;
+
+    @TableField("node_count")
+    @Schema(description = "图谱节点数")
+    private Integer nodeCount;
+
+    @TableField("edge_count")
+    @Schema(description = "图谱边数")
+    private Integer edgeCount;
+
     @TableField("status")
     @Schema(description = "状态")
     private CommonStatus status;

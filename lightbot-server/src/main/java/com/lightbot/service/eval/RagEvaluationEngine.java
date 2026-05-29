@@ -73,7 +73,8 @@ public class RagEvaluationEngine {
      * @return 生成的题目列表
      */
     public List<EvalRagBenchmarkItem> generateBenchmarkItems(Long knowledgeId, int count,
-                                                              Long providerId, String modelId, int neighborCount) {
+                                                              Long providerId, String modelId, int neighborCount,
+                                                              java.util.function.Consumer<Integer> progressCallback) {
         // 1. 收集所有已向量化的 chunk
         List<Chunk> allChunks = chunkService.list(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Chunk>()
@@ -158,6 +159,12 @@ public class RagEvaluationEngine {
                 item.setGoldChunkIds(objectMapper.writeValueAsString(goldChunkIds));
                 item.setSortOrder(items.size());
                 items.add(item);
+
+                // 回调进度：30% ~ 90% 按已完成题目数线性增长
+                if (progressCallback != null) {
+                    int progress = 30 + (int) ((items.size() / (double) count) * 60);
+                    progressCallback.accept(progress);
+                }
 
             } catch (Exception e) {
                 log.debug("[RagEval] 生成基准题目失败 attempt={}: {}", attempt, e.getMessage());
@@ -329,13 +336,20 @@ public class RagEvaluationEngine {
             AI生成的答案：
             %s
 
-            请判断AI生成的答案是否在事实层面与标准答案一致。
-            忽略措辞、标点符号或格式上的细微差异。
-            只关注核心事实是否准确包含。
+            评分标准（0.0 ~ 1.0 连续分值）：
+            - 1.0：核心事实完全正确，与标准答案一致
+            - 0.8 ~ 0.9：核心事实正确，有少量非关键信息遗漏或多余
+            - 0.5 ~ 0.7：部分核心事实正确，但有明显遗漏或部分错误
+            - 0.2 ~ 0.4：仅少部分事实正确，大部分关键信息缺失或错误
+            - 0.0：完全错误、无关或与标准答案矛盾
+
+            评判规则：
+            1. 忽略措辞、标点符号、格式上的差异
+            2. 只关注核心事实是否准确
+            3. 如果AI回答"无法回答"或类似表述，给 0.0
 
             请返回以下JSON格式的结果（不要包含其他文本、Markdown 或注释）：
-            {"score": 1.0, "reasoning": "简要说明判定理由"}
-            score 只能是 1.0 或 0.0。
+            {"score": 0.85, "reasoning": "简要说明判定理由"}
             """;
 
     private static final String ANSWER_GEN_PROMPT = """

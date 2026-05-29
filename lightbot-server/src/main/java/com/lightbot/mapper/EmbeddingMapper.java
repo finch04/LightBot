@@ -107,4 +107,58 @@ public interface EmbeddingMapper extends BaseMapper<Embedding> {
      */
     @Delete("DELETE FROM embedding WHERE chunk_id IN (SELECT id FROM chunk WHERE document_id = #{documentId})")
     void deleteByDocumentId(@Param("documentId") Long documentId);
+
+    // ========== QA Pair 向量操作 ==========
+
+    /**
+     * 存储 QA Pair 向量
+     *
+     * @param id        主键ID
+     * @param qaPairId  问答对ID
+     * @param modelName 模型名称
+     * @param dimension 向量维度
+     * @param vector    向量字符串 "[0.1,0.2,...]"
+     */
+    @Insert("INSERT INTO embedding (id, qa_pair_id, model_name, dimension, vector, create_time) " +
+            "VALUES (#{id}, #{qaPairId}, #{modelName}, #{dimension}, #{vector}::vector, NOW())")
+    void insertQaPairVector(@Param("id") Long id, @Param("qaPairId") Long qaPairId,
+                            @Param("modelName") String modelName, @Param("dimension") int dimension,
+                            @Param("vector") String vector);
+
+    /**
+     * QA Pair 向量检索（带阈值过滤）
+     *
+     * @param vector      查询向量字符串
+     * @param knowledgeId 知识库ID
+     * @param topK        返回数量
+     * @param threshold   相似度阈值
+     * @return 检索结果（id, question, answer, knowledge_id, score）
+     */
+    @Select("SELECT qp.id, qp.question, qp.answer, qp.knowledge_id, " +
+            "1 - (e.vector <=> #{vector}::vector) AS score " +
+            "FROM embedding e " +
+            "JOIN qa_pair qp ON e.qa_pair_id = qp.id " +
+            "WHERE qp.knowledge_id = #{knowledgeId} AND qp.deleted = 0 AND qp.status = 'active' " +
+            "AND (1 - (e.vector <=> #{vector}::vector)) >= #{threshold} " +
+            "ORDER BY e.vector <=> #{vector}::vector LIMIT #{topK}")
+    List<Map<String, Object>> searchSimilarQaPairs(@Param("vector") String vector,
+                                                    @Param("knowledgeId") Long knowledgeId,
+                                                    @Param("topK") int topK,
+                                                    @Param("threshold") double threshold);
+
+    /**
+     * 删除指定问答对的向量
+     *
+     * @param qaPairId 问答对ID
+     */
+    @Delete("DELETE FROM embedding WHERE qa_pair_id = #{qaPairId}")
+    void deleteByQaPairId(@Param("qaPairId") Long qaPairId);
+
+    /**
+     * 删除指定知识库所有问答对的向量
+     *
+     * @param knowledgeId 知识库ID
+     */
+    @Delete("DELETE FROM embedding WHERE qa_pair_id IN (SELECT id FROM qa_pair WHERE knowledge_id = #{knowledgeId})")
+    void deleteByQaPairKnowledgeId(@Param("knowledgeId") Long knowledgeId);
 }

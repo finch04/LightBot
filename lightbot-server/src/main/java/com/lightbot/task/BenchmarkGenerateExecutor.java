@@ -38,15 +38,24 @@ public class BenchmarkGenerateExecutor implements TaskExecutor {
         log.info("[基准生成执行器] 开始, taskId={}, benchmarkId={}, knowledgeId={}, count={}, neighborCount={}",
                 task.getId(), benchmarkId, knowledgeId, count, neighborCount);
 
-        // 1. 开始生成
-        taskService.updateProgress(task.getId(), 10, "正在分析知识库内容...");
+        var tracker = new TaskProgressTracker(taskService, task.getId())
+                .phases("分析知识库", "生成题目", "保存结果");
 
-        // 2. 调用生成逻辑
-        taskService.updateProgress(task.getId(), 30, "正在调用 AI 生成题目...");
+        // 1. 分析知识库
+        tracker.nextPhase("正在分析知识库内容...");
+        checkCancelled(task.getId());
+
+        // 2. 逐题生成（30% → 90%）
+        tracker.nextPhase("正在生成题目 (0/" + count + ")...");
         try {
-            benchmarkService.generateBenchmarkItems(benchmarkId, knowledgeId, count, providerId, modelId, neighborCount);
+            TaskProgressTracker.SubProgress sub = tracker.subRange(30, 90, count);
+            benchmarkService.generateBenchmarkItems(benchmarkId, knowledgeId, count, providerId, modelId, neighborCount,
+                    progress -> {
+                        checkCancelled(task.getId());
+                        int done = Math.min((int) Math.round((progress - 30) / 60.0 * count), count);
+                        sub.setCompleted(done, "正在生成题目 (" + done + "/" + count + ")...");
+                    });
         } catch (Exception e) {
-            // 生成失败时将状态重置为 ready，避免一直卡在 generating
             EvalRagBenchmark benchmark = benchmarkService.getById(benchmarkId);
             if (benchmark != null && "generating".equals(benchmark.getStatus())) {
                 benchmark.setStatus("ready");
@@ -56,7 +65,14 @@ public class BenchmarkGenerateExecutor implements TaskExecutor {
         }
 
         // 3. 完成
-        taskService.updateProgress(task.getId(), 100, "生成完成");
+        tracker.update(100, "生成完成");
         return "评估基准生成完成, benchmarkId=" + benchmarkId + ", count=" + count;
+    }
+
+    private void checkCancelled(Long taskId) {
+        Task latest = taskService.getById(taskId);
+        if (latest != null && latest.getCancelRequested() == 1) {
+            throw new RuntimeException("任务已被用户取消");
+        }
     }
 }

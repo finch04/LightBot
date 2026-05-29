@@ -3,12 +3,12 @@
     <div class="page-header">
       <div class="page-header-left">
         <h2>任务中心</h2>
-        <span
-          :class="['pending-badge', { active: onlyPending }]"
-          @click="onlyPending = !onlyPending"
-        >
-          待处理 {{ pendingCount }}
-        </span>
+        <a-radio-group v-model:value="statusFilter" size="small" button-style="solid">
+          <a-radio-button value="active">进行中 {{ activeCount }}</a-radio-button>
+          <a-radio-button value="pending">等待中</a-radio-button>
+          <a-radio-button value="running">执行中</a-radio-button>
+          <a-radio-button value="">全部</a-radio-button>
+        </a-radio-group>
       </div>
       <div class="page-header-right">
         <a-input
@@ -37,10 +37,13 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
-          <a class="task-name-link" @click="openDetail(record)">{{ record.name }}</a>
+          <a-tooltip>
+            <template #title>{{ record.name }}</template>
+            <a class="task-name-link" @click="openDetail(record)">{{ record.name }}</a>
+          </a-tooltip>
         </template>
         <template v-else-if="column.key === 'type'">
-          <a-tag :color="typeColor[record.type]">{{ typeMap[record.type] || record.type }}</a-tag>
+          <a-tag :color="typeColor[record.type] || 'default'">{{ record.type }}</a-tag>
         </template>
         <template v-else-if="column.key === 'status'">
           <a-badge :status="statusBadge[record.status]" :text="statusMap[record.status] || record.status" />
@@ -90,9 +93,11 @@
       :footer="null"
     >
       <template v-if="detailTask">
-        <a-descriptions :column="1" bordered size="small">
-          <a-descriptions-item label="任务名称">{{ detailTask.name }}</a-descriptions-item>
-          <a-descriptions-item label="任务类型">{{ typeMap[detailTask.type] || detailTask.type }}</a-descriptions-item>
+        <a-descriptions :column="1" bordered size="small" class="detail-descriptions">
+          <a-descriptions-item label="任务名称">
+            <span class="detail-content">{{ detailTask.name }}</span>
+          </a-descriptions-item>
+          <a-descriptions-item label="任务类型">{{ detailTask.type }}</a-descriptions-item>
           <a-descriptions-item label="状态">
             <a-badge :status="statusBadge[detailTask.status]" :text="statusMap[detailTask.status] || detailTask.status" />
           </a-descriptions-item>
@@ -107,18 +112,20 @@
               <span class="progress-text">{{ detailTask.progress || 0 }}%</span>
             </div>
           </a-descriptions-item>
-          <a-descriptions-item label="进度信息">{{ detailTask.message || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="进度信息">
+            <span class="detail-content">{{ detailTask.message || '-' }}</span>
+          </a-descriptions-item>
           <a-descriptions-item v-if="detailTask.payload" label="请求参数">
-            <span class="json-text">{{ formatJson(detailTask.payload) }}</span>
+            <pre class="json-text">{{ formatJson(detailTask.payload) }}</pre>
           </a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ formatTime(detailTask.createTime) }}</a-descriptions-item>
           <a-descriptions-item label="开始时间">{{ formatTime(detailTask.startedAt) }}</a-descriptions-item>
           <a-descriptions-item label="完成时间">{{ formatTime(detailTask.completedAt) }}</a-descriptions-item>
           <a-descriptions-item v-if="detailTask.result" label="执行结果">
-            <span class="json-text">{{ formatJson(detailTask.result) }}</span>
+            <pre class="json-text">{{ formatJson(detailTask.result) }}</pre>
           </a-descriptions-item>
           <a-descriptions-item v-if="detailTask.error" label="错误信息">
-            <span class="error-text">{{ detailTask.error }}</span>
+            <span class="error-text detail-content">{{ detailTask.error }}</span>
           </a-descriptions-item>
         </a-descriptions>
       </template>
@@ -135,8 +142,8 @@ import { getTaskList, cancelTask, deleteTask } from '../api/task'
 const loading = ref(false)
 const tasks = ref([])
 const searchText = ref('')
-const onlyPending = ref(false)
-const pendingCount = ref(0)
+const statusFilter = ref('')
+const activeCount = ref(0)
 
 const detailVisible = ref(false)
 const detailTask = ref(null)
@@ -157,22 +164,15 @@ const columns = [
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
 ]
 
-const typeMap = {
-  document_upload: '文档上传',
-  document_ingest: '文档入库',
-  document_ocr: '文档OCR',
-  experiment_run: '实验执行',
-  benchmark_generate: '基准生成',
-  rag_evaluation: 'RAG评估',
-}
-
 const typeColor = {
-  document_upload: 'blue',
-  document_ingest: 'green',
-  document_ocr: 'orange',
-  experiment_run: 'cyan',
-  benchmark_generate: 'purple',
-  rag_evaluation: 'magenta',
+  '文档上传': 'blue',
+  '文档入库': 'green',
+  '文档OCR': 'orange',
+  '实验执行': 'cyan',
+  '基准生成': 'purple',
+  '基准导入': 'cyan',
+  'RAG评估': 'magenta',
+  '图谱抽取': 'geekblue',
 }
 
 const statusMap = {
@@ -198,7 +198,7 @@ async function loadTasks() {
   try {
     const params = { pageNum: pagination.current, pageSize: pagination.pageSize }
     if (searchText.value) params.name = searchText.value
-    if (onlyPending.value) params.status = 'pending'
+    if (statusFilter.value) params.status = statusFilter.value
     const res = await getTaskList(params)
     tasks.value = res.data.records || []
     pagination.total = res.data.total || 0
@@ -209,10 +209,10 @@ async function loadTasks() {
   }
 }
 
-async function loadPendingCount() {
+async function loadActiveCount() {
   try {
-    const res = await getTaskList({ pageNum: 1, pageSize: 1, status: 'pending' })
-    pendingCount.value = res.data.total || 0
+    const res = await getTaskList({ pageNum: 1, pageSize: 1, status: 'active' })
+    activeCount.value = res.data.total || 0
   } catch { /* ignore */ }
 }
 
@@ -227,7 +227,7 @@ watch(searchText, () => {
   loadTasks()
 })
 
-watch(onlyPending, () => {
+watch(statusFilter, () => {
   pagination.current = 1
   loadTasks()
 })
@@ -295,10 +295,10 @@ function formatJson(val) {
 
 onMounted(() => {
   loadTasks()
-  loadPendingCount()
+  loadActiveCount()
   pollTimer = setInterval(() => {
     loadTasks()
-    loadPendingCount()
+    loadActiveCount()
   }, 5000)
 })
 
@@ -332,30 +332,6 @@ onUnmounted(() => {
   font-size: 20px;
   font-weight: 600;
 }
-.pending-label {
-  font-size: 13px;
-  color: #8c8c8c;
-}
-.pending-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  font-size: 12px;
-  border-radius: 10px;
-  background: #f5f5f5;
-  color: #8c8c8c;
-  cursor: pointer;
-  transition: all 0.2s;
-  user-select: none;
-}
-.pending-badge:hover {
-  background: #e6e6e6;
-}
-.pending-badge.active {
-  background: #e6f4ff;
-  color: #1677ff;
-  border-color: #91caff;
-}
 .page-header-right {
   display: flex;
   align-items: center;
@@ -384,15 +360,6 @@ onUnmounted(() => {
 .task-name-link:hover {
   text-decoration: underline;
 }
-.error-text {
-  color: #dc2626;
-}
-.json-text {
-  font-family: 'Geist Mono', 'Menlo', monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
 .progress-cell {
   display: flex;
   align-items: center;
@@ -409,16 +376,39 @@ onUnmounted(() => {
   text-align: right;
   flex-shrink: 0;
 }
-.task-center :deep(.ant-descriptions-view) {
+.detail-descriptions :deep(.ant-descriptions-view) {
   table-layout: fixed;
 }
-.task-center :deep(.ant-descriptions-item-content) {
-  word-break: break-word;
-  white-space: normal;
-}
-.task-center :deep(.ant-descriptions-item-label) {
-  width: 90px;
-  min-width: 90px;
+.detail-descriptions :deep(.ant-descriptions-item-label) {
+  width: 100px;
+  min-width: 100px;
   white-space: nowrap;
+}
+.detail-descriptions :deep(.ant-descriptions-item-content) {
+  word-break: break-all;
+  overflow-wrap: break-word;
+}
+.detail-content {
+  display: inline-block;
+  max-width: 100%;
+  word-break: break-all;
+  overflow-wrap: break-word;
+}
+.json-text {
+  margin: 0;
+  padding: 8px 10px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  font-family: 'Geist Mono', 'Menlo', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.error-text {
+  color: #dc2626;
+  word-break: break-all;
 }
 </style>

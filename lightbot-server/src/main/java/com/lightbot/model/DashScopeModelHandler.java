@@ -53,6 +53,11 @@ public class DashScopeModelHandler implements ModelProviderHandler {
 
     @Override
     public ChatModel createChatModel(ModelProvider provider) {
+        return createChatModel(provider, getCheapestModel());
+    }
+
+    @Override
+    public ChatModel createChatModel(ModelProvider provider, String defaultModelId) {
         String baseUrl = provider.getBaseUrl();
 
         // 判断是否使用兼容模式
@@ -67,7 +72,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                     .build();
             return OpenAiChatModel.builder()
                     .openAiApi(openAiApi)
-                    .defaultOptions(OpenAiChatOptions.builder().streamUsage(true).build())
+                    .defaultOptions(OpenAiChatOptions.builder().model(defaultModelId).streamUsage(true).build())
                     .build();
         } else {
             // 使用 DashScope SDK（原生模式）
@@ -80,6 +85,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
             DashScopeApi api = apiBuilder.build();
             return DashScopeChatModel.builder()
                     .dashScopeApi(api)
+                    .defaultOptions(DashScopeChatOptions.builder().withModel(defaultModelId).build())
                     .build();
         }
     }

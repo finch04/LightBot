@@ -8,10 +8,12 @@ import com.lightbot.entity.EvalRagBenchmark;
 import com.lightbot.entity.EvalRagBenchmarkItem;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.enums.TaskType;
 import com.lightbot.mapper.EvalRagBenchmarkItemMapper;
 import com.lightbot.mapper.EvalRagBenchmarkMapper;
 import com.lightbot.service.EvalRagBenchmarkService;
+import com.lightbot.service.KnowledgePermissionHelper;
 import com.lightbot.service.TaskService;
 import com.lightbot.service.eval.RagEvaluationEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -46,10 +48,13 @@ public class EvalRagBenchmarkServiceImpl
     private final EvalRagBenchmarkItemMapper benchmarkItemMapper;
     private final RagEvaluationEngine evaluationEngine;
     private final TaskService taskService;
+    private final KnowledgePermissionHelper permissionHelper;
     private final ObjectMapper objectMapper;
 
     @Override
     public List<EvalRagBenchmark> listByKnowledgeId(Long knowledgeId) {
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
         List<EvalRagBenchmark> benchmarks = list(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalRagBenchmark>()
                 .eq(EvalRagBenchmark::getKnowledgeId, knowledgeId)
                 .orderByDesc(EvalRagBenchmark::getCreateTime));
@@ -67,6 +72,11 @@ public class EvalRagBenchmarkServiceImpl
 
     @Override
     public Page<EvalRagBenchmarkItem> getBenchmarkDetail(Long benchmarkId, int pageNum, int pageSize) {
+        // 权限校验：需要成员权限
+        EvalRagBenchmark benchmark = getById(benchmarkId);
+        if (benchmark != null) {
+            permissionHelper.checkMember(benchmark.getKnowledgeId());
+        }
         Page<EvalRagBenchmarkItem> page = new Page<>(pageNum, pageSize);
         return benchmarkItemMapper.selectPage(page,
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalRagBenchmarkItem>()
@@ -77,6 +87,8 @@ public class EvalRagBenchmarkServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public EvalRagBenchmark createEmptyBenchmark(Long knowledgeId, String name, String description) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         EvalRagBenchmark benchmark = new EvalRagBenchmark();
         benchmark.setKnowledgeId(knowledgeId);
         benchmark.setName(name);
@@ -121,6 +133,8 @@ public class EvalRagBenchmarkServiceImpl
     @Transactional(rollbackFor = Exception.class)
     public EvalRagBenchmark uploadBenchmark(Long knowledgeId, String name, String description,
                                              MultipartFile file) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         // 1. 预读取并校验 JSONL 内容
         List<String> lines = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(
@@ -197,6 +211,8 @@ public class EvalRagBenchmarkServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Task uploadBenchmarkAsync(Long knowledgeId, String name, String description, MultipartFile file, Long userId) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         // 1. 保存临时文件
         Path tempDir = Path.of(System.getProperty("java.io.tmpdir"), "lightbot", "benchmark");
         try {
@@ -331,6 +347,8 @@ public class EvalRagBenchmarkServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteBenchmark(Long knowledgeId, Long benchmarkId) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         EvalRagBenchmark benchmark = getById(benchmarkId);
         if (benchmark == null || !benchmark.getKnowledgeId().equals(knowledgeId)) {
             throw new BizException(ErrorCode.NOT_FOUND);
@@ -344,6 +362,11 @@ public class EvalRagBenchmarkServiceImpl
 
     @Override
     public String downloadBenchmarkAsJsonl(Long benchmarkId) {
+        // 权限校验：需要成员权限
+        EvalRagBenchmark benchmark = getById(benchmarkId);
+        if (benchmark != null) {
+            permissionHelper.checkMember(benchmark.getKnowledgeId());
+        }
         List<EvalRagBenchmarkItem> items = listItemsByBenchmarkId(benchmarkId);
         StringBuilder sb = new StringBuilder();
         for (EvalRagBenchmarkItem item : items) {

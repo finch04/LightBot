@@ -9,11 +9,13 @@ import com.lightbot.entity.EvalRagBenchmarkItem;
 import com.lightbot.entity.EvalRagResult;
 import com.lightbot.entity.EvalRagResultDetail;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.mapper.EvalRagResultDetailMapper;
 import com.lightbot.mapper.EvalRagResultMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.EvalRagBenchmarkService;
 import com.lightbot.service.EvalRagResultService;
+import com.lightbot.service.KnowledgePermissionHelper;
 import com.lightbot.service.eval.RagEvaluationEngine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -52,11 +54,15 @@ public class EvalRagResultServiceImpl
     @Autowired
     private ModelFactory modelFactory;
     @Autowired
+    private KnowledgePermissionHelper permissionHelper;
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public EvalRagResult createEvalResult(Long knowledgeId, Long benchmarkId) {
+        // 0. 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         // 1. 校验基准存在
         EvalRagBenchmark benchmark = benchmarkService.getById(benchmarkId);
         if (benchmark == null || !benchmark.getKnowledgeId().equals(knowledgeId)) {
@@ -175,6 +181,8 @@ public class EvalRagResultServiceImpl
 
     @Override
     public Page<EvalRagResult> listByKnowledgeId(Long knowledgeId, int pageNum, int pageSize) {
+        // 权限校验：需要成员权限
+        permissionHelper.checkMember(knowledgeId);
         Page<EvalRagResult> page = new Page<>(pageNum, pageSize);
         return page(page,
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalRagResult>()
@@ -185,6 +193,11 @@ public class EvalRagResultServiceImpl
     @Override
     public Page<EvalRagResultDetail> getResultDetail(Long resultId, int pageNum, int pageSize,
                                                        boolean errorOnly) {
+        // 权限校验：需要成员权限
+        EvalRagResult result = getById(resultId);
+        if (result != null) {
+            permissionHelper.checkMember(result.getKnowledgeId());
+        }
         Page<EvalRagResultDetail> page = new Page<>(pageNum, pageSize);
         var wrapper = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalRagResultDetail>()
                 .eq(EvalRagResultDetail::getResultId, resultId)
@@ -199,6 +212,8 @@ public class EvalRagResultServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteResult(Long knowledgeId, Long resultId) {
+        // 权限校验：需要DEVELOPER及以上权限
+        permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         EvalRagResult result = getById(resultId);
         if (result == null || !result.getKnowledgeId().equals(knowledgeId)) {
             throw new BizException(ErrorCode.NOT_FOUND);

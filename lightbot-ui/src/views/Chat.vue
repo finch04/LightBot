@@ -180,7 +180,8 @@
               <div v-for="(ref, ri) in getMsgRagRefs(msg)" :key="ri" class="rag-item">
                 <div class="rag-item-header" @click="toggleReference(msg, ri)">
                   <RightOutlined :class="{ expanded: isReferenceExpanded(msg, ri) }" />
-                  <span class="rag-doc-name">{{ ref.documentName }}</span>
+                  <a-tag v-if="ref.sourceType === 'qa_pair'" color="success" class="rag-qa-tag">问答对</a-tag>
+                  <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
                   <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
                   <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
                     <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
@@ -229,7 +230,19 @@
     <div class="chat-input-wrapper">
       <div class="chat-input-shell">
         <div class="chat-input-toolbar">
-          <a-dropdown :trigger="['click']" placement="topLeft">
+          <!-- Agent 列表为空时显示气泡引导 -->
+          <a-popover v-if="agents.length === 0" trigger="click" placement="topLeft">
+            <template #content>
+              <div class="empty-agent-tip">
+                系统里还没有智能体，<router-link to="/agents">点击创建智能体</router-link>
+              </div>
+            </template>
+            <button type="button" class="btn-agent">
+              <RobotOutlined />
+            </button>
+          </a-popover>
+          <!-- Agent 列表不为空时正常下拉 -->
+          <a-dropdown v-else :trigger="['click']" placement="topLeft">
             <a-tooltip :title="currentAgent?.name || '选择 Agent'">
               <button type="button" class="btn-agent">
                 <RobotOutlined v-if="!currentAgent" />
@@ -1876,6 +1889,15 @@ watch(sessionId, (newVal, oldVal) => {
   border-radius: 100px;
   flex-shrink: 0;
 }
+.empty-agent-tip {
+  font-size: 13px;
+  color: #52525b;
+  white-space: nowrap;
+}
+.empty-agent-tip a {
+  color: #0070f3;
+  font-weight: 500;
+}
 
 .config-version-select {
   margin-left: auto;
@@ -2323,6 +2345,10 @@ watch(sessionId, (newVal, oldVal) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rag-qa-tag {
+  flex-shrink: 0;
+  font-size: 12px;
 }
 .rag-score {
   font-size: 12px;
