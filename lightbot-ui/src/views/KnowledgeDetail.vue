@@ -54,20 +54,20 @@
                 <ExclamationCircleOutlined v-else />
               </span>
             </a-tooltip>
-            <span class="doc-name">{{ doc.name }}</span>
+            <a-tooltip :title="doc.name" placement="topLeft">
+              <span class="doc-name">{{ doc.name }}</span>
+            </a-tooltip>
             <div class="doc-meta">
               <span v-if="doc.chunkCount" class="doc-chunk-count">{{ doc.chunkCount }} 分块</span>
-              <button
-                v-if="(doc.status?.code || doc.status) === 'uploaded' || (doc.status?.code || doc.status) === 'failed'"
-                class="btn-link"
-                @click.stop="openIngestModal(doc)"
-              >入库</button>
-              <button
-                v-if="(doc.status?.code || doc.status) === 'completed'"
-                class="btn-link"
-                @click.stop="openIngestModal(doc)"
-              >重新入库</button>
-              <button class="btn-link danger" @click.stop="deleteDoc(doc.id)">删除</button>
+              <a-tooltip title="入库" v-if="(doc.status?.code || doc.status) === 'uploaded' || (doc.status?.code || doc.status) === 'failed'">
+                <button class="doc-icon-btn" @click.stop="openIngestModal(doc)"><UploadOutlined /></button>
+              </a-tooltip>
+              <a-tooltip title="重新入库" v-if="(doc.status?.code || doc.status) === 'completed'">
+                <button class="doc-icon-btn" @click.stop="openIngestModal(doc)"><RedoOutlined /></button>
+              </a-tooltip>
+              <a-tooltip title="删除">
+                <button class="doc-icon-btn danger" @click.stop="deleteDoc(doc.id)"><DeleteOutlined /></button>
+              </a-tooltip>
             </div>
           </div>
           <div v-if="documents.length === 0" class="doc-empty">
@@ -165,12 +165,22 @@
           </a-tab-pane>
           <a-tab-pane key="eval" tab="RAG 评估">
             <div class="rag-section">
-              <RAGEvaluationTab :knowledge-id="knowledgeId" />
+              <RAGEvaluationTab ref="evalTabRef" :knowledge-id="knowledgeId" />
             </div>
           </a-tab-pane>
           <a-tab-pane key="benchmarks" tab="评估基准">
             <div class="rag-section">
-              <EvaluationBenchmarks :knowledge-id="knowledgeId" />
+              <EvaluationBenchmarks ref="benchmarksTabRef" :knowledge-id="knowledgeId" />
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="knowledge-graph" tab="知识图谱">
+            <div class="rag-section">
+              <KnowledgeGraphTab :knowledge-id="knowledgeId" />
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="qa-pairs" tab="问答对">
+            <div class="rag-section">
+              <QAPairsTab :knowledge-id="knowledgeId" />
             </div>
           </a-tab-pane>
         </a-tabs>
@@ -662,6 +672,7 @@ import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
   DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined, DeleteOutlined, RobotOutlined,
+  UploadOutlined, RedoOutlined,
   GlobalOutlined, EyeOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
@@ -682,6 +693,8 @@ import { Markmap } from 'markmap-view'
 import FilePreview from '../components/FilePreview.vue'
 import RAGEvaluationTab from '../components/eval/RAGEvaluationTab.vue'
 import EvaluationBenchmarks from '../components/eval/EvaluationBenchmarks.vue'
+import KnowledgeGraphTab from '../components/KnowledgeGraphTab.vue'
+import QAPairsTab from '../components/QAPairsTab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -694,7 +707,7 @@ const docLoading = ref(false)
 const docSearch = ref('')
 const docPagination = reactive({
   current: 1,
-  pageSize: 50,
+  pageSize: 10,
   total: 0,
 })
 
@@ -717,6 +730,8 @@ const knowledgeDefaultStrategy = computed(() => {
   } catch { return '' }
 })
 const activeTab = ref('ask')
+const evalTabRef = ref(null)
+const benchmarksTabRef = ref(null)
 const ragQuestion = ref('')
 const ragMessages = ref([])
 const ragLoading = ref(false)
@@ -885,7 +900,7 @@ async function handleUpload(file) {
   try {
     await uploadDocument(knowledgeId, file)
     message.success('上传成功')
-    setTimeout(loadDocuments, 500)
+    setTimeout(loadDocuments, 1500)
   } catch (e) {
     // interceptor已处理错误提示
   }
@@ -965,7 +980,7 @@ async function handleBatchUpload() {
     message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
     uploadFiles.value = []
-    setTimeout(loadDocuments, 500)
+    setTimeout(loadDocuments, 1500)
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -1089,7 +1104,7 @@ async function handleConfirmUrls() {
     uploadVisible.value = false
     urlList.value = []
     urlInput.value = ''
-    setTimeout(loadDocuments, 500)
+    setTimeout(loadDocuments, 1500)
   }
   if (errors.length > 0) {
     message.error(errors[0])
@@ -1159,7 +1174,7 @@ async function handleIngest() {
     await ingestDocument(ingestDoc.value.id, data)
     message.success('入库任务已提交，可在「任务中心」查看进度')
     ingestVisible.value = false
-    setTimeout(loadDocuments, 500)
+    setTimeout(loadDocuments, 1500)
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -1451,6 +1466,13 @@ watch(activeTab, (tab) => {
         loadMindmap()
       }
     })
+  } else if (tab === 'eval') {
+    nextTick(() => {
+      evalTabRef.value?.loadBenchmarks()
+      evalTabRef.value?.loadResults()
+    })
+  } else if (tab === 'benchmarks') {
+    nextTick(() => benchmarksTabRef.value?.loadBenchmarks())
   }
 })
 
@@ -1673,14 +1695,15 @@ onUnmounted(() => {
 
 .content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(0, 2.5fr) minmax(0, 3fr);
+  gap: 15px;
 }
 .panel {
   background: #fff;
   border: 1px solid #ebebeb;
   border-radius: 8px;
   padding: 16px;
+  min-width: 0;
 }
 .panel-header {
   display: flex;
@@ -1758,9 +1781,15 @@ onUnmounted(() => {
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s;
+  overflow: hidden;
 }
 .doc-item:hover {
   border-color: #0070f3;
+}
+.doc-item :deep(.ant-tooltip-wrapper) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .doc-status-icon {
   font-size: 16px;
@@ -1775,13 +1804,12 @@ onUnmounted(() => {
 .doc-status-icon.completed { color: #16a34a; }
 .doc-status-icon.failed { color: #dc2626; }
 .doc-name {
-  flex: 1;
+  display: block;
   font-size: 14px;
   color: #171717;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
 }
 .doc-chunk-count {
   font-size: 12px;
@@ -1791,20 +1819,33 @@ onUnmounted(() => {
 .doc-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 2px;
   font-size: 13px;
   color: #a1a1aa;
   flex-shrink: 0;
+  margin-left: auto;
 }
-.btn-link {
-  background: none;
+.doc-icon-btn {
+  width: 26px;
+  height: 26px;
   border: none;
-  color: #0070f3;
+  background: transparent;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
 }
-.btn-link.danger {
-  color: #ee0000;
+.doc-icon-btn:hover {
+  background: #f4f4f5;
+  color: #171717;
+}
+.doc-icon-btn.danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
 }
 .doc-empty {
   text-align: center;

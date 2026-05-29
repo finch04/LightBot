@@ -9,6 +9,7 @@ import com.lightbot.util.SensitiveWordFilter;
 import com.lightbot.util.ToolArgsSanitizer;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.ModelProvider;
+import com.lightbot.entity.ToolCall;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.model.MimoChatClient;
 import com.lightbot.subagent.DelegateSubAgentTool;
@@ -73,6 +74,7 @@ public class ChatServiceImpl implements ChatService {
     private final TraceMiddleware traceMiddleware;
     private final MimoChatClient mimoChatClient;
     private final ModelProviderService modelProviderService;
+    private final ToolCallService toolCallService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -301,6 +303,15 @@ public class ChatServiceImpl implements ChatService {
                                     List<Map<String, Object>> kbResults = QueryKnowledgeTool.getSearchResults(requestId);
                                     synchronized (kbResultsHolder) { kbResultsHolder.addAll(kbResults); }
                                 }
+                                // 记录工具调用日志
+                                ToolCall toolCallLog = new ToolCall();
+                                toolCallLog.setToolName(tcName);
+                                toolCallLog.setToolInput(safeTcArgs);
+                                toolCallLog.setToolOutput(result);
+                                toolCallLog.setStatus(result.startsWith("工具执行失败") || result.startsWith("工具不存在") ? "error" : "success");
+                                toolCallLog.setErrorMessage(result.startsWith("工具执行失败") ? result : null);
+                                toolCallService.recordToolCall(toolCallLog);
+
                                 appendToolCallResult(toolEventsList, statusFluxes, tcName, tcArgs, result, toolContentOffset);
                                 return result;
                             }, RAG_EXECUTOR));
@@ -351,6 +362,15 @@ public class ChatServiceImpl implements ChatService {
                             List<Map<String, Object>> kbResults = QueryKnowledgeTool.getSearchResults(requestId);
                             if (!kbResults.isEmpty()) kbResultsHolder.addAll(kbResults);
                         }
+
+                        // 记录工具调用日志
+                        ToolCall toolCallLog = new ToolCall();
+                        toolCallLog.setToolName(toolName);
+                        toolCallLog.setToolInput(safeArgs);
+                        toolCallLog.setToolOutput(toolResult);
+                        toolCallLog.setStatus(toolResult.startsWith("工具执行失败") || toolResult.startsWith("工具不存在") ? "error" : "success");
+                        toolCallLog.setErrorMessage(toolResult.startsWith("工具执行失败") ? toolResult : null);
+                        toolCallService.recordToolCall(toolCallLog);
 
                         List<String> emittedEvents = ToolEventEmitter.drain();
                         for (String event : emittedEvents) {
@@ -707,6 +727,17 @@ public class ChatServiceImpl implements ChatService {
         return mimoChatClient.streamChat(provider, configMap, messages, mediaAttachments)
                 .concatMap(chunk -> {
                     if (chunk.startsWith(STATUS_PREFIX)) {
+                        // 提取 reasoning_content 累积到 ctx，用于 trace 记录
+                        String statusJson = chunk.substring(STATUS_PREFIX.length());
+                        try {
+                            var node = OBJECT_MAPPER.readTree(statusJson);
+                            if ("reasoning_content".equals(node.path("type").asText())) {
+                                String content = node.path("content").asText("");
+                                if (!content.isBlank()) {
+                                    ctx.getReasoningContent().append(content);
+                                }
+                            }
+                        } catch (Exception ignored) {}
                         return Flux.just(chunk);
                     }
                     String delta = sensitiveState != null ? sensitiveState.processChunk(chunk) : chunk;

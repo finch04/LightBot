@@ -71,6 +71,12 @@
         :loading="resultsLoading"
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'benchmarkName'">
+            <a-tooltip placement="topLeft" :overlayStyle="{ maxWidth: '400px' }">
+              <template #title>{{ record.benchmarkName }}</template>
+              <span>{{ record.benchmarkName }}</span>
+            </a-tooltip>
+          </template>
           <template v-if="column.key === 'overallScore'">
             <a-tag v-if="record.overallScore != null" :color="scoreColor(record.overallScore)">
               {{ (record.overallScore * 100).toFixed(1) }}%
@@ -151,7 +157,7 @@ const selectedResult = ref(null)
 const resultColumns = [
   { title: '基准名称', dataIndex: 'benchmarkName', ellipsis: true },
   { title: '状态', key: 'status', width: 80 },
-  { title: '综合评分', key: 'overallScore', width: 100 },
+  { title: '综合评分', key: 'overallScore', width: 85 },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 160 },
   { title: '操作', key: 'action', width: 80 },
 ]
@@ -218,10 +224,16 @@ async function handleRun() {
     try {
       await new Promise((resolve, reject) => {
         Modal.confirm({
-          title: '仅评估检索质量',
-          content: '未选择答案生成/评判模型，将只评估检索指标（Precision/Recall/F1@K），是否继续？',
-          onOk: resolve,
-          onCancel: reject,
+          title: '仅进行检索测试',
+          content: '您未选择答案生成模型，将仅进行检索测试，不会进行问答测试。是否继续？',
+          okText: '继续',
+          cancelText: '取消',
+          onOk() {
+            resolve()
+          },
+          onCancel() {
+            reject(new Error('cancel'))
+          },
         })
       })
     } catch { return }
@@ -241,7 +253,7 @@ async function handleRun() {
     }
     await runEvaluation(props.knowledgeId, params)
     message.success('评估任务已提交，请在任务中心查看进度')
-    loadResults()
+    setTimeout(loadResults, 1500)
   } catch (e) {
     message.error('启动评估失败: ' + (e.message || '未知错误'))
   } finally {
@@ -269,6 +281,8 @@ function handleResultTableChange(pag) {
   resultPagination.value.pageSize = pag.pageSize
   loadResults()
 }
+
+defineExpose({ loadResults, loadBenchmarks })
 
 onMounted(() => {
   loadBenchmarks()

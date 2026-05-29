@@ -111,7 +111,8 @@ async function handleOk() {
     await generateBenchmark(props.knowledgeId, params)
     message.success('评估基准生成任务已进入任务队列')
     emit('update:open', false)
-    emit('success')
+    // 延迟刷新，等待后端任务处理
+    setTimeout(() => emit('success'), 1500)
     form.name = ''
     form.description = ''
     form.count = 10

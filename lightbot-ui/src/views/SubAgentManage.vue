@@ -78,7 +78,37 @@
             placeholder="选择工具（可选）"
             :options="toolOptions"
             allow-clear
-          />
+            option-label-prop="label"
+          >
+            <template #option="{ value, label, toolType, description }">
+              <div class="tool-option-item">
+                <span class="tool-option-icon-wrap">
+                  <ToolOutlined />
+                </span>
+                <span class="tool-option-name">{{ label }}</span>
+                <span v-if="toolType" class="tool-option-tag">{{ toolType }}</span>
+                <span v-if="description" class="tool-option-desc">{{ description }}</span>
+              </div>
+            </template>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="模型配置">
+          <a-select
+            v-model:value="form.modelId"
+            placeholder="不选则继承主 Agent 模型"
+            allow-clear
+            show-search
+            :filter-option="(input, option) => option.label?.toLowerCase().includes(input.toLowerCase())"
+          >
+            <a-select-option
+              v-for="p in providerOptions"
+              :key="p.id"
+              :value="p.id"
+              :label="p.name"
+            >
+              {{ p.name }}
+            </a-select-option>
+          </a-select>
         </a-form-item>
         <a-form-item label="是否启用">
           <a-switch v-model:checked="form.enabled" />
@@ -145,6 +175,15 @@
           <span class="detail-value">{{ formatTools(currentDetail?.tools) || '无' }}</span>
         </div>
         <div class="detail-row">
+          <span class="detail-label">模型配置</span>
+          <span class="detail-value">
+            <a-tag v-if="currentDetail?.modelId" color="blue">
+              {{ providerNameMap[String(currentDetail.modelId)] || currentDetail.modelId }}
+            </a-tag>
+            <span v-else style="color: #999;">继承主 Agent</span>
+          </span>
+        </div>
+        <div class="detail-row">
           <span class="detail-label">状态</span>
           <span class="detail-value">
             <a-tag :color="currentDetail?.enabled === 1 ? 'green' : 'red'">
@@ -168,6 +207,7 @@ import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCirc
 import { message, Modal } from 'ant-design-vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
+import { getProvidersWithModels } from '../api/modelProvider'
 
 const props = defineProps({
   hideHeader: { type: Boolean, default: false }
@@ -188,7 +228,18 @@ const form = reactive({
   description: '',
   systemPrompt: '',
   tools: [],
+  modelId: null,
   enabled: true
+})
+
+// 模型提供商列表（用于表单下拉和详情展示）
+const providerOptions = ref([])
+const providerNameMap = computed(() => {
+  const map = {}
+  for (const p of providerOptions.value) {
+    map[String(p.id)] = p.name
+  }
+  return map
 })
 
 const detailVisible = ref(false)
@@ -196,13 +247,28 @@ const currentDetail = ref(null)
 
 const toolList = ref([])
 const toolOptions = computed(() => {
-  return toolList.value.map(t => ({ value: t.name, label: t.displayName || t.name }))
+  return toolList.value.map(t => ({
+    value: t.name,
+    label: t.displayName || t.name,
+    toolType: t.toolType,
+    description: t.description,
+  }))
 })
 
 onMounted(() => {
   loadList()
   loadToolList()
+  loadProviderNames()
 })
+
+async function loadProviderNames() {
+  try {
+    const res = await getProvidersWithModels('llm')
+    providerOptions.value = res.data || []
+  } catch (e) {
+    console.error('[SubAgentManage] 加载模型提供商列表失败:', e)
+  }
+}
 
 async function loadList() {
   loading.value = true
@@ -237,7 +303,7 @@ function refresh() {
 
 function openDialog() {
   editingId.value = null
-  Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', tools: [], enabled: true })
+  Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', tools: [], modelId: null, enabled: true })
   dialogVisible.value = true
 }
 
@@ -249,6 +315,7 @@ function openEditDialog(record) {
     description: record.description,
     systemPrompt: record.systemPrompt,
     tools: JSON.parse(record.tools || '[]'),
+    modelId: record.modelId ? String(record.modelId) : null,
     enabled: record.enabled === 1
   })
   dialogVisible.value = true
@@ -266,6 +333,7 @@ async function handleSave() {
       description: form.description,
       systemPrompt: form.systemPrompt,
       tools: form.tools,
+      modelId: form.modelId || null,
       enabled: form.enabled
     }
     if (editingId.value) {
@@ -565,5 +633,45 @@ defineExpose({ openDialog, search, refresh })
   margin: 0;
   font-size: 12px;
   color: #71717a;
+}
+/* 工具下拉选项样式 */
+.tool-option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.tool-option-icon-wrap {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #ecfdf5;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.tool-option-name {
+  font-size: 13px;
+  color: #171717;
+  flex-shrink: 0;
+}
+.tool-option-tag {
+  font-size: 11px;
+  color: #71717a;
+  background: #f4f4f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.tool-option-desc {
+  font-size: 12px;
+  color: #a1a1aa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 </style>

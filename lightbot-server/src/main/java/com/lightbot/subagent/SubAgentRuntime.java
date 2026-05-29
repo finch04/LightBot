@@ -74,8 +74,10 @@ public class SubAgentRuntime {
             toolMap.put(cb.getToolDefinition().name(), cb);
         }
 
-        // 2. 准备模型（暂不支持 SubAgent 独立的 providerId，按主 Agent 的提供商运行）
-        Long providerId = parentProviderId != null ? parentProviderId : initMiddleware.getDefaultProviderId();
+        // 2. 准备模型（优先使用 SubAgent 独立配置的 providerId，否则 fallback 到主 Agent）
+        Long providerId = subAgent.getModelId() != null
+                ? subAgent.getModelId()
+                : (parentProviderId != null ? parentProviderId : initMiddleware.getDefaultProviderId());
         ChatModel chatModel = modelFactory.getChatModel(providerId);
 
         // 3. 构造消息：系统提示词 + 主 Agent 给的任务

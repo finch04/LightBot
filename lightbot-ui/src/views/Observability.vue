@@ -48,6 +48,7 @@
         :style="{ width: '360px' }"
       />
       <a-button type="primary" @click="loadTraces(1)"><SearchOutlined /> 查询</a-button>
+      <a-button @click="toolCallDrawerVisible = true"><ToolOutlined /> 工具调用日志</a-button>
     </div>
 
     <!-- Trace 列表 -->
@@ -334,11 +335,68 @@
         </div>
       </template>
     </a-drawer>
+
+    <!-- 工具调用日志抽屉 -->
+    <a-drawer
+      v-model:open="toolCallDrawerVisible"
+      title="工具调用日志"
+      :width="900"
+      placement="right"
+    >
+      <div class="tool-call-filter">
+        <a-input v-model:value="toolCallFilter.toolName" placeholder="工具名称" :style="{ width: '160px' }" allow-clear />
+        <a-select v-model:value="toolCallFilter.status" placeholder="状态" :style="{ width: '120px' }" allowClear>
+          <a-select-option value="success">成功</a-select-option>
+          <a-select-option value="error">失败</a-select-option>
+          <a-select-option value="pending">执行中</a-select-option>
+        </a-select>
+        <a-range-picker
+          v-model:value="toolCallFilter.timeRange"
+          :show-time="{ format: 'HH:mm' }"
+          format="YYYY-MM-DD HH:mm"
+          :style="{ width: '360px' }"
+        />
+        <a-button type="primary" @click="loadToolCalls(1)"><SearchOutlined /> 查询</a-button>
+      </div>
+      <a-table
+        :dataSource="toolCalls"
+        :columns="toolCallColumns"
+        :loading="toolCallLoading"
+        :pagination="toolCallPagination"
+        rowKey="id"
+        size="small"
+        @change="handleToolCallTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'toolName'">
+            <span class="tool-name-cell"><ToolOutlined /> {{ record.toolName }}</span>
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="record.status === 'success' ? 'success' : record.status === 'error' ? 'error' : 'processing'">
+              {{ record.status === 'success' ? '成功' : record.status === 'error' ? '失败' : '执行中' }}
+            </a-tag>
+          </template>
+          <template v-else-if="column.key === 'toolInput'">
+            <a-tooltip :title="record.toolInput" placement="topLeft">
+              <span class="cell-truncate">{{ formatJsonPreview(record.toolInput) }}</span>
+            </a-tooltip>
+          </template>
+          <template v-else-if="column.key === 'toolOutput'">
+            <a-tooltip :title="record.toolOutput" placement="topLeft">
+              <span class="cell-truncate">{{ record.toolOutput?.substring(0, 60) }}{{ record.toolOutput?.length > 60 ? '...' : '' }}</span>
+            </a-tooltip>
+          </template>
+          <template v-else-if="column.key === 'createdAt'">
+            {{ formatTime(record.createdAt) }}
+          </template>
+        </template>
+      </a-table>
+    </a-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue'
 import {
   BarChartOutlined,
   ThunderboltOutlined,
@@ -350,6 +408,7 @@ import {
 } from '@ant-design/icons-vue'
 import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
 import { getTraces, getTraceDetail, getTraceOverview } from '../api/observability'
+import { getToolCalls } from '../api/toolCall'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -395,6 +454,30 @@ const columns = [
   { title: '工具', dataIndex: 'toolCallCount', width: 70, align: 'center' },
   { title: '状态', key: 'status', width: 80 },
   { title: '操作', key: 'action', width: 80 },
+]
+
+// 工具调用日志
+const toolCallDrawerVisible = ref(false)
+const toolCallLoading = ref(false)
+const toolCalls = ref([])
+const toolCallFilter = reactive({
+  toolName: '',
+  status: undefined,
+  timeRange: null,
+})
+const toolCallPagination = reactive({
+  current: 1,
+  pageSize: 15,
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total) => `共 ${total} 条`,
+})
+const toolCallColumns = [
+  { title: '工具名称', key: 'toolName', width: 140 },
+  { title: '状态', key: 'status', width: 80 },
+  { title: '输入参数', key: 'toolInput', width: 200, ellipsis: true },
+  { title: '输出结果', key: 'toolOutput', width: 250, ellipsis: true },
+  { title: '时间', key: 'createdAt', width: 100 },
 ]
 
 function parseSpansFromDetail() {
@@ -597,6 +680,32 @@ async function loadOverview() {
   } catch { /* ignore */ }
 }
 
+async function loadToolCalls(page) {
+  toolCallLoading.value = true
+  try {
+    toolCallPagination.current = page || 1
+    const params = {
+      pageNum: toolCallPagination.current,
+      pageSize: toolCallPagination.pageSize,
+    }
+    if (toolCallFilter.toolName?.trim()) params.toolName = toolCallFilter.toolName.trim()
+    if (toolCallFilter.status) params.status = toolCallFilter.status
+    if (toolCallFilter.timeRange?.length === 2) {
+      params.startTime = toolCallFilter.timeRange[0].format('YYYY-MM-DD HH:mm:ss')
+      params.endTime = toolCallFilter.timeRange[1].format('YYYY-MM-DD HH:mm:ss')
+    }
+    const res = await getToolCalls(params)
+    toolCalls.value = res.data.records || []
+    toolCallPagination.total = res.data.total || 0
+  } finally {
+    toolCallLoading.value = false
+  }
+}
+
+function handleToolCallTableChange(pag) {
+  loadToolCalls(pag.current)
+}
+
 function handleTableChange(pag) {
   loadTraces(pag.current)
 }
@@ -636,6 +745,21 @@ function formatTokens(tokens) {
   if (tokens >= 10000) return (tokens / 10000).toFixed(1) + 'w'
   return String(tokens)
 }
+
+function formatJsonPreview(jsonStr) {
+  if (!jsonStr) return '-'
+  try {
+    const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
+    const str = JSON.stringify(obj)
+    return str.length > 60 ? str.substring(0, 60) + '...' : str
+  } catch {
+    return jsonStr.length > 60 ? jsonStr.substring(0, 60) + '...' : jsonStr
+  }
+}
+
+watch(toolCallDrawerVisible, (visible) => {
+  if (visible) loadToolCalls(1)
+})
 
 onMounted(() => {
   loadTraces(1)
@@ -689,6 +813,29 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
+}
+
+/* 工具调用日志筛选 */
+.tool-call-filter {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.tool-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.cell-truncate {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #52525b;
 }
 
 /* Token 详情 */

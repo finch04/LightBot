@@ -256,6 +256,10 @@
           <div v-if="capabilityFields.length" class="sub-config-card sub-config-card--model">
             <div class="sub-config-card-header">
               <div class="sub-config-card-title-row">
+                <span class="capability-collapse-trigger" @click="capabilityCollapsed = !capabilityCollapsed">
+                  <RightOutlined v-if="capabilityCollapsed" class="capability-collapse-icon" />
+                  <DownOutlined v-else class="capability-collapse-icon" />
+                </span>
                 <h4 class="sub-config-card-title">模型能力</h4>
                 <a-tooltip
                   title="多模态、联网搜索等由模型提供商动态提供；开启后对话页将显示对应入口。需先开启「多模态」才能配置图片/视频/语音输入。"
@@ -277,7 +281,7 @@
                 {{ allCapabilitiesEnabled ? '全部关闭' : '全部开启' }}
               </button>
             </div>
-            <div class="capability-grid">
+            <div v-show="!capabilityCollapsed" class="capability-grid">
               <div class="capability-grid-primary">
                 <template v-for="field in primaryCapabilityFields" :key="field.key">
                   <div
@@ -1170,11 +1174,14 @@
 
     <a-drawer
       v-model:open="versionDrawerVisible"
-      title="版本历史"
       placement="right"
       :width="480"
       class="agent-version-drawer"
     >
+      <template #title>
+        <span>版本历史</span>
+        <QuestionCircleOutlined class="version-help-icon" @click.stop="versionHelpVisible = true" />
+      </template>
       <div
         class="version-drawer-item draft"
         :class="{ active: selectedVersion === 'draft' }"
@@ -1434,13 +1441,36 @@
       </template>
     </a-drawer>
 
+    <!-- 版本控制说明弹窗 -->
+    <a-modal
+      v-model:open="versionHelpVisible"
+      title="版本控制说明"
+      :footer="null"
+      width="560px"
+    >
+      <div class="version-help-content">
+        <p>版本快照记录的是<strong>对话配置与编排数据</strong>，以下字段不在版本控制范围内，修改后不会随版本回滚：</p>
+        <div class="version-help-table">
+          <div class="version-help-row header">
+            <span>字段</span><span>说明</span>
+          </div>
+          <div class="version-help-row"><span>Agent 名称</span><span>智能体的显示名称</span></div>
+          <div class="version-help-row"><span>Agent 描述</span><span>智能体的简介描述</span></div>
+          <div class="version-help-row"><span>头像</span><span>智能体头像图片</span></div>
+          <div class="version-help-row"><span>图标</span><span>智能体图标（emoji）</span></div>
+          <div class="version-help-row"><span>是否默认</span><span>默认智能体标记</span></div>
+        </div>
+        <p class="version-help-note">提示：系统提示词、欢迎语、推荐问题、模型配置、工具/知识库/SubAgent 绑定等均受版本控制。</p>
+      </div>
+    </a-modal>
+
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined, RightOutlined, DownOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, updateAgentSkills, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
 import { getWorkflowConfig } from '../api/workflow'
@@ -1651,6 +1681,7 @@ const sensitiveWords = ref([''])
 
 const providerList = ref([])
 const configFields = ref([])
+const capabilityCollapsed = ref(false)
 
 /** 模型能力卡片字段（与温度、TopP 等调参分离） */
 const CAPABILITY_FIELD_KEYS = new Set([
@@ -1794,6 +1825,7 @@ const versionList = ref([])
 const versionLoading = ref(false)
 const selectedVersion = ref('draft')
 const versionPreview = ref(null)
+const versionHelpVisible = ref(false)
 /** 草稿编辑基线快照，用于离开页未保存提示 */
 const formBaselineSnapshot = ref(null)
 
@@ -4006,6 +4038,22 @@ onMounted(async () => {
 .sub-config-card-title-row .sub-config-card-title {
   margin-bottom: 0;
 }
+.capability-collapse-trigger {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.capability-collapse-trigger:hover {
+  background: #f4f4f5;
+}
+.capability-collapse-icon {
+  font-size: 10px;
+  color: #71717a;
+  transition: transform 0.2s;
+}
 .capability-grid {
   display: flex;
   flex-direction: column;
@@ -4118,7 +4166,6 @@ onMounted(async () => {
   flex: 1;
   min-height: calc(100vh - 200px);
 }
-.panel--basic.panel-stretch,
 .panel--config-unified.panel-stretch {
   height: 100%;
 }
@@ -4846,6 +4893,57 @@ onMounted(async () => {
 .workflow-status .status-text {
   font-size: 14px;
   color: #52525b;
+}
+
+/* 版本帮助图标 */
+.version-help-icon {
+  margin-left: 8px;
+  color: #a1a1aa;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.version-help-icon:hover { color: #1890ff; }
+
+/* 版本控制说明弹窗 */
+.version-help-content p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.6;
+}
+.version-help-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.version-help-row {
+  display: flex;
+  border-bottom: 1px solid #f0f0f0;
+}
+.version-help-row:last-child { border-bottom: none; }
+.version-help-row.header {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+}
+.version-help-row span {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #52525b;
+}
+.version-help-row.header span { color: #374151; }
+.version-help-note {
+  margin: 0;
+  font-size: 12px !important;
+  color: #9ca3af !important;
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid #1890ff;
 }
 
 </style>

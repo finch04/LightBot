@@ -7,12 +7,19 @@
       :disabled="disabled"
       style="width: 100%"
       show-search
-      :filter-option="filterOption"
+      :filter-option="false"
       :loading="loading"
       allow-clear
       :dropdownMatchSelectWidth="false"
+      @search="onSearch"
     >
-      <a-select-option v-for="opt in options" :key="opt.value" :value="opt.value">
+      <template #dropdownRender="{ menuNode }">
+        <div v-if="searching" class="search-progress-bar">
+          <div class="progress-inner" :style="{ width: progress + '%', transition: progress >= 100 ? 'width 0.15s ease' : 'none' }"></div>
+        </div>
+        <component :is="menuNode" />
+      </template>
+      <a-select-option v-for="opt in filteredOptions" :key="opt.value" :value="opt.value">
         <a-tooltip :title="opt.modelId" placement="topLeft" :overlayStyle="{ maxWidth: '360px' }">
           <span class="model-option-label">{{ opt.label }}</span>
         </a-tooltip>
@@ -80,10 +87,59 @@ const displayValue = computed(() => {
   return props.modelValue
 })
 
-function filterOption(input, option) {
-  const label = option.children?.[0]?.children?.[0]?.children || ''
-  return label.toLowerCase().includes(input.toLowerCase())
+// 防抖搜索：支持模型提供商名称、模型名称
+const searchText = ref('')
+const debouncedSearch = ref('')
+const searching = ref(false)
+const progress = ref(0)
+let searchTimer = null
+let progressTimer = null
+
+function simulateProgress() {
+  clearInterval(progressTimer)
+  const startTime = Date.now()
+  const duration = 300
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - startTime
+    progress.value = Math.min((elapsed / duration) * 100, 100)
+    if (progress.value >= 100) clearInterval(progressTimer)
+  }, 16)
 }
+
+function onSearch(val) {
+  searchText.value = val
+  clearTimeout(searchTimer)
+  clearInterval(progressTimer)
+  if (!val) {
+    debouncedSearch.value = ''
+    searching.value = false
+    progress.value = 0
+    return
+  }
+  // 防抖期间不显示进度条
+  searching.value = false
+  progress.value = 0
+  searchTimer = setTimeout(() => {
+    debouncedSearch.value = val
+    // 防抖结束后开始进度条动画
+    searching.value = true
+    progress.value = 0
+    simulateProgress()
+    setTimeout(() => {
+      searching.value = false
+      progress.value = 0
+    }, 300)
+  }, 300)
+}
+
+const filteredOptions = computed(() => {
+  const keyword = debouncedSearch.value.toLowerCase().trim()
+  if (!keyword) return options.value
+  return options.value.filter(opt =>
+    opt.providerName.toLowerCase().includes(keyword) ||
+    opt.modelId.toLowerCase().includes(keyword)
+  )
+})
 
 async function loadOptions() {
   loading.value = true
@@ -202,5 +258,15 @@ watch(() => props.modelType, loadOptions)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.search-progress-bar {
+  height: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.progress-inner {
+  height: 100%;
+  background: #1890ff;
+  border-radius: 1px;
 }
 </style>

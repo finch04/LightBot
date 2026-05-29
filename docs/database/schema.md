@@ -37,38 +37,34 @@
 │ config       │                               └──────────────────┘
 │ status       │
 └──────┬───────┘
-       │
-       ├───────────────────────────────────────────────┐
-       │ 1:N                                           │ 1:N
-       ▼                                               ▼
-┌──────────────────┐                          ┌──────────────────┐
-│   chat_session   │                          │    workflow      │
-│──────────────────│                          │──────────────────│
-│ id (PK)          │                          │ id (PK)          │
-│ agent_id (FK)    │                          │ agent_id (FK)    │
-│ user_id (FK)     │                          │ user_id (FK)     │
-│ title            │                          │ name             │
-│ status           │                          │ description      │
-│ context          │                          │ graph_data       │
-│ message_count    │                          │ config           │
-│ last_message_at  │                          │ status           │
-└──────┬───────────┘                          │ version          │
-       │                                      └──────┬───────────┘
-       │ 1:N                                         │ 1:N
-       ▼                                             ▼
-┌──────────────────┐                          ┌──────────────────┐
-│     message      │                          │   workflow_node  │
-│──────────────────│                          │──────────────────│
-│ id (PK)          │                          │ id (PK)          │
-│ session_id (FK)  │                          │ workflow_id (FK) │
-│ role             │                          │ node_type        │
-│ content          │                          │ name             │
-│ content_type     │                          │ config           │
-│ tool_calls       │                          │ position_x       │
-│ token_count      │                          │ position_y       │
-│ metadata         │                          │ inputs           │
-└──────────────────┘                          │ outputs          │
-                                              └──────────────────┘
+       │ 1:N
+       ▼
+┌──────────────────┐
+│   chat_session   │
+│──────────────────│
+│ id (PK)          │
+│ agent_id (FK)    │
+│ user_id (FK)     │
+│ title            │
+│ status           │
+│ context          │
+│ message_count    │
+│ last_message_at  │
+└──────┬───────────┘
+       │ 1:N
+       ▼
+┌──────────────────┐
+│     message      │
+│──────────────────│
+│ id (PK)          │
+│ session_id (FK)  │
+│ role             │
+│ content          │
+│ content_type     │
+│ tool_calls       │
+│ token_count      │
+│ metadata         │
+└──────────────────┘
 
 ┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
 │    knowledge     │       │    document      │       │      chunk       │
@@ -281,164 +277,7 @@ COMMENT ON COLUMN t_agent.version IS '版本号';
 
 ---
 
-### 4. workflow - Workflow 表
-
-```sql
-CREATE TABLE t_workflow (
-    id              BIGINT          NOT NULL,
-    agent_id        BIGINT,
-    user_id         BIGINT          NOT NULL,
-    name            VARCHAR(128)    NOT NULL,
-    description     TEXT,
-    graph_data      JSONB           NOT NULL DEFAULT '{}',
-    config          JSONB           DEFAULT '{}',
-    status          VARCHAR(20)     NOT NULL DEFAULT 'draft',
-    version         INT             NOT NULL DEFAULT 1,
-    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted         SMALLINT        NOT NULL DEFAULT 0,
-    PRIMARY KEY (id)
-);
-
-CREATE INDEX idx_workflow_user_id ON t_workflow (user_id);
-CREATE INDEX idx_workflow_agent_id ON t_workflow (agent_id);
-CREATE INDEX idx_workflow_status ON t_workflow (status);
-
-COMMENT ON TABLE t_workflow IS 'Workflow表';
-COMMENT ON COLUMN t_workflow.id IS '主键ID';
-COMMENT ON COLUMN t_workflow.agent_id IS '关联AgentID';
-COMMENT ON COLUMN t_workflow.user_id IS '创建者ID';
-COMMENT ON COLUMN t_workflow.name IS '工作流名称';
-COMMENT ON COLUMN t_workflow.description IS '工作流描述';
-COMMENT ON COLUMN t_workflow.graph_data IS '图数据(节点和边的定义)';
-COMMENT ON COLUMN t_workflow.config IS '扩展配置';
-COMMENT ON COLUMN t_workflow.status IS '状态: draft/published/archived';
-COMMENT ON COLUMN t_workflow.version IS '版本号';
-```
-
-**字段说明**：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| id | BIGINT | 是 | 雪花算法生成 |
-| agent_id | BIGINT | 否 | 关联 Agent，可独立存在 |
-| user_id | BIGINT | 是 | 创建者 |
-| graph_data | JSONB | 是 | 存储节点、边、布局信息 |
-| status | VARCHAR(20) | 是 | draft/published/archived |
-
-**graph_data 结构**：
-
-```json
-{
-    "nodes": [
-        {
-            "id": "node_1",
-            "type": "start",
-            "position": {"x": 100, "y": 200},
-            "data": {"label": "开始"}
-        }
-    ],
-    "edges": [
-        {
-            "id": "edge_1",
-            "source": "node_1",
-            "target": "node_2",
-            "sourceHandle": "output",
-            "targetHandle": "input"
-        }
-    ],
-    "viewport": {"x": 0, "y": 0, "zoom": 1}
-}
-```
-
----
-
-### 5. workflow_node - Workflow 节点表
-
-```sql
-CREATE TABLE t_workflow_node (
-    id              BIGINT          NOT NULL,
-    workflow_id     BIGINT          NOT NULL,
-    node_key        VARCHAR(64)     NOT NULL,
-    node_type       VARCHAR(32)     NOT NULL,
-    name            VARCHAR(128)    NOT NULL,
-    description     TEXT,
-    config          JSONB           DEFAULT '{}',
-    inputs          JSONB           DEFAULT '[]',
-    outputs         JSONB           DEFAULT '[]',
-    position_x      FLOAT           NOT NULL DEFAULT 0,
-    position_y      FLOAT           NOT NULL DEFAULT 0,
-    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
-);
-
-CREATE UNIQUE INDEX uk_workflow_node_key ON t_workflow_node (workflow_id, node_key);
-CREATE INDEX idx_workflow_node_type ON t_workflow_node (workflow_id, node_type);
-
-COMMENT ON TABLE t_workflow_node IS 'Workflow节点表';
-COMMENT ON COLUMN t_workflow_node.id IS '主键ID';
-COMMENT ON COLUMN t_workflow_node.workflow_id IS '所属工作流ID';
-COMMENT ON COLUMN t_workflow_node.node_key IS '节点标识(图内唯一)';
-COMMENT ON COLUMN t_workflow_node.node_type IS '节点类型: start/end/llm/tool/condition/code';
-COMMENT ON COLUMN t_workflow_node.name IS '节点名称';
-COMMENT ON COLUMN t_workflow_node.config IS '节点配置';
-COMMENT ON COLUMN t_workflow_node.inputs IS '输入端口定义';
-COMMENT ON COLUMN t_workflow_node.outputs IS '输出端口定义';
-COMMENT ON COLUMN t_workflow_node.position_x IS '画布X坐标';
-COMMENT ON COLUMN t_workflow_node.position_y IS '画布Y坐标';
-```
-
-**字段说明**：
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| id | BIGINT | 是 | 雪花算法生成 |
-| workflow_id | BIGINT | 是 | 所属 Workflow |
-| node_key | VARCHAR(64) | 是 | Workflow 内唯一标识 |
-| node_type | VARCHAR(32) | 是 | start/end/llm/tool/condition/code |
-| config | JSONB | 是 | 节点特有配置 |
-| inputs | JSONB | 否 | 输入端口定义 |
-| outputs | JSONB | 否 | 输出端口定义 |
-
-**LLM 节点 config 示例**：
-
-```json
-{
-    "model_id": 1,
-    "prompt_template": "请分析以下内容：{{input.content}}",
-    "temperature": 0.7,
-    "max_tokens": 2048,
-    "output_variable": "llm_result"
-}
-```
-
-**Tool 节点 config 示例**：
-
-```json
-{
-    "tool_id": 1,
-    "params_mapping": {
-        "url": "{{input.url}}",
-        "method": "GET"
-    },
-    "timeout": 30000
-}
-```
-
-**Condition 节点 config 示例**：
-
-```json
-{
-    "expression": "{{input.score}} > 0.8",
-    "true_branch": "node_3",
-    "false_branch": "node_4"
-}
-```
-
----
-
-### 6. tool - Tool 表
+### 4. tool - Tool 表
 
 ```sql
 CREATE TABLE t_tool (
@@ -522,7 +361,7 @@ COMMENT ON COLUMN t_tool.status IS '状态: active/disabled';
 
 ---
 
-### 7. skill - Skill 表
+### 5. skill - Skill 表
 
 ```sql
 CREATE TABLE t_skill (
@@ -581,7 +420,7 @@ COMMENT ON COLUMN t_skill.status IS '状态: active/disabled';
 
 ---
 
-### 8. knowledge - 知识库表
+### 6. knowledge - 知识库表
 
 ```sql
 CREATE TABLE t_knowledge (
@@ -647,7 +486,7 @@ COMMENT ON COLUMN t_knowledge.status IS '状态: active/disabled';
 
 ---
 
-### 9. document - 文档表
+### 7. document - 文档表
 
 ```sql
 CREATE TABLE t_document (
@@ -710,7 +549,7 @@ pending → processing → completed
 
 ---
 
-### 10. chunk - 文档分块表
+### 8. chunk - 文档分块表
 
 ```sql
 CREATE TABLE t_chunk (
@@ -763,7 +602,7 @@ COMMENT ON COLUMN t_chunk.metadata IS '分块元数据';
 
 ---
 
-### 11. embedding - 向量表
+### 9. embedding - 向量表
 
 ```sql
 -- 启用 pgvector 扩展
@@ -824,7 +663,7 @@ LIMIT 5;
 
 ---
 
-### 12. chat_session - 对话会话表
+### 10. chat_session - 对话会话表
 
 ```sql
 CREATE TABLE t_chat_session (
@@ -886,7 +725,7 @@ COMMENT ON COLUMN t_chat_session.last_message_at IS '最后消息时间';
 
 ---
 
-### 13. message - 消息表
+### 11. message - 消息表
 
 ```sql
 CREATE TABLE t_message (

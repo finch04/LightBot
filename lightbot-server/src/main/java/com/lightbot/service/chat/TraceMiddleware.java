@@ -186,7 +186,12 @@ public class TraceMiddleware implements ChatMiddleware {
         trace.setTotalTokens(ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0]);
         trace.setToolCallCount(ctx.getToolCallCountHolder()[0]);
         trace.setTotalDurationMs(durationMs);
-        trace.setReplyContent(ctx.getFullReply().toString());
+        // 如果 fullReply 为空但有 reasoning 内容，将 reasoning 作为回复内容记录
+        String replyContent = ctx.getFullReply().toString();
+        if (replyContent.isBlank() && ctx.getReasoningContent().length() > 0) {
+            replyContent = ctx.getReasoningContent().toString();
+        }
+        trace.setReplyContent(replyContent);
         trace.setErrorMessage(errorMessage);
         try {
             trace.setSpans(OBJECT_MAPPER.writeValueAsString(ctx.getSpans()));

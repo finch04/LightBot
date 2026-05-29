@@ -58,6 +58,10 @@ public class EvalRagResult {
     @Schema(description = "评估配置JSON")
     private String configJson;
 
+    @TableField("analysis")
+    @Schema(description = "AI评估分析")
+    private String analysis;
+
     @TableField("error")
     @Schema(description = "错误信息")
     private String error;

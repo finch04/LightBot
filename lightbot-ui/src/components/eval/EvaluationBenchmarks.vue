@@ -4,7 +4,7 @@
       管理 RAG 评估的基准数据集，支持 AI 自动生成或上传 JSONL 格式文件
     </div>
     <div class="benchmarks-toolbar">
-      <a-button size="small" @click="loadBenchmarks" :loading="loading">
+      <a-button size="small" :loading="loading" @click="loadBenchmarks">
         <template #icon><ReloadOutlined /></template> 刷新
       </a-button>
       <a-button size="small" @click="showUploadModal = true">
@@ -217,6 +217,8 @@ function handleDeleteConfirm(bm) {
     },
   })
 }
+
+defineExpose({ loadBenchmarks })
 
 onMounted(loadBenchmarks)
 </script>

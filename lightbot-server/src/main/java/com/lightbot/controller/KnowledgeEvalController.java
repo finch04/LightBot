@@ -2,11 +2,13 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.dto.EvalBenchmarkGenerateRequest;
 import com.lightbot.dto.EvalRunRequest;
 import com.lightbot.entity.EvalRagBenchmark;
 import com.lightbot.entity.EvalRagBenchmarkItem;
+import com.lightbot.enums.ErrorCode;
 import com.lightbot.entity.EvalRagResult;
 import com.lightbot.entity.EvalRagResultDetail;
 import com.lightbot.entity.Task;
@@ -98,13 +100,35 @@ public class KnowledgeEvalController {
         return Result.ok(task);
     }
 
+    private static final long ASYNC_THRESHOLD = 2 * 1024 * 1024L; // 2MB
+
     @PostMapping("/benchmarks/upload")
     @Operation(summary = "上传 JSONL 评估基准")
-    public Result<EvalRagBenchmark> uploadBenchmark(
+    public Result<?> uploadBenchmark(
             @PathVariable Long knowledgeId,
             @RequestParam("name") String name,
             @RequestParam(value = "description", required = false) String description,
             @RequestParam("file") MultipartFile file) {
+        // 1. 校验文件
+        if (file.isEmpty()) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "上传文件不能为空");
+        }
+        // 2. 校验文件扩展名
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || (!originalFilename.endsWith(".jsonl") && !originalFilename.endsWith(".json"))) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "仅支持 .jsonl 或 .json 格式文件");
+        }
+        // 3. 校验文件大小（最大 10MB）
+        long maxSize = 10 * 1024 * 1024L;
+        if (file.getSize() > maxSize) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "文件大小超过限制（最大 10MB）");
+        }
+        // 4. 按文件大小分流：小文件同步，大文件异步
+        if (file.getSize() > ASYNC_THRESHOLD) {
+            Long userId = StpUtil.getLoginIdAsLong();
+            Task task = benchmarkService.uploadBenchmarkAsync(knowledgeId, name, description, file, userId);
+            return Result.ok(task);
+        }
         return Result.ok(benchmarkService.uploadBenchmark(knowledgeId, name, description, file));
     }
 
