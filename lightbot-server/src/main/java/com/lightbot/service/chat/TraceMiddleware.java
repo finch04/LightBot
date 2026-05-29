@@ -9,6 +9,7 @@ import com.lightbot.entity.Agent;
 import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.LlmTrace;
 import com.lightbot.entity.Message;
+import com.lightbot.entity.ToolCall;
 import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
@@ -52,6 +53,7 @@ public class TraceMiddleware implements ChatMiddleware {
     private final AgentService agentService;
     private final ChatSessionService chatSessionService;
     private final MessageMapper messageMapper;
+    private final ToolCallService toolCallService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -67,8 +69,20 @@ public class TraceMiddleware implements ChatMiddleware {
                     String replyToSave = SensitiveWordFilter.filterAiOutput(
                             ctx.getFullReply().toString(), ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
                     String metadataStr = buildPersistMetadata(ctx);
-                    messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
+                    Long messageId = messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
                             replyToSave, metadataStr, (int) totalTokens);
+
+                    // 1.1 批量写入工具调用记录（关联 assistant 消息ID）
+                    if (!ctx.getPendingToolCalls().isEmpty()) {
+                        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                        for (ToolCall tc : ctx.getPendingToolCalls()) {
+                            tc.setMessageId(messageId);
+                            if (tc.getCreatedAt() == null) {
+                                tc.setCreatedAt(now);
+                            }
+                        }
+                        toolCallService.saveBatch(ctx.getPendingToolCalls());
+                    }
                     ctx.getFullReply().setLength(0);
                     ctx.getFullReply().append(replyToSave);
 

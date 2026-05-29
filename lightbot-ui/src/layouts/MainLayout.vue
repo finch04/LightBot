@@ -162,6 +162,7 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   ExperimentOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { Modal } from 'ant-design-vue'
@@ -203,6 +204,7 @@ const navItems = [
   { path: '/eval', label: '评测', icon: markRaw(ExperimentOutlined) },
   { path: '/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
   { path: '/observability', label: '可观测', icon: markRaw(EyeOutlined) },
+  { path: '/tool-calls', label: '工具日志', icon: markRaw(UnorderedListOutlined) },
 ]
 
 function isActive(path) {

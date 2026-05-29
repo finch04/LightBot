@@ -54,16 +54,9 @@
         <a-button size="middle" @click="showEdgeCreateModal = true" :disabled="!neo4jAvailable">
           <template #icon><LinkOutlined /></template> 新建关系
         </a-button>
-        <a-upload
-          :before-upload="handleJsonlUpload"
-          :show-upload-list="false"
-          accept=".jsonl"
-          :disabled="!neo4jAvailable"
-        >
-          <a-button size="middle" :loading="importing" :disabled="!neo4jAvailable">
-            <template #icon><UploadOutlined /></template> 上传 JSONL
-          </a-button>
-        </a-upload>
+        <a-button size="middle" :disabled="!neo4jAvailable" @click="showImportModal = true">
+          <template #icon><UploadOutlined /></template> 导入 JSONL
+        </a-button>
         <a-popconfirm
           v-if="stats.nodeCount > 0"
           title="确定清空整个知识图谱？此操作不可恢复。"
@@ -197,6 +190,55 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 导入 JSONL 弹窗 -->
+    <a-modal
+      v-model:open="showImportModal"
+      title="导入知识图谱"
+      :maskClosable="false"
+      :footer="null"
+      :width="560"
+    >
+      <a-alert type="info" show-icon style="margin-bottom: 16px">
+        <template #message>通过 JSONL 文件批量导入节点和关系，每行一个三元组（头实体 → 关系 → 尾实体）。</template>
+      </a-alert>
+
+      <div class="import-section">
+        <div class="import-section-title">文件格式说明</div>
+        <pre class="import-format-pre">{"head": "张三", "headType": "人物", "headDesc": "软件工程师",
+ "relation": "就职于", "relationDesc": "任职关系",
+ "tail": "腾讯", "tailType": "组织", "tailDesc": "互联网公司"}</pre>
+        <div class="import-field-desc">
+          <p><b>必填字段：</b><code>head</code>（头实体）、<code>relation</code>（关系）、<code>tail</code>（尾实体）</p>
+          <p><b>可选字段：</b><code>headType</code>、<code>headDesc</code>、<code>relationDesc</code>、<code>tailType</code>、<code>tailDesc</code></p>
+        </div>
+      </div>
+
+      <a-divider style="margin: 12px 0" />
+
+      <div class="import-section">
+        <div class="import-section-title">上传要求</div>
+        <ul class="import-rules">
+          <li>文件格式：<code>.jsonl</code>（UTF-8 编码）</li>
+          <li>文件大小：不超过 <b>5MB</b></li>
+          <li>每行一个 JSON 对象，不可跨行</li>
+          <li>已存在的节点和关系会自动合并，不会重复创建</li>
+        </ul>
+      </div>
+
+      <a-divider style="margin: 12px 0" />
+
+      <a-upload
+        :before-upload="handleJsonlUpload"
+        :show-upload-list="false"
+        accept=".jsonl"
+      >
+        <a-button type="primary" block :loading="importing" size="large">
+          <template #icon><UploadOutlined /></template>
+          {{ importing ? '导入中...' : '选择文件并导入' }}
+        </a-button>
+      </a-upload>
+    </a-modal>
   </div>
 </template>
 
@@ -243,6 +285,9 @@ const showNodeCreateModal = ref(false)
 const editingNode = ref(null)
 const nodeSubmitting = ref(false)
 const nodeForm = reactive({ name: '', entityType: '其他', description: '' })
+
+// 导入弹窗
+const showImportModal = ref(false)
 
 // 边表单
 const showEdgeCreateModal = ref(false)
@@ -487,6 +532,7 @@ function handleJsonlUpload(file) {
   importGraphFromJsonl(file).then(res => {
     const s = res.data
     message.success(`导入完成：${s.nodeCount} 个节点，${s.edgeCount} 条边`)
+    showImportModal.value = false
     loadGraphData()
   }).catch(() => {
     // interceptor 已处理错误提示
@@ -965,5 +1011,52 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.import-section {
+  margin-bottom: 4px;
+}
+.import-section-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.import-format-pre {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0 0 8px 0;
+}
+.import-field-desc {
+  font-size: 13px;
+  color: #555;
+}
+.import-field-desc p {
+  margin-bottom: 4px;
+}
+.import-field-desc code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.import-rules {
+  padding-left: 20px;
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+}
+.import-rules li {
+  margin-bottom: 4px;
+}
+.import-rules code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 </style>

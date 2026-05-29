@@ -95,6 +95,11 @@ const routes = [
         component: () => import('../views/Observability.vue'),
       },
       {
+        path: 'tool-calls',
+        name: 'ToolCallLog',
+        component: () => import('../views/ToolCallLog.vue'),
+      },
+      {
         path: 'prompts',
         name: 'Prompts',
         component: () => import('../views/PromptManage.vue'),

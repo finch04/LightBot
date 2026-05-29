@@ -439,8 +439,10 @@ public class MessageMiddleware implements ChatMiddleware {
 
     /**
      * 持久化消息并更新会话统计（含metadata和tokenCount）
+     *
+     * @return 消息ID
      */
-    public void saveMessage(Long sessionId, MessageRole role, String content, String metadata, int tokenCount) {
+    public Long saveMessage(Long sessionId, MessageRole role, String content, String metadata, int tokenCount) {
         Message msg = new Message();
         msg.setSessionId(sessionId);
         msg.setRole(role);
@@ -450,13 +452,16 @@ public class MessageMiddleware implements ChatMiddleware {
         msg.setMetadata(metadata);
         messageMapper.insert(msg);
         chatSessionService.updateStats(sessionId, tokenCount);
+        return msg.getId();
     }
 
     /**
      * 持久化消息（无metadata）
+     *
+     * @return 消息ID
      */
-    public void saveMessage(Long sessionId, MessageRole role, String content) {
-        saveMessage(sessionId, role, content, null, 0);
+    public Long saveMessage(Long sessionId, MessageRole role, String content) {
+        return saveMessage(sessionId, role, content, null, 0);
     }
 
     /**

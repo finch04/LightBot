@@ -3,6 +3,7 @@ package com.lightbot.service.chat;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.ToolCall;
 import com.lightbot.util.SensitiveWordFilter;
 import lombok.Data;
 import org.springframework.ai.chat.model.ChatModel;
@@ -74,6 +75,9 @@ public class ChatContext {
     /** 流式敏感词过滤状态（按累积全文过滤，避免分片漏拦） */
     private SensitiveWordFilter.StreamState sensitiveStreamState;
 
+    /** 待持久化的工具调用记录（assistant 消息保存后批量写入，关联 messageId） */
+    private List<ToolCall> pendingToolCalls;
+
     /**
      * 工厂方法：创建上下文并初始化所有累加器
      */
@@ -89,6 +93,7 @@ public class ChatContext {
         ctx.toolEventsList = new ArrayList<>();
         ctx.workflowEventsList = new ArrayList<>();
         ctx.spans = new ArrayList<>();
+        ctx.pendingToolCalls = new ArrayList<>();
         return ctx;
     }
 }

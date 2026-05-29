@@ -74,7 +74,6 @@ public class ChatServiceImpl implements ChatService {
     private final TraceMiddleware traceMiddleware;
     private final MimoChatClient mimoChatClient;
     private final ModelProviderService modelProviderService;
-    private final ToolCallService toolCallService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -303,14 +302,16 @@ public class ChatServiceImpl implements ChatService {
                                     List<Map<String, Object>> kbResults = QueryKnowledgeTool.getSearchResults(requestId);
                                     synchronized (kbResultsHolder) { kbResultsHolder.addAll(kbResults); }
                                 }
-                                // 记录工具调用日志
+                                // 暂存工具调用记录（assistant 消息保存后批量写入）
                                 ToolCall toolCallLog = new ToolCall();
                                 toolCallLog.setToolName(tcName);
                                 toolCallLog.setToolInput(safeTcArgs);
                                 toolCallLog.setToolOutput(result);
                                 toolCallLog.setStatus(result.startsWith("工具执行失败") || result.startsWith("工具不存在") ? "error" : "success");
                                 toolCallLog.setErrorMessage(result.startsWith("工具执行失败") ? result : null);
-                                toolCallService.recordToolCall(toolCallLog);
+                                synchronized (ctx.getPendingToolCalls()) {
+                                    ctx.getPendingToolCalls().add(toolCallLog);
+                                }
 
                                 appendToolCallResult(toolEventsList, statusFluxes, tcName, tcArgs, result, toolContentOffset);
                                 return result;
@@ -363,14 +364,14 @@ public class ChatServiceImpl implements ChatService {
                             if (!kbResults.isEmpty()) kbResultsHolder.addAll(kbResults);
                         }
 
-                        // 记录工具调用日志
+                        // 暂存工具调用记录（assistant 消息保存后批量写入）
                         ToolCall toolCallLog = new ToolCall();
                         toolCallLog.setToolName(toolName);
                         toolCallLog.setToolInput(safeArgs);
                         toolCallLog.setToolOutput(toolResult);
                         toolCallLog.setStatus(toolResult.startsWith("工具执行失败") || toolResult.startsWith("工具不存在") ? "error" : "success");
                         toolCallLog.setErrorMessage(toolResult.startsWith("工具执行失败") ? toolResult : null);
-                        toolCallService.recordToolCall(toolCallLog);
+                        ctx.getPendingToolCalls().add(toolCallLog);
 
                         List<String> emittedEvents = ToolEventEmitter.drain();
                         for (String event : emittedEvents) {
@@ -578,6 +579,17 @@ public class ChatServiceImpl implements ChatService {
                             kbResultsHolder.addAll(kbResults);
                         }
                     }
+                    // 暂存工具调用记录（assistant 消息保存后批量写入）
+                    ToolCall toolCallLog = new ToolCall();
+                    toolCallLog.setToolName(tcName);
+                    toolCallLog.setToolInput(safeTcArgs);
+                    toolCallLog.setToolOutput(result);
+                    toolCallLog.setStatus(result.startsWith("工具执行失败") || result.startsWith("工具不存在") ? "error" : "success");
+                    toolCallLog.setErrorMessage(result.startsWith("工具执行失败") ? result : null);
+                    synchronized (ctx.getPendingToolCalls()) {
+                        ctx.getPendingToolCalls().add(toolCallLog);
+                    }
+
                     toolEventsList.add(Map.of("type", "tool_result", "toolName", tcName, "result",
                             result.length() > 2000 ? result.substring(0, 2000) + "..." : result,
                             "contentOffset", toolContentOffset));
@@ -622,6 +634,15 @@ public class ChatServiceImpl implements ChatService {
                     kbResultsHolder.addAll(kbResults);
                 }
             }
+
+            // 暂存工具调用记录（assistant 消息保存后批量写入）
+            ToolCall toolCallLog = new ToolCall();
+            toolCallLog.setToolName(toolName);
+            toolCallLog.setToolInput(callArgs);
+            toolCallLog.setToolOutput(toolResult);
+            toolCallLog.setStatus(toolResult.startsWith("工具执行失败") || toolResult.startsWith("工具不存在") ? "error" : "success");
+            toolCallLog.setErrorMessage(toolResult.startsWith("工具执行失败") ? toolResult : null);
+            ctx.getPendingToolCalls().add(toolCallLog);
 
             List<String> emittedEvents = ToolEventEmitter.drain();
             for (String event : emittedEvents) {
