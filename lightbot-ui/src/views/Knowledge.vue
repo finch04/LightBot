@@ -67,7 +67,7 @@
           <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" />
         </a-form-item>
         <a-form-item label="Embed模型" required>
-          <ModelSelect v-model="form.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" />
+          <ModelSelect v-model="form.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" @change="onEmbeddingModelChange" />
         </a-form-item>
         <a-form-item label="分块大小">
           <a-input-number v-model:value="form.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
@@ -96,6 +96,7 @@ const list = ref([])
 const searchText = ref('')
 const showCreate = ref(false)
 const submitting = ref(false)
+const selectedEmbeddingModelId = ref(null)
 const form = reactive({
   name: '',
   description: '',
@@ -108,6 +109,7 @@ const form = reactive({
 
 function openCreateModal() {
   form.embeddingModel = null
+  selectedEmbeddingModelId.value = null
   showCreate.value = true
 }
 
@@ -144,11 +146,10 @@ async function handleCreate() {
     message.warning('请选择 Embed 模型')
     return
   }
-  const embeddingModelId = form.embeddingModel.split(':')[1]
   submitting.value = true
   try {
     const config = JSON.stringify({ ragTopK: form.ragTopK, ragThreshold: form.ragThreshold })
-    await createKnowledge({ ...form, embeddingModel: embeddingModelId, config })
+    await createKnowledge({ ...form, embeddingModel: selectedEmbeddingModelId.value, config })
     message.success('创建成功')
     showCreate.value = false
     form.name = ''

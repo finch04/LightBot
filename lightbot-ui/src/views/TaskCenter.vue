@@ -5,8 +5,8 @@
         <h2>任务中心</h2>
         <a-radio-group v-model:value="statusFilter" size="small" button-style="solid">
           <a-radio-button value="active">进行中 {{ activeCount }}</a-radio-button>
-          <a-radio-button value="pending">等待中</a-radio-button>
-          <a-radio-button value="running">执行中</a-radio-button>
+          <a-radio-button value="pending">等待中 {{ pendingCount }}</a-radio-button>
+          <a-radio-button value="running">执行中 {{ runningCount }}</a-radio-button>
           <a-radio-button value="">全部</a-radio-button>
         </a-radio-group>
       </div>
@@ -24,6 +24,23 @@
           刷新
         </button>
       </div>
+    </div>
+    <div class="type-filter-bar">
+      <span
+        class="type-filter-item"
+        :class="{ active: typeFilter === '' }"
+        @click="typeFilter = ''"
+      >全部</span>
+      <span
+        v-for="(color, typeName) in typeColor"
+        :key="typeName"
+        class="type-filter-item"
+        :class="{ active: typeFilter === typeName }"
+        @click="typeFilter = typeFilter === typeName ? '' : typeName"
+      >
+        <a-tag :color="color" :class="{ 'type-tag-selected': typeFilter === typeName }" size="small">{{ typeName }}</a-tag>
+        <span class="type-count">{{ typeCounts[typeName] || 0 }}</span>
+      </span>
     </div>
 
     <a-table
@@ -137,13 +154,17 @@
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getTaskList, cancelTask, deleteTask } from '../api/task'
+import { getTaskList, cancelTask, deleteTask, getTaskTypeCounts } from '../api/task'
 
 const loading = ref(false)
 const tasks = ref([])
 const searchText = ref('')
 const statusFilter = ref('')
+const typeFilter = ref('')
 const activeCount = ref(0)
+const pendingCount = ref(0)
+const runningCount = ref(0)
+const typeCounts = ref({})
 
 const detailVisible = ref(false)
 const detailTask = ref(null)
@@ -170,9 +191,10 @@ const typeColor = {
   '文档OCR': 'orange',
   '实验执行': 'cyan',
   '基准生成': 'purple',
-  '基准导入': 'cyan',
+  '基准导入': 'volcano',
   'RAG评估': 'magenta',
   '图谱抽取': 'geekblue',
+  '问答对生成': 'gold',
 }
 
 const statusMap = {
@@ -199,6 +221,7 @@ async function loadTasks() {
     const params = { pageNum: pagination.current, pageSize: pagination.pageSize }
     if (searchText.value) params.name = searchText.value
     if (statusFilter.value) params.status = statusFilter.value
+    if (typeFilter.value) params.type = typeFilter.value
     const res = await getTaskList(params)
     tasks.value = res.data.records || []
     pagination.total = res.data.total || 0
@@ -209,10 +232,23 @@ async function loadTasks() {
   }
 }
 
-async function loadActiveCount() {
+async function loadStatusCounts() {
   try {
-    const res = await getTaskList({ pageNum: 1, pageSize: 1, status: 'active' })
-    activeCount.value = res.data.total || 0
+    const [activeRes, pendingRes, runningRes] = await Promise.all([
+      getTaskList({ pageNum: 1, pageSize: 1, status: 'active' }),
+      getTaskList({ pageNum: 1, pageSize: 1, status: 'pending' }),
+      getTaskList({ pageNum: 1, pageSize: 1, status: 'running' }),
+    ])
+    activeCount.value = activeRes.data.total || 0
+    pendingCount.value = pendingRes.data.total || 0
+    runningCount.value = runningRes.data.total || 0
+  } catch { /* ignore */ }
+}
+
+async function loadTypeCounts() {
+  try {
+    const res = await getTaskTypeCounts()
+    typeCounts.value = res.data || {}
   } catch { /* ignore */ }
 }
 
@@ -228,6 +264,12 @@ watch(searchText, () => {
 })
 
 watch(statusFilter, () => {
+  pagination.current = 1
+  typeFilter.value = ''
+  loadTasks()
+})
+
+watch(typeFilter, () => {
   pagination.current = 1
   loadTasks()
 })
@@ -288,17 +330,23 @@ function formatTime(time) {
 function formatJson(val) {
   if (!val) return '-'
   if (typeof val === 'string') {
-    try { return JSON.stringify(JSON.parse(val), null, 2) } catch { return val }
+    try {
+      // 雪花算法 Long ID（16+位数字）超过 JS Number 精度，先转为字符串再解析
+      const safe = val.replace(/:\s*(-?\d{16,})/g, ':"$1"')
+      return JSON.stringify(JSON.parse(safe), null, 2)
+    } catch { return val }
   }
   return JSON.stringify(val, null, 2)
 }
 
 onMounted(() => {
   loadTasks()
-  loadActiveCount()
+  loadStatusCounts()
+  loadTypeCounts()
   pollTimer = setInterval(() => {
     loadTasks()
-    loadActiveCount()
+    loadStatusCounts()
+    loadTypeCounts()
   }, 5000)
 })
 
@@ -336,6 +384,42 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.type-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.type-filter-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+.type-filter-item:hover {
+  background: #f4f4f5;
+}
+.type-filter-item.active {
+  background: #f0f0f0;
+}
+.type-filter-item :deep(.ant-tag) {
+  margin: 0;
+  cursor: pointer;
+}
+.type-tag-selected {
+  outline: 2px solid #1677ff;
+  outline-offset: -1px;
+}
+.type-count {
+  font-size: 12px;
+  color: #8b8b8b;
+  font-weight: 500;
 }
 .btn-outline {
   display: flex;

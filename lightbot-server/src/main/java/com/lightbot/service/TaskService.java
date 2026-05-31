@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.TaskType;
 
+import java.util.Map;
+
 /**
  * 任务队列服务接口
  *
@@ -61,7 +63,7 @@ public interface TaskService extends IService<Task> {
     /**
      * 分页查询用户任务
      */
-    Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status);
+    Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status, String type);
 
     /**
      * 获取任务详情（校验用户归属）
@@ -76,6 +78,14 @@ public interface TaskService extends IService<Task> {
      * @return 任务数量
      */
     Long countByStatus(Long userId, String status);
+
+    /**
+     * 按类型统计用户任务数量（仅统计进行中+等待中的任务）
+     *
+     * @param userId 用户ID
+     * @return 类型 -> 数量
+     */
+    Map<String, Long> countByType(Long userId);
 
     /**
      * 删除任务（仅已终态任务可删除）

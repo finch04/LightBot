@@ -38,6 +38,14 @@ export function uploadDocuments(knowledgeId, files, ocrEnabled = false) {
   })
 }
 
+export function checkDocumentDuplicate(knowledgeId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/knowledge/${knowledgeId}/documents/check-duplicate`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 export function previewUrlDocument(knowledgeId, url) {
   return request.post(`/knowledge/${knowledgeId}/documents/preview-url`, null, {
     params: { url },
@@ -150,12 +158,32 @@ export function getGraphSubgraph(knowledgeId, params) {
   return request.get(`/knowledge/${knowledgeId}/graph/subgraph`, { params })
 }
 
-export function getGraphStats(knowledgeId) {
-  return request.get(`/knowledge/${knowledgeId}/graph/stats`)
+export function getGraphStats(knowledgeId, documentId) {
+  return request.get(`/knowledge/${knowledgeId}/graph/stats`, {
+    params: documentId ? { documentId } : {}
+  })
 }
 
-export function extractGraph(knowledgeId, params) {
-  return request.post(`/knowledge/${knowledgeId}/graph/extract`, null, { params })
+export function extractGraph(knowledgeId, documentIds, providerId, modelId) {
+  const params = {}
+  if (documentIds && documentIds.length > 0) params.documentIds = documentIds
+  if (providerId) params.providerId = providerId
+  if (modelId) params.modelId = modelId
+  return request.post(`/knowledge/${knowledgeId}/graph/extract`, null, {
+    params,
+    paramsSerializer: p => {
+      const parts = []
+      for (const key in p) {
+        const val = p[key]
+        if (Array.isArray(val)) {
+          val.forEach(v => parts.push(`${key}=${v}`))
+        } else {
+          parts.push(`${key}=${val}`)
+        }
+      }
+      return parts.join('&')
+    }
+  })
 }
 
 export function importGraphTriples(knowledgeId, data) {
@@ -164,6 +192,28 @@ export function importGraphTriples(knowledgeId, data) {
 
 export function deleteGraph(knowledgeId) {
   return request.delete(`/knowledge/${knowledgeId}/graph`)
+}
+
+export function deleteDocGraph(knowledgeId, documentId) {
+  return request.delete(`/knowledge/${knowledgeId}/graph/documents/${documentId}`)
+}
+
+export function getExistingDocIds(knowledgeId, documentIds) {
+  return request.get(`/knowledge/${knowledgeId}/graph/existing-docs`, {
+    params: { documentIds },
+    paramsSerializer: p => {
+      const parts = []
+      for (const key in p) {
+        const val = p[key]
+        if (Array.isArray(val)) {
+          val.forEach(v => parts.push(`${key}=${v}`))
+        } else if (val != null) {
+          parts.push(`${key}=${val}`)
+        }
+      }
+      return parts.join('&')
+    }
+  })
 }
 
 export function createGraphNode(knowledgeId, params) {

@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * 任务管理接口
  *
@@ -29,9 +31,10 @@ public class TaskController {
     public Result<Page<Task>> list(@RequestParam(defaultValue = "1") int pageNum,
                                     @RequestParam(defaultValue = "10") int pageSize,
                                     @RequestParam(required = false) String name,
-                                    @RequestParam(required = false) String status) {
+                                    @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String type) {
         long userId = StpUtil.getLoginIdAsLong();
-        return Result.ok(taskService.listByUserId(userId, pageNum, pageSize, name, status));
+        return Result.ok(taskService.listByUserId(userId, pageNum, pageSize, name, status, type));
     }
 
     @Operation(summary = "统计当前用户的运行中+待处理任务数")
@@ -41,6 +44,13 @@ public class TaskController {
         Long running = taskService.countByStatus(userId, "running");
         Long pending = taskService.countByStatus(userId, "pending");
         return Result.ok(running + pending);
+    }
+
+    @Operation(summary = "按类型统计当前用户的进行中任务数")
+    @GetMapping("/type-counts")
+    public Result<Map<String, Long>> typeCounts() {
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(taskService.countByType(userId));
     }
 
     @Operation(summary = "获取任务详情")

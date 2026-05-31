@@ -11,6 +11,7 @@ import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.dto.QaPairUpdateDTO;
 import com.lightbot.dto.QaPairVO;
 import com.lightbot.entity.Knowledge;
+import com.lightbot.entity.ModelProvider;
 import com.lightbot.entity.QaPair;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.ErrorCode;
@@ -22,6 +23,7 @@ import com.lightbot.mapper.EmbeddingMapper;
 import com.lightbot.mapper.QaPairMapper;
 import com.lightbot.service.KnowledgePermissionHelper;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.service.TaskService;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -62,6 +65,9 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
 
     @Autowired
     private QaPairVectorizeHelper vectorizeHelper;
+
+    @Autowired
+    private ModelProviderService modelProviderService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -216,12 +222,20 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
 
         // 4. 创建异步任务
         try {
-            String payload = objectMapper.writeValueAsString(Map.of(
-                    "knowledgeId", knowledgeId,
-                    "count", actualCount,
-                    "providerId", providerId != null ? providerId : 0,
-                    "modelId", modelId != null ? modelId : ""
-            ));
+            Map<String, Object> payloadMap = new LinkedHashMap<>();
+            payloadMap.put("knowledgeId", knowledgeId);
+            payloadMap.put("count", actualCount);
+            if (providerId != null) {
+                payloadMap.put("providerId", providerId);
+                ModelProvider provider = modelProviderService.getById(providerId);
+                if (provider != null) {
+                    payloadMap.put("providerName", provider.getName());
+                }
+            }
+            if (modelId != null && !modelId.isBlank()) {
+                payloadMap.put("modelId", modelId);
+            }
+            String payload = objectMapper.writeValueAsString(payloadMap);
             Task task = taskService.createTask(
                     TaskType.QA_PAIR_GENERATE,
                     "问答对生成 - " + knowledge.getName(),

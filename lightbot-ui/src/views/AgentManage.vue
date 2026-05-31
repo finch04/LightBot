@@ -84,7 +84,7 @@
         </a-form-item>
         <!-- 模型：仅新建且非工作流类型显示 -->
         <a-form-item v-if="!form.id && form.agentType !== 'workflow'" label="模型" required>
-          <ModelSelect v-model="form.model" placeholder="选择模型" />
+          <ModelSelect v-model="form.model" placeholder="选择模型" @change="onModelChange" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -108,6 +108,11 @@ const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', model: null })
+const selectedProviderId = ref(null)
+
+function onModelChange({ providerId }) {
+  selectedProviderId.value = providerId
+}
 
 async function loadData() {
   const params = { pageNum: 1, pageSize: 50 }
@@ -119,6 +124,7 @@ async function loadData() {
 watch(searchText, () => loadData())
 
 function openDialog(row) {
+  selectedProviderId.value = null
   if (row) {
     Object.assign(form, {
       id: row.id,
@@ -145,8 +151,7 @@ async function handleSubmit() {
       message.success('更新成功')
     } else {
       // form.model 格式为 providerId:modelId，拆分后存入 config
-      const [providerId] = form.model ? form.model.split(':') : [null]
-      const config = form.agentType === 'workflow' ? '{}' : JSON.stringify({ providerId })
+      const config = form.agentType === 'workflow' ? '{}' : JSON.stringify({ providerId: selectedProviderId.value })
       await createAgent({ ...form, config })
       message.success('创建成功')
     }

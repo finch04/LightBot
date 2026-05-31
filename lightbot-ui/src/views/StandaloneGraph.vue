@@ -19,35 +19,51 @@
 
     <!-- 工具栏 -->
     <div class="sg-toolbar">
-      <div class="sg-toolbar-left">
-        <a-input
-          v-model:value="searchText"
-          placeholder="搜索节点名称..."
-          allow-clear
-          size="middle"
-          class="sg-search"
-          @press-enter="handleSearch"
-        >
-          <template #prefix><SearchOutlined /></template>
-        </a-input>
-        <a-button size="middle" @click="handleSearch" :disabled="!searchText">搜索</a-button>
-        <a-button size="middle" @click="handleClearSearch" v-if="searchKeywords.length > 0">清除高亮</a-button>
+      <div class="sg-toolbar-row">
+        <div class="sg-toolbar-left">
+          <a-input
+            v-model:value="searchText"
+            placeholder="搜索节点名称..."
+            allow-clear
+            size="middle"
+            class="sg-search"
+            @press-enter="handleSearch"
+          >
+            <template #prefix><SearchOutlined /></template>
+          </a-input>
+          <a-button size="middle" @click="handleSearch" :disabled="!searchText">搜索</a-button>
+          <a-tooltip v-if="searchKeywords.length > 0" title="清除高亮">
+            <a-button size="middle" @click="handleClearSearch">
+              <template #icon><ClearOutlined /></template>
+            </a-button>
+          </a-tooltip>
 
-        <a-input
-          v-model:value="semanticQuery"
-          placeholder="语义搜索..."
-          allow-clear
-          size="middle"
-          class="sg-search"
-          @press-enter="handleSemanticSearch"
-        >
-          <template #prefix><ThunderboltOutlined /></template>
-        </a-input>
-        <a-button size="middle" @click="handleSemanticSearch" :loading="semanticSearching" :disabled="!semanticQuery">
-          语义搜索
-        </a-button>
+          <a-input
+            v-model:value="semanticQuery"
+            placeholder="语义搜索..."
+            allow-clear
+            size="middle"
+            class="sg-search"
+            @press-enter="handleSemanticSearch"
+          >
+            <template #prefix><ThunderboltOutlined /></template>
+          </a-input>
+          <a-button size="middle" @click="handleSemanticSearch" :loading="semanticSearching" :disabled="!semanticQuery">
+            语义搜索
+          </a-button>
+          <a-tooltip>
+            <template #title>
+              <div style="max-width: 260px">
+                <div style="font-weight: 600; margin-bottom: 4px">什么是语义搜索？</div>
+                <div>基于向量相似度匹配节点含义，而非精确匹配文字。</div>
+                <div style="margin-top: 6px; color: #bbb">示例：搜索"数据库技术"可以找到"MySQL"、"PostgreSQL"等节点</div>
+              </div>
+            </template>
+            <QuestionCircleOutlined style="color: #888; cursor: help; font-size: 14px" />
+          </a-tooltip>
+        </div>
       </div>
-      <div class="sg-toolbar-right">
+      <div class="sg-toolbar-row sg-toolbar-actions">
         <a-button size="middle" type="primary" @click="showNodeCreateModal = true" :disabled="!neo4jAvailable">
           <template #icon><PlusOutlined /></template> 新建节点
         </a-button>
@@ -57,17 +73,14 @@
         <a-button size="middle" :disabled="!neo4jAvailable" @click="showImportModal = true">
           <template #icon><UploadOutlined /></template> 导入 JSONL
         </a-button>
-        <a-popconfirm
-          v-if="stats.nodeCount > 0"
-          title="确定清空整个知识图谱？此操作不可恢复。"
-          ok-text="清空"
-          cancel-text="取消"
-          @confirm="handleDeleteGraph"
-        >
-          <a-button size="middle" danger :loading="deleting">
-            <template #icon><DeleteOutlined /></template> 清空图谱
+        <a-button v-if="stats.nodeCount > 0" size="middle" danger :loading="deleting" @click="confirmDeleteGraph">
+          <template #icon><DeleteOutlined /></template> 清空图谱
+        </a-button>
+        <a-tooltip title="为节点创建向量索引" placement="bottom">
+          <a-button size="middle" :loading="rebuildingIndex" :disabled="!neo4jAvailable" @click="handleRebuildIndex">
+            <template #icon><ThunderboltOutlined /></template> 重建索引
           </a-button>
-        </a-popconfirm>
+        </a-tooltip>
       </div>
     </div>
 
@@ -133,11 +146,12 @@
       :width="480"
       :maskClosable="false"
       @ok="handleNodeSubmit"
+      @cancel="resetNodeForm"
       :confirm-loading="nodeSubmitting"
     >
-      <a-form :model="nodeForm" :label-col="{ span: 5 }">
-        <a-form-item label="名称" required>
-          <a-input v-model:value="nodeForm.name" placeholder="实体名称" />
+      <a-form :model="nodeForm" :label-col="{ span: 4 }">
+        <a-form-item label="名称">
+          <a-input v-model:value="nodeForm.name" placeholder="实体名称（必填）" />
         </a-form-item>
         <a-form-item label="类型">
           <a-select v-model:value="nodeForm.entityType" placeholder="选择实体类型">
@@ -157,13 +171,14 @@
       :width="480"
       :maskClosable="false"
       @ok="handleEdgeSubmit"
+      @cancel="resetEdgeForm"
       :confirm-loading="edgeSubmitting"
     >
-      <a-form :model="edgeForm" :label-col="{ span: 5 }">
-        <a-form-item label="起始节点" required>
+      <a-form :model="edgeForm" :label-col="{ span: 4 }">
+        <a-form-item label="起始节点">
           <a-select
             v-model:value="edgeForm.headName"
-            placeholder="选择起始节点"
+            placeholder="选择起始节点（必填）"
             show-search
             :filter-option="(input, option) => option.value.toLowerCase().includes(input.toLowerCase())"
             :disabled="!!editingEdge"
@@ -171,13 +186,13 @@
             <a-select-option v-for="name in allNodeNames" :key="name" :value="name">{{ name }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="关系类型" required>
-          <a-input v-model:value="edgeForm.relationType" placeholder="如：担任、隶属于、使用" />
+        <a-form-item label="关系类型">
+          <a-input v-model:value="edgeForm.relationType" placeholder="如：担任、隶属于、使用（必填）" />
         </a-form-item>
-        <a-form-item label="目标节点" required>
+        <a-form-item label="目标节点">
           <a-select
             v-model:value="edgeForm.tailName"
-            placeholder="选择目标节点"
+            placeholder="选择目标节点（必填）"
             show-search
             :filter-option="(input, option) => option.value.toLowerCase().includes(input.toLowerCase())"
             :disabled="!!editingEdge"
@@ -228,16 +243,21 @@
 
       <a-divider style="margin: 12px 0" />
 
-      <a-upload
-        :before-upload="handleJsonlUpload"
-        :show-upload-list="false"
-        accept=".jsonl"
-      >
-        <a-button type="primary" block :loading="importing" size="large">
-          <template #icon><UploadOutlined /></template>
-          {{ importing ? '导入中...' : '选择文件并导入' }}
+      <div class="import-actions">
+        <a-upload
+          :before-upload="handleJsonlUpload"
+          :show-upload-list="false"
+          accept=".jsonl"
+        >
+          <a-button type="primary" :loading="importing">
+            <template #icon><UploadOutlined /></template>
+            {{ importing ? '导入中...' : '选择文件' }}
+          </a-button>
+        </a-upload>
+        <a-button @click="downloadSample">
+          <template #icon><DownloadOutlined /></template> 下载示例文件
         </a-button>
-      </a-upload>
+      </div>
     </a-modal>
   </div>
 </template>
@@ -246,8 +266,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Graph } from '@antv/g6'
 import {
-  SearchOutlined, DeleteOutlined, CompressOutlined, UploadOutlined,
-  PlusOutlined, LinkOutlined, ThunderboltOutlined
+  SearchOutlined, DeleteOutlined, CompressOutlined, UploadOutlined, DownloadOutlined,
+  PlusOutlined, LinkOutlined, ThunderboltOutlined, ClearOutlined, QuestionCircleOutlined
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -255,7 +275,7 @@ import {
   importGraphFromJsonl, semanticSearchGraph,
   createStandaloneNode, updateStandaloneNode, deleteStandaloneNode,
   createStandaloneEdge, updateStandaloneEdge, deleteStandaloneEdge,
-  getStandaloneNodeNames
+  getStandaloneNodeNames, rebuildVectorIndex
 } from '../api/graph'
 
 // ---- state ----
@@ -263,6 +283,7 @@ const loading = ref(false)
 const importing = ref(false)
 const deleting = ref(false)
 const semanticSearching = ref(false)
+const rebuildingIndex = ref(false)
 const graphReady = ref(false)
 const searchText = ref('')
 const searchKeywords = ref([])
@@ -543,6 +564,21 @@ function handleJsonlUpload(file) {
   return false // 阻止 ant-upload 自动上传
 }
 
+function downloadSample() {
+  const content = [
+    '{"head": "张三", "headType": "人物", "headDesc": "软件工程师", "relation": "就职于", "relationDesc": "任职关系", "tail": "腾讯", "tailType": "组织", "tailDesc": "互联网公司"}',
+    '{"head": "张三", "headType": "人物", "headDesc": "软件工程师", "relation": "精通", "relationDesc": "技术能力", "tail": "Java", "tailType": "技术", "tailDesc": "编程语言"}',
+    '{"head": "腾讯", "tailType": "组织", "tailDesc": "互联网公司", "relation": "开发", "relationDesc": "产品开发", "tail": "微信", "headType": "产品", "headDesc": "社交应用"}',
+  ].join('\n')
+  const blob = new Blob([content], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'graph-sample.jsonl'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ---- 语义搜索 ----
 async function handleSemanticSearch() {
   if (!semanticQuery.value?.trim()) return
@@ -645,6 +681,17 @@ function handleFitView() {
 }
 
 // ---- 清空图谱 ----
+function confirmDeleteGraph() {
+  Modal.confirm({
+    title: '确定清空整个知识图谱？',
+    content: '此操作不可恢复，所有节点和关系将被永久删除。',
+    okText: '清空',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: handleDeleteGraph,
+  })
+}
+
 async function handleDeleteGraph() {
   deleting.value = true
   try {
@@ -660,6 +707,23 @@ async function handleDeleteGraph() {
     console.error('[独立图谱] 清空失败', e)
   } finally {
     deleting.value = false
+  }
+}
+
+async function handleRebuildIndex() {
+  rebuildingIndex.value = true
+  try {
+    const res = await rebuildVectorIndex()
+    const count = res.data || 0
+    if (count > 0) {
+      message.success(`索引重建完成，补生成 ${count} 个节点的向量`)
+    } else {
+      message.info('所有节点均已包含向量，无需重建')
+    }
+  } catch (e) {
+    console.error('[独立图谱] 重建索引失败', e)
+  } finally {
+    rebuildingIndex.value = false
   }
 }
 
@@ -939,11 +1003,16 @@ onUnmounted(() => {
 
 .sg-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
   padding: 12px 32px;
   flex-shrink: 0;
+}
+
+.sg-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -954,11 +1023,8 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.sg-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.sg-toolbar-actions {
+  justify-content: flex-end;
 }
 
 .sg-search {
@@ -1058,5 +1124,10 @@ onUnmounted(() => {
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
+}
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

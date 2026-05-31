@@ -16,9 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -63,8 +61,10 @@ public class QaPairGenerateExecutor implements TaskExecutor {
                 ? payload.get("providerId").asLong() : null;
         String modelId = payload.has("modelId") ? payload.get("modelId").asText("") : "";
         if (modelId.isBlank()) modelId = null;
+        String providerName = payload.has("providerName") ? payload.get("providerName").asText("") : "";
 
-        log.info("[问答对生成执行器] 开始, taskId={}, knowledgeId={}, count={}, providerId={}", task.getId(), knowledgeId, count, providerId);
+        String modelInfo = providerName.isBlank() ? String.valueOf(providerId) : providerName + (modelId != null ? "/" + modelId : "");
+        log.info("[问答对生成执行器] 开始, taskId={}, knowledgeId={}, count={}, model={}", task.getId(), knowledgeId, count, modelInfo);
 
         var tracker = new TaskProgressTracker(taskService, task.getId())
                 .phases("加载文档", "AI生成", "保存结果");
@@ -99,7 +99,7 @@ public class QaPairGenerateExecutor implements TaskExecutor {
 
         // 解析可用的 providerId（优先使用传入的，否则使用系统默认）
         Long actualProviderId = resolveProviderId(providerId);
-        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
+        var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId);
 
         String userPrompt = String.format("文档名称：%s\n\n请从以下文档内容中提取 %d 个问答对。\n\n文档内容：\n%s",
                 docName, count, truncated);
@@ -109,7 +109,7 @@ public class QaPairGenerateExecutor implements TaskExecutor {
         messages.add(new UserMessage(userPrompt));
 
         ChatResponse response = com.lightbot.util.LlmTraceContext.callWithoutTrace(
-                () -> chatModel.call(new Prompt(messages)));
+                () -> ctx.call(messages));
         String reply = response.getResult().getOutput().getText();
 
         // 4. 解析AI返回的JSON

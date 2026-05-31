@@ -262,6 +262,11 @@
             </div>
           </div>
         </a-tab-pane>
+        <a-tab-pane v-if="isDocCompleted" key="knowledge-graph" tab="知识图谱">
+          <div class="tab-pane-body doc-graph-pane">
+            <KnowledgeGraphTab :key="`doc-graph-${currentDoc?.id}-${docModalKey}`" :knowledge-id="knowledgeId" :document-id="currentDoc?.id" />
+          </div>
+        </a-tab-pane>
       </a-tabs>
     </a-modal>
 
@@ -516,7 +521,7 @@
           <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" />
         </a-form-item>
         <a-form-item label="Embed模型" required>
-          <ModelSelect v-model="editForm.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" />
+          <ModelSelect v-model="editForm.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" @change="onEmbeddingModelChange" />
         </a-form-item>
         <a-form-item label="RAG Top K">
           <a-input-number v-model:value="editForm.ragTopK" :min="1" :max="20" style="width: 100%" />
@@ -545,6 +550,34 @@
             </div>
           </template>
           <a-switch v-model:checked="editForm.contentScanEnabled" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>重复检测</span>
+              <a-tooltip title="上传文档时检查内容是否与已有文档重复，相似度超过阈值时会提示确认">
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+          </template>
+          <a-switch v-model:checked="editForm.duplicateDetectionEnabled" />
+        </a-form-item>
+        <a-form-item v-if="editForm.duplicateDetectionEnabled">
+          <template #label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>相似度阈值</span>
+              <a-tooltip title="内容相似度阈值，超过此值将提示重复警告。建议值 0.7-0.9">
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              </a-tooltip>
+            </div>
+          </template>
+          <a-input-number
+            v-model:value="editForm.duplicateThreshold"
+            :min="0.1"
+            :max="1.0"
+            :step="0.05"
+            style="width: 160px"
+          />
         </a-form-item>
         <!-- 示例问题管理 -->
         <a-form-item label="示例问题">
@@ -723,7 +756,7 @@ import {
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
-  fetchUrlDocument, previewUrlDocument, saveUrlDocument,
+  fetchUrlDocument, previewUrlDocument, saveUrlDocument, checkDocumentDuplicate,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getProvidersWithModels } from '../api/modelProvider'
@@ -787,6 +820,7 @@ const mindmapLoaded = ref(false)
 // 文档弹窗
 const docModalVisible = ref(false)
 const docModalTab = ref('source')
+const docModalKey = ref(0)
 const currentDoc = ref(null)
 const previewContent = ref('')
 const previewLoaded = ref(false)
@@ -855,6 +889,7 @@ const ingestForm = reactive({
 // 编辑弹窗
 const editVisible = ref(false)
 const editSubmitting = ref(false)
+const selectedEmbeddingModelId = ref(null)
 const editForm = reactive({
   name: '',
   description: '',
@@ -863,6 +898,8 @@ const editForm = reactive({
   ragThreshold: 0.7,
   autoGenerateQuestions: false,
   contentScanEnabled: false,
+  duplicateDetectionEnabled: false,
+  duplicateThreshold: 0.8,
 })
 const editExampleQuestions = ref([])
 const editQuestionLoading = ref(false)
@@ -1019,6 +1056,49 @@ async function handleBatchUpload() {
 
   try {
     const files = uploadFiles.value.map(f => f)
+
+    // 重复检测：检查知识库是否开启
+    let config = {}
+    try {
+      config = typeof knowledge.value.config === 'string' ? JSON.parse(knowledge.value.config) : (knowledge.value.config || {})
+    } catch { config = {} }
+
+    if (config.duplicateDetectionEnabled) {
+      // 并行检测每个文件
+      const results = await Promise.allSettled(
+        files.map(f => checkDocumentDuplicate(knowledgeId, f))
+      )
+      const duplicates = []
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value?.data?.hasDuplicate) {
+          const d = r.value.data
+          duplicates.push({
+            name: files[i].name,
+            maxSimilarity: (d.maxSimilarity * 100).toFixed(1),
+            mostSimilarDoc: d.mostSimilarDocName || '-',
+          })
+        }
+      })
+
+      if (duplicates.length > 0) {
+        const list = duplicates.map(d => `  · ${d.name} → 与"${d.mostSimilarDoc}"相似度 ${d.maxSimilarity}%`).join('\n')
+        const confirmed = await new Promise(resolve => {
+          Modal.confirm({
+            title: '检测到相似文档',
+            content: `以下文件与已有文档内容相似度较高：\n${list}\n\n是否继续上传？`,
+            okText: '继续上传',
+            cancelText: '取消',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+        if (!confirmed) {
+          uploadSubmitting.value = false
+          return
+        }
+      }
+    }
+
     await uploadDocuments(knowledgeId, files, ocrEnabled.value)
     message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
@@ -1236,6 +1316,7 @@ async function openDocModal(doc) {
   previewLoaded.value = false
   downloadUrl.value = ''
   chunks.value = []
+  docModalKey.value++
   docModalVisible.value = true
 
   // 并行加载预览、下载链接和分块
@@ -1271,6 +1352,10 @@ function openChunkDetail(chunk) {
 
 // ========== 编辑知识库 ==========
 
+function onEmbeddingModelChange({ modelId }) {
+  selectedEmbeddingModelId.value = modelId
+}
+
 async function openEditDialog() {
   const k = knowledge.value
   // 解析已有的config JSONB
@@ -1293,6 +1378,7 @@ async function openEditDialog() {
     } catch { /* ignore */ }
   }
 
+  selectedEmbeddingModelId.value = k.embeddingModel || null
   Object.assign(editForm, {
     name: k.name || '',
     description: k.description || '',
@@ -1301,6 +1387,8 @@ async function openEditDialog() {
     ragThreshold: config.ragThreshold ?? 0.7,
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
     contentScanEnabled: config.contentScanEnabled ?? false,
+    duplicateDetectionEnabled: config.duplicateDetectionEnabled ?? false,
+    duplicateThreshold: config.duplicateThreshold ?? 0.8,
   })
 
   // 加载示例问题
@@ -1315,7 +1403,6 @@ async function openEditDialog() {
 async function handleEdit() {
   if (!editForm.name.trim()) return message.warning('请输入名称')
   if (!editForm.embeddingModel) return message.warning('请选择 Embed 模型')
-  const embeddingModelId = editForm.embeddingModel.split(':')[1]
   editSubmitting.value = true
   try {
     const config = JSON.stringify({
@@ -1323,12 +1410,14 @@ async function handleEdit() {
       ragThreshold: editForm.ragThreshold,
       autoGenerateQuestions: editForm.autoGenerateQuestions,
       contentScanEnabled: editForm.contentScanEnabled,
+      duplicateDetectionEnabled: editForm.duplicateDetectionEnabled,
+      duplicateThreshold: editForm.duplicateThreshold,
     })
     await updateKnowledge({
       id: knowledgeId,
       name: editForm.name,
       description: editForm.description,
-      embeddingModel: embeddingModelId,
+      embeddingModel: selectedEmbeddingModelId.value,
       config,
     })
     // 保存示例问题
@@ -1451,6 +1540,10 @@ async function askRag() {
 
 // 文件类型判断（用于文本预览tab）
 // Excel/CSV/Word 转为 Markdown 表格，MD 文件本身是 Markdown
+const isDocCompleted = computed(() => {
+  const s = currentDoc.value?.status?.code || currentDoc.value?.status
+  return s === 'completed'
+})
 const isMarkdownFile = computed(() => ['md', 'xlsx', 'xls', 'csv', 'doc', 'docx'].includes(currentDoc.value?.fileType))
 // Office文档（doc/docx/xls/xlsx/ppt/pptx）不支持源文件预览，只展示文本化后的内容
 const hasSourcePreview = computed(() => {
@@ -2166,6 +2259,10 @@ onUnmounted(() => {
   overflow: auto;
 }
 .chunk-list-pane {
+  height: 520px;
+  overflow: hidden;
+}
+.doc-graph-pane {
   height: 520px;
   overflow: hidden;
 }

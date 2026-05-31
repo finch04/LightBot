@@ -58,3 +58,7 @@ export function deleteStandaloneEdge(elementId) {
 export function getStandaloneNodeNames() {
   return request.get('/graph/node-names')
 }
+
+export function rebuildVectorIndex() {
+  return request.post('/graph/rebuild-index')
+}

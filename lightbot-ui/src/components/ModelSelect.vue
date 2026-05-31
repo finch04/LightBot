@@ -26,16 +26,14 @@
       </a-select-option>
     </a-select>
     <div class="model-select-suffix-icons">
-      <template v-if="modelValue">
-        <a-tooltip title="检查连通性">
-          <span class="suffix-icon-btn" @click.stop="handleCheck">
-            <LoadingOutlined v-if="checking" spin />
-            <CheckCircleOutlined v-else-if="checkStatus === 'success'" style="color: #52c41a" />
-            <CloseCircleOutlined v-else-if="checkStatus === 'error'" style="color: #ff4d4f" />
-            <ApiOutlined v-else />
-          </span>
-        </a-tooltip>
-      </template>
+      <a-tooltip :title="modelValue ? '检查连通性' : '请先选择模型'">
+        <span class="suffix-icon-btn" :class="{ disabled: !modelValue }" @click.stop="handleCheck">
+          <LoadingOutlined v-if="checking" spin />
+          <CheckCircleOutlined v-else-if="checkStatus === 'success'" style="color: #52c41a" />
+          <CloseCircleOutlined v-else-if="checkStatus === 'error'" style="color: #ff4d4f" />
+          <ApiOutlined v-else />
+        </span>
+      </a-tooltip>
       <a-tooltip title="刷新缓存">
         <span class="suffix-icon-btn" @click.stop="handleRefresh">
           <LoadingOutlined v-if="refreshing" spin />
@@ -171,9 +169,9 @@ function handleUpdate(val) {
   emit('update:modelValue', val)
   if (val) {
     const [providerId, modelId] = val.split(':')
-    emit('change', providerId, modelId)
+    emit('change', { providerId, modelId })
   } else {
-    emit('change', null, null)
+    emit('change', { providerId: null, modelId: null })
   }
 }
 
@@ -251,6 +249,14 @@ watch(() => props.modelType, loadOptions)
 .suffix-icon-btn:hover {
   color: #171717;
   background: #f4f4f5;
+}
+.suffix-icon-btn.disabled {
+  color: #d4d4d8;
+  cursor: not-allowed;
+}
+.suffix-icon-btn.disabled:hover {
+  color: #d4d4d8;
+  background: transparent;
 }
 .model-option-label {
   display: inline-block;

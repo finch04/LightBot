@@ -33,10 +33,12 @@ public class BenchmarkGenerateExecutor implements TaskExecutor {
         int count = payload.get("count").asInt(10);
         Long providerId = payload.has("providerId") ? payload.get("providerId").asLong() : null;
         String modelId = payload.has("modelId") ? payload.get("modelId").asText() : null;
+        String providerName = payload.has("providerName") ? payload.get("providerName").asText("") : "";
         int neighborCount = payload.has("neighborCount") ? payload.get("neighborCount").asInt(3) : 3;
 
-        log.info("[基准生成执行器] 开始, taskId={}, benchmarkId={}, knowledgeId={}, count={}, neighborCount={}",
-                task.getId(), benchmarkId, knowledgeId, count, neighborCount);
+        String modelInfo = providerName.isBlank() ? String.valueOf(providerId) : providerName + (modelId != null ? "/" + modelId : "");
+        log.info("[基准生成执行器] 开始, taskId={}, benchmarkId={}, knowledgeId={}, model={}, count={}, neighborCount={}",
+                task.getId(), benchmarkId, knowledgeId, modelInfo, count, neighborCount);
 
         var tracker = new TaskProgressTracker(taskService, task.getId())
                 .phases("分析知识库", "生成题目", "保存结果");

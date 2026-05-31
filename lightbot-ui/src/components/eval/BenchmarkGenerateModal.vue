@@ -37,7 +37,7 @@
         </a-col>
       </a-row>
       <a-form-item label="生成模型">
-        <ModelSelect v-model="form.modelValue" placeholder="不选则使用系统默认模型" allow-clear />
+        <ModelSelect v-model="form.modelValue" placeholder="不选则使用系统默认模型" @change="onModelChange" />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -90,6 +90,11 @@ const form = reactive({
   neighborCount: 3,
   modelValue: null,
 })
+const selectedModel = ref({ providerId: null, modelId: null })
+
+function onModelChange({ providerId, modelId }) {
+  selectedModel.value = { providerId, modelId }
+}
 
 async function handleOk() {
   if (!form.name?.trim()) {
@@ -103,10 +108,9 @@ async function handleOk() {
       count: form.count,
       neighborCount: form.neighborCount,
     }
-    if (form.modelValue) {
-      const [pid, mid] = form.modelValue.split(':')
-      params.providerId = pid
-      params.modelId = mid
+    if (selectedModel.value.providerId) {
+      params.providerId = selectedModel.value.providerId
+      params.modelId = selectedModel.value.modelId
     }
     await generateBenchmark(props.knowledgeId, params)
     message.success('评估基准生成任务已进入任务队列')

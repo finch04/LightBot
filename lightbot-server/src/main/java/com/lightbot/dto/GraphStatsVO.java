@@ -29,6 +29,9 @@ public class GraphStatsVO {
     @Schema(description = "Neo4j 是否可用")
     private Boolean available;
 
+    @Schema(description = "当前文档是否有正在运行的图谱抽取任务")
+    private Boolean hasRunningTask;
+
     public GraphStatsVO(Integer nodeCount, Integer edgeCount, Map<String, Integer> typeDistribution) {
         this.nodeCount = nodeCount;
         this.edgeCount = edgeCount;

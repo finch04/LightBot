@@ -72,6 +72,37 @@ public class ModelFactory {
     }
 
     /**
+     * 获取 ChatModel 并构建指定模型的 ChatOptions
+     *
+     * @param providerId 模型提供商ID
+     * @param modelId    指定模型ID（为空时使用 provider 默认模型）
+     * @return ChatModel 和 ChatOptions 的封装
+     */
+    public ChatModelContext getChatModelWithContext(Long providerId, String modelId) {
+        ChatModel chatModel = getChatModel(providerId);
+        ChatOptions options = null;
+        if (modelId != null && !modelId.isBlank()) {
+            Long actualId = resolveProviderIdOrDefault(providerId);
+            options = buildChatOptions(actualId, Map.of("modelId", modelId));
+        }
+        return new ChatModelContext(chatModel, options);
+    }
+
+    /**
+     * ChatModel + 可选的 ChatOptions 封装
+     */
+    public record ChatModelContext(ChatModel chatModel, ChatOptions options) {
+
+        /**
+         * 发起调用，有 options 时使用指定模型，否则使用默认模型
+         */
+        public ChatResponse call(List<org.springframework.ai.chat.messages.Message> messages) {
+            Prompt prompt = options != null ? new Prompt(messages, options) : new Prompt(messages);
+            return chatModel.call(prompt);
+        }
+    }
+
+    /**
      * 从 provider config 中解析 modelId，未配置时使用 handler 的最便宜模型
      */
     private String resolveModelId(ModelProvider provider, ModelProviderHandler handler) {

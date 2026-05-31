@@ -95,4 +95,11 @@ public interface StandaloneGraphService {
      * 获取所有节点名称列表（用于关系创建时选择）
      */
     List<String> listNodeNames();
+
+    /**
+     * 重建向量索引（为缺失embedding的节点补生成向量）
+     *
+     * @return 补生成的节点数
+     */
+    int rebuildVectorIndex();
 }

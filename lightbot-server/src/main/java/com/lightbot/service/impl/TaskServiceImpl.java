@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 任务队列服务实现
@@ -132,13 +133,15 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     }
 
     @Override
-    public Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status) {
+    public Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status, String type) {
+        TaskType taskType = StringUtils.hasText(type) ? TaskType.fromValue(type) : null;
         return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Task>()
                         .eq(Task::getUserId, userId)
                         .like(StringUtils.hasText(name), Task::getName, name)
                         .eq(StringUtils.hasText(status) && !"active".equals(status), Task::getStatus, status)
                         .in(StringUtils.hasText(status) && "active".equals(status), Task::getStatus, List.of("pending", "running"))
+                        .eq(taskType != null, Task::getType, taskType)
                         .orderByDesc(Task::getCreateTime));
     }
 
@@ -156,6 +159,18 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
         return count(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .eq(Task::getStatus, status));
+    }
+
+    @Override
+    public Map<String, Long> countByType(Long userId) {
+        // 查询所有进行中+等待中的任务，按类型分组计数
+        List<Task> tasks = list(new LambdaQueryWrapper<Task>()
+                .eq(Task::getUserId, userId)
+                .in(Task::getStatus, List.of(TaskStatus.PENDING, TaskStatus.RUNNING)));
+        return tasks.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        t -> t.getType().getDesc(),
+                        java.util.stream.Collectors.counting()));
     }
 
     @Override

@@ -8,6 +8,10 @@ export function getRunningTaskCount() {
   return request.get('/tasks/running-count')
 }
 
+export function getTaskTypeCounts() {
+  return request.get('/tasks/type-counts')
+}
+
 export function getTask(taskId) {
   return request.get(`/tasks/${taskId}`)
 }

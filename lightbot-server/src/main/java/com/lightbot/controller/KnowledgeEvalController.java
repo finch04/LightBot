@@ -13,8 +13,10 @@ import com.lightbot.entity.EvalRagResult;
 import com.lightbot.entity.EvalRagResultDetail;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.TaskType;
+import com.lightbot.entity.ModelProvider;
 import com.lightbot.service.EvalRagBenchmarkService;
 import com.lightbot.service.EvalRagResultService;
+import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.TaskService;
 import cn.dev33.satoken.stp.StpUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,6 +46,7 @@ public class KnowledgeEvalController {
     private final EvalRagBenchmarkService benchmarkService;
     private final EvalRagResultService resultService;
     private final TaskService taskService;
+    private final ModelProviderService modelProviderService;
     private final ObjectMapper objectMapper;
 
     // ==================== 评估基准 ====================
@@ -81,6 +84,10 @@ public class KnowledgeEvalController {
         payloadNode.put("count", request.getCount());
         if (request.getProviderId() != null) {
             payloadNode.put("providerId", request.getProviderId());
+            ModelProvider provider = modelProviderService.getById(request.getProviderId());
+            if (provider != null) {
+                payloadNode.put("providerName", provider.getName());
+            }
         }
         if (request.getModelId() != null && !request.getModelId().isBlank()) {
             payloadNode.put("modelId", request.getModelId());
@@ -172,12 +179,20 @@ public class KnowledgeEvalController {
         payloadNode.put("knowledgeId", knowledgeId);
         if (request.getAnswerProviderId() != null) {
             payloadNode.put("answerProviderId", request.getAnswerProviderId());
+            ModelProvider answerProvider = modelProviderService.getById(request.getAnswerProviderId());
+            if (answerProvider != null) {
+                payloadNode.put("answerProviderName", answerProvider.getName());
+            }
         }
         if (request.getAnswerModelId() != null) {
             payloadNode.put("answerModelId", request.getAnswerModelId());
         }
         if (request.getJudgeProviderId() != null) {
             payloadNode.put("judgeProviderId", request.getJudgeProviderId());
+            ModelProvider judgeProvider = modelProviderService.getById(request.getJudgeProviderId());
+            if (judgeProvider != null) {
+                payloadNode.put("judgeProviderName", judgeProvider.getName());
+            }
         }
         if (request.getJudgeModelId() != null) {
             payloadNode.put("judgeModelId", request.getJudgeModelId());

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChunkVO;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.DuplicateCheckResultVO;
 import com.lightbot.dto.GraphEdgeVO;
 import com.lightbot.dto.GraphImportRequest;
 import com.lightbot.dto.GraphNodeVO;
@@ -150,6 +151,13 @@ public class KnowledgeController {
         return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled));
     }
 
+    @Operation(summary = "检查文档内容是否与已有文档重复（需要DEVELOPER及以上权限）")
+    @PostMapping("/{id}/documents/check-duplicate")
+    public Result<DuplicateCheckResultVO> checkDuplicate(@PathVariable Long id,
+                                                          @RequestParam("file") MultipartFile file) {
+        return Result.ok(documentService.checkDuplicate(id, file));
+    }
+
     @Operation(summary = "预览URL网页内容（不入库）")
     @PostMapping("/{id}/documents/preview-url")
     public Result<UrlFetchPreviewVO> previewUrlDocument(@PathVariable Long id,
@@ -284,9 +292,10 @@ public class KnowledgeController {
     @Operation(summary = "触发图谱抽取（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/graph/extract")
     public Result<Long> extractGraph(@PathVariable Long id,
-                                     @RequestParam(required = false) Long documentId,
-                                     @RequestParam(required = false) Long providerId) {
-        return Result.ok(graphService.extractFromDocument(id, documentId, providerId));
+                                     @RequestParam(required = false) List<Long> documentIds,
+                                     @RequestParam(required = false) Long providerId,
+                                     @RequestParam(required = false) String modelId) {
+        return Result.ok(graphService.extractFromDocument(id, documentIds, providerId, modelId));
     }
 
     @Operation(summary = "批量导入三元组（需要DEVELOPER及以上权限）")
@@ -300,16 +309,18 @@ public class KnowledgeController {
     @Operation(summary = "获取子图数据（可视化用）")
     @GetMapping("/{id}/graph/subgraph")
     public Result<GraphSubgraphVO> getSubgraph(@PathVariable Long id,
+                                               @RequestParam(required = false) Long documentId,
                                                @RequestParam(required = false) String keyword,
                                                @RequestParam(defaultValue = "2") int maxDepth,
                                                @RequestParam(defaultValue = "50") int maxNodes) {
-        return Result.ok(graphService.getSubgraph(id, keyword, maxDepth, maxNodes));
+        return Result.ok(graphService.getSubgraph(id, documentId, keyword, maxDepth, maxNodes));
     }
 
     @Operation(summary = "获取图谱统计信息")
     @GetMapping("/{id}/graph/stats")
-    public Result<GraphStatsVO> getGraphStats(@PathVariable Long id) {
-        return Result.ok(graphService.getStats(id));
+    public Result<GraphStatsVO> getGraphStats(@PathVariable Long id,
+                                              @RequestParam(required = false) Long documentId) {
+        return Result.ok(graphService.getStats(id, documentId));
     }
 
     @Operation(summary = "清空知识库图谱数据（需要MANAGER及以上权限）")
@@ -317,6 +328,20 @@ public class KnowledgeController {
     public Result<Void> deleteGraph(@PathVariable Long id) {
         graphService.deleteByKnowledgeId(id);
         return Result.ok();
+    }
+
+    @Operation(summary = "删除单个文档的图谱数据（需要DEVELOPER及以上权限）")
+    @DeleteMapping("/{id}/graph/documents/{documentId}")
+    public Result<Void> deleteDocGraph(@PathVariable Long id, @PathVariable Long documentId) {
+        graphService.deleteByDocumentId(id, documentId);
+        return Result.ok();
+    }
+
+    @Operation(summary = "批量检查哪些文档已有图谱数据")
+    @GetMapping("/{id}/graph/existing-docs")
+    public Result<List<Long>> getExistingDocIds(@PathVariable Long id,
+                                                @RequestParam List<Long> documentIds) {
+        return Result.ok(graphService.getExistingDocIds(id, documentIds));
     }
 
     @Operation(summary = "手动创建图谱节点（需要DEVELOPER及以上权限）")

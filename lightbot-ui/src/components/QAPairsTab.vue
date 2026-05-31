@@ -151,6 +151,9 @@
         <a-form-item label="生成条数">
           <a-slider v-model:value="generateCount" :min="1" :max="20" :marks="{ 1: '1', 10: '10', 20: '20' }" />
         </a-form-item>
+        <a-form-item label="生成模型">
+          <ModelSelect v-model="generateProviderId" placeholder="不选择则使用系统内置模型" @change="onGenerateModelChange" />
+        </a-form-item>
         <a-form-item>
           <a-alert message="AI 将从知识库文档中自动提取问答对，单次最多生成 20 条" type="info" show-icon />
         </a-form-item>
@@ -188,6 +191,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { SearchOutlined, PlusOutlined, RobotOutlined, SettingOutlined, EditOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs, getKnowledge, updateKnowledge } from '../api/knowledge'
+import ModelSelect from './ModelSelect.vue'
 
 const props = defineProps({ knowledgeId: { type: [String, Number], required: true } })
 
@@ -206,6 +210,12 @@ const showDetailModal = ref(false)
 const detailRecord = ref(null)
 const detailEditing = ref(false)
 const generateCount = ref(10)
+const generateProviderId = ref(null)
+const selectedGenerateModel = ref({ providerId: null, modelId: null })
+
+function onGenerateModelChange({ providerId, modelId }) {
+  selectedGenerateModel.value = { providerId, modelId }
+}
 
 const form = reactive({ question: '', answer: '' })
 const detailForm = reactive({ question: '', answer: '' })
@@ -299,7 +309,12 @@ async function handleDelete(id) {
 async function handleGenerate() {
   generating.value = true
   try {
-    await generateQAPairs(props.knowledgeId, { count: generateCount.value })
+    const params = { count: generateCount.value }
+    if (selectedGenerateModel.value.providerId) {
+      params.providerId = selectedGenerateModel.value.providerId
+      params.modelId = selectedGenerateModel.value.modelId
+    }
+    await generateQAPairs(props.knowledgeId, params)
     message.success('已提交到任务中心，可在任务中心查看进度')
     showGenerateModal.value = false
     setTimeout(() => loadData(), 2000)

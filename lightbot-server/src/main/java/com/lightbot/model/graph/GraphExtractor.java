@@ -8,10 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -63,9 +60,10 @@ public class GraphExtractor {
      *
      * @param content    文本内容
      * @param providerId 模型提供商ID（为空时自动使用第一个可用提供商）
+     * @param modelId    指定模型ID（为空时使用 provider 默认模型）
      * @return 三元组列表
      */
-    public List<GraphTripleDTO> extract(String content, Long providerId) {
+    public List<GraphTripleDTO> extract(String content, Long providerId, String modelId) {
         if (content == null || content.isBlank()) {
             return Collections.emptyList();
         }
@@ -75,14 +73,13 @@ public class GraphExtractor {
 
         try {
             Long actualProviderId = resolveProviderId(providerId);
-            ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-            ChatOptions options = modelFactory.buildChatOptions(actualProviderId, Map.of());
+            var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId);
 
             List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
             messages.add(new SystemMessage(EXTRACT_SYSTEM_PROMPT));
             messages.add(new UserMessage("请从以下文本中抽取实体和关系三元组：\n\n" + truncated));
 
-            ChatResponse response = chatModel.call(new Prompt(messages, options));
+            ChatResponse response = ctx.call(messages);
             String text = response.getResult().getOutput().getText();
             return parseTriples(text);
         } catch (Exception e) {
@@ -101,13 +98,12 @@ public class GraphExtractor {
     public List<String> extractEntitiesFromQuestion(String question, Long providerId) {
         try {
             Long actualProviderId = resolveProviderId(providerId);
-            ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-            ChatOptions options = modelFactory.buildChatOptions(actualProviderId, Map.of());
+            var ctx = modelFactory.getChatModelWithContext(actualProviderId, null);
 
             List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
             messages.add(new UserMessage(ENTITY_EXTRACT_PROMPT.formatted(question)));
 
-            ChatResponse response = chatModel.call(new Prompt(messages, options));
+            ChatResponse response = ctx.call(messages);
             String text = response.getResult().getOutput().getText();
             return parseEntityNames(text);
         } catch (Exception e) {
@@ -121,9 +117,10 @@ public class GraphExtractor {
      *
      * @param contents   文本内容列表（2-3个chunk）
      * @param providerId 模型提供商ID
+     * @param modelId    指定模型ID（为空时使用 provider 默认模型）
      * @return 所有三元组的合并列表
      */
-    public List<GraphTripleDTO> extractBatch(List<String> contents, Long providerId) {
+    public List<GraphTripleDTO> extractBatch(List<String> contents, Long providerId, String modelId) {
         if (contents == null || contents.isEmpty()) {
             return Collections.emptyList();
         }
@@ -149,14 +146,13 @@ public class GraphExtractor {
 
         try {
             Long actualProviderId = resolveProviderId(providerId);
-            ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-            ChatOptions options = modelFactory.buildChatOptions(actualProviderId, Map.of());
+            var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId);
 
             List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
             messages.add(new SystemMessage(EXTRACT_SYSTEM_PROMPT));
             messages.add(new UserMessage("请从以下文本中抽取实体和关系三元组（文本包含多个段落，请分别抽取）：\n\n" + finalText));
 
-            ChatResponse response = chatModel.call(new Prompt(messages, options));
+            ChatResponse response = ctx.call(messages);
             String text = response.getResult().getOutput().getText();
             return parseTriples(text);
         } catch (Exception e) {
@@ -164,7 +160,7 @@ public class GraphExtractor {
             // 降级：逐个抽取
             List<GraphTripleDTO> fallback = new ArrayList<>();
             for (String content : contents) {
-                fallback.addAll(extract(content, providerId));
+                fallback.addAll(extract(content, providerId, modelId));
             }
             return fallback;
         }

@@ -14,26 +14,65 @@
           <template #prefix><SearchOutlined /></template>
         </a-input>
         <a-button size="small" @click="handleSearch" :disabled="!searchText">搜索</a-button>
-        <a-button size="small" @click="handleClearSearch" v-if="searchKeywords.length > 0">清除高亮</a-button>
+        <a-tooltip v-if="searchKeywords.length > 0" title="清除高亮">
+          <a-button size="small" @click="handleClearSearch">
+            <template #icon><ClearOutlined /></template>
+          </a-button>
+        </a-tooltip>
       </div>
       <div class="kg-toolbar-right">
         <a-button size="small" @click="handleFitView">
           <template #icon><CompressOutlined /></template> 适应画布
         </a-button>
-        <a-button size="small" :loading="extracting" @click="handleExtract">
-          <template #icon><RobotOutlined /></template> AI 抽取图谱
-        </a-button>
+        <!-- 单文档模式：重新抽取按钮 -->
         <a-popconfirm
-          v-if="stats.nodeCount > 0"
-          title="确定清空整个知识图谱？此操作不可恢复。"
+          v-if="documentId && stats.nodeCount > 0"
+          title="确定重新抽取该文档的知识图谱？已有数据将被覆盖。"
+          ok-text="重新抽取"
+          cancel-text="取消"
+          @confirm="handleExtractSingleDoc"
+        >
+          <a-button size="small" :loading="extracting">
+            <template #icon><RedoOutlined /></template> 重新抽取
+          </a-button>
+        </a-popconfirm>
+        <!-- 单文档模式：清空图谱按钮 -->
+        <a-popconfirm
+          v-if="documentId && stats.nodeCount > 0"
+          title="确定清空该文档的知识图谱？此操作不可恢复。"
           ok-text="清空"
           cancel-text="取消"
-          @confirm="handleDeleteGraph"
+          @confirm="handleDeleteDocGraph"
         >
           <a-button size="small" danger :loading="deleting">
             <template #icon><DeleteOutlined /></template> 清空图谱
           </a-button>
         </a-popconfirm>
+        <!-- 知识库模式：下拉选择抽取方式 -->
+        <template v-if="!documentId">
+          <a-dropdown :trigger="['click']">
+            <a-button size="small" :loading="extracting">
+              <template #icon><RobotOutlined /></template> AI 抽取图谱
+            </a-button>
+            <template #overlay>
+              <a-menu @click="({ key }) => handleExtractMenu(key)">
+                <a-menu-item key="single">单文档抽取</a-menu-item>
+                <a-menu-item key="multi">多文档合并抽取</a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+          <a-popconfirm
+            v-if="stats.nodeCount > 0"
+            title="确定清空知识图谱？"
+            ok-text="清空"
+            cancel-text="取消"
+            @confirm="handleDeleteGraph"
+          >
+            <a-button size="small" danger :loading="deleting">
+              <template #icon><DeleteOutlined /></template> 清空图谱
+            </a-button>
+          </a-popconfirm>
+        </template>
       </div>
     </div>
 
@@ -53,12 +92,29 @@
 
     <!-- 图谱画布 -->
     <div class="kg-canvas-wrapper" ref="canvasWrapperRef">
-      <div v-if="graphReady" class="kg-canvas" ref="canvasRef"></div>
+      <div v-if="graphReady && !hasRunningTask" class="kg-canvas" ref="canvasRef"></div>
       <div v-else class="kg-empty">
         <a-spin v-if="loading" tip="加载图谱中..." />
         <template v-else>
-          <p>暂无知识图谱</p>
-          <p class="kg-empty-hint">点击「AI 抽取图谱」从已有文档中自动抽取实体关系</p>
+          <template v-if="hasRunningTask">
+            <LoadingOutlined style="font-size: 28px; color: #1677ff; margin-bottom: 12px" />
+            <p>知识图谱抽取任务已提交，请等待</p>
+            <a-button size="small" @click="loadGraphData">刷新状态</a-button>
+          </template>
+          <template v-else>
+            <p>暂无知识图谱</p>
+            <p v-if="documentId" class="kg-empty-hint">点击下方按钮从该文档中抽取实体关系</p>
+            <p v-else class="kg-empty-hint">点击「AI 抽取图谱」从已有文档中自动抽取实体关系</p>
+            <a-button
+              v-if="documentId"
+              type="primary"
+              size="small"
+              :loading="extracting"
+              @click="handleExtractSingleDoc"
+            >
+              <template #icon><RobotOutlined /></template> 抽取知识图谱
+            </a-button>
+          </template>
         </template>
       </div>
     </div>
@@ -108,23 +164,88 @@
         </div>
       </template>
     </a-drawer>
+
+    <!-- 文档选择弹窗 -->
+    <a-modal
+      v-model:open="docExtractVisible"
+      :width="520"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <template #title>
+        {{ extractMode === 'single' ? '单文档抽取' : '多文档合并抽取' }}
+        <a-tooltip :title="extractMode === 'single'
+          ? '为每个选中的文档分别创建抽取任务，各自独立生成该文档的知识图谱。可批量选择多个文档同时提交。'
+          : '将选中的多个文档内容合并，统一抽取实体关系，构建一个完整的知识库级知识图谱。所有文档的实体和关系会融合在同一张图谱中。'">
+          <QuestionCircleOutlined style="margin-left: 6px; font-size: 14px; color: #999; cursor: help" />
+        </a-tooltip>
+      </template>
+      <div class="doc-extract-content">
+        <!-- 全选 -->
+        <div class="doc-extract-header">
+          <a-checkbox
+            :checked="allDocSelected"
+            :indeterminate="selectedDocIds.length > 0 && !allDocSelected"
+            @change="e => handleToggleAllDoc(e.target.checked)"
+          >
+            全选（{{ docList.length }} 个已完成文档）
+          </a-checkbox>
+          <span v-if="extractMode === 'single' && selectedDocIds.length > 1" class="doc-extract-batch-hint">
+            将为 {{ selectedDocIds.length }} 个文档分别创建抽取任务
+          </span>
+        </div>
+        <a-spin :spinning="docListLoading">
+          <div class="doc-extract-list">
+            <div v-for="doc in docList" :key="doc.id" class="doc-extract-item">
+              <a-checkbox
+                :checked="selectedDocIds.includes(doc.id)"
+                @change="e => {
+                  if (e.target.checked) selectedDocIds.push(doc.id)
+                  else selectedDocIds = selectedDocIds.filter(id => id !== doc.id)
+                }"
+              >
+                <a-tooltip :title="doc.name" placement="topLeft">
+                  <span class="doc-extract-name">{{ doc.name }}</span>
+                </a-tooltip>
+              </a-checkbox>
+            </div>
+            <div v-if="!docListLoading && docList.length === 0" class="doc-extract-empty">
+              暂无已完成的文档，请先上传并入库文档
+            </div>
+          </div>
+        </a-spin>
+        <div class="doc-extract-actions">
+          <div class="doc-extract-model">
+            <span class="doc-extract-model-label">抽取模型</span>
+            <ModelSelect v-model="extractProviderId" style="flex: 1" placeholder="不选择则使用系统内置模型" @change="onExtractModelChange" />
+          </div>
+          <div class="doc-extract-btn-row">
+            <a-button type="primary" size="small" :disabled="selectedDocIds.length === 0" @click="handleExtractSelected" :loading="extracting">
+              {{ extractMode === 'single' ? `批量抽取（${selectedDocIds.length}）` : `合并抽取（${selectedDocIds.length}）` }}
+            </a-button>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick, h } from 'vue'
 import { Graph } from '@antv/g6'
 import {
-  SearchOutlined, RobotOutlined, DeleteOutlined, CompressOutlined
+  SearchOutlined, RobotOutlined, DeleteOutlined, CompressOutlined, LoadingOutlined, RedoOutlined, ClearOutlined, QuestionCircleOutlined
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
-  getGraphSubgraph, getGraphStats, extractGraph, deleteGraph,
-  deleteGraphNode, deleteGraphEdge
+  getGraphSubgraph, getGraphStats, extractGraph, deleteGraph, deleteDocGraph,
+  deleteGraphNode, deleteGraphEdge, getDocuments, getExistingDocIds
 } from '../api/knowledge'
+import ModelSelect from './ModelSelect.vue'
 
 const props = defineProps({
-  knowledgeId: { type: [String, Number], required: true }
+  knowledgeId: { type: [String, Number], required: true },
+  documentId: { type: [String, Number], default: null }
 })
 
 // ---- state ----
@@ -136,6 +257,7 @@ const searchText = ref('')
 const searchKeywords = ref([])
 
 const stats = reactive({ nodeCount: 0, edgeCount: 0 })
+const hasRunningTask = ref(false)
 const displayNodeCount = ref(0)
 const displayEdgeCount = ref(0)
 
@@ -146,6 +268,19 @@ const selectedEdge = ref(null)
 
 const canvasRef = ref(null)
 const canvasWrapperRef = ref(null)
+
+// ---- 文档选择弹窗 ----
+const docExtractVisible = ref(false)
+const docList = ref([])
+const docListLoading = ref(false)
+const selectedDocIds = ref([])
+const extractMode = ref('multi') // 'single' | 'multi'
+const extractProviderId = ref(null)
+const selectedExtractModel = ref({ providerId: null, modelId: null })
+
+function onExtractModelChange({ providerId, modelId }) {
+  selectedExtractModel.value = { providerId, modelId }
+}
 
 let graphInstance = null
 let resizeObserver = null
@@ -216,19 +351,72 @@ function formatGraphData(data) {
   return { nodes, edges }
 }
 
-// ---- 初始化图谱 ----
-function initGraph() {
-  if (!canvasRef.value) return
+// ---- 加载图谱数据 ----
+let initRetryTimer = null
+let loadSeq = 0
+async function loadGraphData() {
+  const seq = ++loadSeq
+  loading.value = true
+  hasRunningTask.value = false
+  graphReady.value = false
+  try {
+    const params = props.documentId ? { documentId: props.documentId } : {}
+    const [subgraphRes, statsRes] = await Promise.all([
+      getGraphSubgraph(props.knowledgeId, params),
+      getGraphStats(props.knowledgeId, props.documentId)
+    ])
+    // 后续有更新的调用，丢弃本次结果
+    if (seq !== loadSeq) return
 
-  const width = canvasRef.value.offsetWidth
-  const height = canvasRef.value.offsetHeight
-  if (width === 0 || height === 0) return
+    const subgraph = subgraphRes.data
+    const statsData = statsRes.data || {}
+    Object.assign(stats, {
+      nodeCount: statsData.nodeCount || 0,
+      edgeCount: statsData.edgeCount || 0
+    })
+    hasRunningTask.value = !!statsData.hasRunningTask
 
-  canvasRef.value.innerHTML = ''
+    if (stats.nodeCount === 0) {
+      loading.value = false
+      return
+    }
+
+    displayNodeCount.value = subgraph.nodes?.length || 0
+    displayEdgeCount.value = subgraph.edges?.length || 0
+
+    graphReady.value = true
+    await nextTick()
+    if (seq !== loadSeq) return
+
+    renderGraph(subgraph, seq)
+  } catch (e) {
+    if (seq !== loadSeq) return
+    console.error('[知识图谱] 加载失败', e)
+    message.error('加载知识图谱失败')
+  } finally {
+    if (seq === loadSeq) loading.value = false
+  }
+}
+
+function renderGraph(subgraph, seq) {
+  // 清理旧实例
   if (graphInstance) {
     try { graphInstance.destroy() } catch { /* ignore */ }
     graphInstance = null
   }
+  clearTimeout(initRetryTimer)
+
+  // 确保 canvas 已挂载且有尺寸
+  if (!canvasRef.value || canvasRef.value.offsetWidth === 0 || canvasRef.value.offsetHeight === 0) {
+    initRetryTimer = setTimeout(() => {
+      if (seq === loadSeq) renderGraph(subgraph, seq)
+    }, 50)
+    return
+  }
+
+  canvasRef.value.innerHTML = ''
+  const width = canvasRef.value.offsetWidth
+  const height = canvasRef.value.offsetHeight
 
   graphInstance = new Graph({
     container: canvasRef.value,
@@ -262,21 +450,20 @@ function initGraph() {
     edge: {
       type: 'quadratic',
       style: {
-        labelText: (d) => d.data.label,
-        labelFill: '#1f2937',
-        labelBackground: true,
-        labelBackgroundFill: '#f3f4f6',
+        labelText: (d) => d.data.label || '',
+        labelFill: '#6b7280',
+        labelFontSize: 10,
         stroke: '#d1d5db',
-        opacity: 0.8,
-        lineWidth: 1.2,
-        endArrow: true
+        lineWidth: 1,
+        endArrow: true,
+        endArrowSize: 6,
+        endArrowFill: '#d1d5db'
       }
     },
     behaviors: [
-      'drag-element',
-      'zoom-canvas',
       'drag-canvas',
-      'hover-activate',
+      'zoom-canvas',
+      'drag-element',
       {
         type: 'click-select',
         degree: 1,
@@ -290,7 +477,6 @@ function initGraph() {
     ]
   })
 
-  // 节点点击
   graphInstance.on('node:click', (evt) => {
     const nodeId = evt.target.id
     const nodeData = graphInstance.getNodeData(nodeId)
@@ -301,8 +487,6 @@ function initGraph() {
       detailVisible.value = true
     }
   })
-
-  // 边点击
   graphInstance.on('edge:click', (evt) => {
     const edgeId = evt.target.id
     const edgeData = graphInstance.getEdgeData(edgeId)
@@ -313,74 +497,142 @@ function initGraph() {
       detailVisible.value = true
     }
   })
-
-  // 点击空白关闭详情
   graphInstance.on('canvas:click', () => {
     detailVisible.value = false
   })
-}
 
-// ---- 加载图谱数据 ----
-async function loadGraphData() {
-  loading.value = true
-  try {
-    const [subgraphRes, statsRes] = await Promise.all([
-      getGraphSubgraph(props.knowledgeId, {}),
-      getGraphStats(props.knowledgeId)
-    ])
+  const data = formatGraphData(subgraph)
+  graphInstance.setData(data)
+  graphInstance.render()
 
-    const subgraph = subgraphRes.data
-    Object.assign(stats, {
-      nodeCount: subgraph.nodeCount || 0,
-      edgeCount: subgraph.edgeCount || 0
-    })
-
-    if (stats.nodeCount === 0) {
-      graphReady.value = false
-      loading.value = false
-      return
-    }
-
-    // 设置显示数量（可能被搜索过滤）
-    displayNodeCount.value = subgraph.nodes?.length || 0
-    displayEdgeCount.value = subgraph.edges?.length || 0
-
-    graphReady.value = true
-    await nextTick()
-
-    initGraph()
-    if (graphInstance) {
-      const data = formatGraphData(subgraph)
-      graphInstance.setData(data)
-      graphInstance.render()
-    }
-  } catch (e) {
-    console.error('[知识图谱] 加载失败', e)
-    message.error('加载知识图谱失败')
-  } finally {
-    loading.value = false
+  // 监听容器尺寸变化
+  if (resizeObserver && canvasRef.value) {
+    resizeObserver.unobserve(canvasRef.value)
   }
+  resizeObserver = new ResizeObserver(() => {
+    if (graphInstance && canvasRef.value) {
+      const w = canvasRef.value.offsetWidth
+      const h = canvasRef.value.offsetHeight
+      graphInstance.changeSize(w, h)
+    }
+  })
+  resizeObserver.observe(canvasRef.value)
 }
 
 // ---- AI 抽取 ----
-async function handleExtract() {
-  Modal.confirm({
-    title: 'AI 抽取知识图谱',
-    content: '将从所有已完成文档中自动抽取实体关系，耗时取决于文档数量。确认继续？',
-    okText: '开始抽取',
-    cancelText: '取消',
-    async onOk() {
-      extracting.value = true
-      try {
-        await extractGraph(props.knowledgeId)
-        message.success('图谱抽取任务已提交，正在后台处理中，请前往任务中心查看进度')
-      } catch (e) {
-        console.error('[知识图谱] 抽取失败', e)
-      } finally {
-        extracting.value = false
+function handleExtractMenu(key) {
+  extractMode.value = key === 'single' ? 'single' : 'multi'
+  openDocPicker()
+}
+
+async function openDocPicker() {
+  docExtractVisible.value = true
+  docListLoading.value = true
+  selectedDocIds.value = []
+  try {
+    const res = await getDocuments(props.knowledgeId, { pageNum: 1, pageSize: 500 })
+    docList.value = (res.data?.records || []).filter(d => d.status === 'completed' || d.status?.code === 'completed')
+  } catch (e) {
+    console.error('[知识图谱] 加载文档列表失败', e)
+    message.error('加载文档列表失败')
+  } finally {
+    docListLoading.value = false
+  }
+}
+
+const allDocSelected = computed(() => docList.value.length > 0 && selectedDocIds.value.length === docList.value.length)
+
+function handleToggleAllDoc(checked) {
+  selectedDocIds.value = checked ? docList.value.map(d => d.id) : []
+}
+
+async function handleExtractSelected() {
+  const ids = selectedDocIds.value
+  if (ids.length === 0) {
+    message.warning('请至少选择一个文档')
+    return
+  }
+
+  // 单文档模式：检查哪些文档已有图谱，列出文档名提醒
+  if (extractMode.value === 'single') {
+    try {
+      const res = await getExistingDocIds(props.knowledgeId, ids)
+      const existingIds = (res.data || []).map(String)
+      if (existingIds.length > 0) {
+        const nameMap = Object.fromEntries(docList.value.map(d => [String(d.id), d.name]))
+        const names = existingIds.map(id => nameMap[id] || `文档${id}`)
+        const docNamesHtml = names.map(n => `<div>· ${n}</div>`).join('')
+        Modal.confirm({
+          title: '已有图谱数据',
+          content: h('div', [
+            h('p', `以下 ${names.length} 个文档已有知识图谱数据，重新抽取将覆盖：`),
+            h('div', { innerHTML: docNamesHtml }),
+            h('p', '是否继续？')
+          ]),
+          okText: '继续抽取',
+          cancelText: '取消',
+          onOk: () => doExtract(ids)
+        })
+        return
       }
+    } catch (e) {
+      console.warn('[知识图谱] 检查文档图谱状态失败', e)
     }
-  })
+  }
+
+  // 多文档模式：检查知识库级图谱
+  if (extractMode.value === 'multi' && stats.nodeCount > 0) {
+    Modal.confirm({
+      title: '重新抽取确认',
+      content: `当前知识图谱已有 ${stats.nodeCount} 个节点，多文档合并抽取将覆盖整个知识图谱，是否继续？`,
+      okText: '继续抽取',
+      cancelText: '取消',
+      onOk: () => doExtract(ids)
+    })
+  } else {
+    doExtract(ids)
+  }
+}
+
+async function doExtract(ids) {
+  docExtractVisible.value = false
+  extracting.value = true
+  try {
+    const { providerId, modelId } = selectedExtractModel.value
+    if (extractMode.value === 'single') {
+      // 单文档模式：为每个文档分别创建独立的抽取任务
+      for (const docId of ids) {
+        await extractGraph(props.knowledgeId, [docId], providerId, modelId)
+      }
+      message.success(`已提交 ${ids.length} 个文档的图谱抽取任务，请前往任务中心查看进度`)
+    } else {
+      // 多文档模式：合并为一个任务，统一构建知识图谱
+      await extractGraph(props.knowledgeId, ids, providerId, modelId)
+      message.success(`已提交多文档合并抽取任务（${ids.length} 个文档），请前往任务中心查看进度`)
+    }
+    hasRunningTask.value = true
+    graphReady.value = false
+  } catch (e) {
+    console.error('[知识图谱] 抽取失败', e)
+  } finally {
+    extracting.value = false
+  }
+}
+
+// 文档模式：单文档抽取（从空状态按钮触发）
+async function handleExtractSingleDoc() {
+  if (!props.documentId) return
+  extracting.value = true
+  try {
+    await extractGraph(props.knowledgeId, [props.documentId])
+    hasRunningTask.value = true
+    graphReady.value = false
+    message.success('图谱抽取任务已提交，请前往任务中心查看进度')
+  } catch (e) {
+    console.error('[知识图谱] 抽取失败', e)
+  } finally {
+    extracting.value = false
+  }
 }
 
 // ---- 清空图谱 ----
@@ -399,6 +651,27 @@ async function handleDeleteGraph() {
     }
   } catch (e) {
     console.error('[知识图谱] 清空失败', e)
+  } finally {
+    deleting.value = false
+  }
+}
+
+async function handleDeleteDocGraph() {
+  if (!props.documentId) return
+  deleting.value = true
+  try {
+    await deleteDocGraph(props.knowledgeId, props.documentId)
+    message.success('文档图谱已清空')
+    graphReady.value = false
+    Object.assign(stats, { nodeCount: 0, edgeCount: 0 })
+    displayNodeCount.value = 0
+    displayEdgeCount.value = 0
+    if (graphInstance) {
+      try { graphInstance.destroy() } catch { /* ignore */ }
+      graphInstance = null
+    }
+  } catch (e) {
+    console.error('[知识图谱] 清空文档图谱失败', e)
   } finally {
     deleting.value = false
   }
@@ -491,26 +764,13 @@ async function handleDeleteEdge() {
   }
 }
 
-// ---- ResizeObserver ----
-function setupResizeObserver() {
-  if (!window.ResizeObserver || !canvasRef.value) return
-  resizeObserver = new ResizeObserver(() => {
-    if (!canvasRef.value || !graphInstance) return
-    const w = canvasRef.value.offsetWidth
-    const h = canvasRef.value.offsetHeight
-    graphInstance.changeSize(w, h)
-  })
-  resizeObserver.observe(canvasRef.value)
-}
-
 // ---- 生命周期 ----
 onMounted(() => {
   loadGraphData()
-  // 延迟设置 ResizeObserver，等 DOM 渲染
-  nextTick(() => setupResizeObserver())
 })
 
 onUnmounted(() => {
+  clearTimeout(initRetryTimer)
   if (resizeObserver && canvasRef.value) {
     resizeObserver.unobserve(canvasRef.value)
   }
@@ -520,8 +780,8 @@ onUnmounted(() => {
   }
 })
 
-// 切换 tab 时重新加载
-watch(() => props.knowledgeId, () => {
+// 切换 tab 或文档时重新加载
+watch(() => [props.knowledgeId, props.documentId], () => {
   loadGraphData()
 })
 </script>
@@ -536,11 +796,10 @@ watch(() => props.knowledgeId, () => {
 
 .kg-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
+  padding-top: 12px;
   margin-bottom: 8px;
-  flex-wrap: wrap;
 }
 
 .kg-toolbar-left {
@@ -552,6 +811,7 @@ watch(() => props.knowledgeId, () => {
 .kg-toolbar-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -626,6 +886,86 @@ watch(() => props.knowledgeId, () => {
 
 .kg-detail-actions {
   margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 文档选择弹窗 */
+.doc-extract-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.doc-extract-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.doc-extract-batch-hint {
+  font-size: 12px;
+  color: #faad14;
+}
+.doc-extract-list {
+  max-height: 400px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.doc-extract-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  min-width: 0;
+}
+.doc-extract-item:hover {
+  background: #f9fafb;
+}
+.doc-extract-item :deep(.ant-checkbox-wrapper) {
+  min-width: 0;
+  overflow: hidden;
+}
+.doc-extract-name {
+  font-size: 13px;
+  color: #171717;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-extract-empty {
+  text-align: center;
+  padding: 32px;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+.doc-extract-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+.doc-extract-actions :deep(.ant-btn-primary:disabled) {
+  background: #d4d4d8;
+  border-color: #d4d4d8;
+  color: #fff;
+}
+.doc-extract-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.doc-extract-model-label {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #666;
+}
+.doc-extract-btn-row {
   display: flex;
   justify-content: flex-end;
 }

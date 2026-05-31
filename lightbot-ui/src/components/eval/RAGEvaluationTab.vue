@@ -38,6 +38,7 @@
               v-model="answerProviderId"
               model-type="llm"
               placeholder="不选则仅评估检索质量"
+              @change="onAnswerModelChange"
             />
           </div>
         </a-col>
@@ -48,6 +49,7 @@
               v-model="judgeProviderId"
               model-type="llm"
               placeholder="不选则仅评估检索质量"
+              @change="onJudgeModelChange"
             />
           </div>
         </a-col>
@@ -134,6 +136,16 @@ const selectedBenchmarkId = ref(null)
 // 模型选择（复合值 "providerId:modelId"）
 const answerProviderId = ref(null)
 const judgeProviderId = ref(null)
+const selectedAnswer = ref({ providerId: null, modelId: null })
+const selectedJudge = ref({ providerId: null, modelId: null })
+
+function onAnswerModelChange({ providerId, modelId }) {
+  selectedAnswer.value = { providerId, modelId }
+}
+
+function onJudgeModelChange({ providerId, modelId }) {
+  selectedJudge.value = { providerId, modelId }
+}
 
 // 运行
 const runLoading = ref(false)
@@ -241,15 +253,13 @@ async function handleRun() {
   runLoading.value = true
   try {
     const params = { benchmarkId: selectedBenchmarkId.value }
-    if (answerProviderId.value) {
-      const [pid, mid] = answerProviderId.value.split(':')
-      params.answerProviderId = pid
-      params.answerModelId = mid
+    if (selectedAnswer.value.providerId) {
+      params.answerProviderId = selectedAnswer.value.providerId
+      params.answerModelId = selectedAnswer.value.modelId
     }
-    if (judgeProviderId.value) {
-      const [pid, mid] = judgeProviderId.value.split(':')
-      params.judgeProviderId = pid
-      params.judgeModelId = mid
+    if (selectedJudge.value.providerId) {
+      params.judgeProviderId = selectedJudge.value.providerId
+      params.judgeModelId = selectedJudge.value.modelId
     }
     await runEvaluation(props.knowledgeId, params)
     message.success('评估任务已提交，请在任务中心查看进度')

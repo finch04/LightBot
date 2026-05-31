@@ -16,11 +16,12 @@ public interface GraphService {
      * 触发文档的图谱抽取（异步任务）
      *
      * @param knowledgeId 知识库ID
-     * @param documentId  文档ID（为null表示全量抽取）
+     * @param documentIds 文档ID列表（为null或空表示全量抽取）
      * @param providerId  模型提供商ID
+     * @param modelId     指定模型ID（为空时使用 provider 默认模型）
      * @return 任务ID
      */
-    Long extractFromDocument(Long knowledgeId, Long documentId, Long providerId);
+    Long extractFromDocument(Long knowledgeId, List<Long> documentIds, Long providerId, String modelId);
 
     /**
      * 批量导入三元组到图谱
@@ -36,12 +37,13 @@ public interface GraphService {
      * 获取子图（用于可视化和检索）
      *
      * @param knowledgeId 知识库ID
+     * @param documentId  文档ID（为null表示全库图谱）
      * @param keyword     搜索关键词（null 表示采样高连接度节点）
      * @param maxDepth    最大跳数（默认2）
      * @param maxNodes    最大节点数（默认50）
      * @return 子图数据
      */
-    GraphSubgraphVO getSubgraph(Long knowledgeId, String keyword, int maxDepth, int maxNodes);
+    GraphSubgraphVO getSubgraph(Long knowledgeId, Long documentId, String keyword, int maxDepth, int maxNodes);
 
     /**
      * 图谱检索：从问题中提取实体，展开子图，返回文本格式的三元组
@@ -57,9 +59,19 @@ public interface GraphService {
      * 获取图谱统计信息
      *
      * @param knowledgeId 知识库ID
+     * @param documentId  文档ID（为null表示全库统计）
      * @return 统计信息
      */
-    GraphStatsVO getStats(Long knowledgeId);
+    GraphStatsVO getStats(Long knowledgeId, Long documentId);
+
+    /**
+     * 批量查询哪些文档已有图谱数据
+     *
+     * @param knowledgeId 知识库ID
+     * @param documentIds 文档ID列表
+     * @return 已有图谱的文档ID集合
+     */
+    List<Long> getExistingDocIds(Long knowledgeId, List<Long> documentIds);
 
     /**
      * 删除知识库的全部图谱数据

@@ -57,7 +57,7 @@
             <ModelSelect
               :model-value="getInstModelValue(inst)"
               size="small"
-              @change="(pid, mid) => onInstModelChange(inst, pid, mid)"
+              @change="(m) => onInstModelChange(inst, m)"
             />
           </div>
           <!-- 动态模型参数 -->
@@ -339,7 +339,7 @@ function getInstModelValue(inst) {
   return undefined
 }
 
-async function onInstModelChange(inst, providerId, modelId) {
+async function onInstModelChange(inst, { providerId, modelId }) {
   const prevProviderId = inst.providerId
   inst.providerId = providerId ? String(providerId) : providerId
   inst.modelId = modelId ? String(modelId) : modelId

@@ -131,4 +131,10 @@ public class StandaloneGraphController {
     public Result<List<String>> listNodeNames() {
         return Result.ok(standaloneGraphService.listNodeNames());
     }
+
+    @Operation(summary = "重建向量索引")
+    @PostMapping("/rebuild-index")
+    public Result<Integer> rebuildVectorIndex() {
+        return Result.ok(standaloneGraphService.rebuildVectorIndex());
+    }
 }

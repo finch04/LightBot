@@ -34,9 +34,13 @@ public class RagEvaluationExecutor implements TaskExecutor {
         String answerModelId = payload.has("answerModelId") ? payload.get("answerModelId").asText() : null;
         Long judgeProviderId = payload.has("judgeProviderId") ? payload.get("judgeProviderId").asLong() : null;
         String judgeModelId = payload.has("judgeModelId") ? payload.get("judgeModelId").asText() : null;
+        String answerProviderName = payload.has("answerProviderName") ? payload.get("answerProviderName").asText("") : "";
+        String judgeProviderName = payload.has("judgeProviderName") ? payload.get("judgeProviderName").asText("") : "";
 
-        log.info("[RAG评估执行器] 开始, taskId={}, resultId={}, benchmarkId={}",
-                task.getId(), resultId, benchmarkId);
+        String answerModel = answerProviderName.isBlank() ? String.valueOf(answerProviderId) : answerProviderName + (answerModelId != null ? "/" + answerModelId : "");
+        String judgeModel = judgeProviderName.isBlank() ? String.valueOf(judgeProviderId) : judgeProviderName + (judgeModelId != null ? "/" + judgeModelId : "");
+        log.info("[RAG评估执行器] 开始, taskId={}, resultId={}, benchmarkId={}, answerModel={}, judgeModel={}",
+                task.getId(), resultId, benchmarkId, answerModel, judgeModel);
 
         var tracker = new TaskProgressTracker(taskService, task.getId())
                 .phases("加载基准", "逐题评估", "聚合指标");

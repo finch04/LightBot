@@ -42,6 +42,7 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
 
     private static final long MAX_JSONL_SIZE = 5 * 1024 * 1024L; // 5MB
     private static final String VECTOR_INDEX_NAME = "standalone_entity_embedding";
+    private static final double MIN_SIMILARITY_SCORE = 0.5;
     private volatile boolean vectorIndexEnsured = false;
 
     // ==================== 导入 ====================
@@ -160,7 +161,10 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
             return Collections.emptyList();
         }
 
-        // 2. 向量检索
+        // 2. 确保向量索引存在
+        ensureVectorIndex(queryEmbedding.length);
+
+        // 3. 向量检索
         try {
             String cypher = """
                 CALL db.index.vector.queryNodes($indexName, $topK, $queryEmbedding)
@@ -177,9 +181,11 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
 
             List<GraphNodeVO> results = new ArrayList<>();
             for (org.neo4j.driver.Record r : records) {
+                double score = r.get("score").asDouble();
+                if (score < MIN_SIMILARITY_SCORE) break;
                 Node node = r.get("node").asNode();
                 GraphNodeVO vo = toNodeVO(node);
-                vo.setScore(r.get("score").asDouble());
+                vo.setScore(score);
                 results.add(vo);
             }
             return results;
@@ -240,6 +246,7 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
 
         // 写入 embedding
         if (embedding != null && !records.isEmpty()) {
+            ensureVectorIndex(embedding.length);
             writeNodeEmbedding(name, embedding);
         }
 
@@ -272,6 +279,7 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
         if (!name.equals(oldName)) {
             float[] embedding = embedText(name);
             if (embedding != null) {
+                ensureVectorIndex(embedding.length);
                 writeNodeEmbedding(name, embedding);
             }
         }
@@ -376,6 +384,47 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
                 .toList();
     }
 
+    @Override
+    public int rebuildVectorIndex() {
+        checkNeo4jAvailable();
+
+        // 1. 查询缺失 embedding 的节点
+        String cypher = "MATCH (n:Entity:standalone) WHERE n.embedding IS NULL RETURN n.name AS name";
+        List<org.neo4j.driver.Record> records = neo4jUtil.query(cypher, Map.of());
+        List<String> names = records.stream()
+                .filter(r -> !r.get("name").isNull())
+                .map(r -> r.get("name").asString())
+                .toList();
+
+        if (names.isEmpty()) {
+            log.info("[独立图谱] 所有节点均已包含embedding，无需重建");
+            return 0;
+        }
+
+        // 2. 批量生成 embedding
+        Map<String, float[]> embeddingMap = generateEmbeddings(names);
+        if (embeddingMap.isEmpty()) {
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
+        }
+
+        // 3. 确保向量索引存在
+        ensureVectorIndex(embeddingMap.values().iterator().next().length);
+
+        // 4. 逐节点写入 embedding
+        int count = 0;
+        for (Map.Entry<String, float[]> entry : embeddingMap.entrySet()) {
+            try {
+                writeNodeEmbedding(entry.getKey(), entry.getValue());
+                count++;
+            } catch (Exception e) {
+                log.warn("[独立图谱] 节点[{}] embedding写入失败: {}", entry.getKey(), e.getMessage());
+            }
+        }
+
+        log.info("[独立图谱] 向量索引重建完成, 补生成节点数={}", count);
+        return count;
+    }
+
     // ==================== 内部方法 ====================
 
     private void checkNeo4jAvailable() {
@@ -440,7 +489,7 @@ public class StandaloneGraphServiceImpl implements StandaloneGraphService {
             try {
                 String cypher = """
                     CREATE VECTOR INDEX %s IF NOT EXISTS
-                    FOR (n:Entity:standalone) ON (n.embedding)
+                    FOR (n:standalone) ON (n.embedding)
                     OPTIONS {indexConfig: {`vector.dimensions`: %d, `vector.similarity_function`: 'cosine'}}
                     """.formatted(VECTOR_INDEX_NAME, dimensions);
                 neo4jUtil.run(cypher, Map.of());

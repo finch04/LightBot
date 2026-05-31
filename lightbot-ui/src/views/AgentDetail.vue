@@ -2101,7 +2101,7 @@ const modelSelectValue = computed(() => {
   return null
 })
 
-async function onModelSelectChange(providerId, modelId) {
+async function onModelSelectChange({ providerId, modelId }) {
   if (isVersionPreview.value) return
   const prevProviderId = agentConfig.providerId
   agentConfig.providerId = providerId ? String(providerId) : providerId

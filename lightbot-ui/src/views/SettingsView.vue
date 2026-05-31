@@ -21,7 +21,7 @@
                 v-model="chatValue"
                 model-type="llm"
                 placeholder="选择对话模型"
-                @change="(pid, mid) => onModelChange('chat', pid, mid)"
+                @change="(m) => onModelChange('chat', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -52,7 +52,7 @@
                 v-model="embeddingValue"
                 model-type="embedding"
                 placeholder="选择向量模型"
-                @change="(pid, mid) => onModelChange('embedding', pid, mid)"
+                @change="(m) => onModelChange('embedding', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -83,7 +83,7 @@
                 v-model="rerankValue"
                 model-type="rerank"
                 placeholder="选择重排模型"
-                @change="(pid, mid) => onModelChange('rerank', pid, mid)"
+                @change="(m) => onModelChange('rerank', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -114,7 +114,7 @@
                 v-model="ttsValue"
                 model-type="tts"
                 placeholder="选择 TTS 模型"
-                @change="(pid, mid) => onModelChange('tts', pid, mid)"
+                @change="(m) => onModelChange('tts', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -169,7 +169,7 @@ onMounted(async () => {
   await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig(), loadRerankConfig()])
 })
 
-function onModelChange(kind, providerId, modelId) {
+function onModelChange(kind, { providerId, modelId }) {
   const pid = providerId ? String(providerId) : providerId
   const mid = modelId ? String(modelId) : modelId
   if (kind === 'chat') { chatProviderId.value = pid; chatModelId.value = mid }
