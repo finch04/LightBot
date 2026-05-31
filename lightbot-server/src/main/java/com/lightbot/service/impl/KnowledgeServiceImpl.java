@@ -244,8 +244,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             return;
         }
 
-        // 3. 读取文档 Markdown 内容
-        String content = documentService.previewDocument(documentId);
+        // 3. 读取文档 Markdown 内容（后台任务调用，跳过权限校验）
+        String content = documentService.readDocumentContent(documentId);
         if (content == null || content.isBlank()) {
             log.warn("[示例问题] 文档内容为空, documentId={}", documentId);
             return;

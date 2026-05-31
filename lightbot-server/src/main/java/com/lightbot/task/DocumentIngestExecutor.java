@@ -45,11 +45,15 @@ public class DocumentIngestExecutor implements TaskExecutor {
             taskService.updateProgress(task.getId(), progress, message);
         });
 
-        // 读取处理后的文档信息作为结果
+        // 读取处理后的文档信息作为结果（包含重复检测警告）
         var doc = documentService.getById(documentId);
         if (doc != null) {
-            return String.format("入库完成, documentId=%d, chunkCount=%d, tokenCount=%d",
+            String result = String.format("入库完成, documentId=%d, chunkCount=%d, tokenCount=%d",
                     documentId, doc.getChunkCount(), doc.getTokenCount());
+            if (doc.getDuplicateRate() != null && doc.getDuplicateRate() > 0) {
+                result += String.format(", 重复率=%.1f%%", doc.getDuplicateRate() * 100);
+            }
+            return result;
         }
         return "入库完成, documentId=" + documentId;
     }

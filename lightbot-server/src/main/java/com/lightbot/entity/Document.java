@@ -69,6 +69,10 @@ public class Document {
     @Schema(description = "Token数量")
     private Long tokenCount;
 
+    @TableField("duplicate_rate")
+    @Schema(description = "内容重复率")
+    private Double duplicateRate;
+
     @TableField("status")
     @Schema(description = "状态")
     private DocumentStatus status;

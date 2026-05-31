@@ -164,6 +164,7 @@ import {
   ExperimentOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
+import { taskCounts, updateTaskCounts } from '../stores/task'
 import { Modal } from 'ant-design-vue'
 import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
 
@@ -182,12 +183,11 @@ const sessionsCollapsed = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 const sidebarHidden = ref(false)
 let sidebarStateBeforeWorkflow = null
-const taskActiveCount = ref(0)
 let taskSSE = null
 
 const taskBadgeCount = computed(() => {
-  if (taskActiveCount.value <= 0) return 0
-  return taskActiveCount.value > 10 ? '10+' : taskActiveCount.value
+  if (taskCounts.active <= 0) return 0
+  return taskCounts.active > 10 ? '10+' : taskCounts.active
 })
 
 const taskBadgeStyle = computed(() => sidebarCollapsed.value
@@ -352,7 +352,13 @@ function connectTaskSSE() {
   taskSSE = new EventSource(`/api/tasks/stream?userId=${userId}`)
 
   taskSSE.addEventListener('count', (e) => {
-    taskActiveCount.value = Number(e.data) || 0
+    try {
+      const counts = JSON.parse(e.data)
+      updateTaskCounts(counts)
+    } catch {
+      // 兼容旧格式（纯数字）
+      updateTaskCounts({ active: Number(e.data) || 0, pending: 0, running: 0 })
+    }
   })
 
   taskSSE.onerror = () => {

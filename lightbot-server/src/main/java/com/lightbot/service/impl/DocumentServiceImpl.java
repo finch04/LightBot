@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.DuplicateCheckResultVO;
 import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.UrlFetchPreviewVO;
 import com.lightbot.dto.UrlSaveRequest;
@@ -24,6 +25,7 @@ import com.lightbot.entity.Task;
 import com.lightbot.enums.TaskType;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
+import com.lightbot.util.ContentDuplicateDetectionUtil;
 import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
@@ -93,6 +95,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
     private final DocumentSecurityScanUtil documentSecurityScanUtil;
+    private final ContentDuplicateDetectionUtil contentDuplicateDetectionUtil;
     private final KnowledgePermissionHelper permissionHelper;
 
     @Override
@@ -265,6 +268,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 return;
             }
 
+            // 1.2 内容重复检测（入库时异步执行，结果存入文档记录）
+            progressCallback.accept(10, "正在检测内容重复...");
+            String dupWarning = detectContentDuplicate(doc, content);
+
             // 2. 解析入库配置，执行分块
             progressCallback.accept(20, "正在分块...");
             ChunkParams params = parseChunkParams(embeddingJson);
@@ -303,7 +310,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 progressCallback.accept(overallProgress, msg);
             });
 
-            progressCallback.accept(100, "入库完成");
+            String doneMsg = dupWarning != null ? "入库完成（" + dupWarning + "）" : "入库完成";
+            progressCallback.accept(100, doneMsg);
         } catch (Exception e) {
             log.error("[文档入库] 失败, documentId={}", documentId, e);
             doc.setStatus(DocumentStatus.FAILED);
@@ -788,4 +796,55 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         }
         return originalContent + "\n\n---\n\n## OCR 识别内容\n\n" + ocrContent;
     }
+
+    /**
+     * 入库时内容重复检测：读取知识库配置，若开启则与已有文档比较相似度，结果存入 doc.duplicateRate
+     *
+     * @return 超过阈值时返回警告消息，未超过或未开启返回 null
+     */
+    private String detectContentDuplicate(Document doc, String content) {
+        try {
+            Knowledge knowledge = knowledgeServiceProvider.getObject().getById(doc.getKnowledgeId());
+            if (knowledge == null || knowledge.getConfig() == null || knowledge.getConfig().isBlank()) {
+                return null;
+            }
+            com.fasterxml.jackson.databind.JsonNode config = objectMapper.readTree(knowledge.getConfig());
+            boolean enabled = config.has("duplicateDetectionEnabled") && config.get("duplicateDetectionEnabled").asBoolean(false);
+            if (!enabled) {
+                return null;
+            }
+            double threshold = config.has("duplicateThreshold") ? config.get("duplicateThreshold").asDouble(0.8) : 0.8;
+
+            // 查询已有文档（排除当前文档，有解析内容即可，不限状态）
+            List<Document> existingDocs = list(new LambdaQueryWrapper<Document>()
+                    .eq(Document::getKnowledgeId, doc.getKnowledgeId())
+                    .eq(Document::getDeleted, 0)
+                    .ne(Document::getId, doc.getId())
+                    .isNotNull(Document::getMarkdownPath)
+                    .orderByDesc(Document::getCreateTime)
+                    .last("LIMIT 50"));
+
+            if (existingDocs.isEmpty()) {
+                return null;
+            }
+
+            DuplicateCheckResultVO result = contentDuplicateDetectionUtil.checkDuplicate(content, existingDocs, threshold);
+            doc.setDuplicateRate(result.getMaxSimilarity());
+            log.info("[重复检测] documentId={}, maxSimilarity={}, threshold={}", doc.getId(), result.getMaxSimilarity(), threshold);
+
+            // 超过阈值返回警告消息
+            if (result.getMaxSimilarity() >= threshold) {
+                String percent = String.format("%.1f", result.getMaxSimilarity() * 100);
+                String docName = result.getMostSimilarDocName() != null ? result.getMostSimilarDocName() : "未知";
+                return String.format("内容重复率 %s%%（阈值 %.0f%%），与「%s」高度相似",
+                        percent, threshold * 100, docName);
+            }
+            return null;
+        } catch (Exception e) {
+            // 重复检测失败不影响主入库流程
+            log.warn("[重复检测] 执行失败, documentId={}", doc.getId(), e);
+            return null;
+        }
+    }
+
 }

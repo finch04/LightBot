@@ -4,9 +4,8 @@
       <div class="page-header-left">
         <h2>任务中心</h2>
         <a-radio-group v-model:value="statusFilter" size="small" button-style="solid">
-          <a-radio-button value="active">进行中 {{ activeCount }}</a-radio-button>
+          <a-radio-button value="running">进行中 {{ runningCount }}</a-radio-button>
           <a-radio-button value="pending">等待中 {{ pendingCount }}</a-radio-button>
-          <a-radio-button value="running">执行中 {{ runningCount }}</a-radio-button>
           <a-radio-button value="">全部</a-radio-button>
         </a-radio-group>
       </div>
@@ -151,19 +150,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTaskList, cancelTask, deleteTask, getTaskTypeCounts } from '../api/task'
+import { taskCounts } from '../stores/task'
 
 const loading = ref(false)
 const tasks = ref([])
 const searchText = ref('')
 const statusFilter = ref('')
 const typeFilter = ref('')
-const activeCount = ref(0)
-const pendingCount = ref(0)
-const runningCount = ref(0)
+const pendingCount = computed(() => taskCounts.pending)
+const runningCount = computed(() => taskCounts.running)
 const typeCounts = ref({})
 
 const detailVisible = ref(false)
@@ -230,19 +229,6 @@ async function loadTasks() {
   } finally {
     loading.value = false
   }
-}
-
-async function loadStatusCounts() {
-  try {
-    const [activeRes, pendingRes, runningRes] = await Promise.all([
-      getTaskList({ pageNum: 1, pageSize: 1, status: 'active' }),
-      getTaskList({ pageNum: 1, pageSize: 1, status: 'pending' }),
-      getTaskList({ pageNum: 1, pageSize: 1, status: 'running' }),
-    ])
-    activeCount.value = activeRes.data.total || 0
-    pendingCount.value = pendingRes.data.total || 0
-    runningCount.value = runningRes.data.total || 0
-  } catch { /* ignore */ }
 }
 
 async function loadTypeCounts() {
@@ -341,11 +327,9 @@ function formatJson(val) {
 
 onMounted(() => {
   loadTasks()
-  loadStatusCounts()
   loadTypeCounts()
   pollTimer = setInterval(() => {
     loadTasks()
-    loadStatusCounts()
     loadTypeCounts()
   }, 5000)
 })

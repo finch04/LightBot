@@ -58,6 +58,9 @@
               <span class="doc-name">{{ doc.name }}</span>
             </a-tooltip>
             <div class="doc-meta">
+              <a-tooltip v-if="duplicateThreshold > 0 && doc.duplicateRate != null && doc.duplicateRate >= duplicateThreshold" :title="`内容重复率 ${(doc.duplicateRate * 100).toFixed(1)}%，超过阈值 ${(duplicateThreshold * 100).toFixed(0)}%`">
+                <a-tag color="orange" class="doc-dup-tag">重复 {{ (doc.duplicateRate * 100).toFixed(0) }}%</a-tag>
+              </a-tooltip>
               <span v-if="doc.chunkCount" class="doc-chunk-count">{{ doc.chunkCount }} 分块</span>
               <a-tooltip title="入库" v-if="(doc.status?.code || doc.status) === 'uploaded' || (doc.status?.code || doc.status) === 'failed'">
                 <button class="doc-icon-btn" @click.stop="openIngestModal(doc)"><UploadOutlined /></button>
@@ -203,6 +206,45 @@
         </button>
       </template>
       <a-tabs v-model:activeKey="docModalTab" class="doc-modal-tabs">
+        <a-tab-pane key="info" tab="文档信息">
+          <div class="tab-pane-body doc-info-pane">
+            <div class="doc-info-section">
+              <div class="doc-info-title">文件信息</div>
+              <a-descriptions :column="2" size="small" bordered :labelStyle="{ width: '100px', minWidth: '100px', whiteSpace: 'nowrap' }">
+                <a-descriptions-item label="文件名称">{{ currentDoc?.name || '-' }}</a-descriptions-item>
+                <a-descriptions-item label="文件类型">{{ currentDoc?.fileType?.toUpperCase() || '-' }}</a-descriptions-item>
+                <a-descriptions-item label="文件大小">{{ formatFileSize(currentDoc?.fileSize) }}</a-descriptions-item>
+                <a-descriptions-item label="状态">
+                  <a-tag :color="docStatusColor(currentDoc?.status)">{{ statusText(currentDoc?.status?.code || currentDoc?.status) }}</a-tag>
+                </a-descriptions-item>
+                <a-descriptions-item label="创建时间">{{ formatDateTime(currentDoc?.createTime) }}</a-descriptions-item>
+                <a-descriptions-item label="更新时间">{{ formatDateTime(currentDoc?.updateTime) }}</a-descriptions-item>
+              </a-descriptions>
+            </div>
+            <div class="doc-info-section">
+              <div class="doc-info-title">业务信息</div>
+              <a-descriptions :column="2" size="small" bordered :labelStyle="{ width: '100px', minWidth: '100px', whiteSpace: 'nowrap' }">
+                <a-descriptions-item label="分块数量">{{ currentDoc?.chunkCount ?? '-' }}</a-descriptions-item>
+                <a-descriptions-item label="Token 数量">{{ currentDoc?.tokenCount != null ? currentDoc.tokenCount.toLocaleString() : '-' }}</a-descriptions-item>
+                <a-descriptions-item label="内容重复率">
+                  <template v-if="currentDoc?.duplicateRate != null">
+                    <a-tag :color="currentDoc.duplicateRate >= 0.8 ? 'red' : currentDoc.duplicateRate >= 0.5 ? 'orange' : 'green'">
+                      {{ (currentDoc.duplicateRate * 100).toFixed(1) }}%
+                    </a-tag>
+                  </template>
+                  <span v-else>-</span>
+                </a-descriptions-item>
+                <a-descriptions-item label="入库策略">{{ currentDoc?.embeddingJson ? parseIngestConfig(currentDoc.embeddingJson).chunkStrategy || '-' : '-' }}</a-descriptions-item>
+              </a-descriptions>
+            </div>
+            <div v-if="currentDoc?.errorMessage && (currentDoc?.status?.code || currentDoc?.status) === 'failed'" class="doc-info-section">
+              <div class="doc-info-title">错误信息</div>
+              <div class="doc-info-error">
+                <ExclamationCircleOutlined /> {{ currentDoc.errorMessage }}
+              </div>
+            </div>
+          </div>
+        </a-tab-pane>
         <a-tab-pane v-if="hasSourcePreview" key="source" tab="源文件预览">
           <div class="tab-pane-body">
             <FilePreview
@@ -756,7 +798,7 @@ import {
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
-  fetchUrlDocument, previewUrlDocument, saveUrlDocument, checkDocumentDuplicate,
+  fetchUrlDocument, previewUrlDocument, saveUrlDocument,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getProvidersWithModels } from '../api/modelProvider'
@@ -803,6 +845,12 @@ const knowledgeDefaultStrategy = computed(() => {
     return cfg.defaultChunkStrategy || ''
   } catch { return '' }
 })
+const duplicateThreshold = computed(() => {
+  try {
+    const cfg = typeof knowledge.value.config === 'string' ? JSON.parse(knowledge.value.config) : (knowledge.value.config || {})
+    return cfg.duplicateDetectionEnabled ? (cfg.duplicateThreshold ?? 0.8) : -1
+  } catch { return -1 }
+})
 const activeTab = ref('ask')
 const evalTabRef = ref(null)
 const benchmarksTabRef = ref(null)
@@ -819,7 +867,7 @@ const mindmapLoaded = ref(false)
 
 // 文档弹窗
 const docModalVisible = ref(false)
-const docModalTab = ref('source')
+const docModalTab = ref('info')
 const docModalKey = ref(0)
 const currentDoc = ref(null)
 const previewContent = ref('')
@@ -1056,49 +1104,6 @@ async function handleBatchUpload() {
 
   try {
     const files = uploadFiles.value.map(f => f)
-
-    // 重复检测：检查知识库是否开启
-    let config = {}
-    try {
-      config = typeof knowledge.value.config === 'string' ? JSON.parse(knowledge.value.config) : (knowledge.value.config || {})
-    } catch { config = {} }
-
-    if (config.duplicateDetectionEnabled) {
-      // 并行检测每个文件
-      const results = await Promise.allSettled(
-        files.map(f => checkDocumentDuplicate(knowledgeId, f))
-      )
-      const duplicates = []
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value?.data?.hasDuplicate) {
-          const d = r.value.data
-          duplicates.push({
-            name: files[i].name,
-            maxSimilarity: (d.maxSimilarity * 100).toFixed(1),
-            mostSimilarDoc: d.mostSimilarDocName || '-',
-          })
-        }
-      })
-
-      if (duplicates.length > 0) {
-        const list = duplicates.map(d => `  · ${d.name} → 与"${d.mostSimilarDoc}"相似度 ${d.maxSimilarity}%`).join('\n')
-        const confirmed = await new Promise(resolve => {
-          Modal.confirm({
-            title: '检测到相似文档',
-            content: `以下文件与已有文档内容相似度较高：\n${list}\n\n是否继续上传？`,
-            okText: '继续上传',
-            cancelText: '取消',
-            onOk: () => resolve(true),
-            onCancel: () => resolve(false),
-          })
-        })
-        if (!confirmed) {
-          uploadSubmitting.value = false
-          return
-        }
-      }
-    }
-
     await uploadDocuments(knowledgeId, files, ocrEnabled.value)
     message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
@@ -1309,9 +1314,7 @@ async function handleIngest() {
 
 async function openDocModal(doc) {
   currentDoc.value = doc
-  // Office文档默认展示文本预览，其他默认展示源文件预览
-  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
-  docModalTab.value = officeTypes.includes(doc.fileType) ? 'text' : 'source'
+  docModalTab.value = 'info'
   previewContent.value = ''
   previewLoaded.value = false
   downloadUrl.value = ''
@@ -1573,6 +1576,33 @@ function chunkStatusColor(s) {
   const code = s?.code || s
   const map = { chunked: 'default', vectorizing: 'processing', vectorized: 'success', failed: 'error' }
   return map[code] || 'default'
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '-'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function docStatusColor(status) {
+  const s = status?.code || status
+  const map = { uploading: 'orange', uploaded: 'default', pending: 'blue', processing: 'orange', completed: 'green', failed: 'red' }
+  return map[s] || 'default'
+}
+
+function formatDateTime(val) {
+  if (!val) return '-'
+  // 后端 LocalDateTime 可能是数组 [2026,5,31,10,30,0] 或 ISO 字符串
+  let d
+  if (Array.isArray(val)) {
+    d = new Date(val[0], val[1] - 1, val[2], val[3] || 0, val[4] || 0, val[5] || 0)
+  } else {
+    d = new Date(val)
+  }
+  if (isNaN(d.getTime())) return String(val)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 // ========== 思维导图 ==========
@@ -1954,6 +1984,12 @@ onUnmounted(() => {
   color: #a1a1aa;
   flex-shrink: 0;
 }
+.doc-dup-tag {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
 .doc-meta {
   display: flex;
   align-items: center;
@@ -2265,6 +2301,35 @@ onUnmounted(() => {
 .doc-graph-pane {
   height: 520px;
   overflow: hidden;
+}
+.doc-info-pane {
+  height: 520px;
+  overflow: auto;
+  padding: 16px 24px;
+}
+.doc-info-section {
+  margin-bottom: 20px;
+}
+.doc-info-section:last-child {
+  margin-bottom: 0;
+}
+.doc-info-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 10px;
+}
+.doc-info-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #dc2626;
+  font-size: 13px;
+  white-space: pre-line;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 .ingest-config-display {
   padding: 10px 12px;

@@ -38,14 +38,6 @@ export function uploadDocuments(knowledgeId, files, ocrEnabled = false) {
   })
 }
 
-export function checkDocumentDuplicate(knowledgeId, file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request.post(`/knowledge/${knowledgeId}/documents/check-duplicate`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-}
-
 export function previewUrlDocument(knowledgeId, url) {
   return request.post(`/knowledge/${knowledgeId}/documents/preview-url`, null, {
     params: { url },

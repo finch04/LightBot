@@ -72,6 +72,7 @@ public enum ErrorCode {
     DOCUMENT_CHUNKS_TOO_SHORT(60009, "按照此分片策略会导致每个分片过短，请重新选择策略!", HttpStatus.BAD_REQUEST),
     DOCUMENT_CONTENT_SUSPICIOUS(60010, "文档内容安全扫描未通过: %s", HttpStatus.BAD_REQUEST),
     CHAT_FILE_CONTENT_SUSPICIOUS(60011, "上传的文件中包含敏感信息", HttpStatus.BAD_REQUEST),
+    DOCUMENT_DUPLICATE_WARNING(60012, "文档内容与已有文档相似度较高", HttpStatus.OK),
 
     // ========== 任务模块 ==========
     TASK_NOT_FOUND(61001, "任务不存在", HttpStatus.BAD_REQUEST),

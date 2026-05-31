@@ -79,6 +79,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
                 .set(Task::getStartedAt, LocalDateTime.now())
                 .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
+        broadcastTaskCountByTaskId(taskId);
     }
 
     @Override

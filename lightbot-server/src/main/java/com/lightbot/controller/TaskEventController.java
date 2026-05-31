@@ -64,9 +64,12 @@ public class TaskEventController {
 
     private void sendCount(Long userId, SseEmitter emitter) {
         try {
-            long count = taskService.countByStatus(userId, "running")
-                    + taskService.countByStatus(userId, "pending");
-            emitter.send(SseEmitter.event().name("count").data(count));
+            long pending = taskService.countByStatus(userId, "pending");
+            long running = taskService.countByStatus(userId, "running");
+            long active = pending + running;
+            // 推送分状态计数 JSON，前端同时用于导航角标和任务中心
+            emitter.send(SseEmitter.event().name("count")
+                    .data(Map.of("active", active, "pending", pending, "running", running)));
         } catch (IOException | IllegalStateException e) {
             USER_EMITTERS.remove(userId, emitter);
         } catch (Exception e) {

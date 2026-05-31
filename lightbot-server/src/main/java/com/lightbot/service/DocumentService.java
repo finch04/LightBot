@@ -131,4 +131,5 @@ public interface DocumentService extends IService<Document> {
      * 从 URL 抓取内容并创建文档记录（抓取后立即入库，兼容旧调用）
      */
     Document fetchUrlDocument(Long knowledgeId, String url);
+
 }

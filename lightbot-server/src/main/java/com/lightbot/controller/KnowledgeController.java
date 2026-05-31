@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChunkVO;
 import com.lightbot.dto.DocumentDownloadVO;
-import com.lightbot.dto.DuplicateCheckResultVO;
 import com.lightbot.dto.GraphEdgeVO;
 import com.lightbot.dto.GraphImportRequest;
 import com.lightbot.dto.GraphNodeVO;
@@ -149,13 +148,6 @@ public class KnowledgeController {
                                                    @RequestParam("files") List<MultipartFile> files,
                                                    @RequestParam(defaultValue = "false") boolean ocrEnabled) {
         return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled));
-    }
-
-    @Operation(summary = "检查文档内容是否与已有文档重复（需要DEVELOPER及以上权限）")
-    @PostMapping("/{id}/documents/check-duplicate")
-    public Result<DuplicateCheckResultVO> checkDuplicate(@PathVariable Long id,
-                                                          @RequestParam("file") MultipartFile file) {
-        return Result.ok(documentService.checkDuplicate(id, file));
     }
 
     @Operation(summary = "预览URL网页内容（不入库）")
