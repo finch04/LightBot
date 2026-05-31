@@ -73,6 +73,10 @@ public class Document {
     @Schema(description = "内容重复率")
     private Double duplicateRate;
 
+    @TableField(value = "duplicate_details", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "重复文档详情（top3，含文档名和相似度）")
+    private String duplicateDetails;
+
     @TableField("status")
     @Schema(description = "状态")
     private DocumentStatus status;

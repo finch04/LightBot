@@ -244,6 +244,17 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             return;
         }
 
+        // 2.1 高重复文档跳过生成，避免产生重复示例问题
+        if (doc.getDuplicateRate() != null) {
+            double dupThreshold = parseDuplicateThreshold(knowledge.getConfig());
+            if (doc.getDuplicateRate() >= dupThreshold) {
+                log.info("[示例问题] 跳过生成，文档重复率 {} >= 阈值 {}, documentId={}",
+                        String.format("%.1f%%", doc.getDuplicateRate() * 100),
+                        String.format("%.0f%%", dupThreshold * 100), documentId);
+                return;
+            }
+        }
+
         // 3. 读取文档 Markdown 内容（后台任务调用，跳过权限校验）
         String content = documentService.readDocumentContent(documentId);
         if (content == null || content.isBlank()) {
@@ -299,6 +310,18 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
     }
 
+    private double parseDuplicateThreshold(String configJson) {
+        if (configJson == null || configJson.isBlank()) {
+            return 0.8;
+        }
+        try {
+            var node = objectMapper.readTree(configJson);
+            return node.has("duplicateThreshold") ? node.get("duplicateThreshold").asDouble(0.8) : 0.8;
+        } catch (Exception e) {
+            return 0.8;
+        }
+    }
+
     /**
      * 从AI回复中解析问题JSON
      */
@@ -318,7 +341,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     }
 
     /**
-     * 将问题追加到知识库的 exampleQuestions 数组，限制最多20个
+     * 将问题追加到知识库的 exampleQuestions 数组，限制最多10个
      */
     @SuppressWarnings("unchecked")
     private void appendQuestion(Knowledge knowledge, String question) {

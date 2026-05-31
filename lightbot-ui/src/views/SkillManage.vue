@@ -64,12 +64,13 @@
     </a-spin>
 
     <a-pagination
-      v-if="total > pageSize"
+      v-if="total > 0"
       class="pagination"
       v-model:current="pageNum"
       :total="total"
       :page-size="pageSize"
       show-quick-jumper
+      :show-total="(total) => `共 ${total} 条`"
       @change="loadData"
     />
 

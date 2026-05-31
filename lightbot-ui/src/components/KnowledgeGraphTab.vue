@@ -245,7 +245,8 @@ import ModelSelect from './ModelSelect.vue'
 
 const props = defineProps({
   knowledgeId: { type: [String, Number], required: true },
-  documentId: { type: [String, Number], default: null }
+  documentId: { type: [String, Number], default: null },
+  docTotal: { type: Number, default: 0 },
 })
 
 // ---- state ----
@@ -521,6 +522,10 @@ function renderGraph(subgraph, seq) {
 
 // ---- AI 抽取 ----
 function handleExtractMenu(key) {
+  if (props.docTotal === 0) {
+    Modal.warning({ title: '暂无文档', content: '知识库中暂无文档，请先上传文档后再抽取知识图谱。' })
+    return
+  }
   extractMode.value = key === 'single' ? 'single' : 'multi'
   openDocPicker()
 }

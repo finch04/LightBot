@@ -15,7 +15,7 @@
         <a-button size="small" @click="showCreateModal = true">
           <template #icon><PlusOutlined /></template> 新增
         </a-button>
-        <a-button size="small" :loading="generating" @click="showGenerateModal = true">
+        <a-button size="small" :loading="generating" @click="onGenerateClick">
           <template #icon><RobotOutlined /></template> AI 生成
         </a-button>
         <a-tooltip title="检索配置">
@@ -189,11 +189,14 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { SearchOutlined, PlusOutlined, RobotOutlined, SettingOutlined, EditOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs, getKnowledge, updateKnowledge } from '../api/knowledge'
 import ModelSelect from './ModelSelect.vue'
 
-const props = defineProps({ knowledgeId: { type: [String, Number], required: true } })
+const props = defineProps({
+  knowledgeId: { type: [String, Number], required: true },
+  docTotal: { type: Number, default: 0 },
+})
 
 const searchText = ref('')
 const loading = ref(false)
@@ -201,7 +204,7 @@ const generating = ref(false)
 const saving = ref(false)
 const savingConfig = ref(false)
 const qaPairs = ref([])
-const pagination = ref({ current: 1, pageSize: 20, total: 0 })
+const pagination = ref({ current: 1, pageSize: 10, total: 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` })
 
 const showCreateModal = ref(false)
 const showGenerateModal = ref(false)
@@ -304,6 +307,14 @@ async function handleDelete(id) {
   } catch (e) {
     message.error('删除失败')
   }
+}
+
+function onGenerateClick() {
+  if (props.docTotal === 0) {
+    Modal.warning({ title: '暂无文档', content: '知识库中暂无文档，请先上传文档后再生成问答对。' })
+    return
+  }
+  showGenerateModal.value = true
 }
 
 async function handleGenerate() {

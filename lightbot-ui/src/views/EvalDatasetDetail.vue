@@ -39,13 +39,14 @@
           </div>
           <div v-if="items.length === 0" class="item-empty">暂无数据项，点击右上角添加</div>
         </div>
-        <div v-if="itemTotal > pageSize" class="item-pagination">
+        <div v-if="itemTotal > 0" class="item-pagination">
           <a-pagination
             v-model:current="pageNum"
             :page-size="pageSize"
             :total="itemTotal"
             size="small"
             show-less-items
+            :show-total="(total) => `共 ${total} 条`"
             @change="loadItems"
           />
         </div>

@@ -160,7 +160,7 @@ const selectedBenchmarkHasGoldAnswer = computed(() => {
 // 结果
 const results = ref([])
 const resultsLoading = ref(false)
-const resultPagination = ref({ current: 1, pageSize: 10, total: 0 })
+const resultPagination = ref({ current: 1, pageSize: 10, total: 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` })
 
 // 详情
 const detailVisible = ref(false)

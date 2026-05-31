@@ -93,7 +93,7 @@
             <a-table
               :dataSource="getResultsForEvaluator(ev.evaluatorName)"
               :columns="resultColumns"
-              :pagination="{ pageSize: 20 }"
+              :pagination="{ pageSize: 20, showTotal: (total) => `共 ${total} 条` }"
               rowKey="id"
               size="middle"
             >

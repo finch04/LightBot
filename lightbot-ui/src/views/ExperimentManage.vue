@@ -26,7 +26,7 @@
     <a-table
       :dataSource="list"
       :columns="columns"
-      :pagination="{ pageSize: 20 }"
+      :pagination="{ pageSize: 20, showTotal: (total) => `共 ${total} 条` }"
       rowKey="id"
       size="middle"
       :loading="loading"

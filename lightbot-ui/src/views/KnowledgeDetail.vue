@@ -78,13 +78,14 @@
           </div>
         </div>
         </a-spin>
-        <div v-if="docPagination.total > docPagination.pageSize" class="doc-pagination">
+        <div v-if="docPagination.total > 0" class="doc-pagination">
           <a-pagination
             v-model:current="docPagination.current"
             :page-size="docPagination.pageSize"
             :total="docPagination.total"
             size="small"
             show-less-items
+            :show-total="(total) => `共 ${total} 条`"
             @change="loadDocuments"
           />
         </div>
@@ -173,17 +174,17 @@
           </a-tab-pane>
           <a-tab-pane key="benchmarks" tab="评估基准">
             <div class="rag-section">
-              <EvaluationBenchmarks ref="benchmarksTabRef" :knowledge-id="knowledgeId" />
+              <EvaluationBenchmarks ref="benchmarksTabRef" :knowledge-id="knowledgeId" :doc-total="docPagination.total" />
             </div>
           </a-tab-pane>
           <a-tab-pane key="knowledge-graph" tab="知识图谱">
             <div v-if="activeTab === 'knowledge-graph'" class="rag-section">
-              <KnowledgeGraphTab :knowledge-id="knowledgeId" />
+              <KnowledgeGraphTab :knowledge-id="knowledgeId" :doc-total="docPagination.total" />
             </div>
           </a-tab-pane>
           <a-tab-pane key="qa-pairs" tab="问答对">
             <div class="rag-section">
-              <QAPairsTab ref="qaPairsTabRef" :knowledge-id="knowledgeId" />
+              <QAPairsTab ref="qaPairsTabRef" :knowledge-id="knowledgeId" :doc-total="docPagination.total" />
             </div>
           </a-tab-pane>
         </a-tabs>
@@ -236,6 +237,24 @@
                 </a-descriptions-item>
                 <a-descriptions-item label="入库策略">{{ currentDoc?.embeddingJson ? parseIngestConfig(currentDoc.embeddingJson).chunkStrategy || '-' : '-' }}</a-descriptions-item>
               </a-descriptions>
+            </div>
+            <div v-if="parseDuplicateDetails(currentDoc?.duplicateDetails).length > 0" class="doc-info-section">
+              <div class="doc-info-title">相似文档</div>
+              <a-table
+                :data-source="parseDuplicateDetails(currentDoc?.duplicateDetails)"
+                :columns="dupDetailColumns"
+                :pagination="false"
+                size="small"
+                bordered
+              >
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'similarity'">
+                    <a-tag :color="record.similarity >= 0.8 ? 'red' : 'orange'">
+                      {{ (record.similarity * 100).toFixed(1) }}%
+                    </a-tag>
+                  </template>
+                </template>
+              </a-table>
             </div>
             <div v-if="currentDoc?.errorMessage && (currentDoc?.status?.code || currentDoc?.status) === 'failed'" class="doc-info-section">
               <div class="doc-info-title">错误信息</div>
@@ -571,64 +590,46 @@
         <a-form-item label="RAG 相似度阈值">
           <a-input-number v-model:value="editForm.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
         </a-form-item>
-        <a-form-item>
-          <template #label>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span>自动生成问题</span>
-              <a-tooltip title="入库文档时AI自动生成示例问题">
-                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
-              </a-tooltip>
-            </div>
-          </template>
-          <a-switch v-model:checked="editForm.autoGenerateQuestions" />
+        <a-form-item label="自动生成问题">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a-switch v-model:checked="editForm.autoGenerateQuestions" />
+            <a-tooltip title="入库文档时AI自动生成示例问题">
+              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+            </a-tooltip>
+          </div>
         </a-form-item>
-        <a-form-item>
-          <template #label>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span>内容安全扫描</span>
-              <a-tooltip title="上传文件/网页抓取时使用系统默认模型检测 Prompt 注入">
-                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
-              </a-tooltip>
-            </div>
-          </template>
-          <a-switch v-model:checked="editForm.contentScanEnabled" />
+        <a-form-item label="内容安全扫描">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a-switch v-model:checked="editForm.contentScanEnabled" />
+            <a-tooltip title="上传文件/网页抓取时使用系统默认模型检测 Prompt 注入">
+              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+            </a-tooltip>
+          </div>
         </a-form-item>
-        <a-form-item>
-          <template #label>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span>重复检测</span>
-              <a-tooltip title="上传文档时检查内容是否与已有文档重复，相似度超过阈值时会提示确认">
-                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
-              </a-tooltip>
-            </div>
-          </template>
-          <a-switch v-model:checked="editForm.duplicateDetectionEnabled" />
+        <a-form-item label="重复检测">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a-switch v-model:checked="editForm.duplicateDetectionEnabled" />
+            <a-tooltip title="文档入库时自动检测内容与已有文档的相似度，超过阈值的文档会在列表中标记橙色警告标签">
+              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+            </a-tooltip>
+          </div>
         </a-form-item>
-        <a-form-item v-if="editForm.duplicateDetectionEnabled">
-          <template #label>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span>相似度阈值</span>
-              <a-tooltip title="内容相似度阈值，超过此值将提示重复警告。建议值 0.7-0.9">
-                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
-              </a-tooltip>
-            </div>
-          </template>
-          <a-input-number
-            v-model:value="editForm.duplicateThreshold"
-            :min="0.1"
-            :max="1.0"
-            :step="0.05"
-            style="width: 160px"
-          />
+        <a-form-item v-if="editForm.duplicateDetectionEnabled" label="相似度阈值">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a-input-number
+              v-model:value="editForm.duplicateThreshold"
+              :min="0.1"
+              :max="1.0"
+              :step="0.05"
+              style="width: 160px"
+            />
+            <a-tooltip title="内容相似度阈值，超过此值的文档会被标记为重复警告。建议值 0.7-0.9">
+              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+            </a-tooltip>
+          </div>
         </a-form-item>
         <!-- 示例问题管理 -->
         <a-form-item label="示例问题">
-          <template #label>
-            <span>示例问题</span>
-            <a-tooltip title="知识库的示例问题会展示在RAG问答界面，帮助用户快速了解知识库内容。最多10个。">
-              <QuestionCircleOutlined style="margin-left: 4px; color: #8c8c8c; font-size: 12px" />
-            </a-tooltip>
-          </template>
           <div class="edit-questions-list">
             <div v-for="(q, qi) in editExampleQuestions" :key="qi" class="edit-question-item">
               <a-input
@@ -651,6 +652,9 @@
               <a-button size="small" type="dashed" :loading="editQuestionLoading" @click="aiGenerateEditQuestion" :disabled="editExampleQuestions.length >= 10">
                 <RobotOutlined /> AI生成
               </a-button>
+              <a-tooltip title="知识库的示例问题会展示在RAG问答界面，帮助用户快速了解知识库内容。最多10个。">
+                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help; margin-left: 4px;" />
+              </a-tooltip>
             </div>
           </div>
         </a-form-item>
@@ -1603,6 +1607,20 @@ function formatDateTime(val) {
   if (isNaN(d.getTime())) return String(val)
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+// ========== 相似文档详情 ==========
+const dupDetailColumns = [
+  { title: '文档名称', dataIndex: 'documentName', key: 'documentName', ellipsis: true },
+  { title: '相似度', dataIndex: 'similarity', key: 'similarity', width: 100, align: 'center' },
+]
+
+function parseDuplicateDetails(val) {
+  if (!val) return []
+  try {
+    const arr = typeof val === 'string' ? JSON.parse(val) : val
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
 }
 
 // ========== 思维导图 ==========

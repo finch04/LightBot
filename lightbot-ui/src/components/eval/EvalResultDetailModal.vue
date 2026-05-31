@@ -194,7 +194,7 @@ const emit = defineEmits(['update:open'])
 const details = ref([])
 const detailLoading = ref(false)
 const errorOnly = ref(false)
-const detailPagination = ref({ current: 1, pageSize: 10, total: 0 })
+const detailPagination = ref({ current: 1, pageSize: 10, total: 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` })
 const metricHelpVisible = ref(false)
 
 const statusMap = { RUNNING: '运行中', COMPLETED: '已完成', FAILED: '失败' }

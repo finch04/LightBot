@@ -10,7 +10,7 @@
       <a-button size="small" @click="showUploadModal = true">
         <template #icon><UploadOutlined /></template> 上传基准
       </a-button>
-      <a-button size="small" type="primary" @click="showGenerateModal = true">
+      <a-button size="small" type="primary" @click="onGenerateClick">
         <template #icon><ThunderboltOutlined /></template> AI 生成
       </a-button>
     </div>
@@ -117,7 +117,10 @@ import {
 import BenchmarkGenerateModal from './BenchmarkGenerateModal.vue'
 import BenchmarkUploadModal from './BenchmarkUploadModal.vue'
 
-const props = defineProps({ knowledgeId: { type: String, required: true } })
+const props = defineProps({
+  knowledgeId: { type: String, required: true },
+  docTotal: { type: Number, default: 0 },
+})
 
 const loading = ref(false)
 const benchmarks = ref([])
@@ -163,6 +166,14 @@ const previewColumns = computed(() => {
   cols.push({ title: 'Gold Answer', dataIndex: 'goldAnswer', key: 'goldAnswer', width: 420 })
   return cols
 })
+
+function onGenerateClick() {
+  if (props.docTotal === 0) {
+    Modal.warning({ title: '暂无文档', content: '知识库中暂无文档，请先上传文档后再生成评估基准。' })
+    return
+  }
+  showGenerateModal.value = true
+}
 
 async function loadBenchmarks() {
   loading.value = true

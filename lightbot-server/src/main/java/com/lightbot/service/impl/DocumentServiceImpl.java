@@ -832,6 +832,15 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             doc.setDuplicateRate(result.getMaxSimilarity());
             log.info("[重复检测] documentId={}, maxSimilarity={}, threshold={}", doc.getId(), result.getMaxSimilarity(), threshold);
 
+            // 存储top3相似文档详情（降序取前3）
+            if (result.getDetails() != null && !result.getDetails().isEmpty()) {
+                List<DuplicateCheckResultVO.DuplicateDetail> top3 = result.getDetails().stream()
+                        .sorted((a, b) -> Double.compare(b.getSimilarity(), a.getSimilarity()))
+                        .limit(3)
+                        .toList();
+                doc.setDuplicateDetails(objectMapper.writeValueAsString(top3));
+            }
+
             // 超过阈值返回警告消息
             if (result.getMaxSimilarity() >= threshold) {
                 String percent = String.format("%.1f", result.getMaxSimilarity() * 100);
