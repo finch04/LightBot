@@ -74,6 +74,14 @@ public interface AgentVersionService {
     void initDraftOnCreate(Agent agent);
 
     /**
+     * Agent 创建后使用预定义工作流快照初始化草稿版本行
+     *
+     * @param agent             Agent 实体
+     * @param workflowSnapshot  工作流快照（含 kind + graph）
+     */
+    void initDraftWithWorkflow(Agent agent, Map<String, Object> workflowSnapshot);
+
+    /**
      * 从 agent.config 迁移历史版本数据（一次性）
      */
     void migrateLegacyIfNeeded(Agent agent);

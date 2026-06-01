@@ -98,6 +98,7 @@ export function getDefaultNodeData(type) {
       promptTemplate: '{{input}}',
       sysPrompt: '',
       temperature: 0.7,
+      enableStreaming: false,
       short_memory: { ...SHORT_MEMORY_DEFAULT }
     },
     condition: {

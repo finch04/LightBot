@@ -24,6 +24,9 @@ import com.lightbot.service.ToolService;
 import com.lightbot.entity.Tool;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MinioUtil;
+import com.lightbot.util.WorkflowExampleTemplates;
+import com.lightbot.dto.WorkflowExampleVO;
+import com.lightbot.enums.AgentType;
 import com.lightbot.service.AgentVersionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -118,14 +121,17 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
-    public Page<Agent> listMyAgents(int pageNum, int pageSize, String name) {
+    public Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType) {
         long userId = StpUtil.getLoginIdAsLong();
-        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
-                new LambdaQueryWrapper<Agent>()
-                        .eq(Agent::getUserId, userId)
-                        .like(StringUtils.hasText(name), Agent::getName, name)
-                        .orderByDesc(Agent::getIsDefault)
-                        .orderByDesc(Agent::getCreateTime));
+        LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<Agent>()
+                .eq(Agent::getUserId, userId)
+                .like(StringUtils.hasText(name), Agent::getName, name)
+                .orderByDesc(Agent::getIsDefault)
+                .orderByDesc(Agent::getCreateTime);
+        if (StringUtils.hasText(agentType)) {
+            wrapper.eq(Agent::getAgentType, AgentType.valueOf(agentType));
+        }
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }
 
     @Override
@@ -543,5 +549,36 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             throw new BizException(ErrorCode.AI_NO_PROVIDER);
         }
         return providerIds.get(0);
+    }
+
+    @Override
+    public List<WorkflowExampleVO> listWorkflowExamples() {
+        return WorkflowExampleTemplates.listExamples();
+    }
+
+    @Override
+    public Agent createFromWorkflowExample(String key) {
+        // 1. 校验示例 key 有效性
+        String exampleName = WorkflowExampleTemplates.getExampleName(key);
+        if (exampleName == null) {
+            throw new BizException("无效的示例标识: " + key);
+        }
+
+        // 2. 构建 Agent 实体
+        long userId = StpUtil.getLoginIdAsLong();
+        Agent agent = new Agent();
+        agent.setUserId(userId);
+        agent.setName(exampleName);
+        agent.setDescription("内置示例工作流，帮助学习工作流节点使用");
+        agent.setAgentType(AgentType.WORKFLOW);
+        agent.setConfig("{}");
+        agent.setStatus(AgentStatus.DRAFT);
+        agent.setVersion(0);
+        save(agent);
+
+        // 3. 使用预定义工作流快照初始化草稿版本
+        Map<String, Object> snapshot = WorkflowExampleTemplates.getWorkflowSnapshot(key);
+        agentVersionService.initDraftWithWorkflow(agent, snapshot);
+        return agent;
     }
 }

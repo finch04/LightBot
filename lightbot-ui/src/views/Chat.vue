@@ -76,7 +76,8 @@
               <WorkflowNodesGroupComponent
                 :workflow-events="msg._workflowEvents"
                 :is-done="!msg._streaming"
-                :default-expanded="true"
+                :default-expanded="!!msg._streaming"
+                :is-streaming="!!msg._streaming"
               />
             </div>
             <!-- 有工具事件：按 offset 位置插入工具块（流式/历史统一逻辑，支持多轮工具调用） -->
@@ -811,8 +812,9 @@ async function loadHistory() {
     const session = sessionRes.data
     if (session?.agentId) {
       selectedAgentId.value = session.agentId
-      await loadCurrentAgent(session.agentId)
+      // 先加载版本列表（会设置 selectedConfigVersion），再加载 agent 详情
       await loadAgentConfigVersions(session.agentId)
+      await loadCurrentAgent(session.agentId)
     }
     scrollToBottom()
   } catch (e) {
@@ -1123,6 +1125,19 @@ async function runChatStream({ message, attachments, regenerate }) {
             abortController.value = null
             return
           }
+          // 工作流 LLM 流式输出：逐 token 追加到消息内容
+          if (event.type === 'workflow_llm_chunk') {
+            if (!pushed) {
+              messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
+              assistantMsg = messages.value[messages.value.length - 1]
+              attachRequestId(assistantMsg)
+              pushed = true
+              hasStreamContent.value = true
+            }
+            assistantMsg.content += (event.content || '')
+            scrollToBottom()
+            return
+          }
           // 工作流节点执行事件（实时推送，无需等待最终回复）
           if (event.type === 'workflow_node_start' || event.type === 'workflow_node_complete' || event.type === 'workflow_complete') {
             if (!assistantMsg._workflowEvents) assistantMsg._workflowEvents = []
@@ -1335,7 +1350,8 @@ function applyToolMetadata(msg, meta) {
   if (meta.toolEvents?.length) {
     msg._toolEvents = meta.toolEvents
   }
-  if (meta.workflowEvents?.length) {
+  // 流式阶段已实时推送的 workflow 事件不再被 metadata 整体替换，避免节点列表闪跳
+  if (meta.workflowEvents?.length && !msg._workflowEvents?.length) {
     msg._workflowEvents = meta.workflowEvents
   }
   if (meta.toolBlockOffsets?.length) {

@@ -129,17 +129,10 @@ public class ClassifierNodeProcessor extends AbstractFlowNodeProcessor implement
         }
         outputs.put("classificationRaw", rawResponse);
 
-        String streamContent;
-        try {
-            streamContent = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(outputs);
-        } catch (Exception e) {
-            streamContent = outputs.toString();
-        }
-
         return NodeExecutionResult.builder()
                 .nextNodeId(nextNodeId)
                 .outputs(outputs)
-                .streamContent(streamContent)
+                .streamContent(null)
                 .finished(false)
                 .build();
     }

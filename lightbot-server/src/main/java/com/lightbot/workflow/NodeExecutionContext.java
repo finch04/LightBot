@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 工作流节点执行上下文
@@ -65,4 +66,10 @@ public class NodeExecutionContext {
      * Agent 实体
      */
     private Agent agent;
+
+    /**
+     * 流式输出回调（LLM 逐 token 回调，非空时启用流式调用）
+     */
+    @Builder.Default
+    private Consumer<String> onStreamChunk = null;
 }

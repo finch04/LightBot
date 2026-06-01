@@ -8,6 +8,8 @@ import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.lightbot.dto.WorkflowExampleVO;
+
 import java.util.List;
 import java.util.Map;
 
@@ -42,7 +44,7 @@ public interface AgentService extends IService<Agent> {
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    Page<Agent> listMyAgents(int pageNum, int pageSize, String name);
+    Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType);
 
     /**
      * 查询用户的默认Agent
@@ -202,4 +204,19 @@ public interface AgentService extends IService<Agent> {
      * @param skillIds Skill ID 列表
      */
     void updateSkillBindings(Long agentId, List<Long> skillIds);
+
+    /**
+     * 获取内置示例工作流列表
+     *
+     * @return 示例列表
+     */
+    List<WorkflowExampleVO> listWorkflowExamples();
+
+    /**
+     * 根据示例 key 创建工作流 Agent
+     *
+     * @param key 示例标识
+     * @return 创建的 Agent
+     */
+    Agent createFromWorkflowExample(String key);
 }

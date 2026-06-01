@@ -91,6 +91,14 @@ public class WorkflowExecutorService {
                                         String userInput, List<Map<String, Object>> workflowEvents,
                                         Consumer<Map<String, Object>> onEvent,
                                         Map<String, Object> initialVariables) {
+        return executeWithDefinition(agent, workflow, sessionId, userInput, workflowEvents, onEvent, initialVariables, null);
+    }
+
+    public String executeWithDefinition(Agent agent, WorkflowDefinition workflow, Long sessionId,
+                                        String userInput, List<Map<String, Object>> workflowEvents,
+                                        Consumer<Map<String, Object>> onEvent,
+                                        Map<String, Object> initialVariables,
+                                        Consumer<String> onStreamChunk) {
         Long agentId = agent.getId();
         if (workflow == null || workflow.getNodes() == null || workflow.getNodes().isEmpty()) {
             return "工作流为空";
@@ -103,8 +111,9 @@ public class WorkflowExecutorService {
                 .userInput(userInput)
                 .agent(agent)
                 .workflow(workflow)
-                .variables(new HashMap<>())
-                .nodeOutputs(new HashMap<>())
+                .variables(new LinkedHashMap<>())
+                .nodeOutputs(new LinkedHashMap<>())
+                .onStreamChunk(onStreamChunk)
                 .build();
 
         // 2. 注入全局配置中的会话变量默认值
@@ -207,12 +216,19 @@ public class WorkflowExecutorService {
             if (nextNodeId != null) {
                 completeEvent.put("nextNodeId", nextNodeId);
             }
-            String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage);
+            String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
             if (detail != null && !detail.isBlank()) {
                 completeEvent.put("detail", detail);
             }
             if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
-                completeEvent.put("outputs", summarizeMap(nodeResult.getOutputs(), 10));
+                Map<String, Object> outputSummary = summarizeMap(nodeResult.getOutputs(), 10);
+                // LLM 节点：llmOutput 即消息正文，从出参中移除避免对话页重复展示
+                if ("llm".equals(nodeTypeCode)) {
+                    outputSummary.remove("llmOutput");
+                }
+                if (!outputSummary.isEmpty()) {
+                    completeEvent.put("outputs", outputSummary);
+                }
             }
             emitWorkflowEvent(workflowEvents, onEvent, completeEvent);
 
@@ -221,11 +237,10 @@ public class WorkflowExecutorService {
 
         emitWorkflowEvent(workflowEvents, onEvent, Map.of("type", "workflow_complete", "contentOffset", 0));
 
-        // 5. 返回结果
-        if (result.isEmpty() && context.getVariables().containsKey("result")) {
+        // 5. 返回结果：优先取 END 节点写入的 result 出参，而非所有节点 streamContent 拼接
+        if (context.getVariables().containsKey("result")) {
             return String.valueOf(context.getVariables().get("result"));
         }
-
         return result.toString();
     }
 
@@ -421,14 +436,15 @@ public class WorkflowExecutorService {
      * 节点完成后的可读摘要，供对话页展示节点间传递内容
      */
     private String buildNodeDetail(WorkflowNode node, NodeExecutionResult result,
-                                   boolean success, String completeMessage) {
+                                   boolean success, String completeMessage, String nodeTypeCode) {
         if (!success) {
             return completeMessage;
         }
         if (result == null) {
             return null;
         }
-        if (result.getStreamContent() != null && !result.getStreamContent().isBlank()) {
+        // LLM 节点输出即消息正文，不重复放入 detail（避免对话页显示两遍）
+        if (!"llm".equals(nodeTypeCode) && result.getStreamContent() != null && !result.getStreamContent().isBlank()) {
             return truncateDetail(result.getStreamContent());
         }
         Map<String, Object> outputs = result.getOutputs();
@@ -442,7 +458,8 @@ public class WorkflowExecutorService {
             }
             return "知识检索命中 " + text.length() + " 字\n" + truncateDetail(text);
         }
-        if (outputs.containsKey("llmOutput")) {
+        // LLM 节点的 llmOutput 即消息正文，跳过（避免对话页显示两遍）
+        if (!"llm".equals(nodeTypeCode) && outputs.containsKey("llmOutput")) {
             return truncateDetail(String.valueOf(outputs.get("llmOutput")));
         }
         if (outputs.containsKey("result")) {
@@ -518,8 +535,8 @@ public class WorkflowExecutorService {
                 .agentId(agent.getId())
                 .agent(agent)
                 .workflow(workflow)
-                .variables(new HashMap<>())
-                .nodeOutputs(new HashMap<>())
+                .variables(new LinkedHashMap<>())
+                .nodeOutputs(new LinkedHashMap<>())
                 .currentNodeId(nodeId)
                 .currentNodeData(node.getData())
                 .build();
@@ -567,7 +584,7 @@ public class WorkflowExecutorService {
         completeEvent.put("message", completeMessage);
         completeEvent.put("success", nodeSuccess);
         completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
-        String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage);
+        String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
         if (detail != null && !detail.isBlank()) {
             completeEvent.put("detail", detail);
             if (output.isBlank()) {
@@ -575,7 +592,14 @@ public class WorkflowExecutorService {
             }
         }
         if (nodeSuccess && nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
-            completeEvent.put("outputs", nodeResult.getOutputs());
+            Map<String, Object> filteredOutputs = new LinkedHashMap<>(nodeResult.getOutputs());
+            // LLM 节点：llmOutput 即消息正文，从出参中移除避免对话页重复展示
+            if ("llm".equals(nodeTypeCode)) {
+                filteredOutputs.remove("llmOutput");
+            }
+            if (!filteredOutputs.isEmpty()) {
+                completeEvent.put("outputs", filteredOutputs);
+            }
         }
         emitWorkflowEvent(events, null, completeEvent);
 

@@ -67,6 +67,12 @@
         </template>
         <a-slider v-model:value="node.data.temperature" :min="0" :max="2" :step="0.1" @change="emitSync" />
       </a-form-item>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="流式输出" :tip="hint('llm', 'enableStreaming')" />
+        </template>
+        <a-switch v-model:checked="node.data.enableStreaming" @change="emitSync" />
+      </a-form-item>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
     </template>
 
@@ -899,7 +905,7 @@ const nodeModelSelectValue = computed(() => {
   return undefined
 })
 
-function onNodeModelChange(providerId, modelId) {
+function onNodeModelChange({ providerId, modelId } = {}) {
   if (props.readonly) return
   props.node.data.providerId = providerId ? String(providerId) : providerId
   props.node.data.modelId = modelId ? String(modelId) : modelId

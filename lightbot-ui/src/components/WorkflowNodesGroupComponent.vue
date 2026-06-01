@@ -1,6 +1,6 @@
 <template>
   <div v-if="workflowEvents && workflowEvents.length > 0" class="workflow-nodes-group">
-    <button type="button" class="workflow-summary" :class="{ 'is-expanded': isExpanded }" @click="isExpanded = !isExpanded">
+    <button type="button" class="workflow-summary" :class="{ 'is-expanded': isExpanded }" @click="toggleExpand">
       <span class="summary-icon">
         <CheckCircleOutlined v-if="isDone" class="icon-success" />
         <LoadingOutlined v-else class="icon-spinning" />
@@ -17,40 +17,53 @@
     </button>
 
     <div v-show="isExpanded" class="workflow-panel">
-      <div v-for="(step, i) in nodeSteps" :key="step.stepKey || `${step.nodeId || 'node'}_${i}`" class="workflow-step">
+      <div
+        v-for="(step, i) in nodeSteps"
+        :key="step.stepKey || i"
+        v-show="i < visibleCount"
+        class="workflow-step"
+        :style="{ animationDelay: `${i * 80}ms` }"
+      >
         <div class="event-row" :class="stepStatusClass(step)">
-          <LoadingOutlined v-if="step.status === 'running'" class="event-icon icon-spinning" />
-          <CheckCircleOutlined v-else-if="step.status === 'done'" class="event-icon icon-success" />
-          <CloseCircleOutlined v-else-if="step.status === 'failed'" class="event-icon icon-fail" />
-          <PlayCircleOutlined v-else class="event-icon start" />
+          <div class="event-icon-col">
+            <LoadingOutlined v-if="step.status === 'running'" class="event-icon icon-spinning" />
+            <CheckCircleOutlined v-else-if="step.status === 'done'" class="event-icon icon-success" />
+            <CloseCircleOutlined v-else-if="step.status === 'failed'" class="event-icon icon-fail" />
+            <PlayCircleOutlined v-else class="event-icon start" />
+          </div>
           <div class="event-main">
-            <div class="event-head">
+            <div class="event-head" @click="toggleStep(i)">
               <span class="event-label">
                 <strong>{{ step.nodeLabel || getNodeTypeName(step.nodeType) }}</strong>
                 <span class="event-type-tag">{{ getNodeTypeName(step.nodeType) }}</span>
               </span>
               <span v-if="step.durationMs != null" class="event-duration">{{ step.durationMs }}ms</span>
-              <span v-else-if="step.status === 'running'" class="event-duration running">执行中</span>
+              <span v-else-if="step.status === 'running'" class="event-duration running">
+                <span class="running-dot"></span> 执行中
+              </span>
+              <RightOutlined v-if="hasExpandableContent(step)" :class="{ expanded: expandedSteps.has(i) }" class="step-toggle-icon" />
             </div>
-            <div v-if="step.status === 'failed'" class="event-message fail">
-              {{ step.message || '执行失败' }}
+            <div v-show="expandedSteps.has(i)" class="step-detail-body">
+              <div v-if="step.status === 'failed'" class="event-message fail">
+                {{ step.message || '执行失败' }}
+              </div>
+              <div v-else-if="step.status === 'done' && step.message" class="event-message">
+                {{ step.message }}
+              </div>
+              <div v-if="step.detail" class="event-detail">
+                <pre>{{ step.detail }}</pre>
+              </div>
+              <div v-if="hasKvData(step.input)" class="event-kv-block">
+                <div class="event-kv-title">入参</div>
+                <pre>{{ formatKv(step.input) }}</pre>
+              </div>
+              <div v-if="hasKvData(step.outputs)" class="event-kv-block">
+                <div class="event-kv-title">出参</div>
+                <pre>{{ formatKv(step.outputs) }}</pre>
+              </div>
+              <div v-if="step.nextNodeId" class="event-next-node">下一节点: {{ step.nextNodeId }}</div>
+              <div v-if="step.nodeId" class="event-node-id">节点 ID: {{ step.nodeId }}</div>
             </div>
-            <div v-else-if="step.status === 'done' && step.message" class="event-message">
-              {{ step.message }}
-            </div>
-            <div v-if="step.detail" class="event-detail">
-              <pre>{{ step.detail }}</pre>
-            </div>
-            <div v-if="hasKvData(step.input)" class="event-kv-block">
-              <div class="event-kv-title">入参</div>
-              <pre>{{ formatKv(step.input) }}</pre>
-            </div>
-            <div v-if="hasKvData(step.outputs)" class="event-kv-block">
-              <div class="event-kv-title">出参</div>
-              <pre>{{ formatKv(step.outputs) }}</pre>
-            </div>
-            <div v-if="step.nextNodeId" class="event-next-node">下一节点: {{ step.nextNodeId }}</div>
-            <div v-if="step.nodeId" class="event-node-id">节点 ID: {{ step.nodeId }}</div>
           </div>
         </div>
       </div>
@@ -59,7 +72,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import {
   CheckCircleOutlined, LoadingOutlined, RightOutlined,
   PlayCircleOutlined, CloseCircleOutlined
@@ -68,16 +81,77 @@ import {
 const props = defineProps({
   workflowEvents: { type: Array, default: () => [] },
   isDone: { type: Boolean, default: true },
-  defaultExpanded: { type: Boolean, default: false }
+  defaultExpanded: { type: Boolean, default: false },
+  isStreaming: { type: Boolean, default: false },
 })
 
 const isExpanded = ref(props.defaultExpanded)
+const expandedSteps = ref(new Set())
+const visibleCount = ref(0)
+let revealTimer = null
 
 watch(
   () => props.defaultExpanded,
   (val) => { isExpanded.value = val },
   { immediate: true }
 )
+
+function clearRevealTimer() {
+  if (revealTimer) {
+    clearInterval(revealTimer)
+    revealTimer = null
+  }
+}
+
+/** 展开面板时逐个显示节点 */
+function toggleExpand() {
+  isExpanded.value = !isExpanded.value
+  if (isExpanded.value) {
+    startRevealAnimation()
+  } else {
+    clearRevealTimer()
+    visibleCount.value = 0
+  }
+}
+
+/** 启动逐个显示动画：每 120ms 显示一个节点 */
+function startRevealAnimation() {
+  clearRevealTimer()
+  const total = nodeSteps.value.length
+  // 已完成的工作流（历史消息）：逐个显示
+  // 流式中：显示所有已到达的节点
+  if (props.isStreaming) {
+    visibleCount.value = total
+    return
+  }
+  // 已完成的节点数少于等于 3 个，直接全部显示
+  if (total <= 3) {
+    visibleCount.value = total
+    return
+  }
+  visibleCount.value = 0
+  revealTimer = setInterval(() => {
+    if (visibleCount.value < nodeSteps.value.length) {
+      visibleCount.value++
+    } else {
+      clearRevealTimer()
+    }
+  }, 120)
+}
+
+function toggleStep(index) {
+  const next = new Set(expandedSteps.value)
+  if (next.has(index)) {
+    next.delete(index)
+  } else {
+    next.add(index)
+  }
+  expandedSteps.value = next
+}
+
+function hasExpandableContent(step) {
+  return step.message || step.detail || hasKvData(step.input) || hasKvData(step.outputs) || step.nextNodeId || step.nodeId
+}
 
 /** 按事件顺序构建链路，保留重复节点经过记录（不再按 nodeId 去重） */
 const nodeSteps = computed(() => {
@@ -142,6 +216,40 @@ const nodeLabels = computed(() =>
   nodeSteps.value.map(s => s.nodeLabel || getNodeTypeName(s.nodeType)).filter(Boolean)
 )
 
+// 流式时自动展开新节点，完成后全部收起
+watch(
+  () => [props.isDone, nodeSteps.value.length],
+  ([done, len]) => {
+    if (done) {
+      expandedSteps.value = new Set()
+      // 流式结束时确保所有节点可见
+      visibleCount.value = len
+      clearRevealTimer()
+    } else if (len > 0) {
+      expandedSteps.value = new Set(Array.from({ length: len }, (_, i) => i))
+      // 流式中新节点到达时，立即显示（不走定时器）
+      if (isExpanded.value) {
+        visibleCount.value = len
+      }
+    }
+  },
+  { immediate: true }
+)
+
+// 展开状态变化时触发动画
+watch(isExpanded, (val) => {
+  if (val) {
+    startRevealAnimation()
+  } else {
+    clearRevealTimer()
+    visibleCount.value = 0
+  }
+})
+
+onUnmounted(() => {
+  clearRevealTimer()
+})
+
 function stepStatusClass(step) {
   if (step.status === 'running') return 'event-running'
   if (step.status === 'failed') return 'event-fail'
@@ -169,6 +277,11 @@ function getNodeTypeName(type) {
     variable_handle: '变量处理',
     parameter_extractor: '参数提取',
     app_component: '应用组件',
+    code: '代码',
+    loop_start: '迭代开始',
+    loop_end: '迭代结束',
+    batch_start: '并行处理',
+    batch_end: '并行结束',
   }
   return map[type] || type || '节点'
 }
@@ -214,7 +327,11 @@ function formatKv(value) {
 }
 
 .icon-success { color: #22c55e; }
-.icon-spinning { color: #7c3aed; }
+.icon-spinning { color: #7c3aed; animation: spin 1s linear infinite; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .summary-content {
   flex: 1;
@@ -261,8 +378,21 @@ function formatKv(value) {
   gap: 8px;
 }
 
+/* 节点逐个淡入动画 */
 .workflow-step {
   font-size: 13px;
+  animation: stepFadeIn 0.3s ease-out both;
+}
+
+@keyframes stepFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .event-row {
@@ -272,11 +402,20 @@ function formatKv(value) {
   padding: 8px 10px;
   border-radius: 6px;
   background: #fff;
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
 }
 
+/* 当前执行节点高亮：脉冲边框 + 微光背景 */
 .event-running {
   border: 1px solid #c4b5fd;
   background: #faf5ff;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+  animation: runningPulse 2s ease-in-out infinite;
+}
+
+@keyframes runningPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1); }
+  50% { box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2); }
 }
 
 .event-start {
@@ -292,9 +431,12 @@ function formatKv(value) {
   background: #fef2f2;
 }
 
-.event-icon {
+.event-icon-col {
   flex-shrink: 0;
   margin-top: 2px;
+}
+
+.event-icon {
   font-size: 14px;
 }
 
@@ -311,6 +453,15 @@ function formatKv(value) {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+
+.event-head:hover {
+  background: #f5f3ff;
 }
 
 .event-label {
@@ -336,6 +487,34 @@ function formatKv(value) {
 
 .event-duration.running {
   color: #7c3aed;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 执行中脉冲圆点 */
+.running-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7c3aed;
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.step-toggle-icon {
+  font-size: 10px;
+  color: #9ca3af;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.step-toggle-icon.expanded {
+  transform: rotate(90deg);
 }
 
 .event-message {

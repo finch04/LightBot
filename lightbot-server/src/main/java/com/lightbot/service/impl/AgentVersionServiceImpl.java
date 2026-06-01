@@ -766,6 +766,36 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     }
 
     @Override
+    public void initDraftWithWorkflow(Agent agent, Map<String, Object> workflowSnapshot) {
+        if (agent.getId() == null) {
+            return;
+        }
+        AgentVersion existing = getDraftRow(agent.getId());
+        if (existing != null) {
+            return;
+        }
+        AgentVersion draft = new AgentVersion();
+        draft.setAgentId(agent.getId());
+        draft.setUserId(agent.getUserId());
+        draft.setVersion(0);
+        draft.setStatus(AgentVersionStatus.DRAFT);
+        draft.setConfig(writeJson(workflowSnapshot));
+        // 统计节点和边数量
+        Object graph = workflowSnapshot.get("graph");
+        if (graph instanceof Map<?, ?> g) {
+            Object nodes = g.get("nodes");
+            Object edges = g.get("edges");
+            if (nodes instanceof List<?> nl) {
+                draft.setNodeCount(nl.size());
+            }
+            if (edges instanceof List<?> el) {
+                draft.setEdgeCount(el.size());
+            }
+        }
+        agentVersionMapper.insert(draft);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void migrateLegacyIfNeeded(Agent agent) {
         if (agent == null || agent.getId() == null) {

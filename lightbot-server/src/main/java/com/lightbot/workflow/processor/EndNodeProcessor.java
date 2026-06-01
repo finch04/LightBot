@@ -4,6 +4,7 @@ import com.lightbot.enums.NodeType;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
+import com.lightbot.workflow.WorkflowNode;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -26,17 +27,40 @@ public class EndNodeProcessor implements NodeProcessor {
 
     @Override
     public NodeExecutionResult execute(NodeExecutionContext context) {
-        // 1. 获取最后一个节点的输出作为最终结果
         Map<String, Object> outputs = new HashMap<>();
+
+        // 1. 优先从 variables 中取 LLM 输出
+        Object llmOutput = context.getVariables().get("llmOutput");
+        if (llmOutput != null) {
+            outputs.put("result", llmOutput);
+            return NodeExecutionResult.builder()
+                    .outputs(outputs)
+                    .finished(true)
+                    .build();
+        }
+
+        // 2. 遍历工作流节点定义，找到最后一个 LLM 节点的输出
+        if (context.getWorkflow() != null && context.getWorkflow().getNodes() != null) {
+            for (int i = context.getWorkflow().getNodes().size() - 1; i >= 0; i--) {
+                WorkflowNode node = context.getWorkflow().getNodes().get(i);
+                if (node.getType() == NodeType.LLM) {
+                    Object nodeOutput = context.getNodeOutputs().get(node.getId());
+                    if (nodeOutput instanceof Map<?, ?> map && map.containsKey("llmOutput")) {
+                        outputs.put("result", map.get("llmOutput"));
+                        return NodeExecutionResult.builder()
+                                .outputs(outputs)
+                                .finished(true)
+                                .build();
+                    }
+                }
+            }
+        }
+
+        // 3. 兜底：取最后一个节点的输出
         Object lastOutput = context.getNodeOutputs().values().stream()
                 .reduce((first, second) -> second)
                 .orElse(null);
         outputs.put("result", lastOutput);
-
-        // 2. 如果有 llmOutput，直接作为结果
-        if (context.getVariables().containsKey("llmOutput")) {
-            outputs.put("result", context.getVariables().get("llmOutput"));
-        }
 
         return NodeExecutionResult.builder()
                 .outputs(outputs)

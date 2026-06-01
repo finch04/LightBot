@@ -118,3 +118,11 @@ export function restoreAgentVersion(id, version) {
 export function deleteAgentVersion(id, version) {
   return request.delete(`/agents/${id}/versions/${version}`)
 }
+
+export function listWorkflowExamples() {
+  return request.get('/agents/workflow-examples')
+}
+
+export function createFromWorkflowExample(key) {
+  return request.post(`/agents/workflow-examples/${key}`)
+}

@@ -8,6 +8,8 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
+import com.lightbot.workflow.WorkflowNodeDataUtils;
+import com.lightbot.workflow.WorkflowVariableUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -51,12 +53,22 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
 
         Long knowledgeId = parseLong(nodeData.get("knowledgeId"));
         if (knowledgeId == null) {
-            log.warn("[RetrievalNodeProcessor] 未配置 knowledgeId");
+            log.warn("[RetrievalNodeProcessor] 未配置 knowledgeId，节点数据: {}", nodeData);
             return passThrough(context, "retrievalResult", "");
         }
 
+        // 1. 校验知识库是否存在
         Knowledge knowledge = knowledgeService.getById(knowledgeId);
-        String query = String.valueOf(context.getVariables().getOrDefault("input", context.getUserInput()));
+        if (knowledge == null) {
+            log.warn("[RetrievalNodeProcessor] 知识库不存在: knowledgeId={}", knowledgeId);
+            return passThrough(context, "retrievalResult", "");
+        }
+
+        String query = WorkflowVariableUtils.resolveInputText(
+                WorkflowNodeDataUtils.parseString(nodeData.get("inputVariable")),
+                context.getVariables(),
+                context.getUserInput());
+        log.info("[RetrievalNodeProcessor] 开始检索: knowledgeId={}, query={}", knowledgeId, query);
 
         int topK = DEFAULT_TOP_K;
         double threshold = DEFAULT_THRESHOLD;
@@ -67,7 +79,7 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
             if (nodeData.get("threshold") instanceof Number t) {
                 threshold = t.doubleValue();
             }
-        } else if (knowledge != null) {
+        } else {
             Map<String, Object> kbConfig = parseConfig(knowledge.getConfig());
             if (kbConfig.get("ragTopK") instanceof Number n) {
                 topK = n.intValue();
@@ -80,27 +92,31 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
         String retrievalText = "";
         try {
             if (embeddingModel == null) {
-                log.warn("[RetrievalNodeProcessor] EmbeddingModel 未配置");
+                log.warn("[RetrievalNodeProcessor] EmbeddingModel 未配置，无法生成查询向量");
                 return passThrough(context, "retrievalResult", "");
             }
             float[] vector = embedText(query);
             List<Map<String, Object>> hits = embeddingService.searchSimilarSql(knowledgeId, vector, topK, threshold);
+            log.info("[RetrievalNodeProcessor] 检索完成: knowledgeId={}, topK={}, threshold={}, 命中数={}",
+                    knowledgeId, topK, threshold, hits.size());
             retrievalText = hits.stream()
                     .map(h -> String.valueOf(h.getOrDefault("content", "")))
                     .filter(s -> !s.isBlank())
                     .collect(Collectors.joining("\n\n"));
         } catch (Exception e) {
-            log.warn("[RetrievalNodeProcessor] 检索失败: {}", e.getMessage());
+            log.error("[RetrievalNodeProcessor] 检索异常: knowledgeId={}, query={}, error={}",
+                    knowledgeId, query, e.getMessage(), e);
         }
 
         Map<String, Object> outputs = new HashMap<>();
         outputs.put("retrievalResult", retrievalText);
         outputs.put("input", query);
 
+        // streamContent 不设置，检索结果仅作为 outputs 传给下游 LLM 节点
+        // 最终回答由 LLM 节点生成
         return NodeExecutionResult.builder()
                 .nextNodeId(resolveNextNodeId(context))
                 .outputs(outputs)
-                .streamContent(retrievalText)
                 .finished(false)
                 .build();
     }

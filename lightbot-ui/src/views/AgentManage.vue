@@ -14,9 +14,24 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
+        <a-select
+          v-model:value="filterAgentType"
+          placeholder="全部类型"
+          allow-clear
+          style="width: 130px"
+          @change="loadData"
+        >
+          <a-select-option value="chat">对话型</a-select-option>
+          <a-select-option value="workflow">工作流型</a-select-option>
+        </a-select>
         <button class="btn-outline" @click="loadData">
           <ReloadOutlined /> 刷新
         </button>
+        <a-tooltip title="示例工作流">
+          <button class="btn-outline" @click="openExampleModal">
+            <ExperimentOutlined />
+          </button>
+        </a-tooltip>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新建 Agent
         </button>
@@ -89,15 +104,40 @@
       </a-form>
     </a-modal>
 
+    <!-- 示例工作流弹窗 -->
+    <a-modal
+      v-model:open="exampleModalVisible"
+      title="示例工作流 Agent"
+      :width="640"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="example-desc">选择一个内置示例，快速创建工作流 Agent 并学习各节点的使用方式</div>
+      <div class="example-list">
+        <div v-for="ex in workflowExamples" :key="ex.key" class="example-card">
+          <div class="example-card-header">
+            <span class="example-name">{{ ex.name }}</span>
+            <a-button type="primary" size="small" :loading="exampleCreating === ex.key" @click="handleCreateExample(ex.key)">
+              生成
+            </a-button>
+          </div>
+          <div class="example-desc-text">{{ ex.description }}</div>
+          <div class="example-tags">
+            <a-tag v-for="tag in ex.nodeTypeTags" :key="tag" color="blue">{{ tag }}</a-tag>
+          </div>
+        </div>
+      </div>
+    </a-modal>
+
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent } from '../api/agent'
+import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 import ModelSelect from '../components/ModelSelect.vue'
 
@@ -105,10 +145,14 @@ const router = useRouter()
 const list = ref([])
 const agentStatusLabels = ref(null)
 const searchText = ref('')
+const filterAgentType = ref(undefined)
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', model: null })
 const selectedProviderId = ref(null)
+const exampleModalVisible = ref(false)
+const workflowExamples = ref([])
+const exampleCreating = ref(null)
 
 function onModelChange({ providerId }) {
   selectedProviderId.value = providerId
@@ -117,6 +161,7 @@ function onModelChange({ providerId }) {
 async function loadData() {
   const params = { pageNum: 1, pageSize: 50 }
   if (searchText.value) params.name = searchText.value
+  if (filterAgentType.value) params.agentType = filterAgentType.value
   const res = await getAgents(params)
   list.value = res.data.records || []
 }
@@ -204,6 +249,40 @@ function statusText(s, version) {
 function formatTime(t) {
   if (!t) return ''
   return new Date(t).toLocaleDateString('zh-CN')
+}
+
+async function openExampleModal() {
+  try {
+    const res = await listWorkflowExamples()
+    workflowExamples.value = res.data || []
+    exampleModalVisible.value = true
+  } catch {
+    message.error('加载示例列表失败')
+  }
+}
+
+function handleCreateExample(key) {
+  const ex = workflowExamples.value.find(e => e.key === key)
+  Modal.confirm({
+    title: '生成示例工作流 Agent',
+    content: `即将生成「${ex?.name || key}」。\n\n注意：示例中的部分节点需要手动配置实际内容（如绑定知识库、选择工具、选择模型等），生成后请进入工作流编辑器逐一完善。`,
+    okText: '确认生成',
+    cancelText: '取消',
+    async onOk() {
+      exampleCreating.value = key
+      try {
+        const res = await createFromWorkflowExample(key)
+        message.success('示例 Agent 创建成功')
+        exampleModalVisible.value = false
+        loadData()
+        router.push(`/agents/${res.data.id}`)
+      } catch {
+        message.error('创建失败')
+      } finally {
+        exampleCreating.value = null
+      }
+    },
+  })
 }
 
 onMounted(async () => {
@@ -413,6 +492,47 @@ onMounted(async () => {
   font-size: 48px;
   margin-bottom: 16px;
   display: block;
+}
+.example-desc {
+  color: #71717a;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.example-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.example-card {
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 14px 16px;
+  transition: border-color 0.2s;
+}
+.example-card:hover {
+  border-color: #1677ff;
+}
+.example-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.example-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #171717;
+}
+.example-desc-text {
+  font-size: 12px;
+  color: #71717a;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.example-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 </style>

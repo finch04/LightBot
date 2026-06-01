@@ -69,6 +69,20 @@ public class WorkflowMiddleware implements ChatMiddleware {
                     }
                 };
 
+                // LLM 流式回调：逐 token 推送到前端
+                final boolean[] streamed = {false};
+                Consumer<String> streamChunk = chunk -> {
+                    streamed[0] = true;
+                    try {
+                        Map<String, Object> chunkEvent = new LinkedHashMap<>();
+                        chunkEvent.put("type", "workflow_llm_chunk");
+                        chunkEvent.put("content", chunk);
+                        sink.next(STATUS_PREFIX + OBJECT_MAPPER.writeValueAsString(chunkEvent));
+                    } catch (Exception ex) {
+                        log.warn("[WorkflowMiddleware] 流式 chunk 推送失败: {}", ex.getMessage());
+                    }
+                };
+
                 WorkflowDefinition workflow = agentVersionService.loadWorkflowDefinitionForChat(
                         ctx.getAgent().getId(), ctx.getRequest().getConfigVersion());
 
@@ -82,7 +96,9 @@ public class WorkflowMiddleware implements ChatMiddleware {
                             ctx.getSessionId(),
                             ctx.getRequest().getMessage(),
                             workflowEvents,
-                            emit
+                            emit,
+                            null,
+                            streamChunk
                     );
                 }
 
@@ -104,7 +120,8 @@ public class WorkflowMiddleware implements ChatMiddleware {
                 }
                 ctx.getRagMetadataHolder()[0] = OBJECT_MAPPER.writeValueAsString(metadataMap);
 
-                if (result != null && !result.isEmpty()) {
+                // 流式已逐 token 推送，不再重复发送完整结果
+                if (!streamed[0] && result != null && !result.isEmpty()) {
                     sink.next(result);
                 }
                 sink.next(METADATA_PREFIX + ctx.getRagMetadataHolder()[0]);
@@ -158,11 +175,16 @@ public class WorkflowMiddleware implements ChatMiddleware {
             }
             Object outputs = e.get("outputs");
             if (outputs instanceof Map<?, ?> outputMap && !outputMap.isEmpty()) {
-                for (String key : List.of("result", "output", "text", "answer")) {
+                for (String key : List.of("result", "output", "text", "answer", "llmOutput")) {
                     Object val = outputMap.get(key);
                     if (val != null && !val.toString().isBlank()) {
                         return val.toString();
                     }
+                }
+                // 跳过 classifier 等中间节点的结构化输出，继续向上查找
+                String nodeType = e.get("nodeType") != null ? e.get("nodeType").toString() : "";
+                if ("classifier".equals(nodeType) || "condition".equals(nodeType)) {
+                    continue;
                 }
                 return outputMap.values().iterator().next().toString();
             }

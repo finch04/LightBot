@@ -6,6 +6,7 @@ import com.lightbot.common.Result;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.AgentPublishRequest;
 import com.lightbot.dto.WorkflowVersionVO;
+import com.lightbot.dto.WorkflowExampleVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
@@ -54,8 +55,21 @@ public class AgentController {
     public Result<Page<Agent>> list(
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "50") int pageSize,
-            @RequestParam(required = false) String name) {
-        return Result.ok(agentService.listMyAgents(pageNum, pageSize, name));
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String agentType) {
+        return Result.ok(agentService.listMyAgents(pageNum, pageSize, name, agentType));
+    }
+
+    @Operation(summary = "获取内置示例工作流列表")
+    @GetMapping("/workflow-examples")
+    public Result<List<WorkflowExampleVO>> listWorkflowExamples() {
+        return Result.ok(agentService.listWorkflowExamples());
+    }
+
+    @Operation(summary = "根据示例创建工作流Agent")
+    @PostMapping("/workflow-examples/{key}")
+    public Result<Agent> createFromWorkflowExample(@PathVariable String key) {
+        return Result.ok(agentService.createFromWorkflowExample(key));
     }
 
     @Operation(summary = "获取Agent详情（含绑定的知识库ID列表）")

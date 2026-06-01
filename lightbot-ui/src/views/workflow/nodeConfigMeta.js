@@ -126,6 +126,7 @@ export const FIELD_HINTS = {
     sysPrompt: 'System 角色提示词，定义 AI 身份与全局规则，不随用户输入变化',
     promptTemplate: 'User 提示词模板，支持 {{query}}、{{history_list}} 等变量',
     temperature: '采样温度，越高越发散，越低越稳定，建议 0.3~1.0',
+    enableStreaming: '开启后 LLM 逐 token 输出到聊天界面，关闭则等全部生成完再返回',
   },
   classifier: {
     inputVariable: '待分类的文本，通常填 {{query}}',

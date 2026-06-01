@@ -61,21 +61,48 @@
       <h4>输出结果</h4>
       <pre class="test-output">{{ testResult.output || '（无输出）' }}</pre>
       <h4>节点轨迹</h4>
-      <div
-        v-for="(ev, i) in testResult.nodeEvents"
-        :key="i"
-        class="test-event"
-        :class="{ active: ev.nodeId === testCurrentNodeId }"
-      >
-        <span class="test-event-type">{{ ev.type === 'workflow_node_start' ? '▶' : ev.type === 'workflow_node_complete' ? '✓' : '•' }}</span>
-        {{ ev.nodeLabel || ev.nodeId }} — {{ ev.message || ev.nodeType }}
+      <div class="trace-steps">
+        <div v-for="(step, i) in nodeSteps" :key="i" class="trace-step" :class="{ 'trace-active': step.nodeId === testCurrentNodeId }">
+          <div class="trace-step-head" @click="toggleStep(i)">
+            <span class="trace-step-icon">
+              <span v-if="step.status === 'done'" class="trace-icon-done">✓</span>
+              <span v-else-if="step.status === 'failed'" class="trace-icon-fail">✗</span>
+              <span v-else class="trace-icon-run">▶</span>
+            </span>
+            <span class="trace-step-label">
+              <strong>{{ step.nodeLabel || step.nodeId }}</strong>
+              <span class="trace-step-type">{{ getNodeTypeName(step.nodeType) }}</span>
+            </span>
+            <span v-if="step.durationMs != null" class="trace-step-duration">{{ step.durationMs }}ms</span>
+            <span v-else-if="step.status === 'running'" class="trace-step-duration trace-running">执行中</span>
+            <span class="trace-toggle" :class="{ expanded: expandedSteps.has(i) }">›</span>
+          </div>
+          <div v-show="expandedSteps.has(i)" class="trace-step-body">
+            <div v-if="step.status === 'failed'" class="trace-msg trace-fail">{{ step.message || '执行失败' }}</div>
+            <div v-else-if="step.status === 'done' && step.message" class="trace-msg">{{ step.message }}</div>
+            <div v-if="step.detail" class="trace-detail">
+              <pre>{{ step.detail }}</pre>
+            </div>
+            <div v-if="hasKvData(step.input)" class="trace-kv">
+              <div class="trace-kv-title">入参</div>
+              <pre>{{ formatKv(step.input) }}</pre>
+            </div>
+            <div v-if="hasKvData(step.outputs)" class="trace-kv">
+              <div class="trace-kv-title">出参</div>
+              <pre>{{ formatKv(step.outputs) }}</pre>
+            </div>
+            <div v-if="step.nextNodeId" class="trace-meta">下一节点: {{ step.nextNodeId }}</div>
+          </div>
+        </div>
       </div>
     </div>
   </a-drawer>
 </template>
 
 <script setup>
-defineProps({
+import { ref, computed, watch } from 'vue'
+
+const props = defineProps({
   testMode: String,
   testInput: String,
   testUseDraft: Boolean,
@@ -93,6 +120,84 @@ defineEmits([
 ])
 
 const open = defineModel('open', { type: Boolean, default: false })
+
+const expandedSteps = ref(new Set())
+
+function toggleStep(index) {
+  const next = new Set(expandedSteps.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  expandedSteps.value = next
+}
+
+/** 将 start+complete 事件合并为节点步骤 */
+const nodeSteps = computed(() => {
+  if (!props.testResult?.nodeEvents) return []
+  const steps = []
+  const runningByNodeId = new Map()
+  const stepByIndex = new Map()
+
+  for (const e of props.testResult.nodeEvents) {
+    if (e.type === 'workflow_node_start' && e.nodeId) {
+      const step = {
+        nodeId: e.nodeId, nodeType: e.nodeType, nodeLabel: e.nodeLabel,
+        input: e.input, stepIndex: e.stepIndex,
+        status: 'running',
+      }
+      steps.push(step)
+      runningByNodeId.set(e.nodeId, step)
+      if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
+    } else if (e.type === 'workflow_node_complete' && e.nodeId) {
+      let step = (e.stepIndex != null ? stepByIndex.get(e.stepIndex) : null) || runningByNodeId.get(e.nodeId)
+      if (!step) {
+        step = { nodeId: e.nodeId, nodeType: e.nodeType, nodeLabel: e.nodeLabel, stepIndex: e.stepIndex, status: 'pending' }
+        steps.push(step)
+      }
+      step.nodeType = e.nodeType ?? step.nodeType
+      step.nodeLabel = e.nodeLabel ?? step.nodeLabel
+      step.message = e.message
+      step.detail = e.detail
+      step.durationMs = e.durationMs
+      step.success = e.success
+      step.outputs = e.outputs
+      step.nextNodeId = e.nextNodeId
+      step.status = e.success === false ? 'failed' : 'done'
+      runningByNodeId.delete(e.nodeId)
+      if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
+    }
+  }
+  return steps
+})
+
+// 测试完成后展开所有步骤
+watch(() => props.testResult, (val) => {
+  if (val?.nodeEvents) {
+    expandedSteps.value = new Set(Array.from({ length: nodeSteps.value.length }, (_, i) => i))
+  }
+}, { immediate: true })
+
+function hasKvData(value) {
+  return value && typeof value === 'object' && Object.keys(value).length > 0
+}
+
+function formatKv(value) {
+  if (!value) return ''
+  try { return JSON.stringify(value, null, 2) } catch { return String(value) }
+}
+
+function getNodeTypeName(type) {
+  const map = {
+    start: '开始', end: '结束', llm: '大模型', condition: '条件判断',
+    retrieval: '知识检索', tool: '工具调用', classifier: '意图分类',
+    api: 'API', loop: '循环', variable: '变量', batch: '批处理',
+    script: '脚本', mcp: 'MCP', input: '输入', output: '输出',
+    variable_handle: '变量处理', parameter_extractor: '参数提取',
+    app_component: '应用组件', code: '代码',
+    loop_start: '迭代开始', loop_end: '迭代结束',
+    batch_start: '并行处理', batch_end: '并行结束',
+  }
+  return map[type] || type || '节点'
+}
 </script>
 
 <style scoped>
@@ -130,15 +235,41 @@ const open = defineModel('open', { type: Boolean, default: false })
   white-space: pre-wrap;
   font-size: 12px;
 }
-.test-event {
-  font-size: 12px;
-  color: #6b7280;
-  padding: 4px 0;
+.trace-steps { display: flex; flex-direction: column; gap: 6px; }
+.trace-step { border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
+.trace-step.trace-active { border-color: #818cf8; background: #eef2ff; }
+.trace-step-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; cursor: pointer; user-select: none;
 }
-.test-event.active {
-  background: #eef2ff;
-  color: #4338ca;
-  font-weight: 600;
+.trace-step-head:hover { background: #f9fafb; }
+.trace-step-icon { flex-shrink: 0; font-size: 13px; }
+.trace-icon-done { color: #22c55e; }
+.trace-icon-fail { color: #dc2626; }
+.trace-icon-run { color: #6366f1; }
+.trace-step-label { flex: 1; min-width: 0; font-size: 13px; color: #374151; }
+.trace-step-label strong { font-weight: 600; }
+.trace-step-type { margin-left: 6px; font-size: 11px; font-weight: normal; color: #9ca3af; }
+.trace-step-duration { flex-shrink: 0; font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+.trace-running { color: #6366f1; }
+.trace-toggle {
+  flex-shrink: 0; font-size: 12px; color: #9ca3af;
+  transition: transform 0.2s; display: inline-block;
 }
-.test-event-type { margin-right: 6px; }
+.trace-toggle.expanded { transform: rotate(90deg); }
+.trace-step-body { padding: 0 10px 10px; }
+.trace-msg { font-size: 12px; color: #6b7280; margin-top: 4px; }
+.trace-msg.trace-fail { color: #dc2626; }
+.trace-detail {
+  margin-top: 6px; padding: 8px; background: #f8fafc;
+  border: 1px solid #e2e8f0; border-radius: 6px; max-height: 160px; overflow: auto;
+}
+.trace-detail pre { margin: 0; font-size: 12px; line-height: 1.45; color: #334155; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.trace-kv {
+  margin-top: 6px; padding: 8px; border-radius: 6px;
+  border: 1px solid #ede9fe; background: #faf5ff;
+}
+.trace-kv-title { margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #6d28d9; }
+.trace-kv pre { margin: 0; font-size: 12px; line-height: 1.45; color: #4c1d95; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.trace-meta { margin-top: 4px; font-size: 11px; color: #9ca3af; font-family: ui-monospace, monospace; }
 </style>
