@@ -95,6 +95,11 @@ const routes = [
         component: () => import('../views/Observability.vue'),
       },
       {
+        path: 'observability/workflow-trace/:id',
+        name: 'WorkflowTraceDetail',
+        component: () => import('../views/WorkflowTraceDetail.vue'),
+      },
+      {
         path: 'tool-calls',
         name: 'ToolCallLog',
         component: () => import('../views/ToolCallLog.vue'),

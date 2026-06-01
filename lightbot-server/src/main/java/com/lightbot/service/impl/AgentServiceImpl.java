@@ -571,6 +571,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         agent.setName(exampleName);
         agent.setDescription("内置示例工作流，帮助学习工作流节点使用");
         agent.setAgentType(AgentType.WORKFLOW);
+        agent.setWelcomeMessage(WorkflowExampleTemplates.getWelcomeMessage(key));
+        agent.setRecommendedQuestions(WorkflowExampleTemplates.getRecommendedQuestions(key));
         agent.setConfig("{}");
         agent.setStatus(AgentStatus.DRAFT);
         agent.setVersion(0);

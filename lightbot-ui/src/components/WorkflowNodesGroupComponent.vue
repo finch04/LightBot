@@ -50,19 +50,9 @@
               <div v-else-if="step.status === 'done' && step.message" class="event-message">
                 {{ step.message }}
               </div>
-              <div v-if="step.detail" class="event-detail">
-                <pre>{{ step.detail }}</pre>
+              <div v-if="step.status === 'done' && extractResultText(step)" class="event-result">
+                {{ extractResultText(step) }}
               </div>
-              <div v-if="hasKvData(step.input)" class="event-kv-block">
-                <div class="event-kv-title">入参</div>
-                <pre>{{ formatKv(step.input) }}</pre>
-              </div>
-              <div v-if="hasKvData(step.outputs)" class="event-kv-block">
-                <div class="event-kv-title">出参</div>
-                <pre>{{ formatKv(step.outputs) }}</pre>
-              </div>
-              <div v-if="step.nextNodeId" class="event-next-node">下一节点: {{ step.nextNodeId }}</div>
-              <div v-if="step.nodeId" class="event-node-id">节点 ID: {{ step.nodeId }}</div>
             </div>
           </div>
         </div>
@@ -150,7 +140,7 @@ function toggleStep(index) {
 }
 
 function hasExpandableContent(step) {
-  return step.message || step.detail || hasKvData(step.input) || hasKvData(step.outputs) || step.nextNodeId || step.nodeId
+  return step.message || step.detail || hasKvData(step.outputs) || extractResultText(step)
 }
 
 /** 按事件顺序构建链路，保留重复节点经过记录（不再按 nodeId 去重） */
@@ -290,13 +280,43 @@ function hasKvData(value) {
   return value && typeof value === 'object' && Object.keys(value).length > 0
 }
 
-function formatKv(value) {
-  if (!value) return ''
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
+/** 从 step.detail / step.outputs 中提取可读的执行结果文本 */
+function extractResultText(step) {
+  // 优先从 outputs 中提取有意义的值
+  if (step.outputs && typeof step.outputs === 'object' && Object.keys(step.outputs).length > 0) {
+    const preferKeys = ['result', 'output', 'text', 'answer', 'llmOutput']
+    for (const k of preferKeys) {
+      const v = step.outputs[k]
+      if (v != null && String(v).trim()) return String(v)
+    }
+    // 取第一个非空值
+    for (const v of Object.values(step.outputs)) {
+      if (v != null && String(v).trim()) return String(v)
+    }
   }
+  // 回退到 detail
+  if (step.detail && String(step.detail).trim()) {
+    const detail = String(step.detail)
+    // 尝试解析 JSON，提取内部值
+    try {
+      const parsed = JSON.parse(detail)
+      if (typeof parsed === 'string') return parsed
+      if (typeof parsed === 'object' && parsed !== null) {
+        const preferKeys = ['result', 'output', 'text', 'answer', 'llmOutput', 'input']
+        for (const k of preferKeys) {
+          const v = parsed[k]
+          if (v != null && String(v).trim()) return String(v)
+        }
+        // 取第一个值
+        const first = Object.values(parsed).find(v => v != null && String(v).trim())
+        if (first != null) return String(first)
+      }
+    } catch {
+      // 非 JSON，直接返回
+      return detail
+    }
+  }
+  return ''
 }
 </script>
 
@@ -525,6 +545,21 @@ function formatKv(value) {
 
 .event-message.fail {
   color: #dc2626;
+}
+
+.event-result {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .event-detail {

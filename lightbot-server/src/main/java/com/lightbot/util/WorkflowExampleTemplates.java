@@ -77,6 +77,38 @@ public final class WorkflowExampleTemplates {
                 .findFirst().orElse(null);
     }
 
+    /**
+     * 获取示例欢迎语
+     */
+    public static String getWelcomeMessage(String key) {
+        return WELCOME_MAP.getOrDefault(key, "你好，有什么可以帮你的？");
+    }
+
+    /**
+     * 获取示例推荐问题（JSON 数组字符串）
+     */
+    public static String getRecommendedQuestions(String key) {
+        return QUESTIONS_MAP.getOrDefault(key, "[]");
+    }
+
+    // ========== 欢迎语 & 推荐问题 ==========
+
+    private static final Map<String, String> WELCOME_MAP = Map.of(
+            "rag_qa", "## RAG 知识问答助手\n我可以从知识库中检索相关信息，为你提供准确的回答。\n\n> 请先在工作流中绑定知识库，然后开始提问。",
+            "intent_router", "## 智能意图路由助手\n我会自动识别你的意图类型，分配给不同的处理模块来回答。\n\n> 支持信息查询、投诉建议等多种意图。",
+            "batch_parallel", "## 批量并行处理助手\n我可以同时处理多个问题，大幅提升效率。\n\n> 请输入多个问题，我会并行检索并生成回答。",
+            "data_extract", "## 数据提取与转换助手\n我可以从自然语言中提取结构化信息（姓名、邮箱、电话等），并进行格式验证。\n\n> 试试用一句话描述你的个人信息。",
+            "external_integration", "## 外部集成与 MCP 助手\n我可以调用外部 API、MCP 工具获取数据，并自动生成分析总结。\n\n> 已预置示例 API，直接对话即可体验。"
+    );
+
+    private static final Map<String, String> QUESTIONS_MAP = Map.of(
+            "rag_qa", "[\"这个知识库包含哪些内容？\", \"帮我总结一下关键信息\", \"有哪些常见问题？\"]",
+            "intent_router", "[\"我想查询一下产品价格\", \"我对服务不满意，要投诉\", \"你好，随便聊聊\"]",
+            "batch_parallel", "[\"同时问3个不同的问题\", \"批量处理的效率如何？\", \"支持多大的并发量？\"]",
+            "data_extract", "[\"我叫张三，邮箱是zhangsan@example.com，电话13800138000\", \"帮我验证一下 test@domain.com 这个邮箱格式对不对\", \"从这段话里提取所有联系方式\"]",
+            "external_integration", "[\"帮我调用API获取数据\", \"用MCP工具处理一下任务\", \"外部接口调用失败了怎么办？\"]"
+    );
+
     // ========== 示例 1：RAG 知识问答助手 ==========
 
     private static Map<String, Object> buildRagQaWorkflow() {
@@ -103,7 +135,8 @@ public final class WorkflowExampleTemplates {
                         "label", "生成回答",
                         "sysPrompt", "你是一个专业的知识库问答助手。请严格根据提供的知识库内容回答用户问题，如果知识库中没有相关内容，请如实告知。",
                         "promptTemplate", "用户问题：{{query}}\n\n{{output}}",
-                        "temperature", 0.7
+                        "temperature", 0.7,
+                        "enableStreaming", true
                 )),
                 node("output_1", "output", 1000, 200, Map.of(
                         "label", "输出回答",
@@ -142,13 +175,15 @@ public final class WorkflowExampleTemplates {
                         "label", "查询处理",
                         "sysPrompt", "你是一个信息查询助手。请根据用户的问题提供准确、简洁的信息。",
                         "promptTemplate", "{{query}}",
-                        "temperature", 0.3
+                        "temperature", 0.3,
+                        "enableStreaming", true
                 )),
                 node("llm_complaint", "llm", 550, 250, Map.of(
                         "label", "投诉处理",
                         "sysPrompt", "你是一个客服投诉处理专员。请认真倾听用户的投诉，表达歉意，并提供解决方案。",
                         "promptTemplate", "{{query}}",
-                        "temperature", 0.5
+                        "temperature", 0.5,
+                        "enableStreaming", true
                 )),
                 node("variable_1", "variable", 550, 420, Map.of(
                         "label", "设置默认回复",
@@ -159,7 +194,8 @@ public final class WorkflowExampleTemplates {
                         "label", "通用回复",
                         "sysPrompt", "你是一个友好的助手。请用温和的语气与用户对话，尝试理解用户的真实需求。",
                         "promptTemplate", "{{fallbackReply}}\n\n用户说：{{query}}",
-                        "temperature", 0.8
+                        "temperature", 0.8,
+                        "enableStreaming", true
                 )),
                 node("end_1", "end", 1000, 250, Map.of())
         );
@@ -206,7 +242,8 @@ public final class WorkflowExampleTemplates {
                         "label", "生成回答",
                         "sysPrompt", "根据检索内容回答问题，简洁准确。",
                         "promptTemplate", "问题：{{query}}\n\n参考内容：{{retrievalResult}}",
-                        "temperature", 0.5
+                        "temperature", 0.5,
+                        "enableStreaming", true
                 )),
                 node("batch_end_1", "batch_end", 1050, 280, Map.of(
                         "label", "并行结束"
@@ -368,7 +405,8 @@ public final class WorkflowExampleTemplates {
                         "label", "生成总结",
                         "sysPrompt", "你是一个数据分析师。请根据API返回的数据，用自然语言生成简洁的总结。",
                         "promptTemplate", "API返回的数据标题：{{title}}\n内容：{{content}}\n\n请生成一段简洁的总结。",
-                        "temperature", 0.5
+                        "temperature", 0.5,
+                        "enableStreaming", true
                 )),
                 node("output_ok", "output", 1400, 200, Map.of(
                         "label", "成功输出",

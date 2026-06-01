@@ -1,5 +1,13 @@
 <template>
   <div class="observability">
+    <!-- 类型切换 Tab -->
+    <div class="trace-tabs">
+      <a-radio-group v-model:value="activeTab" button-style="solid" @change="onTabChange">
+        <a-radio-button value="chat">对话型链路</a-radio-button>
+        <a-radio-button value="workflow">工作流链路</a-radio-button>
+      </a-radio-group>
+    </div>
+
     <!-- 顶部统计卡片 -->
     <div class="stats-overview">
       <div class="stat-card">
@@ -358,6 +366,7 @@ const router = useRouter()
 const loading = ref(false)
 const traces = ref([])
 const overview = ref({})
+const activeTab = ref('chat')
 const detailVisible = ref(false)
 const detailTrace = ref(null)
 const expandedSpans = ref(new Set())
@@ -386,7 +395,7 @@ const pagination = reactive({
   showTotal: (total) => `共 ${total} 条`,
 })
 
-const columns = [
+const chatColumns = [
   { title: '时间', key: 'createTime', width: 100 },
   { title: 'Request ID', dataIndex: 'requestId', width: 160, ellipsis: true },
   { title: 'Agent', dataIndex: 'agentName', width: 120, ellipsis: true },
@@ -397,6 +406,18 @@ const columns = [
   { title: '状态', key: 'status', width: 80 },
   { title: '操作', key: 'action', width: 80 },
 ]
+
+const workflowColumns = [
+  { title: '时间', key: 'createTime', width: 100 },
+  { title: 'Request ID', dataIndex: 'requestId', width: 160, ellipsis: true },
+  { title: 'Agent', dataIndex: 'agentName', width: 120, ellipsis: true },
+  { title: 'Token (入/出)', key: 'totalTokens', width: 130 },
+  { title: '耗时', key: 'totalDurationMs', width: 100 },
+  { title: '状态', key: 'status', width: 80 },
+  { title: '操作', key: 'action', width: 80 },
+]
+
+const columns = computed(() => activeTab.value === 'workflow' ? workflowColumns : chatColumns)
 
 function parseSpansFromDetail() {
   if (!detailTrace.value?.spans) return []
@@ -575,6 +596,7 @@ async function loadTraces(page) {
     const params = {
       pageNum: pagination.current,
       pageSize: pagination.pageSize,
+      traceSource: activeTab.value,
     }
     if (filter.requestId?.trim()) params.requestId = filter.requestId.trim()
     if (filter.sessionId) params.sessionId = filter.sessionId
@@ -593,9 +615,15 @@ async function loadTraces(page) {
 
 async function loadOverview() {
   try {
-    const res = await getTraceOverview()
+    const res = await getTraceOverview(activeTab.value)
     overview.value = res.data || {}
   } catch { /* ignore */ }
+}
+
+function onTabChange() {
+  pagination.current = 1
+  loadTraces(1)
+  loadOverview()
 }
 
 function handleTableChange(pag) {
@@ -607,6 +635,10 @@ function goToChat(sessionId) {
 }
 
 async function openDetail(record) {
+  if (activeTab.value === 'workflow') {
+    router.push(`/observability/workflow-trace/${record.id}`)
+    return
+  }
   detailVisible.value = true
   expandedSpans.value = new Set()
   try {
@@ -649,6 +681,11 @@ onMounted(() => {
   padding: 24px;
   height: 100%;
   overflow-y: auto;
+}
+
+/* 类型切换 Tab */
+.trace-tabs {
+  margin-bottom: 20px;
 }
 
 /* 统计卡片 */

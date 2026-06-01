@@ -60,8 +60,14 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
             wrapper.le(LlmTrace::getCreateTime, LocalDateTime.parse(request.getEndTime(), FORMATTER));
         }
 
-        // 仅展示用户对话 trace（排除辅助能力：生成提示词、向量化、TTS 等）
-        wrapper.and(w -> w.eq(LlmTrace::getTraceSource, "chat").or().isNull(LlmTrace::getTraceSource));
+        // 按来源类型筛选：指定 traceSource 时精确匹配，否则展示 chat + workflow（排除辅助能力）
+        if (StringUtils.hasText(request.getTraceSource())) {
+            wrapper.eq(LlmTrace::getTraceSource, request.getTraceSource());
+        } else {
+            wrapper.and(w -> w.eq(LlmTrace::getTraceSource, "chat")
+                    .or().eq(LlmTrace::getTraceSource, "workflow")
+                    .or().isNull(LlmTrace::getTraceSource));
+        }
 
         wrapper.orderByDesc(LlmTrace::getCreateTime);
 
@@ -113,8 +119,8 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
      * 汇总统计
      */
     @Override
-    public Map<String, Object> getOverview() {
-        LambdaQueryWrapper<LlmTrace> chatOnly = chatTraceWrapper();
+    public Map<String, Object> getOverview(String traceSource) {
+        LambdaQueryWrapper<LlmTrace> chatOnly = chatTraceWrapper(traceSource);
 
         // 1. 总请求数（仅对话）
         long totalCount = count(chatOnly);
@@ -145,11 +151,16 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
     }
 
     /**
-     * 异步写入调用链记录
+     * 构建 trace 来源筛选条件
      */
-    private LambdaQueryWrapper<LlmTrace> chatTraceWrapper() {
+    private LambdaQueryWrapper<LlmTrace> chatTraceWrapper(String traceSource) {
+        if (StringUtils.hasText(traceSource)) {
+            return new LambdaQueryWrapper<LlmTrace>().eq(LlmTrace::getTraceSource, traceSource);
+        }
         return new LambdaQueryWrapper<LlmTrace>()
-                .and(w -> w.eq(LlmTrace::getTraceSource, "chat").or().isNull(LlmTrace::getTraceSource));
+                .and(w -> w.eq(LlmTrace::getTraceSource, "chat")
+                        .or().eq(LlmTrace::getTraceSource, "workflow")
+                        .or().isNull(LlmTrace::getTraceSource));
     }
 
     @Async
@@ -162,7 +173,8 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         if (trace.getTraceSource() == null) {
             trace.setTraceSource("chat");
         }
-        if (!"chat".equals(trace.getTraceSource())) {
+        // 仅允许 chat 和 workflow 来源写入
+        if (!"chat".equals(trace.getTraceSource()) && !"workflow".equals(trace.getTraceSource())) {
             return;
         }
         try {

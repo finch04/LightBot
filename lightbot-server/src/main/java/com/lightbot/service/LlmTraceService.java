@@ -34,9 +34,10 @@ public interface LlmTraceService extends IService<LlmTrace> {
     /**
      * 汇总统计
      *
+     * @param traceSource 来源类型筛选（chat/workflow/null=全部）
      * @return 统计数据
      */
-    Map<String, Object> getOverview();
+    Map<String, Object> getOverview(String traceSource);
 
     /**
      * 异步写入调用链记录

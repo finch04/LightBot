@@ -8,6 +8,6 @@ export function getTraceDetail(id) {
   return request.get(`/observability/traces/${id}`)
 }
 
-export function getTraceOverview() {
-  return request.get('/observability/overview')
+export function getTraceOverview(traceSource) {
+  return request.get('/observability/overview', { params: { traceSource } })
 }

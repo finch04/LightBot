@@ -48,7 +48,7 @@ public class LlmTraceController {
      */
     @GetMapping("/overview")
     @Operation(summary = "调用链汇总统计")
-    public Result<Map<String, Object>> getOverview() {
-        return Result.ok(llmTraceService.getOverview());
+    public Result<Map<String, Object>> getOverview(@RequestParam(required = false) String traceSource) {
+        return Result.ok(llmTraceService.getOverview(traceSource));
     }
 }

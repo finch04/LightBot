@@ -36,4 +36,7 @@ public class LlmTraceRequest {
 
     @Schema(description = "结束时间（ISO格式）")
     private String endTime;
+
+    @Schema(description = "来源类型: chat=对话型, workflow=工作流型, 空=全部")
+    private String traceSource;
 }
