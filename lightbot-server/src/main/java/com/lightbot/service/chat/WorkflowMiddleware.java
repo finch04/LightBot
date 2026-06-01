@@ -376,6 +376,17 @@ public class WorkflowMiddleware implements ChatMiddleware {
         if (complete.containsKey("outputs")) {
             attrs.put("outputs", complete.get("outputs"));
         }
+        // traceData 合并到 outputs（仅用于 trace span，不影响 Chat 页展示）
+        if (complete.containsKey("traceData")) {
+            Object existing = attrs.get("outputs");
+            if (existing instanceof Map<?, ?> existingMap) {
+                Map<String, Object> merged = new LinkedHashMap<>((Map<String, Object>) existingMap);
+                merged.putAll((Map<String, Object>) complete.get("traceData"));
+                attrs.put("outputs", merged);
+            } else {
+                attrs.put("outputs", complete.get("traceData"));
+            }
+        }
         if (complete.containsKey("detail")) {
             attrs.put("detail", truncate(String.valueOf(complete.get("detail")), 500));
         }

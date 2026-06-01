@@ -8,7 +8,7 @@ import {
 export const SHORT_MEMORY_DEFAULT = {
   enabled: false,
   type: 'self',
-  round: 3,
+  round: 5,
   paramKey: ''
 }
 

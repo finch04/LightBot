@@ -140,7 +140,16 @@
             </div>
             <div v-if="selectedNodeSpan.attributes?.outputs && Object.keys(selectedNodeSpan.attributes.outputs).length" class="panel-section">
               <div class="ps-title">输出结果</div>
-              <pre class="ps-json">{{ JSON.stringify(selectedNodeSpan.attributes.outputs, null, 2) }}</pre>
+              <pre class="ps-json">{{ JSON.stringify(filterOutputs(selectedNodeSpan.attributes.outputs), null, 2) }}</pre>
+            </div>
+            <div v-if="llmMessages(selectedNodeSpan)" class="panel-section">
+              <div class="ps-title">LLM 上下文（完整消息列表）</div>
+              <div class="llm-messages-list">
+                <div v-for="(msg, mi) in llmMessages(selectedNodeSpan)" :key="mi" class="llm-msg-item" :class="'llm-msg-' + msg.role">
+                  <span class="llm-msg-role">{{ msg.role }}</span>
+                  <pre class="llm-msg-content">{{ msg.content }}</pre>
+                </div>
+              </div>
             </div>
             <div v-if="selectedNodeSpan.attributes?.detail" class="panel-section">
               <div class="ps-title">执行详情</div>
@@ -181,7 +190,16 @@
             </div>
             <div v-if="span.attributes?.outputs && Object.keys(span.attributes.outputs).length" class="tn-section">
               <div class="tn-section-title">输出结果</div>
-              <pre class="tn-json">{{ JSON.stringify(span.attributes.outputs, null, 2) }}</pre>
+              <pre class="tn-json">{{ JSON.stringify(filterOutputs(span.attributes.outputs), null, 2) }}</pre>
+            </div>
+            <div v-if="llmMessages(span)" class="tn-section">
+              <div class="tn-section-title">LLM 上下文（完整消息列表）</div>
+              <div class="llm-messages-list">
+                <div v-for="(msg, mi) in llmMessages(span)" :key="mi" class="llm-msg-item" :class="'llm-msg-' + msg.role">
+                  <span class="llm-msg-role">{{ msg.role }}</span>
+                  <pre class="llm-msg-content">{{ msg.content }}</pre>
+                </div>
+              </div>
             </div>
             <div v-if="span.attributes?.detail" class="tn-section">
               <div class="tn-section-title">执行详情</div>
@@ -601,6 +619,18 @@ function getNodeColors(type, status) {
   return map[type] || { fill: '#fafafa', stroke: '#d9d9d9', textColor: '#595959' }
 }
 
+function llmMessages(span) {
+  const msgs = span.attributes?.outputs?.llmMessages
+  return Array.isArray(msgs) && msgs.length ? msgs : null
+}
+
+function filterOutputs(outputs) {
+  if (!outputs) return {}
+  const filtered = { ...outputs }
+  delete filtered.llmMessages
+  return filtered
+}
+
 function formatLlmAttrs(attrs) {
   if (!attrs) return '{}'
   const filtered = { ...attrs }
@@ -988,5 +1018,40 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* LLM Messages */
+.llm-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.llm-msg-item {
+  border-radius: 6px;
+  padding: 8px 12px;
+  border: 1px solid #e8e8e8;
+}
+.llm-msg-system { background: #fff7e6; border-color: #ffd591; }
+.llm-msg-user { background: #e6f7ff; border-color: #91d5ff; }
+.llm-msg-assistant { background: #f6ffed; border-color: #b7eb8f; }
+.llm-msg-role {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #595959;
+  margin-bottom: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+}
+.llm-msg-content {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow: auto;
 }
 </style>

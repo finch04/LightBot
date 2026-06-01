@@ -192,9 +192,9 @@ public final class WorkflowExampleTemplates {
                 )),
                 node("llm_other", "llm", 780, 420, Map.of(
                         "label", "通用回复",
-                        "sysPrompt", "你是一个友好的助手。请用温和的语气与用户对话，尝试理解用户的真实需求。",
-                        "promptTemplate", "{{fallbackReply}}\n\n用户说：{{query}}",
-                        "temperature", 0.8,
+                        "sysPrompt", "你是一个友好的助手。请严格按下方「标准回复」的内容回复用户，不要自行发挥，可以适当补充礼貌用语。",
+                        "promptTemplate", "【标准回复】：{{fallbackReply}}\n\n【用户消息】：{{query}}\n\n请将「标准回复」作为核心内容回复用户。",
+                        "temperature", 0.3,
                         "enableStreaming", true
                 )),
                 node("end_1", "end", 1000, 250, Map.of())

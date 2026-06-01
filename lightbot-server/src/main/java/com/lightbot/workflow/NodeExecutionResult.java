@@ -40,4 +40,9 @@ public class NodeExecutionResult {
      * 是否结束（END节点返回 true）
      */
     private boolean finished;
+
+    /**
+     * 链路追踪专用数据（不进入工作流变量，仅供 trace 记录）
+     */
+    private Map<String, Object> traceData;
 }

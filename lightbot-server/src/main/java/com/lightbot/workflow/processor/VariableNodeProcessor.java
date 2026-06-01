@@ -47,11 +47,11 @@ public class VariableNodeProcessor extends AbstractFlowNodeProcessor implements 
         }
 
         variables.put(variableName, resolvedValue);
-        log.info("[VariableNodeProcessor] 变量赋值: {}={}", variableName, resolvedValue);
+        log.info("[VariableNodeProcessor] 变量赋值: {}={}, rawValue={}, 当前变量keys={}",
+                variableName, resolvedValue, rawValue, variables.keySet());
 
         Map<String, Object> outputs = new HashMap<>();
         outputs.put(variableName, resolvedValue);
-        outputs.put("result", "Assignment successful");
 
         return NodeExecutionResult.builder()
                 .nextNodeId(resolveNextNodeId(context))

@@ -283,14 +283,19 @@ function hasKvData(value) {
 /** 从 step.detail / step.outputs 中提取可读的执行结果文本 */
 function extractResultText(step) {
   // 优先从 outputs 中提取有意义的值
-  if (step.outputs && typeof step.outputs === 'object' && Object.keys(step.outputs).length > 0) {
+  let outputs = step.outputs
+  // 兼容 outputs 为 JSON 字符串的情况
+  if (typeof outputs === 'string') {
+    try { outputs = JSON.parse(outputs) } catch { outputs = null }
+  }
+  if (outputs && typeof outputs === 'object' && Object.keys(outputs).length > 0) {
     const preferKeys = ['result', 'output', 'text', 'answer', 'llmOutput']
     for (const k of preferKeys) {
-      const v = step.outputs[k]
+      const v = outputs[k]
       if (v != null && String(v).trim()) return String(v)
     }
     // 取第一个非空值
-    for (const v of Object.values(step.outputs)) {
+    for (const v of Object.values(outputs)) {
       if (v != null && String(v).trim()) return String(v)
     }
   }

@@ -230,6 +230,10 @@ public class WorkflowExecutorService {
                     completeEvent.put("outputs", outputSummary);
                 }
             }
+            // traceData 独立存放，不混入 outputs（避免 Chat 页组件误将其作为执行结果展示）
+            if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
+                completeEvent.put("traceData", nodeResult.getTraceData());
+            }
             emitWorkflowEvent(workflowEvents, onEvent, completeEvent);
 
             currentNodeId = nextNodeId;
@@ -341,6 +345,10 @@ public class WorkflowExecutorService {
         if (value instanceof String text) {
             return truncateDetail(text);
         }
+        // List<Map> 结构（如 LLM 上下文消息列表）保留原始结构，便于前端渲染
+        if (value instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map) {
+            return value;
+        }
         try {
             String json = objectMapper.writeValueAsString(value);
             return truncateDetail(json);
@@ -443,8 +451,15 @@ public class WorkflowExecutorService {
         if (result == null) {
             return null;
         }
-        // LLM 节点输出即消息正文，不重复放入 detail（避免对话页显示两遍）
-        if (!"llm".equals(nodeTypeCode) && result.getStreamContent() != null && !result.getStreamContent().isBlank()) {
+        // LLM 节点：直接返回 llmOutput 文本（不走 JSON 序列化）
+        if ("llm".equals(nodeTypeCode)) {
+            Map<String, Object> llmOutputs = result.getOutputs();
+            if (llmOutputs != null && llmOutputs.containsKey("llmOutput")) {
+                return String.valueOf(llmOutputs.get("llmOutput"));
+            }
+            return result.getStreamContent();
+        }
+        if (result.getStreamContent() != null && !result.getStreamContent().isBlank()) {
             return truncateDetail(result.getStreamContent());
         }
         Map<String, Object> outputs = result.getOutputs();
@@ -600,6 +615,10 @@ public class WorkflowExecutorService {
             if (!filteredOutputs.isEmpty()) {
                 completeEvent.put("outputs", filteredOutputs);
             }
+        }
+        // traceData 独立存放，不混入 outputs（避免 Chat 页组件误将其作为执行结果展示）
+        if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
+            completeEvent.put("traceData", nodeResult.getTraceData());
         }
         emitWorkflowEvent(events, null, completeEvent);
 

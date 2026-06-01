@@ -80,7 +80,24 @@ public class LlmNodeProcessor implements NodeProcessor {
         }
         ChatOptions chatOptions = modelFactory.buildChatOptions(providerId, configParams);
 
-        // 5. 调用 LLM（流式 or 非流式）
+        // 5. 构建 LLM 上下文快照（用于链路追踪）
+        List<Map<String, String>> llmContextSnapshot = messages.stream()
+                .map(m -> {
+                    String text;
+                    if (m instanceof SystemMessage sm) {
+                        text = sm.getText();
+                    } else if (m instanceof AssistantMessage am) {
+                        text = am.getText();
+                    } else if (m instanceof UserMessage um) {
+                        text = um.getText();
+                    } else {
+                        text = m.toString();
+                    }
+                    return Map.of("role", m.getMessageType().getValue(), "content", text != null ? text : "");
+                })
+                .toList();
+
+        // 6. 调用 LLM（流式 or 非流式）
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         Consumer<String> streamCallback = context.getOnStreamChunk();
         boolean useStream = streamCallback != null && Boolean.TRUE.equals(nodeData.get("enableStreaming"));
@@ -92,13 +109,16 @@ public class LlmNodeProcessor implements NodeProcessor {
             llmOutput = callSync(chatModel, messages, chatOptions);
         }
 
-        // 6. 获取下一个节点
+        // 7. 获取下一个节点
         List<WorkflowEdge> outEdges = context.getWorkflow().getOutEdges(context.getCurrentNodeId());
         String nextNodeId = outEdges.isEmpty() ? null : outEdges.get(0).getTarget();
 
-        // 7. 构建输出
+        // 8. 构建输出
         Map<String, Object> outputs = new HashMap<>();
         outputs.put("llmOutput", llmOutput);
+
+        Map<String, Object> traceData = new HashMap<>();
+        traceData.put("llmMessages", llmContextSnapshot);
 
         log.info("[LlmNodeProcessor] LLM调用完成: nodeId={}, stream={}, outputLength={}",
                 context.getCurrentNodeId(), useStream, llmOutput.length());
@@ -106,6 +126,7 @@ public class LlmNodeProcessor implements NodeProcessor {
         return NodeExecutionResult.builder()
                 .nextNodeId(nextNodeId)
                 .outputs(outputs)
+                .traceData(traceData)
                 .streamContent(llmOutput)
                 .finished(false)
                 .build();
@@ -127,10 +148,10 @@ public class LlmNodeProcessor implements NodeProcessor {
             }
         }
 
-        // 对话历史：从 history_list 变量中提取，构建为 Message 对象
-        Object historyObj = context.getVariables().get("history_list");
-        if (historyObj instanceof List<?> historyList) {
-            for (Object item : historyList) {
+        // 对话历史：根据 short_memory 配置决定是否注入及注入轮次
+        List<?> rawHistory = resolveHistory(nodeData, context.getVariables());
+        if (rawHistory != null) {
+            for (Object item : rawHistory) {
                 if (item instanceof Map<?, ?> map) {
                     String role = map.get("role") != null ? map.get("role").toString() : "user";
                     String content = map.get("content") != null ? map.get("content").toString() : "";
@@ -147,9 +168,64 @@ public class LlmNodeProcessor implements NodeProcessor {
         // 用户提示词（模板渲染）
         String promptTemplate = String.valueOf(nodeData.getOrDefault("promptTemplate", "{{input}}"));
         String userPrompt = WorkflowPromptUtils.render(promptTemplate, context.getVariables());
+        log.info("[LlmNodeProcessor] promptTemplate={}, renderedUserPrompt={}, variableKeys={}",
+                promptTemplate, userPrompt.length() > 200 ? userPrompt.substring(0, 200) + "..." : userPrompt, context.getVariables().keySet());
         messages.add(new UserMessage(userPrompt));
 
         return messages;
+    }
+
+    /**
+     * 根据 short_memory 配置解析对话历史
+     * <p>enabled=false → 不注入历史；type=self → 按 round 截断；type=custom → 使用指定变量</p>
+     */
+    @SuppressWarnings("unchecked")
+    private List<?> resolveHistory(Map<String, Object> nodeData, Map<String, Object> variables) {
+        Object memoryObj = nodeData.get("short_memory");
+        Map<String, Object> memory = parseMap(memoryObj);
+        if (memory == null || !Boolean.TRUE.equals(memory.get("enabled"))) {
+            return null;
+        }
+
+        String type = String.valueOf(memory.getOrDefault("type", "self"));
+        List<?> historyList;
+
+        if ("custom".equals(type)) {
+            // 自定义缓存：从指定变量读取
+            String paramKey = WorkflowNodeDataUtils.parseString(memory.get("paramKey"));
+            if (paramKey == null || paramKey.isBlank()) return null;
+            Object custom = variables.get(paramKey);
+            historyList = custom instanceof List<?> list ? list : null;
+        } else {
+            // 本节点缓存：从 history_list 读取
+            Object historyObj = variables.get("history_list");
+            historyList = historyObj instanceof List<?> list ? list : null;
+        }
+
+        if (historyList == null || historyList.isEmpty()) return null;
+
+        // 按轮次截断：每轮 = 1 user + 1 assistant = 2 条消息
+        int round = 3;
+        Object roundObj = memory.get("round");
+        if (roundObj instanceof Number n) {
+            round = n.intValue();
+        }
+        int maxMessages = round * 2;
+        log.info("[LlmNodeProcessor] 记忆模块: type={}, round={}, 历史消息总数={}, 截断上限={}", type, round, historyList.size(), maxMessages);
+        if (historyList.size() <= maxMessages) return historyList;
+        return historyList.subList(historyList.size() - maxMessages, historyList.size());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseMap(Object obj) {
+        if (obj instanceof Map) return (Map<String, Object>) obj;
+        if (obj instanceof String s && !s.isBlank()) {
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(s, Map.class);
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     /**
