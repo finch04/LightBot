@@ -115,6 +115,8 @@ function isAllowedGroupBoundaryConnection(sourceNode, targetNode, sourceType, ta
   if (GROUP_START_BUILTIN.has(targetType) && tp != null && sp == null) return true
   // 迭代结束 / 并行结束 → 主流程
   if (GROUP_END_BUILTIN.has(sourceType) && sp != null && tp == null) return true
+  // 迭代结束 / 并行结束 → 另一个容器的迭代开始 / 并行开始（跨容器串联）
+  if (GROUP_END_BUILTIN.has(sourceType) && GROUP_START_BUILTIN.has(targetType) && sp != null && tp != null && sp !== tp) return true
   return false
 }
 
@@ -125,14 +127,15 @@ function isValidGroupBuiltinConnection(sourceNode, targetNode, sourceType, targe
 
   if (GROUP_START_BUILTIN.has(sourceType) && tp !== sp) return false
   if (GROUP_START_BUILTIN.has(targetType)) {
+    // 容器内的节点不能连到自己的 start（sp === tp），但允许跨容器串联（如 batch_end → loop_start）
     if (sp === tp) return false
-    if (sp != null) return false
   }
 
   if (GROUP_END_BUILTIN.has(targetType) && sp !== tp) return false
   if (GROUP_END_BUILTIN.has(sourceType)) {
     if (sp === tp) return false
-    if (tp != null) return false
+    // 允许迭代结束/并行结束 → 另一个容器的迭代开始/并行开始
+    if (tp != null && !GROUP_START_BUILTIN.has(targetType)) return false
   }
 
   return true

@@ -190,6 +190,19 @@ public class WorkflowMiddleware implements ChatMiddleware {
         if (events == null || events.isEmpty()) {
             return "";
         }
+        // 1. 优先返回最后一个失败节点的错误信息
+        for (int i = events.size() - 1; i >= 0; i--) {
+            Map<String, Object> e = events.get(i);
+            if (!"workflow_node_complete".equals(e.get("type"))) {
+                continue;
+            }
+            if (Boolean.FALSE.equals(e.get("success"))) {
+                String nodeLabel = e.get("nodeLabel") != null ? e.get("nodeLabel").toString() : "";
+                String message = e.get("message") != null ? e.get("message").toString() : "未知错误";
+                return "节点【" + nodeLabel + "】执行失败：" + message;
+            }
+        }
+        // 2. 从最后一个成功节点提取输出
         for (int i = events.size() - 1; i >= 0; i--) {
             Map<String, Object> e = events.get(i);
             if (!"workflow_node_complete".equals(e.get("type"))) {

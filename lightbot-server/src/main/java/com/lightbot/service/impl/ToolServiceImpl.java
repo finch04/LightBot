@@ -296,11 +296,15 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             }
             // agentId 为空时，使用当前用户的默认 Agent（便于测试 query_knowledge 等工具）
             if (agentId == 0) {
-                long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
-                Agent defaultAgent = agentService.getDefaultAgent(userId);
-                if (defaultAgent != null) {
-                    agentId = defaultAgent.getId();
-                    log.info("[ToolService] 测试工具自动使用默认Agent: agentId={}", agentId);
+                try {
+                    long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
+                    Agent defaultAgent = agentService.getDefaultAgent(userId);
+                    if (defaultAgent != null) {
+                        agentId = defaultAgent.getId();
+                        log.info("[ToolService] 测试工具自动使用默认Agent: agentId={}", agentId);
+                    }
+                } catch (cn.dev33.satoken.exception.NotWebContextException ignored) {
+                    log.debug("[ToolService] 非Web上下文，跳过默认Agent查找");
                 }
             }
             org.springframework.ai.chat.model.ToolContext testContext =

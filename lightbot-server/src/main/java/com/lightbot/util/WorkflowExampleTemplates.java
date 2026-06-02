@@ -34,8 +34,8 @@ public final class WorkflowExampleTemplates {
                         .build(),
                 WorkflowExampleVO.builder()
                         .key("batch_parallel").name("示例：批量并行处理助手")
-                        .description("批处理容器 + 循环容器，演示 batch/loop 容器节点的并行与迭代用法")
-                        .nodeTypeTags(List.of("batch", "batch_start", "batch_end", "loop", "loop_start", "loop_end", "script"))
+                        .description("LLM拆分问题 + 批处理容器 + 循环容器，演示 batch/loop 容器节点的并行与迭代用法")
+                        .nodeTypeTags(List.of("llm", "batch", "batch_start", "batch_end", "loop", "loop_start", "loop_end", "script"))
                         .build(),
                 WorkflowExampleVO.builder()
                         .key("data_extract").name("示例：数据提取与转换助手")
@@ -44,8 +44,8 @@ public final class WorkflowExampleTemplates {
                         .build(),
                 WorkflowExampleVO.builder()
                         .key("external_integration").name("示例：外部集成与 MCP 助手")
-                        .description("API 调用 + MCP 工具 + 条件分支，演示 api/mcp/tool/app_component 节点的外部集成能力")
-                        .nodeTypeTags(List.of("api", "script", "condition", "mcp", "tool", "app_component"))
+                        .description("API 调用 + MCP 工具 + 条件分支，演示 api/script/condition/mcp 节点的外部集成能力")
+                        .nodeTypeTags(List.of("api", "script", "condition", "mcp"))
                         .build()
         );
     }
@@ -219,65 +219,73 @@ public final class WorkflowExampleTemplates {
                 node("start_1", "start", 50, 250, Map.of()),
                 node("input_1", "input", 200, 250, Map.of(
                         "label", "输入参数",
-                        "outputParams", List.of(Map.of("key", "questions", "type", "Array", "defaultValue", "[]"))
+                        "outputParams", List.of(Map.of("key", "query", "type", "String", "defaultValue", ""))
                 )),
-                node("batch_1", "batch", 400, 200, Map.of(
+                node("script_split", "script", 420, 250, Map.of(
+                        "label", "问题拆分",
+                        "scriptLanguage", "javascript",
+                        "scriptContent", "function main(params) {\n  var input = params.input || '';\n  // 1. 尝试 JSON 数组解析\n  try {\n    var arr = JSON.parse(input);\n    if (Array.isArray(arr) && arr.length > 0) {\n      return { questions: arr };\n    }\n  } catch (e) {}\n  // 2. 按中文标点拆分\n  var parts = input.split(/[，,；;。！!？?\\n]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });\n  if (parts.length === 0) parts = [input];\n  return { questions: parts };\n}",
+                        "inputParams", List.of(Map.of("key", "input", "value", "{{query}}")),
+                        "outputParams", List.of(Map.of("key", "questions"))
+                )),
+                node("batch_1", "batch", 680, 200, Map.of(
                         "label", "批量处理",
-                        "arrayVariable", "questions",
+                        "inputParams", List.of(Map.of("key", "question", "value", "{{questions}}")),
                         "batchSize", 10,
                         "concurrentSize", 3,
                         "errorStrategy", "continueOnError",
                         "outputParams", List.of(Map.of("key", "llmOutput", "type", "Array"))
                 )),
-                node("batch_start_1", "batch_start", 500, 280, Map.of(
+                node("batch_start_1", "batch_start", 780, 280, Map.of(
                         "label", "并行开始"
                 )),
-                node("retrieval_1", "retrieval", 650, 280, Map.of(
+                node("retrieval_1", "retrieval", 930, 280, Map.of(
                         "label", "检索相关文档",
                         "knowledgeId", 0,
                         "overrideConfig", true,
                         "topK", 3,
                         "threshold", 0.5
                 )),
-                node("llm_1", "llm", 850, 280, Map.of(
+                node("llm_1", "llm", 1130, 280, Map.of(
                         "label", "生成回答",
                         "sysPrompt", "根据检索内容回答问题，简洁准确。",
-                        "promptTemplate", "问题：{{query}}\n\n参考内容：{{retrievalResult}}",
+                        "promptTemplate", "问题：{{question}}\n\n参考内容：{{retrievalResult}}",
                         "temperature", 0.5,
                         "enableStreaming", true
                 )),
-                node("batch_end_1", "batch_end", 1050, 280, Map.of(
+                node("batch_end_1", "batch_end", 1330, 280, Map.of(
                         "label", "并行结束"
                 )),
-                node("loop_1", "loop", 1250, 200, Map.of(
+                node("loop_1", "loop", 1550, 200, Map.of(
                         "label", "结果汇总",
                         "iteratorType", "byCount",
                         "countLimit", 1,
                         "errorStrategy", "continueOnError",
                         "outputParams", List.of(Map.of("key", "summary", "type", "Array"))
                 )),
-                node("loop_start_1", "loop_start", 1350, 280, Map.of(
+                node("loop_start_1", "loop_start", 1650, 280, Map.of(
                         "label", "迭代开始"
                 )),
-                node("script_1", "script", 1500, 280, Map.of(
+                node("script_1", "script", 1800, 280, Map.of(
                         "label", "拼接结果",
                         "scriptLanguage", "javascript",
                         "scriptContent", "function main(params) {\n  var results = params.results || [];\n  var summary = '共处理 ' + results.length + ' 个问题：\\n';\n  for (var i = 0; i < results.length; i++) {\n    summary += (i + 1) + '. ' + results[i] + '\\n';\n  }\n  return { summary: summary };\n}",
                         "inputParams", List.of(Map.of("key", "results", "value", "{{llmOutput}}")),
                         "outputParams", List.of(Map.of("key", "summary"))
                 )),
-                node("loop_end_1", "loop_end", 1700, 280, Map.of(
+                node("loop_end_1", "loop_end", 2000, 280, Map.of(
                         "label", "迭代结束"
                 )),
-                node("output_1", "output", 1900, 250, Map.of(
+                node("output_1", "output", 2200, 250, Map.of(
                         "label", "输出汇总",
                         "output", "{{summary}}"
                 )),
-                node("end_1", "end", 2150, 250, Map.of())
+                node("end_1", "end", 2450, 250, Map.of())
         );
         List<Map<String, Object>> edges = List.of(
                 edge("e_start", "start_1", "input_1"),
-                edge("e_input", "input_1", "batch_start_1"),
+                edge("e_input", "input_1", "script_split"),
+                edge("e_split", "script_split", "batch_start_1"),
                 edge("e_bs", "batch_start_1", "retrieval_1"),
                 edge("e_ret", "retrieval_1", "llm_1"),
                 edge("e_llm", "llm_1", "batch_end_1"),
@@ -360,12 +368,12 @@ public final class WorkflowExampleTemplates {
                 node("script_parse", "script", 420, 300, Map.of(
                         "label", "解析响应",
                         "scriptLanguage", "javascript",
-                        "scriptContent", "function main(params) {\n  try {\n    var body = JSON.parse(params.body || '{}');\n    return {\n      title: body.title || '',\n      content: body.body || '',\n      statusCode: params.statusCode\n    };\n  } catch (e) {\n    return { error: 'JSON解析失败: ' + e.message, statusCode: params.statusCode };\n  }\n}",
+                        "scriptContent", "function main(params) {\n  try {\n    var body = JSON.parse(params.body || '{}');\n    var title = body.title || '';\n    var content = body.body || '';\n    var wordCount = content.split(/\\s+/).length;\n    var charCount = content.length;\n    var chartData = [\n      { name: 'Title', value: title.length },\n      { name: 'Word Count', value: wordCount },\n      { name: 'Char Count', value: charCount }\n    ];\n    return {\n      title: title,\n      chartData: JSON.stringify(chartData),\n      statusCode: params.statusCode\n    };\n  } catch (e) {\n    return { error: 'JSON解析失败: ' + e.message, statusCode: params.statusCode };\n  }\n}",
                         "inputParams", List.of(
                                 Map.of("key", "body", "value", "{{body}}"),
                                 Map.of("key", "statusCode", "value", "{{statusCode}}")
                         ),
-                        "outputParams", List.of(Map.of("key", "title"), Map.of("key", "content"), Map.of("key", "statusCode"))
+                        "outputParams", List.of(Map.of("key", "title"), Map.of("key", "chartData"), Map.of("key", "statusCode"))
                 )),
                 node("condition_1", "condition", 650, 300, Map.of(
                         "label", "状态检查",
@@ -382,20 +390,16 @@ public final class WorkflowExampleTemplates {
                                 )
                         )
                 )),
-                node("tool_1", "tool", 900, 120, Map.of(
-                        "label", "工具处理",
-                        "toolId", 0,
-                        "inputParams", List.of(Map.of("key", "text", "value", "{{title}}"))
-                )),
                 node("mcp_1", "mcp", 900, 300, Map.of(
                         "label", "MCP工具调用",
-                        "toolName", "example_tool",
-                        "inputParams", List.of(Map.of("key", "data", "value", "{{content}}"))
+                        "toolName", "generate_bar_chart",
+                        "mcpServerName", "mcp-server-chart",
+                        "inputParams", List.of(Map.of("key", "data", "value", "{{chartData}}"))
                 )),
                 node("llm_1", "llm", 1150, 200, Map.of(
                         "label", "生成总结",
-                        "sysPrompt", "你是一个数据分析师。请根据API返回的数据，用自然语言生成简洁的总结。",
-                        "promptTemplate", "API返回的数据标题：{{title}}\n内容：{{content}}\n\n请生成一段简洁的总结。",
+                        "sysPrompt", "你是一个数据分析师。请根据API返回的数据和图表统计，用自然语言生成简洁的总结。",
+                        "promptTemplate", "API返回的数据标题：{{title}}\n图表统计数据：{{chartData}}\n\n请根据以上信息生成一段简洁的总结，说明数据概况。",
                         "temperature", 0.5,
                         "enableStreaming", true
                 )),
@@ -403,33 +407,26 @@ public final class WorkflowExampleTemplates {
                         "label", "成功输出",
                         "output", "API调用成功！\n\n{{llmOutput}}"
                 )),
-                node("app_component_1", "app_component", 900, 480, Map.of(
-                        "label", "应用组件示例",
-                        "componentCode", "example_workflow",
-                        "componentType", "workflow"
-                )),
-                node("variable_err", "variable", 1150, 420, Map.of(
+                node("variable_err", "variable", 900, 480, Map.of(
                         "label", "错误信息",
                         "variableName", "errorMsg",
                         "variableValue", "API调用或解析失败：{{error}}"
                 )),
-                node("output_err", "output", 1400, 420, Map.of(
+                node("output_err", "output", 1150, 480, Map.of(
                         "label", "错误输出",
                         "output", "{{errorMsg}}"
                 )),
-                node("end_1", "end", 1650, 300, Map.of())
+                node("end_1", "end", 1400, 350, Map.of())
         );
         List<Map<String, Object>> edges = List.of(
                 edge("e_start", "start_1", "api_1"),
                 edge("e_api", "api_1", "script_parse"),
                 edge("e_parse", "script_parse", "condition_1"),
-                edgeHandle("e_ok", "condition_1", "tool_1", "out_a", "in"),
-                edgeHandle("e_err", "condition_1", "app_component_1", "out_b", "in"),
-                edge("e_tool", "tool_1", "mcp_1"),
+                edgeHandle("e_ok", "condition_1", "mcp_1", "out_a", "in"),
+                edgeHandle("e_err", "condition_1", "variable_err", "out_b", "in"),
                 edge("e_mcp", "mcp_1", "llm_1"),
                 edge("e_llm", "llm_1", "output_ok"),
                 edge("e_out_ok", "output_ok", "end_1"),
-                edge("e_app", "app_component_1", "variable_err"),
                 edge("e_var_err", "variable_err", "output_err"),
                 edge("e_out_err", "output_err", "end_1")
         );

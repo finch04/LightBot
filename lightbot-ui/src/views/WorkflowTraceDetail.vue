@@ -64,6 +64,8 @@
           <span class="zoom-label">{{ Math.round(scale * 100) }}%</span>
           <a-button size="small" @click="zoomOut"><MinusOutlined /></a-button>
           <a-button size="small" @click="resetView">重置</a-button>
+          <a-divider type="vertical" />
+          <a-button size="small" @click="reLayout"><ApartmentOutlined /> 重新布局</a-button>
         </div>
 
         <svg
@@ -258,6 +260,7 @@ let pendingMouse = null
 // Graph data — shallowRef 避免深层响应式追踪
 const graphNodes = shallowRef([])
 const graphEdges = shallowRef([])
+const rawWfEdges = shallowRef([])
 
 // --- Data loading ---
 
@@ -320,6 +323,7 @@ function initGraph() {
   const rootAttrs = root.attributes || {}
   const wfEdges = rootAttrs.edges || []
   const wfNodes = rootAttrs.nodes || []
+  rawWfEdges.value = wfEdges
 
   const spanMap = new Map()
   for (const s of spans) {
@@ -426,6 +430,20 @@ function autoLayout(nodes, wfEdges) {
     const offsetY = startY + Math.max(0, (400 - totalHeight) / 2)
     group.forEach((n, i) => { n.x = x; n.y = offsetY + i * nodeGapY })
   }
+}
+
+function reLayout() {
+  const nodes = graphNodes.value
+  if (!nodes.length) return
+  autoLayout(nodes, rawWfEdges.value)
+  const nodeMap = new Map(nodes.map(n => [n.nodeId, n]))
+  graphEdges.value = graphEdges.value.map(e => {
+    const srcNode = nodeMap.get(e.source)
+    const tgtNode = nodeMap.get(e.target)
+    if (!srcNode || !tgtNode) return e
+    return { ...e, ...buildEdgePath(srcNode, tgtNode) }
+  })
+  graphNodes.value = [...nodes]
 }
 
 // --- Zoom ---

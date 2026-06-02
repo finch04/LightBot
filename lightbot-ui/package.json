@@ -17,6 +17,7 @@
     "@vue-flow/minimap": "^1.5.2",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.7.9",
+    "dagre": "^0.8.5",
     "highlight.js": "^11.11.0",
     "marked": "^15.0.0",
     "marked-highlight": "^2.2.4",
@@ -27,6 +28,7 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.54",
     "@vitejs/plugin-vue": "^5.2.1",
     "less": "^4.6.4",
     "vite": "^6.0.0"

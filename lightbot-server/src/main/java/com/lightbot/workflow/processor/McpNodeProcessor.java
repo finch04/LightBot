@@ -151,7 +151,22 @@ public class McpNodeProcessor extends AbstractFlowNodeProcessor implements NodeP
         }
         if (value instanceof String str) {
             Object resolved = WorkflowVariableUtils.resolveValue(str, variables);
-            return resolved != null ? resolved : WorkflowPromptUtils.render(str, variables);
+            if (resolved != null) {
+                // 变量解析结果为 JSON 字符串时，还原为 Java 对象（防止数组/对象被序列化为字符串传给 MCP）
+                if (resolved instanceof String jsonStr) {
+                    String trimmed = jsonStr.trim();
+                    if ((trimmed.startsWith("[") && trimmed.endsWith("]"))
+                            || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+                        try {
+                            return objectMapper.readValue(trimmed, Object.class);
+                        } catch (Exception ignored) {
+                            // 非合法 JSON，按普通字符串处理
+                        }
+                    }
+                }
+                return resolved;
+            }
+            return WorkflowPromptUtils.render(str, variables);
         }
         return value;
     }
