@@ -56,7 +56,17 @@ public class EndNodeProcessor implements NodeProcessor {
             }
         }
 
-        // 3. 兜底：取最后一个节点的输出
+        // 3. 优先取 variables 中已有的 result（脚本/代码等节点已设置）
+        Object existingResult = context.getVariables().get("result");
+        if (existingResult != null) {
+            outputs.put("result", existingResult);
+            return NodeExecutionResult.builder()
+                    .outputs(outputs)
+                    .finished(true)
+                    .build();
+        }
+
+        // 4. 兜底：取最后一个节点的输出
         Object lastOutput = context.getNodeOutputs().values().stream()
                 .reduce((first, second) -> second)
                 .orElse(null);

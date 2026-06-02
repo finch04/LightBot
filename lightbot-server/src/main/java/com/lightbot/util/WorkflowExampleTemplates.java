@@ -39,8 +39,8 @@ public final class WorkflowExampleTemplates {
                         .build(),
                 WorkflowExampleVO.builder()
                         .key("data_extract").name("示例：数据提取与转换助手")
-                        .description("参数提取 + 脚本处理 + 代码执行，演示 parameter_extractor/script/code 节点的数据处理能力")
-                        .nodeTypeTags(List.of("parameter_extractor", "variable_handle", "code", "script"))
+                        .description("参数提取 + 变量处理 + 脚本执行，演示 parameter_extractor/variable_handle/script 节点的数据处理能力")
+                        .nodeTypeTags(List.of("parameter_extractor", "variable_handle", "script"))
                         .build(),
                 WorkflowExampleVO.builder()
                         .key("external_integration").name("示例：外部集成与 MCP 助手")
@@ -226,7 +226,8 @@ public final class WorkflowExampleTemplates {
                         "arrayVariable", "questions",
                         "batchSize", 10,
                         "concurrentSize", 3,
-                        "errorStrategy", "continueOnError"
+                        "errorStrategy", "continueOnError",
+                        "outputParams", List.of(Map.of("key", "llmOutput", "type", "Array"))
                 )),
                 node("batch_start_1", "batch_start", 500, 280, Map.of(
                         "label", "并行开始"
@@ -252,7 +253,8 @@ public final class WorkflowExampleTemplates {
                         "label", "结果汇总",
                         "iteratorType", "byCount",
                         "countLimit", 1,
-                        "errorStrategy", "continueOnError"
+                        "errorStrategy", "continueOnError",
+                        "outputParams", List.of(Map.of("key", "summary", "type", "Array"))
                 )),
                 node("loop_start_1", "loop_start", 1350, 280, Map.of(
                         "label", "迭代开始"
@@ -271,20 +273,18 @@ public final class WorkflowExampleTemplates {
                         "label", "输出汇总",
                         "output", "{{summary}}"
                 )),
-                node("end_1", "end", 2100, 250, Map.of())
+                node("end_1", "end", 2150, 250, Map.of())
         );
         List<Map<String, Object>> edges = List.of(
                 edge("e_start", "start_1", "input_1"),
-                edge("e_input", "input_1", "batch_1"),
-                edge("e_batch_in", "batch_1", "batch_start_1"),
+                edge("e_input", "input_1", "batch_start_1"),
                 edge("e_bs", "batch_start_1", "retrieval_1"),
                 edge("e_ret", "retrieval_1", "llm_1"),
                 edge("e_llm", "llm_1", "batch_end_1"),
-                edge("e_batch_out", "batch_1", "loop_1"),
-                edge("e_loop_in", "loop_1", "loop_start_1"),
+                edge("e_batch_out", "batch_end_1", "loop_start_1"),
                 edge("e_ls", "loop_start_1", "script_1"),
                 edge("e_script", "script_1", "loop_end_1"),
-                edge("e_loop_out", "loop_1", "output_1"),
+                edge("e_loop_out", "loop_end_1", "output_1"),
                 edge("e_output", "output_1", "end_1")
         );
         Map<String, Object> ws = workflowSnapshot(nodes, edges);
@@ -319,36 +319,27 @@ public final class WorkflowExampleTemplates {
                         "handleType", "template",
                         "templateContent", "姓名：{{name}}\n邮箱：{{email}}\n电话：{{phone}}"
                 )),
-                node("code_1", "code", 700, 250, Map.of(
-                        "label", "验证邮箱格式",
-                        "scriptLanguage", "javascript",
-                        "codeContent", "function main(params) {\n  var email = params.email || '';\n  var valid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n  return {\n    emailValid: valid,\n    emailStatus: valid ? '格式正确' : '格式无效'\n  };\n}",
-                        "inputParams", List.of(Map.of("key", "email", "value", "{{email}}")),
-                        "outputParams", List.of(Map.of("key", "emailValid"), Map.of("key", "emailStatus"))
-                )),
-                node("script_1", "script", 900, 250, Map.of(
+                node("script_1", "script", 700, 250, Map.of(
                         "label", "生成摘要",
                         "scriptLanguage", "javascript",
-                        "scriptContent", "function main(params) {\n  var name = params.name || '未提供';\n  var email = params.email || '未提供';\n  var phone = params.phone || '未提供';\n  var emailStatus = params.emailStatus || '未知';\n  var summary = '用户信息摘要：\\n';\n  summary += '- 姓名：' + name + '\\n';\n  summary += '- 邮箱：' + email + '（' + emailStatus + '）\\n';\n  summary += '- 电话：' + phone;\n  return { result: summary };\n}",
+                        "scriptContent", "function main(params) {\n  var name = params.name || '未提供';\n  var email = params.email || '未提供';\n  var phone = params.phone || '未提供';\n  var emailValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n  var emailStatus = emailValid ? '格式正确' : '格式无效';\n  var summary = '用户信息摘要：\\n';\n  summary += '- 姓名：' + name + '\\n';\n  summary += '- 邮箱：' + email + '（' + emailStatus + '）\\n';\n  summary += '- 电话：' + phone;\n  return { result: summary };\n}",
                         "inputParams", List.of(
                                 Map.of("key", "name", "value", "{{name}}"),
                                 Map.of("key", "email", "value", "{{email}}"),
-                                Map.of("key", "phone", "value", "{{phone}}"),
-                                Map.of("key", "emailStatus", "value", "{{emailStatus}}")
+                                Map.of("key", "phone", "value", "{{phone}}")
                         ),
                         "outputParams", List.of(Map.of("key", "result"))
                 )),
-                node("output_1", "output", 1100, 250, Map.of(
+                node("output_1", "output", 950, 250, Map.of(
                         "label", "输出结果",
                         "output", "{{result}}"
                 )),
-                node("end_1", "end", 1300, 250, Map.of())
+                node("end_1", "end", 1150, 250, Map.of())
         );
         List<Map<String, Object>> edges = List.of(
                 edge("e_start", "start_1", "extractor_1"),
                 edge("e_extract", "extractor_1", "varhandle_1"),
-                edge("e_vh", "varhandle_1", "code_1"),
-                edge("e_code", "code_1", "script_1"),
+                edge("e_vh", "varhandle_1", "script_1"),
                 edge("e_script", "script_1", "output_1"),
                 edge("e_output", "output_1", "end_1")
         );

@@ -32,7 +32,6 @@ public class OutputNodeProcessor extends AbstractFlowNodeProcessor implements No
 
         Map<String, Object> outputs = new HashMap<>();
         outputs.put("output", output);
-        outputs.put("result", output);
 
         log.info("[OutputNodeProcessor] 输出节点完成: nodeId={}, length={}",
                 context.getCurrentNodeId(), output.length());

@@ -5,11 +5,12 @@
       <a-radio-group v-model:value="activeTab" button-style="solid" @change="onTabChange">
         <a-radio-button value="chat">对话型链路</a-radio-button>
         <a-radio-button value="workflow">工作流链路</a-radio-button>
+        <a-radio-button value="tool">工具调用链路</a-radio-button>
       </a-radio-group>
     </div>
 
     <!-- 顶部统计卡片 -->
-    <div class="stats-overview">
+    <div v-if="activeTab !== 'tool'" class="stats-overview">
       <div class="stat-card">
         <div class="stat-icon total-icon"><BarChartOutlined /></div>
         <div class="stat-info">
@@ -40,8 +41,8 @@
       </div>
     </div>
 
-    <!-- 筛选栏 -->
-    <div class="filter-bar">
+    <!-- 对话/工作流 筛选栏 -->
+    <div v-if="activeTab !== 'tool'" class="filter-bar">
       <a-input v-model:value="filter.requestId" placeholder="Request ID" :style="{ width: '200px' }" allow-clear />
       <a-input-number v-model:value="filter.sessionId" placeholder="会话ID" :style="{ width: '160px' }" />
       <a-select v-model:value="filter.status" placeholder="状态" :style="{ width: '120px' }" allowClear>
@@ -56,11 +57,27 @@
         :style="{ width: '360px' }"
       />
       <a-button type="primary" @click="loadTraces(1)"><SearchOutlined /> 查询</a-button>
-      <a-button @click="router.push('/tool-calls')"><ToolOutlined /> 工具调用日志</a-button>
+    </div>
+
+    <!-- 工具调用 筛选栏 -->
+    <div v-if="activeTab === 'tool'" class="filter-bar">
+      <a-input v-model:value="toolFilter.toolName" placeholder="工具名称" style="width: 180px" allow-clear @pressEnter="loadToolCalls(1)" />
+      <a-select v-model:value="toolFilter.status" placeholder="状态" style="width: 120px" allowClear>
+        <a-select-option value="success">成功</a-select-option>
+        <a-select-option value="error">失败</a-select-option>
+        <a-select-option value="pending">执行中</a-select-option>
+      </a-select>
+      <a-range-picker
+        v-model:value="toolFilter.timeRange"
+        :show-time="{ format: 'HH:mm' }"
+        format="YYYY-MM-DD HH:mm"
+        style="width: 380px"
+      />
+      <a-button type="primary" @click="loadToolCalls(1)"><SearchOutlined /> 查询</a-button>
     </div>
 
     <!-- Trace 列表 -->
-    <a-table
+    <a-table v-if="activeTab !== 'tool'"
       :dataSource="traces"
       :columns="columns"
       :loading="loading"
@@ -93,6 +110,79 @@
         </template>
       </template>
     </a-table>
+
+    <!-- 工具调用 列表 -->
+    <a-table v-if="activeTab === 'tool'"
+      :dataSource="toolRecords"
+      :columns="toolColumns"
+      :loading="toolLoading"
+      :pagination="toolPagination"
+      rowKey="id"
+      size="small"
+      @change="handleToolTableChange"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'toolName'">
+          <span class="tool-name-cell"><ToolOutlined /> {{ record.toolName }}</span>
+        </template>
+        <template v-else-if="column.key === 'status'">
+          <a-tag :color="record.status === 'success' ? 'success' : record.status === 'error' ? 'error' : 'processing'">
+            {{ record.status === 'success' ? '成功' : record.status === 'error' ? '失败' : '执行中' }}
+          </a-tag>
+        </template>
+        <template v-else-if="column.key === 'toolInput'">
+          <span class="cell-truncate">{{ formatJsonPreview(record.toolInput) }}</span>
+        </template>
+        <template v-else-if="column.key === 'toolOutput'">
+          <span class="cell-truncate">{{ truncate(record.toolOutput, 80) }}</span>
+        </template>
+        <template v-else-if="column.key === 'createdAt'">
+          {{ formatTime(record.createdAt) }}
+        </template>
+        <template v-else-if="column.key === 'action'">
+          <a-button type="link" size="small" @click="openToolDetail(record)">详情</a-button>
+        </template>
+      </template>
+    </a-table>
+
+    <!-- 工具调用 详情弹窗 -->
+    <a-modal
+      v-model:open="toolDetailVisible"
+      title="工具调用详情"
+      :width="720"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <template v-if="toolDetailRecord">
+        <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px">
+          <a-descriptions-item label="工具名称">
+            <ToolOutlined /> {{ toolDetailRecord.toolName }}
+          </a-descriptions-item>
+          <a-descriptions-item label="状态">
+            <a-tag :color="toolDetailRecord.status === 'success' ? 'success' : toolDetailRecord.status === 'error' ? 'error' : 'processing'">
+              {{ toolDetailRecord.status === 'success' ? '成功' : toolDetailRecord.status === 'error' ? '失败' : '执行中' }}
+            </a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="消息ID" :span="2">{{ toolDetailRecord.messageId || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="调用时间" :span="2">{{ formatTime(toolDetailRecord.createdAt) }}</a-descriptions-item>
+          <a-descriptions-item label="错误信息" :span="2" v-if="toolDetailRecord.errorMessage">
+            <span style="color: #ff4d4f">{{ toolDetailRecord.errorMessage }}</span>
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <a-divider style="margin: 12px 0" />
+
+        <div class="detail-section">
+          <div class="detail-label">输入参数</div>
+          <pre class="detail-pre">{{ formatJson(toolDetailRecord.toolInput) }}</pre>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-label">输出结果</div>
+          <pre class="detail-pre">{{ toolDetailRecord.toolOutput || '-' }}</pre>
+        </div>
+      </template>
+    </a-modal>
 
     <!-- Trace 详情抽屉 -->
     <a-drawer
@@ -359,6 +449,7 @@ import {
 } from '@ant-design/icons-vue'
 import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
 import { getTraces, getTraceDetail, getTraceOverview } from '../api/observability'
+import { getToolCalls } from '../api/toolCall'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -386,6 +477,35 @@ const filter = reactive({
   status: undefined,
   timeRange: null,
 })
+
+// 工具调用状态
+const toolLoading = ref(false)
+const toolRecords = ref([])
+const toolDetailVisible = ref(false)
+const toolDetailRecord = ref(null)
+
+const toolFilter = reactive({
+  toolName: '',
+  status: undefined,
+  timeRange: null,
+})
+
+const toolPagination = reactive({
+  current: 1,
+  pageSize: 20,
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total) => `共 ${total} 条`,
+})
+
+const toolColumns = [
+  { title: '工具名称', key: 'toolName', width: 150 },
+  { title: '状态', key: 'status', width: 80, align: 'center' },
+  { title: '输入参数', key: 'toolInput', width: 220, ellipsis: true },
+  { title: '输出结果', key: 'toolOutput', width: 300, ellipsis: true },
+  { title: '时间', key: 'createdAt', width: 140 },
+  { title: '操作', key: 'action', width: 70, align: 'center' },
+]
 
 const pagination = reactive({
   current: 1,
@@ -622,8 +742,12 @@ async function loadOverview() {
 
 function onTabChange() {
   pagination.current = 1
-  loadTraces(1)
-  loadOverview()
+  if (activeTab.value === 'tool') {
+    loadToolCalls(1)
+  } else {
+    loadTraces(1)
+    loadOverview()
+  }
 }
 
 function handleTableChange(pag) {
@@ -668,6 +792,64 @@ function formatTokens(tokens) {
   if (!tokens && tokens !== 0) return '-'
   if (tokens >= 10000) return (tokens / 10000).toFixed(1) + 'w'
   return String(tokens)
+}
+
+// 工具调用方法
+async function loadToolCalls(page) {
+  toolLoading.value = true
+  try {
+    toolPagination.current = page || 1
+    const params = {
+      pageNum: toolPagination.current,
+      pageSize: toolPagination.pageSize,
+    }
+    if (toolFilter.toolName?.trim()) params.toolName = toolFilter.toolName.trim()
+    if (toolFilter.status) params.status = toolFilter.status
+    if (toolFilter.timeRange?.length === 2) {
+      params.startTime = toolFilter.timeRange[0].format('YYYY-MM-DD HH:mm:ss')
+      params.endTime = toolFilter.timeRange[1].format('YYYY-MM-DD HH:mm:ss')
+    }
+    const res = await getToolCalls(params)
+    toolRecords.value = res.data.records || []
+    toolPagination.total = res.data.total || 0
+  } finally {
+    toolLoading.value = false
+  }
+}
+
+function handleToolTableChange(pag) {
+  loadToolCalls(pag.current)
+}
+
+function openToolDetail(record) {
+  toolDetailRecord.value = record
+  toolDetailVisible.value = true
+}
+
+function formatJsonPreview(jsonStr) {
+  if (!jsonStr) return '-'
+  try {
+    const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
+    const str = JSON.stringify(obj)
+    return str.length > 60 ? str.substring(0, 60) + '...' : str
+  } catch {
+    return jsonStr.length > 60 ? jsonStr.substring(0, 60) + '...' : jsonStr
+  }
+}
+
+function truncate(str, len) {
+  if (!str) return '-'
+  return str.length > len ? str.substring(0, len) + '...' : str
+}
+
+function formatJson(jsonStr) {
+  if (!jsonStr) return '-'
+  try {
+    const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
+    return JSON.stringify(obj, null, 2)
+  } catch {
+    return jsonStr
+  }
 }
 
 onMounted(() => {
@@ -1101,5 +1283,28 @@ onMounted(() => {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* 工具调用详情 */
+.detail-section {
+  margin-bottom: 16px;
+}
+.detail-label {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.detail-pre {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 400px;
+  overflow: auto;
+  margin: 0;
 }
 </style>

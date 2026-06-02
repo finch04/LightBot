@@ -469,7 +469,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
             case "classifier" -> List.of("model", "modelId", "modelName", "inputVariable", "conditions", "mode_switch", "instruction");
             case "retrieval" -> List.of("knowledgeId", "inputVariable", "topK", "threshold", "overrideConfig");
             case "api" -> List.of("url", "method", "timeout", "headers");
-            case "script", "code" -> List.of("scriptContent", "scriptLanguage", "codeContent", "code");
+            case "script" -> List.of("scriptContent", "scriptLanguage", "codeContent", "code");
             case "variable" -> List.of("variableName", "variableValue");
             case "variable_handle" -> List.of("handleType", "type", "templateContent", "template_content", "groupStrategy", "groups");
             case "condition" -> List.of("conditionGroups", "branches");

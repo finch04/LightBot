@@ -27,6 +27,8 @@
       :edges-updatable="!isVersionPreview"
       :nodes-connectable="!isVersionPreview"
       :elements-selectable="!isVersionPreview"
+      selection-key-code="Shift"
+      multi-selection-key-code="Control"
       :default-edge-options="defaultEdgeOptions"
       :is-valid-connection="isValidConnection"
       :delete-key-code="null"

@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import javax.script.Bindings;
-import javax.script.Invocable;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import java.util.HashMap;
@@ -105,15 +104,10 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
             Bindings bindings = engine.createBindings();
             bindings.put("params", params);
             engine.eval(script, bindings);
-            if (engine instanceof Invocable invocable) {
-                try {
-                    return invocable.invokeFunction("main", params);
-                } catch (NoSuchMethodException e) {
-                    Object main = bindings.get("main");
-                    if (main instanceof java.util.function.Function<?, ?> fn) {
-                        return ((java.util.function.Function<Object, Object>) fn).apply(params);
-                    }
-                }
+            // 优先通过 eval 调用 main(params)，避免 Nashorn invokeFunction 作用域问题
+            Object mainFn = bindings.get("main");
+            if (mainFn != null) {
+                return engine.eval("main(params)", bindings);
             }
             return bindings.get("result");
         } catch (Exception e) {

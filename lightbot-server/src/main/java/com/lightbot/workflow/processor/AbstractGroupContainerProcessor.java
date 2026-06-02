@@ -5,6 +5,7 @@ import com.lightbot.enums.NodeType;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
+import com.lightbot.workflow.WorkflowEdge;
 import com.lightbot.workflow.WorkflowGroupUtils;
 import com.lightbot.workflow.WorkflowNode;
 import com.lightbot.workflow.WorkflowSubgraphExecutor;
@@ -76,7 +77,18 @@ abstract class AbstractGroupContainerProcessor extends AbstractFlowNodeProcessor
         String exitNodeId = WorkflowGroupUtils.findExitNodeAfterEnd(
                 context.getWorkflow(), endNode.getId(), groupId);
         if (exitNodeId == null) {
-            exitNodeId = resolveNextNodeId(context);
+            // 回退：取容器节点的出边，但排除指向容器内部节点的边
+            for (WorkflowEdge edge : context.getWorkflow().getOutEdges(groupId)) {
+                WorkflowNode target = context.getWorkflow().getNode(edge.getTarget());
+                if (target != null && !groupId.equals(WorkflowGroupUtils.getParentNodeId(target))) {
+                    exitNodeId = target.getId();
+                    break;
+                }
+            }
+            if (exitNodeId == null) {
+                log.warn("[{}] 容器 {} 找不到出口节点，请检查连线是否正确（应从内置结束节点连出）",
+                        getClass().getSimpleName(), groupId);
+            }
         }
 
         log.info("[{}] 执行完成: groupId={}, iterations={}, exit={}",

@@ -272,6 +272,9 @@ public class WorkflowExecutorService {
 
         Map<String, Object> nodeData = node.getData();
         Object inputParamsObj = nodeData != null ? nodeData.get("input_params") : null;
+        if (inputParamsObj == null && nodeData != null) {
+            inputParamsObj = nodeData.get("inputParams");
+        }
         if (inputParamsObj instanceof List<?> inputParamsList) {
             for (Object item : inputParamsList) {
                 if (!(item instanceof Map<?, ?> paramMap)) {

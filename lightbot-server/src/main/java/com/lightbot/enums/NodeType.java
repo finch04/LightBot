@@ -23,7 +23,6 @@ public enum NodeType {
     RETRIEVAL("retrieval", "知识检索"),
     TOOL("tool", "工具调用"),
     SCRIPT("script", "脚本节点"),
-    CODE("code", "代码节点"),
     API("api", "HTTP调用"),
     LOOP("loop", "循环"),
     LOOP_START("loop_start", "迭代开始"),

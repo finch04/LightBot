@@ -123,7 +123,7 @@
           </div>
           <div class="panel-body">
             <div class="panel-grid">
-              <div class="pg-item"><span class="pg-key">节点类型</span><span class="pg-val">{{ selectedNodeSpan.nodeType }}</span></div>
+              <div class="pg-item"><span class="pg-key">节点类型</span><span class="pg-val">{{ getNodeTitle(selectedNodeSpan.attributes?.nodeType) }}</span></div>
               <div class="pg-item"><span class="pg-key">状态</span><span class="pg-val"><a-tag :color="selectedNodeSpan.status === 'completed' ? 'success' : 'error'" size="small">{{ selectedNodeSpan.status === 'completed' ? '成功' : '失败' }}</a-tag></span></div>
               <div class="pg-item"><span class="pg-key">耗时</span><span class="pg-val">{{ formatDuration(selectedNodeSpan.durationMs) }}</span></div>
               <div v-if="selectedNodeSpan.attributes?.message" class="pg-item" style="grid-column: 1 / -1;">
@@ -229,6 +229,8 @@ import {
 } from '@ant-design/icons-vue'
 import { getTraceDetail } from '../api/observability'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
+import { getNodeIconText as getNodeIcon, getNodeColors } from '../utils/nodeStyleUtils'
+import { getNodeTitle } from '../views/workflow/nodeMeta'
 
 const route = useRoute()
 const router = useRouter()
@@ -580,43 +582,6 @@ function arrowPoints(edge) {
   const tx = parseFloat(match[1])
   const ty = parseFloat(match[2])
   return `${tx},${ty} ${tx - 8},${ty - 4} ${tx - 8},${ty + 4}`
-}
-
-function getNodeIcon(type) {
-  const icons = {
-    start: '▶', end: '⏹', input: '📥', output: '📤',
-    llm: '🤖', retrieval: '🔍', classifier: '🏷️', condition: '🔀',
-    variable: '📝', variable_handle: '🔧', script: '📜', code: '💻',
-    api: '🌐', mcp: '🔌', tool: '🛠️', parameter_extractor: '📋',
-    batch: '📦', loop: '🔄', app_component: '🧩',
-  }
-  return icons[type] || '⬜'
-}
-
-function getNodeColors(type, status) {
-  if (status === 'failed') return { fill: '#fff2f0', stroke: '#ff4d4f', textColor: '#cf1322' }
-  const map = {
-    start: { fill: '#e6f7ff', stroke: '#1890ff', textColor: '#096dd9' },
-    end: { fill: '#f6ffed', stroke: '#52c41a', textColor: '#389e0d' },
-    llm: { fill: '#f0f5ff', stroke: '#2f54eb', textColor: '#1d39c4' },
-    classifier: { fill: '#fff7e6', stroke: '#fa8c16', textColor: '#d46b08' },
-    condition: { fill: '#fff1f0', stroke: '#f5222d', textColor: '#cf1322' },
-    retrieval: { fill: '#f9f0ff', stroke: '#722ed1', textColor: '#531dab' },
-    script: { fill: '#e6fffb', stroke: '#13c2c2', textColor: '#08979c' },
-    code: { fill: '#e6fffb', stroke: '#13c2c2', textColor: '#08979c' },
-    api: { fill: '#fcffe6', stroke: '#a0d911', textColor: '#7cb305' },
-    mcp: { fill: '#fff0f6', stroke: '#eb2f96', textColor: '#c41d7f' },
-    tool: { fill: '#fff7e6', stroke: '#fa8c16', textColor: '#d46b08' },
-    variable: { fill: '#f0f5ff', stroke: '#adc6ff', textColor: '#2f54eb' },
-    variable_handle: { fill: '#f0f5ff', stroke: '#adc6ff', textColor: '#2f54eb' },
-    input: { fill: '#e6f7ff', stroke: '#91d5ff', textColor: '#096dd9' },
-    output: { fill: '#f6ffed', stroke: '#b7eb8f', textColor: '#389e0d' },
-    parameter_extractor: { fill: '#fff7e6', stroke: '#ffd591', textColor: '#d46b08' },
-    batch: { fill: '#f9f0ff', stroke: '#d3adf7', textColor: '#531dab' },
-    loop: { fill: '#f9f0ff', stroke: '#d3adf7', textColor: '#531dab' },
-    app_component: { fill: '#e6fffb', stroke: '#87e8de', textColor: '#08979c' },
-  }
-  return map[type] || { fill: '#fafafa', stroke: '#d9d9d9', textColor: '#595959' }
 }
 
 function llmMessages(span) {
