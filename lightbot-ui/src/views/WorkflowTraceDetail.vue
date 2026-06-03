@@ -87,33 +87,72 @@
               <text v-if="edge.label" :x="edge.labelX" :y="edge.labelY"
                     font-size="10" fill="#8c8c8c" text-anchor="middle">{{ edge.label }}</text>
             </g>
-            <!-- 节点（可拖拽） -->
-            <g v-for="node in graphNodes" :key="node.id"
-               class="dag-node"
-               :class="{
-                 'node-selected': selectedNodeId === node.id,
-                 'node-dragging': dragState.id === node.id,
-                 'node-transition': dragState.id !== node.id
-               }"
-               :transform="`translate(${node.x + (dragState.id === node.id ? dragState.dx : 0)}, ${node.y + (dragState.id === node.id ? dragState.dy : 0)})`"
-               @mousedown.stop="onNodeMouseDown($event, node)"
-               @click.stop="selectNode(node.id)">
-              <rect :x="-node.w / 2" :y="-node.h / 2"
-                    :width="node.w" :height="node.h" rx="8"
-                    :fill="node.fill" :stroke="node.stroke" stroke-width="2" />
-              <text x="0" y="-6" text-anchor="middle"
-                    font-size="12" font-weight="600" :fill="node.textColor">
-                {{ node.icon }} {{ node.label }}
-              </text>
-              <text x="0" y="10" text-anchor="middle"
-                    font-size="10" fill="#8c8c8c">
-                {{ node.statusText }}
-              </text>
-              <text v-if="node.durationText" x="0" y="24" text-anchor="middle"
-                    font-size="10" fill="#bfbfbf">
-                {{ node.durationText }}
-              </text>
-            </g>
+            <!-- 容器节点（batch/loop） -->
+            <template v-for="node in graphNodes" :key="node.id">
+              <g v-if="node.isContainer"
+                 class="dag-node dag-container"
+                 :class="{ 'node-selected': selectedNodeId === node.id, 'node-dragging': dragState.id === node.id }"
+                 :transform="`translate(${node.x + (dragState.id === node.id ? dragState.dx : 0)}, ${node.y + (dragState.id === node.id ? dragState.dy : 0)})`"
+                 @mousedown.stop="onNodeMouseDown($event, node)"
+                 @click.stop="selectNode(node.id)">
+                <rect :x="-node.w / 2" :y="-node.h / 2"
+                      :width="node.w" :height="node.h" rx="12"
+                      fill="#fafbfc" :stroke="node.stroke" stroke-width="2" stroke-dasharray="6 3" />
+                <text :x="-node.w / 2 + 16" :y="-node.h / 2 + 20"
+                      font-size="12" font-weight="600" :fill="node.textColor">
+                  {{ node.icon }} {{ node.label }}
+                </text>
+                <!-- 容器内子节点 -->
+                <g v-for="child in node.children" :key="child.id"
+                   class="dag-node"
+                   :class="{ 'node-selected': selectedNodeId === child.id }"
+                   :transform="`translate(${child.x}, ${child.y})`"
+                   @click.stop="selectNode(child.id)">
+                  <rect :x="-child.w / 2" :y="-child.h / 2"
+                        :width="child.w" :height="child.h" rx="8"
+                        :fill="child.fill" :stroke="child.stroke" stroke-width="1.5" />
+                  <text x="0" y="-4" text-anchor="middle"
+                        font-size="11" font-weight="500" :fill="child.textColor">
+                    {{ child.icon }} {{ child.label }}
+                  </text>
+                  <text x="0" y="12" text-anchor="middle"
+                        font-size="10" fill="#8c8c8c">
+                    {{ child.statusText }}
+                  </text>
+                  <text v-if="child.durationText" x="0" y="24" text-anchor="middle"
+                        font-size="9" fill="#bfbfbf">
+                    {{ child.durationText }}
+                  </text>
+                </g>
+              </g>
+              <!-- 普通节点 -->
+              <g v-else
+                 class="dag-node"
+                 :class="{
+                   'node-selected': selectedNodeId === node.id,
+                   'node-dragging': dragState.id === node.id,
+                   'node-transition': dragState.id !== node.id
+                 }"
+                 :transform="`translate(${node.x + (dragState.id === node.id ? dragState.dx : 0)}, ${node.y + (dragState.id === node.id ? dragState.dy : 0)})`"
+                 @mousedown.stop="onNodeMouseDown($event, node)"
+                 @click.stop="selectNode(node.id)">
+                <rect :x="-node.w / 2" :y="-node.h / 2"
+                      :width="node.w" :height="node.h" rx="8"
+                      :fill="node.fill" :stroke="node.stroke" stroke-width="2" />
+                <text x="0" y="-6" text-anchor="middle"
+                      font-size="12" font-weight="600" :fill="node.textColor">
+                  {{ node.icon }} {{ node.label }}
+                </text>
+                <text x="0" y="10" text-anchor="middle"
+                      font-size="10" fill="#8c8c8c">
+                  {{ node.statusText }}
+                </text>
+                <text v-if="node.durationText" x="0" y="24" text-anchor="middle"
+                      font-size="10" fill="#bfbfbf">
+                  {{ node.durationText }}
+                </text>
+              </g>
+            </template>
           </g>
         </svg>
 
@@ -315,7 +354,12 @@ function llmChildSpan(nodeSpan) {
 
 // --- Graph init ---
 
-function initGraph() {
+const CONTAINER_TYPES = new Set(['batch', 'loop'])
+const CONTAINER_W = 420, CONTAINER_H = 260
+const NODE_W = 160, NODE_H = 56
+const CHILD_PAD_X = 30, CHILD_PAD_TOP = 50, CHILD_GAP_Y = 80
+
+function initGraph(forceLayout = false) {
   const root = rootSpan.value
   const spans = nodeSpans.value
   if (!root || !spans.length) { graphNodes.value = []; graphEdges.value = []; return }
@@ -331,42 +375,65 @@ function initGraph() {
     spanMap.set(nid, s)
   }
 
-  const nodeW = 160, nodeH = 56
-  const nodes = wfNodes.map(wfNode => {
-    const nid = wfNode.id
-    const span = spanMap.get(nid)
-    const attrs = span?.attributes || {}
-    const nodeType = wfNode.type || attrs.nodeType || nid
-    const label = wfNode.label || attrs.nodeLabel || nid
-    const status = span?.status || 'SKIPPED'
-    const pos = wfNode.position || {}
-    const x = (typeof pos.x === 'number' ? pos.x : 0) + nodeW / 2
-    const y = (typeof pos.y === 'number' ? pos.y : 0) + nodeH / 2
-    return {
-      id: `node:${nid}`, nodeId: nid, nodeType,
-      label: truncate(label, 14), icon: getNodeIcon(nodeType), status,
-      statusText: status === 'completed' ? '成功' : status === 'failed' ? '失败' : '未执行',
-      durationText: span?.durationMs != null ? formatDuration(span.durationMs) : '',
-      w: nodeW, h: nodeH, x, y, ...getNodeColors(nodeType, status), span,
-    }
-  })
+  const wfNodeMap = new Map(wfNodes.map(n => [n.id, n]))
+  const childIds = new Set(wfNodes.filter(n => n.parentNode).map(n => n.id))
+  const topNodes = wfNodes.filter(n => !n.parentNode)
 
-  const hasPositions = wfNodes.some(n => n.position && typeof n.position.x === 'number')
+  // 构建节点列表：容器 + 顶层普通节点
+  const nodes = []
+  for (const wfNode of topNodes) {
+    const nid = wfNode.id
+    const isContainer = CONTAINER_TYPES.has(wfNode.type)
+    if (isContainer) {
+      const children = wfNodes.filter(n => n.parentNode === nid)
+      const childNodes = children.map(child => buildGraphNode(child, spanMap))
+      // 容器内子节点按相对坐标排列后转为绝对坐标
+      layoutChildrenInside(childNodes)
+      const span = spanMap.get(nid)
+      const status = computeContainerStatus(children, spanMap)
+      nodes.push({
+        id: `node:${nid}`, nodeId: nid, nodeType: wfNode.type,
+        label: truncate(wfNode.data?.label || wfNode.label || nid, 14),
+        icon: getNodeIcon(wfNode.type), status,
+        statusText: status === 'completed' ? '成功' : status === 'failed' ? '失败' : '未执行',
+        durationText: '', w: CONTAINER_W, h: CONTAINER_H,
+        x: 0, y: 0, ...getNodeColors(wfNode.type, status), span,
+        isContainer: true, children: childNodes,
+      })
+    } else {
+      nodes.push(buildGraphNode(wfNode, spanMap))
+    }
+  }
+
+  // 布局：容器和普通节点一起参与顶层布局
+  const hasPositions = !forceLayout && topNodes.some(n => n.position && typeof n.position.x === 'number')
   if (!hasPositions) {
     autoLayout(nodes, wfEdges)
   } else {
     const padX = 60, padY = 40
     const minX = Math.min(...nodes.map(n => n.x - n.w / 2))
     const minY = Math.min(...nodes.map(n => n.y - n.h / 2))
-    nodes.forEach(n => { n.x = n.x - minX + padX; n.y = n.y - minY + padY })
+    nodes.forEach(n => {
+      n.x = n.x - minX + padX
+      n.y = n.y - minY + padY
+      if (n.isContainer && n.children) {
+        n.children.forEach(c => { c.x += n.x - (n.w / 2 - CHILD_PAD_X); c.y += n.y - (n.h / 2 - CHILD_PAD_TOP) })
+      }
+    })
   }
 
-  const nodeMap = new Map(nodes.map(n => [n.nodeId, n]))
+  // 构建边：容器子节点的边也渲染
+  const allNodeMap = new Map()
+  for (const n of nodes) {
+    allNodeMap.set(n.nodeId, n)
+    if (n.isContainer && n.children) {
+      for (const c of n.children) allNodeMap.set(c.nodeId, c)
+    }
+  }
   const executedIds = new Set(spanMap.keys())
-
   const edges = wfEdges.map(e => {
-    const srcNode = nodeMap.get(e.source)
-    const tgtNode = nodeMap.get(e.target)
+    const srcNode = allNodeMap.get(e.source)
+    const tgtNode = allNodeMap.get(e.target)
     if (!srcNode || !tgtNode) return null
     const highlighted = executedIds.has(e.source) && executedIds.has(e.target)
     return {
@@ -379,6 +446,42 @@ function initGraph() {
 
   graphNodes.value = nodes
   graphEdges.value = edges
+}
+
+function buildGraphNode(wfNode, spanMap) {
+  const nid = wfNode.id
+  const span = spanMap.get(nid)
+  const attrs = span?.attributes || {}
+  const nodeType = wfNode.type || attrs.nodeType || nid
+  const label = wfNode.data?.label || wfNode.label || attrs.nodeLabel || nid
+  const status = span?.status || 'SKIPPED'
+  const pos = wfNode.position || {}
+  const x = (typeof pos.x === 'number' ? pos.x : 0) + NODE_W / 2
+  const y = (typeof pos.y === 'number' ? pos.y : 0) + NODE_H / 2
+  return {
+    id: `node:${nid}`, nodeId: nid, nodeType,
+    label: truncate(label, 14), icon: getNodeIcon(nodeType), status,
+    statusText: status === 'completed' ? '成功' : status === 'failed' ? '失败' : '未执行',
+    durationText: span?.durationMs != null ? formatDuration(span.durationMs) : '',
+    w: NODE_W, h: NODE_H, x, y, ...getNodeColors(nodeType, status), span,
+  }
+}
+
+function layoutChildrenInside(children) {
+  if (!children.length) return
+  // 按原始 position.y 排序，再依次垂直排列
+  children.sort((a, b) => a.y - b.y || a.x - b.x)
+  for (let i = 0; i < children.length; i++) {
+    children[i].x = CHILD_PAD_X + NODE_W / 2
+    children[i].y = CHILD_PAD_TOP + i * (NODE_H + CHILD_GAP_Y) + NODE_H / 2
+  }
+}
+
+function computeContainerStatus(children, spanMap) {
+  const statuses = children.map(c => spanMap.get(c.id)?.status || 'SKIPPED')
+  if (statuses.some(s => s === 'failed')) return 'failed'
+  if (statuses.some(s => s === 'completed')) return 'completed'
+  return 'SKIPPED'
 }
 
 function buildEdgePath(srcNode, tgtNode) {
@@ -428,22 +531,22 @@ function autoLayout(nodes, wfEdges) {
     const x = startX + depth * nodeGapX
     const totalHeight = group.length * nodeGapY
     const offsetY = startY + Math.max(0, (400 - totalHeight) / 2)
-    group.forEach((n, i) => { n.x = x; n.y = offsetY + i * nodeGapY })
+    group.forEach((n, i) => {
+      n.x = x
+      n.y = offsetY + i * nodeGapY
+      // 容器内子节点跟随容器移动
+      if (n.isContainer && n.children) {
+        n.children.forEach(c => {
+          c.x += n.x - (n.w / 2 - CHILD_PAD_X)
+          c.y += n.y - (n.h / 2 - CHILD_PAD_TOP)
+        })
+      }
+    })
   }
 }
 
 function reLayout() {
-  const nodes = graphNodes.value
-  if (!nodes.length) return
-  autoLayout(nodes, rawWfEdges.value)
-  const nodeMap = new Map(nodes.map(n => [n.nodeId, n]))
-  graphEdges.value = graphEdges.value.map(e => {
-    const srcNode = nodeMap.get(e.source)
-    const tgtNode = nodeMap.get(e.target)
-    if (!srcNode || !tgtNode) return e
-    return { ...e, ...buildEdgePath(srcNode, tgtNode) }
-  })
-  graphNodes.value = [...nodes]
+  initGraph(true)
 }
 
 // --- Zoom ---
