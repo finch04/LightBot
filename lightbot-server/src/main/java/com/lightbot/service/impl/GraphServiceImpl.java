@@ -59,7 +59,7 @@ public class GraphServiceImpl implements GraphService {
     // ==================== 抽取 ====================
 
     @Override
-    public Long extractFromDocument(Long knowledgeId, List<Long> documentIds, Long providerId, String modelId) {
+    public Long extractFromDocument(Long knowledgeId, GraphExtractRequest request) {
         checkNeo4jAvailable();
         permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
 
@@ -67,6 +67,10 @@ public class GraphServiceImpl implements GraphService {
         if (knowledge == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
+
+        List<Long> documentIds = request.getDocumentIds();
+        Long providerId = request.getProviderId();
+        String modelId = request.getModelId();
 
         // 1. 获取或创建 KnowledgeGraph 记录
         KnowledgeGraph kg = getOrCreateKnowledgeGraph(knowledgeId);
@@ -156,6 +160,15 @@ public class GraphServiceImpl implements GraphService {
             }
             if (modelId != null && !modelId.isBlank()) {
                 payload.put("modelId", modelId);
+            }
+            if (request.getSchema() != null && !request.getSchema().isBlank()) {
+                payload.put("schema", request.getSchema().trim());
+            }
+            if (request.getConcurrency() != null) {
+                payload.put("concurrency", Math.max(1, Math.min(request.getConcurrency(), 1000)));
+            }
+            if (request.getModelParams() != null && !request.getModelParams().isEmpty()) {
+                payload.put("modelParams", request.getModelParams());
             }
             var task = taskService.createTask(com.lightbot.enums.TaskType.GRAPH_EXTRACTION,
                     "图谱抽取", knowledge.getUserId(), knowledgeId,

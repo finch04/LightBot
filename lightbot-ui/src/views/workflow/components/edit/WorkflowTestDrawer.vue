@@ -62,38 +62,73 @@
       <pre class="test-output">{{ testResult.output || '（无输出）' }}</pre>
       <h4>节点轨迹</h4>
       <div class="trace-steps">
-        <div v-for="(step, i) in nodeSteps" :key="i" class="trace-step" :class="{ 'trace-active': step.nodeId === testCurrentNodeId }">
-          <div class="trace-step-head" @click="toggleStep(i)">
-            <span class="trace-step-icon">
-              <span v-if="step.status === 'done'" class="trace-icon-done">✓</span>
-              <span v-else-if="step.status === 'failed'" class="trace-icon-fail">✗</span>
-              <span v-else class="trace-icon-run">▶</span>
-            </span>
-            <span class="trace-step-label">
-              <strong>{{ step.nodeLabel || step.nodeId }}</strong>
-              <span class="trace-step-type">{{ getNodeTypeName(step.nodeType) }}</span>
-            </span>
-            <span v-if="step.durationMs != null" class="trace-step-duration">{{ step.durationMs }}ms</span>
-            <span v-else-if="step.status === 'running'" class="trace-step-duration trace-running">执行中</span>
-            <span class="trace-toggle" :class="{ expanded: expandedSteps.has(i) }">›</span>
+        <template v-for="(step, i) in nodeSteps" :key="i">
+          <div class="trace-step" :class="{ 'trace-active': step.nodeId === testCurrentNodeId }">
+            <div class="trace-step-head" @click="toggleStep(i)">
+              <span class="trace-step-icon">
+                <span v-if="step.status === 'done'" class="trace-icon-done">✓</span>
+                <span v-else-if="step.status === 'failed'" class="trace-icon-fail">✗</span>
+                <span v-else class="trace-icon-run">▶</span>
+              </span>
+              <span class="trace-step-label">
+                <strong>{{ step.nodeLabel || step.nodeId }}</strong>
+                <span class="trace-step-type">{{ getNodeTypeName(step.nodeType) }}</span>
+                <span v-if="step.isContainer && step.children?.length" class="trace-child-count">{{ step.children.length }} 个子节点</span>
+              </span>
+              <span v-if="step.durationMs != null" class="trace-step-duration">{{ step.durationMs }}ms</span>
+              <span v-else-if="step.status === 'running'" class="trace-step-duration trace-running">执行中</span>
+              <span class="trace-toggle" :class="{ expanded: expandedSteps.has(i) }">›</span>
+            </div>
+            <div v-show="expandedSteps.has(i)" class="trace-step-body">
+              <div v-if="step.status === 'failed'" class="trace-msg trace-fail">{{ step.message || '执行失败' }}</div>
+              <div v-else-if="step.status === 'done' && step.message" class="trace-msg">{{ step.message }}</div>
+              <div v-if="step.detail" class="trace-detail">
+                <pre>{{ step.detail }}</pre>
+              </div>
+              <div v-if="hasKvData(step.input)" class="trace-kv">
+                <div class="trace-kv-title">入参</div>
+                <pre>{{ formatKv(step.input) }}</pre>
+              </div>
+              <div v-if="hasKvData(step.outputs)" class="trace-kv">
+                <div class="trace-kv-title">出参</div>
+                <pre>{{ formatKv(step.outputs) }}</pre>
+              </div>
+              <div v-if="step.nextNodeId" class="trace-meta">下一节点: {{ step.nextNodeId }}</div>
+            </div>
+            <!-- 容器内部子节点 -->
+            <div v-if="step.isContainer && step.children?.length && expandedSteps.has(i)" class="trace-container-children">
+              <div
+                v-for="(child, ci) in step.children"
+                :key="ci"
+                class="trace-step trace-child-step"
+                :class="{ 'trace-active': child.nodeId === testCurrentNodeId }"
+              >
+                <div class="trace-step-head" @click="toggleStep(`child_${i}_${ci}`)">
+                  <span class="trace-step-icon">
+                    <span v-if="child.status === 'done'" class="trace-icon-done">✓</span>
+                    <span v-else-if="child.status === 'failed'" class="trace-icon-fail">✗</span>
+                    <span v-else class="trace-icon-run">▶</span>
+                  </span>
+                  <span class="trace-step-label">
+                    <strong>{{ child.nodeLabel || child.nodeId }}</strong>
+                    <span class="trace-step-type">{{ getNodeTypeName(child.nodeType) }}</span>
+                    <span v-if="child.iterationIndex != null" class="trace-iteration-tag">#{{ child.iterationIndex + 1 }}</span>
+                  </span>
+                  <span v-if="child.durationMs != null" class="trace-step-duration">{{ child.durationMs }}ms</span>
+                  <span class="trace-toggle" :class="{ expanded: expandedSteps.has(`child_${i}_${ci}`) }">›</span>
+                </div>
+                <div v-show="expandedSteps.has(`child_${i}_${ci}`)" class="trace-step-body">
+                  <div v-if="child.status === 'failed'" class="trace-msg trace-fail">{{ child.message || '执行失败' }}</div>
+                  <div v-else-if="child.status === 'done' && child.message" class="trace-msg">{{ child.message }}</div>
+                  <div v-if="hasKvData(child.outputs)" class="trace-kv">
+                    <div class="trace-kv-title">出参</div>
+                    <pre>{{ formatKv(child.outputs) }}</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div v-show="expandedSteps.has(i)" class="trace-step-body">
-            <div v-if="step.status === 'failed'" class="trace-msg trace-fail">{{ step.message || '执行失败' }}</div>
-            <div v-else-if="step.status === 'done' && step.message" class="trace-msg">{{ step.message }}</div>
-            <div v-if="step.detail" class="trace-detail">
-              <pre>{{ step.detail }}</pre>
-            </div>
-            <div v-if="hasKvData(step.input)" class="trace-kv">
-              <div class="trace-kv-title">入参</div>
-              <pre>{{ formatKv(step.input) }}</pre>
-            </div>
-            <div v-if="hasKvData(step.outputs)" class="trace-kv">
-              <div class="trace-kv-title">出参</div>
-              <pre>{{ formatKv(step.outputs) }}</pre>
-            </div>
-            <div v-if="step.nextNodeId" class="trace-meta">下一节点: {{ step.nextNodeId }}</div>
-          </div>
-        </div>
+        </template>
       </div>
     </div>
   </a-drawer>
@@ -130,28 +165,46 @@ function toggleStep(index) {
   expandedSteps.value = next
 }
 
-/** 将 start+complete 事件合并为节点步骤 */
+/** 将 start+complete 事件合并为节点步骤，支持容器节点折叠展示 */
 const nodeSteps = computed(() => {
   if (!props.testResult?.nodeEvents) return []
   const steps = []
   const runningByNodeId = new Map()
   const stepByIndex = new Map()
+  const containerStack = []
 
   for (const e of props.testResult.nodeEvents) {
     if (e.type === 'workflow_node_start' && e.nodeId) {
+      const isContainerStart = !e.parentNodeId && isContainerNodeType(e.nodeType)
       const step = {
         nodeId: e.nodeId, nodeType: e.nodeType, nodeLabel: e.nodeLabel,
         input: e.input, stepIndex: e.stepIndex,
         status: 'running',
+        parentNodeId: e.parentNodeId || null,
+        iterationIndex: e.iterationIndex ?? null,
+        isContainer: isContainerStart,
+        children: isContainerStart ? [] : undefined,
       }
-      steps.push(step)
+      if (e.parentNodeId && containerStack.length > 0) {
+        const parent = containerStack[containerStack.length - 1]
+        if (parent.children) parent.children.push(step)
+      } else {
+        steps.push(step)
+      }
       runningByNodeId.set(e.nodeId, step)
       if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
+      if (isContainerStart) containerStack.push(step)
     } else if (e.type === 'workflow_node_complete' && e.nodeId) {
       let step = (e.stepIndex != null ? stepByIndex.get(e.stepIndex) : null) || runningByNodeId.get(e.nodeId)
       if (!step) {
-        step = { nodeId: e.nodeId, nodeType: e.nodeType, nodeLabel: e.nodeLabel, stepIndex: e.stepIndex, status: 'pending' }
-        steps.push(step)
+        const isChild = !!e.parentNodeId
+        step = { nodeId: e.nodeId, nodeType: e.nodeType, nodeLabel: e.nodeLabel, stepIndex: e.stepIndex, status: 'pending', parentNodeId: e.parentNodeId || null, iterationIndex: e.iterationIndex ?? null }
+        if (isChild && containerStack.length > 0) {
+          const parent = containerStack[containerStack.length - 1]
+          if (parent.children) parent.children.push(step)
+        } else {
+          steps.push(step)
+        }
       }
       step.nodeType = e.nodeType ?? step.nodeType
       step.nodeLabel = e.nodeLabel ?? step.nodeLabel
@@ -162,12 +215,20 @@ const nodeSteps = computed(() => {
       step.outputs = e.outputs
       step.nextNodeId = e.nextNodeId
       step.status = e.success === false ? 'failed' : 'done'
+      if (e.isContainer != null) step.isContainer = e.isContainer
       runningByNodeId.delete(e.nodeId)
       if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
+      if (step.isContainer && containerStack.length > 0 && containerStack[containerStack.length - 1].nodeId === e.nodeId) {
+        containerStack.pop()
+      }
     }
   }
   return steps
 })
+
+function isContainerNodeType(type) {
+  return type === 'loop' || type === 'batch'
+}
 
 // 测试完成后展开所有步骤
 watch(() => props.testResult, (val) => {
@@ -272,4 +333,37 @@ function getNodeTypeName(type) {
 .trace-kv-title { margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #6d28d9; }
 .trace-kv pre { margin: 0; font-size: 12px; line-height: 1.45; color: #4c1d95; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .trace-meta { margin-top: 4px; font-size: 11px; color: #9ca3af; font-family: ui-monospace, monospace; }
+
+/* 容器内部子节点 */
+.trace-container-children {
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 2px solid #e9d5ff;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 6px;
+}
+.trace-child-step { background: #faf5ff; border-color: #f3e8ff; }
+.trace-child-step .trace-step-head { padding: 5px 8px; }
+.trace-child-step .trace-step-body { padding: 0 8px 8px; }
+.trace-child-count {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.trace-iteration-tag {
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: normal;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 1px 5px;
+  border-radius: 6px;
+}
 </style>

@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.lightbot.dto.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识图谱服务接口
@@ -16,12 +17,10 @@ public interface GraphService {
      * 触发文档的图谱抽取（异步任务）
      *
      * @param knowledgeId 知识库ID
-     * @param documentIds 文档ID列表（为null或空表示全量抽取）
-     * @param providerId  模型提供商ID
-     * @param modelId     指定模型ID（为空时使用 provider 默认模型）
+     * @param request     抽取配置请求
      * @return 任务ID
      */
-    Long extractFromDocument(Long knowledgeId, List<Long> documentIds, Long providerId, String modelId);
+    Long extractFromDocument(Long knowledgeId, GraphExtractRequest request);
 
     /**
      * 批量导入三元组到图谱

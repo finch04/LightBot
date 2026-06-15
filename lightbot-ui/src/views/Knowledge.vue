@@ -37,7 +37,10 @@
           <div class="card-icon">K</div>
           <div class="card-info">
             <h3 class="card-title">{{ k.name }}</h3>
-            <p class="card-desc">{{ k.description || '暂无描述' }}</p>
+            <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+              <p class="card-desc">{{ truncateText(k.description, 50) }}</p>
+            </a-tooltip>
+            <p v-else class="card-desc">暂无描述</p>
           </div>
           <a-tooltip title="删除知识库">
             <button class="btn-icon danger" @click.stop="handleDelete(k.id)">
@@ -64,7 +67,7 @@
           <a-input v-model:value="form.name" placeholder="知识库名称" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" />
+          <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="Embed模型" required>
           <ModelSelect v-model="form.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" @change="onEmbeddingModelChange" />
@@ -90,6 +93,7 @@ import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, Apartment
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 import ModelSelect from '../components/ModelSelect.vue'
+import { truncateText } from '../utils/format'
 
 const router = useRouter()
 const list = ref([])

@@ -5,7 +5,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 单节点执行器（供主流程与子图复用，避免 SubgraphExecutor 依赖 WorkflowExecutorService 产生循环依赖）
@@ -19,6 +22,7 @@ public class WorkflowNodeRunner {
 
     /**
      * 在已有上下文中执行指定节点并合并输出到 variables
+     * <p>当上下文携带 workflowEvents 时，自动推送子节点执行事件（用于循环/批处理容器内部节点）</p>
      */
     public NodeExecutionResult executeNodeInContext(NodeExecutionContext context, String nodeId) {
         WorkflowDefinition workflow = context.getWorkflow();
@@ -29,14 +33,73 @@ public class WorkflowNodeRunner {
         context.setCurrentNodeId(nodeId);
         context.setCurrentNodeData(node.getData());
 
+        String nodeLabel = resolveNodeLabel(node);
+        String nodeTypeCode = node.getType() != null ? node.getType().getCode() : "";
+        boolean emitEvents = context.getWorkflowEvents() != null;
+        long nodeStartMs = 0;
+
+        // 1. 推送子节点开始事件
+        if (emitEvents) {
+            nodeStartMs = System.currentTimeMillis();
+            Map<String, Object> startEvent = new HashMap<>();
+            startEvent.put("type", "workflow_node_start");
+            startEvent.put("nodeId", nodeId);
+            startEvent.put("nodeType", nodeTypeCode);
+            startEvent.put("nodeLabel", nodeLabel);
+            if (context.getParentNodeId() != null) {
+                startEvent.put("parentNodeId", context.getParentNodeId());
+            }
+            if (context.getIterationIndex() != null) {
+                startEvent.put("iterationIndex", context.getIterationIndex());
+            }
+            emitEvent(context, startEvent);
+        }
+
         NodeProcessor processor = registry.getProcessor(node.getType());
         log.debug("[WorkflowNodeRunner] 执行节点: nodeId={}, type={}", nodeId, node.getType());
 
-        NodeExecutionResult nodeResult = processor.execute(context);
-        if (nodeResult.getOutputs() != null) {
-            context.getNodeOutputs().put(nodeId, nodeResult.getOutputs());
-            context.getVariables().putAll(nodeResult.getOutputs());
+        boolean nodeSuccess = true;
+        String completeMessage = "执行完成";
+        NodeExecutionResult nodeResult = null;
+
+        try {
+            nodeResult = processor.execute(context);
+            if (nodeResult.getOutputs() != null) {
+                context.getNodeOutputs().put(nodeId, nodeResult.getOutputs());
+                context.getVariables().putAll(nodeResult.getOutputs());
+            }
+        } catch (Exception e) {
+            nodeSuccess = false;
+            completeMessage = "执行失败: " + e.getMessage();
+            log.error("[WorkflowNodeRunner] 子图节点执行失败: nodeId={}, error={}", nodeId, e.getMessage(), e);
         }
+
+        // 2. 推送子节点完成事件
+        if (emitEvents) {
+            Map<String, Object> completeEvent = new HashMap<>();
+            completeEvent.put("type", "workflow_node_complete");
+            completeEvent.put("nodeId", nodeId);
+            completeEvent.put("nodeType", nodeTypeCode);
+            completeEvent.put("nodeLabel", nodeLabel);
+            completeEvent.put("message", completeMessage);
+            completeEvent.put("success", nodeSuccess);
+            completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
+            if (context.getParentNodeId() != null) {
+                completeEvent.put("parentNodeId", context.getParentNodeId());
+            }
+            if (context.getIterationIndex() != null) {
+                completeEvent.put("iterationIndex", context.getIterationIndex());
+            }
+            if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
+                completeEvent.put("outputs", nodeResult.getOutputs());
+            }
+            emitEvent(context, completeEvent);
+        }
+
+        if (!nodeSuccess) {
+            throw new IllegalStateException("子图节点执行失败: " + nodeId + ": " + completeMessage);
+        }
+
         if (nodeResult.isFinished() || node.getType() == NodeType.END) {
             return NodeExecutionResult.builder()
                     .nextNodeId(null)
@@ -57,5 +120,24 @@ public class WorkflowNodeRunner {
                     .build();
         }
         return nodeResult;
+    }
+
+    private void emitEvent(NodeExecutionContext context, Map<String, Object> event) {
+        if (context.getWorkflowEvents() != null) {
+            context.getWorkflowEvents().add(event);
+        }
+        if (context.getOnEvent() != null) {
+            context.getOnEvent().accept(event);
+        }
+    }
+
+    private String resolveNodeLabel(WorkflowNode node) {
+        if (node.getData() != null && node.getData().containsKey("label")) {
+            Object label = node.getData().get("label");
+            if (label != null && !label.toString().isEmpty()) {
+                return label.toString();
+            }
+        }
+        return node.getType() != null ? node.getType().getDesc() : "节点";
     }
 }

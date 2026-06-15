@@ -68,6 +68,17 @@ public class GraphExtractionExecutor implements TaskExecutor {
         String modelId = payload.has("modelId") ? payload.get("modelId").asText("") : "";
         if (modelId.isBlank()) modelId = null;
         String providerName = payload.has("providerName") ? payload.get("providerName").asText("") : "";
+        String schema = payload.has("schema") ? payload.get("schema").asText("") : "";
+        if (schema.isBlank()) schema = null;
+        int concurrency = payload.has("concurrency") ? payload.get("concurrency").asInt(50) : 50;
+        concurrency = Math.max(1, Math.min(concurrency, 1000));
+        Map<String, Object> modelParams = null;
+        if (payload.has("modelParams") && payload.get("modelParams").isObject()) {
+            try {
+                modelParams = objectMapper.convertValue(payload.get("modelParams"), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+            } catch (Exception ignored) {
+            }
+        }
 
         // 1. 解析文档ID列表和图谱文档关联ID列表
         List<Long> documentIds = new ArrayList<>();
@@ -154,7 +165,7 @@ public class GraphExtractionExecutor implements TaskExecutor {
                     List<Chunk> docChunks = chunkService.listByDocumentId(doc.getId());
                     log.info("[图谱抽取执行器] 文档 {}/{}: docId={}, chunks={}", docIdx + 1, documents.size(), doc.getId(), docChunks.size());
 
-                    List<GraphTripleDTO> docTriples = extractTriples(task, docChunks, providerId, modelId);
+                    List<GraphTripleDTO> docTriples = extractTriples(task, docChunks, providerId, modelId, schema, modelParams, concurrency);
 
                     int[] counts = writeTriplesToNeo4j(label, docTriples, doc.getId(), knowledgeId, "auto", graphSource);
                     totalNodes += counts[0];
@@ -221,14 +232,14 @@ public class GraphExtractionExecutor implements TaskExecutor {
         }
     }
 
-    private List<GraphTripleDTO> extractTriples(Task task, List<Chunk> chunks, Long providerId, String modelId) throws Exception {
+    private List<GraphTripleDTO> extractTriples(Task task, List<Chunk> chunks, Long providerId, String modelId,
+                                                 String schema, Map<String, Object> modelParams, int concurrency) throws Exception {
         if (chunks.isEmpty()) {
             return new ArrayList<>();
         }
 
         List<GraphTripleDTO> allTriples = Collections.synchronizedList(new ArrayList<>());
         int batchSize = 3;
-        int parallelism = 5;
 
         List<List<Chunk>> batches = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i += batchSize) {
@@ -236,7 +247,7 @@ public class GraphExtractionExecutor implements TaskExecutor {
             batches.add(new ArrayList<>(chunks.subList(i, end)));
         }
 
-        ExecutorService executor = Executors.newFixedThreadPool(parallelism);
+        ExecutorService executor = Executors.newFixedThreadPool(concurrency);
         AtomicInteger completedChunks = new AtomicInteger(0);
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
@@ -249,13 +260,13 @@ public class GraphExtractionExecutor implements TaskExecutor {
 
                 try {
                     List<String> contents = batch.stream().map(Chunk::getContent).collect(Collectors.toList());
-                    List<GraphTripleDTO> triples = graphExtractor.extractBatch(contents, providerId, modelId);
+                    List<GraphTripleDTO> triples = graphExtractor.extractBatch(contents, providerId, modelId, schema, modelParams);
                     allTriples.addAll(triples);
                 } catch (Exception e) {
                     log.warn("[图谱抽取执行器] 批次抽取失败, 降级为逐个抽取: {}", e.getMessage());
                     for (Chunk chunk : batch) {
                         try {
-                            allTriples.addAll(graphExtractor.extract(chunk.getContent(), providerId, modelId));
+                            allTriples.addAll(graphExtractor.extract(chunk.getContent(), providerId, modelId, schema, modelParams));
                         } catch (Exception ex) {
                             log.warn("[图谱抽取执行器] Chunk {} 抽取失败: {}", chunk.getId(), ex.getMessage());
                         }

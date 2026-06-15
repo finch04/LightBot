@@ -64,6 +64,21 @@ public class GraphExtractor {
      * @return 三元组列表
      */
     public List<GraphTripleDTO> extract(String content, Long providerId, String modelId) {
+        return extract(content, providerId, modelId, null, null);
+    }
+
+    /**
+     * 从文本中抽取实体和关系三元组（支持 Schema 约束和模型参数）
+     *
+     * @param content    文本内容
+     * @param providerId 模型提供商ID
+     * @param modelId    指定模型ID
+     * @param schema     Schema 约束文本（拼接到抽取 Prompt 尾部），可为 null
+     * @param modelParams 模型参数（如 temperature、maxTokens），可为 null
+     * @return 三元组列表
+     */
+    public List<GraphTripleDTO> extract(String content, Long providerId, String modelId,
+                                         String schema, Map<String, Object> modelParams) {
         if (content == null || content.isBlank()) {
             return Collections.emptyList();
         }
@@ -73,10 +88,12 @@ public class GraphExtractor {
 
         try {
             Long actualProviderId = resolveProviderId(providerId);
-            var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId);
+            var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId, modelParams);
+
+            String systemPrompt = buildSystemPrompt(schema);
 
             List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
-            messages.add(new SystemMessage(EXTRACT_SYSTEM_PROMPT));
+            messages.add(new SystemMessage(systemPrompt));
             messages.add(new UserMessage("请从以下文本中抽取实体和关系三元组：\n\n" + truncated));
 
             ChatResponse response = ctx.call(messages);
@@ -121,6 +138,21 @@ public class GraphExtractor {
      * @return 所有三元组的合并列表
      */
     public List<GraphTripleDTO> extractBatch(List<String> contents, Long providerId, String modelId) {
+        return extractBatch(contents, providerId, modelId, null, null);
+    }
+
+    /**
+     * 批量抽取（支持 Schema 约束和模型参数）
+     *
+     * @param contents   文本内容列表
+     * @param providerId 模型提供商ID
+     * @param modelId    指定模型ID
+     * @param schema     Schema 约束文本，可为 null
+     * @param modelParams 模型参数，可为 null
+     * @return 所有三元组的合并列表
+     */
+    public List<GraphTripleDTO> extractBatch(List<String> contents, Long providerId, String modelId,
+                                              String schema, Map<String, Object> modelParams) {
         if (contents == null || contents.isEmpty()) {
             return Collections.emptyList();
         }
@@ -146,10 +178,12 @@ public class GraphExtractor {
 
         try {
             Long actualProviderId = resolveProviderId(providerId);
-            var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId);
+            var ctx = modelFactory.getChatModelWithContext(actualProviderId, modelId, modelParams);
+
+            String systemPrompt = buildSystemPrompt(schema);
 
             List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
-            messages.add(new SystemMessage(EXTRACT_SYSTEM_PROMPT));
+            messages.add(new SystemMessage(systemPrompt));
             messages.add(new UserMessage("请从以下文本中抽取实体和关系三元组（文本包含多个段落，请分别抽取）：\n\n" + finalText));
 
             ChatResponse response = ctx.call(messages);
@@ -160,7 +194,7 @@ public class GraphExtractor {
             // 降级：逐个抽取
             List<GraphTripleDTO> fallback = new ArrayList<>();
             for (String content : contents) {
-                fallback.addAll(extract(content, providerId, modelId));
+                fallback.addAll(extract(content, providerId, modelId, schema, modelParams));
             }
             return fallback;
         }
@@ -233,6 +267,16 @@ public class GraphExtractor {
             log.warn("[图谱抽取] 实体名解析失败: text={}", text, e);
             return Collections.emptyList();
         }
+    }
+
+    /**
+     * 构建系统提示词，可选追加 Schema 约束
+     */
+    private String buildSystemPrompt(String schema) {
+        if (schema == null || schema.isBlank()) {
+            return EXTRACT_SYSTEM_PROMPT;
+        }
+        return EXTRACT_SYSTEM_PROMPT + "\n\n抽取 Schema 约束：\n" + schema.trim();
     }
 
     private String getString(Map<String, Object> map, String key) {

@@ -831,15 +831,16 @@
                 @click="!isVersionPreview && toggleTool(t)"
               >
                 <div class="item-icon tool-icon-bg">
+                  <span v-if="isSystemTool(t)" class="builtin-badge">系统</span>
+                  <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
                   <ToolOutlined />
                 </div>
                 <div class="item-info">
-                  <div class="item-name">
-                    {{ t.displayName || t.name }}
-                    <span v-if="isSystemTool(t)" class="tool-system-badge">系统工具</span>
-                    <span v-else class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
-                  </div>
-                  <div class="item-desc">{{ t.description || '暂无描述' }}</div>
+                  <div class="item-name">{{ t.displayName || t.name }}</div>
+                  <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(t.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
                 </div>
                 <div class="item-check" v-if="selectedToolIds.has(toBindingId(t.id))">
                   <CheckOutlined />
@@ -909,7 +910,10 @@
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ k.name }}</div>
-                  <div class="item-desc">{{ k.description || '暂无描述' }}</div>
+                  <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(k.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
                 </div>
                 <div class="item-check" v-if="selectedKnowledgeIds.has(toBindingId(k.id))">
                   <CheckOutlined />
@@ -980,7 +984,10 @@
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ s.name }}</div>
-                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
                 </div>
                 <div class="item-check" v-if="selectedMcpServerIds.has(toBindingId(s.id))">
                   <CheckOutlined />
@@ -1053,7 +1060,10 @@
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ s.displayName }}</div>
-                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
                   <div class="item-tools" v-if="s.tools && JSON.parse(s.tools).length > 0">
                     工具: {{ JSON.parse(s.tools).join(', ') }}
                   </div>
@@ -1125,14 +1135,15 @@
                 @click="!isVersionPreview && toggleSkill(s)"
               >
                 <div class="item-icon skill-icon">
+                  <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
                   <ThunderboltOutlined />
                 </div>
                 <div class="item-info">
-                  <div class="item-name">
-                    <span v-if="s.isBuiltin === 1" class="binding-inline-badge">内置</span>
-                    {{ s.displayName || s.name }}
-                  </div>
-                  <div class="item-desc">{{ s.description || '暂无描述' }}</div>
+                  <div class="item-name">{{ s.displayName || s.name }}</div>
+                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
                   <div class="item-tools" v-if="s.slug">slug: {{ s.slug }}</div>
                 </div>
                 <div class="item-check" v-if="selectedSkillIds.has(toBindingId(s.id))">
@@ -1483,6 +1494,7 @@ import { getMcpServers } from '../api/mcp'
 import { getEnabledSubAgents } from '../api/subagent'
 import { getEnabledSkills } from '../api/skill'
 import { safeJsonParse } from '../utils/request'
+import { truncateText } from '../utils/format'
 import {
   toBindingId,
   toBindingIdSet,
@@ -4499,6 +4511,7 @@ onMounted(async () => {
   justify-content: center;
   font-weight: 700;
   font-size: 14px;
+  position: relative;
   flex-shrink: 0;
   position: relative;
 }
@@ -4794,12 +4807,15 @@ onMounted(async () => {
   background: #eff6ff;
 }
 .subagent-item .builtin-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   font-size: 10px;
   padding: 1px 4px;
   background: #0070f3;
   color: #fff;
-  border-radius: 3px;
-  margin-right: 4px;
+  border-radius: 4px;
+  z-index: 1;
 }
 .subagent-item .item-tools {
   margin-top: 4px;

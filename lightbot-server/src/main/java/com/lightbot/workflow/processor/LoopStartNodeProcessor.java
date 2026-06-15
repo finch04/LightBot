@@ -1,21 +1,20 @@
 package com.lightbot.workflow.processor;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.enums.NodeType;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
-import com.lightbot.workflow.WorkflowSubgraphExecutor;
+import com.lightbot.workflow.NodeProcessor;
 import org.springframework.stereotype.Component;
 
 /**
- * 迭代开始节点：触发循环容器完整执行并跳转到 loop_end 之后
+ * 迭代开始节点：仅作为子图内部的起始标记，不做任何业务处理
+ * <p>容器的完整执行由 {@link LoopNodeProcessor} 负责，此节点仅在子图迭代中被跳过</p>
+ *
+ * @author finch
+ * @since 2026-06-15
  */
 @Component
-public class LoopStartNodeProcessor extends AbstractGroupContainerProcessor {
-
-    public LoopStartNodeProcessor(WorkflowSubgraphExecutor subgraphExecutor, ObjectMapper objectMapper) {
-        super(subgraphExecutor, objectMapper);
-    }
+public class LoopStartNodeProcessor extends AbstractFlowNodeProcessor implements NodeProcessor {
 
     @Override
     public NodeType getType() {
@@ -24,6 +23,6 @@ public class LoopStartNodeProcessor extends AbstractGroupContainerProcessor {
 
     @Override
     public NodeExecutionResult execute(NodeExecutionContext context) {
-        return executeContainer(context, NodeType.LOOP_START, NodeType.LOOP_END, false);
+        return passThrough(context, "output", "success");
     }
 }

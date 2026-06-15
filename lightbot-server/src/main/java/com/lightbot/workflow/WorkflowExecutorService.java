@@ -114,6 +114,8 @@ public class WorkflowExecutorService {
                 .variables(new LinkedHashMap<>())
                 .nodeOutputs(new LinkedHashMap<>())
                 .onStreamChunk(onStreamChunk)
+                .workflowEvents(workflowEvents)
+                .onEvent(onEvent)
                 .build();
 
         // 2. 注入全局配置中的会话变量默认值
@@ -215,6 +217,10 @@ public class WorkflowExecutorService {
             completeEvent.put("contentOffset", 0);
             if (nextNodeId != null) {
                 completeEvent.put("nextNodeId", nextNodeId);
+            }
+            // 循环/批处理容器节点：标记为容器，前端可据此折叠展示内部子节点
+            if (node.getType() == NodeType.LOOP || node.getType() == NodeType.BATCH) {
+                completeEvent.put("isContainer", true);
             }
             String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
             if (detail != null && !detail.isBlank()) {

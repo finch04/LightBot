@@ -28,7 +28,10 @@
             </button>
           </div>
         </div>
-        <p class="card-desc">{{ s.description || '暂无描述' }}</p>
+        <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+          <p class="card-desc">{{ truncateText(s.description, 50) }}</p>
+        </a-tooltip>
+        <p v-else class="card-desc">暂无描述</p>
         <div class="card-meta">
           <span class="card-tools" v-if="formatTools(s.tools)">
             <ToolOutlined /> {{ formatTools(s.tools) }}
@@ -66,7 +69,7 @@
           <a-input v-model:value="form.displayName" placeholder="中文显示名称" />
         </a-form-item>
         <a-form-item label="描述" required>
-          <a-textarea v-model:value="form.description" placeholder="SubAgent 描述" :rows="2" />
+          <a-textarea v-model:value="form.description" placeholder="SubAgent 描述" :rows="2" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="系统提示词" required>
           <a-textarea v-model:value="form.systemPrompt" placeholder="SubAgent 的系统提示词" :rows="6" />
@@ -208,6 +211,7 @@ import { message, Modal } from 'ant-design-vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
 import { getProvidersWithModels } from '../api/modelProvider'
+import { truncateText } from '../utils/format'
 
 const props = defineProps({
   hideHeader: { type: Boolean, default: false }

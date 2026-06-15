@@ -156,26 +156,8 @@ export function getGraphStats(knowledgeId, documentId) {
   })
 }
 
-export function extractGraph(knowledgeId, documentIds, providerId, modelId) {
-  const params = {}
-  if (documentIds && documentIds.length > 0) params.documentIds = documentIds
-  if (providerId) params.providerId = providerId
-  if (modelId) params.modelId = modelId
-  return request.post(`/knowledge/${knowledgeId}/graph/extract`, null, {
-    params,
-    paramsSerializer: p => {
-      const parts = []
-      for (const key in p) {
-        const val = p[key]
-        if (Array.isArray(val)) {
-          val.forEach(v => parts.push(`${key}=${v}`))
-        } else {
-          parts.push(`${key}=${val}`)
-        }
-      }
-      return parts.join('&')
-    }
-  })
+export function extractGraph(knowledgeId, data) {
+  return request.post(`/knowledge/${knowledgeId}/graph/extract`, data)
 }
 
 export function importGraphTriples(knowledgeId, data) {

@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -72,4 +73,30 @@ public class NodeExecutionContext {
      */
     @Builder.Default
     private Consumer<String> onStreamChunk = null;
+
+    // ========== 容器子图事件推送 ==========
+
+    /**
+     * 工作流事件列表（子图节点执行时追加事件）
+     */
+    @Builder.Default
+    private List<Map<String, Object>> workflowEvents = null;
+
+    /**
+     * 实时事件回调（SSE 推送）
+     */
+    @Builder.Default
+    private Consumer<Map<String, Object>> onEvent = null;
+
+    /**
+     * 父容器节点 ID（子图节点执行时标识归属）
+     */
+    @Builder.Default
+    private String parentNodeId = null;
+
+    /**
+     * 当前迭代序号（从 0 开始，子图节点执行时标识所属迭代）
+     */
+    @Builder.Default
+    private Integer iterationIndex = null;
 }

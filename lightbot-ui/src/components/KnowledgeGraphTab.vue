@@ -215,17 +215,58 @@
           </div>
         </a-spin>
         <div class="doc-extract-actions">
-          <div class="doc-extract-model">
-            <span class="doc-extract-model-label">抽取模型</span>
-            <ModelSelect v-model="extractProviderId" style="flex: 1" placeholder="不选择则使用系统内置模型" @change="onExtractModelChange" />
-          </div>
           <div class="doc-extract-btn-row">
             <a-button type="primary" size="small" :disabled="selectedDocIds.length === 0" @click="handleExtractSelected" :loading="extracting">
-              {{ extractMode === 'single' ? `批量抽取（${selectedDocIds.length}）` : `合并抽取（${selectedDocIds.length}）` }}
+              {{ extractMode === 'single' ? `下一步（${selectedDocIds.length}）` : `下一步（${selectedDocIds.length}）` }}
             </a-button>
           </div>
         </div>
       </div>
+    </a-modal>
+
+    <!-- 抽取配置弹窗 -->
+    <a-modal
+      v-model:open="extractConfigVisible"
+      title="图谱抽取配置"
+      :width="560"
+      :maskClosable="false"
+      @ok="handleExtractConfigSubmit"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="抽取模型">
+          <ModelSelect
+            v-model="extractConfigForm.modelValue"
+            style="width: 100%"
+            placeholder="不选择则使用系统默认模型"
+            @change="onExtractConfigModelChange"
+          />
+        </a-form-item>
+        <a-form-item label="Schema">
+          <a-textarea
+            v-model:value="extractConfigForm.schema"
+            :rows="5"
+            placeholder="描述实体类型、关系类型和属性约束，会拼接到抽取 Prompt 尾部。例如：&#10;实体类型：人物、组织、项目、技术&#10;关系类型：负责、隶属于、使用、包含"
+          />
+        </a-form-item>
+        <div style="display: flex; gap: 16px">
+          <a-form-item label="并发队列数" style="flex: 1">
+            <a-input-number
+              v-model:value="extractConfigForm.concurrency"
+              :min="1"
+              :max="1000"
+              :step="1"
+              style="width: 100%"
+            />
+          </a-form-item>
+          <a-form-item label="模型参数 JSON" style="flex: 1">
+            <a-textarea
+              v-model:value="extractConfigForm.modelParamsText"
+              :rows="1"
+              placeholder='例如 {"temperature":0.1}'
+            />
+          </a-form-item>
+        </div>
+      </a-form>
     </a-modal>
   </div>
 </template>
@@ -276,11 +317,38 @@ const docList = ref([])
 const docListLoading = ref(false)
 const selectedDocIds = ref([])
 const extractMode = ref('multi') // 'single' | 'multi'
-const extractProviderId = ref(null)
-const selectedExtractModel = ref({ providerId: null, modelId: null })
 
-function onExtractModelChange({ providerId, modelId }) {
-  selectedExtractModel.value = { providerId, modelId }
+// ---- 抽取配置弹窗 ----
+const extractConfigVisible = ref(false)
+const extractConfigForm = reactive({
+  modelValue: '',
+  schema: '',
+  concurrency: 50,
+  modelParamsText: '',
+})
+const extractConfigModel = ref({ providerId: null, modelId: null })
+const pendingExtractIds = ref([]) // 暂存待抽取的文档 ID 列表
+const pendingExtractMode = ref('') // 暂存抽取模式
+
+function onExtractConfigModelChange({ providerId, modelId }) {
+  extractConfigModel.value = { providerId, modelId }
+}
+
+/**
+ * 打开抽取配置弹窗
+ * @param {Array} docIds 待抽取的文档 ID 列表
+ * @param {string} mode 抽取模式 'single' | 'multi' | 'singleDoc'
+ */
+function openExtractConfig(docIds, mode) {
+  pendingExtractIds.value = docIds
+  pendingExtractMode.value = mode
+  // 重置表单
+  extractConfigForm.modelValue = ''
+  extractConfigForm.schema = ''
+  extractConfigForm.concurrency = 50
+  extractConfigForm.modelParamsText = ''
+  extractConfigModel.value = { providerId: null, modelId: null }
+  extractConfigVisible.value = true
 }
 
 let graphInstance = null
@@ -574,9 +642,12 @@ async function handleExtractSelected() {
             h('div', { innerHTML: docNamesHtml }),
             h('p', '是否继续？')
           ]),
-          okText: '继续抽取',
+          okText: '继续配置',
           cancelText: '取消',
-          onOk: () => doExtract(ids)
+          onOk: () => {
+            docExtractVisible.value = false
+            openExtractConfig(ids, extractMode.value)
+          }
         })
         return
       }
@@ -590,29 +661,77 @@ async function handleExtractSelected() {
     Modal.confirm({
       title: '重新抽取确认',
       content: `当前知识图谱已有 ${stats.nodeCount} 个节点，多文档合并抽取将覆盖整个知识图谱，是否继续？`,
-      okText: '继续抽取',
+      okText: '继续配置',
       cancelText: '取消',
-      onOk: () => doExtract(ids)
+      onOk: () => {
+        docExtractVisible.value = false
+        openExtractConfig(ids, extractMode.value)
+      }
     })
   } else {
-    doExtract(ids)
+    docExtractVisible.value = false
+    openExtractConfig(ids, extractMode.value)
   }
 }
 
-async function doExtract(ids) {
-  docExtractVisible.value = false
+/**
+ * 解析模型参数 JSON
+ */
+function parseModelParams() {
+  const text = extractConfigForm.modelParamsText?.trim()
+  if (!text) return null
+  try {
+    const obj = JSON.parse(text)
+    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+      message.warning('模型参数必须是 JSON 对象格式')
+      return null
+    }
+    return obj
+  } catch {
+    message.warning('模型参数 JSON 格式不正确，请检查')
+    return null
+  }
+}
+
+/**
+ * 抽取配置弹窗确认
+ */
+async function handleExtractConfigSubmit() {
+  const ids = pendingExtractIds.value
+  const mode = pendingExtractMode.value
+  if (!ids || ids.length === 0) {
+    message.warning('没有待抽取的文档')
+    return
+  }
+
+  const modelParams = parseModelParams()
+  if (extractConfigForm.modelParamsText?.trim() && modelParams === null) return
+
+  extractConfigVisible.value = false
   extracting.value = true
   try {
-    const { providerId, modelId } = selectedExtractModel.value
-    if (extractMode.value === 'single') {
+    const { providerId, modelId } = extractConfigModel.value
+    const baseData = {
+      providerId: providerId || undefined,
+      modelId: modelId || undefined,
+      schema: extractConfigForm.schema?.trim() || undefined,
+      concurrency: extractConfigForm.concurrency || 50,
+      modelParams: modelParams || undefined,
+    }
+
+    if (mode === 'single') {
       // 单文档模式：为每个文档分别创建独立的抽取任务
       for (const docId of ids) {
-        await extractGraph(props.knowledgeId, [docId], providerId, modelId)
+        await extractGraph(props.knowledgeId, { ...baseData, documentIds: [docId] })
       }
       message.success(`已提交 ${ids.length} 个文档的图谱抽取任务，请前往任务中心查看进度`)
+    } else if (mode === 'singleDoc') {
+      // 单文档模式（从空状态/重新抽取按钮触发）
+      await extractGraph(props.knowledgeId, { ...baseData, documentIds: ids })
+      message.success('图谱抽取任务已提交，请前往任务中心查看进度')
     } else {
       // 多文档模式：合并为一个任务，统一构建知识图谱
-      await extractGraph(props.knowledgeId, ids, providerId, modelId)
+      await extractGraph(props.knowledgeId, { ...baseData, documentIds: ids })
       message.success(`已提交多文档合并抽取任务（${ids.length} 个文档），请前往任务中心查看进度`)
     }
     hasRunningTask.value = true
@@ -624,20 +743,10 @@ async function doExtract(ids) {
   }
 }
 
-// 文档模式：单文档抽取（从空状态按钮触发）
-async function handleExtractSingleDoc() {
+// 文档模式：单文档抽取（从空状态按钮或重新抽取触发）
+function handleExtractSingleDoc() {
   if (!props.documentId) return
-  extracting.value = true
-  try {
-    await extractGraph(props.knowledgeId, [props.documentId])
-    hasRunningTask.value = true
-    graphReady.value = false
-    message.success('图谱抽取任务已提交，请前往任务中心查看进度')
-  } catch (e) {
-    console.error('[知识图谱] 抽取失败', e)
-  } finally {
-    extracting.value = false
-  }
+  openExtractConfig([props.documentId], 'singleDoc')
 }
 
 // ---- 清空图谱 ----
@@ -950,8 +1059,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 }
 .doc-extract-actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: flex-end;
   padding-top: 8px;
   border-top: 1px solid #f0f0f0;
 }
@@ -959,16 +1067,6 @@ watch(() => [props.knowledgeId, props.documentId], () => {
   background: #d4d4d8;
   border-color: #d4d4d8;
   color: #fff;
-}
-.doc-extract-model {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.doc-extract-model-label {
-  flex-shrink: 0;
-  font-size: 13px;
-  color: #666;
 }
 .doc-extract-btn-row {
   display: flex;

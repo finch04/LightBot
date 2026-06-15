@@ -30,17 +30,24 @@
           <div class="card-icon">{{ s.name[0] }}</div>
           <div class="card-info">
             <h3>{{ s.name }}</h3>
-            <span class="card-type">{{ s.installType?.code || s.installType }}</span>
           </div>
           <div class="card-actions">
             <button class="btn-icon" @click="openDialog(s)"><EditOutlined /></button>
             <button class="btn-icon danger" @click="handleDelete(s.id)"><DeleteOutlined /></button>
           </div>
         </div>
-        <div class="card-detail">
-          <span v-if="s.description">{{ s.description }}</span>
-          <span v-if="s.host">地址: {{ s.host }}</span>
-          <span class="card-transport">{{ s.transport?.code || s.transport || s.installType }}</span>
+        <div class="card-body">
+          <div class="card-tags">
+            <span class="tag tag-install" :class="'tag-' + (s.installType?.code || s.installType)">
+              {{ getInstallTypeLabel(s.installType?.code || s.installType) }}
+            </span>
+            <span v-if="s.transport?.code || s.transport" class="tag tag-transport">
+              {{ s.transport?.code || s.transport }}
+            </span>
+          </div>
+          <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+            <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
+          </a-tooltip>
         </div>
         <div class="card-footer">
           <button class="btn-text" :disabled="testingId === s.id" @click="handleTest(s)">
@@ -65,7 +72,7 @@
           <a-input v-model:value="form.name" placeholder="如：filesystem-server" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-input v-model:value="form.description" placeholder="服务用途说明" />
+          <a-input v-model:value="form.description" placeholder="服务用途说明" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="安装类型" required>
           <a-select v-model:value="form.installType" style="width: 100%" @change="onInstallTypeChange">
@@ -302,6 +309,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutli
 import { message, Modal } from 'ant-design-vue'
 import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
+import { truncateText } from '../utils/format'
 
 const list = ref([])
 const loading = ref(false)
@@ -583,6 +591,11 @@ function formatSchema(schema) {
 
 onMounted(loadData)
 
+function getInstallTypeLabel(type) {
+  const map = { npx: 'NPX', uvx: 'UVX', sse: 'SSE' }
+  return map[type] || type
+}
+
 function search(text) {
   const next = text || ''
   if (searchText.value === next) return
@@ -705,6 +718,52 @@ defineExpose({ openDialog, search, refresh })
   padding: 2px 8px;
   border-radius: 100px;
 }
+.card-desc {
+  font-size: 13px;
+  color: #a1a1aa;
+  line-height: 1.5;
+}
+.card-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+.tag-install {
+  background: #f0f5ff;
+  color: #3b82f6;
+  border: 1px solid #dbeafe;
+}
+.tag-npx {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #dcfce7;
+}
+.tag-uvx {
+  background: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+.tag-sse {
+  background: #fce7f3;
+  color: #db2777;
+  border: 1px solid #fbcfe8;
+}
+.tag-transport {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ede9fe;
+}
 .card-actions {
   display: flex;
   gap: 4px;
@@ -728,13 +787,11 @@ defineExpose({ openDialog, search, refresh })
   color: #ee0000;
   background: #f7d4d6;
 }
-.card-detail {
+.card-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: #a1a1aa;
-  flex: 1;
+  gap: 8px;
 }
 
 .dialog-footer {
@@ -806,15 +863,6 @@ defineExpose({ openDialog, search, refresh })
 .btn-text:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-.card-transport {
-  font-size: 12px;
-  color: #a1a1aa;
-  background: #f5f5f5;
-  padding: 2px 8px;
-  border-radius: 100px;
-  display: inline-block;
-  margin-top: 4px;
 }
 .tools-empty {
   text-align: center;

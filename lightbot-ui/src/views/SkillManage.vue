@@ -29,14 +29,11 @@
       <div v-for="s in list" :key="s.id" class="provider-card">
         <div class="card-top">
           <div class="card-icon card-icon--skill">
+            <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
             <ThunderboltOutlined />
           </div>
           <div class="card-info">
-            <h3>
-              <span class="builtin-badge" v-if="s.isBuiltin === 1">内置</span>
-              {{ s.displayName || s.name }}
-            </h3>
-            <span class="card-type" v-if="s.slug">slug: {{ s.slug }}</span>
+            <h3>{{ s.displayName || s.name }}</h3>
           </div>
           <div class="card-actions">
             <a-tooltip title="查看详情">
@@ -53,8 +50,12 @@
           </div>
         </div>
         <div class="card-detail">
-          <span v-if="s.description">{{ s.description }}</span>
-          <span v-if="s.promptTemplate" class="prompt-preview">{{ truncate(s.promptTemplate, 120) }}</span>
+          <div class="card-tags">
+            <span v-if="s.slug" class="tag tag-slug">{{ s.slug }}</span>
+          </div>
+          <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+            <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
+          </a-tooltip>
         </div>
       </div>
       <div v-if="list.length === 0" class="empty-tip">
@@ -124,7 +125,7 @@
           <a-input v-model:value="form.displayName" placeholder="中文，如 深度研究" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能，给模型看的" />
+          <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能，给模型看的" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="依赖工具">
           <a-select v-model:value="form.toolIds" mode="multiple" placeholder="选择该 Skill 启用时附带的工具" style="width: 100%" :options="toolOptions" />
@@ -198,6 +199,7 @@ import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled } fro
 import { getTools } from '../api/tool'
 import { getMcpServers } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
+import { truncateText } from '../utils/format'
 
 const list = ref([])
 const loading = ref(false)
@@ -457,6 +459,7 @@ defineExpose({ openDialog, search, refresh })
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
+  position: relative;
 }
 .card-icon--skill {
   background: linear-gradient(135deg, #ec4899, #db2777);
@@ -499,12 +502,15 @@ defineExpose({ openDialog, search, refresh })
   border-radius: 100px;
 }
 .builtin-badge {
-  display: inline-block;
-  background: #fef3c7;
-  color: #b45309;
-  font-size: 11px;
-  padding: 1px 6px;
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 10px;
+  padding: 1px 4px;
+  background: #0070f3;
+  color: #fff;
   border-radius: 4px;
+  z-index: 1;
 }
 .card-actions { display: flex; gap: 4px; }
 .btn-icon {
@@ -518,16 +524,36 @@ defineExpose({ openDialog, search, refresh })
 .btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-icon.danger:hover:not(:disabled) { color: #ee0000; background: #f7d4d6; }
 .card-detail {
-  display: flex; flex-direction: column;
-  gap: 6px; font-size: 13px; color: #6b7280;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.prompt-preview {
-  font-size: 12px; color: #a1a1aa;
-  background: #fafafa; padding: 6px 8px;
+.card-desc {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+.card-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
   border-radius: 6px;
-  white-space: pre-wrap;
-  max-height: 80px;
-  overflow: hidden;
+  line-height: 1.4;
+}
+.tag-slug {
+  background: #fdf2f8;
+  color: #be185d;
+  border: 1px solid #fbcfe8;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 .help-icon {
   margin-left: 8px;

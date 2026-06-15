@@ -5,6 +5,7 @@ import com.lightbot.common.Result;
 import com.lightbot.dto.ChunkVO;
 import com.lightbot.dto.DocumentDownloadVO;
 import com.lightbot.dto.GraphEdgeVO;
+import com.lightbot.dto.GraphExtractRequest;
 import com.lightbot.dto.GraphImportRequest;
 import com.lightbot.dto.GraphNodeVO;
 import com.lightbot.dto.GraphStatsVO;
@@ -284,10 +285,8 @@ public class KnowledgeController {
     @Operation(summary = "触发图谱抽取（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/graph/extract")
     public Result<Long> extractGraph(@PathVariable Long id,
-                                     @RequestParam(required = false) List<Long> documentIds,
-                                     @RequestParam(required = false) Long providerId,
-                                     @RequestParam(required = false) String modelId) {
-        return Result.ok(graphService.extractFromDocument(id, documentIds, providerId, modelId));
+                                     @RequestBody @jakarta.validation.Valid GraphExtractRequest request) {
+        return Result.ok(graphService.extractFromDocument(id, request));
     }
 
     @Operation(summary = "批量导入三元组（需要DEVELOPER及以上权限）")

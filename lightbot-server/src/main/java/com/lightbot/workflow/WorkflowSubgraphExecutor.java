@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 
 /**
  * 循环/批处理容器内子图执行器
@@ -35,7 +37,8 @@ public class WorkflowSubgraphExecutor {
                                                String groupId,
                                                String startNodeId,
                                                String endNodeId,
-                                               Map<String, Object> iterationOverlay) {
+                                               Map<String, Object> iterationOverlay,
+                                               int iterationIndex) {
         WorkflowDefinition workflow = parentContext.getWorkflow();
         Set<String> childIds = WorkflowGroupUtils.getGroupChildIds(workflow, groupId);
 
@@ -59,6 +62,10 @@ public class WorkflowSubgraphExecutor {
                 .workflow(workflow)
                 .variables(variables)
                 .nodeOutputs(nodeOutputs)
+                .workflowEvents(parentContext.getWorkflowEvents())
+                .onEvent(parentContext.getOnEvent())
+                .parentNodeId(groupId)
+                .iterationIndex(iterationIndex)
                 .build();
 
         String currentNodeId = WorkflowGroupUtils.findFirstInnerNode(workflow, startNodeId, groupId);
@@ -130,7 +137,7 @@ public class WorkflowSubgraphExecutor {
             try {
                 Map<String, Object> overlay = WorkflowGroupUtils.buildIterationOverlay(
                         groupId, i, itemListMap, context.getVariables());
-                IterationSnapshot snap = executeOneIteration(context, groupId, startNodeId, endNodeId, overlay);
+                IterationSnapshot snap = executeOneIteration(context, groupId, startNodeId, endNodeId, overlay, i);
                 snapshots.add(snap.getSnapshot());
             } catch (Exception e) {
                 log.error("[WorkflowSubgraphExecutor] 迭代失败: groupId={}, index={}, error={}",
@@ -168,7 +175,7 @@ public class WorkflowSubgraphExecutor {
                     Map<String, Object> overlay = WorkflowGroupUtils.buildIterationOverlay(
                             groupId, index, itemListMap, context.getVariables());
                     IterationSnapshot snap = executeOneIteration(
-                            context, groupId, startNodeId, endNodeId, overlay);
+                            context, groupId, startNodeId, endNodeId, overlay, index);
                     return snap.getSnapshot();
                 };
                 futures.add(pool.submit(task));

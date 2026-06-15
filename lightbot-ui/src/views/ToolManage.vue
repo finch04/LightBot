@@ -43,27 +43,31 @@
       <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'system-card': t.isSystem }">
         <div class="card-top">
           <div class="card-icon card-icon--tool">
+            <span v-if="t.isSystem || (t.toolType?.code || t.toolType) === 'builtin'" class="system-badge">
+              {{ t.isSystem ? '系统' : '内置' }}
+            </span>
             {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
           </div>
           <div class="card-info">
-            <h3>
-              {{ t.displayName || t.name }}
-              <span v-if="t.isSystem" class="system-badge">系统</span>
-            </h3>
+            <h3>{{ t.displayName || t.name }}</h3>
             <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
           </div>
           <div class="card-actions">
             <a-tooltip title="测试工具">
               <button class="btn-icon" @click="openTestDialog(t)"><PlayCircleOutlined /></button>
             </a-tooltip>
-            <button v-if="!t.isSystem" class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
-            <button v-if="!t.isSystem" class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+            <button v-if="!t.isSystem && (t.toolType?.code || t.toolType) !== 'builtin'" class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
+            <button v-if="!t.isSystem && (t.toolType?.code || t.toolType) !== 'builtin'" class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
           </div>
         </div>
         <div class="card-detail">
-          <span v-if="t.name" class="detail-tag">标识: {{ t.name }}</span>
-          <span v-if="t.description">{{ t.description }}</span>
-          <span v-if="t.endpointUrl">端点: {{ t.endpointUrl }}</span>
+          <div class="card-tags">
+            <span v-if="t.name" class="tag tag-identifier">{{ t.name }}</span>
+            <span v-if="t.endpointUrl" class="tag tag-endpoint">{{ truncateText(t.endpointUrl, 30) }}</span>
+          </div>
+          <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+            <span class="card-desc">{{ truncateText(t.description, 50) }}</span>
+          </a-tooltip>
         </div>
       </div>
       <div v-if="list.length === 0" class="empty-tip">
@@ -82,15 +86,16 @@
           <a-input v-model:value="form.displayName" placeholder="如：HTTP 请求" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="2" placeholder="工具用途说明，供 Agent 理解" />
+          <a-textarea v-model:value="form.description" :rows="2" placeholder="工具用途说明，供 Agent 理解" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="工具类型" required>
-          <a-select v-model:value="form.toolType" style="width: 100%">
-            <a-select-option value="builtin">内置</a-select-option>
+          <a-select v-model:value="form.toolType" style="width: 100%" :disabled="form.id && form.toolType === 'builtin'">
+            <a-select-option value="builtin" disabled>内置（系统自动管理）</a-select-option>
             <a-select-option value="custom">自定义</a-select-option>
             <a-select-option value="api">API调用</a-select-option>
             <a-select-option value="mcp">MCP协议</a-select-option>
           </a-select>
+          <div v-if="form.id && form.toolType === 'builtin'" class="param-hint">内置工具类型不可修改</div>
         </a-form-item>
         <!-- 高级选项折叠区 -->
         <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
@@ -258,6 +263,7 @@ import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool } from '../api/tool'
 import { getToolTypes } from '../api/enum'
 import JsonInput from '../components/JsonInput.vue'
+import { truncateText } from '../utils/format'
 
 function getPopupContainer() {
   return document.body
@@ -567,6 +573,7 @@ defineExpose({ openDialog, search, refresh })
   font-weight: 700;
   font-size: 16px;
   flex-shrink: 0;
+  position: relative;
 }
 .card-info {
   flex: 1;
@@ -613,17 +620,44 @@ defineExpose({ openDialog, search, refresh })
 .card-detail {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+.card-desc {
   font-size: 13px;
   color: #a1a1aa;
+  line-height: 1.5;
 }
-.detail-tag {
-  display: inline-block;
-  background: #f5f5f5;
-  padding: 2px 8px;
-  border-radius: 4px;
+.card-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
-  color: #71717a;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-identifier {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #d1fae5;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.tag-endpoint {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ede9fe;
+  max-width: 200px;
 }
 .empty-tip {
   grid-column: 1 / -1;
@@ -631,6 +665,11 @@ defineExpose({ openDialog, search, refresh })
   padding: 48px 24px;
   color: #a1a1aa;
   font-size: 14px;
+}
+.param-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 4px;
 }
 
 /* 高级选项折叠区 */
@@ -839,13 +878,15 @@ defineExpose({ openDialog, search, refresh })
   background: #f0f7ff;
 }
 .system-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
   font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 100px;
+  padding: 1px 4px;
   background: #0070f3;
   color: #fff;
-  margin-left: 6px;
-  vertical-align: middle;
+  border-radius: 4px;
+  z-index: 1;
 }
 .btn-icon-help {
   width: 24px;

@@ -17,46 +17,93 @@
     </button>
 
     <div v-show="isExpanded" class="workflow-panel">
-      <div
-        v-for="(step, i) in nodeSteps"
-        :key="step.stepKey || i"
-        v-show="i < visibleCount"
-        class="workflow-step"
-        :style="{ animationDelay: `${i * 80}ms` }"
-      >
-        <div class="event-row" :class="stepStatusClass(step)">
-          <div class="event-icon-col">
-            <LoadingOutlined v-if="step.status === 'running'" class="event-icon icon-spinning" />
-            <CheckCircleOutlined v-else-if="step.status === 'done'" class="event-icon icon-success" />
-            <CloseCircleOutlined v-else-if="step.status === 'failed'" class="event-icon icon-fail" />
-            <PlayCircleOutlined v-else class="event-icon start" />
-          </div>
-          <div class="event-main">
-            <div class="event-head" @click="toggleStep(i)">
-              <span class="event-label">
-                <strong>{{ step.nodeLabel || getNodeTypeName(step.nodeType) }}</strong>
-                <span class="event-type-tag">{{ getNodeTypeName(step.nodeType) }}</span>
-              </span>
-              <span v-if="step.durationMs != null" class="event-duration">{{ step.durationMs }}ms</span>
-              <span v-else-if="step.status === 'running'" class="event-duration running">
-                <span class="running-dot"></span> 执行中
-              </span>
-              <RightOutlined v-if="hasExpandableContent(step)" :class="{ expanded: expandedSteps.has(i) }" class="step-toggle-icon" />
+      <template v-for="(step, i) in nodeSteps" :key="step.stepKey || i">
+        <div
+          v-show="i < visibleCount"
+          class="workflow-step"
+          :style="{ animationDelay: `${i * 80}ms` }"
+        >
+          <div class="event-row" :class="stepStatusClass(step)">
+            <div class="event-icon-col">
+              <LoadingOutlined v-if="step.status === 'running'" class="event-icon icon-spinning" />
+              <CheckCircleOutlined v-else-if="step.status === 'done'" class="event-icon icon-success" />
+              <CloseCircleOutlined v-else-if="step.status === 'failed'" class="event-icon icon-fail" />
+              <PlayCircleOutlined v-else class="event-icon start" />
             </div>
-            <div v-show="expandedSteps.has(i)" class="step-detail-body">
-              <div v-if="step.status === 'failed'" class="event-message fail">
-                {{ step.message || '执行失败' }}
+            <div class="event-main">
+              <div class="event-head" @click="toggleStep(i)">
+                <span class="event-label">
+                  <strong>{{ step.nodeLabel || getNodeTypeName(step.nodeType) }}</strong>
+                  <span class="event-type-tag">{{ getNodeTypeName(step.nodeType) }}</span>
+                  <span v-if="step.isContainer && step.children?.length" class="event-child-count">
+                    {{ step.children.length }} 个子节点
+                  </span>
+                </span>
+                <span v-if="step.durationMs != null" class="event-duration">{{ step.durationMs }}ms</span>
+                <span v-else-if="step.status === 'running'" class="event-duration running">
+                  <span class="running-dot"></span> 执行中
+                </span>
+                <RightOutlined v-if="hasExpandableContent(step)" :class="{ expanded: expandedSteps.has(i) }" class="step-toggle-icon" />
               </div>
-              <div v-else-if="step.status === 'done' && step.message" class="event-message">
-                {{ step.message }}
+              <div v-show="expandedSteps.has(i)" class="step-detail-body">
+                <div v-if="step.status === 'failed'" class="event-message fail">
+                  {{ step.message || '执行失败' }}
+                </div>
+                <div v-else-if="step.status === 'done' && step.message" class="event-message">
+                  {{ step.message }}
+                </div>
+                <div v-if="step.status === 'done' && extractResultText(step)" class="event-result">
+                  {{ extractResultText(step) }}
+                </div>
               </div>
-              <div v-if="step.status === 'done' && extractResultText(step)" class="event-result">
-                {{ extractResultText(step) }}
+            </div>
+          </div>
+          <!-- 容器内部子节点 -->
+          <div v-if="step.isContainer && step.children?.length && expandedSteps.has(i)" class="container-children">
+            <div
+              v-for="(child, ci) in step.children"
+              :key="child.stepKey || ci"
+              class="workflow-step child-step"
+              :style="{ animationDelay: `${ci * 60}ms` }"
+            >
+              <div class="event-row child-row" :class="stepStatusClass(child)">
+                <div class="event-icon-col">
+                  <LoadingOutlined v-if="child.status === 'running'" class="event-icon icon-spinning" />
+                  <CheckCircleOutlined v-else-if="child.status === 'done'" class="event-icon icon-success" />
+                  <CloseCircleOutlined v-else-if="child.status === 'failed'" class="event-icon icon-fail" />
+                  <PlayCircleOutlined v-else class="event-icon start" />
+                </div>
+                <div class="event-main">
+                  <div class="event-head" @click="toggleStep(`child_${i}_${ci}`)">
+                    <span class="event-label">
+                      <strong>{{ child.nodeLabel || getNodeTypeName(child.nodeType) }}</strong>
+                      <span class="event-type-tag">{{ getNodeTypeName(child.nodeType) }}</span>
+                      <span v-if="child.iterationIndex != null" class="event-iteration-tag">
+                        #{{ child.iterationIndex + 1 }}
+                      </span>
+                    </span>
+                    <span v-if="child.durationMs != null" class="event-duration">{{ child.durationMs }}ms</span>
+                    <span v-else-if="child.status === 'running'" class="event-duration running">
+                      <span class="running-dot"></span> 执行中
+                    </span>
+                  </div>
+                  <div v-show="expandedSteps.has(`child_${i}_${ci}`)" class="step-detail-body">
+                    <div v-if="child.status === 'failed'" class="event-message fail">
+                      {{ child.message || '执行失败' }}
+                    </div>
+                    <div v-else-if="child.status === 'done' && child.message" class="event-message">
+                      {{ child.message }}
+                    </div>
+                    <div v-if="child.status === 'done' && extractResultText(child)" class="event-result">
+                      {{ extractResultText(child) }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>
@@ -143,14 +190,17 @@ function hasExpandableContent(step) {
   return step.message || step.detail || hasKvData(step.outputs) || extractResultText(step)
 }
 
-/** 按事件顺序构建链路，保留重复节点经过记录（不再按 nodeId 去重） */
+/** 按事件顺序构建链路，支持容器节点（循环/批处理）折叠展示内部子节点 */
 const nodeSteps = computed(() => {
   const steps = []
   const runningByNodeId = new Map()
   const stepByIndex = new Map()
+  // 容器节点栈：处理嵌套事件归属
+  const containerStack = []
 
   for (const e of props.workflowEvents) {
     if (e.type === 'workflow_node_start' && e.nodeId) {
+      const isContainerStart = !e.parentNodeId && isContainerNodeType(e.nodeType)
       const step = {
         nodeId: e.nodeId,
         nodeType: e.nodeType,
@@ -159,10 +209,21 @@ const nodeSteps = computed(() => {
         stepIndex: e.stepIndex,
         stepKey: `start_${e.stepIndex ?? steps.length}_${e.nodeId}`,
         status: 'running',
+        parentNodeId: e.parentNodeId || null,
+        iterationIndex: e.iterationIndex ?? null,
+        isContainer: isContainerStart,
+        children: isContainerStart ? [] : undefined,
       }
-      steps.push(step)
+      if (e.parentNodeId && containerStack.length > 0) {
+        // 子节点：挂到当前容器的 children
+        const parent = containerStack[containerStack.length - 1]
+        if (parent.children) parent.children.push(step)
+      } else {
+        steps.push(step)
+      }
       runningByNodeId.set(e.nodeId, step)
       if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
+      if (isContainerStart) containerStack.push(step)
     } else if (e.type === 'workflow_node_complete' && e.nodeId) {
       let step = null
       if (e.stepIndex != null) {
@@ -172,6 +233,8 @@ const nodeSteps = computed(() => {
         step = runningByNodeId.get(e.nodeId) || null
       }
       if (!step) {
+        // 未匹配到已有 step，按容器归属决定插入位置
+        const isChild = !!e.parentNodeId
         step = {
           nodeId: e.nodeId,
           nodeType: e.nodeType,
@@ -179,8 +242,15 @@ const nodeSteps = computed(() => {
           stepIndex: e.stepIndex,
           stepKey: `complete_${e.stepIndex ?? steps.length}_${e.nodeId}`,
           status: 'pending',
+          parentNodeId: e.parentNodeId || null,
+          iterationIndex: e.iterationIndex ?? null,
         }
-        steps.push(step)
+        if (isChild && containerStack.length > 0) {
+          const parent = containerStack[containerStack.length - 1]
+          if (parent.children) parent.children.push(step)
+        } else {
+          steps.push(step)
+        }
       }
       step.nodeType = e.nodeType ?? step.nodeType
       step.nodeLabel = e.nodeLabel ?? step.nodeLabel
@@ -191,16 +261,30 @@ const nodeSteps = computed(() => {
       step.outputs = e.outputs
       step.nextNodeId = e.nextNodeId
       step.status = e.success === false ? 'failed' : 'done'
+      if (e.isContainer != null) step.isContainer = e.isContainer
       runningByNodeId.delete(e.nodeId)
       if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
+      // 容器完成：出栈
+      if (step.isContainer && containerStack.length > 0 &&
+          containerStack[containerStack.length - 1].nodeId === e.nodeId) {
+        containerStack.pop()
+      }
     }
   }
   return steps
 })
 
-const runningCount = computed(() =>
-  nodeSteps.value.filter(s => s.status === 'running').length
-)
+function isContainerNodeType(type) {
+  return type === 'loop' || type === 'batch'
+}
+
+const runningCount = computed(() => {
+  let count = nodeSteps.value.filter(s => s.status === 'running').length
+  for (const s of nodeSteps.value) {
+    if (s.children) count += s.children.filter(c => c.status === 'running').length
+  }
+  return count
+})
 
 const nodeLabels = computed(() =>
   nodeSteps.value.map(s => s.nodeLabel || getNodeTypeName(s.nodeType)).filter(Boolean)
@@ -624,5 +708,56 @@ function extractResultText(step) {
   font-size: 11px;
   color: #9ca3af;
   font-family: ui-monospace, monospace;
+}
+
+/* 容器内部子节点 */
+.container-children {
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 2px solid #e9d5ff;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.child-step .child-row {
+  padding: 6px 8px;
+  background: #faf5ff;
+  border: 1px solid #f3e8ff;
+}
+
+.child-step .child-row.event-running {
+  border-color: #d8b4fe;
+  background: #faf5ff;
+}
+
+.child-step .child-row.event-done {
+  border-color: #e9d5ff;
+}
+
+.child-step .child-row.event-fail {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.event-child-count {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.event-iteration-tag {
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: normal;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 1px 5px;
+  border-radius: 6px;
 }
 </style>

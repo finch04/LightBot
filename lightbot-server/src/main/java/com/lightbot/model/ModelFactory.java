@@ -79,12 +79,28 @@ public class ModelFactory {
      * @return ChatModel 和 ChatOptions 的封装
      */
     public ChatModelContext getChatModelWithContext(Long providerId, String modelId) {
+        return getChatModelWithContext(providerId, modelId, null);
+    }
+
+    /**
+     * 获取 ChatModel 并构建指定模型 + 自定义参数的 ChatOptions
+     *
+     * @param providerId  模型提供商ID
+     * @param modelId     指定模型ID（为空时使用 provider 默认模型）
+     * @param modelParams 模型参数（如 temperature、maxTokens），可为 null
+     * @return ChatModel 和 ChatOptions 的封装
+     */
+    public ChatModelContext getChatModelWithContext(Long providerId, String modelId, Map<String, Object> modelParams) {
         ChatModel chatModel = getChatModel(providerId);
-        ChatOptions options = null;
+        Long actualId = resolveProviderIdOrDefault(providerId);
+        Map<String, Object> config = new HashMap<>();
         if (modelId != null && !modelId.isBlank()) {
-            Long actualId = resolveProviderIdOrDefault(providerId);
-            options = buildChatOptions(actualId, Map.of("modelId", modelId));
+            config.put("modelId", modelId);
         }
+        if (modelParams != null && !modelParams.isEmpty()) {
+            config.putAll(modelParams);
+        }
+        ChatOptions options = config.isEmpty() ? null : buildChatOptions(actualId, config);
         return new ChatModelContext(chatModel, options);
     }
 
