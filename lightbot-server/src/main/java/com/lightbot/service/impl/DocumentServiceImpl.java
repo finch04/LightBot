@@ -94,6 +94,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final TaskService taskService;
     /** 延迟获取，避免与 KnowledgeServiceImpl 构造器循环依赖 */
     private final ObjectProvider<KnowledgeService> knowledgeServiceProvider;
+    private final ObjectProvider<GraphService> graphServiceProvider;
     private final DocumentSecurityScanUtil documentSecurityScanUtil;
     private final ContentDuplicateDetectionUtil contentDuplicateDetectionUtil;
     private final KnowledgePermissionHelper permissionHelper;
@@ -369,8 +370,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             batch.forEach(c -> c.setStatus(ChunkStatus.VECTORIZING));
             chunkService.updateBatchById(batch);
 
-            // 3.3 批量存储向量
-            embeddingService.batchSaveVectors(chunkIds, modelName, Arrays.asList(vectors));
+            // 3.3 批量存储向量（传 knowledgeId 支持 Milvus 路由）
+            ((EmbeddingServiceImpl) embeddingService).batchSaveVectors(knowledgeId, chunkIds, modelName, Arrays.asList(vectors));
 
             // 3.4 批量更新chunk状态为已向量化
             batch.forEach(c -> c.setStatus(ChunkStatus.VECTORIZED));
@@ -387,7 +388,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     /**
-     * 向量化完成后更新文档状态为 COMPLETED，并触发示例问题生成
+     * 向量化完成后更新文档状态为 COMPLETED，并触发示例问题生成、图谱抽取
      */
     private void completeDocument(Long documentId) {
         Document doc = getById(documentId);
@@ -396,12 +397,25 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             doc.setErrorMessage(null);
             updateById(doc);
 
+            Long knowledgeId = doc.getKnowledgeId();
+
             // 异步触发示例问题生成（失败不影响主流程）
             try {
                 knowledgeServiceProvider.getObject()
-                        .generateExampleQuestions(doc.getKnowledgeId(), documentId);
+                        .generateExampleQuestions(knowledgeId, documentId);
             } catch (Exception e) {
                 log.warn("[文档入库] 示例问题生成失败, documentId={}", documentId, e);
+            }
+
+            // 异步触发图谱抽取（知识库开启 graphEnabled 时自动执行）
+            try {
+                Knowledge knowledge = knowledgeServiceProvider.getObject().getById(knowledgeId);
+                if (knowledge != null && Boolean.TRUE.equals(knowledge.getGraphEnabled())) {
+                    graphServiceProvider.getObject().autoExtractFromDocument(knowledgeId, documentId);
+                    log.info("[文档入库] 自动触发图谱抽取, knowledgeId={}, documentId={}", knowledgeId, documentId);
+                }
+            } catch (Exception e) {
+                log.warn("[文档入库] 自动图谱抽取失败, documentId={}", documentId, e);
             }
         }
     }

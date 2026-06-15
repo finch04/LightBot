@@ -31,6 +31,7 @@
         <minio.version>8.5.7</minio.version>
         <pgvector.version>0.1.6</pgvector.version>
         <neo4j.version>5.26.0</neo4j.version>
+        <milvus.version>2.4.2</milvus.version>
     </properties>
 
     <dependencyManagement>
@@ -81,6 +82,11 @@
                 <groupId>org.neo4j.driver</groupId>
                 <artifactId>neo4j-java-driver</artifactId>
                 <version>${neo4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.milvus</groupId>
+                <artifactId>milvus-sdk-java</artifactId>
+                <version>${milvus.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

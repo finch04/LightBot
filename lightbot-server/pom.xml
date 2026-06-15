@@ -82,6 +82,12 @@
             <artifactId>neo4j-java-driver</artifactId>
         </dependency>
 
+        <!-- Milvus -->
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+        </dependency>
+
         <!-- Spring AI 文档解析器 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

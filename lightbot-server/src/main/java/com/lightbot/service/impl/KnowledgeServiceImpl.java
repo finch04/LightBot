@@ -35,7 +35,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库服务实现类
@@ -61,7 +63,12 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     public Knowledge create(Knowledge knowledge) {
         long userId = StpUtil.getLoginIdAsLong();
 
-        // 1. 初始化知识库字段
+        // 1. 参数校验
+        if (knowledge.getDescription() != null && knowledge.getDescription().length() > 50) {
+            throw new BizException("知识库描述不能超过50个字符");
+        }
+
+        // 2. 初始化知识库字段
         knowledge.setUserId(userId);
         knowledge.setStatus(CommonStatus.ACTIVE);
         knowledge.setDocumentCount(0);
@@ -84,16 +91,22 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         // 1. 权限校验：需要MANAGER及以上权限
         checkPermission(knowledge.getId(), KnowledgeRole.MANAGER);
 
-        // 2. 校验存在性
+        // 2. 参数校验
+        if (knowledge.getDescription() != null && knowledge.getDescription().length() > 50) {
+            throw new BizException("知识库描述不能超过50个字符");
+        }
+
+        // 3. 校验存在性
         Knowledge existing = getById(knowledge.getId());
         if (existing == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
 
-        // 3. 更新允许修改的字段
+        // 4. 更新允许修改的字段
         existing.setName(knowledge.getName());
         existing.setDescription(knowledge.getDescription());
         existing.setEmbeddingModel(knowledge.getEmbeddingModel());
+        existing.setGraphEnabled(knowledge.getGraphEnabled());
         existing.setConfig(knowledge.getConfig());
         updateById(existing);
         return existing;
@@ -570,5 +583,68 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
 
         return config;
+    }
+
+    // ========== 检索配置 ==========
+
+    @Override
+    public Map<String, Object> getQueryParams(Long knowledgeId) {
+        // 1. 权限校验：需要成员权限
+        checkMember(knowledgeId);
+
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
+        }
+
+        // 2. 解析 query_params JSONB
+        Map<String, Object> params = parseJsonToMap(knowledge.getQueryParams());
+        if (!params.isEmpty()) {
+            return params;
+        }
+
+        // 3. 兼容旧数据：从 config 中提取 ragTopK / ragThreshold
+        Map<String, Object> config = parseJsonToMap(knowledge.getConfig());
+        Map<String, Object> fallback = new HashMap<>();
+        if (config.containsKey("ragTopK")) {
+            fallback.put("final_top_k", config.get("ragTopK"));
+        }
+        if (config.containsKey("ragThreshold")) {
+            fallback.put("similarity_threshold", config.get("ragThreshold"));
+        }
+        return fallback;
+    }
+
+    @Override
+    public void updateQueryParams(Long knowledgeId, Map<String, Object> params) {
+        // 1. 权限校验：需要MANAGER及以上权限
+        checkPermission(knowledgeId, KnowledgeRole.MANAGER);
+
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
+        }
+
+        // 2. 序列化并保存
+        try {
+            knowledge.setQueryParams(objectMapper.writeValueAsString(params));
+        } catch (Exception e) {
+            log.warn("[Knowledge] 检索配置序列化失败: knowledgeId={}", knowledgeId, e);
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
+        }
+        updateById(knowledge);
+        log.info("[Knowledge] 检索配置已更新: knowledgeId={}", knowledgeId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonToMap(String json) {
+        if (json == null || json.isBlank() || "{}".equals(json)) {
+            return new HashMap<>();
+        }
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.lightbot.dto.IngestRequest;
 import com.lightbot.entity.Knowledge;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库服务接口
@@ -121,4 +122,20 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @return 生成的问题
      */
     String generateOneExampleQuestion(Long knowledgeId);
+
+    /**
+     * 获取知识库检索配置
+     *
+     * @param knowledgeId 知识库ID
+     * @return 检索配置Map
+     */
+    Map<String, Object> getQueryParams(Long knowledgeId);
+
+    /**
+     * 更新知识库检索配置
+     *
+     * @param knowledgeId 知识库ID
+     * @param params      检索配置
+     */
+    void updateQueryParams(Long knowledgeId, Map<String, Object> params);
 }

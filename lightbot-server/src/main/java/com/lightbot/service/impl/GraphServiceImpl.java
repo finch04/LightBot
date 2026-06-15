@@ -4,11 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.*;
+import com.lightbot.entity.Document;
 import com.lightbot.entity.GraphDocument;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.KnowledgeGraph;
+import com.lightbot.enums.DocumentStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.GraphTaskStatus;
+import com.lightbot.mapper.DocumentMapper;
 import com.lightbot.mapper.GraphDocumentMapper;
 import com.lightbot.mapper.KnowledgeGraphMapper;
 import com.lightbot.model.graph.GraphExtractor;
@@ -48,6 +51,7 @@ public class GraphServiceImpl implements GraphService {
     private final ModelProviderService modelProviderService;
     private final KnowledgeGraphMapper knowledgeGraphMapper;
     private final GraphDocumentMapper graphDocumentMapper;
+    private final DocumentMapper documentMapper;
     private final ObjectMapper objectMapper;
 
     private void checkNeo4jAvailable() {
@@ -62,7 +66,24 @@ public class GraphServiceImpl implements GraphService {
     public Long extractFromDocument(Long knowledgeId, GraphExtractRequest request) {
         checkNeo4jAvailable();
         permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
+        return doExtract(knowledgeId, request);
+    }
 
+    @Override
+    public Long autoExtractFromDocument(Long knowledgeId, Long documentId) {
+        if (!neo4jUtil.isAvailable()) {
+            return null;
+        }
+        Knowledge knowledge = knowledgeService.getById(knowledgeId);
+        if (knowledge == null) {
+            return null;
+        }
+        GraphExtractRequest request = new GraphExtractRequest();
+        request.setDocumentIds(List.of(documentId));
+        return doExtract(knowledgeId, request);
+    }
+
+    private Long doExtract(Long knowledgeId, GraphExtractRequest request) {
         Knowledge knowledge = knowledgeService.getById(knowledgeId);
         if (knowledge == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
@@ -308,12 +329,33 @@ public class GraphServiceImpl implements GraphService {
                                 .in(GraphDocument::getStatus, List.of(GraphTaskStatus.PENDING, GraphTaskStatus.RUNNING)));
                 stats.setHasRunningTask(runningCount > 0);
             }
+            // 文档正在入库且开启了图谱自动抽取，视为即将触发图谱任务
+            if (!Boolean.TRUE.equals(stats.getHasRunningTask())) {
+                Knowledge knowledge = knowledgeService.getById(knowledgeId);
+                if (knowledge != null && Boolean.TRUE.equals(knowledge.getGraphEnabled())) {
+                    Document doc = documentMapper.selectById(documentId);
+                    if (doc != null && doc.getStatus() == DocumentStatus.PROCESSING) {
+                        stats.setHasRunningTask(true);
+                    }
+                }
+            }
         } else {
             stats = getStatsFromNeo4j(label);
             // 知识库级别：检查 KnowledgeGraph 整体状态
             KnowledgeGraph kg = getKnowledgeGraph(knowledgeId);
             if (kg != null) {
                 stats.setHasRunningTask(kg.getStatus() == GraphTaskStatus.PENDING || kg.getStatus() == GraphTaskStatus.RUNNING);
+            }
+            // 若无运行中图谱任务，检查是否有文档正在入库且开启了自动抽取
+            if (!Boolean.TRUE.equals(stats.getHasRunningTask())) {
+                Knowledge knowledge = knowledgeService.getById(knowledgeId);
+                if (knowledge != null && Boolean.TRUE.equals(knowledge.getGraphEnabled())) {
+                    long processingCount = documentMapper.selectCount(
+                            new LambdaQueryWrapper<Document>()
+                                    .eq(Document::getKnowledgeId, knowledgeId)
+                                    .eq(Document::getStatus, DocumentStatus.PROCESSING));
+                    stats.setHasRunningTask(processingCount > 0);
+                }
             }
         }
         return stats;

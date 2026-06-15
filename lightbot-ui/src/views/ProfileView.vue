@@ -12,6 +12,19 @@
           <h3>基本信息</h3>
         </div>
         <a-form :model="profileForm" :label-col="{ span: 6 }">
+          <a-form-item label="头像">
+            <div class="avatar-upload">
+              <div class="avatar-preview" :class="{ 'has-avatar': avatarUrl }">
+                <img v-if="avatarUrl" :src="avatarUrl" alt="avatar" class="avatar-img" @error="avatarUrl = ''" />
+                <span v-else class="avatar-placeholder">{{ initialLetter }}</span>
+                <div class="avatar-overlay" @click="triggerAvatarUpload">
+                  <UploadOutlined />
+                </div>
+              </div>
+              <input ref="avatarInputRef" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp" style="display: none" @change="onAvatarFileChange" />
+              <span class="avatar-tip">支持 jpg/jpeg/png/gif/webp，建议 200x200</span>
+            </div>
+          </a-form-item>
           <a-form-item label="用户名">
             <a-input :value="profileForm.username" disabled />
           </a-form-item>
@@ -71,7 +84,10 @@
       <div class="frame-content">
         <div class="frame-preview">
           <AvatarFrame :frame="selectedFrame" :size="80">
-            <div class="preview-avatar">{{ initialLetter }}</div>
+            <div class="preview-avatar">
+              <img v-if="avatarUrl" :src="avatarUrl" alt="avatar" class="preview-avatar-img" @error="avatarUrl = ''" />
+              <span v-else>{{ initialLetter }}</span>
+            </div>
           </AvatarFrame>
           <span class="frame-preview-label">{{ frameLabelMap[selectedFrame] || '无' }}</span>
         </div>
@@ -84,7 +100,10 @@
             @click="selectedFrame = opt.value"
           >
             <AvatarFrame :frame="opt.value" :size="48">
-              <div class="option-avatar">{{ initialLetter }}</div>
+              <div class="option-avatar">
+                <img v-if="avatarUrl" :src="avatarUrl" alt="avatar" class="option-avatar-img" @error="avatarUrl = ''" />
+                <span v-else>{{ initialLetter }}</span>
+              </div>
             </AvatarFrame>
             <span class="frame-option-label">{{ opt.label }}</span>
           </div>
@@ -99,9 +118,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { SaveOutlined, LockOutlined } from '@ant-design/icons-vue'
+import { SaveOutlined, LockOutlined, UploadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getMe, updateProfile, changePassword, updateAvatarFrame } from '../api/auth'
+import { getMe, updateProfile, changePassword, updateAvatarFrame, uploadAvatar } from '../api/auth'
 import { useUserStore } from '../stores/user'
 import AvatarFrame from '../components/AvatarFrame.vue'
 
@@ -110,6 +129,9 @@ const saving = ref(false)
 const changingPwd = ref(false)
 const savingFrame = ref(false)
 const selectedFrame = ref('')
+const avatarUrl = ref('')
+const avatarUploading = ref(false)
+const avatarInputRef = ref(null)
 
 const frameOptions = [
   { value: '', label: '无' },
@@ -166,6 +188,7 @@ async function loadProfile() {
       createTime: user.createTime || '',
     })
     selectedFrame.value = user.avatarFrame || ''
+    avatarUrl.value = user.avatar || ''
   } catch { /* ignore */ }
 }
 
@@ -217,6 +240,25 @@ async function handleSaveFrame() {
     message.success('头像框已更新')
   } catch { /* interceptor已处理 */ } finally {
     savingFrame.value = false
+  }
+}
+
+function triggerAvatarUpload() {
+  avatarInputRef.value?.click()
+}
+
+async function onAvatarFileChange(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  avatarUploading.value = true
+  try {
+    const res = await uploadAvatar(file)
+    avatarUrl.value = res.data
+    userStore.user.avatar = res.data
+    message.success('头像上传成功')
+  } catch { /* interceptor已处理 */ } finally {
+    avatarUploading.value = false
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
   }
 }
 
@@ -286,6 +328,58 @@ onMounted(loadProfile)
   font-size: 14px;
   color: #71717a;
 }
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.avatar-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #0070f3;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.avatar-preview.has-avatar {
+  background: #f4f4f5;
+}
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-placeholder {
+  font-size: 28px;
+  font-weight: 700;
+}
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #fff;
+  font-size: 20px;
+}
+.avatar-preview:hover .avatar-overlay {
+  opacity: 1;
+}
+.avatar-tip {
+  font-size: 12px;
+  color: #a1a1aa;
+}
 .frame-panel {
   grid-column: 1 / -1;
   margin-top: 4px;
@@ -317,6 +411,12 @@ onMounted(loadProfile)
   justify-content: center;
   font-size: 32px;
   font-weight: 600;
+  overflow: hidden;
+}
+.preview-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .frame-preview-label {
   font-size: 13px;
@@ -356,6 +456,12 @@ onMounted(loadProfile)
   justify-content: center;
   font-size: 20px;
   font-weight: 600;
+  overflow: hidden;
+}
+.option-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .frame-option-label {
   font-size: 12px;

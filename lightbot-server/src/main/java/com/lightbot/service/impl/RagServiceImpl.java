@@ -86,9 +86,10 @@ public class RagServiceImpl implements RagService {
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层）
-        List<Map<String, Object>> results = embeddingService.searchSimilarSql(
-                knowledgeId, queryVector, topK, threshold);
+        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层，传 queryParams 支持 Milvus search_mode）
+        Map<String, Object> mergedParams = buildSearchParams(knowledge, null, question);
+        List<Map<String, Object>> results = ((EmbeddingServiceImpl) embeddingService)
+                .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
         log.info("[RAG] 向量检索完成(SQL过滤): threshold={}, 命中分块数={}", threshold, results.size());
         for (int i = 0; i < results.size(); i++) {
             Map<String, Object> row = results.get(i);
@@ -142,9 +143,10 @@ public class RagServiceImpl implements RagService {
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层）
-        List<Map<String, Object>> results = embeddingService.searchSimilarSql(
-                knowledgeId, queryVector, topK, threshold);
+        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层，传 queryParams 支持 Milvus search_mode）
+        Map<String, Object> mergedParams = buildSearchParams(knowledge, null, question);
+        List<Map<String, Object>> results = ((EmbeddingServiceImpl) embeddingService)
+                .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
         log.info("[RAG] 向量检索完成(SQL过滤): threshold={}, 命中分块数={}", threshold, results.size());
         for (int i = 0; i < results.size(); i++) {
             Map<String, Object> row = results.get(i);
@@ -178,6 +180,11 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public List<RagSearchResultVO> search(Long knowledgeId, String question) {
+        return search(knowledgeId, question, null);
+    }
+
+    @Override
+    public List<RagSearchResultVO> search(Long knowledgeId, String question, Map<String, Object> overrides) {
         // 1. 校验知识库存在性
         Knowledge knowledge = knowledgeService.getById(knowledgeId);
         if (knowledge == null) {
@@ -186,17 +193,19 @@ public class RagServiceImpl implements RagService {
         // 1.1 权限校验：需要成员权限
         permissionHelper.checkMember(knowledgeId);
 
-        // 2. 解析检索参数
-        int topK = parseRagTopK(knowledge);
-        double threshold = parseRagThreshold(knowledge);
+        // 2. 解析检索参数：overrides > queryParams > config > 默认值
+        int topK = resolveTopK(knowledge, overrides);
+        double threshold = resolveThreshold(knowledge, overrides);
         log.info("[RAG] 检索测试开始: knowledgeId={}, topK={}, threshold={}, question={}",
                 knowledgeId, topK, threshold, question);
 
         // 3. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 4. 向量检索（阈值过滤下沉到SQL层）
-        List<Map<String, Object>> results = embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold);
+        // 4. 向量检索（阈值过滤下沉到SQL层，传 queryParams 支持 Milvus search_mode）
+        Map<String, Object> mergedParams = buildSearchParams(knowledge, overrides, question);
+        List<Map<String, Object>> results = ((EmbeddingServiceImpl) embeddingService)
+                .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
         log.info("[RAG] 检索测试完成: results={}", results.size());
 
         // 5. 转为VO返回（已按相似度降序，rank从1开始）
@@ -249,32 +258,100 @@ public class RagServiceImpl implements RagService {
     }
 
     /**
-     * 从知识库配置中解析 RAG Top K（默认5）
+     * 解析 TopK 参数（无 overrides 版本，用于 ask/askStream）
+     * 优先级：queryParams > config > 默认值
      */
     private int parseRagTopK(Knowledge knowledge) {
-        Map<String, Object> config = parseConfig(knowledge.getConfig());
-        Object val = config.get("ragTopK");
-        return val instanceof Number ? ((Number) val).intValue() : DEFAULT_TOP_K;
+        return resolveTopK(knowledge, null);
     }
 
     /**
-     * 从知识库配置中解析 RAG 相似度阈值（默认0.5）
+     * 解析 threshold 参数（无 overrides 版本，用于 ask/askStream）
+     * 优先级：queryParams > config > 默认值
      */
     private double parseRagThreshold(Knowledge knowledge) {
-        Map<String, Object> config = parseConfig(knowledge.getConfig());
-        Object val = config.get("ragThreshold");
-        return val instanceof Number ? ((Number) val).doubleValue() : DEFAULT_THRESHOLD;
+        return resolveThreshold(knowledge, null);
+    }
+
+    /**
+     * 解析 TopK 参数，支持 overrides 覆盖
+     * 优先级：overrides > queryParams > config > 默认值
+     */
+    private int resolveTopK(Knowledge knowledge, Map<String, Object> overrides) {
+        // 1. overrides 最高优先
+        if (overrides != null) {
+            Object val = overrides.get("final_top_k");
+            if (val instanceof Number n) {
+                return n.intValue();
+            }
+        }
+        // 2. query_params 专有字段
+        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
+        Object qpVal = queryParams.get("final_top_k");
+        if (qpVal instanceof Number n) {
+            return n.intValue();
+        }
+        // 3. 兼容旧 config 中的 ragTopK
+        Map<String, Object> config = parseJson(knowledge.getConfig());
+        Object cfgVal = config.get("ragTopK");
+        if (cfgVal instanceof Number n) {
+            return n.intValue();
+        }
+        // 4. 默认值
+        return DEFAULT_TOP_K;
+    }
+
+    /**
+     * 解析 threshold 参数，支持 overrides 覆盖
+     * 优先级：overrides > queryParams > config > 默认值
+     */
+    private double resolveThreshold(Knowledge knowledge, Map<String, Object> overrides) {
+        // 1. overrides 最高优先
+        if (overrides != null) {
+            Object val = overrides.get("similarity_threshold");
+            if (val instanceof Number n) {
+                return n.doubleValue();
+            }
+        }
+        // 2. query_params 专有字段
+        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
+        Object qpVal = queryParams.get("similarity_threshold");
+        if (qpVal instanceof Number n) {
+            return n.doubleValue();
+        }
+        // 3. 兼容旧 config 中的 ragThreshold
+        Map<String, Object> config = parseJson(knowledge.getConfig());
+        Object cfgVal = config.get("ragThreshold");
+        if (cfgVal instanceof Number n) {
+            return n.doubleValue();
+        }
+        // 4. 默认值
+        return DEFAULT_THRESHOLD;
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> parseConfig(String configJson) {
-        if (configJson == null || configJson.isBlank()) {
+    private Map<String, Object> parseJson(String json) {
+        if (json == null || json.isBlank() || "{}".equals(json)) {
             return Map.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(configJson, Map.class);
+            return OBJECT_MAPPER.readValue(json, Map.class);
         } catch (Exception e) {
             return Map.of();
         }
+    }
+
+    /**
+     * 构建 Milvus 检索参数：queryParams + overrides + query_text
+     */
+    private Map<String, Object> buildSearchParams(Knowledge knowledge, Map<String, Object> overrides, String question) {
+        Map<String, Object> params = new java.util.HashMap<>(parseJson(knowledge.getQueryParams()));
+        // overrides 中的 search_mode 覆盖 queryParams
+        if (overrides != null && overrides.get("search_mode") instanceof String s) {
+            params.put("search_mode", s);
+        }
+        // 传入原始问题文本，供 keyword/hybrid 模式使用
+        params.put("query_text", question);
+        return params;
     }
 }

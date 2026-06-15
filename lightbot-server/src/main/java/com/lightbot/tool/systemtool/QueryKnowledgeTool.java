@@ -3,7 +3,7 @@ package com.lightbot.tool.systemtool;
 import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
-import com.lightbot.service.EmbeddingService;
+import com.lightbot.service.impl.EmbeddingServiceImpl;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.util.TextNormalizeUtil;
@@ -44,7 +44,7 @@ public class QueryKnowledgeTool {
 
     private final AgentService agentService;
     private final KnowledgeService knowledgeService;
-    private final EmbeddingService embeddingService;
+    private final EmbeddingServiceImpl embeddingService;
     private final QaPairService qaPairService;
     private final EmbeddingModel embeddingModel;
 
@@ -109,7 +109,8 @@ public class QueryKnowledgeTool {
                             // 并行检索 Chunk 和 QA Pair
                             CompletableFuture<List<Map<String, Object>>> chunkFuture = CompletableFuture.supplyAsync(() -> {
                                 try {
-                                    return embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold);
+                                    Map<String, Object> searchParams = buildSearchParams(knowledge, question);
+                                    return embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold, searchParams);
                                 } catch (Exception e) {
                                     log.warn("[Tool:query_knowledge] Chunk检索失败: knowledgeId={}", knowledgeId);
                                     return List.<Map<String, Object>>of();
@@ -275,5 +276,20 @@ public class QueryKnowledgeTool {
         if (requestId == null) return List.of();
         List<Map<String, Object>> results = SEARCH_RESULTS_MAP.remove(requestId);
         return results != null ? results : List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildSearchParams(Knowledge knowledge, String question) {
+        Map<String, Object> params = new java.util.HashMap<>();
+        if (knowledge.getQueryParams() != null && !knowledge.getQueryParams().isBlank()
+                && !"{}".equals(knowledge.getQueryParams())) {
+            try {
+                params.putAll(new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readValue(knowledge.getQueryParams(), Map.class));
+            } catch (Exception ignored) {
+            }
+        }
+        params.put("query_text", question);
+        return params;
     }
 }

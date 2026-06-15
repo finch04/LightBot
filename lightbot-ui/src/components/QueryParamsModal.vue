@@ -1,0 +1,219 @@
+<template>
+  <a-modal
+    v-model:open="visible"
+    title="检索配置"
+    :width="480"
+    :maskClosable="false"
+    @cancel="handleCancel"
+  >
+    <a-form :model="form" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }">
+      <!-- 检索模式（仅 Milvus 支持 keyword/hybrid） -->
+      <a-form-item v-if="isMilvus">
+        <template #label>
+          <span>检索模式</span>
+          <a-tooltip title="vector=纯向量语义检索；keyword=BM25关键词检索；hybrid=两者加权融合">
+            <QuestionCircleOutlined class="field-tip-icon" />
+          </a-tooltip>
+        </template>
+        <a-select v-model:value="form.search_mode">
+          <a-select-option value="vector">向量检索</a-select-option>
+          <a-select-option value="keyword">关键词检索</a-select-option>
+          <a-select-option value="hybrid">混合检索</a-select-option>
+        </a-select>
+      </a-form-item>
+
+      <a-form-item>
+        <template #label>
+          <span>返回数量</span>
+          <a-tooltip title="检索返回的最大文档块数量。值越大召回越全，但噪声也可能增加，建议 3-10">
+            <QuestionCircleOutlined class="field-tip-icon" />
+          </a-tooltip>
+        </template>
+        <a-input-number v-model:value="form.final_top_k" :min="1" :max="100" style="width: 100%" />
+      </a-form-item>
+
+      <a-form-item>
+        <template #label>
+          <span>相似度阈值</span>
+          <a-tooltip title="仅返回相似度分数 ≥ 该阈值的文档块。值越高结果越精准但可能漏召回，建议 0.3-0.7">
+            <QuestionCircleOutlined class="field-tip-icon" />
+          </a-tooltip>
+        </template>
+        <a-input-number v-model:value="form.similarity_threshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
+      </a-form-item>
+
+      <!-- hybrid 模式专属参数 -->
+      <template v-if="isMilvus && form.search_mode === 'hybrid'">
+        <a-form-item>
+          <template #label>
+            <span>向量权重</span>
+            <a-tooltip title="混合检索中向量语义的权重占比。值越大越偏向语义理解，建议 0.5-0.8">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.vector_weight" :min="0" :max="1" :step="0.1" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item>
+          <template #label>
+            <span>BM25权重</span>
+            <a-tooltip title="混合检索中BM25关键词的权重占比。值越大越偏向精确关键词匹配，建议 0.2-0.5">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.bm25_weight" :min="0" :max="1" :step="0.1" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item>
+          <template #label>
+            <span>BM25候选数</span>
+            <a-tooltip title="BM25检索阶段的候选文档数量，越大召回越全但耗时越长，建议为返回数量的2-3倍">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.bm25_top_k" :min="1" :max="200" style="width: 100%" />
+        </a-form-item>
+      </template>
+    </a-form>
+
+    <template #footer>
+      <div style="display: flex; justify-content: space-between;">
+        <button class="btn-outline-sm" @click="handleReset">恢复默认</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-outline-sm" @click="handleCancel">取消</button>
+          <button class="btn-outline-sm" @click="handleApply">仅应用测试（不保存）</button>
+          <button class="btn-primary-sm" :disabled="saving" @click="handleSave">
+            {{ saving ? '保存中...' : '保存为默认' }}
+          </button>
+        </div>
+      </div>
+    </template>
+  </a-modal>
+</template>
+
+<script setup>
+import { ref, reactive, computed } from 'vue'
+import { message } from 'ant-design-vue'
+import { QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { getQueryParams, updateQueryParams } from '../api/knowledge'
+
+const props = defineProps({
+  knowledgeId: { type: String, required: true },
+  knowledgeType: { type: String, default: 'pg' },
+})
+
+const emit = defineEmits(['apply'])
+
+const visible = ref(false)
+const saving = ref(false)
+
+const isMilvus = computed(() => props.knowledgeType === 'milvus')
+
+const pgDefaults = {
+  search_mode: 'vector',
+  final_top_k: 5,
+  similarity_threshold: 0.5,
+}
+
+const milvusDefaults = {
+  search_mode: 'vector',
+  final_top_k: 10,
+  similarity_threshold: 0.0,
+  vector_weight: 0.7,
+  bm25_weight: 0.3,
+  bm25_top_k: 30,
+}
+
+const form = reactive({ ...pgDefaults })
+
+function getDefaults() {
+  return props.knowledgeType === 'milvus' ? { ...milvusDefaults } : { ...pgDefaults }
+}
+
+async function open() {
+  try {
+    const res = await getQueryParams(props.knowledgeId)
+    const saved = res.data || {}
+    const defaults = getDefaults()
+    Object.assign(form, { ...defaults, ...saved })
+  } catch {
+    Object.assign(form, getDefaults())
+  }
+  visible.value = true
+}
+
+function handleReset() {
+  Object.assign(form, getDefaults())
+}
+
+function handleCancel() {
+  visible.value = false
+}
+
+function handleApply() {
+  emit('apply', { ...form })
+  visible.value = false
+}
+
+async function handleSave() {
+  saving.value = true
+  try {
+    await updateQueryParams(props.knowledgeId, { ...form })
+    emit('apply', { ...form })
+    message.success('检索配置已保存')
+    visible.value = false
+  } catch {
+    // interceptor handled
+  } finally {
+    saving.value = false
+  }
+}
+
+defineExpose({ open })
+</script>
+
+<style scoped>
+.field-tip-icon {
+  font-size: 13px;
+  color: #a1a1aa;
+  cursor: help;
+  margin-left: 4px;
+}
+.btn-outline-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-outline-sm:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.btn-primary-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-primary-sm:hover:not(:disabled) {
+  background: #27272a;
+}
+.btn-primary-sm:disabled {
+  background: #d4d4d8;
+  cursor: not-allowed;
+}
+</style>

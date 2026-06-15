@@ -3,7 +3,7 @@ package com.lightbot.workflow.processor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.NodeType;
-import com.lightbot.service.EmbeddingService;
+import com.lightbot.service.impl.EmbeddingServiceImpl;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
@@ -35,7 +35,7 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
     private static final double DEFAULT_THRESHOLD = 0.5;
 
     private final KnowledgeService knowledgeService;
-    private final EmbeddingService embeddingService;
+    private final EmbeddingServiceImpl embeddingService;
     private final ObjectMapper objectMapper;
 
     @Autowired(required = false)
@@ -96,7 +96,8 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
                 return passThrough(context, "retrievalResult", "");
             }
             float[] vector = embedText(query);
-            List<Map<String, Object>> hits = embeddingService.searchSimilarSql(knowledgeId, vector, topK, threshold);
+            Map<String, Object> searchParams = buildSearchParams(knowledge, query);
+            List<Map<String, Object>> hits = embeddingService.searchSimilarSql(knowledgeId, vector, topK, threshold, searchParams);
             log.info("[RetrievalNodeProcessor] 检索完成: knowledgeId={}, topK={}, threshold={}, 命中数={}",
                     knowledgeId, topK, threshold, hits.size());
             retrievalText = hits.stream()
@@ -146,5 +147,11 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
         } catch (Exception e) {
             return Map.of();
         }
+    }
+
+    private Map<String, Object> buildSearchParams(Knowledge knowledge, String query) {
+        Map<String, Object> params = new HashMap<>(parseConfig(knowledge.getQueryParams()));
+        params.put("query_text", query);
+        return params;
     }
 }

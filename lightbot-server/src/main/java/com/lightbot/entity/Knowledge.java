@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.CommonStatus;
+import com.lightbot.enums.KnowledgeType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -44,9 +45,17 @@ public class Knowledge {
     @Schema(description = "向量化模型名称")
     private String embeddingModel;
 
+    @TableField("type")
+    @Schema(description = "知识库类型：pg / milvus")
+    private KnowledgeType type;
+
     @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "扩展配置")
     private String config;
+
+    @TableField(value = "query_params", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "检索配置")
+    private String queryParams;
 
     @TableField(value = "mindmap_data", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "思维导图数据（JSON格式树状结构）")

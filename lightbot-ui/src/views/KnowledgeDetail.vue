@@ -5,7 +5,13 @@
         <button class="btn-back" @click="router.push('/knowledge')">
           <ArrowLeftOutlined /> 返回
         </button>
-        <h1 class="page-title">{{ knowledge.name }}</h1>
+        <h1 class="page-title">
+          {{ knowledge.name }}
+          <a-tooltip v-if="knowledge.type" :title="knowledge.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
+            <CloudServerOutlined v-if="knowledge.type === 'milvus'" class="title-type-icon milvus" />
+            <DatabaseOutlined v-else class="title-type-icon pg" />
+          </a-tooltip>
+        </h1>
         <p class="page-desc">{{ knowledge.description || '暂无描述' }}</p>
       </div>
       <div class="header-actions">
@@ -124,7 +130,14 @@
                   placeholder="输入测试问题..."
                   @keydown.enter="askRag"
                 />
+                <a-tooltip title="检索配置">
+                  <button class="btn-outline-sm" @click="queryParamsModalRef?.open()">
+                    <SettingOutlined />
+                  </button>
+                </a-tooltip>
                 <button class="btn-primary-sm" :disabled="!ragQuestion.trim() || ragLoading" @click="askRag">
+                  <SearchOutlined v-if="!ragLoading" />
+                  <LoadingOutlined v-else />
                   {{ ragLoading ? '检索中...' : '检索' }}
                 </button>
               </div>
@@ -581,21 +594,26 @@
           <a-input v-model:value="editForm.name" placeholder="知识库名称" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" />
+          <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="Embed模型" required>
           <ModelSelect v-model="editForm.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" @change="onEmbeddingModelChange" />
         </a-form-item>
-        <a-form-item label="RAG Top K">
-          <a-input-number v-model:value="editForm.ragTopK" :min="1" :max="20" style="width: 100%" />
-        </a-form-item>
-        <a-form-item label="RAG 相似度阈值">
-          <a-input-number v-model:value="editForm.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
+        <a-form-item label="分块大小">
+          <a-input-number v-model:value="editForm.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
         </a-form-item>
         <a-form-item label="自动生成问题">
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-switch v-model:checked="editForm.autoGenerateQuestions" />
             <a-tooltip title="入库文档时AI自动生成示例问题">
+              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+            </a-tooltip>
+          </div>
+        </a-form-item>
+        <a-form-item label="知识图谱">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <a-switch v-model:checked="editForm.graphEnabled" />
+            <a-tooltip title="开启后，文档入库完成时自动触发知识图谱抽取，提取实体和关系用于图谱检索增强（RAG Graph）">
               <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
             </a-tooltip>
           </div>
@@ -616,7 +634,7 @@
             </a-tooltip>
           </div>
         </a-form-item>
-        <a-form-item v-if="editForm.duplicateDetectionEnabled" label="相似度阈值">
+        <a-form-item v-if="editForm.duplicateDetectionEnabled" label="重复度阈值">
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-input-number
               v-model:value="editForm.duplicateThreshold"
@@ -625,7 +643,7 @@
               :step="0.05"
               style="width: 160px"
             />
-            <a-tooltip title="内容相似度阈值，超过此值的文档会被标记为重复警告。建议值 0.7-0.9">
+            <a-tooltip title="文档内容重复度阈值，超过此值的文档会被标记为重复警告（用于检测文档间重复，非检索相似度阈值）。建议值 0.7-0.9">
               <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
             </a-tooltip>
           </div>
@@ -679,7 +697,10 @@
         <div class="member-list">
           <div v-for="member in membersWithInfo" :key="member.userId" class="member-item">
             <div class="member-info">
-              <div class="member-avatar">{{ (member.nickname || member.username || 'U')[0] }}</div>
+              <div class="member-avatar">
+                <img v-if="member.avatar" :src="member.avatar" alt="avatar" class="member-avatar-img" @error="member.avatar = ''" />
+                <span v-else>{{ (member.nickname || member.username || 'U')[0] }}</span>
+              </div>
               <div class="member-detail">
                 <span class="member-name">{{ member.nickname || member.username || '用户' }}</span>
               </div>
@@ -730,7 +751,10 @@
         <div class="invite-results">
           <div v-for="u in inviteResults" :key="u.id" class="invite-item">
             <div class="invite-user">
-              <div class="member-avatar">{{ (u.nickname || u.username || 'U')[0] }}</div>
+              <div class="member-avatar">
+                <img v-if="u.avatar" :src="u.avatar" alt="avatar" class="member-avatar-img" @error="u.avatar = ''" />
+                <span v-else>{{ (u.nickname || u.username || 'U')[0] }}</span>
+              </div>
               <div class="invite-info">
                 <span class="invite-name">{{ u.nickname || u.username }}</span>
                 <span class="invite-username">@{{ u.username }}</span>
@@ -752,6 +776,14 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 检索配置弹窗 -->
+    <QueryParamsModal
+      ref="queryParamsModalRef"
+      :knowledge-id="knowledgeId"
+      :knowledge-type="knowledge.type || 'pg'"
+      @apply="onQueryParamsApply"
+    />
 
     <!-- 权限说明弹窗 -->
     <a-modal v-model:open="permHelpVisible" title="权限说明" :width="520" :footer="null">
@@ -798,7 +830,8 @@ import {
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
   DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined, DeleteOutlined, RobotOutlined,
   UploadOutlined, RedoOutlined,
-  GlobalOutlined, EyeOutlined,
+  GlobalOutlined, EyeOutlined, SettingOutlined,
+  DatabaseOutlined, CloudServerOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -807,7 +840,7 @@ import {
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
-  fetchUrlDocument, previewUrlDocument, saveUrlDocument,
+  fetchUrlDocument, previewUrlDocument, saveUrlDocument, getQueryParams,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getProvidersWithModels } from '../api/modelProvider'
@@ -820,6 +853,7 @@ import RAGEvaluationTab from '../components/eval/RAGEvaluationTab.vue'
 import EvaluationBenchmarks from '../components/eval/EvaluationBenchmarks.vue'
 import KnowledgeGraphTab from '../components/KnowledgeGraphTab.vue'
 import QAPairsTab from '../components/QAPairsTab.vue'
+import QueryParamsModal from '../components/QueryParamsModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -951,15 +985,18 @@ const editForm = reactive({
   name: '',
   description: '',
   embeddingModel: '',
-  ragTopK: 5,
-  ragThreshold: 0.7,
+  chunkSize: 512,
   autoGenerateQuestions: false,
+  graphEnabled: false,
   contentScanEnabled: false,
   duplicateDetectionEnabled: false,
   duplicateThreshold: 0.8,
 })
 const editExampleQuestions = ref([])
 const editQuestionLoading = ref(false)
+
+const queryParamsModalRef = ref(null)
+const searchOverrides = ref(null)
 
 const exampleQuestions = ref([])
 const exampleQuestionsLoaded = ref(false)
@@ -1395,9 +1432,9 @@ async function openEditDialog() {
     name: k.name || '',
     description: k.description || '',
     embeddingModel: embeddingComposite,
-    ragTopK: config.ragTopK ?? 5,
-    ragThreshold: config.ragThreshold ?? 0.7,
+    chunkSize: config.defaultChunkSize ?? 512,
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
+    graphEnabled: k.graphEnabled ?? false,
     contentScanEnabled: config.contentScanEnabled ?? false,
     duplicateDetectionEnabled: config.duplicateDetectionEnabled ?? false,
     duplicateThreshold: config.duplicateThreshold ?? 0.8,
@@ -1418,8 +1455,7 @@ async function handleEdit() {
   editSubmitting.value = true
   try {
     const config = JSON.stringify({
-      ragTopK: editForm.ragTopK,
-      ragThreshold: editForm.ragThreshold,
+      defaultChunkSize: editForm.chunkSize,
       autoGenerateQuestions: editForm.autoGenerateQuestions,
       contentScanEnabled: editForm.contentScanEnabled,
       duplicateDetectionEnabled: editForm.duplicateDetectionEnabled,
@@ -1430,6 +1466,7 @@ async function handleEdit() {
       name: editForm.name,
       description: editForm.description,
       embeddingModel: selectedEmbeddingModelId.value,
+      graphEnabled: editForm.graphEnabled,
       config,
     })
     // 保存示例问题
@@ -1499,6 +1536,10 @@ async function aiGenerateEditQuestion() {
 
 // ========== RAG 问答 - 生成示例问题 ==========
 
+function onQueryParamsApply(params) {
+  searchOverrides.value = params
+}
+
 async function handleGenerateQuestions() {
   editQuestionLoading.value = true
   try {
@@ -1550,7 +1591,7 @@ async function askRag() {
   searchResults.value = []
 
   try {
-    const res = await searchKnowledge(knowledgeId, q)
+    const res = await searchKnowledge(knowledgeId, q, searchOverrides.value)
     searchResults.value = res.data || []
   } catch (e) {
     // interceptor 已处理错误提示
@@ -1887,6 +1928,18 @@ onUnmounted(() => {
   font-weight: 600;
   color: #171717;
   margin-bottom: 4px;
+}
+.title-type-icon {
+  font-size: 18px;
+  vertical-align: middle;
+  margin-left: 8px;
+  cursor: help;
+}
+.title-type-icon.pg {
+  color: #3b82f6;
+}
+.title-type-icon.milvus {
+  color: #8b5cf6;
 }
 .page-desc {
   font-size: 14px;
@@ -2609,6 +2662,12 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.member-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .member-detail {
   display: flex;

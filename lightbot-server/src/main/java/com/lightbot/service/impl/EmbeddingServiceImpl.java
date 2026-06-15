@@ -1,18 +1,28 @@
 package com.lightbot.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lightbot.entity.Chunk;
+import com.lightbot.entity.Document;
 import com.lightbot.entity.Embedding;
+import com.lightbot.entity.Knowledge;
+import com.lightbot.enums.KnowledgeType;
+import com.lightbot.mapper.DocumentMapper;
 import com.lightbot.mapper.EmbeddingMapper;
+import com.lightbot.service.ChunkService;
 import com.lightbot.service.EmbeddingService;
-import lombok.RequiredArgsConstructor;
+import com.lightbot.service.KnowledgeService;
+import com.lightbot.util.MilvusUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 向量服务实现类：负责向量存储和相似度检索
@@ -23,11 +33,28 @@ import java.util.Map;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding>
         implements EmbeddingService {
 
     private final EmbeddingMapper embeddingMapper;
+    private final MilvusUtil milvusUtil;
+    private final DocumentMapper documentMapper;
+    private final ChunkService chunkService;
+    private final KnowledgeService knowledgeService;
+
+    private static final String SEARCH_MODE_VECTOR = "vector";
+    private static final String SEARCH_MODE_KEYWORD = "keyword";
+    private static final String SEARCH_MODE_HYBRID = "hybrid";
+
+    public EmbeddingServiceImpl(EmbeddingMapper embeddingMapper, MilvusUtil milvusUtil,
+                                DocumentMapper documentMapper, ChunkService chunkService,
+                                @Lazy KnowledgeService knowledgeService) {
+        this.embeddingMapper = embeddingMapper;
+        this.milvusUtil = milvusUtil;
+        this.documentMapper = documentMapper;
+        this.chunkService = chunkService;
+        this.knowledgeService = knowledgeService;
+    }
 
     @Override
     public void saveVector(Long chunkId, String modelName, float[] vector) {
@@ -38,12 +65,46 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
 
     /**
      * 批量存储向量（减少数据库往返次数）
-     *
-     * @param chunkIds  分块ID列表
-     * @param modelName 模型名称
-     * @param vectors   向量数据列表，与 chunkIds 一一对应
+     * <p>默认走 pgvector，调用方无 knowledgeId 时使用此方法</p>
      */
+    @Override
     public void batchSaveVectors(List<Long> chunkIds, String modelName, List<float[]> vectors) {
+        batchSaveVectors(null, chunkIds, modelName, vectors);
+    }
+
+    /**
+     * 批量存储向量（带 knowledgeId，支持 Milvus 路由）
+     *
+     * @param knowledgeId 知识库ID（为 null 时走 pgvector）
+     * @param chunkIds    分块ID列表
+     * @param modelName   模型名称
+     * @param vectors     向量数据列表，与 chunkIds 一一对应
+     */
+    public void batchSaveVectors(Long knowledgeId, List<Long> chunkIds, String modelName, List<float[]> vectors) {
+        // Milvus 路由
+        if (shouldRouteToMilvus(knowledgeId)) {
+            // 确保 Collection 存在（首次写入时自动创建）
+            if (!milvusUtil.hasCollection(knowledgeId) && !vectors.isEmpty()) {
+                int dimension = vectors.get(0).length;
+                milvusUtil.createCollectionForKnowledge(knowledgeId, dimension);
+            }
+            List<Chunk> chunks = chunkService.list(new LambdaQueryWrapper<Chunk>()
+                    .in(Chunk::getId, chunkIds));
+            Map<Long, Chunk> chunkMap = chunks.stream()
+                    .collect(Collectors.toMap(Chunk::getId, c -> c));
+            List<Long> documentIds = new ArrayList<>(chunkIds.size());
+            List<String> contents = new ArrayList<>(chunkIds.size());
+            for (Long chunkId : chunkIds) {
+                Chunk chunk = chunkMap.get(chunkId);
+                documentIds.add(chunk != null ? chunk.getDocumentId() : 0L);
+                contents.add(chunk != null ? chunk.getContent() : "");
+            }
+            milvusUtil.insertVectors(knowledgeId, chunkIds, documentIds, contents, vectors);
+            log.info("[Embedding] Milvus 批量写入: knowledgeId={}, count={}", knowledgeId, chunkIds.size());
+            return;
+        }
+
+        // pgvector（原有逻辑）
         List<Map<String, Object>> batch = new ArrayList<>(chunkIds.size());
         for (int i = 0; i < chunkIds.size(); i++) {
             float[] vector = vectors.get(i);
@@ -74,6 +135,28 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
 
     @Override
     public List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector, int topK, double threshold) {
+        return searchSimilarSql(knowledgeId, queryVector, topK, threshold, null);
+    }
+
+    /**
+     * 向量检索（支持 Milvus 路由 + search_mode 参数）
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param topK        返回数量
+     * @param threshold   相似度阈值
+     * @param queryParams 检索配置参数（search_mode/vector_weight/bm25_weight/bm25_top_k 等）
+     * @return 检索结果（chunk_id, content, document_id, document_name, score）
+     */
+    public List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector,
+                                                       int topK, double threshold,
+                                                       Map<String, Object> queryParams) {
+        // Milvus 路由
+        if (shouldRouteToMilvus(knowledgeId)) {
+            return searchMilvus(knowledgeId, queryVector, topK, threshold, queryParams);
+        }
+
+        // pgvector（原有逻辑）
         String vectorStr = toVectorString(queryVector);
         return embeddingMapper.searchSimilarWithThreshold(vectorStr, knowledgeId, topK, threshold);
     }
@@ -87,11 +170,33 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     @Override
     public void deleteByKnowledgeId(Long knowledgeId) {
         embeddingMapper.deleteByKnowledgeId(knowledgeId);
+        if (shouldRouteToMilvus(knowledgeId)) {
+            milvusUtil.dropCollection(knowledgeId);
+        }
     }
 
     @Override
     public void deleteByDocumentId(Long documentId) {
         embeddingMapper.deleteByDocumentId(documentId);
+        // Milvus 侧：查询文档获取 knowledgeId，判断是否需要清理
+        Document doc = documentMapper.selectById(documentId);
+        if (doc != null && shouldRouteToMilvus(doc.getKnowledgeId())) {
+            milvusUtil.deleteByDocumentId(doc.getKnowledgeId(), documentId);
+        }
+    }
+
+    /**
+     * 删除指定文档的向量（调用方已知 knowledgeId 和 type，避免重复查询）
+     *
+     * @param documentId  文档ID
+     * @param knowledgeId 知识库ID
+     * @param type        知识库类型
+     */
+    public void deleteByDocumentId(Long documentId, Long knowledgeId, KnowledgeType type) {
+        embeddingMapper.deleteByDocumentId(documentId);
+        if (type == KnowledgeType.MILVUS && milvusUtil.isAvailable()) {
+            milvusUtil.deleteByDocumentId(knowledgeId, documentId);
+        }
     }
 
     /**
@@ -105,5 +210,85 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    /**
+     * 判断是否应路由到 Milvus
+     */
+    private boolean shouldRouteToMilvus(Long knowledgeId) {
+        if (knowledgeId == null || !milvusUtil.isAvailable()) {
+            return false;
+        }
+        Knowledge knowledge = knowledgeService.getById(knowledgeId);
+        return knowledge != null && knowledge.getType() == KnowledgeType.MILVUS;
+    }
+
+    /**
+     * Milvus 检索路由：根据 search_mode 分发到 vector/keyword/hybrid 检索
+     */
+    private List<Map<String, Object>> searchMilvus(Long knowledgeId, float[] queryVector,
+                                                    int topK, double threshold,
+                                                    Map<String, Object> queryParams) {
+        // Collection 不存在时直接返回空结果
+        if (!milvusUtil.hasCollection(knowledgeId)) {
+            log.info("[Embedding] Milvus Collection 不存在, knowledgeId={}", knowledgeId);
+            return List.of();
+        }
+
+        String searchMode = SEARCH_MODE_VECTOR;
+        if (queryParams != null && queryParams.get("search_mode") instanceof String s) {
+            searchMode = s;
+        }
+
+        List<Map<String, Object>> results;
+        switch (searchMode) {
+            case SEARCH_MODE_KEYWORD -> {
+                String queryText = queryParams != null && queryParams.get("query_text") instanceof String s
+                        ? s : "";
+                results = milvusUtil.searchKeyword(knowledgeId, queryText, topK);
+            }
+            case SEARCH_MODE_HYBRID -> {
+                String queryText = queryParams != null && queryParams.get("query_text") instanceof String s
+                        ? s : "";
+                float vectorWeight = queryParams != null && queryParams.get("vector_weight") instanceof Number n
+                        ? n.floatValue() : 0.7f;
+                float bm25Weight = queryParams != null && queryParams.get("bm25_weight") instanceof Number n
+                        ? n.floatValue() : 0.3f;
+                int bm25TopK = queryParams != null && queryParams.get("bm25_top_k") instanceof Number n
+                        ? n.intValue() : topK * 3;
+                results = milvusUtil.searchHybrid(knowledgeId, queryText, queryVector,
+                        topK, vectorWeight, bm25Weight, bm25TopK);
+            }
+            default -> {
+                results = milvusUtil.searchVector(knowledgeId, queryVector, topK, threshold);
+            }
+        }
+
+        // 补充 document_name 字段（Milvus 只返回 document_id）
+        enrichWithDocumentNames(results);
+        return results;
+    }
+
+    /**
+     * 为 Milvus 检索结果补充 document_name 字段
+     */
+    private void enrichWithDocumentNames(List<Map<String, Object>> results) {
+        List<Long> docIds = results.stream()
+                .map(r -> r.get("document_id"))
+                .filter(id -> id instanceof Long)
+                .map(id -> (Long) id)
+                .distinct()
+                .toList();
+        if (docIds.isEmpty()) {
+            return;
+        }
+        Map<Long, String> nameMap = documentMapper.selectBatchIds(docIds).stream()
+                .collect(Collectors.toMap(Document::getId, Document::getName));
+        for (Map<String, Object> row : results) {
+            Object docId = row.get("document_id");
+            if (docId instanceof Long id) {
+                row.put("document_name", nameMap.getOrDefault(id, "未知文档"));
+            }
+        }
     }
 }

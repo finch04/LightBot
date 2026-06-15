@@ -108,7 +108,10 @@
         <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown">
           <div class="user-info">
             <AvatarFrame :frame="userStore.user?.avatarFrame" :size="28">
-              <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
+              <div class="user-avatar">
+                <img v-if="userStore.user?.avatar" :src="userStore.user.avatar" alt="avatar" class="user-avatar-img" @error="userStore.user.avatar = ''" />
+                <span v-else>{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</span>
+              </div>
             </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
             <a-badge v-if="taskBadgeCount" class="sidebar-badge" :count="taskBadgeCount" :number-style="taskBadgeStyle" />
@@ -710,6 +713,13 @@ watch(() => route.path, (path) => {
   justify-content: center;
   font-size: 13px;
   font-weight: 600;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .user-name {
   flex: 1;

@@ -36,6 +36,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库管理接口
@@ -131,6 +132,20 @@ public class KnowledgeController {
     @GetMapping("/{id}/default-ingest-config")
     public Result<IngestRequest> getDefaultIngestConfig(@PathVariable Long id) {
         return Result.ok(knowledgeService.getDefaultIngestConfig(id));
+    }
+
+    @Operation(summary = "获取知识库检索配置")
+    @GetMapping("/{id}/query-params")
+    public Result<Map<String, Object>> getQueryParams(@PathVariable Long id) {
+        return Result.ok(knowledgeService.getQueryParams(id));
+    }
+
+    @Operation(summary = "更新知识库检索配置（需要MANAGER及以上权限）")
+    @PutMapping("/{id}/query-params")
+    public Result<Void> updateQueryParams(@PathVariable Long id,
+                                           @RequestBody Map<String, Object> params) {
+        knowledgeService.updateQueryParams(id, params);
+        return Result.ok();
     }
 
     // ========== 文档管理 ==========
@@ -403,11 +418,14 @@ public class KnowledgeController {
         return emitter;
     }
 
-    @Operation(summary = "检索测试（纯向量检索，不调用LLM）")
-    @GetMapping("/{id}/search")
+    @Operation(summary = "检索测试（纯向量检索，不调用LLM，支持overrides覆盖参数）")
+    @PostMapping("/{id}/search")
     public Result<List<RagSearchResultVO>> search(@PathVariable Long id,
-                                                  @RequestParam String question) {
-        return Result.ok(ragService.search(id, question));
+                                                   @RequestBody Map<String, Object> body) {
+        String question = (String) body.get("question");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> overrides = (Map<String, Object>) body.get("overrides");
+        return Result.ok(ragService.search(id, question, overrides));
     }
 
     // ========== 问答对 ==========

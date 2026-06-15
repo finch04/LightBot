@@ -166,6 +166,10 @@
               <div class="resource-option-header">
                 <BookOutlined class="resource-option-icon knowledge" />
                 <span class="resource-option-title">{{ k.name }}</span>
+                <a-tooltip v-if="k.type" :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
+                  <CloudServerOutlined v-if="k.type === 'milvus'" class="kb-type-icon milvus" />
+                  <DatabaseOutlined v-else class="kb-type-icon pg" />
+                </a-tooltip>
               </div>
               <div v-if="k.description" class="resource-option-desc">{{ k.description }}</div>
               <div class="resource-option-meta">
@@ -656,7 +660,7 @@
 <script setup>
 import { computed, watch, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined, CopyOutlined, ApiOutlined, SyncOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined, CopyOutlined, ApiOutlined, SyncOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
 import { getMcpServers, getMcpServerTools, refreshMcpServerTools } from '../../../api/mcp'
 import ShortMemoryForm from './ShortMemoryForm.vue'
 import ConfigFieldLabel from './ConfigFieldLabel.vue'
@@ -1137,6 +1141,10 @@ function removeGroupVar(idx) {
 
 .resource-option { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
 .resource-option-header { display: flex; align-items: center; gap: 8px; }
+.kb-type-mini-tag { font-size: 10px; line-height: 16px; padding: 0 4px; flex-shrink: 0; }
+.kb-type-icon { font-size: 13px; flex-shrink: 0; cursor: help; }
+.kb-type-icon.pg { color: #3b82f6; }
+.kb-type-icon.milvus { color: #8b5cf6; }
 .resource-option-icon { font-size: 14px; flex-shrink: 0; }
 .resource-option-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
 .resource-option-icon-wrap.tool { background: #ecfdf5; color: #059669; }

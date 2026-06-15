@@ -1029,7 +1029,13 @@
                   <BookOutlined />
                 </div>
                 <div class="item-info">
-                  <div class="item-name">{{ k.name }}</div>
+                  <div class="item-name">
+                    {{ k.name }}
+                    <a-tooltip v-if="k.type" :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
+                      <CloudServerOutlined v-if="k.type === 'milvus'" class="kb-type-icon milvus" />
+                      <DatabaseOutlined v-else class="kb-type-icon pg" />
+                    </a-tooltip>
+                  </div>
                   <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
                     <div class="item-desc">{{ truncateText(k.description, 50) }}</div>
                   </a-tooltip>
@@ -1601,7 +1607,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
-import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined, RightOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined, RightOutlined, DownOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, updateAgentSkills, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
 import { getWorkflowConfig } from '../api/workflow'
@@ -4669,6 +4675,19 @@ onMounted(async () => {
 .knowledge-icon {
   background: linear-gradient(135deg, #8b5cf6, #6366f1);
 }
+.kb-type-mini-tag {
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.kb-type-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  cursor: help;
+}
+.kb-type-icon.pg { color: #3b82f6; }
+.kb-type-icon.milvus { color: #8b5cf6; }
 .subagent-icon {
   background: linear-gradient(135deg, #f59e0b, #d97706);
 }
@@ -4713,6 +4732,9 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 500;
   color: #171717;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .item-desc {
   margin-top: 4px;

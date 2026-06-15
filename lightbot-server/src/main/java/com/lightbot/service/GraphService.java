@@ -23,6 +23,15 @@ public interface GraphService {
     Long extractFromDocument(Long knowledgeId, GraphExtractRequest request);
 
     /**
+     * 自动触发图谱抽取（内部调用，跳过权限校验）
+     *
+     * @param knowledgeId 知识库ID
+     * @param documentId  文档ID
+     * @return 任务ID，null 表示跳过（Neo4j 不可用或知识库不存在）
+     */
+    Long autoExtractFromDocument(Long knowledgeId, Long documentId);
+
+    /**
      * 批量导入三元组到图谱
      *
      * @param knowledgeId 知识库ID

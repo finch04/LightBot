@@ -51,6 +51,12 @@
         <div class="card-stats">
           <span>{{ k.documentCount || 0 }} 文档</span>
           <span>{{ k.chunkCount || 0 }} 分块</span>
+          <span v-if="k.type" class="card-type-icon-wrap">
+            <a-tooltip :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
+              <CloudServerOutlined v-if="k.type === 'milvus'" class="card-type-icon milvus" />
+              <DatabaseOutlined v-else class="card-type-icon pg" />
+            </a-tooltip>
+          </span>
         </div>
       </div>
 
@@ -67,19 +73,36 @@
           <a-input v-model:value="form.name" placeholder="知识库名称" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" :maxlength="200" show-count />
+          <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（可选）" :maxlength="50" show-count />
+        </a-form-item>
+        <a-form-item label="知识库类型" required>
+          <div class="kb-type-cards">
+            <div
+              class="kb-type-card"
+              :class="{ active: form.type === 'pg' }"
+              @click="form.type = 'pg'"
+            >
+              <div class="kb-type-header">
+                <DatabaseOutlined class="kb-type-icon" />
+                <span class="kb-type-title">PostgreSQL</span>
+              </div>
+              <div class="kb-type-desc">基于 pgvector 向量扩展，轻量易部署，适合中小规模知识库，与 PostgreSQL 生态无缝集成</div>
+            </div>
+            <div
+              class="kb-type-card"
+              :class="{ active: form.type === 'milvus' }"
+              @click="form.type = 'milvus'"
+            >
+              <div class="kb-type-header">
+                <CloudServerOutlined class="kb-type-icon" />
+                <span class="kb-type-title">Milvus</span>
+              </div>
+              <div class="kb-type-desc">高性能分布式向量数据库，支持亿级向量检索、混合检索（BM25 + 向量），适合大规模生产场景</div>
+            </div>
+          </div>
         </a-form-item>
         <a-form-item label="Embed模型" required>
           <ModelSelect v-model="form.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" @change="onEmbeddingModelChange" />
-        </a-form-item>
-        <a-form-item label="分块大小">
-          <a-input-number v-model:value="form.chunkSize" :min="100" :max="2000" :step="100" style="width: 100%" />
-        </a-form-item>
-        <a-form-item label="RAG Top K">
-          <a-input-number v-model:value="form.ragTopK" :min="1" :max="20" style="width: 100%" />
-        </a-form-item>
-        <a-form-item label="RAG 相似度阈值">
-          <a-input-number v-model:value="form.ragThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -89,7 +112,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 import ModelSelect from '../components/ModelSelect.vue'
@@ -104,11 +127,8 @@ const selectedEmbeddingModelId = ref(null)
 const form = reactive({
   name: '',
   description: '',
+  type: 'pg',
   embeddingModel: null,
-  chunkSize: 512,
-  chunkOverlap: 50,
-  ragTopK: 5,
-  ragThreshold: 0.7,
 })
 
 function openCreateModal() {
@@ -152,12 +172,12 @@ async function handleCreate() {
   }
   submitting.value = true
   try {
-    const config = JSON.stringify({ ragTopK: form.ragTopK, ragThreshold: form.ragThreshold })
-    await createKnowledge({ ...form, embeddingModel: selectedEmbeddingModelId.value, config })
+    await createKnowledge({ ...form, embeddingModel: selectedEmbeddingModelId.value, config: '{}' })
     message.success('创建成功')
     showCreate.value = false
     form.name = ''
     form.description = ''
+    form.type = 'pg'
     loadData()
   } finally {
     submitting.value = false
@@ -292,7 +312,7 @@ onMounted(loadData)
   font-size: 16px;
   font-weight: 600;
   color: #171717;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .card-desc {
   font-size: 13px;
@@ -306,11 +326,75 @@ onMounted(loadData)
   gap: 16px;
   font-size: 13px;
   color: #a1a1aa;
+  align-items: center;
+}
+.card-type-icon-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.card-type-icon {
+  font-size: 15px;
+  cursor: help;
+}
+.card-type-icon.pg {
+  color: #3b82f6;
+}
+.card-type-icon.milvus {
+  color: #8b5cf6;
 }
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
   color: #a1a1aa;
+}
+
+/* 知识库类型选择卡片 */
+.kb-type-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+}
+.kb-type-card {
+  border: 1.5px solid #e4e4e7;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #fff;
+}
+.kb-type-card:hover {
+  border-color: #a1a1aa;
+}
+.kb-type-card.active {
+  border-color: #171717;
+  background: #fafafa;
+  box-shadow: 0 0 0 1px #171717;
+}
+.kb-type-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.kb-type-icon {
+  font-size: 18px;
+  color: #a1a1aa;
+  transition: color 0.15s;
+}
+.kb-type-card.active .kb-type-icon {
+  color: #171717;
+}
+.kb-type-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
+.kb-type-desc {
+  font-size: 12px;
+  color: #71717a;
+  line-height: 1.5;
 }
 </style>

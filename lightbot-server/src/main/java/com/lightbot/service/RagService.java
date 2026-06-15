@@ -4,6 +4,7 @@ import com.lightbot.dto.RagSearchResultVO;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * RAG 检索增强生成服务接口
@@ -41,4 +42,14 @@ public interface RagService {
      * @return 检索结果列表
      */
     List<RagSearchResultVO> search(Long knowledgeId, String question);
+
+    /**
+     * 纯向量检索测试（不调用LLM），支持运行时覆盖检索参数
+     *
+     * @param knowledgeId 知识库ID
+     * @param question    用户问题
+     * @param overrides   运行时覆盖参数（优先级最高）
+     * @return 检索结果列表
+     */
+    List<RagSearchResultVO> search(Long knowledgeId, String question, Map<String, Object> overrides);
 }

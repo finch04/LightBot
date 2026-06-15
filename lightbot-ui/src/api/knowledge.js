@@ -90,8 +90,16 @@ export function getDefaultIngestConfig(knowledgeId) {
   return request.get(`/knowledge/${knowledgeId}/default-ingest-config`)
 }
 
-export function searchKnowledge(knowledgeId, question) {
-  return request.get(`/knowledge/${knowledgeId}/search`, { params: { question } })
+export function searchKnowledge(knowledgeId, question, overrides) {
+  return request.post(`/knowledge/${knowledgeId}/search`, { question, overrides })
+}
+
+export function getQueryParams(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/query-params`)
+}
+
+export function updateQueryParams(knowledgeId, params) {
+  return request.put(`/knowledge/${knowledgeId}/query-params`, params)
 }
 
 export function generateMindmap(knowledgeId) {
