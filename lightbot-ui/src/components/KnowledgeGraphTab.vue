@@ -248,24 +248,34 @@
             placeholder="描述实体类型、关系类型和属性约束，会拼接到抽取 Prompt 尾部。例如：&#10;实体类型：人物、组织、项目、技术&#10;关系类型：负责、隶属于、使用、包含"
           />
         </a-form-item>
-        <div style="display: flex; gap: 16px">
-          <a-form-item label="并发队列数" style="flex: 1">
-            <a-input-number
-              v-model:value="extractConfigForm.concurrency"
-              :min="1"
-              :max="1000"
-              :step="1"
-              style="width: 100%"
-            />
-          </a-form-item>
-          <a-form-item label="模型参数 JSON" style="flex: 1">
-            <a-textarea
-              v-model:value="extractConfigForm.modelParamsText"
-              :rows="1"
-              placeholder='例如 {"temperature":0.1}'
-            />
-          </a-form-item>
-        </div>
+        <a-form-item>
+          <template #label>
+            并发队列数
+            <a-tooltip title="同时并发抽取的协程数量，越大抽取速度越快，但会消耗更多模型 API 并发额度。建议 10-50。">
+              <QuestionCircleOutlined style="margin-left: 4px; font-size: 13px; color: #999; cursor: help" />
+            </a-tooltip>
+          </template>
+          <a-input-number
+            v-model:value="extractConfigForm.concurrency"
+            :min="1"
+            :max="1000"
+            :step="1"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            模型参数 JSON
+            <a-tooltip title="传给模型的额外参数，如 temperature、maxTokens 等。不同模型支持的参数不同。">
+              <QuestionCircleOutlined style="margin-left: 4px; font-size: 13px; color: #999; cursor: help" />
+            </a-tooltip>
+          </template>
+          <JsonInput
+            v-model="extractConfigForm.modelParamsText"
+            :rows="3"
+            placeholder='例如 {"temperature": 0.1, "maxTokens": 4096}'
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -283,6 +293,7 @@ import {
   deleteGraphNode, deleteGraphEdge, getDocuments, getExistingDocIds
 } from '../api/knowledge'
 import ModelSelect from './ModelSelect.vue'
+import JsonInput from './JsonInput.vue'
 
 const props = defineProps({
   knowledgeId: { type: [String, Number], required: true },

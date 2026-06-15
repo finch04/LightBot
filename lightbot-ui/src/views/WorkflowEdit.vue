@@ -244,6 +244,7 @@ import {
   getNodeDropPoint,
   getNodeParentId,
   hasEdgesToGroupSiblings,
+  getGroupBuiltinPair,
 } from '../views/workflow/workflowGroup'
 import { getDefaultNodeData as buildDefaultNodeData, getNodeTitle as metaGetNodeTitle, getNodeColor as metaGetNodeColor, getNodeMeta, getNodeLibraryGroups, createConditionId } from '../views/workflow/nodeMeta'
 import {
@@ -742,7 +743,7 @@ onMounted(async () => {
       workflowLoaded.value = true
       scheduleUpdateNodeInternals()
     })
-    scheduleFitView(!hasSavedLayout(nodes.value))
+    scheduleFitView(true)
     validateWorkflow(false)
         } catch (e) {
     notification.error({ message: '加载失败', description: e.message })
@@ -1675,12 +1676,13 @@ function applyEdgePatch(edgeId, patch) {
   const idx = edges.value.findIndex(e => e.id === edgeId)
   if (idx < 0) return false
   const old = edges.value[idx]
-  const merged = normalizeConnection({
+  const normalized = normalizeConnection({
     source: patch.source ?? old.source,
     target: patch.target ?? old.target,
     sourceHandle: patch.sourceHandle ?? old.sourceHandle,
     targetHandle: patch.targetHandle ?? old.targetHandle ?? HANDLE_IN,
   })
+  const merged = redirectContainerConnection(normalized)
   if (!isValidWorkflowConnection(merged, {
     nodes: nodes.value,
     edges: edges.value,
@@ -1715,11 +1717,47 @@ function onEdgesChange(changes) {
   }
 }
 
+/**
+ * 容器壳层连线自动重定向：
+ * - source 为容器壳层 → 重定向到内置 end 节点（出 = 结束节点）
+ * - target 为容器壳层 → 重定向到内置 start 节点（入 = 开始节点）
+ */
+function redirectContainerConnection(conn) {
+  const srcNode = nodes.value.find(n => n.id === conn.source)
+  const tgtNode = nodes.value.find(n => n.id === conn.target)
+  let { source, target, sourceHandle, targetHandle } = conn
+
+  // source 是容器壳层 → 重定向到内置 end 节点
+  if (srcNode && isGroupNodeType(srcNode.type)) {
+    const pair = getGroupBuiltinPair(srcNode.type)
+    const endNode = nodes.value.find(n => getNodeParentId(n) === srcNode.id && n.type === pair.end)
+    if (endNode) {
+      source = endNode.id
+      sourceHandle = HANDLE_OUT
+    }
+  }
+
+  // target 是容器壳层 → 重定向到内置 start 节点
+  if (tgtNode && isGroupNodeType(tgtNode.type)) {
+    const pair = getGroupBuiltinPair(tgtNode.type)
+    const startNode = nodes.value.find(n => getNodeParentId(n) === tgtNode.id && n.type === pair.start)
+    if (startNode) {
+      target = startNode.id
+      targetHandle = HANDLE_IN
+    }
+  }
+
+  return { ...conn, source, target, sourceHandle, targetHandle }
+}
+
 // 新建连线
 function onConnect(params) {
   if (isVersionPreview.value) return
   const normalized = normalizeConnection(params)
-  if (!isValidWorkflowConnection(normalized, { nodes: nodes.value, edges: edges.value })) {
+
+  // 容器壳层自动重定向：source=容器 → 找内置 end 节点，target=容器 → 找内置 start 节点
+  const redirected = redirectContainerConnection(normalized)
+  if (!isValidWorkflowConnection(redirected, { nodes: nodes.value, edges: edges.value })) {
     message.warning('无法连接：请从上游节点右侧「出」拖到下游节点左侧「入」')
     return
   }
@@ -1727,9 +1765,9 @@ function onConnect(params) {
   const newEdge = {
     id: `edge_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     type: 'workflow-bezier',
-    source: normalized.source,
-    target: normalized.target,
-    sourceHandle: normalized.sourceHandle || HANDLE_OUT,
+    source: redirected.source,
+    target: redirected.target,
+    sourceHandle: redirected.sourceHandle || HANDLE_OUT,
     targetHandle: HANDLE_IN,
     selectable: true,
     style: { strokeWidth: 2, stroke: '#94a3b8' },
@@ -1746,7 +1784,7 @@ function onEdgeUpdate({ edge, connection }) {
 }
 
 const edgeTargetCandidates = computed(() =>
-  nodes.value.filter(n => n.type !== 'start')
+  nodes.value.filter(n => n.type !== 'start' && !isGroupNodeType(n.type))
 )
 
 const edgeSourceHandleOptions = computed(() => {

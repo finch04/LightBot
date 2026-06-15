@@ -32,7 +32,7 @@
       :default-edge-options="defaultEdgeOptions"
       :is-valid-connection="isValidConnection"
       :delete-key-code="null"
-      :default-viewport="{ zoom: 0.8, x: 0, y: 0 }"
+      fit-view-on-init
       :min-zoom="0.1"
       :max-zoom="4"
       @edges-change="$emit('edges-change', $event)"

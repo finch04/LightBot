@@ -236,11 +236,15 @@
           >
             <div class="resource-option">
               <div class="resource-option-header">
-                <ToolOutlined class="resource-option-icon tool" />
+                <span class="resource-option-icon-wrap tool">
+                  <ToolOutlined class="resource-option-icon" />
+                  <span v-if="t.isSystem" class="option-badge option-badge--system">系统</span>
+                  <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="option-badge option-badge--builtin">内置</span>
+                </span>
                 <span class="resource-option-title">{{ t.displayName || t.name }}</span>
                 <span v-if="t.type" class="resource-tag">{{ getToolTypeLabel(t.type) }}</span>
               </div>
-              <div v-if="t.description" class="resource-option-desc">{{ t.description }}</div>
+              <div v-if="t.description" class="resource-option-desc" :title="t.description">{{ truncateText(t.description, 50) }}</div>
               <div class="resource-option-meta">
                 <span v-if="t.name && t.displayName">标识: {{ t.name }}</span>
               </div>
@@ -624,7 +628,7 @@
                   <span class="resource-option-title">{{ t.name }}</span>
                   <span v-if="t.enabled === false" class="resource-tag resource-tag--muted">已禁用</span>
                 </div>
-                <div v-if="t.description" class="resource-option-desc">{{ t.description }}</div>
+                <div v-if="t.description" class="resource-option-desc" :title="t.description">{{ truncateText(t.description, 50) }}</div>
               </div>
             </a-select-option>
           </a-select>
@@ -663,6 +667,7 @@ import JsonInput from '../../../components/JsonInput.vue'
 import ModelSelect from '../../../components/ModelSelect.vue'
 import { createConditionId } from '../nodeMeta'
 import { BUILTIN_VARIABLES, getFieldHint, getScriptExampleConfig } from '../nodeConfigMeta'
+import { truncateText } from '../../../utils/format'
 import { syncConditionBranches, ensureConditionGroups } from '../conditionUtils'
 
 const props = defineProps({
@@ -1133,8 +1138,13 @@ function removeGroupVar(idx) {
 .resource-option { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
 .resource-option-header { display: flex; align-items: center; gap: 8px; }
 .resource-option-icon { font-size: 14px; flex-shrink: 0; }
+.resource-option-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
+.resource-option-icon-wrap.tool { background: #ecfdf5; color: #059669; }
+.option-badge { position: absolute; top: -4px; right: -4px; font-size: 9px; padding: 0 3px; border-radius: 3px; line-height: 14px; white-space: nowrap; z-index: 1; }
+.option-badge--system { background: #0070f3; color: #fff; }
+.option-badge--builtin { background: #0070f3; color: #fff; }
 .resource-option-icon.knowledge { color: #4f46e5; }
-.resource-option-icon.tool { color: #059669; }
+.resource-option-icon.tool { font-size: 12px; }
 .resource-option-icon.mcp { color: #7c3aed; }
 .mcp-tool-picker {
   display: flex;

@@ -41,6 +41,10 @@ const nodeClass = computed(() => ({
   pointer-events: auto;
   cursor: grab;
 }
+/* 容器壳层不显示句柄，连线通过内置 start/end 节点 */
+.group-shell :deep(.vue-flow__handle) {
+  display: none !important;
+}
 .group-shell:active {
   cursor: grabbing;
 }
