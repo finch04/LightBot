@@ -28,6 +28,16 @@ public final class ConfigKeys {
         // 上下文摘要
         public static final String ENABLE_SUMMARY = "enableSummary";
         public static final String SUMMARY_THRESHOLD_KB = "summaryThresholdKb";
+        /** 上下文摘要提示词（含 {messages} 占位符） */
+        public static final String SUMMARY_PROMPT = "summaryPrompt";
+        /** 摘要后保留最近 N 条消息不被压缩 */
+        public static final String SUMMARY_KEEP_MESSAGES = "summaryKeepMessages";
+        /** 摘要时工具结果预览 Token 上限，超出截断 */
+        public static final String SUMMARY_TOOL_RESULT_TOKEN_LIMIT = "summaryToolResultTokenLimit";
+        /** 最大执行步数（工具调用递归深度上限） */
+        public static final String MAX_EXECUTION_STEPS = "maxExecutionSteps";
+        /** 模型调用失败重试次数 */
+        public static final String MODEL_RETRY_TIMES = "modelRetryTimes";
         /** 提示词自定义变量列表 [{key,label,defaultValue,description}] */
         public static final String PROMPT_VARIABLES = "promptVariables";
         /** 用户输入敏感词（命中即拦截，不调用模型） */

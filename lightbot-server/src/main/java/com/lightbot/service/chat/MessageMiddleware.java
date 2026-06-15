@@ -392,7 +392,13 @@ public class MessageMiddleware implements ChatMiddleware {
             return history;
         }
 
+        // 从配置读取摘要后保留消息数，默认 6
         int keepRecent = 6;
+        Object keepVal = configMap.get(ConfigKeys.Agent.SUMMARY_KEEP_MESSAGES);
+        if (keepVal instanceof Number kn) {
+            keepRecent = Math.max(1, Math.min(kn.intValue(), 50));
+        }
+
         if (history.size() <= keepRecent + 2) {
             return history;
         }
@@ -404,17 +410,37 @@ public class MessageMiddleware implements ChatMiddleware {
             Long providerId = initMiddleware.getProviderId(configMap);
             ChatModel chatModel = modelFactory.getChatModel(providerId);
 
+            // 从配置读取工具结果预览 Token 上限，默认 500
+            int toolResultTokenLimit = 500;
+            Object tokenLimitVal = configMap.get(ConfigKeys.Agent.SUMMARY_TOOL_RESULT_TOKEN_LIMIT);
+            if (tokenLimitVal instanceof Number tln) {
+                toolResultTokenLimit = Math.max(50, Math.min(tln.intValue(), 5000));
+            }
+            int toolResultCharLimit = toolResultTokenLimit * 4;
+
             StringBuilder conversationText = new StringBuilder();
             for (Message msg : olderMessages) {
                 String role = msg.getRole() == MessageRole.USER ? "用户" : "助手";
-                conversationText.append(role).append("：").append(msg.getContent()).append("\n");
+                String content = msg.getContent() != null ? msg.getContent() : "";
+                // 工具结果截断预览
+                if (msg.getRole() == MessageRole.TOOL && content.length() > toolResultCharLimit) {
+                    content = content.substring(0, toolResultCharLimit) + "\n[已截断，共" + content.length() + "字符]";
+                }
+                conversationText.append(role).append("：").append(content).append("\n");
             }
 
-            List<org.springframework.ai.chat.messages.Message> summaryPrompt = new ArrayList<>();
-            summaryPrompt.add(new SystemMessage("你是一个对话摘要助手。请将以下对话内容压缩为简明摘要，保留关键信息、决策和上下文要点。只输出摘要，不要添加额外说明。"));
-            summaryPrompt.add(new UserMessage("请对以下对话进行摘要：\n\n" + conversationText));
+            // 从配置读取摘要提示词，默认使用内置 prompt
+            String summaryPromptText = "你是一个对话摘要助手。请将以下对话内容压缩为简明摘要，保留关键信息、决策和上下文要点。只输出摘要，不要添加额外说明。";
+            Object customPrompt = configMap.get(ConfigKeys.Agent.SUMMARY_PROMPT);
+            if (customPrompt instanceof String cp && !cp.isBlank()) {
+                summaryPromptText = cp;
+            }
 
-            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(summaryPrompt)));
+            List<org.springframework.ai.chat.messages.Message> summaryMessages = new ArrayList<>();
+            summaryMessages.add(new SystemMessage(summaryPromptText));
+            summaryMessages.add(new UserMessage("请对以下对话进行摘要：\n\n" + conversationText));
+
+            ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(summaryMessages)));
             String summary = response.getResult().getOutput().getText().trim();
 
             if (summary.isBlank()) {

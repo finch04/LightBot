@@ -554,6 +554,126 @@
             </div>
             <div class="param-hint">上下文超过该大小时自动摘要，默认 100KB</div>
           </a-form-item>
+          <a-form-item v-if="agentConfig.enableSummary">
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>摘要提示词</span>
+                <a-tooltip
+                  title="触发上下文摘要时使用的提示词，必须保留 {messages} 占位符"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-textarea
+              v-model:value="agentConfig.summaryPrompt"
+              :rows="4"
+              placeholder="留空使用系统默认摘要提示词"
+              :disabled="isVersionPreview"
+            />
+          </a-form-item>
+          <a-form-item v-if="agentConfig.enableSummary">
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>摘要后保留消息数</span>
+                <a-tooltip
+                  title="摘要触发后，除摘要消息外保留最近 N 条消息不被压缩"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-input-number
+              v-model:value="agentConfig.summaryKeepMessages"
+              :min="1"
+              :max="50"
+              :step="1"
+              placeholder="默认 6"
+              style="width: 100%"
+              :disabled="isVersionPreview"
+            />
+          </a-form-item>
+          <a-form-item v-if="agentConfig.enableSummary">
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>工具结果预览上限</span>
+                <a-tooltip
+                  title="摘要清洗历史工具结果时，保留的预览 Token 数。超出部分截断"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+              </div>
+            </template>
+            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+              <a-input-number
+                v-model:value="agentConfig.summaryToolResultTokenLimit"
+                :min="50"
+                :max="5000"
+                :step="50"
+                placeholder="默认 500"
+                style="flex: 1"
+                :disabled="isVersionPreview"
+              />
+              <span style="font-size: 13px; color: #71717a; white-space: nowrap;">Tokens</span>
+            </div>
+          </a-form-item>
+          <a-form-item>
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>最大执行步数</span>
+                <a-tooltip
+                  title="单次对话中模型与工具交互的最大轮次。超出后停止工具调用并返回当前结果"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-input-number
+              v-model:value="agentConfig.maxExecutionSteps"
+              :min="1"
+              :max="100"
+              :step="1"
+              placeholder="默认 10"
+              style="width: 100%"
+              :disabled="isVersionPreview"
+            />
+          </a-form-item>
+          <a-form-item>
+            <template #label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>模型重试次数</span>
+                <a-tooltip
+                  title="模型调用失败时的最大重试次数。重试间隔递增（1s, 2s, 4s）"
+                  overlay-class-name="no-flip-tooltip"
+                  :overlay-style="{ maxWidth: '320px' }"
+                  placement="topLeft"
+                >
+                  <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-input-number
+              v-model:value="agentConfig.modelRetryTimes"
+              :min="0"
+              :max="10"
+              :step="1"
+              placeholder="默认 2"
+              style="width: 100%"
+              :disabled="isVersionPreview"
+            />
+          </a-form-item>
           <a-form-item>
             <template #label>
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -1686,6 +1806,13 @@ const agentConfig = reactive({
   sensitiveFilterStrategy: 'replace',
   sensitiveFilterReplaceText: '***',
   sensitiveWords: [],
+  enableSummary: false,
+  summaryThresholdKb: 100,
+  summaryPrompt: '',
+  summaryKeepMessages: 6,
+  summaryToolResultTokenLimit: 500,
+  maxExecutionSteps: 10,
+  modelRetryTimes: 2,
 })
 
 const userSensitiveWords = ref([''])
@@ -1849,6 +1976,11 @@ const CHAT_CONFIG_PREVIEW_DEFAULTS = {
   maxContextMessages: 20,
   enableSummary: false,
   summaryThresholdKb: 100,
+  summaryPrompt: '',
+  summaryKeepMessages: 6,
+  summaryToolResultTokenLimit: 500,
+  maxExecutionSteps: 10,
+  modelRetryTimes: 2,
   userSensitiveFilterEnabled: false,
   sensitiveFilterEnabled: false,
   sensitiveFilterStrategy: 'replace',
@@ -1891,7 +2023,21 @@ const chatConfigPreviewRows = computed(() => {
       text: `${threshold.value ?? 100} KB`,
       fromDefault: threshold.fromDefault,
     })
+    const keepMsgs = chatConfigPreviewValue('summaryKeepMessages')
+    const toolLimit = chatConfigPreviewValue('summaryToolResultTokenLimit')
+    const summaryPromptVal = chatConfigPreviewValue('summaryPrompt')
+    rows.push(
+      { label: '摘要提示词', text: summaryPromptVal.value ? '自定义' : '系统默认', fromDefault: summaryPromptVal.fromDefault },
+      { label: '摘要保留消息数', text: String(keepMsgs.value ?? 6), fromDefault: keepMsgs.fromDefault },
+      { label: '工具结果预览上限', text: `${toolLimit.value ?? 500} Tokens`, fromDefault: toolLimit.fromDefault },
+    )
   }
+  const maxSteps = chatConfigPreviewValue('maxExecutionSteps')
+  const retryTimes = chatConfigPreviewValue('modelRetryTimes')
+  rows.push(
+    { label: '最大执行步数', text: String(maxSteps.value ?? 10), fromDefault: maxSteps.fromDefault },
+    { label: '模型重试次数', text: String(retryTimes.value ?? 2), fromDefault: retryTimes.fromDefault },
+  )
   rows.push(
     { label: '用户敏感词', text: userSens.value ? '开启' : '关闭', fromDefault: userSens.fromDefault },
     { label: 'AI输出敏感词', text: aiSens.value ? '开启' : '关闭', fromDefault: aiSens.fromDefault },
@@ -3170,6 +3316,11 @@ function normalizeVersionDetailData(data) {
       maxContextMessages: cfg.maxContextMessages,
       enableSummary: cfg.enableSummary,
       summaryThresholdKb: cfg.summaryThresholdKb,
+      summaryPrompt: cfg.summaryPrompt,
+      summaryKeepMessages: cfg.summaryKeepMessages,
+      summaryToolResultTokenLimit: cfg.summaryToolResultTokenLimit,
+      maxExecutionSteps: cfg.maxExecutionSteps,
+      modelRetryTimes: cfg.modelRetryTimes,
       userSensitiveFilterEnabled: cfg.userSensitiveFilterEnabled,
       userSensitiveWords: cfg.userSensitiveWords,
       sensitiveFilterEnabled: cfg.sensitiveFilterEnabled,

@@ -103,8 +103,27 @@ public class ChatServiceImpl implements ChatService {
         log.info("[Chat] 用户消息: sessionId={}, agentId={}, message={}", ctx.getSessionId(),
                 agentId, request.getMessage());
 
-        // 2. 调用模型获取回复
-        ChatResponse response = ctx.getChatModel().call(new Prompt(ctx.getMessages(), ctx.getToolOptions()));
+        // 2. 调用模型获取回复（带重试）
+        int retryTimes = resolveModelRetryTimes(ctx.getConfigMap());
+        ChatResponse response = null;
+        Exception lastException = null;
+        for (int attempt = 0; attempt <= retryTimes; attempt++) {
+            try {
+                response = ctx.getChatModel().call(new Prompt(ctx.getMessages(), ctx.getToolOptions()));
+                break;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < retryTimes) {
+                    long delayMs = (long) Math.pow(2, attempt) * 1000;
+                    log.warn("[Chat] 模型调用失败，第{}次重试，等待{}ms: {}", attempt + 1, delayMs, e.getMessage());
+                    try { Thread.sleep(delayMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }
+        if (response == null) {
+            throw lastException != null ? new RuntimeException("模型调用失败，已重试" + retryTimes + "次", lastException)
+                    : new RuntimeException("模型调用失败");
+        }
         String reply = response.getResult().getOutput().getText();
         reply = SensitiveWordFilter.filterAiOutput(reply, ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
 
@@ -155,7 +174,8 @@ public class ChatServiceImpl implements ChatService {
      * @return Flux<String> 流式输出片段
      */
     private Flux<String> processToolCallsRecursively(ChatContext ctx, int depth, long llmCallStart) {
-        if (depth >= 10) {
+        int maxSteps = resolveMaxExecutionSteps(ctx.getConfigMap());
+        if (depth >= maxSteps) {
             log.warn("[Chat][Trace] 工具调用递归深度达到上限({})，停止循环", depth);
             return Flux.just("\n[工具调用轮次已达上限，请简化问题后重试]");
         }
@@ -462,7 +482,8 @@ public class ChatServiceImpl implements ChatService {
      * 非流式 LLM 轮次：call() 获取完整回复后一次性输出
      */
     private Flux<String> processBlockingRound(ChatContext ctx, int depth, long llmCallStart) {
-        if (depth >= 10) {
+        int maxSteps = resolveMaxExecutionSteps(ctx.getConfigMap());
+        if (depth >= maxSteps) {
             log.warn("[Chat][Trace] 工具调用递归深度达到上限({})，停止循环", depth);
             return Flux.just("\n[工具调用轮次已达上限，请简化问题后重试]");
         }
@@ -484,8 +505,27 @@ public class ChatServiceImpl implements ChatService {
 
         String llmSpanId = "llm_" + depth;
         Prompt prompt = new Prompt(new ArrayList<>(messages), toolOptions);
+        int retryTimes = resolveModelRetryTimes(configMap);
 
-        ChatResponse response = chatModel.call(prompt);
+        ChatResponse response = null;
+        Exception lastException = null;
+        for (int attempt = 0; attempt <= retryTimes; attempt++) {
+            try {
+                response = chatModel.call(prompt);
+                break;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < retryTimes) {
+                    long delayMs = (long) Math.pow(2, attempt) * 1000;
+                    log.warn("[Chat] 非流式模型调用失败，第{}次重试，等待{}ms: depth={}, error={}", attempt + 1, delayMs, depth, e.getMessage());
+                    try { Thread.sleep(delayMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }
+        if (response == null) {
+            log.error("[Chat] 非流式模型调用最终失败: depth={}", depth, lastException);
+            return Flux.just("\n[模型调用失败，请稍后重试]");
+        }
         accumulateStreamUsage(response, inputTokenHolder, outputTokenHolder);
 
         Generation gen = response.getResult();
@@ -796,6 +836,26 @@ public class ChatServiceImpl implements ChatService {
                     }
                 })
                 .doOnError(e -> log.error("[Chat][MiMo] 直连失败: {}", e.getMessage()));
+    }
+
+    private int resolveMaxExecutionSteps(Map<String, Object> configMap) {
+        if (configMap == null) return 10;
+        Object val = configMap.get(ConfigKeys.Agent.MAX_EXECUTION_STEPS);
+        if (val instanceof Number n) return Math.max(1, Math.min(100, n.intValue()));
+        if (val != null) {
+            try { return Math.max(1, Math.min(100, Integer.parseInt(val.toString()))); } catch (Exception ignored) {}
+        }
+        return 10;
+    }
+
+    private int resolveModelRetryTimes(Map<String, Object> configMap) {
+        if (configMap == null) return 2;
+        Object val = configMap.get(ConfigKeys.Agent.MODEL_RETRY_TIMES);
+        if (val instanceof Number n) return Math.max(0, Math.min(10, n.intValue()));
+        if (val != null) {
+            try { return Math.max(0, Math.min(10, Integer.parseInt(val.toString()))); } catch (Exception ignored) {}
+        }
+        return 2;
     }
 
     private boolean isStreamOutputEnabled(Map<String, Object> configMap) {
