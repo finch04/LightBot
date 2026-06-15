@@ -132,13 +132,15 @@
               <div v-if="ragMessages.length === 0" class="example-questions">
                 <template v-if="exampleQuestions.length > 0">
                   <transition name="fade" mode="out-in">
-                    <span
-                      :key="questionRotateIndex"
-                      class="example-question-text"
-                      @click="ragQuestion = exampleQuestions[questionRotateIndex]"
-                    >
-                      {{ exampleQuestions[questionRotateIndex] }}
-                    </span>
+                    <a-tooltip :title="exampleQuestions[questionRotateIndex]" :overlay-style="{ maxWidth: '400px' }">
+                      <span
+                        :key="questionRotateIndex"
+                        class="example-question-text"
+                        @click="ragQuestion = exampleQuestions[questionRotateIndex]"
+                      >
+                        {{ exampleQuestions[questionRotateIndex] }}
+                      </span>
+                    </a-tooltip>
                   </transition>
                 </template>
                 <div v-else class="example-questions-hint">
@@ -636,12 +638,15 @@
                 v-if="q.editing"
                 v-model:value="q.text"
                 size="small"
-                placeholder="输入示例问题"
+                placeholder="输入示例问题（最多100字）"
+                :maxlength="100"
                 @press-enter="confirmEditQuestion(qi)"
                 @blur="confirmEditQuestion(qi)"
               />
               <template v-else>
-                <span class="edit-question-text" @click="startEditQuestion(qi)">{{ q.text }}</span>
+                <a-tooltip :title="q.text" :overlay-style="{ maxWidth: '400px' }">
+                  <span class="edit-question-text" @click="startEditQuestion(qi)">{{ q.text }}</span>
+                </a-tooltip>
               </template>
               <DeleteOutlined class="edit-question-delete" @click="removeEditQuestion(qi)" />
             </div>
@@ -1429,6 +1434,10 @@ async function handleEdit() {
     })
     // 保存示例问题
     const questions = editExampleQuestions.value.map(q => q.text).filter(t => t && t.trim())
+    const overLimit = questions.find(q => q.length > 100)
+    if (overLimit) {
+      return message.warning('示例问题不能超过100字，请检查')
+    }
     await updateExampleQuestions(knowledgeId, questions)
     message.success('更新成功')
     editVisible.value = false
@@ -1461,6 +1470,10 @@ function confirmEditQuestion(index) {
     editExampleQuestions.value.splice(index, 1)
     return
   }
+  if (q.text.trim().length > 100) {
+    message.warning('示例问题不能超过100字')
+    return
+  }
   q.editing = false
 }
 
@@ -1473,7 +1486,8 @@ async function aiGenerateEditQuestion() {
     const res = await generateOneExampleQuestion(knowledgeId)
     const question = res.data
     if (question) {
-      editExampleQuestions.value.push({ text: question, editing: false })
+      const trimmed = question.length > 100 ? question.substring(0, 100) : question
+      editExampleQuestions.value.push({ text: trimmed, editing: false })
       message.success('生成成功')
     }
   } catch (e) {

@@ -1,5 +1,7 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.entity.User;
@@ -18,6 +20,8 @@ import java.time.LocalDateTime;
 @Data
 public class UserDTO {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
     private String username;
@@ -29,6 +33,7 @@ public class UserDTO {
     private UserStatus status;
     private LocalDateTime createTime;
     private Boolean firstLogin;
+    private String avatarFrame;
 
     public static UserDTO from(User user) {
         UserDTO dto = new UserDTO();
@@ -41,6 +46,18 @@ public class UserDTO {
         dto.setRole(user.getRole());
         dto.setStatus(user.getStatus());
         dto.setCreateTime(user.getCreateTime());
+        dto.setAvatarFrame(extractAvatarFrame(user.getConfig()));
         return dto;
+    }
+
+    private static String extractAvatarFrame(String config) {
+        if (config == null || config.isBlank()) return null;
+        try {
+            JsonNode node = MAPPER.readTree(config);
+            JsonNode frame = node.get("avatarFrame");
+            return (frame != null && !frame.isNull()) ? frame.asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

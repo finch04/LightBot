@@ -107,7 +107,9 @@
       <div class="sidebar-footer">
         <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown">
           <div class="user-info">
-            <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
+            <AvatarFrame :frame="userStore.user?.avatarFrame" :size="28">
+              <div class="user-avatar">{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</div>
+            </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
             <a-badge v-if="taskBadgeCount" class="sidebar-badge" :count="taskBadgeCount" :number-style="taskBadgeStyle" />
             <span class="sidebar-text">
@@ -167,6 +169,7 @@ import { useUserStore } from '../stores/user'
 import { taskCounts, updateTaskCounts } from '../stores/task'
 import { Modal } from 'ant-design-vue'
 import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
+import AvatarFrame from '../components/AvatarFrame.vue'
 
 const route = useRoute()
 const router = useRouter()

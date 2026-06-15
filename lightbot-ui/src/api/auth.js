@@ -31,6 +31,18 @@ export function updateProfile(data) {
   return request.put('/auth/profile', data)
 }
 
+export function updateAvatarFrame(avatarFrame) {
+  return request.put('/auth/profile', { avatarFrame })
+}
+
+export function uploadAvatar(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/auth/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 export function changePassword(data) {
   return request.put('/auth/password', data)
 }

@@ -221,7 +221,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     private static final String QUESTION_GEN_SYSTEM_PROMPT = """
             你是知识库测试专家。根据文档内容生成1个用户可能会问的具体问题。
-            要求：10-30个字，具体明确，能通过知识库检索找到答案。
+            要求：10-100个字，具体明确，能通过知识库检索找到答案。问题长度严格不超过100字。
             只返回JSON格式，不要有其他内容：{"question": "..."}
             """;
 

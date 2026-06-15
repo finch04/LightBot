@@ -2,7 +2,10 @@ package com.lightbot.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.ChangePasswordRequest;
 import com.lightbot.dto.LoginRequest;
 import com.lightbot.dto.ProfileUpdateRequest;
@@ -14,11 +17,18 @@ import com.lightbot.enums.UserRole;
 import com.lightbot.enums.UserStatus;
 import com.lightbot.mapper.UserMapper;
 import com.lightbot.service.UserService;
+import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -27,11 +37,17 @@ import java.util.stream.Collectors;
  * @author finch
  * @since 2026-05-19
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Set<String> VALID_FRAMES = Set.of("lightning", "flame", "stars");
+    private static final List<String> ALLOWED_AVATAR_EXTS = List.of("jpg", "jpeg", "png", "gif", "webp", "bmp");
+
     private final UserMapper userMapper;
+    private final MinioUtil minioUtil;
 
     @Override
     public UserDTO register(RegisterRequest request) {
@@ -140,6 +156,25 @@ public class UserServiceImpl implements UserService {
         if (request.getPhone() != null) {
             user.setPhone(request.getPhone());
         }
+
+        // 3. 更新头像框配置
+        if (request.getAvatarFrame() != null) {
+            Map<String, Object> configMap = parseConfigMap(user.getConfig());
+            if (request.getAvatarFrame().isEmpty() || "none".equals(request.getAvatarFrame())) {
+                configMap.remove(ConfigKeys.User.AVATAR_FRAME);
+            } else {
+                if (!VALID_FRAMES.contains(request.getAvatarFrame())) {
+                    throw new BizException(ErrorCode.BAD_REQUEST);
+                }
+                configMap.put(ConfigKeys.User.AVATAR_FRAME, request.getAvatarFrame());
+            }
+            try {
+                user.setConfig(MAPPER.writeValueAsString(configMap));
+            } catch (Exception e) {
+                throw new BizException(ErrorCode.INTERNAL_ERROR);
+            }
+        }
+
         userMapper.updateById(user);
 
         return UserDTO.from(user);
@@ -169,5 +204,57 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.selectOne(
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username));
         return user != null && user.getLastLoginAt() == null;
+    }
+
+    @Override
+    public String uploadAvatar(MultipartFile file) {
+        // 1. 获取当前用户
+        long userId = StpUtil.getLoginIdAsLong();
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        // 2. 校验文件格式
+        String originalName = file.getOriginalFilename();
+        String ext = "";
+        if (originalName != null && originalName.lastIndexOf('.') > 0) {
+            ext = originalName.substring(originalName.lastIndexOf('.') + 1).toLowerCase();
+        }
+        if (!ALLOWED_AVATAR_EXTS.contains(ext)) {
+            throw new BizException(ErrorCode.AVATAR_UNSUPPORTED_TYPE, "支持格式: jpg/jpeg/png/gif/webp/bmp");
+        }
+
+        // 3. 生成存储路径：user/{userId}/avatar/{uuid}.{ext}
+        String filePath = String.format("user/%d/avatar/%s.%s", userId, UUID.randomUUID().toString().replace("-", ""), ext);
+
+        // 4. 删除旧头像
+        deleteOldAvatar(user.getAvatar());
+
+        // 5. 上传新头像
+        minioUtil.upload(file, filePath);
+
+        // 6. 构建完整URL并更新用户avatar字段
+        String fullUrl = minioUtil.getPresignedUrl(filePath);
+        user.setAvatar(fullUrl);
+        userMapper.updateById(user);
+
+        log.info("[用户] 头像上传成功: userId={}, url={}", userId, fullUrl);
+        return fullUrl;
+    }
+
+    private void deleteOldAvatar(String avatar) {
+        if (avatar == null || avatar.isEmpty()) return;
+        String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
+        minioUtil.delete(path);
+    }
+
+    private Map<String, Object> parseConfigMap(String config) {
+        if (config == null || config.isBlank()) return new HashMap<>();
+        try {
+            return MAPPER.readValue(config, new TypeReference<>() {});
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
     }
 }

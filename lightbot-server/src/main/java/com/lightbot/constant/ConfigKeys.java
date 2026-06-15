@@ -84,6 +84,13 @@ public final class ConfigKeys {
     }
 
     /**
+     * Users.config JSONB 字段的 key
+     */
+    public static final class User {
+        public static final String AVATAR_FRAME = "avatarFrame";
+    }
+
+    /**
      * SystemConfig 系统配置的 key
      */
     public static final class System {

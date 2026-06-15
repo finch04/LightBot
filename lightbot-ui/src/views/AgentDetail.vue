@@ -578,9 +578,9 @@
           <a-form-item v-if="agentConfig.enableSummary">
             <template #label>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <span>摘要后保留消息数</span>
+                <span>保留消息数</span>
                 <a-tooltip
-                  title="摘要触发后，除摘要消息外保留最近 N 条消息不被压缩"
+                  title="摘要触发后，除摘要消息外保留最近 N 条消息不被压缩（摘要后保留消息数）"
                   overlay-class-name="no-flip-tooltip"
                   :overlay-style="{ maxWidth: '320px' }"
                   placement="topLeft"
@@ -602,9 +602,9 @@
           <a-form-item v-if="agentConfig.enableSummary">
             <template #label>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <span>工具结果预览上限</span>
+                <span>工具结果上限</span>
                 <a-tooltip
-                  title="摘要清洗历史工具结果时，保留的预览 Token 数。超出部分截断"
+                  title="摘要清洗历史工具结果时，保留的预览 Token 数，超出部分截断（工具结果预览上限）"
                   overlay-class-name="no-flip-tooltip"
                   :overlay-style="{ maxWidth: '320px' }"
                   placement="topLeft"

@@ -5,6 +5,7 @@ import com.lightbot.dto.LoginRequest;
 import com.lightbot.dto.ProfileUpdateRequest;
 import com.lightbot.dto.RegisterRequest;
 import com.lightbot.dto.UserDTO;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -82,4 +83,12 @@ public interface UserService {
      * @return true=首次登录
      */
     boolean isFirstLogin(String username);
+
+    /**
+     * 上传当前用户头像
+     *
+     * @param file 头像文件
+     * @return 头像URL
+     */
+    String uploadAvatar(MultipartFile file);
 }

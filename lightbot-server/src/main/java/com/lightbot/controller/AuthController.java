@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.List;
@@ -83,5 +84,11 @@ public class AuthController {
     public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(request);
         return Result.ok();
+    }
+
+    @Operation(summary = "上传用户头像")
+    @PostMapping("/avatar")
+    public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        return Result.ok(userService.uploadAvatar(file));
     }
 }
