@@ -245,3 +245,11 @@ export function batchImportQAPairs(knowledgeId, items) {
 export function generateQAPairs(knowledgeId, params) {
   return request.post(`/knowledge/${knowledgeId}/qa-pairs/ai-generate`, null, { params })
 }
+
+export function vectorizeQAPair(qaPairId) {
+  return request.post(`/knowledge/qa-pairs/${qaPairId}/vectorize`)
+}
+
+export function batchVectorizeQAPairs(qaPairIds) {
+  return request.post('/knowledge/qa-pairs/batch-vectorize', qaPairIds)
+}

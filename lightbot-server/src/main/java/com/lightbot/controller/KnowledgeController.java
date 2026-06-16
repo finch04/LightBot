@@ -484,4 +484,17 @@ public class KnowledgeController {
                                          @RequestParam(required = false) String modelId) {
         return Result.ok(qaPairService.generateByAI(id, count, providerId, modelId));
     }
+
+    @Operation(summary = "手动触发问答对向量化（需要DEVELOPER及以上权限）")
+    @PostMapping("/qa-pairs/{qaPairId}/vectorize")
+    public Result<Void> vectorizeQaPair(@PathVariable Long qaPairId) {
+        qaPairService.vectorize(qaPairId);
+        return Result.ok();
+    }
+
+    @Operation(summary = "批量触发问答对向量化（需要DEVELOPER及以上权限）")
+    @PostMapping("/qa-pairs/batch-vectorize")
+    public Result<Integer> batchVectorizeQaPairs(@RequestBody List<Long> qaPairIds) {
+        return Result.ok(qaPairService.batchVectorize(qaPairIds));
+    }
 }

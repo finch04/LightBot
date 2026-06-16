@@ -84,6 +84,21 @@ public interface QaPairService extends IService<QaPair> {
     Task generateByAI(Long knowledgeId, Integer count, Long providerId, String modelId);
 
     /**
+     * 手动触发单个问答对向量化
+     *
+     * @param qaPairId 问答对ID
+     */
+    void vectorize(Long qaPairId);
+
+    /**
+     * 批量触发问答对向量化
+     *
+     * @param qaPairIds 问答对ID列表
+     * @return 成功触发的数量
+     */
+    int batchVectorize(List<Long> qaPairIds);
+
+    /**
      * 向量检索：在指定知识库中搜索最相关的问答对
      *
      * @param knowledgeId 知识库ID

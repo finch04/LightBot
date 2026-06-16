@@ -11,7 +11,20 @@
       >
         <template #prefix><SearchOutlined /></template>
       </a-input>
+      <a-tooltip title="刷新">
+        <a-button size="small" @click="loadData" :disabled="loading">
+          <template #icon><ReloadOutlined :spin="loading" /></template>
+        </a-button>
+      </a-tooltip>
       <div class="qa-toolbar-right">
+        <a-button
+          v-if="selectedRowKeys.length > 0"
+          size="small"
+          @click="handleBatchVectorize"
+          :disabled="vectorizing"
+        >
+          <template #icon><ApiOutlined /></template> 向量化 ({{ selectedRowKeys.length }})
+        </a-button>
         <a-button size="small" @click="showCreateModal = true">
           <template #icon><PlusOutlined /></template> 新增
         </a-button>
@@ -28,6 +41,7 @@
       :loading="loading"
       size="small"
       row-key="id"
+      :row-selection="{ selectedRowKeys, onChange: onSelectChange }"
       @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
@@ -52,6 +66,11 @@
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
+            <a-tooltip v-if="record.status === '待向量化' || record.status === '失败'" title="向量化">
+              <a-button type="text" size="small" @click="handleVectorize(record)" :disabled="vectorizing">
+                <template #icon><ApiOutlined /></template>
+              </a-button>
+            </a-tooltip>
             <a-tooltip title="查看详情">
               <a-button type="text" size="small" @click="handleViewDetail(record)">
                 <template #icon><EyeOutlined /></template>
@@ -170,9 +189,9 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { SearchOutlined, PlusOutlined, RobotOutlined, EditOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, CloseCircleOutlined, CopyOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined, PlusOutlined, RobotOutlined, EditOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, CloseCircleOutlined, CopyOutlined, ReloadOutlined, ApiOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs } from '../api/knowledge'
+import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs, vectorizeQAPair, batchVectorizeQAPairs } from '../api/knowledge'
 import ModelSelect from './ModelSelect.vue'
 
 const props = defineProps({
@@ -185,8 +204,10 @@ const searchText = ref('')
 const loading = ref(false)
 const generating = ref(false)
 const saving = ref(false)
+const vectorizing = ref(false)
 const qaPairs = ref([])
 const pagination = ref({ current: 1, pageSize: 10, total: 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` })
+const selectedRowKeys = ref([])
 
 const showCreateModal = ref(false)
 const showGenerateModal = ref(false)
@@ -286,6 +307,38 @@ async function handleDelete(id) {
     loadData()
   } catch (e) {
     message.error('删除失败')
+  }
+}
+
+function onSelectChange(keys) {
+  selectedRowKeys.value = keys
+}
+
+async function handleVectorize(record) {
+  vectorizing.value = true
+  try {
+    await vectorizeQAPair(record.id)
+    message.success('已提交向量化')
+    loadData()
+  } catch (e) {
+    message.error('向量化失败')
+  } finally {
+    vectorizing.value = false
+  }
+}
+
+async function handleBatchVectorize() {
+  if (selectedRowKeys.value.length === 0) return
+  vectorizing.value = true
+  try {
+    const count = await batchVectorizeQAPairs(selectedRowKeys.value)
+    message.success(`已提交 ${count} 条向量化`)
+    selectedRowKeys.value = []
+    loadData()
+  } catch (e) {
+    message.error('批量向量化失败')
+  } finally {
+    vectorizing.value = false
   }
 }
 

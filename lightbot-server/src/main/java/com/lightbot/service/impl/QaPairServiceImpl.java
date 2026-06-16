@@ -252,6 +252,45 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
     }
 
     @Override
+    public void vectorize(Long qaPairId) {
+        QaPair qaPair = getById(qaPairId);
+        if (qaPair == null) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+
+        // 1. 权限校验：DEVELOPER+
+        permissionHelper.checkPermission(qaPair.getKnowledgeId(), KnowledgeRole.DEVELOPER);
+
+        // 2. 仅允许对 pending 或 failed 状态的问答对触发向量化
+        if (qaPair.getStatus() != QaPairStatus.PENDING && qaPair.getStatus() != QaPairStatus.FAILED) {
+            return;
+        }
+
+        // 3. 删除旧向量（failed 状态可能有残留）
+        embeddingMapper.deleteByQaPairId(qaPairId);
+
+        // 4. 异步向量化
+        asyncVectorize(qaPairId, qaPair.getQuestion());
+
+        log.info("[QaPair] 手动触发向量化: qaPairId={}", qaPairId);
+    }
+
+    @Override
+    public int batchVectorize(List<Long> qaPairIds) {
+        int count = 0;
+        for (Long qaPairId : qaPairIds) {
+            try {
+                vectorize(qaPairId);
+                count++;
+            } catch (Exception e) {
+                log.warn("[QaPair] 批量向量化跳过: qaPairId={}, reason={}", qaPairId, e.getMessage());
+            }
+        }
+        log.info("[QaPair] 批量向量化完成: total={}, success={}", qaPairIds.size(), count);
+        return count;
+    }
+
+    @Override
     public List<QaPairSearchResultVO> searchSimilar(Long knowledgeId, float[] queryVector, int topK, double threshold) {
         String vectorStr = toVectorString(queryVector);
         List<Map<String, Object>> results = embeddingMapper.searchSimilarQaPairs(vectorStr, knowledgeId, topK, threshold);

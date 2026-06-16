@@ -1,7 +1,6 @@
 package com.lightbot.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -14,8 +13,7 @@ import lombok.Data;
 @Schema(description = "问答对更新请求")
 public class QaPairUpdateDTO {
 
-    @NotNull(message = "ID不能为空")
-    @Schema(description = "问答对ID", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "问答对ID（由URL Path自动注入，无需传参）")
     private Long id;
 
     @Schema(description = "问题内容")
