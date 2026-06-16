@@ -31,4 +31,7 @@ public class RagSearchResultVO {
     @Schema(description = "文档ID")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long documentId;
+
+    @Schema(description = "来源类型：chunk-文档分块，qa_pair-问答对")
+    private String resultType;
 }

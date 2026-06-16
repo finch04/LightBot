@@ -23,6 +23,7 @@
     "marked-highlight": "^2.2.4",
     "markmap-lib": "^0.18.12",
     "markmap-view": "^0.18.12",
+    "monaco-editor": "^0.55.1",
     "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"

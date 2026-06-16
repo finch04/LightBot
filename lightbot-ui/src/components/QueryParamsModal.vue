@@ -132,6 +132,50 @@
         </a-form-item>
       </template>
 
+      <!-- 问答对检索 -->
+      <a-divider style="margin: 12px 0" />
+      <a-form-item>
+        <template #label>
+          <span>启用问答对</span>
+          <a-tooltip title="开启后检索时同时搜索问答对，高匹配度的问答对可直接返回标准答案，不经过大模型合成">
+            <QuestionCircleOutlined class="field-tip-icon" />
+          </a-tooltip>
+        </template>
+        <a-switch v-model:checked="form.qa_enabled" />
+      </a-form-item>
+
+      <template v-if="form.qa_enabled">
+        <a-form-item>
+          <template #label>
+            <span>QA 返回数量</span>
+            <a-tooltip title="问答对检索返回的最大条数。不需要太多，命中 1-2 条即可，建议 1-5">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.qa_top_k" :min="1" :max="20" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item>
+          <template #label>
+            <span>QA 命中阈值</span>
+            <a-tooltip title="问答对相似度高于此阈值时才算命中。值越高要求匹配越精确，建议 0.7-0.95">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.qa_threshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item>
+          <template #label>
+            <span>QA 优先返回</span>
+            <a-tooltip title="开启后，当问答对相似度超过阈值时直接返回标准答案，跳过大模型合成。关闭则问答对仅作为参考资料辅助大模型回答">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-switch v-model:checked="form.qa_priority" />
+        </a-form-item>
+      </template>
+
       <!-- 图检索（仅 Milvus 知识库） -->
       <template v-if="isMilvus">
       <a-divider style="margin: 12px 0" />
@@ -259,7 +303,7 @@ const props = defineProps({
   knowledgeType: { type: String, default: 'pg' },
 })
 
-const emit = defineEmits(['apply'])
+const emit = defineEmits(['apply', 'qaChange'])
 
 const visible = ref(false)
 const saving = ref(false)
@@ -275,6 +319,10 @@ const pgDefaults = {
   use_reranker: false,
   reranker_model: '',
   recall_top_k: 50,
+  qa_enabled: true,
+  qa_top_k: 3,
+  qa_threshold: 0.85,
+  qa_priority: true,
   use_graph_retrieval: false,
   graph_entity_top_k: 10,
   graph_triple_top_k: 10,
@@ -294,6 +342,10 @@ const milvusDefaults = {
   use_reranker: false,
   reranker_model: '',
   recall_top_k: 50,
+  qa_enabled: true,
+  qa_top_k: 3,
+  qa_threshold: 0.85,
+  qa_priority: true,
   use_graph_retrieval: false,
   graph_entity_top_k: 10,
   graph_triple_top_k: 10,
@@ -339,6 +391,7 @@ async function handleSave() {
   try {
     await updateQueryParams(props.knowledgeId, { ...form })
     emit('apply', { ...form })
+    emit('qaChange', form.qa_enabled)
     message.success('检索配置已保存')
     visible.value = false
   } catch {
@@ -348,7 +401,7 @@ async function handleSave() {
   }
 }
 
-defineExpose({ open })
+defineExpose({ open, getQaEnabled: () => form.qa_enabled })
 </script>
 
 <style scoped>

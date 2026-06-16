@@ -119,7 +119,10 @@
                   <!-- 检索结果摘要 -->
                   <template v-else>
                     <div v-if="turn.results.length > 0" class="rag-msg assistant">
-                      检索到 {{ turn.results.length }} 个文档块
+                      检索到 {{ turn.results.length }} 条结果
+                      <template v-if="turn.results.some(r => r.resultType === 'qa_pair')">
+                        （含 {{ turn.results.filter(r => r.resultType === 'qa_pair').length }} 条问答对）
+                      </template>
                     </div>
                     <div v-else class="rag-msg assistant">
                       未检索到相关内容
@@ -128,7 +131,8 @@
                     <div v-for="(item, i) in turn.results" :key="'chunk-' + ti + '-' + i" class="chunk-result-card">
                       <div class="chunk-result-header">
                         <span class="chunk-rank">#{{ item.rank }}</span>
-                        <span class="chunk-source">{{ item.documentName }}</span>
+                        <a-tag v-if="item.resultType === 'qa_pair'" color="blue" size="small">问答对</a-tag>
+                        <span v-else class="chunk-source">{{ item.documentName }}</span>
                         <span class="chunk-score">相似度 {{ (item.score * 100).toFixed(1) }}%</span>
                       </div>
                       <div class="chunk-result-content">{{ item.content }}</div>
@@ -209,8 +213,19 @@
             </div>
           </a-tab-pane>
           <a-tab-pane key="qa-pairs" tab="问答对">
-            <div class="rag-section">
-              <QAPairsTab ref="qaPairsTabRef" :knowledge-id="knowledgeId" :doc-total="docPagination.total" />
+            <div class="rag-section" style="position: relative;">
+              <QAPairsTab
+                ref="qaPairsTabRef"
+                :knowledge-id="knowledgeId"
+                :doc-total="docPagination.total"
+                :qa-enabled="qaEnabled"
+              />
+              <div v-if="!qaEnabled" class="qa-disabled-mask">
+                <div class="qa-disabled-content">
+                  <p>问答对检索未启用</p>
+                  <button class="btn-primary-sm" @click="queryParamsModalRef?.open()">前往检索配置开启</button>
+                </div>
+              </div>
             </div>
           </a-tab-pane>
         </a-tabs>
@@ -226,13 +241,21 @@
       centered
       :bodyStyle="{ padding: '0' }"
     >
-      <template #extra>
-        <span v-if="previewContent" class="doc-char-count">{{ previewContent.length }} 字符</span>
-        <button class="btn-outline-sm" @click="handleDownload">
-          <DownloadOutlined /> 下载
-        </button>
-      </template>
       <a-tabs v-model:activeKey="docModalTab" class="doc-modal-tabs">
+        <template #rightExtra>
+          <div class="doc-modal-actions">
+            <a-tooltip v-if="isEditableType(currentDoc?.fileType) && (currentDoc?.status?.code || currentDoc?.status) === 'completed'" title="编辑文档">
+              <button class="doc-modal-action-btn" @click="openDocEditor(currentDoc)">
+                <EditOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="下载">
+              <button class="doc-modal-action-btn" @click="handleDownload">
+                <DownloadOutlined />
+              </button>
+            </a-tooltip>
+          </div>
+        </template>
         <a-tab-pane key="info" tab="文档信息">
           <div class="tab-pane-body doc-info-pane">
             <div class="doc-info-section">
@@ -788,12 +811,20 @@
       </div>
     </a-modal>
 
+    <!-- 文档编辑弹窗 -->
+    <DocumentEditorModal
+      v-model:open="docEditorVisible"
+      :document-id="docEditorDocId"
+      @saved="onDocEditorSaved"
+    />
+
     <!-- 检索配置弹窗 -->
     <QueryParamsModal
       ref="queryParamsModalRef"
       :knowledge-id="knowledgeId"
       :knowledge-type="knowledge.type || 'pg'"
       @apply="onQueryParamsApply"
+      @qa-change="onQaChange"
     />
 
     <!-- 权限说明弹窗 -->
@@ -833,7 +864,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { marked } from 'marked'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -865,6 +896,9 @@ import EvaluationBenchmarks from '../components/eval/EvaluationBenchmarks.vue'
 import KnowledgeGraphTab from '../components/KnowledgeGraphTab.vue'
 import QAPairsTab from '../components/QAPairsTab.vue'
 import QueryParamsModal from '../components/QueryParamsModal.vue'
+const DocumentEditorModal = defineAsyncComponent(() =>
+  import('../components/DocumentEditor/DocumentEditorModal.vue')
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -918,6 +952,25 @@ const mindmapData = ref(null)
 const mindmapLoading = ref(false)
 const mindmapSvgRef = ref(null)
 const mindmapLoaded = ref(false)
+
+// 文档编辑弹窗
+const docEditorVisible = ref(false)
+const docEditorDocId = ref(null)
+
+const EDITABLE_FILE_TYPES = new Set(['md', 'txt', 'csv'])
+function isEditableType(fileType) {
+  return fileType && EDITABLE_FILE_TYPES.has(fileType.toLowerCase())
+}
+
+function openDocEditor(doc) {
+  docModalVisible.value = false
+  docEditorDocId.value = doc.id
+  docEditorVisible.value = true
+}
+
+function onDocEditorSaved() {
+  loadDocuments()
+}
 
 // 文档弹窗
 const docModalVisible = ref(false)
@@ -1008,6 +1061,7 @@ const editQuestionLoading = ref(false)
 
 const queryParamsModalRef = ref(null)
 const searchOverrides = ref(null)
+const qaEnabled = ref(true)
 
 const exampleQuestions = ref([])
 const exampleQuestionsLoaded = ref(false)
@@ -1057,6 +1111,19 @@ async function loadKnowledge() {
     }).catch(() => {
       milvusConnected.value = false
     })
+  }
+
+  // 解析问答对启用状态
+  try {
+    const qp = res.data.queryParams
+    if (qp && qp !== '{}') {
+      const parsed = typeof qp === 'string' ? JSON.parse(qp) : qp
+      qaEnabled.value = parsed.qa_enabled !== false
+    } else {
+      qaEnabled.value = true
+    }
+  } catch {
+    qaEnabled.value = true
   }
 
   // 解析示例问题
@@ -1558,6 +1625,13 @@ async function aiGenerateEditQuestion() {
 
 function onQueryParamsApply(params) {
   searchOverrides.value = params
+  if (params.qa_enabled !== undefined) {
+    qaEnabled.value = params.qa_enabled
+  }
+}
+
+function onQaChange(enabled) {
+  qaEnabled.value = enabled
 }
 
 async function handleGenerateQuestions() {
@@ -2272,12 +2346,20 @@ onUnmounted(() => {
 /* 示例问题 */
 .example-questions {
   padding-top: 10px;
+  overflow: hidden;
+  max-width: 100%;
 }
 .example-question-text {
   font-size: 13px;
   color: #a1a1aa;
   cursor: pointer;
   transition: color 0.15s;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 .example-question-text:hover {
   color: #0070f3;
@@ -2415,10 +2497,29 @@ onUnmounted(() => {
 }
 
 /* 文档弹窗 */
-.doc-char-count {
-  font-size: 12px;
-  color: #a1a1aa;
-  margin-right: 8px;
+.doc-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.doc-modal-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #52525b;
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.15s;
+}
+.doc-modal-action-btn:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+  color: #171717;
 }
 .doc-modal-tabs {
   margin-top: 4px;
@@ -3264,5 +3365,25 @@ onUnmounted(() => {
 .invite-username {
   font-size: 12px;
   color: #a1a1aa;
+}
+
+.qa-disabled-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 8px;
+}
+.qa-disabled-content {
+  text-align: center;
+  color: #71717a;
+}
+.qa-disabled-content p {
+  font-size: 15px;
+  margin-bottom: 12px;
 }
 </style>

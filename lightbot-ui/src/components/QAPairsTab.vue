@@ -18,11 +18,6 @@
         <a-button size="small" :loading="generating" @click="onGenerateClick">
           <template #icon><RobotOutlined /></template> AI 生成
         </a-button>
-        <a-tooltip title="检索配置">
-          <a-button size="small" @click="showConfigModal = true">
-            <template #icon><SettingOutlined /></template>
-          </a-button>
-        </a-tooltip>
       </div>
     </div>
 
@@ -121,11 +116,21 @@
         </a-form>
         <template v-else>
           <div class="qa-detail-section">
-            <div class="qa-detail-label">问题</div>
+            <div class="qa-detail-label">
+              问题
+              <a-tooltip title="复制">
+                <CopyOutlined class="qa-copy-btn" @click="copyText(detailRecord.question)" />
+              </a-tooltip>
+            </div>
             <div class="qa-detail-content">{{ detailRecord.question }}</div>
           </div>
           <div class="qa-detail-section">
-            <div class="qa-detail-label">标准答案</div>
+            <div class="qa-detail-label">
+              标准答案
+              <a-tooltip title="复制">
+                <CopyOutlined class="qa-copy-btn" @click="copyText(detailRecord.answer)" />
+              </a-tooltip>
+            </div>
             <div class="qa-detail-content">{{ detailRecord.answer }}</div>
           </div>
         </template>
@@ -160,55 +165,31 @@
       </a-form>
     </a-modal>
 
-    <!-- 配置弹窗 -->
-    <a-modal
-      v-model:open="showConfigModal"
-      title="问答对检索配置"
-      :maskClosable="false"
-      @ok="handleSaveConfig"
-      :confirm-loading="savingConfig"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="QA Top K">
-          <a-input-number v-model:value="config.qaTopK" :min="1" :max="10" style="width: 100%" />
-          <div class="config-desc">返回最相关的问答对数量</div>
-        </a-form-item>
-        <a-form-item label="QA 阈值 (qaThreshold)">
-          <a-slider v-model:value="config.qaThreshold" :min="0.5" :max="1" :step="0.01" />
-          <div class="config-desc">相似度高于此阈值时直接返回标准答案（当前: {{ config.qaThreshold }}）</div>
-        </a-form-item>
-        <a-form-item label="QA 优先返回">
-          <a-switch v-model:checked="config.qaPriority" />
-          <div class="config-desc">开启后高分命中问答对将跳过 LLM 直接返回答案</div>
-        </a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import { SearchOutlined, PlusOutlined, RobotOutlined, SettingOutlined, EditOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, onMounted } from 'vue'
+import { SearchOutlined, PlusOutlined, RobotOutlined, EditOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, SyncOutlined, ClockCircleOutlined, CloseCircleOutlined, CopyOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs, getKnowledge, updateKnowledge } from '../api/knowledge'
+import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs } from '../api/knowledge'
 import ModelSelect from './ModelSelect.vue'
 
 const props = defineProps({
   knowledgeId: { type: [String, Number], required: true },
   docTotal: { type: Number, default: 0 },
+  qaEnabled: { type: Boolean, default: true },
 })
 
 const searchText = ref('')
 const loading = ref(false)
 const generating = ref(false)
 const saving = ref(false)
-const savingConfig = ref(false)
 const qaPairs = ref([])
 const pagination = ref({ current: 1, pageSize: 10, total: 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` })
 
 const showCreateModal = ref(false)
 const showGenerateModal = ref(false)
-const showConfigModal = ref(false)
 const showDetailModal = ref(false)
 const detailRecord = ref(null)
 const detailEditing = ref(false)
@@ -222,7 +203,6 @@ function onGenerateModelChange({ providerId, modelId }) {
 
 const form = reactive({ question: '', answer: '' })
 const detailForm = reactive({ question: '', answer: '' })
-const config = reactive({ qaTopK: 3, qaThreshold: 0.85, qaPriority: true })
 
 const columns = [
   { title: '问题', key: 'question', dataIndex: 'question', ellipsis: true, width: '40%' },
@@ -336,46 +316,6 @@ async function handleGenerate() {
   }
 }
 
-async function handleSaveConfig() {
-  savingConfig.value = true
-  try {
-    // 读取当前知识库配置
-    const res = await getKnowledge(props.knowledgeId)
-    const knowledge = res.data
-    let existingConfig = {}
-    try {
-      existingConfig = knowledge.config ? JSON.parse(knowledge.config) : {}
-    } catch { existingConfig = {} }
-
-    // 合并 QA 配置
-    existingConfig.qaTopK = config.qaTopK
-    existingConfig.qaThreshold = config.qaThreshold
-    existingConfig.qaPriority = config.qaPriority
-
-    await updateKnowledge({ id: props.knowledgeId, config: JSON.stringify(existingConfig) })
-    message.success('配置已保存')
-    showConfigModal.value = false
-  } catch (e) {
-    message.error('保存失败')
-  } finally {
-    savingConfig.value = false
-  }
-}
-
-async function loadConfig() {
-  try {
-    const res = await getKnowledge(props.knowledgeId)
-    const knowledge = res.data
-    if (knowledge?.config) {
-      try {
-        const cfg = JSON.parse(knowledge.config)
-        if (cfg.qaTopK !== undefined) config.qaTopK = cfg.qaTopK
-        if (cfg.qaThreshold !== undefined) config.qaThreshold = cfg.qaThreshold
-        if (cfg.qaPriority !== undefined) config.qaPriority = cfg.qaPriority
-      } catch {}
-    }
-  } catch {}
-}
 
 function handleTableChange(pag) {
   pagination.value.current = pag.current
@@ -388,6 +328,15 @@ function formatTime(time) {
   const d = new Date(time)
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text || '')
+    message.success('已复制')
+  } catch {
+    message.error('复制失败')
+  }
 }
 
 function truncate(str, len) {
@@ -410,7 +359,6 @@ defineExpose({ loadData })
 
 onMounted(() => {
   loadData()
-  loadConfig()
 })
 </script>
 
@@ -472,6 +420,18 @@ onMounted(() => {
   font-size: 12px;
   color: #888;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qa-copy-btn {
+  font-size: 12px;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.qa-copy-btn:hover {
+  color: #0070f3;
 }
 .qa-detail-content {
   white-space: pre-wrap;

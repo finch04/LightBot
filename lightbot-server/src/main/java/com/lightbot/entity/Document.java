@@ -85,6 +85,14 @@ public class Document {
     @Schema(description = "错误信息")
     private String errorMessage;
 
+    @TableField("version")
+    @Schema(description = "文档内容版本号，每次编辑递增")
+    private Integer version;
+
+    @TableField("last_edit_time")
+    @Schema(description = "最后一次在线编辑时间")
+    private LocalDateTime lastEditTime;
+
     @TableField(value = "embedding_json", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "入库配置（chunkStrategy/chunkSize/chunkOverlap/chunkDelimiter）")
     private String embeddingJson;

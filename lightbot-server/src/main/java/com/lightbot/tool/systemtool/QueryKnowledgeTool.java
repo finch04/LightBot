@@ -27,7 +27,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 /**
  * 平台系统工具 — 知识库检索
@@ -98,15 +97,17 @@ public class QueryKnowledgeTool {
                                 return List.<Map<String, Object>>of();
                             }
                             String kbName = knowledge.getName();
-                            ToolEventEmitter.emit("正在检索知识库「" + kbName + "」...");
-                            int topK = parseTopK(knowledge);
-                            double threshold = parseThreshold(knowledge);
-                            int qaTopK = parseQaTopK(knowledge);
-                            double qaThreshold = parseQaThreshold(knowledge);
-                            log.info("[Tool:query_knowledge] 检索知识库: name={}, knowledgeId={}, topK={}, threshold={}, qaTopK={}, qaThreshold={}",
-                                    kbName, knowledgeId, topK, threshold, qaTopK, qaThreshold);
+                            int topK = resolveTopK(knowledge);
+                            double threshold = resolveThreshold(knowledge);
+                            boolean qaEnabled = resolveQaEnabled(knowledge);
+                            int qaTopK = qaEnabled ? resolveQaTopK(knowledge) : 0;
+                            double qaThreshold = qaEnabled ? resolveQaThreshold(knowledge) : 0;
+                            boolean qaPriority = qaEnabled && resolveQaPriority(knowledge);
+                            log.info("[Tool:query_knowledge] 检索知识库: name={}, knowledgeId={}, topK={}, threshold={}, qaEnabled={}, qaTopK={}, qaThreshold={}, qaPriority={}",
+                                    kbName, knowledgeId, topK, threshold, qaEnabled, qaTopK, qaThreshold, qaPriority);
 
                             // 并行检索 Chunk 和 QA Pair
+                            ToolEventEmitter.emit("正在检索知识库「" + kbName + "」的文档块...");
                             CompletableFuture<List<Map<String, Object>>> chunkFuture = CompletableFuture.supplyAsync(() -> {
                                 try {
                                     Map<String, Object> searchParams = buildSearchParams(knowledge, question);
@@ -117,27 +118,32 @@ public class QueryKnowledgeTool {
                                 }
                             }, SEARCH_EXECUTOR);
 
-                            CompletableFuture<List<Map<String, Object>>> qaFuture = CompletableFuture.supplyAsync(() -> {
-                                try {
-                                    List<QaPairSearchResultVO> qaResults = qaPairService.searchSimilar(knowledgeId, queryVector, qaTopK, qaThreshold);
-                                    // 转换为统一的 Map 格式
-                                    return qaResults.stream().map(qa -> {
-                                        Map<String, Object> row = new java.util.HashMap<>();
-                                        row.put("id", qa.getId());
-                                        row.put("question", qa.getQuestion());
-                                        row.put("content", qa.getAnswer());
-                                        row.put("answer", qa.getAnswer());
-                                        row.put("score", qa.getScore());
-                                        row.put("knowledge_id", knowledgeId);
-                                        row.put("document_name", "问答对");
-                                        row.put("result_type", "qa_pair");
-                                        return row;
-                                    }).toList();
-                                } catch (Exception e) {
-                                    log.warn("[Tool:query_knowledge] QA Pair检索失败: knowledgeId={}", knowledgeId);
-                                    return List.<Map<String, Object>>of();
-                                }
-                            }, SEARCH_EXECUTOR);
+                            CompletableFuture<List<Map<String, Object>>> qaFuture;
+                            if (qaEnabled) {
+                                ToolEventEmitter.emit("正在检索知识库「" + kbName + "」的问答对...");
+                                qaFuture = CompletableFuture.supplyAsync(() -> {
+                                    try {
+                                        List<QaPairSearchResultVO> qaResults = qaPairService.searchSimilar(knowledgeId, queryVector, qaTopK, qaThreshold);
+                                        return qaResults.stream().map(qa -> {
+                                            Map<String, Object> row = new java.util.HashMap<>();
+                                            row.put("id", qa.getId());
+                                            row.put("question", qa.getQuestion());
+                                            row.put("content", qa.getAnswer());
+                                            row.put("answer", qa.getAnswer());
+                                            row.put("score", qa.getScore());
+                                            row.put("knowledge_id", knowledgeId);
+                                            row.put("document_name", "问答对");
+                                            row.put("result_type", "qa_pair");
+                                            return row;
+                                        }).toList();
+                                    } catch (Exception e) {
+                                        log.warn("[Tool:query_knowledge] QA Pair检索失败: knowledgeId={}", knowledgeId);
+                                        return List.<Map<String, Object>>of();
+                                    }
+                                }, SEARCH_EXECUTOR);
+                            } else {
+                                qaFuture = CompletableFuture.completedFuture(List.of());
+                            }
 
                             // 合并结果
                             List<Map<String, Object>> chunkResults = chunkFuture.join();
@@ -146,13 +152,24 @@ public class QueryKnowledgeTool {
                             // 标记 chunk 结果类型
                             chunkResults.forEach(row -> row.putIfAbsent("result_type", "chunk"));
 
-                            List<Map<String, Object>> allKbResults = new ArrayList<>();
-                            allKbResults.addAll(qaResults);
-                            allKbResults.addAll(chunkResults);
-
                             log.info("[Tool:query_knowledge] 知识库检索结果: name={}, chunkCount={}, qaCount={}",
                                     kbName, chunkResults.size(), qaResults.size());
-                            ToolEventEmitter.emit("知识库「" + kbName + "」找到 " + allKbResults.size() + " 条结果");
+                            ToolEventEmitter.emit("知识库「" + kbName + "」: 文档块 " + chunkResults.size() + " 条" + (qaEnabled ? ", 问答对 " + qaResults.size() + " 条" : ""));
+
+                            // QA 优先返回：高分 QA 标记特殊字段，外层统一处理
+                            List<Map<String, Object>> allKbResults = new ArrayList<>();
+                            if (qaPriority && !qaResults.isEmpty()) {
+                                double topQaScore = ((Number) qaResults.get(0).get("score")).doubleValue();
+                                if (topQaScore >= qaThreshold) {
+                                    Map<String, Object> qaPriorityResult = new java.util.HashMap<>(qaResults.get(0));
+                                    qaPriorityResult.put("_qa_priority", true);
+                                    allKbResults.add(qaPriorityResult);
+                                    log.info("[Tool:query_knowledge] QA优先命中: knowledgeId={}, score={}", knowledgeId, topQaScore);
+                                    return allKbResults;
+                                }
+                            }
+                            allKbResults.addAll(qaResults);
+                            allKbResults.addAll(chunkResults);
                             return allKbResults;
                         } catch (Exception e) {
                             log.warn("[Tool:query_knowledge] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage(), e);
@@ -161,13 +178,33 @@ public class QueryKnowledgeTool {
                     }, SEARCH_EXECUTOR))
                     .toList();
 
-            // 4. 合并结果
-            List<Map<String, Object>> allResults = futures.stream()
-                    .map(CompletableFuture::join)
-                    .flatMap(List::stream)
-                    .toList();
+            // 4. 合并结果，检查是否有 QA 优先命中
+            List<Map<String, Object>> allResults = new ArrayList<>();
+            Map<String, Object> qaPriorityHit = null;
+            for (CompletableFuture<List<Map<String, Object>>> future : futures) {
+                for (Map<String, Object> row : future.join()) {
+                    if (Boolean.TRUE.equals(row.get("_qa_priority"))) {
+                        qaPriorityHit = row;
+                    } else {
+                        allResults.add(row);
+                    }
+                }
+            }
 
-            // 4.1 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
+            // 4.1 QA 优先命中：直接返回标准答案
+            if (qaPriorityHit != null) {
+                String qaAnswer = (String) qaPriorityHit.get("answer");
+                String qaQuestion = (String) qaPriorityHit.get("question");
+                double qaScore = ((Number) qaPriorityHit.get("score")).doubleValue();
+                ToolEventEmitter.emit("命中高匹配问答对（相似度 " + String.format("%.2f", qaScore) + "），直接返回标准答案");
+                if (requestId != null) {
+                    SEARCH_RESULTS_MAP.put(requestId, List.of(qaPriorityHit));
+                }
+                log.info("[Tool:query_knowledge] QA优先返回: question={}, score={}", qaQuestion, qaScore);
+                return "【问答对命中】\n问题：" + qaQuestion + "\n答案：" + qaAnswer;
+            }
+
+            // 4.2 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
             if (requestId != null) {
                 SEARCH_RESULTS_MAP.put(requestId, allResults);
             }
@@ -224,38 +261,70 @@ public class QueryKnowledgeTool {
         return response.getResult().getOutput();
     }
 
-    private int parseTopK(Knowledge knowledge) {
-        // 优先读 queryParams.final_top_k
+    private int resolveTopK(Knowledge knowledge) {
         Map<String, Object> qp = parseQueryParams(knowledge);
-        if (qp.get("final_top_k") instanceof Number n) {
-            return n.intValue();
-        }
-        // 兼容旧 config.ragTopK
+        if (qp.get("final_top_k") instanceof Number n) return n.intValue();
         if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
             try {
                 var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
                 if (node.has("ragTopK")) return node.get("ragTopK").asInt(5);
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
         return 5;
     }
 
-    private double parseThreshold(Knowledge knowledge) {
-        // 优先读 queryParams.similarity_threshold
+    private double resolveThreshold(Knowledge knowledge) {
         Map<String, Object> qp = parseQueryParams(knowledge);
-        if (qp.get("similarity_threshold") instanceof Number n) {
-            return n.doubleValue();
-        }
-        // 兼容旧 config.ragThreshold
+        if (qp.get("similarity_threshold") instanceof Number n) return n.doubleValue();
         if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
             try {
                 var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
                 if (node.has("ragThreshold")) return node.get("ragThreshold").asDouble(0.5);
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
         return 0.5;
+    }
+
+    private boolean resolveQaEnabled(Knowledge knowledge) {
+        Map<String, Object> qp = parseQueryParams(knowledge);
+        if (qp.get("qa_enabled") instanceof Boolean b) return b;
+        return true;
+    }
+
+    private int resolveQaTopK(Knowledge knowledge) {
+        Map<String, Object> qp = parseQueryParams(knowledge);
+        if (qp.get("qa_top_k") instanceof Number n) return n.intValue();
+        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+                if (node.has("qaTopK")) return node.get("qaTopK").asInt(3);
+            } catch (Exception ignored) {}
+        }
+        return 3;
+    }
+
+    private double resolveQaThreshold(Knowledge knowledge) {
+        Map<String, Object> qp = parseQueryParams(knowledge);
+        if (qp.get("qa_threshold") instanceof Number n) return n.doubleValue();
+        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+                if (node.has("qaThreshold")) return node.get("qaThreshold").asDouble(0.85);
+            } catch (Exception ignored) {}
+        }
+        return 0.85;
+    }
+
+    private boolean resolveQaPriority(Knowledge knowledge) {
+        Map<String, Object> qp = parseQueryParams(knowledge);
+        if (qp.get("qa_priority") instanceof Boolean b) return b;
+        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+                if (node.has("qaPriority")) return node.get("qaPriority").asBoolean(true);
+            } catch (Exception ignored) {}
+        }
+        return true;
     }
 
     @SuppressWarnings("unchecked")
@@ -272,25 +341,6 @@ public class QueryKnowledgeTool {
         }
     }
 
-    private int parseQaTopK(Knowledge knowledge) {
-        if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 3;
-        try {
-            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-            return node.has("qaTopK") ? node.get("qaTopK").asInt(3) : 3;
-        } catch (Exception e) {
-            return 3;
-        }
-    }
-
-    private double parseQaThreshold(Knowledge knowledge) {
-        if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 0.85;
-        try {
-            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-            return node.has("qaThreshold") ? node.get("qaThreshold").asDouble(0.85) : 0.85;
-        } catch (Exception e) {
-            return 0.85;
-        }
-    }
 
     /**
      * 按 requestId 获取工具执行期间的搜索结果（跨线程安全）

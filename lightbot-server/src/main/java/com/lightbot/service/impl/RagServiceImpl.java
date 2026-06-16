@@ -6,9 +6,11 @@ import com.lightbot.dto.RagSearchResultVO;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgePermissionHelper;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.QaPairService;
 import com.lightbot.service.RagService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.LlmTraceContext;
@@ -48,6 +50,7 @@ public class RagServiceImpl implements RagService {
     private final EmbeddingService embeddingService;
     private final KnowledgeService knowledgeService;
     private final KnowledgePermissionHelper permissionHelper;
+    private final QaPairService qaPairService;
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
     private final SystemConfigService systemConfigService;
@@ -196,22 +199,52 @@ public class RagServiceImpl implements RagService {
         // 2. 解析检索参数：overrides > queryParams > config > 默认值
         int topK = resolveTopK(knowledge, overrides);
         double threshold = resolveThreshold(knowledge, overrides);
-        log.info("[RAG] 检索测试开始: knowledgeId={}, topK={}, threshold={}, question={}",
-                knowledgeId, topK, threshold, question);
+        boolean qaEnabled = resolveQaEnabled(knowledge, overrides);
+        log.info("[RAG] 检索测试开始: knowledgeId={}, topK={}, threshold={}, qaEnabled={}, question={}",
+                knowledgeId, topK, threshold, qaEnabled, question);
 
         // 3. 将问题文本向量化
         float[] queryVector = embedText(question);
 
-        // 4. 向量检索（阈值过滤下沉到SQL层，传 queryParams 支持 Milvus search_mode）
+        // 4. 并行检索 Chunk 和 QA Pair
         Map<String, Object> mergedParams = buildSearchParams(knowledge, overrides, question);
-        List<Map<String, Object>> results = ((EmbeddingServiceImpl) embeddingService)
-                .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
-        log.info("[RAG] 检索测试完成: results={}", results.size());
 
-        // 5. 转为VO返回（已按相似度降序，rank从1开始）
+        java.util.concurrent.CompletableFuture<List<Map<String, Object>>> chunkFuture =
+                java.util.concurrent.CompletableFuture.supplyAsync(() ->
+                    ((EmbeddingServiceImpl) embeddingService)
+                            .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams)
+                );
+
+        java.util.concurrent.CompletableFuture<List<QaPairSearchResultVO>> qaFuture;
+        if (qaEnabled) {
+            int qaTopK = resolveQaTopK(knowledge, overrides);
+            double qaThreshold = resolveQaThreshold(knowledge, overrides);
+            qaFuture = java.util.concurrent.CompletableFuture.supplyAsync(() ->
+                qaPairService.searchSimilar(knowledgeId, queryVector, qaTopK, qaThreshold)
+            );
+        } else {
+            qaFuture = java.util.concurrent.CompletableFuture.completedFuture(java.util.List.of());
+        }
+
+        List<Map<String, Object>> chunkResults = chunkFuture.join();
+        List<QaPairSearchResultVO> qaResults = qaFuture.join();
+        log.info("[RAG] 检索测试完成: chunkCount={}, qaCount={}", chunkResults.size(), qaResults.size());
+
+        // 5. 转为VO返回：QA 结果排在前面
         int rank = 0;
         List<RagSearchResultVO> voList = new ArrayList<>();
-        for (Map<String, Object> row : results) {
+
+        for (QaPairSearchResultVO qa : qaResults) {
+            RagSearchResultVO vo = new RagSearchResultVO();
+            vo.setContent("【问答对】Q: " + qa.getQuestion() + "\nA: " + qa.getAnswer());
+            vo.setRank(++rank);
+            vo.setScore(qa.getScore());
+            vo.setDocumentName("问答对");
+            vo.setResultType("qa_pair");
+            voList.add(vo);
+        }
+
+        for (Map<String, Object> row : chunkResults) {
             RagSearchResultVO vo = new RagSearchResultVO();
             vo.setContent((String) row.get("content"));
             vo.setRank(++rank);
@@ -220,6 +253,7 @@ public class RagServiceImpl implements RagService {
             vo.setDocumentName((String) row.get("document_name"));
             Object documentId = row.get("document_id");
             vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
+            vo.setResultType("chunk");
             voList.add(vo);
         }
         return voList;
@@ -327,6 +361,45 @@ public class RagServiceImpl implements RagService {
         }
         // 4. 默认值
         return DEFAULT_THRESHOLD;
+    }
+
+    private boolean resolveQaEnabled(Knowledge knowledge, Map<String, Object> overrides) {
+        if (overrides != null) {
+            Object val = overrides.get("qa_enabled");
+            if (val instanceof Boolean b) return b;
+        }
+        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
+        Object qpVal = queryParams.get("qa_enabled");
+        if (qpVal instanceof Boolean b) return b;
+        return true;
+    }
+
+    private int resolveQaTopK(Knowledge knowledge, Map<String, Object> overrides) {
+        if (overrides != null) {
+            Object val = overrides.get("qa_top_k");
+            if (val instanceof Number n) return n.intValue();
+        }
+        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
+        Object qpVal = queryParams.get("qa_top_k");
+        if (qpVal instanceof Number n) return n.intValue();
+        Map<String, Object> config = parseJson(knowledge.getConfig());
+        Object cfgVal = config.get("qaTopK");
+        if (cfgVal instanceof Number n) return n.intValue();
+        return 3;
+    }
+
+    private double resolveQaThreshold(Knowledge knowledge, Map<String, Object> overrides) {
+        if (overrides != null) {
+            Object val = overrides.get("qa_threshold");
+            if (val instanceof Number n) return n.doubleValue();
+        }
+        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
+        Object qpVal = queryParams.get("qa_threshold");
+        if (qpVal instanceof Number n) return n.doubleValue();
+        Map<String, Object> config = parseJson(knowledge.getConfig());
+        Object cfgVal = config.get("qaThreshold");
+        if (cfgVal instanceof Number n) return n.doubleValue();
+        return 0.85;
     }
 
     @SuppressWarnings("unchecked")

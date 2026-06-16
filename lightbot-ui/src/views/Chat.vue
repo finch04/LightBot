@@ -171,6 +171,11 @@
               </a-tooltip>
             </div>
           </div>
+          <!-- 问答对命中提示 -->
+          <div v-if="msg.role === 'assistant' && hasQaPairHit(msg) && !msg._streaming" class="qa-hit-banner">
+            <span class="qa-hit-icon">Q&A</span>
+            <span class="qa-hit-text">命中问答对，直接返回标准答案</span>
+          </div>
           <!-- RAG引用列表（从消息metadata中解析） -->
           <div v-if="msg.role === 'assistant' && getMsgRagRefs(msg).length > 0 && !msg._streaming" class="rag-references">
             <div class="rag-header">
@@ -657,6 +662,11 @@ function getMsgRagRefs(msg) {
   } catch {
     return []
   }
+}
+
+function hasQaPairHit(msg) {
+  const refs = getMsgRagRefs(msg)
+  return refs.length > 0 && refs.every(r => r.sourceType === 'qa_pair')
 }
 
 /**
@@ -2365,6 +2375,34 @@ watch(sessionId, (newVal, oldVal) => {
 .rag-qa-tag {
   flex-shrink: 0;
   font-size: 12px;
+}
+.qa-hit-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.qa-hit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  background: #10b981;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.qa-hit-text {
+  color: #065f46;
+  font-weight: 500;
 }
 .rag-score {
   font-size: 12px;
