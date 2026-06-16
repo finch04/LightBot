@@ -13,6 +13,7 @@ import com.lightbot.mapper.EmbeddingMapper;
 import com.lightbot.service.ChunkService;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.util.GraphRetrievalUtil;
 import com.lightbot.util.MilvusUtil;
 import com.lightbot.util.RerankerUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     private final ChunkService chunkService;
     private final KnowledgeService knowledgeService;
     private final RerankerUtil rerankerUtil;
+    private final GraphRetrievalUtil graphRetrievalUtil;
 
     private static final String SEARCH_MODE_VECTOR = "vector";
     private static final String SEARCH_MODE_KEYWORD = "keyword";
@@ -50,13 +52,15 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
 
     public EmbeddingServiceImpl(EmbeddingMapper embeddingMapper, MilvusUtil milvusUtil,
                                 DocumentMapper documentMapper, ChunkService chunkService,
-                                @Lazy KnowledgeService knowledgeService, RerankerUtil rerankerUtil) {
+                                @Lazy KnowledgeService knowledgeService, RerankerUtil rerankerUtil,
+                                GraphRetrievalUtil graphRetrievalUtil) {
         this.embeddingMapper = embeddingMapper;
         this.milvusUtil = milvusUtil;
         this.documentMapper = documentMapper;
         this.chunkService = chunkService;
         this.knowledgeService = knowledgeService;
         this.rerankerUtil = rerankerUtil;
+        this.graphRetrievalUtil = graphRetrievalUtil;
     }
 
     @Override
@@ -142,46 +146,55 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     }
 
     /**
-     * 向量检索（支持 Milvus 路由 + search_mode 参数）
+     * 向量检索（支持 Milvus 路由 + search_mode 参数 + 图检索融合）
      *
      * @param knowledgeId 知识库ID
      * @param queryVector 查询向量
      * @param topK        返回数量
      * @param threshold   相似度阈值
-     * @param queryParams 检索配置参数（search_mode/vector_weight/bm25_weight/bm25_top_k 等）
+     * @param queryParams 检索配置参数（search_mode/vector_weight/bm25_weight/bm25_top_k/use_graph_retrieval 等）
      * @return 检索结果（chunk_id, content, document_id, document_name, score）
      */
     public List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector,
                                                        int topK, double threshold,
                                                        Map<String, Object> queryParams) {
-        // Milvus 路由
-        if (shouldRouteToMilvus(knowledgeId)) {
-            return searchMilvus(knowledgeId, queryVector, topK, threshold, queryParams);
-        }
-
-        // pgvector：根据 search_mode 分发
-        String searchMode = queryParams != null && queryParams.get("search_mode") instanceof String s
-                ? s : SEARCH_MODE_VECTOR;
-
+        // 1. 常规检索（Milvus 或 pgvector）
         List<Map<String, Object>> results;
-        switch (searchMode) {
-            case SEARCH_MODE_KEYWORD -> {
-                String queryText = getQueryParam(queryParams, "query_text", "");
-                results = embeddingMapper.searchByFullText(queryText, knowledgeId, topK);
-            }
-            case SEARCH_MODE_HYBRID -> {
-                results = searchPgHybrid(knowledgeId, queryVector, topK, threshold, queryParams);
-            }
-            default -> {
-                String vectorStr = toVectorString(queryVector);
-                results = embeddingMapper.searchSimilarWithThreshold(vectorStr, knowledgeId, topK, threshold);
-            }
+        if (shouldRouteToMilvus(knowledgeId)) {
+            results = searchMilvus(knowledgeId, queryVector, topK, threshold, queryParams);
+        } else {
+            results = searchPgvector(knowledgeId, queryVector, topK, threshold, queryParams);
         }
 
-        // Reranker（可选）
+        // 2. 图检索（可选）：与常规结果 RRF 融合
+        results = applyGraphRetrieval(knowledgeId, queryVector, results, topK, queryParams);
+
+        // 3. Reranker（可选）
         results = applyReranker(results, queryParams, topK);
 
         return results;
+    }
+
+    /**
+     * pgvector 检索路由：根据 search_mode 分发
+     */
+    private List<Map<String, Object>> searchPgvector(Long knowledgeId, float[] queryVector,
+                                                      int topK, double threshold,
+                                                      Map<String, Object> queryParams) {
+        String searchMode = queryParams != null && queryParams.get("search_mode") instanceof String s
+                ? s : SEARCH_MODE_VECTOR;
+
+        return switch (searchMode) {
+            case SEARCH_MODE_KEYWORD -> {
+                String queryText = getQueryParam(queryParams, "query_text", "");
+                yield embeddingMapper.searchByFullText(queryText, knowledgeId, topK);
+            }
+            case SEARCH_MODE_HYBRID -> searchPgHybrid(knowledgeId, queryVector, topK, threshold, queryParams);
+            default -> {
+                String vectorStr = toVectorString(queryVector);
+                yield embeddingMapper.searchSimilarWithThreshold(vectorStr, knowledgeId, topK, threshold);
+            }
+        };
     }
 
     @Override
@@ -447,5 +460,53 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         }
         String rerankerModel = getQueryParam(queryParams, "reranker_model", "");
         return rerankerUtil.rerank(queryText, results, topK, rerankerModel);
+    }
+
+    /**
+     * 应用图检索（如果启用）：图检索结果与常规结果 RRF 融合
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param results     常规检索结果
+     * @param topK        最终返回数量
+     * @param queryParams 查询参数
+     * @return 融合后的结果
+     */
+    private List<Map<String, Object>> applyGraphRetrieval(Long knowledgeId, float[] queryVector,
+                                                           List<Map<String, Object>> results,
+                                                           int topK, Map<String, Object> queryParams) {
+        boolean useGraph = queryParams != null
+                && Boolean.TRUE.equals(queryParams.get("use_graph_retrieval"));
+        if (!useGraph || !shouldRouteToMilvus(knowledgeId)) {
+            return results;
+        }
+
+        int graphEntityTopK = getIntParam(queryParams, "graph_entity_top_k", 10);
+        int graphTripleTopK = getIntParam(queryParams, "graph_triple_top_k", 10);
+        int graphMaxNodes = getIntParam(queryParams, "graph_max_nodes", 100);
+        int graphTopK = getIntParam(queryParams, "graph_top_k", 5);
+        double graphWeight = getFloatParam(queryParams, "graph_weight", 0.3f);
+        double pprDamping = getFloatParam(queryParams, "ppr_damping", 0.85f);
+
+        try {
+            List<Map<String, Object>> graphResults = graphRetrievalUtil.search(
+                    knowledgeId, queryVector, graphEntityTopK, graphTripleTopK,
+                    graphMaxNodes, graphTopK, pprDamping);
+
+            if (graphResults.isEmpty()) {
+                return results;
+            }
+
+            // 为图检索结果分配唯一负数 chunk_id，避免与常规结果冲突
+            for (int i = 0; i < graphResults.size(); i++) {
+                graphResults.get(i).put("chunk_id", -(i + 1L));
+            }
+
+            // RRF 融合：常规结果权重=1.0，图检索结果权重=graphWeight
+            return rrfFusion(results, graphResults, 1.0f, (float) graphWeight, topK, 0);
+        } catch (Exception e) {
+            log.error("[Embedding] 图检索异常，返回常规结果: {}", e.getMessage(), e);
+            return results;
+        }
     }
 }

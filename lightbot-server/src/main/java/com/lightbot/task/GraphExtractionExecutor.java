@@ -19,9 +19,14 @@ import com.lightbot.service.ChunkService;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.TaskService;
+import com.lightbot.util.MilvusUtil;
 import com.lightbot.util.Neo4jUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingRequest;
+import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -47,6 +52,7 @@ public class GraphExtractionExecutor implements TaskExecutor {
 
     private final GraphExtractor graphExtractor;
     private final Neo4jUtil neo4jUtil;
+    private final MilvusUtil milvusUtil;
     private final KnowledgeService knowledgeService;
     private final DocumentService documentService;
     private final ChunkService chunkService;
@@ -54,6 +60,9 @@ public class GraphExtractionExecutor implements TaskExecutor {
     private final KnowledgeGraphMapper knowledgeGraphMapper;
     private final GraphDocumentMapper graphDocumentMapper;
     private final ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    private EmbeddingModel embeddingModel;
 
     @Override
     public String execute(Task task) throws Exception {
@@ -191,7 +200,17 @@ public class GraphExtractionExecutor implements TaskExecutor {
                 }
             }
 
-            // 8. 更新知识库统计
+            // 8. 写入 Entity/Triple 向量到 Milvus（图检索支持）
+            if (milvusUtil.isAvailable() && embeddingModel != null) {
+                tracker.nextPhase("正在写入图谱向量...");
+                try {
+                    writeGraphVectors(knowledgeId, label);
+                } catch (Exception e) {
+                    log.warn("[图谱抽取执行器] 写入图谱向量失败（不影响图谱抽取结果）: {}", e.getMessage());
+                }
+            }
+
+            // 9. 更新知识库统计
             tracker.nextPhase("正在更新统计...");
             GraphStatsVO stats = getStatsFromNeo4j(label);
             Knowledge knowledge = knowledgeService.getById(knowledgeId);
@@ -422,6 +441,124 @@ public class GraphExtractionExecutor implements TaskExecutor {
             edgeCount = r.get("edgeCount").asInt();
         }
         return new GraphStatsVO(nodeCount, edgeCount, java.util.Map.of());
+    }
+
+    /**
+     * 从 Neo4j 读取 Entity/Triple，生成 Embedding 后写入 Milvus
+     */
+    private void writeGraphVectors(Long knowledgeId, String label) {
+        // 1. 从 Neo4j 查询所有 Entity
+        String entityCypher = """
+            MATCH (n:Entity:`%s`)
+            WHERE n.graph_source = 'merged' OR n.graph_source IS NULL
+            RETURN n.id AS id, n.name AS name, n.description AS description
+            """.formatted(label);
+
+        List<org.neo4j.driver.Record> entityRecords = neo4jUtil.query(entityCypher, Map.of());
+        if (entityRecords.isEmpty()) {
+            log.info("[图谱向量] 无 Entity 数据, knowledgeId={}", knowledgeId);
+            return;
+        }
+
+        List<Long> entityIds = new ArrayList<>();
+        List<String> entityContents = new ArrayList<>();
+        for (org.neo4j.driver.Record r : entityRecords) {
+            if (r.get("id").isNull()) continue;
+            long id = Long.parseLong(r.get("id").asString());
+            String name = r.get("name").isNull() ? "" : r.get("name").asString();
+            String desc = r.get("description").isNull() ? "" : r.get("description").asString();
+            entityIds.add(id);
+            entityContents.add(name + (desc.isBlank() ? "" : ": " + desc));
+        }
+
+        // 2. 确保 Milvus Entity Collection 存在
+        if (!milvusUtil.hasEntityCollection(knowledgeId)) {
+            List<float[]> sampleVectors = batchEmbed(entityContents.subList(0, Math.min(1, entityContents.size())));
+            if (sampleVectors.isEmpty()) return;
+            milvusUtil.createEntityCollection(knowledgeId, sampleVectors.get(0).length);
+        }
+
+        // 3. 批量生成 Entity Embedding 并写入
+        List<float[]> entityVectors = batchEmbed(entityContents);
+        if (!entityVectors.isEmpty()) {
+            milvusUtil.insertEntityVectors(knowledgeId, entityIds, entityContents, entityVectors);
+            log.info("[图谱向量] Entity 向量写入完成: knowledgeId={}, count={}", knowledgeId, entityIds.size());
+        }
+
+        // 4. 从 Neo4j 查询所有 Triple
+        String tripleCypher = """
+            MATCH (h:Entity:`%s`)-[r:RELATION]->(t:Entity:`%s`)
+            WHERE r.graph_source = 'merged' OR r.graph_source IS NULL
+            RETURN r.id AS id, h.id AS sourceId, t.id AS targetId,
+                   h.name AS headName, r.relation_type AS relType, t.name AS tailName
+            """.formatted(label, label);
+
+        List<org.neo4j.driver.Record> tripleRecords = neo4jUtil.query(tripleCypher, Map.of());
+        if (tripleRecords.isEmpty()) {
+            log.info("[图谱向量] 无 Triple 数据, knowledgeId={}", knowledgeId);
+            return;
+        }
+
+        List<Long> tripleIds = new ArrayList<>();
+        List<String> tripleContents = new ArrayList<>();
+        List<Long> sourceIds = new ArrayList<>();
+        List<Long> targetIds = new ArrayList<>();
+        for (org.neo4j.driver.Record r : tripleRecords) {
+            if (r.get("id").isNull()) continue;
+            long id = Long.parseLong(r.get("id").asString());
+            long sourceId = r.get("sourceId").isNull() ? 0L : Long.parseLong(r.get("sourceId").asString());
+            long targetId = r.get("targetId").isNull() ? 0L : Long.parseLong(r.get("targetId").asString());
+            String headName = r.get("headName").isNull() ? "" : r.get("headName").asString();
+            String relType = r.get("relType").isNull() ? "" : r.get("relType").asString();
+            String tailName = r.get("tailName").isNull() ? "" : r.get("tailName").asString();
+            tripleIds.add(id);
+            sourceIds.add(sourceId);
+            targetIds.add(targetId);
+            tripleContents.add(headName + " " + relType + " " + tailName);
+        }
+
+        // 5. 确保 Milvus Triple Collection 存在
+        if (!milvusUtil.hasTripleCollection(knowledgeId)) {
+            List<float[]> sampleVectors = batchEmbed(tripleContents.subList(0, Math.min(1, tripleContents.size())));
+            if (sampleVectors.isEmpty()) return;
+            milvusUtil.createTripleCollection(knowledgeId, sampleVectors.get(0).length);
+        }
+
+        // 6. 批量生成 Triple Embedding 并写入
+        List<float[]> tripleVectors = batchEmbed(tripleContents);
+        if (!tripleVectors.isEmpty()) {
+            milvusUtil.insertTripleVectors(knowledgeId, tripleIds, tripleContents, sourceIds, targetIds, tripleVectors);
+            log.info("[图谱向量] Triple 向量写入完成: knowledgeId={}, count={}", knowledgeId, tripleIds.size());
+        }
+    }
+
+    /**
+     * 批量生成 Embedding（每批最多 16 条）
+     */
+    private List<float[]> batchEmbed(List<String> texts) {
+        if (texts == null || texts.isEmpty() || embeddingModel == null) {
+            return List.of();
+        }
+        int batchSize = 16;
+        List<float[]> allVectors = new ArrayList<>(texts.size());
+        for (int i = 0; i < texts.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, texts.size());
+            List<String> batch = texts.subList(i, end);
+            try {
+                EmbeddingResponse response = embeddingModel.call(new EmbeddingRequest(batch, null));
+                for (var result : response.getResults()) {
+                    allVectors.add(result.getOutput());
+                }
+            } catch (Exception e) {
+                log.warn("[图谱向量] Embedding 生成失败: batch=[{}, {}), error={}", i, end, e.getMessage());
+                // 填充零向量保持对齐
+                int dim = allVectors.isEmpty() ? 768 : allVectors.get(0).length;
+                for (int j = 0; j < batch.size(); j++) {
+                    allVectors.add(new float[dim]);
+                }
+            }
+        }
+        return allVectors;
     }
 
     private long snowflakeId() {

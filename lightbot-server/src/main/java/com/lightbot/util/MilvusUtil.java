@@ -116,6 +116,20 @@ public class MilvusUtil {
         return "kb_" + knowledgeId;
     }
 
+    /**
+     * 获取 Entity Collection 名称
+     */
+    public static String entityCollectionName(Long knowledgeId) {
+        return "kb_" + knowledgeId + "_entity";
+    }
+
+    /**
+     * 获取 Triple Collection 名称
+     */
+    public static String tripleCollectionName(Long knowledgeId) {
+        return "kb_" + knowledgeId + "_triple";
+    }
+
     // ==================== Collection 管理 ====================
 
     /**
@@ -228,6 +242,295 @@ public class MilvusUtil {
         } catch (Exception e) {
             log.warn("[Milvus] 删除 Collection 失败: {}, error={}", collName, e.getMessage());
         }
+    }
+
+    // ==================== 图检索 Collection 管理 ====================
+
+    /**
+     * 判断 Entity Collection 是否存在
+     */
+    public boolean hasEntityCollection(Long knowledgeId) {
+        return hasCollectionByName(entityCollectionName(knowledgeId));
+    }
+
+    /**
+     * 判断 Triple Collection 是否存在
+     */
+    public boolean hasTripleCollection(Long knowledgeId) {
+        return hasCollectionByName(tripleCollectionName(knowledgeId));
+    }
+
+    private boolean hasCollectionByName(String collName) {
+        try {
+            DescribeCollectionResp desc = getClient().describeCollection(
+                    DescribeCollectionReq.builder().collectionName(collName).build());
+            return desc != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 为知识库创建 Entity Collection
+     * <p>字段: id(VarChar PK), content(VarChar+BM25), embedding(FloatVector), content_sparse(SparseFloatVector)</p>
+     *
+     * @param knowledgeId 知识库ID
+     * @param dimension   向量维度
+     */
+    public void createEntityCollection(Long knowledgeId, int dimension) {
+        String collName = entityCollectionName(knowledgeId);
+        createGraphCollection(collName, dimension, false);
+    }
+
+    /**
+     * 为知识库创建 Triple Collection
+     * <p>字段: id(VarChar PK), content(VarChar+BM25), source_id(VarChar), target_id(VarChar),
+     * embedding(FloatVector), content_sparse(SparseFloatVector)</p>
+     *
+     * @param knowledgeId 知识库ID
+     * @param dimension   向量维度
+     */
+    public void createTripleCollection(Long knowledgeId, int dimension) {
+        String collName = tripleCollectionName(knowledgeId);
+        createGraphCollection(collName, dimension, true);
+    }
+
+    /**
+     * 创建图检索 Collection 的通用逻辑
+     *
+     * @param collName    Collection 名称
+     * @param dimension   向量维度
+     * @param isTriple    是否为 Triple Collection（Triple 多 source_id、target_id 字段）
+     */
+    private void createGraphCollection(String collName, int dimension, boolean isTriple) {
+        // 检查是否已存在
+        if (hasCollectionByName(collName)) {
+            log.info("[Milvus] 图 Collection 已存在, skipping: {}", collName);
+            return;
+        }
+
+        List<CreateCollectionReq.FieldSchema> fieldSchemas = new ArrayList<>();
+
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
+                .name("id").dataType(DataType.VarChar)
+                .maxLength(64).isPrimaryKey(true).autoID(false).build());
+
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
+                .name("content").dataType(DataType.VarChar)
+                .maxLength(65535)
+                .enableAnalyzer(true)
+                .analyzerParams(Map.of("type", "chinese"))
+                .build());
+
+        if (isTriple) {
+            fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
+                    .name("source_id").dataType(DataType.VarChar).maxLength(64).build());
+            fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
+                    .name("target_id").dataType(DataType.VarChar).maxLength(64).build());
+        }
+
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
+                .name("embedding").dataType(DataType.FloatVector)
+                .dimension(dimension).build());
+
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
+                .name("content_sparse").dataType(DataType.SparseFloatVector)
+                .build());
+
+        CreateCollectionReq.Function bm25Function = CreateCollectionReq.Function.builder()
+                .functionType(FunctionType.BM25)
+                .name("bm25_sparse")
+                .inputFieldNames(List.of("content"))
+                .outputFieldNames(List.of("content_sparse"))
+                .build();
+
+        CreateCollectionReq.CollectionSchema schema = CreateCollectionReq.CollectionSchema.builder()
+                .fieldSchemaList(fieldSchemas)
+                .functionList(List.of(bm25Function))
+                .build();
+
+        getClient().createCollection(CreateCollectionReq.builder()
+                .collectionName(collName).collectionSchema(schema).build());
+
+        IndexParam vectorIndex = IndexParam.builder()
+                .fieldName("embedding")
+                .indexType(IndexParam.IndexType.HNSW)
+                .metricType(IndexParam.MetricType.COSINE)
+                .extraParams(Map.of("M", 16, "efConstruction", 200))
+                .build();
+
+        IndexParam sparseIndex = IndexParam.builder()
+                .fieldName("content_sparse")
+                .indexType(IndexParam.IndexType.SPARSE_INVERTED_INDEX)
+                .metricType(IndexParam.MetricType.BM25)
+                .extraParams(Map.of("drop_ratio_search", 0.0))
+                .build();
+
+        getClient().createIndex(CreateIndexReq.builder()
+                .collectionName(collName)
+                .indexParams(List.of(vectorIndex, sparseIndex))
+                .build());
+
+        getClient().loadCollection(LoadCollectionReq.builder()
+                .collectionName(collName).build());
+
+        log.info("[Milvus] 图 Collection 创建成功: {}, dimension={}", collName, dimension);
+    }
+
+    // ==================== 图检索向量写入 ====================
+
+    /**
+     * 批量写入 Entity 向量
+     *
+     * @param knowledgeId 知识库ID
+     * @param entityIds   实体ID列表
+     * @param contents    实体描述列表
+     * @param vectors     向量列表
+     */
+    public void insertEntityVectors(Long knowledgeId, List<Long> entityIds,
+                                     List<String> contents, List<float[]> vectors) {
+        String collName = entityCollectionName(knowledgeId);
+        List<JsonObject> rows = new ArrayList<>(entityIds.size());
+        for (int i = 0; i < entityIds.size(); i++) {
+            JsonObject row = new JsonObject();
+            row.addProperty("id", String.valueOf(entityIds.get(i)));
+            row.addProperty("content", contents.get(i));
+            row.add("embedding", GSON.toJsonTree(vectors.get(i)));
+            rows.add(row);
+        }
+        getClient().insert(InsertReq.builder().collectionName(collName).data(rows).build());
+        log.info("[Milvus] Entity 向量写入: collection={}, count={}", collName, entityIds.size());
+    }
+
+    /**
+     * 批量写入 Triple 向量
+     *
+     * @param knowledgeId 知识库ID
+     * @param tripleIds   三元组ID列表
+     * @param contents    三元组描述列表
+     * @param sourceIds   源实体ID列表
+     * @param targetIds   目标实体ID列表
+     * @param vectors     向量列表
+     */
+    public void insertTripleVectors(Long knowledgeId, List<Long> tripleIds,
+                                     List<String> contents, List<Long> sourceIds,
+                                     List<Long> targetIds, List<float[]> vectors) {
+        String collName = tripleCollectionName(knowledgeId);
+        List<JsonObject> rows = new ArrayList<>(tripleIds.size());
+        for (int i = 0; i < tripleIds.size(); i++) {
+            JsonObject row = new JsonObject();
+            row.addProperty("id", String.valueOf(tripleIds.get(i)));
+            row.addProperty("content", contents.get(i));
+            row.addProperty("source_id", String.valueOf(sourceIds.get(i)));
+            row.addProperty("target_id", String.valueOf(targetIds.get(i)));
+            row.add("embedding", GSON.toJsonTree(vectors.get(i)));
+            rows.add(row);
+        }
+        getClient().insert(InsertReq.builder().collectionName(collName).data(rows).build());
+        log.info("[Milvus] Triple 向量写入: collection={}, count={}", collName, tripleIds.size());
+    }
+
+    // ==================== 图检索向量搜索 ====================
+
+    /**
+     * Entity 向量检索
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param topK        返回数量
+     * @return 检索结果（id, content, score）
+     */
+    public List<Map<String, Object>> searchEntities(Long knowledgeId, float[] queryVector, int topK) {
+        String collName = entityCollectionName(knowledgeId);
+        if (!hasCollectionByName(collName)) {
+            return List.of();
+        }
+
+        SearchReq req = SearchReq.builder()
+                .collectionName(collName)
+                .data(List.of(new FloatVec(queryVector)))
+                .annsField("embedding")
+                .topK(topK)
+                .metricType(IndexParam.MetricType.COSINE)
+                .outputFields(List.of("id", "content"))
+                .build();
+
+        SearchResp resp = getClient().search(req);
+        return convertGraphResults(resp);
+    }
+
+    /**
+     * Triple 向量检索
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param topK        返回数量
+     * @return 检索结果（id, content, source_id, target_id, score）
+     */
+    public List<Map<String, Object>> searchTriples(Long knowledgeId, float[] queryVector, int topK) {
+        String collName = tripleCollectionName(knowledgeId);
+        if (!hasCollectionByName(collName)) {
+            return List.of();
+        }
+
+        SearchReq req = SearchReq.builder()
+                .collectionName(collName)
+                .data(List.of(new FloatVec(queryVector)))
+                .annsField("embedding")
+                .topK(topK)
+                .metricType(IndexParam.MetricType.COSINE)
+                .outputFields(List.of("id", "content", "source_id", "target_id"))
+                .build();
+
+        SearchResp resp = getClient().search(req);
+        return convertGraphResults(resp);
+    }
+
+    /**
+     * 删除知识库的图检索 Collections（Entity + Triple）
+     */
+    public void dropGraphCollections(Long knowledgeId) {
+        dropByName(entityCollectionName(knowledgeId));
+        dropByName(tripleCollectionName(knowledgeId));
+    }
+
+    private void dropByName(String collName) {
+        try {
+            getClient().dropCollection(DropCollectionReq.builder()
+                    .collectionName(collName).build());
+            log.info("[Milvus] 图 Collection 已删除: {}", collName);
+        } catch (Exception e) {
+            log.warn("[Milvus] 删除图 Collection 失败: {}, error={}", collName, e.getMessage());
+        }
+    }
+
+    /**
+     * 将图检索 SearchResp 转换为统一的 Map 格式
+     */
+    private List<Map<String, Object>> convertGraphResults(SearchResp resp) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        if (resp == null || resp.getSearchResults() == null) {
+            return results;
+        }
+        for (List<SearchResp.SearchResult> rowList : resp.getSearchResults()) {
+            for (SearchResp.SearchResult row : rowList) {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("id", Long.parseLong((String) row.getEntity().get("id")));
+                map.put("content", row.getEntity().get("content"));
+                map.put("score", row.getScore());
+                // Triple Collection 额外字段
+                Object sourceId = row.getEntity().get("source_id");
+                Object targetId = row.getEntity().get("target_id");
+                if (sourceId != null) {
+                    map.put("source_id", Long.parseLong((String) sourceId));
+                }
+                if (targetId != null) {
+                    map.put("target_id", Long.parseLong((String) targetId));
+                }
+                results.add(map);
+            }
+        }
+        return results;
     }
 
     // ==================== 向量写入 ====================
