@@ -1,5 +1,8 @@
 package com.lightbot.util;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import io.milvus.common.clientenum.FunctionType;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.DataType;
@@ -7,10 +10,11 @@ import io.milvus.v2.common.IndexParam;
 import io.milvus.v2.service.vector.request.*;
 import io.milvus.v2.service.vector.request.data.FloatVec;
 import io.milvus.v2.service.vector.request.data.SparseFloatVec;
+import io.milvus.v2.service.vector.request.ranker.WeightedRanker;
 import io.milvus.v2.service.vector.response.SearchResp;
 import io.milvus.v2.service.collection.request.*;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
-import io.milvus.common.utils.JsonUtils;
+import io.milvus.v2.service.index.request.CreateIndexReq;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -29,6 +33,8 @@ import java.util.*;
 @Slf4j
 @Component
 public class MilvusUtil {
+
+    private static final Gson GSON = new Gson();
 
     private final boolean enabled;
     private final String uri;
@@ -135,52 +141,53 @@ public class MilvusUtil {
         }
 
         // 1. 定义字段
-        List<FieldType> fields = new ArrayList<>();
+        List<CreateCollectionReq.FieldSchema> fieldSchemas = new ArrayList<>();
 
-        fields.add(FieldType.builder()
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
                 .name("id").dataType(DataType.VarChar)
                 .maxLength(64).isPrimaryKey(true).autoID(false).build());
 
-        fields.add(FieldType.builder()
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
                 .name("document_id").dataType(DataType.VarChar)
                 .maxLength(64).build());
 
-        fields.add(FieldType.builder()
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
                 .name("content").dataType(DataType.VarChar)
                 .maxLength(65535)
                 .enableAnalyzer(true)
                 .analyzerParams(Map.of("type", "chinese"))
                 .build());
 
-        fields.add(FieldType.builder()
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
                 .name("embedding").dataType(DataType.FloatVector)
                 .dimension(dimension).build());
 
-        fields.add(FieldType.builder()
+        fieldSchemas.add(CreateCollectionReq.FieldSchema.builder()
                 .name("content_sparse").dataType(DataType.SparseFloatVector)
                 .build());
 
-        // 2. 创建 Collection
-        CreateCollectionReq createReq = CreateCollectionReq.builder()
-                .collectionName(collName)
-                .fieldTypes(fields)
-                .build();
-        getClient().createCollection(createReq);
-
-        // 3. 创建 BM25 Function（content → content_sparse 自动转换）
-        io.milvus.v2.common.Function function = io.milvus.v2.common.Function.builder()
-                .functionType(io.milvus.v2.common.Function.FunctionType.BM25)
+        // 2. 创建 BM25 Function（content → content_sparse 自动转换）
+        CreateCollectionReq.Function bm25Function = CreateCollectionReq.Function.builder()
+                .functionType(FunctionType.BM25)
                 .name("bm25_sparse")
                 .inputFieldNames(List.of("content"))
                 .outputFieldNames(List.of("content_sparse"))
                 .build();
-        AlterCollectionReq alterReq = AlterCollectionReq.builder()
-                .collectionName(collName)
-                .addFunction(function)
-                .build();
-        getClient().alterCollection(alterReq);
 
-        // 4. 创建向量索引（HNSW + COSINE）
+        // 3. 构建 CollectionSchema（含字段 + Function）
+        CreateCollectionReq.CollectionSchema schema = CreateCollectionReq.CollectionSchema.builder()
+                .fieldSchemaList(fieldSchemas)
+                .functionList(List.of(bm25Function))
+                .build();
+
+        // 4. 创建 Collection
+        CreateCollectionReq createReq = CreateCollectionReq.builder()
+                .collectionName(collName)
+                .collectionSchema(schema)
+                .build();
+        getClient().createCollection(createReq);
+
+        // 5. 创建向量索引（HNSW + COSINE）
         IndexParam vectorIndex = IndexParam.builder()
                 .fieldName("embedding")
                 .indexType(IndexParam.IndexType.HNSW)
@@ -188,7 +195,7 @@ public class MilvusUtil {
                 .extraParams(Map.of("M", 16, "efConstruction", 200))
                 .build();
 
-        // 5. 创建 BM25 稀疏向量索引
+        // 6. 创建 BM25 稀疏向量索引
         IndexParam sparseIndex = IndexParam.builder()
                 .fieldName("content_sparse")
                 .indexType(IndexParam.IndexType.SPARSE_INVERTED_INDEX)
@@ -202,7 +209,7 @@ public class MilvusUtil {
                 .build();
         getClient().createIndex(indexReq);
 
-        // 6. 加载 Collection 到内存
+        // 7. 加载 Collection 到内存
         getClient().loadCollection(LoadCollectionReq.builder()
                 .collectionName(collName).build());
 
@@ -239,22 +246,20 @@ public class MilvusUtil {
                               List<float[]> vectors) {
         String collName = collectionName(knowledgeId);
 
-        List<String> ids = new ArrayList<>(chunkIds.size());
-        List<String> docIds = new ArrayList<>(chunkIds.size());
+        // 2.6.13 SDK 使用 List<JsonObject> 格式
+        List<JsonObject> rows = new ArrayList<>(chunkIds.size());
         for (int i = 0; i < chunkIds.size(); i++) {
-            ids.add(String.valueOf(chunkIds.get(i)));
-            docIds.add(String.valueOf(documentIds.get(i)));
+            JsonObject row = new JsonObject();
+            row.addProperty("id", String.valueOf(chunkIds.get(i)));
+            row.addProperty("document_id", String.valueOf(documentIds.get(i)));
+            row.addProperty("content", contents.get(i));
+            row.add("embedding", GSON.toJsonTree(vectors.get(i)));
+            rows.add(row);
         }
-
-        List<InsertReq.FieldData> fieldDataList = new ArrayList<>();
-        fieldDataList.add(InsertReq.FieldData.builder().fieldName("id").data(ids).build());
-        fieldDataList.add(InsertReq.FieldData.builder().fieldName("document_id").data(docIds).build());
-        fieldDataList.add(InsertReq.FieldData.builder().fieldName("content").data(contents).build());
-        fieldDataList.add(InsertReq.FieldData.builder().fieldName("embedding").data(vectors).build());
 
         InsertReq insertReq = InsertReq.builder()
                 .collectionName(collName)
-                .data(fieldDataList)
+                .data(rows)
                 .build();
         getClient().insert(insertReq);
     }
@@ -298,7 +303,7 @@ public class MilvusUtil {
                 .annsField("embedding")
                 .topK(topK)
                 .metricType(IndexParam.MetricType.COSINE)
-                .outFields(List.of("id", "document_id", "content"))
+                .outputFields(List.of("id", "document_id", "content"))
                 .build();
 
         SearchResp resp = getClient().search(req);
@@ -322,7 +327,7 @@ public class MilvusUtil {
                 .annsField("content_sparse")
                 .topK(topK)
                 .metricType(IndexParam.MetricType.BM25)
-                .outFields(List.of("id", "document_id", "content"))
+                .outputFields(List.of("id", "document_id", "content"))
                 .build();
 
         SearchResp resp = getClient().search(req);
@@ -363,10 +368,15 @@ public class MilvusUtil {
                 .metricType(IndexParam.MetricType.BM25)
                 .build();
 
+        // 加权融合排序器
+        WeightedRanker ranker = WeightedRanker.builder()
+                .weights(List.of(vectorWeight, bm25Weight))
+                .build();
+
         HybridSearchReq req = HybridSearchReq.builder()
                 .collectionName(collName)
                 .searchRequests(List.of(vectorReq, bm25Req))
-                .ranker(new io.milvus.v2.common.IndexParam.WeightedRanker(vectorWeight, bm25Weight))
+                .ranker(ranker)
                 .topK(topK)
                 .outFields(List.of("id", "document_id", "content"))
                 .build();
@@ -403,15 +413,12 @@ public class MilvusUtil {
     }
 
     /**
-     * 将文本转为 BM25 稀疏向量（Milvus 内部自动处理，此方法用于构造输入）
+     * 将文本转为 BM25 稀疏向量
      * <p>Milvus 的 BM25 Function 会在 Insert 时自动将 content 转为 content_sparse，
-     * 检索时直接传入原始文本即可，SDK 内部处理</p>
+     * 检索时需要手动构造稀疏向量输入</p>
      */
-    private Map<Long, Float> sparseFromString(String text) {
-        // Milvus SDK 2.4.x 的 SparseFloatVec 接受 Map<Long, Float>
-        // 对于 BM25 检索，直接传入原始文本的 term 频率
-        // 简单实现：按字符分词，每个 term 权重为 1.0
-        Map<Long, Float> sparse = new LinkedHashMap<>();
+    private SortedMap<Long, Float> sparseFromString(String text) {
+        SortedMap<Long, Float> sparse = new TreeMap<>();
         if (text == null || text.isEmpty()) {
             return sparse;
         }

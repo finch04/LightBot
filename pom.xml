@@ -31,7 +31,7 @@
         <minio.version>8.5.7</minio.version>
         <pgvector.version>0.1.6</pgvector.version>
         <neo4j.version>5.26.0</neo4j.version>
-        <milvus.version>2.4.2</milvus.version>
+        <milvus.version>2.6.13</milvus.version>
     </properties>
 
     <dependencyManagement>

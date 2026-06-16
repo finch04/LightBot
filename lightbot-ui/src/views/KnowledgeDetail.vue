@@ -103,26 +103,34 @@
           <a-tab-pane key="ask" tab="检索测试">
             <div class="rag-section">
               <div class="rag-messages" ref="ragRef">
-                <!-- 用户提问 -->
-                <div v-for="(msg, i) in ragMessages" :key="i" class="rag-msg user">
-                  <div class="rag-content">{{ msg.content }}</div>
-                </div>
-                <!-- 检索结果摘要 -->
-                <div v-if="searchResults.length > 0" class="rag-msg assistant">
-                  检索到 {{ searchResults.length }} 个文档块
-                </div>
-                <div v-else-if="ragMessages.length > 0 && !ragLoading" class="rag-msg assistant">
-                  未检索到相关内容
-                </div>
-                <!-- 文档块列表 -->
-                <div v-for="(item, i) in searchResults" :key="'chunk-' + i" class="chunk-result-card">
-                  <div class="chunk-result-header">
-                    <span class="chunk-rank">#{{ item.rank }}</span>
-                    <span class="chunk-source">{{ item.documentName }}</span>
-                    <span class="chunk-score">相似度 {{ (item.score * 100).toFixed(1) }}%</span>
+                <template v-for="(turn, ti) in ragHistory" :key="ti">
+                  <!-- 用户提问 -->
+                  <div class="rag-msg user">
+                    <div class="rag-content">{{ turn.question }}</div>
                   </div>
-                  <div class="chunk-result-content">{{ item.content }}</div>
-                </div>
+                  <!-- 加载中 -->
+                  <div v-if="turn.loading" class="rag-msg assistant">
+                    <LoadingOutlined spin /> 检索中...
+                  </div>
+                  <!-- 检索结果摘要 -->
+                  <template v-else>
+                    <div v-if="turn.results.length > 0" class="rag-msg assistant">
+                      检索到 {{ turn.results.length }} 个文档块
+                    </div>
+                    <div v-else class="rag-msg assistant">
+                      未检索到相关内容
+                    </div>
+                    <!-- 文档块列表 -->
+                    <div v-for="(item, i) in turn.results" :key="'chunk-' + ti + '-' + i" class="chunk-result-card">
+                      <div class="chunk-result-header">
+                        <span class="chunk-rank">#{{ item.rank }}</span>
+                        <span class="chunk-source">{{ item.documentName }}</span>
+                        <span class="chunk-score">相似度 {{ (item.score * 100).toFixed(1) }}%</span>
+                      </div>
+                      <div class="chunk-result-content">{{ item.content }}</div>
+                    </div>
+                  </template>
+                </template>
               </div>
               <div class="rag-input">
                 <input
@@ -137,12 +145,11 @@
                 </a-tooltip>
                 <button class="btn-primary-sm" :disabled="!ragQuestion.trim() || ragLoading" @click="askRag">
                   <SearchOutlined v-if="!ragLoading" />
-                  <LoadingOutlined v-else />
-                  {{ ragLoading ? '检索中...' : '检索' }}
+                  <LoadingOutlined v-else spin />
                 </button>
               </div>
               <!-- 示例问题轮播 / 空状态引导 -->
-              <div v-if="ragMessages.length === 0" class="example-questions">
+              <div v-if="ragHistory.length === 0" class="example-questions">
                 <template v-if="exampleQuestions.length > 0">
                   <transition name="fade" mode="out-in">
                     <a-tooltip :title="exampleQuestions[questionRotateIndex]" :overlay-style="{ maxWidth: '400px' }">
@@ -899,10 +906,9 @@ const evalTabRef = ref(null)
 const benchmarksTabRef = ref(null)
 const qaPairsTabRef = ref(null)
 const ragQuestion = ref('')
-const ragMessages = ref([])
+const ragHistory = ref([])
 const ragLoading = ref(false)
 const ragRef = ref(null)
-const searchResults = ref([])
 const mindmapData = ref(null)
 const mindmapLoading = ref(false)
 const mindmapSvgRef = ref(null)
@@ -1585,18 +1591,28 @@ function deleteDoc(docId) {
 async function askRag() {
   const q = ragQuestion.value.trim()
   if (!q || ragLoading.value) return
-  ragMessages.value.push({ role: 'user', content: q })
   ragQuestion.value = ''
   ragLoading.value = true
-  searchResults.value = []
+
+  const turn = reactive({ question: q, results: [], loading: true })
+  ragHistory.value.push(turn)
+
+  // 滚动到底部
+  nextTick(() => {
+    if (ragRef.value) ragRef.value.scrollTop = ragRef.value.scrollHeight
+  })
 
   try {
     const res = await searchKnowledge(knowledgeId, q, searchOverrides.value)
-    searchResults.value = res.data || []
+    turn.results = res.data || []
   } catch (e) {
     // interceptor 已处理错误提示
   } finally {
+    turn.loading = false
     ragLoading.value = false
+    nextTick(() => {
+      if (ragRef.value) ragRef.value.scrollTop = ragRef.value.scrollHeight
+    })
   }
 }
 
@@ -2130,6 +2146,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 12px;
   padding-bottom: 12px;
+  padding-right: 8px;
 }
 .rag-msg.user {
   align-self: flex-end;
