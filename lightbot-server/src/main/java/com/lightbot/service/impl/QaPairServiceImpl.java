@@ -26,6 +26,7 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.service.TaskService;
+import com.lightbot.util.QaPairVectorizeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -64,7 +65,7 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
     private ObjectMapper objectMapper;
 
     @Autowired
-    private QaPairVectorizeHelper vectorizeHelper;
+    private QaPairVectorizeUtil vectorizeHelper;
 
     @Autowired
     private ModelProviderService modelProviderService;

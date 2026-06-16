@@ -1,4 +1,4 @@
-package com.lightbot.service.impl;
+package com.lightbot.util;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
@@ -26,7 +26,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class QaPairVectorizeHelper extends ServiceImpl<QaPairMapper, QaPair> {
+public class QaPairVectorizeUtil extends ServiceImpl<QaPairMapper, QaPair> {
 
     private final EmbeddingMapper embeddingMapper;
     private final EmbeddingModel embeddingModel;

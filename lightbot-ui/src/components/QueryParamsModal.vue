@@ -7,17 +7,17 @@
     @cancel="handleCancel"
   >
     <a-form :model="form" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }">
-      <!-- 检索模式（仅 Milvus 支持 keyword/hybrid） -->
-      <a-form-item v-if="isMilvus">
+      <!-- 检索模式 -->
+      <a-form-item>
         <template #label>
           <span>检索模式</span>
-          <a-tooltip title="vector=纯向量语义检索；keyword=BM25关键词检索；hybrid=两者加权融合">
+          <a-tooltip :title="isMilvus ? 'vector=纯向量语义检索；keyword=BM25关键词检索；hybrid=两者加权融合' : 'vector=向量语义检索；keyword=全文检索；hybrid=两者RRF融合'">
             <QuestionCircleOutlined class="field-tip-icon" />
           </a-tooltip>
         </template>
         <a-select v-model:value="form.search_mode">
           <a-select-option value="vector">向量检索</a-select-option>
-          <a-select-option value="keyword">关键词检索</a-select-option>
+          <a-select-option value="keyword">{{ isMilvus ? '关键词检索' : '全文检索' }}</a-select-option>
           <a-select-option value="hybrid">混合检索</a-select-option>
         </a-select>
       </a-form-item>
@@ -42,7 +42,7 @@
         <a-input-number v-model:value="form.similarity_threshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
       </a-form-item>
 
-      <!-- hybrid 模式专属参数 -->
+      <!-- Milvus hybrid 模式专属参数 -->
       <template v-if="isMilvus && form.search_mode === 'hybrid'">
         <a-form-item>
           <template #label>
@@ -74,6 +74,63 @@
           <a-input-number v-model:value="form.bm25_top_k" :min="1" :max="200" style="width: 100%" />
         </a-form-item>
       </template>
+
+      <!-- pgvector hybrid 模式专属参数 -->
+      <template v-if="!isMilvus && form.search_mode === 'hybrid'">
+        <a-form-item>
+          <template #label>
+            <span>向量权重</span>
+            <a-tooltip title="RRF融合中向量检索的权重。值越大越偏向语义理解，建议 0.5-0.8">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.vector_weight" :min="0" :max="1" :step="0.1" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item>
+          <template #label>
+            <span>关键词权重</span>
+            <a-tooltip title="RRF融合中全文检索的权重。值越大越偏向精确关键词匹配，建议 0.2-0.5">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.keyword_weight" :min="0" :max="1" :step="0.1" style="width: 100%" />
+        </a-form-item>
+      </template>
+
+      <!-- Reranker（通用） -->
+      <a-divider style="margin: 12px 0" />
+      <a-form-item>
+        <template #label>
+          <span>启用重排序</span>
+          <a-tooltip title="使用 Reranker 模型对检索结果进行精排，提升相关性">
+            <QuestionCircleOutlined class="field-tip-icon" />
+          </a-tooltip>
+        </template>
+        <a-switch v-model:checked="form.use_reranker" />
+      </a-form-item>
+
+      <template v-if="form.use_reranker">
+        <a-form-item>
+          <template #label>
+            <span>重排序模型</span>
+            <a-tooltip title="指定重排序模型，不选择时使用系统默认配置的重排序模型">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <ModelSelect v-model="form.reranker_model" model-type="rerank" placeholder="系统默认" />
+        </a-form-item>
+
+        <a-form-item>
+          <template #label>
+            <span>召回候选数</span>
+            <a-tooltip title="重排序前的候选文档数量，需 ≥ 返回数量。越大重排序效果越好但耗时越长">
+              <QuestionCircleOutlined class="field-tip-icon" />
+            </a-tooltip>
+          </template>
+          <a-input-number v-model:value="form.recall_top_k" :min="1" :max="200" style="width: 100%" />
+        </a-form-item>
+      </template>
     </a-form>
 
     <template #footer>
@@ -96,6 +153,7 @@ import { ref, reactive, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { getQueryParams, updateQueryParams } from '../api/knowledge'
+import ModelSelect from './ModelSelect.vue'
 
 const props = defineProps({
   knowledgeId: { type: String, required: true },
@@ -113,6 +171,11 @@ const pgDefaults = {
   search_mode: 'vector',
   final_top_k: 5,
   similarity_threshold: 0.5,
+  vector_weight: 0.7,
+  keyword_weight: 0.3,
+  use_reranker: false,
+  reranker_model: '',
+  recall_top_k: 50,
 }
 
 const milvusDefaults = {
@@ -122,6 +185,9 @@ const milvusDefaults = {
   vector_weight: 0.7,
   bm25_weight: 0.3,
   bm25_top_k: 30,
+  use_reranker: false,
+  reranker_model: '',
+  recall_top_k: 50,
 }
 
 const form = reactive({ ...pgDefaults })

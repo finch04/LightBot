@@ -88,6 +88,7 @@ public final class ConfigKeys {
      */
     public static final class User {
         public static final String AVATAR_FRAME = "avatarFrame";
+        public static final String LEVEL = "level";
     }
 
     /**

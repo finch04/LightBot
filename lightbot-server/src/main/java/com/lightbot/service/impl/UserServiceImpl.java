@@ -157,9 +157,12 @@ public class UserServiceImpl implements UserService {
             user.setPhone(request.getPhone());
         }
 
-        // 3. 更新头像框配置
+        // 3. 更新头像框和等级配置
+        boolean configChanged = false;
+        Map<String, Object> configMap = parseConfigMap(user.getConfig());
+
         if (request.getAvatarFrame() != null) {
-            Map<String, Object> configMap = parseConfigMap(user.getConfig());
+            configChanged = true;
             if (request.getAvatarFrame().isEmpty() || "none".equals(request.getAvatarFrame())) {
                 configMap.remove(ConfigKeys.User.AVATAR_FRAME);
             } else {
@@ -168,6 +171,14 @@ public class UserServiceImpl implements UserService {
                 }
                 configMap.put(ConfigKeys.User.AVATAR_FRAME, request.getAvatarFrame());
             }
+        }
+
+        if (request.getLevel() != null) {
+            configChanged = true;
+            configMap.put(ConfigKeys.User.LEVEL, request.getLevel());
+        }
+
+        if (configChanged) {
             try {
                 user.setConfig(MAPPER.writeValueAsString(configMap));
             } catch (Exception e) {

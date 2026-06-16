@@ -141,19 +141,23 @@ function seededRandom(seed) {
   }
 }
 
-// ===== 锯齿环形闭合路径 + 总长度 =====
-function makeJaggedRing(cx, cy, radius, jitter, segments, rng, startAngle = 0) {
+// ===== 竖向锯齿闪电路径（从圆弧顶劈到底） =====
+function makeLightningPath(cx, cy, radius, jitter, segments, rng, angle) {
+  const arcSpan = Math.PI * 0.78
+  const startA = angle - arcSpan / 2
+  const endA = angle + arcSpan / 2
   const pts = []
   for (let i = 0; i <= segments; i++) {
-    const angle = startAngle + (i / segments) * Math.PI * 2
+    const t = i / segments
+    const a = startA + t * (endA - startA)
     const r = radius + (rng() - 0.5) * jitter * 2
-    pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+    pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) })
   }
   let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`
   for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1]
-    const curr = pts[i]
     if (i % 3 === 0) {
+      const prev = pts[i - 1]
+      const curr = pts[i]
       const mx = (prev.x + curr.x) / 2
       const my = (prev.y + curr.y) / 2
       const dx = curr.x - prev.x
@@ -162,51 +166,42 @@ function makeJaggedRing(cx, cy, radius, jitter, segments, rng, startAngle = 0) {
       const peak = (rng() - 0.5) * jitter * 2.4
       d += ` L${(mx + (-dy / len) * peak).toFixed(1)},${(my + (dx / len) * peak).toFixed(1)}`
     }
-    d += ` L${curr.x.toFixed(1)},${curr.y.toFixed(1)}`
+    d += ` L${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`
   }
-  d += ' Z'
-
   let totalLen = 0
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i - 1].x
     const dy = pts[i].y - pts[i - 1].y
     totalLen += Math.sqrt(dx * dx + dy * dy)
   }
-  const dx0 = pts[0].x - pts[pts.length - 1].x
-  const dy0 = pts[0].y - pts[pts.length - 1].y
-  totalLen += Math.sqrt(dx0 * dx0 + dy0 * dy0)
-
   return { d, len: Math.round(totalLen) }
 }
 
-// ===== 行进式闪电 =====
+// ===== 行进式闪电（从上到下劈入，依次触发） =====
 const boltCount = computed(() => props.size < 36 ? 2 : 3)
-const cycleDuration = 1.8
+const cycleDuration = 2.4
 
 const lightningBolts = computed(() => {
   const cx = c.value
   const cy = c.value
-  const segments = props.size < 36 ? 28 : 44
+  const segments = props.size < 36 ? 20 : 28
   const s = props.size
 
   return Array.from({ length: boltCount.value }, (_, i) => {
     const rng = seededRandom(100 + i * 37)
-    // 每条闪电均匀分布在圆周上
-    const startAngle = (i / boltCount.value) * Math.PI * 2
-    // 半径 0.48 + 大幅锯齿偏移，让路径跨越头像区域
-    const r = s * (0.46 + rng() * 0.04)
-    const j = s * (0.14 + rng() * 0.06)
-    const ring = makeJaggedRing(cx, cy, r, j, segments, rng, startAngle)
+    // 均匀分布在圆周上
+    const centerAngle = -Math.PI / 2 + (i / boltCount.value) * Math.PI * 2
+    const bolt = makeLightningPath(cx, cy, s * 0.48, s * 0.06, segments, rng, centerAngle)
     const isSmall = s < 36
 
     return {
-      d: ring.d,
-      len: ring.len,
+      d: bolt.d,
+      len: bolt.len,
       headColor: '#ffffff',
-      headWidth: isSmall ? 2 : 3,
+      headWidth: isSmall ? 2.5 : 3.5,
       trailColor: '#55ccff',
-      trailWidth: isSmall ? 1.5 : 2.5,
-      glowWidth: isSmall ? 3 : 5,
+      trailWidth: isSmall ? 2 : 3,
+      glowWidth: isSmall ? 4 : 6,
       delay: i * (cycleDuration / boltCount.value),
     }
   })
@@ -315,67 +310,70 @@ const contentStyle = computed(() => ({
   pointer-events: none;
 }
 
-/* ===== Lightning ===== */
+/* ===== Lightning: 劈入式闪电，从上到下行进，留下发光通路 ===== */
 
-/* 电击闪光：头像区域泛白 */
+/* 闪光：劈入瞬间头像区域泛白 */
 .lt-flash {
   opacity: 0;
-  animation: lt-flash-anim 1.8s ease-out infinite;
+  animation: lt-flash-anim 2.4s ease-out infinite;
   will-change: opacity;
 }
 @keyframes lt-flash-anim {
   0%   { opacity: 0; }
-  3%   { opacity: 0.8; }
-  10%  { opacity: 0; }
+  5%   { opacity: 0.7; }
+  20%  { opacity: 0; }
   100% { opacity: 0; }
 }
 
-/* 外层辉光：粗模糊光晕，前半程可见 */
+/* 外层辉光：跟随头部行进，扩散模糊光 */
 .lt-glow {
-  stroke-dasharray: calc(var(--len) * 0.15) calc(var(--len) * 0.85);
+  stroke-dasharray: calc(var(--len) * 0.5) calc(var(--len) * 0.5);
   stroke-dashoffset: 0;
   opacity: 0;
-  animation: lt-glow-move 1.8s linear infinite;
+  animation: lt-glow-move 2.4s linear infinite;
   will-change: stroke-dashoffset, opacity;
 }
 @keyframes lt-glow-move {
   0%   { stroke-dashoffset: 0; opacity: 0; }
-  2%   { opacity: 0.5; }
-  50%  { opacity: 0.3; }
-  80%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
-  100% { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
-}
-
-/* 中层尾迹：半透明蓝，视觉残留 */
-.lt-trail {
-  stroke-dasharray: calc(var(--len) * 0.35) calc(var(--len) * 0.65);
-  stroke-dashoffset: 0;
-  opacity: 0;
-  animation: lt-trail-move 1.8s linear infinite;
-  will-change: stroke-dashoffset, opacity;
-}
-@keyframes lt-trail-move {
-  0%   { stroke-dashoffset: 0; opacity: 0; }
-  2%   { opacity: 0.7; }
-  60%  { opacity: 0.5; }
-  80%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0.15; }
+  8%   { opacity: 0.4; }
+  55%  { stroke-dashoffset: calc(var(--len) * -0.55); opacity: 0.3; }
+  75%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0.15; }
   90%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
   100% { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
 }
 
-/* 内层头部：亮白短段 */
-.lt-head {
-  stroke-dasharray: calc(var(--len) * 0.06) calc(var(--len) * 0.94);
+/* 中层尾迹：闪电经过后留下的发光通路 */
+.lt-trail {
+  stroke-dasharray: calc(var(--len) * 0.65) calc(var(--len) * 0.35);
   stroke-dashoffset: 0;
   opacity: 0;
-  animation: lt-head-move 1.8s linear infinite;
+  animation: lt-trail-move 2.4s linear infinite;
+  will-change: stroke-dashoffset, opacity;
+}
+@keyframes lt-trail-move {
+  0%   { stroke-dashoffset: 0; opacity: 0; }
+  8%   { opacity: 0.8; }
+  50%  { stroke-dashoffset: calc(var(--len) * -0.55); opacity: 0.7; }
+  70%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0.4; }
+  85%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0.15; }
+  95%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
+  100% { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
+}
+
+/* 内层头部：闪电劈入的亮白尖端 */
+.lt-head {
+  stroke-dasharray: calc(var(--len) * 0.08) calc(var(--len) * 0.92);
+  stroke-dashoffset: 0;
+  opacity: 0;
+  animation: lt-head-move 2.4s linear infinite;
   will-change: stroke-dashoffset, opacity;
 }
 @keyframes lt-head-move {
   0%   { stroke-dashoffset: 0; opacity: 0; }
-  2%   { opacity: 1; }
-  78%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 1; }
-  85%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
+  5%   { opacity: 1; }
+  65%  { stroke-dashoffset: calc(var(--len) * -0.92); opacity: 1; }
+  72%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0.6; }
+  82%  { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
   100% { stroke-dashoffset: calc(var(--len) * -1); opacity: 0; }
 }
 

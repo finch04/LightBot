@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.User;
 import com.lightbot.enums.UserRole;
 import com.lightbot.enums.UserStatus;
@@ -34,6 +35,7 @@ public class UserDTO {
     private LocalDateTime createTime;
     private Boolean firstLogin;
     private String avatarFrame;
+    private Integer level;
 
     public static UserDTO from(User user) {
         UserDTO dto = new UserDTO();
@@ -46,16 +48,28 @@ public class UserDTO {
         dto.setRole(user.getRole());
         dto.setStatus(user.getStatus());
         dto.setCreateTime(user.getCreateTime());
-        dto.setAvatarFrame(extractAvatarFrame(user.getConfig()));
+        dto.setAvatarFrame(extractConfigString(user.getConfig(), ConfigKeys.User.AVATAR_FRAME));
+        dto.setLevel(extractConfigInt(user.getConfig(), ConfigKeys.User.LEVEL));
         return dto;
     }
 
-    private static String extractAvatarFrame(String config) {
+    private static String extractConfigString(String config, String key) {
         if (config == null || config.isBlank()) return null;
         try {
             JsonNode node = MAPPER.readTree(config);
-            JsonNode frame = node.get("avatarFrame");
-            return (frame != null && !frame.isNull()) ? frame.asText() : null;
+            JsonNode val = node.get(key);
+            return (val != null && !val.isNull()) ? val.asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Integer extractConfigInt(String config, String key) {
+        if (config == null || config.isBlank()) return null;
+        try {
+            JsonNode node = MAPPER.readTree(config);
+            JsonNode val = node.get(key);
+            return (val != null && !val.isNull()) ? val.asInt() : null;
         } catch (Exception e) {
             return null;
         }

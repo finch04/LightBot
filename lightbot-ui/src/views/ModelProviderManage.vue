@@ -106,45 +106,8 @@
           <button class="btn-fetch" :disabled="fetching" @click="handleFetchModels">
             {{ fetching ? '拉取中...' : '联网拉取' }}
           </button>
-          <button class="btn-primary-sm" @click="showAddModel = true; showFetchPanel = false">
+          <button class="btn-primary-sm" @click="showAddModel = true">
             <PlusOutlined /> 手动添加
-          </button>
-        </div>
-      </div>
-
-      <!-- 联网拉取面板 -->
-      <div v-if="showFetchPanel" class="fetch-panel">
-        <div class="fetch-panel-header">
-          <span>从 {{ currentProvider?.name }} 拉取到 {{ fetchedModels.length }} 个模型，请勾选需要添加的：</span>
-        </div>
-        <!-- 搜索 + 类型筛选 -->
-        <div class="fetch-filter-bar">
-          <a-input v-model:value="fetchSearchText" placeholder="搜索模型..." allow-clear size="small" style="width: 200px">
-            <template #prefix><SearchOutlined /></template>
-          </a-input>
-          <div class="fetch-type-tabs">
-            <button
-              v-for="t in fetchTypeTabs"
-              :key="t.value"
-              :class="['type-tab', { active: fetchTypeFilter === t.value }]"
-              @click="fetchTypeFilter = t.value"
-            >{{ t.label }}{{ t.count > 0 ? ` (${t.count})` : '' }}</button>
-          </div>
-        </div>
-        <a-checkbox-group v-model:value="selectedFetchedModels" class="fetch-model-grid">
-          <div v-for="m in filteredFetchedModels" :key="m.modelId" class="fetch-model-item">
-            <a-checkbox :value="m.modelId">
-              <span class="fetch-model-id">{{ m.modelId }}</span>
-              <span class="fetch-model-type">{{ modelTypeText(m.type) }}</span>
-            </a-checkbox>
-          </div>
-          <div v-if="filteredFetchedModels.length === 0" class="fetch-empty">无匹配模型</div>
-        </a-checkbox-group>
-        <div class="add-model-actions">
-          <button class="btn-cancel" @click="showFetchPanel = false">取消</button>
-          <button class="btn-link" @click="selectAllFiltered">全选当前筛选</button>
-          <button class="btn-primary-sm" :disabled="selectedFetchedModels.length === 0 || modelSubmitting" @click="handleBatchAddModels">
-            {{ modelSubmitting ? '添加中...' : `确认添加 (${selectedFetchedModels.length})` }}
           </button>
         </div>
       </div>
@@ -187,7 +150,74 @@
           <button class="btn-icon danger" @click="handleDeleteModel(m.id)"><DeleteOutlined /></button>
         </div>
       </div>
-      <div v-else-if="!showFetchPanel && !showAddModel" class="model-empty">暂无模型，点击上方按钮添加</div>
+      <div v-else-if="!showAddModel" class="model-empty">暂无模型，点击上方按钮添加</div>
+    </a-modal>
+
+    <!-- 联网拉取弹窗 -->
+    <a-modal v-model:open="fetchModalVisible" :title="`${currentProvider?.name || ''} - 联网拉取`" :width="560" :footer="null" :maskClosable="false">
+      <div class="fetch-tabs">
+        <button :class="['fetch-tab', { active: fetchTab === 'available' }]" @click="fetchTab = 'available'">
+          可添加 <span class="fetch-tab-count">{{ fetchedModels.length }}</span>
+        </button>
+        <button :class="['fetch-tab', { active: fetchTab === 'existing' }]" @click="fetchTab = 'existing'">
+          已有模型 <span class="fetch-tab-count">{{ modelList.length }}</span>
+        </button>
+      </div>
+
+      <!-- 搜索 + 类型筛选 -->
+      <div class="fetch-filter-bar">
+        <a-input v-model:value="fetchSearchText" placeholder="搜索模型..." allow-clear size="small" style="flex: 1">
+          <template #prefix><SearchOutlined /></template>
+        </a-input>
+        <div class="fetch-type-tabs">
+          <button
+            v-for="t in currentFetchTabs"
+            :key="t.value"
+            :class="['type-tab', { active: fetchTypeFilter === t.value }]"
+            @click="fetchTypeFilter = t.value"
+          >{{ t.label }}{{ t.count > 0 ? ` (${t.count})` : '' }}</button>
+        </div>
+      </div>
+
+      <!-- 可添加模型 -->
+      <div v-if="fetchTab === 'available'" class="fetch-model-list">
+        <a-checkbox-group v-model:value="selectedFetchedModels" class="fetch-model-grid">
+          <div v-for="m in filteredFetchedModels" :key="m.modelId" class="fetch-model-item">
+            <a-checkbox :value="m.modelId">
+              <span class="fetch-model-id">{{ m.modelId }}</span>
+              <span class="fetch-model-type">{{ modelTypeText(m.type) }}</span>
+            </a-checkbox>
+          </div>
+          <div v-if="filteredFetchedModels.length === 0" class="fetch-empty">
+            {{ fetchedModels.length === 0 ? '暂无可添加模型，请先点击拉取' : '无匹配模型' }}
+          </div>
+        </a-checkbox-group>
+      </div>
+
+      <!-- 已有模型 -->
+      <div v-else class="fetch-model-list">
+        <div v-for="m in filteredExistingModels" :key="m.id" class="fetch-model-item existing">
+          <span class="fetch-model-id">{{ m.modelId }}</span>
+          <span class="fetch-model-name">{{ m.name }}</span>
+          <span class="fetch-model-type">{{ modelTypeText(m.type?.code || m.type) }}</span>
+        </div>
+        <div v-if="filteredExistingModels.length === 0" class="fetch-empty">无匹配模型</div>
+      </div>
+
+      <!-- 底部操作 -->
+      <div class="fetch-modal-footer">
+        <div class="fetch-footer-left">
+          <button v-if="fetchTab === 'available'" class="btn-link" @click="selectAllFiltered">全选当前筛选</button>
+        </div>
+        <div class="fetch-footer-right">
+          <button v-if="fetchTab === 'available'" class="btn-fetch" :disabled="fetching" @click="handleFetchModels">
+            {{ fetching ? '拉取中...' : '重新拉取' }}
+          </button>
+          <button v-if="fetchTab === 'available'" class="btn-primary-sm" :disabled="selectedFetchedModels.length === 0 || modelSubmitting" @click="handleBatchAddModels">
+            {{ modelSubmitting ? '添加中...' : `确认添加 (${selectedFetchedModels.length})` }}
+          </button>
+        </div>
+      </div>
     </a-modal>
 
   </div>
@@ -222,7 +252,8 @@ const modelForm = reactive({ modelId: '', name: '', type: 'llm' })
 
 // 联网拉取
 const fetching = ref(false)
-const showFetchPanel = ref(false)
+const fetchModalVisible = ref(false)
+const fetchTab = ref('available')
 const fetchedModels = ref([])
 const selectedFetchedModels = ref([])
 const fetchSearchText = ref('')
@@ -240,7 +271,19 @@ const filteredFetchedModels = computed(() => {
   return result
 })
 
-const fetchTypeTabs = computed(() => {
+const filteredExistingModels = computed(() => {
+  let result = modelList.value
+  if (fetchTypeFilter.value !== 'all') {
+    result = result.filter(m => (m.type?.code || m.type) === fetchTypeFilter.value)
+  }
+  if (fetchSearchText.value) {
+    const keyword = fetchSearchText.value.toLowerCase()
+    result = result.filter(m => m.modelId.toLowerCase().includes(keyword) || (m.name || '').toLowerCase().includes(keyword))
+  }
+  return result
+})
+
+const fetchTypeTabsCache = computed(() => {
   const counts = { all: fetchedModels.value.length }
   for (const m of fetchedModels.value) {
     counts[m.type] = (counts[m.type] || 0) + 1
@@ -251,6 +294,21 @@ const fetchTypeTabs = computed(() => {
   return [{ value: 'all', label: '全部', count: counts.all }, ...tabs]
       .filter(t => t.count > 0 || t.value === 'all')
 })
+
+const existingTypeTabs = computed(() => {
+  const counts = { all: modelList.value.length }
+  for (const m of modelList.value) {
+    const t = m.type?.code || m.type
+    counts[t] = (counts[t] || 0) + 1
+  }
+  const tabs = modelTypes.value.map(t => ({
+    value: t.value, label: t.label, count: counts[t.value] || 0
+  }))
+  return [{ value: 'all', label: '全部', count: counts.all }, ...tabs]
+      .filter(t => t.count > 0 || t.value === 'all')
+})
+
+const currentFetchTabs = computed(() => fetchTab.value === 'available' ? fetchTypeTabsCache.value : existingTypeTabs.value)
 
 function selectAllFiltered() {
   selectedFetchedModels.value = filteredFetchedModels.value.map(m => m.modelId)
@@ -402,7 +460,6 @@ function isValidJson(str) {
 async function openModelModal(provider) {
   currentProvider.value = provider
   showAddModel.value = false
-  showFetchPanel.value = false
   Object.assign(modelForm, { modelId: '', name: '', type: 'llm' })
   modelModalVisible.value = true
   await loadModels(provider.id)
@@ -450,12 +507,14 @@ function handleDeleteModel(id) {
 
 async function handleFetchModels() {
   fetching.value = true
-  showAddModel.value = false
   try {
     const res = await fetchProviderModels(currentProvider.value.id)
     fetchedModels.value = res.data || []
     selectedFetchedModels.value = []
-    showFetchPanel.value = true
+    fetchSearchText.value = ''
+    fetchTypeFilter.value = 'all'
+    fetchTab.value = 'available'
+    fetchModalVisible.value = true
     if (fetchedModels.value.length === 0) {
       message.info('该提供商下未找到可用模型')
     }
@@ -490,9 +549,7 @@ async function handleBatchAddModels() {
       }
     }
     message.success(`成功添加 ${successCount} 个模型`)
-    showFetchPanel.value = false
-    fetchSearchText.value = ''
-    fetchTypeFilter.value = 'all'
+    fetchModalVisible.value = false
     await loadModels(currentProvider.value.id)
   } finally {
     modelSubmitting.value = false
@@ -813,18 +870,35 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
-/* 联网拉取面板 */
-.fetch-panel {
-  background: #f9f9f9;
-  border: 1px solid #ebebeb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-.fetch-panel-header {
-  font-size: 13px;
-  color: #52525b;
+/* 联网拉取弹窗 */
+.fetch-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #ebebeb;
   margin-bottom: 12px;
+}
+.fetch-tab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fetch-tab:hover {
+  color: #171717;
+}
+.fetch-tab.active {
+  color: #171717;
+  border-bottom-color: #171717;
+  font-weight: 500;
+}
+.fetch-tab-count {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-left: 4px;
 }
 .fetch-filter-bar {
   display: flex;
@@ -846,6 +920,7 @@ onMounted(async () => {
   cursor: pointer;
   color: #71717a;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 .type-tab:hover {
   border-color: #0070f3;
@@ -856,15 +931,27 @@ onMounted(async () => {
   border-color: #171717;
   color: #fff;
 }
+.fetch-model-list {
+  max-height: 360px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.fetch-model-list::-webkit-scrollbar {
+  width: 4px;
+}
+.fetch-model-list::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 2px;
+}
 .fetch-model-grid {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 300px;
-  overflow-y: auto;
-  margin-bottom: 12px;
 }
 .fetch-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 8px;
   background: #fff;
   border: 1px solid #ebebeb;
@@ -873,10 +960,23 @@ onMounted(async () => {
 .fetch-model-item:hover {
   border-color: #d4d4d8;
 }
+.fetch-model-item.existing {
+  background: #f9f9f9;
+}
 .fetch-model-id {
   font-family: monospace;
   font-size: 13px;
   color: #171717;
+  flex-shrink: 0;
+}
+.fetch-model-name {
+  font-size: 12px;
+  color: #71717a;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .fetch-model-type {
   font-size: 11px;
@@ -884,13 +984,26 @@ onMounted(async () => {
   background: #f5f5f5;
   padding: 1px 6px;
   border-radius: 4px;
-  margin-left: 8px;
+  flex-shrink: 0;
 }
 .fetch-empty {
   text-align: center;
-  padding: 24px;
+  padding: 32px;
   color: #a1a1aa;
   font-size: 13px;
+}
+.fetch-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+.fetch-footer-left,
+.fetch-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 /* 弹窗底部 */

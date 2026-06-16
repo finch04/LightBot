@@ -29,7 +29,7 @@
             <a-input :value="profileForm.username" disabled />
           </a-form-item>
           <a-form-item label="昵称">
-            <a-input v-model:value="profileForm.nickname" placeholder="设置昵称" />
+            <a-input v-model:value="profileForm.nickname" placeholder="设置昵称" :maxlength="8" />
           </a-form-item>
           <a-form-item label="邮箱">
             <a-input v-model:value="profileForm.email" placeholder="设置邮箱" />
@@ -113,6 +113,29 @@
         </button>
       </div>
     </div>
+
+    <!-- 等级选择 -->
+    <div class="panel level-panel">
+      <div class="panel-header">
+        <h3>等级</h3>
+        <p class="panel-subtitle">选择你的等级徽章</p>
+      </div>
+      <div class="level-options">
+        <div
+          v-for="opt in levelOptions"
+          :key="opt.value"
+          class="level-option"
+          :class="{ active: selectedLevel === opt.value }"
+          @click="selectedLevel = opt.value"
+        >
+          <LevelBadge :level="opt.value" :size="28" />
+          <span class="level-option-label">{{ opt.label }}</span>
+        </div>
+      </div>
+      <button class="btn-primary" :disabled="savingLevel" @click="handleSaveLevel">
+        <SaveOutlined /> 保存等级
+      </button>
+    </div>
   </div>
 </template>
 
@@ -123,12 +146,15 @@ import { message } from 'ant-design-vue'
 import { getMe, updateProfile, changePassword, updateAvatarFrame, uploadAvatar } from '../api/auth'
 import { useUserStore } from '../stores/user'
 import AvatarFrame from '../components/AvatarFrame.vue'
+import LevelBadge from '../components/LevelBadge.vue'
 
 const userStore = useUserStore()
 const saving = ref(false)
 const changingPwd = ref(false)
 const savingFrame = ref(false)
+const savingLevel = ref(false)
 const selectedFrame = ref('')
+const selectedLevel = ref(0)
 const avatarUrl = ref('')
 const avatarUploading = ref(false)
 const avatarInputRef = ref(null)
@@ -141,6 +167,16 @@ const frameOptions = [
 ]
 
 const frameLabelMap = { '': '无', lightning: '巅峰闪电', flame: '烈焰之环', stars: '星辰轨迹' }
+
+const levelOptions = [
+  { value: 0, label: 'Lv0' },
+  { value: 1, label: 'Lv1' },
+  { value: 2, label: 'Lv2' },
+  { value: 3, label: 'Lv3' },
+  { value: 4, label: 'Lv4' },
+  { value: 5, label: 'Lv5' },
+  { value: 6, label: 'Lv6' },
+]
 
 const initialLetter = computed(() => {
   return (profileForm.nickname || profileForm.username || 'U')[0]
@@ -188,6 +224,7 @@ async function loadProfile() {
       createTime: user.createTime || '',
     })
     selectedFrame.value = user.avatarFrame || ''
+    selectedLevel.value = user.level ?? 0
     avatarUrl.value = user.avatar || ''
   } catch { /* ignore */ }
 }
@@ -240,6 +277,17 @@ async function handleSaveFrame() {
     message.success('头像框已更新')
   } catch { /* interceptor已处理 */ } finally {
     savingFrame.value = false
+  }
+}
+
+async function handleSaveLevel() {
+  savingLevel.value = true
+  try {
+    await updateProfile({ level: selectedLevel.value })
+    userStore.user.level = selectedLevel.value
+    message.success('等级已更新')
+  } catch { /* interceptor已处理 */ } finally {
+    savingLevel.value = false
   }
 }
 
@@ -464,6 +512,39 @@ onMounted(loadProfile)
   object-fit: cover;
 }
 .frame-option-label {
+  font-size: 12px;
+  color: #52525b;
+}
+
+/* 等级选择 */
+.level-panel {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+.level-options {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.level-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 2px solid #ebebeb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.level-option:hover {
+  border-color: #0070f3;
+}
+.level-option.active {
+  border-color: #0070f3;
+  box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
+}
+.level-option-label {
   font-size: 12px;
   color: #52525b;
 }

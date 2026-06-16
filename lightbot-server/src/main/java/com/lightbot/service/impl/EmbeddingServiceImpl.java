@@ -14,6 +14,7 @@ import com.lightbot.service.ChunkService;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.util.MilvusUtil;
+import com.lightbot.util.RerankerUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     private final DocumentMapper documentMapper;
     private final ChunkService chunkService;
     private final KnowledgeService knowledgeService;
+    private final RerankerUtil rerankerUtil;
 
     private static final String SEARCH_MODE_VECTOR = "vector";
     private static final String SEARCH_MODE_KEYWORD = "keyword";
@@ -48,12 +50,13 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
 
     public EmbeddingServiceImpl(EmbeddingMapper embeddingMapper, MilvusUtil milvusUtil,
                                 DocumentMapper documentMapper, ChunkService chunkService,
-                                @Lazy KnowledgeService knowledgeService) {
+                                @Lazy KnowledgeService knowledgeService, RerankerUtil rerankerUtil) {
         this.embeddingMapper = embeddingMapper;
         this.milvusUtil = milvusUtil;
         this.documentMapper = documentMapper;
         this.chunkService = chunkService;
         this.knowledgeService = knowledgeService;
+        this.rerankerUtil = rerankerUtil;
     }
 
     @Override
@@ -156,9 +159,29 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
             return searchMilvus(knowledgeId, queryVector, topK, threshold, queryParams);
         }
 
-        // pgvector（原有逻辑）
-        String vectorStr = toVectorString(queryVector);
-        return embeddingMapper.searchSimilarWithThreshold(vectorStr, knowledgeId, topK, threshold);
+        // pgvector：根据 search_mode 分发
+        String searchMode = queryParams != null && queryParams.get("search_mode") instanceof String s
+                ? s : SEARCH_MODE_VECTOR;
+
+        List<Map<String, Object>> results;
+        switch (searchMode) {
+            case SEARCH_MODE_KEYWORD -> {
+                String queryText = getQueryParam(queryParams, "query_text", "");
+                results = embeddingMapper.searchByFullText(queryText, knowledgeId, topK);
+            }
+            case SEARCH_MODE_HYBRID -> {
+                results = searchPgHybrid(knowledgeId, queryVector, topK, threshold, queryParams);
+            }
+            default -> {
+                String vectorStr = toVectorString(queryVector);
+                results = embeddingMapper.searchSimilarWithThreshold(vectorStr, knowledgeId, topK, threshold);
+            }
+        }
+
+        // Reranker（可选）
+        results = applyReranker(results, queryParams, topK);
+
+        return results;
     }
 
     @Override
@@ -197,6 +220,112 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         if (type == KnowledgeType.MILVUS && milvusUtil.isAvailable()) {
             milvusUtil.deleteByDocumentId(knowledgeId, documentId);
         }
+    }
+
+    /**
+     * pgvector 混合检索：向量检索 + 全文检索 → RRF 融合
+     */
+    private List<Map<String, Object>> searchPgHybrid(Long knowledgeId, float[] queryVector,
+                                                      int topK, double threshold,
+                                                      Map<String, Object> params) {
+        String queryText = getQueryParam(params, "query_text", "");
+        int recallTopK = Math.max(topK * 3, getIntParam(params, "recall_top_k", 30));
+        float vectorWeight = getFloatParam(params, "vector_weight", 0.7f);
+        float keywordWeight = getFloatParam(params, "keyword_weight", 0.3f);
+
+        String vectorStr = toVectorString(queryVector);
+        List<Map<String, Object>> vectorResults = embeddingMapper.searchSimilarWithThreshold(
+                vectorStr, knowledgeId, recallTopK, 0);
+        List<Map<String, Object>> keywordResults = embeddingMapper.searchByFullText(
+                queryText, knowledgeId, recallTopK);
+
+        return rrfFusion(vectorResults, keywordResults, vectorWeight, keywordWeight, topK, threshold);
+    }
+
+    /**
+     * RRF（Reciprocal Rank Fusion）融合排序
+     *
+     * @param vectorResults  向量检索结果
+     * @param keywordResults 全文检索结果
+     * @param vectorWeight   向量结果权重
+     * @param keywordWeight  关键词结果权重
+     * @param topK           返回数量
+     * @param threshold      RRF 分数阈值（低于此值不返回，0 表示不过滤）
+     * @return 融合后的结果列表
+     */
+    private List<Map<String, Object>> rrfFusion(List<Map<String, Object>> vectorResults,
+                                                 List<Map<String, Object>> keywordResults,
+                                                 float vectorWeight, float keywordWeight,
+                                                 int topK, double threshold) {
+        int k = 60; // RRF 常量
+        // chunkId → [rrfScore, bestOriginalScore, sourceRow]
+        Map<Long, double[]> scoreMap = new LinkedHashMap<>();
+        Map<Long, Map<String, Object>> sourceMap = new LinkedHashMap<>();
+
+        for (int i = 0; i < vectorResults.size(); i++) {
+            Map<String, Object> row = vectorResults.get(i);
+            long chunkId = getChunkId(row);
+            if (chunkId <= 0) continue;
+            double rrfScore = vectorWeight / (k + i + 1);
+            double originalScore = getScore(row);
+            scoreMap.merge(chunkId, new double[]{rrfScore, originalScore},
+                    (a, b) -> new double[]{a[0] + b[0], Math.max(a[1], b[1])});
+            sourceMap.putIfAbsent(chunkId, row);
+        }
+
+        for (int i = 0; i < keywordResults.size(); i++) {
+            Map<String, Object> row = keywordResults.get(i);
+            long chunkId = getChunkId(row);
+            if (chunkId <= 0) continue;
+            double rrfScore = keywordWeight / (k + i + 1);
+            double originalScore = getScore(row);
+            scoreMap.merge(chunkId, new double[]{rrfScore, originalScore},
+                    (a, b) -> new double[]{a[0] + b[0], Math.max(a[1], b[1])});
+            sourceMap.putIfAbsent(chunkId, row);
+        }
+
+        return scoreMap.entrySet().stream()
+                .filter(e -> threshold <= 0 || e.getValue()[0] >= threshold)
+                .sorted((a, b) -> Double.compare(b.getValue()[0], a.getValue()[0]))
+                .limit(topK)
+                .map(e -> {
+                    Map<String, Object> row = new LinkedHashMap<>(sourceMap.get(e.getKey()));
+                    row.put("score", e.getValue()[0]);
+                    return row;
+                })
+                .toList();
+    }
+
+    private long getChunkId(Map<String, Object> row) {
+        Object id = row.get("chunk_id");
+        if (id instanceof Number n) return n.longValue();
+        return 0;
+    }
+
+    private double getScore(Map<String, Object> row) {
+        Object score = row.get("score");
+        return score instanceof Number n ? n.doubleValue() : 0;
+    }
+
+    private String getQueryParam(Map<String, Object> params, String key, String defaultValue) {
+        if (params != null && params.get(key) instanceof String s) {
+            return s;
+        }
+        return defaultValue;
+    }
+
+    private int getIntParam(Map<String, Object> params, String key, int defaultValue) {
+        if (params != null && params.get(key) instanceof Number n) {
+            return n.intValue();
+        }
+        return defaultValue;
+    }
+
+    private float getFloatParam(Map<String, Object> params, String key, float defaultValue) {
+        if (params != null && params.get(key) instanceof Number n) {
+            return n.floatValue();
+        }
+        return defaultValue;
     }
 
     /**
@@ -266,6 +395,10 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
 
         // 补充 document_name 字段（Milvus 只返回 document_id）
         enrichWithDocumentNames(results);
+
+        // Reranker（可选）
+        results = applyReranker(results, queryParams, topK);
+
         return results;
     }
 
@@ -290,5 +423,29 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
                 row.put("document_name", nameMap.getOrDefault(id, "未知文档"));
             }
         }
+    }
+
+    /**
+     * 应用 Reranker（如果启用）
+     *
+     * @param results     检索结果
+     * @param queryParams 查询参数
+     * @param topK        最终返回数量
+     * @return 重排序后的结果
+     */
+    private List<Map<String, Object>> applyReranker(List<Map<String, Object>> results,
+                                                      Map<String, Object> queryParams,
+                                                      int topK) {
+        boolean useReranker = queryParams != null
+                && Boolean.TRUE.equals(queryParams.get("use_reranker"));
+        if (!useReranker || results.isEmpty()) {
+            return results;
+        }
+        String queryText = getQueryParam(queryParams, "query_text", "");
+        if (queryText.isBlank()) {
+            return results;
+        }
+        String rerankerModel = getQueryParam(queryParams, "reranker_model", "");
+        return rerankerUtil.rerank(queryText, results, topK, rerankerModel);
     }
 }

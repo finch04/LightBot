@@ -108,6 +108,27 @@ public interface EmbeddingMapper extends BaseMapper<Embedding> {
     @Delete("DELETE FROM embedding WHERE chunk_id IN (SELECT id FROM chunk WHERE document_id = #{documentId})")
     void deleteByDocumentId(@Param("documentId") Long documentId);
 
+    /**
+     * 全文检索（keyword 模式）
+     * <p>使用 PostgreSQL tsvector + plainto_tsquery 进行全文检索</p>
+     *
+     * @param query       查询文本
+     * @param knowledgeId 知识库ID
+     * @param topK        返回数量
+     * @return 检索结果（chunk_id, content, document_id, document_name, score）
+     */
+    @Select("SELECT c.id AS chunk_id, c.content, c.knowledge_id, c.document_id, " +
+            "d.name AS document_name, " +
+            "ts_rank(c.content_tsv, query) AS score " +
+            "FROM chunk c, plainto_tsquery('simple', #{query}) query " +
+            "JOIN document d ON c.document_id = d.id " +
+            "WHERE c.knowledge_id = #{knowledgeId} AND d.deleted = 0 " +
+            "AND c.content_tsv @@ query " +
+            "ORDER BY score DESC LIMIT #{topK}")
+    List<Map<String, Object>> searchByFullText(@Param("query") String query,
+                                                @Param("knowledgeId") Long knowledgeId,
+                                                @Param("topK") int topK);
+
     // ========== QA Pair 向量操作 ==========
 
     /**

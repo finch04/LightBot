@@ -342,15 +342,15 @@ public class RagServiceImpl implements RagService {
     }
 
     /**
-     * 构建 Milvus 检索参数：queryParams + overrides + query_text
+     * 构建检索参数：queryParams + overrides + query_text
+     * <p>运行时覆盖 > 持久化配置 > 代码默认值</p>
      */
     private Map<String, Object> buildSearchParams(Knowledge knowledge, Map<String, Object> overrides, String question) {
         Map<String, Object> params = new java.util.HashMap<>(parseJson(knowledge.getQueryParams()));
-        // overrides 中的 search_mode 覆盖 queryParams
-        if (overrides != null && overrides.get("search_mode") instanceof String s) {
-            params.put("search_mode", s);
+        // 全量合并 overrides（运行时覆盖优先）
+        if (overrides != null) {
+            params.putAll(overrides);
         }
-        // 传入原始问题文本，供 keyword/hybrid 模式使用
         params.put("query_text", question);
         return params;
     }

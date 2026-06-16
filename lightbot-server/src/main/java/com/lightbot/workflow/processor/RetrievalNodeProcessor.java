@@ -80,12 +80,25 @@ public class RetrievalNodeProcessor extends AbstractFlowNodeProcessor implements
                 threshold = t.doubleValue();
             }
         } else {
-            Map<String, Object> kbConfig = parseConfig(knowledge.getConfig());
-            if (kbConfig.get("ragTopK") instanceof Number n) {
+            // 优先从 queryParams 读取
+            Map<String, Object> queryParams = parseConfig(knowledge.getQueryParams());
+            if (queryParams.get("final_top_k") instanceof Number n) {
                 topK = n.intValue();
+            } else {
+                // 兼容旧 config.ragTopK
+                Map<String, Object> kbConfig = parseConfig(knowledge.getConfig());
+                if (kbConfig.get("ragTopK") instanceof Number n2) {
+                    topK = n2.intValue();
+                }
             }
-            if (kbConfig.get("ragThreshold") instanceof Number t) {
+            if (queryParams.get("similarity_threshold") instanceof Number t) {
                 threshold = t.doubleValue();
+            } else {
+                // 兼容旧 config.ragThreshold
+                Map<String, Object> kbConfig = parseConfig(knowledge.getConfig());
+                if (kbConfig.get("ragThreshold") instanceof Number t2) {
+                    threshold = t2.doubleValue();
+                }
             }
         }
 

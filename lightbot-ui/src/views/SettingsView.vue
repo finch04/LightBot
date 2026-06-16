@@ -94,7 +94,7 @@
           </a-form>
           <div class="panel-tip">
             <BulbOutlined />
-            <span>用于：知识库检索结果重排序（如 DashScope gte-rerank 系列）</span>
+            <span>用于：知识库检索结果重排序</span>
           </div>
         </div>
       </div>

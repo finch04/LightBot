@@ -225,24 +225,50 @@ public class QueryKnowledgeTool {
     }
 
     private int parseTopK(Knowledge knowledge) {
-        if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 5;
-        try {
-            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-            // 与 RagServiceImpl 保持一致，读取 ragTopK / ragThreshold
-            return node.has("ragTopK") ? node.get("ragTopK").asInt(5) : 5;
-        } catch (Exception e) {
-            return 5;
+        // 优先读 queryParams.final_top_k
+        Map<String, Object> qp = parseQueryParams(knowledge);
+        if (qp.get("final_top_k") instanceof Number n) {
+            return n.intValue();
         }
+        // 兼容旧 config.ragTopK
+        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+                if (node.has("ragTopK")) return node.get("ragTopK").asInt(5);
+            } catch (Exception ignored) {
+            }
+        }
+        return 5;
     }
 
     private double parseThreshold(Knowledge knowledge) {
-        if (knowledge.getConfig() == null || knowledge.getConfig().isBlank()) return 0.5;
+        // 优先读 queryParams.similarity_threshold
+        Map<String, Object> qp = parseQueryParams(knowledge);
+        if (qp.get("similarity_threshold") instanceof Number n) {
+            return n.doubleValue();
+        }
+        // 兼容旧 config.ragThreshold
+        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+                if (node.has("ragThreshold")) return node.get("ragThreshold").asDouble(0.5);
+            } catch (Exception ignored) {
+            }
+        }
+        return 0.5;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseQueryParams(Knowledge knowledge) {
+        if (knowledge.getQueryParams() == null || knowledge.getQueryParams().isBlank()
+                || "{}".equals(knowledge.getQueryParams())) {
+            return Map.of();
+        }
         try {
-            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-            // 与 RagServiceImpl 保持一致，读取 ragTopK / ragThreshold
-            return node.has("ragThreshold") ? node.get("ragThreshold").asDouble(0.5) : 0.5;
+            return new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(knowledge.getQueryParams(), Map.class);
         } catch (Exception e) {
-            return 0.5;
+            return Map.of();
         }
     }
 
