@@ -55,8 +55,11 @@ public class RagEvaluationEngine {
 
     private static final String BENCHMARK_GEN_PROMPT = """
             你将基于以下上下文生成一个可由上下文准确回答的问题与标准答案。
-            仅返回一个JSON对象，不要包含其他文字。
-            键为 query、gold_answer、gold_chunk_ids。gold_chunk_ids 必须是上述上下文片段的ID子集。
+            要求：
+            1. 问题具体明确，控制在30字以内
+            2. 答案精准简洁，控制在80字以内，直接回答核心要点
+            3. 仅返回一个JSON对象，不要包含其他文字
+            4. 键为 query、gold_answer、gold_chunk_ids。gold_chunk_ids 必须是上述上下文片段的ID子集
 
             上下文：
             %s
@@ -349,11 +352,11 @@ public class RagEvaluationEngine {
             3. 如果AI回答"无法回答"或类似表述，给 0.0
 
             请返回以下JSON格式的结果（不要包含其他文本、Markdown 或注释）：
-            {"score": 0.85, "reasoning": "简要说明判定理由"}
+            {"score": 0.85, "reasoning": "用一两句话简要说明判定理由，不超过50字"}
             """;
 
     private static final String ANSWER_GEN_PROMPT = """
-            基于以下参考文档回答用户问题。如果文档中没有相关信息，请回答"根据已有信息无法回答该问题"。
+            基于以下参考文档回答用户问题。要求精准简洁，直接回答核心要点，控制在100字以内，不要展开解释。如果文档中没有相关信息，请回答"根据已有信息无法回答该问题"。
 
             参考文档：
             %s

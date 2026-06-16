@@ -114,7 +114,7 @@
               </div>
             </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
-            <LevelBadge v-if="userStore.user?.level != null" :level="userStore.user.level" :size="42" class="sidebar-text" />
+            <LevelBadge :level="userStore.user?.level" :size="32" class="sidebar-text" />
             <a-badge v-if="taskBadgeCount" class="sidebar-badge" :count="taskBadgeCount" :number-style="taskBadgeStyle" />
             <span class="sidebar-text">
               <UpOutlined v-if="userDropdownOpen" />

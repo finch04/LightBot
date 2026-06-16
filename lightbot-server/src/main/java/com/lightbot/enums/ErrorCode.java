@@ -73,6 +73,9 @@ public enum ErrorCode {
     DOCUMENT_CONTENT_SUSPICIOUS(60010, "文档内容安全扫描未通过: %s", HttpStatus.BAD_REQUEST),
     CHAT_FILE_CONTENT_SUSPICIOUS(60011, "上传的文件中包含敏感信息", HttpStatus.BAD_REQUEST),
     DOCUMENT_DUPLICATE_WARNING(60012, "文档内容与已有文档相似度较高", HttpStatus.OK),
+    DOCUMENT_URL_NO_CONTENT(60013, "未能从网页中提取有效正文，请尝试其他 URL 或上传 HTML 文件", HttpStatus.BAD_REQUEST),
+    DOCUMENT_EDIT_CONFLICT(60014, "文档已被其他人修改，请刷新后重试", HttpStatus.CONFLICT),
+    DOCUMENT_EDIT_UNSUPPORTED(60015, "该文件类型暂不支持在线编辑", HttpStatus.BAD_REQUEST),
 
     // ========== 任务模块 ==========
     TASK_NOT_FOUND(61001, "任务不存在", HttpStatus.BAD_REQUEST),

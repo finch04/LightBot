@@ -1,12 +1,14 @@
 <template>
-  <img
-    v-if="level != null && level >= 1 && animFile"
-    class="level-badge"
-    :src="animFile"
-    :style="{ width: `${animW}px`, height: `${animH}px` }"
-    alt=""
-    draggable="false"
-  />
+  <div class="level-badge" :style="{ width: `${size}px`, height: `${size}px` }">
+    <img
+      v-if="animFile"
+      class="level-badge-img"
+      :src="animFile"
+      :style="{ width: `${size}px`, height: `${size}px` }"
+      alt=""
+      draggable="false"
+    />
+  </div>
 </template>
 
 <script setup>
@@ -16,9 +18,6 @@ const props = defineProps({
   level: { type: Number, default: null },
   size: { type: Number, default: 80 },
 })
-
-const animH = computed(() => props.size)
-const animW = computed(() => props.size)
 
 const animMap = {
   1: '/baijin_level.webp',
@@ -33,12 +32,16 @@ const animFile = computed(() => animMap[props.level] || null)
 
 <style scoped>
 .level-badge {
-  display: block;
+  display: inline-block;
   flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.level-badge-img {
+  display: block;
   object-fit: cover;
   object-position: 16.6% 24.9%;
   border-radius: 4px;
   pointer-events: none;
 }
-
 </style>

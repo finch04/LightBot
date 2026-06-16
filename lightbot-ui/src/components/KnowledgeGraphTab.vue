@@ -134,15 +134,8 @@
           <a-descriptions-item label="来源">{{ selectedNode.source || '-' }}</a-descriptions-item>
           <a-descriptions-item label="文档ID">{{ selectedNode.documentId || '-' }}</a-descriptions-item>
         </a-descriptions>
-        <div class="kg-detail-actions">
-          <a-popconfirm
-            title="确定删除该节点及其关联的边？"
-            ok-text="删除"
-            cancel-text="取消"
-            @confirm="handleDeleteNode"
-          >
-            <a-button size="small" danger>删除节点</a-button>
-          </a-popconfirm>
+        <div v-if="!props.documentId" class="kg-detail-actions">
+          <a-button size="small" danger @click="confirmDeleteNode">删除节点</a-button>
         </div>
       </template>
       <template v-else-if="detailType === 'edge' && selectedEdge">
@@ -152,15 +145,8 @@
           <a-descriptions-item label="权重">{{ selectedEdge.weight ?? '-' }}</a-descriptions-item>
           <a-descriptions-item label="来源">{{ selectedEdge.source || '-' }}</a-descriptions-item>
         </a-descriptions>
-        <div class="kg-detail-actions">
-          <a-popconfirm
-            title="确定删除该关系？"
-            ok-text="删除"
-            cancel-text="取消"
-            @confirm="handleDeleteEdge"
-          >
-            <a-button size="small" danger>删除关系</a-button>
-          </a-popconfirm>
+        <div v-if="!props.documentId" class="kg-detail-actions">
+          <a-button size="small" danger @click="confirmDeleteEdge">删除关系</a-button>
         </div>
       </template>
     </a-drawer>
@@ -864,6 +850,16 @@ function handleFitView() {
 }
 
 // ---- 删除节点 ----
+function confirmDeleteNode() {
+  Modal.confirm({
+    title: '确定删除该节点及其关联的边？',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: handleDeleteNode
+  })
+}
+
 async function handleDeleteNode() {
   if (!selectedNode.value) return
   try {
@@ -877,6 +873,16 @@ async function handleDeleteNode() {
 }
 
 // ---- 删除边 ----
+function confirmDeleteEdge() {
+  Modal.confirm({
+    title: '确定删除该关系？',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: handleDeleteEdge
+  })
+}
+
 async function handleDeleteEdge() {
   if (!selectedEdge.value) return
   try {

@@ -74,10 +74,7 @@
       >
         <template #bodyCell="{ column, text }">
           <template v-if="column.key === 'query'">
-            <a-tooltip placement="topLeft" :overlayStyle="{ maxWidth: '480px' }">
-              <template #title>{{ text }}</template>
-              <span class="cell-ellipsis">{{ text }}</span>
-            </a-tooltip>
+            <span class="cell-wrap">{{ text }}</span>
           </template>
           <template v-if="column.key === 'goldChunkIds'">
             <template v-if="text">
@@ -157,7 +154,6 @@ function formatGoldChunksFull(text) {
 
 const previewColumns = computed(() => {
   const cols = [
-    { title: '#', width: 50, customRender: ({ index }) => `Q${index + 1}` },
     { title: '问题', dataIndex: 'query', key: 'query', width: 280, ellipsis: true },
   ]
   if (hasGoldChunks.value) {
@@ -265,5 +261,9 @@ onMounted(loadBenchmarks)
 .cell-ellipsis {
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
   overflow: hidden; text-overflow: ellipsis; word-break: break-all;
+}
+.cell-wrap {
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 </style>

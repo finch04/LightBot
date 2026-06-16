@@ -1,5 +1,7 @@
 package com.lightbot.util;
 
+import com.lightbot.common.BizException;
+import com.lightbot.enums.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -82,7 +84,7 @@ public class WebFetchUtil {
         String previewHtml = buildPreviewHtml(mainContent != null ? mainContent : doc.body());
 
         if (content == null || content.isBlank()) {
-            throw new RuntimeException("未能从网页中提取有效正文，请尝试其他 URL 或上传 HTML 文件");
+            throw new BizException(ErrorCode.DOCUMENT_URL_NO_CONTENT);
         }
 
         if (content.length() > MAX_CONTENT_LENGTH) {

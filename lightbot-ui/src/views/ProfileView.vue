@@ -128,7 +128,8 @@
           :class="{ active: selectedLevel === opt.value }"
           @click="selectedLevel = opt.value"
         >
-          <LevelBadge :level="opt.value" :size="135" />
+          <LevelBadge v-if="opt.value > 0" :level="opt.value" :size="135" />
+          <span v-else class="level-option-empty">无</span>
         </div>
       </div>
       <button class="btn-primary" :disabled="savingLevel" @click="handleSaveLevel">
@@ -153,7 +154,7 @@ const changingPwd = ref(false)
 const savingFrame = ref(false)
 const savingLevel = ref(false)
 const selectedFrame = ref('')
-const selectedLevel = ref(1)
+const selectedLevel = ref(0)
 const avatarUrl = ref('')
 const avatarUploading = ref(false)
 const avatarInputRef = ref(null)
@@ -168,6 +169,7 @@ const frameOptions = [
 const frameLabelMap = { '': '无', lightning: '巅峰闪电', flame: '烈焰之环', stars: '星辰轨迹' }
 
 const levelOptions = [
+  { value: 0, label: '无' },
   { value: 1, label: 'Lv1' },
   { value: 2, label: 'Lv2' },
   { value: 3, label: 'Lv3' },
@@ -221,7 +223,7 @@ async function loadProfile() {
       createTime: user.createTime || '',
     })
     selectedFrame.value = user.avatarFrame || ''
-    selectedLevel.value = user.level || 1
+    selectedLevel.value = user.level ?? 0
     avatarUrl.value = user.avatar || ''
   } catch { /* ignore */ }
 }
@@ -542,5 +544,9 @@ onMounted(loadProfile)
 .level-option.active {
   border-color: #0070f3;
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
+}
+.level-option-empty {
+  font-size: 14px;
+  color: #a1a1aa;
 }
 </style>
