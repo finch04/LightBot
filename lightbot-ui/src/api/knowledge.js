@@ -146,6 +146,12 @@ export function generateExampleQuestions(knowledgeId) {
   return request.post(`/knowledge/${knowledgeId}/generate-questions`)
 }
 
+// ========== Milvus ==========
+
+export function checkMilvusHealth(knowledgeId) {
+  return request.get(`/knowledge/${knowledgeId}/milvus-health`)
+}
+
 // ========== OCR ==========
 
 export function checkOcrHealth() {

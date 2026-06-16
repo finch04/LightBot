@@ -23,6 +23,7 @@ import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.Task;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
+import com.lightbot.util.MilvusUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,6 +58,7 @@ public class KnowledgeController {
     private final KnowledgeMemberService knowledgeMemberService;
     private final GraphService graphService;
     private final QaPairService qaPairService;
+    private final MilvusUtil milvusUtil;
     private final ObjectMapper objectMapper;
 
     // ========== 知识库 CRUD ==========
@@ -146,6 +148,12 @@ public class KnowledgeController {
                                            @RequestBody Map<String, Object> params) {
         knowledgeService.updateQueryParams(id, params);
         return Result.ok();
+    }
+
+    @Operation(summary = "检查 Milvus 连接状态")
+    @GetMapping("/{id}/milvus-health")
+    public Result<Map<String, Object>> milvusHealth(@PathVariable Long id) {
+        return Result.ok(Map.of("available", milvusUtil.isAvailable()));
     }
 
     // ========== 文档管理 ==========

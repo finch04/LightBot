@@ -11,6 +11,10 @@
             <CloudServerOutlined v-if="knowledge.type === 'milvus'" class="title-type-icon milvus" />
             <DatabaseOutlined v-else class="title-type-icon pg" />
           </a-tooltip>
+          <span v-if="knowledge.type === 'milvus'" class="milvus-status" :class="{ connected: milvusConnected }">
+            <span class="status-dot"></span>
+            {{ milvusConnected ? 'Milvus 已连接' : 'Milvus 未连接' }}
+          </span>
         </h1>
         <p class="page-desc">{{ knowledge.description || '暂无描述' }}</p>
       </div>
@@ -847,7 +851,7 @@ import {
   generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
-  fetchUrlDocument, previewUrlDocument, saveUrlDocument, getQueryParams,
+  fetchUrlDocument, previewUrlDocument, saveUrlDocument, getQueryParams, checkMilvusHealth,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getProvidersWithModels } from '../api/modelProvider'
@@ -868,6 +872,7 @@ const userStore = useUserStore()
 const knowledgeId = route.params.id
 
 const knowledge = ref({})
+const milvusConnected = ref(false)
 const documents = ref([])
 const docLoading = ref(false)
 const docSearch = ref('')
@@ -1044,6 +1049,15 @@ const isManagerOrCreator = computed(() => {
 async function loadKnowledge() {
   const res = await getKnowledge(knowledgeId)
   knowledge.value = res.data
+
+  // Milvus 类型知识库检查连接状态
+  if (res.data.type === 'milvus') {
+    checkMilvusHealth(knowledgeId).then(r => {
+      milvusConnected.value = r.data?.available ?? false
+    }).catch(() => {
+      milvusConnected.value = false
+    })
+  }
 
   // 解析示例问题
   try {
@@ -1956,6 +1970,32 @@ onUnmounted(() => {
 }
 .title-type-icon.milvus {
   color: #8b5cf6;
+}
+.milvus-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ef4444;
+  margin-left: 12px;
+  padding: 2px 10px;
+  border-radius: 100px;
+  background: #fef2f2;
+  vertical-align: middle;
+}
+.milvus-status.connected {
+  color: #16a34a;
+  background: #f0fdf4;
+}
+.milvus-status .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+.milvus-status.connected .status-dot {
+  background: #16a34a;
 }
 .page-desc {
   font-size: 14px;

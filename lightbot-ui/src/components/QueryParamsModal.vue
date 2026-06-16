@@ -331,7 +331,7 @@ function handleCancel() {
 
 function handleApply() {
   emit('apply', { ...form })
-  visible.value = false
+  message.success('已应用到本次检索测试')
 }
 
 async function handleSave() {

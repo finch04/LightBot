@@ -128,8 +128,7 @@
           :class="{ active: selectedLevel === opt.value }"
           @click="selectedLevel = opt.value"
         >
-          <LevelBadge :level="opt.value" :size="28" />
-          <span class="level-option-label">{{ opt.label }}</span>
+          <LevelBadge :level="opt.value" :size="135" />
         </div>
       </div>
       <button class="btn-primary" :disabled="savingLevel" @click="handleSaveLevel">
@@ -154,7 +153,7 @@ const changingPwd = ref(false)
 const savingFrame = ref(false)
 const savingLevel = ref(false)
 const selectedFrame = ref('')
-const selectedLevel = ref(0)
+const selectedLevel = ref(1)
 const avatarUrl = ref('')
 const avatarUploading = ref(false)
 const avatarInputRef = ref(null)
@@ -169,13 +168,11 @@ const frameOptions = [
 const frameLabelMap = { '': '无', lightning: '巅峰闪电', flame: '烈焰之环', stars: '星辰轨迹' }
 
 const levelOptions = [
-  { value: 0, label: 'Lv0' },
   { value: 1, label: 'Lv1' },
   { value: 2, label: 'Lv2' },
   { value: 3, label: 'Lv3' },
   { value: 4, label: 'Lv4' },
   { value: 5, label: 'Lv5' },
-  { value: 6, label: 'Lv6' },
 ]
 
 const initialLetter = computed(() => {
@@ -224,7 +221,7 @@ async function loadProfile() {
       createTime: user.createTime || '',
     })
     selectedFrame.value = user.avatarFrame || ''
-    selectedLevel.value = user.level ?? 0
+    selectedLevel.value = user.level || 1
     avatarUrl.value = user.avatar || ''
   } catch { /* ignore */ }
 }
@@ -528,14 +525,16 @@ onMounted(loadProfile)
 }
 .level-option {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 16px;
+  justify-content: center;
+  width: 135px;
+  height: 135px;
+  padding: 0;
   border: 2px solid #ebebeb;
   border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
+  overflow: hidden;
 }
 .level-option:hover {
   border-color: #0070f3;
@@ -543,9 +542,5 @@ onMounted(loadProfile)
 .level-option.active {
   border-color: #0070f3;
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
-}
-.level-option-label {
-  font-size: 12px;
-  color: #52525b;
 }
 </style>
