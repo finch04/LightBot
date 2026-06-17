@@ -28,6 +28,7 @@ import com.lightbot.util.WorkflowExampleTemplates;
 import com.lightbot.dto.WorkflowExampleVO;
 import com.lightbot.enums.AgentType;
 import com.lightbot.service.AgentVersionService;
+import com.lightbot.config.RedisCacheConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -35,9 +36,12 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -82,11 +86,30 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             """;
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT, key = "#id")
+    public Agent getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT, key = "#entity.id")
+    public boolean updateById(Agent entity) {
+        return super.updateById(entity);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT, allEntries = true)
     public Agent create(Agent agent) {
-        // 1. 获取当前用户ID
+        // 1. 校验名称唯一性
+        long count = count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, agent.getName()));
+        if (count > 0) {
+            throw new BizException(ErrorCode.AGENT_NAME_EXISTS);
+        }
+
+        // 2. 获取当前用户ID
         long userId = StpUtil.getLoginIdAsLong();
 
-        // 2. 初始化Agent字段
+        // 3. 初始化Agent字段
         agent.setUserId(userId);
         agent.setStatus(AgentStatus.DRAFT);
         agent.setVersion(0);
@@ -103,7 +126,15 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
 
-        // 2. 更新允许修改的字段
+        // 2. 名称变更时校验唯一性
+        if (!existing.getName().equals(agent.getName())) {
+            long count = count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, agent.getName()));
+            if (count > 0) {
+                throw new BizException(ErrorCode.AGENT_NAME_EXISTS);
+            }
+        }
+
+        // 3. 更新允许修改的字段
         existing.setName(agent.getName());
         existing.setDescription(agent.getDescription());
         existing.setSystemPrompt(agent.getSystemPrompt());
@@ -192,6 +223,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT, key = "#id")
     public void deleteById(Long id) {
         Agent agent = getById(id);
         if (agent == null) {

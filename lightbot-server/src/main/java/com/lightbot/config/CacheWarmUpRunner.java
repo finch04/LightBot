@@ -1,16 +1,15 @@
 package com.lightbot.config;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.lightbot.entity.Model;
-import com.lightbot.entity.ModelProvider;
-import com.lightbot.mapper.ModelMapper;
-import com.lightbot.mapper.ModelProviderMapper;
+import com.lightbot.entity.*;
+import com.lightbot.mapper.*;
 import com.lightbot.util.ModelCacheUtil;
 import com.lightbot.util.ModelProviderCacheUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.cache.CacheManager;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -35,13 +34,20 @@ public class CacheWarmUpRunner implements ApplicationRunner {
     private final ModelMapper modelMapper;
     private final ModelProviderCacheUtil providerCacheUtil;
     private final ModelCacheUtil modelCacheUtil;
+    private final CacheManager cacheManager;
+    private final AgentMapper agentMapper;
+    private final KnowledgeMapper knowledgeMapper;
+    private final ToolMapper toolMapper;
+    private final SystemConfigMapper systemConfigMapper;
 
     @Override
     public void run(ApplicationArguments args) {
-        // 1. 预热模型提供商缓存
+        // 1. 预热模型提供商缓存（旧逻辑）
         warmUpProviders();
-        // 2. 预热模型缓存
+        // 2. 预热模型缓存（旧逻辑）
         warmUpModels();
+        // 3. 预热 Spring Cache 管理的业务缓存
+        warmUpSpringCaches();
         log.info("[CacheWarmUp] 缓存预热完成");
     }
 
@@ -74,6 +80,45 @@ public class CacheWarmUpRunner implements ApplicationRunner {
             log.info("[CacheWarmUp] 模型缓存预热完成: count={}", models.size());
         } catch (Exception e) {
             log.warn("[CacheWarmUp] 模型缓存预热失败: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 预热 Spring Cache 管理的业务缓存（Agent/Knowledge/Tool/SystemConfig）
+     */
+    private void warmUpSpringCaches() {
+        warmUpCache(RedisCacheConfig.CACHE_AGENT,
+                () -> agentMapper.selectList(new LambdaQueryWrapper<Agent>().eq(Agent::getDeleted, 0)),
+                agent -> agent.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_KNOWLEDGE,
+                () -> knowledgeMapper.selectList(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getDeleted, 0)),
+                k -> k.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_TOOL,
+                () -> toolMapper.selectList(new LambdaQueryWrapper<Tool>().eq(Tool::getDeleted, 0)),
+                t -> t.getId().toString());
+        // SystemConfig 无 deleted 字段，全量加载
+        warmUpCache(RedisCacheConfig.CACHE_SYSTEM_CONFIG,
+                () -> systemConfigMapper.selectList(null),
+                SystemConfig::getConfigKey);
+    }
+
+    @FunctionalInterface
+    private interface DataSupplier<T> {
+        List<T> get();
+    }
+
+    private <T> void warmUpCache(String cacheName, DataSupplier<T> supplier,
+                                  java.util.function.Function<T, Object> keyExtractor) {
+        try {
+            var cache = cacheManager.getCache(cacheName);
+            if (cache == null) return;
+            List<T> data = supplier.get();
+            for (T item : data) {
+                cache.put(keyExtractor.apply(item), item);
+            }
+            log.info("[CacheWarmUp] {}缓存预热完成: count={}", cacheName, data.size());
+        } catch (Exception e) {
+            log.warn("[CacheWarmUp] {}缓存预热失败: {}", cacheName, e.getMessage());
         }
     }
 }

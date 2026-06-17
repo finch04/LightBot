@@ -2,6 +2,7 @@ package com.lightbot.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.DefaultAiConfigDTO;
 import com.lightbot.entity.SystemConfig;
@@ -9,7 +10,11 @@ import com.lightbot.mapper.SystemConfigMapper;
 import com.lightbot.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+
+import java.io.Serializable;
 
 /**
  * 系统配置服务实现类
@@ -26,6 +31,18 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
     private final ObjectMapper objectMapper;
 
     private static final String DEFAULT_AI_PROVIDER_KEY = "default_ai_provider";
+
+    @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_SYSTEM_CONFIG, key = "#id")
+    public SystemConfig getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_SYSTEM_CONFIG, key = "#entity.configKey")
+    public boolean updateById(SystemConfig entity) {
+        return super.updateById(entity);
+    }
 
     @Override
     public String getConfigValue(String configKey) {

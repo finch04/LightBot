@@ -9,7 +9,7 @@
 
 1. [数据库索引优化](#1-数据库索引优化) `已完成`
 2. [向量检索索引调优](#2-向量检索索引调优) `已完成`
-3. [Redis 缓存体系建设](#3-redis-缓存体系建设) `待实施`
+3. [Redis 缓存体系建设](#3-redis-缓存体系建设) `已完成`
 4. [文件存储优化](#4-文件存储优化) `已完成`
 5. [SSE 重连机制](#5-sse-重连机制) `已完成`
 6. [大列表虚拟滚动](#6-大列表虚拟滚动) `已完成`
@@ -373,6 +373,35 @@ systemConfig::chat.max_rounds -> 配置值
 - **缓存击穿**：热点 Key（如默认 Agent）过期瞬间大量并发请求。解决方案：`sync = true` 让只有一个线程重建缓存
 - **JSON 序列化**：`Agent.config` 是 JSONB 字段，存入 Redis 时需要注意序列化/反序列化的一致性
 - **`@CacheEvict` 覆盖面**：需要审查所有写操作方法，确保缓存被正确清除。建议用 `@CacheEvict(allEntries = true)` 作为兜底策略
+
+### 实施状态：已完成
+
+**新增文件：**
+- `RedisCacheConfig.java`：`@EnableCaching` + `RedisCacheManager`，为 7 个缓存域配置独立 TTL（agent/knowledge/tool/mcpServer/subagent=10min, prompt=30min, systemConfig=1hr），使用 `GenericJackson2JsonRedisSerializer` 序列化，`disableCachingNullValues` 防止缓存穿透
+
+**修改文件：**
+- `CacheWarmUpRunner.java`：新增 `warmUpSpringCaches()` 方法，启动时预热 Agent/Knowledge/Tool/SystemConfig 到 Redis
+- 7 个 ServiceImpl（Agent/Knowledge/Tool/McpServer/SubAgent/Prompt/SystemConfig）：
+  - 重写 `getById()` 添加 `@Cacheable`（读缓存，miss 时查 DB 并回填）
+  - 重写 `updateById()` 添加 `@CacheEvict`（写操作自动失效缓存，覆盖所有内部 `updateById` 调用）
+  - `create()` 添加 `@CacheEvict(allEntries = true)`（新增清空该缓存域）
+  - `deleteById()` 添加 `@CacheEvict(key = "#id")`（删除精确失效）
+
+**缓存 Key 设计：**
+```
+agent::123           -> Agent 对象
+knowledge::456       -> Knowledge 对象
+tool::789            -> Tool 对象
+mcpServer::101       -> McpServer 对象
+subagent::202        -> SubAgent 对象
+prompt::303          -> Prompt 对象
+systemConfig::key    -> SystemConfig 对象
+```
+
+**缓存一致性策略：**
+- 通过重写 `updateById()` 统一拦截所有写操作（包括 `updateStats`、`updateQueryParams`、`updateExampleQuestions`、`uploadAvatar` 等内部调用 `updateById` 的方法）
+- `create()` 使用 `allEntries = true` 清空整个缓存域，确保列表查询一致性
+- `disableCachingNullValues` 防止缓存空值导致穿透
 
 ---
 

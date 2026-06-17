@@ -24,6 +24,7 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MindmapUtil;
+import com.lightbot.config.RedisCacheConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -31,9 +32,12 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -59,13 +63,32 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     private final SystemConfigService systemConfigService;
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_KNOWLEDGE, key = "#id")
+    public Knowledge getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_KNOWLEDGE, key = "#entity.id")
+    public boolean updateById(Knowledge entity) {
+        return super.updateById(entity);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = RedisCacheConfig.CACHE_KNOWLEDGE, allEntries = true)
     public Knowledge create(Knowledge knowledge) {
         long userId = StpUtil.getLoginIdAsLong();
 
         // 1. 参数校验
         if (knowledge.getDescription() != null && knowledge.getDescription().length() > 50) {
             throw new BizException("知识库描述不能超过50个字符");
+        }
+
+        // 1.1 校验名称唯一性
+        long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, knowledge.getName()));
+        if (count > 0) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NAME_EXISTS);
         }
 
         // 2. 初始化知识库字段
@@ -102,7 +125,15 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
 
-        // 4. 更新允许修改的字段
+        // 4. 名称变更时校验唯一性
+        if (!existing.getName().equals(knowledge.getName())) {
+            long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, knowledge.getName()));
+            if (count > 0) {
+                throw new BizException(ErrorCode.KNOWLEDGE_NAME_EXISTS);
+            }
+        }
+
+        // 5. 更新允许修改的字段
         existing.setName(knowledge.getName());
         existing.setDescription(knowledge.getDescription());
         existing.setEmbeddingModel(knowledge.getEmbeddingModel());
@@ -133,6 +164,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = RedisCacheConfig.CACHE_KNOWLEDGE, key = "#id")
     public void deleteById(Long id) {
         // 1. 权限校验：仅CREATOR可删除
         checkPermission(id, KnowledgeRole.CREATOR);

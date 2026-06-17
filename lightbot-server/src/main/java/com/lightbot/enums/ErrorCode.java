@@ -30,6 +30,7 @@ public enum ErrorCode {
 
     // ========== Agent模块 ==========
     AGENT_NOT_FOUND(30000, "Agent不存在", HttpStatus.BAD_REQUEST),
+    AGENT_NAME_EXISTS(30009, "Agent名称已存在", HttpStatus.BAD_REQUEST),
     AGENT_KNOWLEDGE_LIMIT(30003, "每个Agent最多绑定10个知识库", HttpStatus.BAD_REQUEST),
     AGENT_TOOL_LIMIT(30005, "每个Agent最多绑定10个额外工具", HttpStatus.BAD_REQUEST),
     AGENT_MCP_LIMIT(30006, "每个Agent最多绑定5个MCP Server", HttpStatus.BAD_REQUEST),
@@ -52,6 +53,7 @@ public enum ErrorCode {
 
     // ========== 知识库模块 ==========
     KNOWLEDGE_NOT_FOUND(50001, "知识库不存在", HttpStatus.BAD_REQUEST),
+    KNOWLEDGE_NAME_EXISTS(50009, "知识库名称已存在", HttpStatus.BAD_REQUEST),
     KNOWLEDGE_NO_PERMISSION(50002, "无权访问该知识库", HttpStatus.FORBIDDEN),
     KNOWLEDGE_ROLE_INSUFFICIENT(50003, "权限不足，需要%s及以上权限", HttpStatus.FORBIDDEN),
     KNOWLEDGE_MEMBER_EXISTS(50004, "该用户已是知识库成员", HttpStatus.BAD_REQUEST),
@@ -106,9 +108,11 @@ public enum ErrorCode {
 
     // ========== Skill模块 ==========
     SKILL_NOT_FOUND(92001, "Skill不存在", HttpStatus.BAD_REQUEST),
+    SKILL_NAME_EXISTS(92002, "Skill名称已存在", HttpStatus.BAD_REQUEST),
 
     // ========== MCP模块 ==========
     MCP_SERVER_NOT_FOUND(90001, "MCP Server不存在", HttpStatus.BAD_REQUEST),
+    MCP_SERVER_NAME_EXISTS(90005, "MCP Server名称已存在", HttpStatus.BAD_REQUEST),
     MCP_CONNECTION_FAILED(90002, "MCP Server连接失败", HttpStatus.BAD_REQUEST),
     MCP_CONFIG_ERROR(90003, "MCP Server配置错误", HttpStatus.BAD_REQUEST),
     MCP_TOOLS_FETCH_FAILED(90004, "MCP获取工具失败", HttpStatus.BAD_REQUEST),
@@ -130,10 +134,12 @@ public enum ErrorCode {
 
     // ========== 评测集模块 ==========
     EVAL_DATASET_NOT_FOUND(100101, "评测集不存在", HttpStatus.BAD_REQUEST),
+    EVAL_DATASET_NAME_EXISTS(100103, "评测集名称已存在", HttpStatus.BAD_REQUEST),
     EVAL_DATASET_VERSION_NOT_FOUND(100102, "评测集版本不存在", HttpStatus.BAD_REQUEST),
 
     // ========== 评估器模块 ==========
     EVAL_EVALUATOR_NOT_FOUND(100201, "评估器不存在", HttpStatus.BAD_REQUEST),
+    EVAL_EVALUATOR_NAME_EXISTS(100204, "评估器名称已存在", HttpStatus.BAD_REQUEST),
     EVAL_EVALUATOR_VERSION_NOT_FOUND(100202, "评估器版本不存在", HttpStatus.BAD_REQUEST),
     EVAL_EVALUATOR_TEMPLATE_NOT_FOUND(100203, "评估器模板不存在", HttpStatus.BAD_REQUEST),
 

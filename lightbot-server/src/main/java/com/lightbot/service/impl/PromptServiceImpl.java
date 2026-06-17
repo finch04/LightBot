@@ -4,13 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.entity.Prompt;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.PromptMapper;
 import com.lightbot.service.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+
+import java.io.Serializable;
 
 /**
  * 提示词服务实现类
@@ -24,6 +29,19 @@ import org.springframework.stereotype.Service;
 public class PromptServiceImpl extends ServiceImpl<PromptMapper, Prompt> implements PromptService {
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_PROMPT, key = "#id")
+    public Prompt getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_PROMPT, key = "#entity.id")
+    public boolean updateById(Prompt entity) {
+        return super.updateById(entity);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_PROMPT, allEntries = true)
     public Prompt create(String promptKey, String description, String tags, Long userId) {
         // 1. 校验promptKey唯一性
         long count = lambdaQuery().eq(Prompt::getPromptKey, promptKey).count();
@@ -56,6 +74,7 @@ public class PromptServiceImpl extends ServiceImpl<PromptMapper, Prompt> impleme
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_PROMPT, key = "#id")
     public void deleteById(Long id) {
         if (getById(id) == null) {
             throw new BizException(ErrorCode.PROMPT_NOT_FOUND);

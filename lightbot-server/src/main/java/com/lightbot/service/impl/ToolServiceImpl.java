@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.dto.ToolRequest;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Tool;
@@ -22,10 +23,13 @@ import org.springframework.ai.tool.method.MethodToolCallback;
 import org.springframework.ai.tool.support.ToolDefinitions;
 import org.springframework.aop.framework.Advised;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +59,19 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_TOOL, key = "#id")
+    public Tool getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_TOOL, key = "#entity.id")
+    public boolean updateById(Tool entity) {
+        return super.updateById(entity);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_TOOL, allEntries = true)
     public Tool create(ToolRequest request) {
         // 1. 校验名称唯一性
         long count = count(new LambdaQueryWrapper<Tool>().eq(Tool::getName, request.getName()));
@@ -89,7 +106,14 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         if (Boolean.TRUE.equals(tool.getIsSystem())) {
             throw new BizException("系统工具不可编辑");
         }
-        // 3. 更新字段
+        // 3. 名称变更时校验唯一性
+        if (!tool.getName().equals(request.getName())) {
+            long count = count(new LambdaQueryWrapper<Tool>().eq(Tool::getName, request.getName()));
+            if (count > 0) {
+                throw new BizException(ErrorCode.TOOL_NAME_EXISTS);
+            }
+        }
+        // 4. 更新字段
         tool.setName(request.getName());
         tool.setDisplayName(request.getDisplayName());
         tool.setDescription(request.getDescription());
@@ -147,6 +171,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_TOOL, key = "#id")
     public void deleteById(Long id) {
         Tool tool = getById(id);
         if (tool == null) {

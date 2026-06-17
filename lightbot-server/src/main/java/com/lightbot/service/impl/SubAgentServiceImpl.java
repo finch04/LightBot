@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.dto.SubAgentRequest;
 import com.lightbot.entity.SubAgent;
 import com.lightbot.enums.ErrorCode;
@@ -12,9 +13,12 @@ import com.lightbot.mapper.SubAgentMapper;
 import com.lightbot.service.SubAgentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -32,6 +36,19 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_SUBAGENT, key = "#id")
+    public SubAgent getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_SUBAGENT, key = "#entity.id")
+    public boolean updateById(SubAgent entity) {
+        return super.updateById(entity);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_SUBAGENT, allEntries = true)
     public SubAgent create(SubAgentRequest request) {
         // 1. 校验名称唯一性
         long count = count(new LambdaQueryWrapper<SubAgent>().eq(SubAgent::getName, request.getName()));
@@ -111,6 +128,7 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_SUBAGENT, key = "#id")
     public void deleteById(Long id) {
         SubAgent subAgent = getById(id);
         if (subAgent == null) {

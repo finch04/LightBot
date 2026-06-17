@@ -147,7 +147,7 @@
               v-model:value="inst.userInput"
               :rows="2"
               :auto-size="{ minRows: 2, maxRows: 6 }"
-              placeholder='输入变量值（JSON格式），如: {"input":"你好"}'
+              :placeholder="inst.variables.length > 1 ? '多变量请输入JSON格式，如: {\"var1\":\"值1\"}' : inst.variables.length === 1 ? '输入 <' + inst.variables[0].key + '> 的值' : '输入内容'"
               @keydown.enter.ctrl="handleRun(inst)"
             />
             <div class="debug-input-actions">
@@ -463,7 +463,13 @@ async function handleRun(inst) {
       const parsed = JSON.parse(inst.userInput)
       variables = JSON.stringify({ ...JSON.parse(variables), ...parsed })
     } catch {
-      return message.warning('变量值必须是有效的 JSON 格式')
+      // 单变量时自动将纯文本包装为 JSON
+      if (inst.variables.length === 1) {
+        const wrapped = { [inst.variables[0].key]: inst.userInput.trim() }
+        variables = JSON.stringify({ ...JSON.parse(variables), ...wrapped })
+      } else {
+        return message.warning('多变量场景下请输入 JSON 格式，如: {"var1":"值1","var2":"值2"}')
+      }
     }
   }
 

@@ -1145,7 +1145,7 @@ async function loadKnowledge() {
 // ---- 文档状态轮询 ----
 const PROCESSING_STATUSES = new Set(['uploading', 'pending', 'processing'])
 let docPollTimer = null
-const DOC_POLL_INTERVAL = 3000
+const DOC_POLL_INTERVAL = 1000
 
 function hasProcessingDocs() {
   return documents.value.some(d => {
@@ -1157,7 +1157,7 @@ function hasProcessingDocs() {
 function startDocPoll() {
   stopDocPoll()
   docPollTimer = setInterval(async () => {
-    await loadDocuments()
+    await loadDocuments(true)
     if (!hasProcessingDocs()) {
       stopDocPoll()
     }
@@ -1171,8 +1171,8 @@ function stopDocPoll() {
   }
 }
 
-async function loadDocuments() {
-  docLoading.value = true
+async function loadDocuments(isBackground = false) {
+  if (!isBackground) docLoading.value = true
   try {
     const res = await getDocuments(knowledgeId, {
       keyword: docSearch.value.trim() || undefined,
@@ -1182,7 +1182,7 @@ async function loadDocuments() {
     documents.value = res.data?.records || []
     docPagination.total = res.data?.total || 0
   } finally {
-    docLoading.value = false
+    if (!isBackground) docLoading.value = false
     if (docPollTimer && !hasProcessingDocs()) {
       stopDocPoll()
     }
@@ -1193,6 +1193,7 @@ async function handleUpload(file) {
   try {
     await uploadDocument(knowledgeId, file)
     message.success('上传成功')
+    await loadDocuments()
     setTimeout(startDocPoll, 1500)
   } catch (e) {
     // interceptor已处理错误提示
@@ -1273,6 +1274,7 @@ async function handleBatchUpload() {
     message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
     uploadFiles.value = []
+    await loadDocuments()
     setTimeout(startDocPoll, 1500)
   } catch (e) {
     // interceptor已处理错误提示
@@ -1397,6 +1399,7 @@ async function handleConfirmUrls() {
     uploadVisible.value = false
     urlList.value = []
     urlInput.value = ''
+    await loadDocuments()
     setTimeout(startDocPoll, 1500)
   }
   if (errors.length > 0) {
@@ -1467,6 +1470,7 @@ async function handleIngest() {
     await ingestDocument(ingestDoc.value.id, data)
     message.success('入库任务已提交，可在「任务中心」查看进度')
     ingestVisible.value = false
+    await loadDocuments()
     setTimeout(startDocPoll, 1500)
   } catch (e) {
     // interceptor已处理错误提示
@@ -2021,6 +2025,11 @@ onMounted(async () => {
   loadKnowledge()
   await loadDocuments()
   loadMembers()
+
+  // 页面加载时如有处理中的文档，自动开启轮询
+  if (hasProcessingDocs()) {
+    startDocPoll()
+  }
 
   // 从聊天页跳转过来时，自动打开对应文档的预览弹窗
   const docId = route.query.docId
@@ -2643,7 +2652,7 @@ onUnmounted(() => {
   gap: 4px;
 }
 .text-content-preview {
-  padding: 20px 24px;
+  padding: 20px 28px 20px 24px;
 }
 .plain-text {
   font-size: 13px;
@@ -2746,8 +2755,9 @@ onUnmounted(() => {
 .error-message {
   background: #fef2f2;
   border-bottom: 1px solid #fecaca;
-  padding: 10px 16px;
+  padding: 10px 20px;
   color: #dc2626;
+  margin-right: 10px;
   font-size: 13px;
   white-space: pre-line;
   display: flex;
@@ -2765,6 +2775,7 @@ onUnmounted(() => {
   height: 500px;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: 8px;
 }
 .chunk-list::-webkit-scrollbar {
   width: 6px;
