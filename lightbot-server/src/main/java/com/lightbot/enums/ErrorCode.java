@@ -101,6 +101,8 @@ public enum ErrorCode {
     // ========== Tool模块 ==========
     TOOL_NOT_FOUND(91001, "工具不存在", HttpStatus.BAD_REQUEST),
     TOOL_NAME_EXISTS(91002, "工具标识已存在", HttpStatus.BAD_REQUEST),
+    TOOL_NOT_EDITABLE(91003, "知识库工具由系统自动管理，不可编辑", HttpStatus.BAD_REQUEST),
+    TOOL_NOT_DELETABLE(91004, "知识库工具由系统自动管理，不可删除", HttpStatus.BAD_REQUEST),
 
     // ========== SubAgent模块 ==========
     SUBAGENT_NOT_FOUND(91101, "SubAgent不存在", HttpStatus.BAD_REQUEST),

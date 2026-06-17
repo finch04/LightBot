@@ -921,7 +921,7 @@
                 <ToolOutlined />
                 <span>{{ t.displayName || t.name }}</span>
                 <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
-                <span v-else-if="isSystemTool(t)" class="tool-system-badge">系统工具</span>
+                <span v-else-if="isKnowledgeTool(t)" class="tool-knowledge-badge">知识库</span>
                 <span v-else class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
                 <button v-if="!isVersionPreview" class="tag-remove" @click="removeTool(t.id)">
                   <CloseOutlined />
@@ -964,7 +964,7 @@
                 @click="!isVersionPreview && toggleTool(t)"
               >
                 <div class="item-icon tool-icon-bg">
-                  <span v-if="isSystemTool(t)" class="builtin-badge">系统</span>
+                  <span v-if="isKnowledgeTool(t)" class="knowledge-badge">知识库</span>
                   <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
                   <ToolOutlined />
                 </div>
@@ -1002,6 +1002,11 @@
             <div class="selected-knowledge-tags">
               <div v-if="selectedKnowledge.length === 0" class="empty-tip">
                 暂未绑定知识库，请从下方列表选择
+              </div>
+              <div v-else class="kb-tool-hint">
+                <InfoCircleOutlined />
+                <span>绑定知识库后将自动导入知识库工具，</span>
+                <a @click.prevent="$refs.kbToolDrawerRef?.open()">点击查看知识库工具</a>
               </div>
               <div
                 v-for="k in selectedKnowledge"
@@ -1064,6 +1069,10 @@
             </div>
           </div>
         </div>
+        <!-- 知识库工具抽屉（通过 hint 链接触发，不渲染默认按钮） -->
+        <SystemToolDrawer ref="kbToolDrawerRef" placement="bottomRight">
+          <template #trigger></template>
+        </SystemToolDrawer>
         </div>
       </a-tab-pane>
 
@@ -1514,7 +1523,7 @@
                 >
                   {{ t.displayName || t.name }}
                   <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
-                  <span v-else-if="isSystemTool(t)" class="tool-system-badge">系统工具</span>
+                  <span v-else-if="isKnowledgeTool(t)" class="tool-knowledge-badge">知识库</span>
                   <span v-else class="preview-tag-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
                 </div>
               </div>
@@ -1950,10 +1959,12 @@ const toolList = ref([])
 const toolSearchText = ref('')
 const toolTypeFilter = ref('')
 const toolTypeList = ref([])
-const toolTypeLabels = { builtin: '内置', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
+const toolTypeLabels = { builtin: '内置', knowledge: '知识库', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
 const toolTypeOptions = computed(() => {
   const options = [{ value: '', label: '全部' }]
   for (const t of toolTypeList.value) {
+    // 知识库工具由中间件自动注入，不在筛选栏展示
+    if (t.value === 'knowledge') continue
     options.push({ value: t.value, label: t.label })
   }
   return options
@@ -2302,7 +2313,11 @@ const selectedTools = computed(() =>
 )
 
 const filteredToolList = computed(() => {
-  let list = toolList.value
+  // 知识库工具由中间件自动注入，不在用户可选列表中展示
+  let list = toolList.value.filter(t => {
+    const type = t.toolType?.code || t.toolType
+    return type !== 'knowledge'
+  })
   if (toolTypeFilter.value) {
     list = list.filter(t => {
       const type = t.toolType?.code || t.toolType
@@ -2675,15 +2690,14 @@ function normalizeToolRecord(t) {
   return {
     ...t,
     id: toBindingId(t.id),
-    isSystem: t.isSystem === true || t.isSystem === 1,
   }
 }
 
-function isSystemTool(t) {
-  return t?.isSystem === true || t?.isSystem === 1
+function isKnowledgeTool(t) {
+  return (t?.toolType?.code || t?.toolType) === 'knowledge'
 }
 
-/** 合并工具目录（不整表覆盖，避免切换 Tab 时丢失已绑定/系统工具） */
+/** 合并工具目录（不整表覆盖，避免切换 Tab 时丢失已绑定/知识库） */
 function mergeToolsIntoCatalog(incoming) {
   const byId = new Map()
   for (const t of toolList.value) {
@@ -4708,6 +4722,18 @@ onMounted(async () => {
   background: #3b82f6;
   color: #fff;
   border-radius: 4px;
+  z-index: 1;
+}
+.knowledge-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 10px;
+  padding: 1px 4px;
+  background: #7c3aed;
+  color: #fff;
+  border-radius: 4px;
+  z-index: 1;
 }
 .binding-inline-badge {
   display: inline-flex;
@@ -4758,6 +4784,27 @@ onMounted(async () => {
   padding: 24px;
   color: #a1a1aa;
   font-size: 13px;
+}
+.kb-tool-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f5f3ff;
+  border: 1px solid #e9e5ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+.kb-tool-hint a {
+  color: #7c3aed;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.kb-tool-hint a:hover {
+  text-decoration: underline;
 }
 
 /* 头像上传 */
@@ -4827,12 +4874,12 @@ onMounted(async () => {
   background: rgba(0, 0, 0, 0.06);
   color: #71717a;
 }
-.tool-system-badge {
+.tool-knowledge-badge {
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 100px;
-  background: #fef3c7;
-  color: #b45309;
+  background: #f5f3ff;
+  color: #7c3aed;
   border: 1px solid #fde68a;
   font-weight: 500;
 }

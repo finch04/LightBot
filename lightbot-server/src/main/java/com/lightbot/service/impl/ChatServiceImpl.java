@@ -14,7 +14,7 @@ import com.lightbot.enums.ModelProviderType;
 import com.lightbot.model.MimoChatClient;
 import com.lightbot.subagent.DelegateSubAgentTool;
 import com.lightbot.tool.ToolEventEmitter;
-import com.lightbot.tool.systemtool.QueryKnowledgeTool;
+import com.lightbot.tool.builtin.QueryKnowledgeTool;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.enums.MessageRole;

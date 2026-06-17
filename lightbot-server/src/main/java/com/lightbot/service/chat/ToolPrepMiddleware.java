@@ -1,8 +1,12 @@
 package com.lightbot.service.chat;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.Tool;
+import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ModelProviderType;
+import com.lightbot.enums.ToolType;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.service.ModelProviderService;
@@ -110,6 +114,21 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             }
             if (!mergedToolIds.isEmpty()) {
                 allCallbacks.addAll(toolService.resolveToolCallbacksByIds(new java.util.ArrayList<>(mergedToolIds)));
+            }
+
+            // 1.1 知识库工具自动注入：当 Agent 绑定了知识库时，自动加载 type=knowledge 的工具
+            List<Long> knowledgeIds = agentService.getKnowledgeIds(agent.getId());
+            if (!knowledgeIds.isEmpty()) {
+                List<Tool> knowledgeTools = toolService.list(
+                        new LambdaQueryWrapper<Tool>()
+                                .eq(Tool::getToolType, ToolType.KNOWLEDGE)
+                                .eq(Tool::getStatus, CommonStatus.ACTIVE));
+                if (!knowledgeTools.isEmpty()) {
+                    List<String> kbToolNames = knowledgeTools.stream().map(Tool::getName).toList();
+                    allCallbacks.addAll(toolService.resolveToolCallbacks(kbToolNames));
+                    log.info("[Chat] 自动注入知识库工具: agentId={}, knowledgeBases={}, tools={}",
+                            agent.getId(), knowledgeIds.size(), kbToolNames);
+                }
             }
 
             // 2. 加载 MCP Server 工具（运行时获取，不落库；同样合并 Agent + Skill 来源）

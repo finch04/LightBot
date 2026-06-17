@@ -139,7 +139,7 @@
           </div>
           <div class="debug-messages" :ref="el => { if (el) inst.messagesRef = el }">
             <div v-if="inst.messages.length === 0" class="debug-empty">
-              输入变量值后发送，调试 Prompt 效果
+              填写参数配置后点击运行，调试 Prompt 效果
             </div>
             <div v-for="(msg, i) in inst.messages" :key="i" :class="['debug-msg', msg.role]">
               <MarkdownPreview v-if="msg.role === 'assistant' && msg._md" :content="msg.content" :finalized="true" />
@@ -386,8 +386,8 @@ async function loadConfigFieldsForInstance(inst, providerId) {
 }
 
 function getPlaceholder(inst) {
-  if (inst.variables.length > 1) return '多变量请输入JSON格式，如: {"var1":"值1"}'
-  if (inst.variables.length === 1) return `输入 <${inst.variables[0].key}> 的值`
+  if (inst.variables.length > 1) return '留空使用默认值，或输入 JSON 覆盖，如: {"var1":"值1"}'
+  if (inst.variables.length === 1) return `留空使用默认值，或输入内容覆盖 <${inst.variables[0].key}>`
   return '输入内容'
 }
 

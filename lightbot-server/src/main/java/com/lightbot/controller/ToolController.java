@@ -47,9 +47,8 @@ public class ToolController {
             @RequestParam(defaultValue = "100") int pageSize,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String toolType,
-            @RequestParam(required = false) Boolean isSystem,
             @RequestParam(required = false) String tag) {
-        return Result.ok(toolService.listToolsWithFilter(pageNum, pageSize, keyword, toolType, isSystem, tag));
+        return Result.ok(toolService.listToolsWithFilter(pageNum, pageSize, keyword, toolType, tag));
     }
 
     @Operation(summary = "获取单个Tool")

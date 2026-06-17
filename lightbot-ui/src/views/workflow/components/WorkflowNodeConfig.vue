@@ -242,7 +242,7 @@
               <div class="resource-option-header">
                 <span class="resource-option-icon-wrap tool">
                   <ToolOutlined class="resource-option-icon" />
-                  <span v-if="t.isSystem" class="option-badge option-badge--system">系统</span>
+                  <span v-if="(t.toolType?.code || t.toolType) === 'knowledge'" class="option-badge option-badge--knowledge">知识库</span>
                   <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="option-badge option-badge--builtin">内置</span>
                 </span>
                 <span class="resource-option-title">{{ t.displayName || t.name }}</span>
@@ -1149,7 +1149,7 @@ function removeGroupVar(idx) {
 .resource-option-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
 .resource-option-icon-wrap.tool { background: #ecfdf5; color: #059669; }
 .option-badge { position: absolute; top: -4px; right: -4px; font-size: 9px; padding: 0 3px; border-radius: 3px; line-height: 14px; white-space: nowrap; z-index: 1; }
-.option-badge--system { background: #0070f3; color: #fff; }
+.option-badge--knowledge { background: #7c3aed; color: #fff; }
 .option-badge--builtin { background: #0070f3; color: #fff; }
 .resource-option-icon.knowledge { color: #4f46e5; }
 .resource-option-icon.tool { font-size: 12px; }

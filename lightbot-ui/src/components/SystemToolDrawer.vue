@@ -1,32 +1,34 @@
 <template>
-  <!-- 系统工具按钮 -->
-  <a-tooltip
-    title="查看系统内置工具"
-    :getPopupContainer="getPopupContainer"
-    :placement="placement"
-    :mouseEnterDelay="0.3"
-  >
-    <button class="btn-system-tool" @click="drawerVisible = true">
-      <SettingOutlined /> 系统工具
-    </button>
-  </a-tooltip>
+  <!-- 知识库工具按钮（支持自定义触发器） -->
+  <slot name="trigger">
+    <a-tooltip
+      title="查看知识库工具"
+      :getPopupContainer="getPopupContainer"
+      :placement="placement"
+      :mouseEnterDelay="0.3"
+    >
+      <button class="btn-system-tool" @click="drawerVisible = true">
+        <SettingOutlined /> 知识库工具
+      </button>
+    </a-tooltip>
+  </slot>
 
-  <!-- 系统工具抽屉 -->
+  <!-- 知识库工具抽屉 -->
   <a-drawer
     v-model:open="drawerVisible"
-    title="系统工具"
+    title="知识库工具"
     :width="480"
     :bodyStyle="{ padding: '16px' }"
   >
     <div class="system-tool-header">
-      <span class="system-tool-desc">系统工具是核心内置工具，自动注入所有 Agent，无需手动绑定。</span>
-      <a-tooltip title="如何新增系统工具？" :getPopupContainer="getPopupContainer" placement="bottomRight">
+      <span class="system-tool-desc">知识库工具在 Agent 绑定知识库后自动注入，无需手动绑定。</span>
+      <a-tooltip title="如何新增知识库工具？" :getPopupContainer="getPopupContainer" placement="bottomRight">
         <button class="btn-help" @click="helpVisible = true"><QuestionCircleOutlined /></button>
       </a-tooltip>
     </div>
     <a-spin :spinning="loading">
       <div v-if="list.length === 0 && !loading" class="empty-tip">
-        暂无系统工具
+        暂无知识库工具
       </div>
       <div v-for="t in list" :key="t.id" class="system-tool-item">
         <div class="tool-icon-wrap">
@@ -44,10 +46,10 @@
     </a-spin>
   </a-drawer>
 
-  <!-- 系统工具详情弹窗 -->
+  <!-- 知识库工具详情弹窗 -->
   <a-modal
     v-model:open="detailVisible"
-    :title="currentTool?.displayName || currentTool?.name || '系统工具详情'"
+    :title="currentTool?.displayName || currentTool?.name || '知识库工具详情'"
     :width="640"
     :footer="null"
   >
@@ -151,17 +153,17 @@
     </div>
   </a-modal>
 
-  <!-- 系统工具帮助弹窗 -->
+  <!-- 知识库工具帮助弹窗 -->
   <a-modal
     v-model:open="helpVisible"
-    title="如何新增系统工具/内置工具"
+    title="如何新增知识库工具/内置工具"
     :width="680"
     :footer="null"
   >
     <div class="help-content">
       <div class="help-section">
-        <h4>什么是系统工具？</h4>
-        <p>系统工具是核心内置工具，自动注入到所有 Agent，用户无需在前端绑定。例如：<code>query_knowledge</code>（知识库检索工具）。</p>
+        <h4>什么是知识库工具？</h4>
+        <p>知识库工具是核心内置工具，自动注入到所有 Agent，用户无需在前端绑定。例如：<code>query_knowledge</code>（知识库检索工具）。</p>
         <p>普通内置工具需要用户在 Agent 配置中手动绑定，如计算器、联网搜索、数据库查询等。</p>
       </div>
       <div class="help-section">
@@ -229,13 +231,13 @@ public class PgSqlTool {
         </table>
       </div>
       <div class="help-section">
-        <h4>系统工具 vs 内置工具</h4>
+        <h4>知识库工具 vs 内置工具</h4>
         <table class="help-table">
           <thead>
             <tr><th>类型</th><th>autoInject</th><th>绑定方式</th><th>示例</th></tr>
           </thead>
           <tbody>
-            <tr><td>系统工具</td><td>true</td><td>自动注入所有Agent</td><td>知识库检索</td></tr>
+            <tr><td>知识库工具</td><td>true</td><td>自动注入所有Agent</td><td>知识库检索</td></tr>
             <tr><td>内置工具</td><td>false（默认）</td><td>用户手动绑定</td><td>计算器、联网搜索</td></tr>
           </tbody>
         </table>
@@ -248,7 +250,7 @@ public class PgSqlTool {
         </ul>
       </div>
       <div class="help-section">
-        <h4>系统工具特性</h4>
+        <h4>知识库工具特性</h4>
         <ul class="help-list">
           <li>自动注入：运行时自动添加到所有 Agent</li>
           <li>不可编辑：前端无法修改配置</li>
@@ -268,6 +270,8 @@ import { getTools, testTool as testToolApi, getToolExampleParams } from '../api/
 const props = defineProps({
   placement: { type: String, default: 'top' }
 })
+
+defineExpose({ open: () => { drawerVisible.value = true } })
 
 const drawerVisible = ref(false)
 const loading = ref(false)
@@ -353,10 +357,10 @@ const testToolParams = computed(() => {
 async function loadSystemTools() {
   loading.value = true
   try {
-    const res = await getTools({ pageNum: 1, pageSize: 100, isSystem: true })
+    const res = await getTools({ pageNum: 1, pageSize: 100, toolType: 'knowledge' })
     list.value = res.data?.records || []
   } catch (e) {
-    console.error('[SystemToolDrawer] 加载系统工具失败:', e)
+    console.error('[SystemToolDrawer] 加载知识库工具失败:', e)
   } finally {
     loading.value = false
   }

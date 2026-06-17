@@ -103,9 +103,9 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         if (tool == null) {
             throw new BizException(ErrorCode.TOOL_NOT_FOUND);
         }
-        // 2. 系统工具不可编辑
-        if (Boolean.TRUE.equals(tool.getIsSystem())) {
-            throw new BizException("系统工具不可编辑");
+        // 2. 知识库工具不可编辑（由注册器自动管理）
+        if (tool.getToolType() == ToolType.KNOWLEDGE) {
+            throw new BizException(ErrorCode.TOOL_NOT_EDITABLE);
         }
         // 3. 名称变更时校验唯一性
         if (!tool.getName().equals(request.getName())) {
@@ -147,8 +147,8 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
-    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, Boolean isSystem, String tag) {
-        // 标签过滤需要 JSONB @> 操作符，使用自定义 SQL
+    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, String tag) {
+        // 标签过滤需要 JSONB @> 操作符
         if (StringUtils.hasText(tag)) {
             return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                     new LambdaQueryWrapper<Tool>()
@@ -158,7 +158,6 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                                     .or()
                                     .like(Tool::getDisplayName, keyword))
                             .eq(StringUtils.hasText(toolType), Tool::getToolType, toolType)
-                            .eq(isSystem != null, Tool::getIsSystem, isSystem)
                             .apply("tags @> '[\"{0}\"]'", tag));
         }
 
@@ -178,11 +177,6 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             wrapper.eq(Tool::getToolType, toolType);
         }
 
-        // 系统工具过滤
-        if (isSystem != null) {
-            wrapper.eq(Tool::getIsSystem, isSystem);
-        }
-
         return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }
 
@@ -193,9 +187,9 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         if (tool == null) {
             throw new BizException(ErrorCode.TOOL_NOT_FOUND);
         }
-        // 系统工具不可删除
-        if (Boolean.TRUE.equals(tool.getIsSystem())) {
-            throw new BizException("系统工具不可删除");
+        // 知识库工具不可删除（由注册器自动管理）
+        if (tool.getToolType() == ToolType.KNOWLEDGE) {
+            throw new BizException(ErrorCode.TOOL_NOT_DELETABLE);
         }
         removeById(id);
     }
