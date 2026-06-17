@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChunkVO;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.DocumentStreamVO;
 import com.lightbot.dto.GraphEdgeVO;
 import com.lightbot.dto.GraphExtractRequest;
 import com.lightbot.dto.GraphImportRequest;
@@ -29,7 +30,11 @@ import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -244,6 +249,19 @@ public class KnowledgeController {
     @GetMapping("/documents/{docId}/download")
     public Result<DocumentDownloadVO> getDocumentDownloadUrl(@PathVariable Long docId) {
         return Result.ok(documentService.getDocumentDownloadUrl(docId));
+    }
+
+    @Operation(summary = "代理下载文档文件（强制下载，文件名正确）")
+    @GetMapping("/documents/{docId}/download-file")
+    public ResponseEntity<InputStreamResource> downloadFile(@PathVariable Long docId) {
+        DocumentStreamVO stream = documentService.downloadDocumentAsStream(docId);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(stream.getFileName(), java.nio.charset.StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(stream.getContentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(new InputStreamResource(stream.getInputStream()));
     }
 
     // ========== 分块查看 ==========

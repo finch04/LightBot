@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.DocumentStreamVO;
 import com.lightbot.dto.UrlFetchPreviewVO;
 import com.lightbot.dto.UrlSaveRequest;
 import com.lightbot.entity.Document;
@@ -116,6 +117,14 @@ public interface DocumentService extends IService<Document> {
      * @return 下载信息
      */
     DocumentDownloadVO getDocumentDownloadUrl(Long documentId);
+
+    /**
+     * 获取文档流式下载数据（代理下载，支持自定义文件名）
+     *
+     * @param documentId 文档ID
+     * @return 流式下载数据
+     */
+    DocumentStreamVO downloadDocumentAsStream(Long documentId);
 
     /**
      * 预览 URL 网页内容（不入库）

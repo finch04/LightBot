@@ -191,4 +191,13 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
     public void deleteBySessionId(Long sessionId) {
         remove(new LambdaQueryWrapper<LlmTrace>().eq(LlmTrace::getSessionId, sessionId));
     }
+
+    /**
+     * 批量删除调用链记录（物理删除）
+     */
+    @Override
+    public void deleteByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        removeByIds(ids);
+    }
 }

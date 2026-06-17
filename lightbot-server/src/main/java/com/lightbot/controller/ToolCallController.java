@@ -6,11 +6,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -38,5 +36,17 @@ public class ToolCallController {
             @Parameter(description = "开始时间") @RequestParam(required = false) String startTime,
             @Parameter(description = "结束时间") @RequestParam(required = false) String endTime) {
         return Result.ok(toolCallService.pageList(pageNum, pageSize, toolName, status, sessionId, startTime, endTime));
+    }
+
+    /**
+     * 批量删除工具调用记录
+     */
+    @DeleteMapping
+    @Operation(summary = "批量删除工具调用记录")
+    public Result<Void> deleteToolCalls(@RequestBody List<Long> ids) {
+        if (ids != null && !ids.isEmpty()) {
+            toolCallService.removeByIds(ids);
+        }
+        return Result.ok();
     }
 }

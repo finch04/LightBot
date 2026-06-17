@@ -6,7 +6,7 @@
         <button class="btn-back" @click="router.push('/prompts')">
           <ArrowLeftOutlined /> 返回
         </button>
-        <h1 class="page-title">{{ promptKey }} <a-tag v-if="latestVersion" color="blue" size="small">{{ latestVersion }}</a-tag></h1>
+        <h1 class="page-title"><span v-if="latestVersion" class="version-badge">{{ latestVersion }}</span>{{ promptKey }}</h1>
         <p class="page-desc" v-if="prompt?.description">{{ prompt.description }}</p>
         <div class="prompt-tags" v-if="prompt?.tags">
           <a-tag v-for="tag in prompt.tags.split(',')" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
@@ -551,6 +551,22 @@ function scrollToBottom(inst) {
   font-weight: 600;
   color: #171717;
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: linear-gradient(135deg, #ede9fe, #e0e7ff);
+  border: 1px solid #c4b5fd;
+  border-radius: 100px;
+  padding: 2px 10px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 .page-desc {
   font-size: 14px;

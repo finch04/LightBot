@@ -5,6 +5,7 @@ import com.lightbot.dto.LlmTraceDetailVO;
 import com.lightbot.dto.LlmTraceRequest;
 import com.lightbot.entity.LlmTrace;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -52,4 +53,11 @@ public interface LlmTraceService extends IService<LlmTrace> {
      * @param sessionId 会话ID
      */
     void deleteBySessionId(Long sessionId);
+
+    /**
+     * 批量删除调用链记录（物理删除）
+     *
+     * @param ids 主键ID列表
+     */
+    void deleteByIds(List<Long> ids);
 }

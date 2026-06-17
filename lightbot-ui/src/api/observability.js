@@ -11,3 +11,7 @@ export function getTraceDetail(id) {
 export function getTraceOverview(traceSource) {
   return request.get('/observability/overview', { params: { traceSource } })
 }
+
+export function deleteTraces(ids) {
+  return request.delete('/observability/traces', { data: ids })
+}

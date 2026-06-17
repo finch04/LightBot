@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -50,5 +51,15 @@ public class LlmTraceController {
     @Operation(summary = "调用链汇总统计")
     public Result<Map<String, Object>> getOverview(@RequestParam(required = false) String traceSource) {
         return Result.ok(llmTraceService.getOverview(traceSource));
+    }
+
+    /**
+     * 批量删除调用链记录
+     */
+    @DeleteMapping("/traces")
+    @Operation(summary = "批量删除调用链")
+    public Result<Void> deleteTraces(@RequestBody List<Long> ids) {
+        llmTraceService.deleteByIds(ids);
+        return Result.ok();
     }
 }

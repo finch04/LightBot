@@ -82,10 +82,10 @@
     >
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="如：客服助手" />
+          <a-input v-model:value="form.name" placeholder="如：客服助手（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="2" placeholder="Agent 描述（可选）" />
+          <a-textarea v-model:value="form.description" :rows="2" placeholder="Agent 描述（不超过200字）" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="类型">
           <a-select v-model:value="form.agentType" style="width: 100%">

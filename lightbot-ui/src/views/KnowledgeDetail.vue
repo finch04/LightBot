@@ -1473,18 +1473,29 @@ async function openDocModal(doc) {
   }
 }
 
-function handleDownload() {
-  if (!downloadUrl.value) {
-    message.warning('下载链接获取中，请稍后重试')
-    return
+async function handleDownload() {
+  if (!currentDoc.value?.id) return
+  try {
+    const token = localStorage.getItem('token')
+    const resp = await fetch(`/api/knowledge/documents/${currentDoc.value.id}/download-file`, {
+      headers: token ? { 'Authorization': token } : {},
+    })
+    if (!resp.ok) {
+      message.error('下载失败')
+      return
+    }
+    const blob = await resp.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = currentDoc.value?.name || 'download'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    message.error('下载失败')
   }
-  const a = document.createElement('a')
-  a.href = downloadUrl.value
-  a.download = currentDoc.value?.name || 'download'
-  a.target = '_blank'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
 }
 
 function openChunkDetail(chunk) {

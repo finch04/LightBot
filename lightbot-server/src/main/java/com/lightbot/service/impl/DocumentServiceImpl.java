@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.DocumentDownloadVO;
+import com.lightbot.dto.DocumentStreamVO;
 import com.lightbot.dto.DuplicateCheckResultVO;
 import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.UrlFetchPreviewVO;
@@ -544,6 +545,18 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         // 预签名URL中携带正确的Content-Type，浏览器才能内联展示而非下载
         String url = minioUtil.getPresignedUrl(doc.getFilePath(), contentType);
         return new DocumentDownloadVO(url, doc.getFileType(), doc.getName(), contentType);
+    }
+
+    @Override
+    public DocumentStreamVO downloadDocumentAsStream(Long documentId) {
+        Document doc = getById(documentId);
+        if (doc == null) {
+            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+        permissionHelper.checkMember(doc.getKnowledgeId());
+        String contentType = getContentType(doc.getFileType());
+        InputStream in = minioUtil.download(doc.getFilePath());
+        return new DocumentStreamVO(in, doc.getName(), contentType);
     }
 
     @Override

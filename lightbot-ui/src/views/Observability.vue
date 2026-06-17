@@ -57,6 +57,7 @@
         :style="{ width: '360px' }"
       />
       <a-button type="primary" @click="loadTraces(1)"><SearchOutlined /> 查询</a-button>
+      <a-button danger :disabled="selectedRowKeys.length === 0" @click="handleBatchDelete"><DeleteOutlined /> 批量删除</a-button>
     </div>
 
     <!-- 工具调用 筛选栏 -->
@@ -74,6 +75,7 @@
         style="width: 380px"
       />
       <a-button type="primary" @click="loadToolCalls(1)"><SearchOutlined /> 查询</a-button>
+      <a-button danger :disabled="selectedToolRowKeys.length === 0" @click="handleBatchDeleteTool"><DeleteOutlined /> 批量删除</a-button>
     </div>
 
     <!-- Trace 列表 -->
@@ -82,6 +84,7 @@
       :columns="columns"
       :loading="loading"
       :pagination="pagination"
+      :rowSelection="{ selectedRowKeys, onChange: keys => selectedRowKeys = keys }"
       rowKey="id"
       size="middle"
       @change="handleTableChange"
@@ -117,6 +120,7 @@
       :columns="toolColumns"
       :loading="toolLoading"
       :pagination="toolPagination"
+      :rowSelection="{ selectedRowKeys: selectedToolRowKeys, onChange: keys => selectedToolRowKeys = keys }"
       rowKey="id"
       size="small"
       @change="handleToolTableChange"
@@ -446,10 +450,12 @@ import {
   SearchOutlined,
   CopyOutlined,
   CheckOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
 import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
-import { getTraces, getTraceDetail, getTraceOverview } from '../api/observability'
-import { getToolCalls } from '../api/toolCall'
+import { getTraces, getTraceDetail, getTraceOverview, deleteTraces } from '../api/observability'
+import { getToolCalls, deleteToolCalls } from '../api/toolCall'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -458,6 +464,8 @@ const loading = ref(false)
 const traces = ref([])
 const overview = ref({})
 const activeTab = ref('chat')
+const selectedRowKeys = ref([])
+const selectedToolRowKeys = ref([])
 const detailVisible = ref(false)
 const detailTrace = ref(null)
 const expandedSpans = ref(new Set())
@@ -742,6 +750,8 @@ async function loadOverview() {
 
 function onTabChange() {
   pagination.current = 1
+  selectedRowKeys.value = []
+  selectedToolRowKeys.value = []
   if (activeTab.value === 'tool') {
     loadToolCalls(1)
   } else {
@@ -824,6 +834,39 @@ function handleToolTableChange(pag) {
 function openToolDetail(record) {
   toolDetailRecord.value = record
   toolDetailVisible.value = true
+}
+
+function handleBatchDelete() {
+  Modal.confirm({
+    title: '确认批量删除',
+    content: `即将删除 ${selectedRowKeys.value.length} 条调用链记录，删除后无法恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await deleteTraces(selectedRowKeys.value)
+      message.success(`成功删除 ${selectedRowKeys.value.length} 条记录`)
+      selectedRowKeys.value = []
+      loadTraces(1)
+      loadOverview()
+    },
+  })
+}
+
+function handleBatchDeleteTool() {
+  Modal.confirm({
+    title: '确认批量删除',
+    content: `即将删除 ${selectedToolRowKeys.value.length} 条工具调用记录，删除后无法恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await deleteToolCalls(selectedToolRowKeys.value)
+      message.success(`成功删除 ${selectedToolRowKeys.value.length} 条记录`)
+      selectedToolRowKeys.value = []
+      loadToolCalls(1)
+    },
+  })
 }
 
 function formatJsonPreview(jsonStr) {

@@ -38,10 +38,12 @@
         @click="router.push(`/prompts/${item.promptKey}`)"
       >
         <div class="card-top">
-          <div class="card-icon">P</div>
+          <div class="card-icon-wrapper">
+            <div class="card-icon">P</div>
+            <span class="card-version-badge" v-if="item.latestVersion">{{ item.latestVersion }}</span>
+          </div>
           <div class="card-info">
             <h3>{{ item.promptKey }}</h3>
-            <span class="card-type" v-if="item.latestVersion">{{ item.latestVersion }}</span>
           </div>
           <div class="card-actions" @click.stop>
             <button class="btn-icon" @click="openDialog(item)"><EditOutlined /></button>
@@ -298,6 +300,10 @@ function handleDelete(id) {
   gap: 12px;
   margin-bottom: 12px;
 }
+.card-icon-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
 .card-icon {
   width: 40px;
   height: 40px;
@@ -309,7 +315,19 @@ function handleDelete(id) {
   justify-content: center;
   font-weight: 700;
   font-size: 16px;
-  flex-shrink: 0;
+}
+.card-version-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 10px;
+  color: #0070f3;
+  background: #e8f4ff;
+  border: 1px solid #b3d8ff;
+  border-radius: 100px;
+  padding: 0 5px;
+  line-height: 16px;
+  white-space: nowrap;
 }
 .card-info { flex: 1; }
 .card-info h3 {
@@ -317,13 +335,6 @@ function handleDelete(id) {
   font-weight: 600;
   color: #171717;
   margin: 0;
-}
-.card-type {
-  font-size: 12px;
-  color: #0070f3;
-  background: #e8f4ff;
-  padding: 2px 8px;
-  border-radius: 100px;
 }
 .card-actions { display: flex; gap: 4px; }
 .card-desc {
