@@ -103,6 +103,11 @@
         />
       </a-modal>
 
+      <!-- 左下角任务徽标 -->
+      <div v-if="taskBadgeCount" class="sidebar-task-badge" @click="router.push('/tasks')">
+        <a-badge :count="taskBadgeCount" :number-style="taskBadgeStyle" />
+      </div>
+
       <!-- 用户信息 -->
       <div class="sidebar-footer">
         <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown">
@@ -115,7 +120,6 @@
             </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
             <LevelBadge :level="userStore.user?.level" :size="32" class="sidebar-text" />
-            <a-badge v-if="taskBadgeCount" class="sidebar-badge" :count="taskBadgeCount" :number-style="taskBadgeStyle" />
             <span class="sidebar-text">
               <UpOutlined v-if="userDropdownOpen" />
               <DownOutlined v-else />
@@ -446,6 +450,7 @@ watch(() => route.path, (path) => {
   flex-shrink: 0;
   overflow: hidden;
   transition: width 0.25s ease;
+  position: relative;
 }
 .sidebar.collapsed {
   width: 60px;
@@ -478,13 +483,17 @@ watch(() => route.path, (path) => {
   padding: 8px 4px;
   position: relative;
 }
-.sidebar-badge {
-  flex-shrink: 0;
-}
-.sidebar.collapsed .sidebar-badge {
+.sidebar-task-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  bottom: 56px;
+  left: 12px;
+  cursor: pointer;
+  z-index: 2;
+}
+.sidebar.collapsed .sidebar-task-badge {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 52px;
 }
 .sidebar.collapsed .sidebar-footer {
   padding: 12px 6px;

@@ -402,7 +402,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
             // 同步触发示例问题生成
             try {
-                knowledgeService.generateExampleQuestions(knowledgeId, documentId);
+                knowledgeServiceProvider.getObject().generateExampleQuestions(knowledgeId, documentId);
             } catch (Exception e) {
                 log.warn("[文档入库] 示例问题生成失败, documentId={}", documentId, e);
             }

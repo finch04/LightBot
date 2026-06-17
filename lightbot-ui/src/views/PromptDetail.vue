@@ -228,7 +228,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, HistoryOutlined, ThunderboltOutlined,
@@ -237,9 +237,9 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
-  getPrompts, getPromptVersions, createPromptVersion, runPromptStream,
+  getPrompts, getPromptVersions, getPromptVersionDetail, createPromptVersion, runPromptStream,
 } from '../api/prompt'
-import { getProviderConfigFields } from '../api/modelProvider'
+import { getProviderConfigFields, getModelProvider } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import TemplateImportModalLR from '../components/TemplateImportModalLR.vue'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
@@ -312,39 +312,31 @@ onMounted(async () => {
   // 初始化一个配置实例
   const inst = createInstance()
   instances.value.push(inst)
-  // 如果有版本，加载最新版本
-  if (versions.value.length > 0) {
-    const latest = versions.value[0]
-    inst.content = latest.template || ''
-    if (latest.modelConfig) {
-      try {
-        const cfg = typeof latest.modelConfig === 'string' ? JSON.parse(latest.modelConfig) : latest.modelConfig
-        if (cfg.providerId) {
-          inst.providerId = cfg.providerId
-          await loadConfigFieldsForInstance(inst, cfg.providerId)
-          if (cfg.modelId) inst.modelId = cfg.modelId
-          // 设置动态参数值
-          for (const [k, v] of Object.entries(cfg)) {
-            if (k !== 'providerId' && k !== 'modelId') {
-              inst.modelConfig[k] = v
-            }
-          }
-        }
-      } catch { /* ignore */ }
-    }
-    // 加载变量
-    if (latest.variables) {
-      try {
-        inst.variables = JSON.parse(latest.variables)
-      } catch { /* ignore */ }
-    }
-    // 加载工具配置
-    if (latest.toolConfig) {
-      inst.toolConfig = latest.toolConfig
-    }
-    onContentChange(inst)
+
+  // 优先恢复指定版本，否则加载最新版本
+  const restoreVersion = route.query.restoreVersion
+  if (restoreVersion) {
+    await restoreByVersion(restoreVersion)
+  } else if (versions.value.length > 0) {
+    await applyVersionToInstance(inst, versions.value[0])
   }
 })
+
+// 监听版本恢复（组件复用时 query 变化不会触发 onMounted）
+watch(() => route.query.restoreVersion, async (val) => {
+  if (val) await restoreByVersion(val)
+})
+
+async function restoreByVersion(version) {
+  const inst = instances.value[0]
+  if (!inst) return
+  try {
+    const res = await getPromptVersionDetail(promptKey, version)
+    if (res.data) {
+      await applyVersionToInstance(inst, res.data)
+    }
+  } catch { /* ignore */ }
+}
 
 async function loadPrompt() {
   const res = await getPrompts({ keyword: promptKey, pageNum: 1, pageSize: 1 })
@@ -355,6 +347,37 @@ async function loadPrompt() {
 async function loadVersions() {
   const res = await getPromptVersions(promptKey)
   versions.value = res.data || []
+}
+
+async function applyVersionToInstance(inst, versionData) {
+  inst.content = versionData.template || ''
+  // 模型配置
+  if (versionData.modelConfig) {
+    try {
+      const cfg = typeof versionData.modelConfig === 'string' ? JSON.parse(versionData.modelConfig) : versionData.modelConfig
+      if (cfg.providerId) {
+        inst.providerId = cfg.providerId
+        await loadConfigFieldsForInstance(inst, cfg.providerId)
+        if (cfg.modelId) inst.modelId = cfg.modelId
+        for (const [k, v] of Object.entries(cfg)) {
+          if (k !== 'providerId' && k !== 'modelId') {
+            inst.modelConfig[k] = v
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  // 变量
+  if (versionData.variables) {
+    try {
+      inst.variables = JSON.parse(versionData.variables)
+    } catch { /* ignore */ }
+  }
+  // 工具配置
+  if (versionData.toolConfig) {
+    inst.toolConfig = versionData.toolConfig
+  }
+  onContentChange(inst)
 }
 
 function getInstModelValue(inst) {
@@ -422,11 +445,13 @@ async function handleTemplateImport(t) {
     onContentChange(inst)
     message.success('模板导入成功')
 
-    // 模型配置导入
+    // 模型配置导入（需验证提供商存在）
     if (t.modelConfig) {
       try {
         const cfg = typeof t.modelConfig === 'string' ? JSON.parse(t.modelConfig) : t.modelConfig
         if (cfg.providerId) {
+          // 验证提供商是否存在，不存在则跳过模型配置导入
+          await getModelProvider(cfg.providerId)
           inst.providerId = cfg.providerId
           await loadConfigFieldsForInstance(inst, cfg.providerId)
           if (cfg.modelId) inst.modelId = cfg.modelId
@@ -438,7 +463,7 @@ async function handleTemplateImport(t) {
           }
         }
       } catch {
-        // 模型配置导入失败不影响模板内容
+        // 提供商不存在或配置导入失败，跳过模型配置导入
       }
     }
   } catch (e) {

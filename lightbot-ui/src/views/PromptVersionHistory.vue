@@ -33,7 +33,6 @@
         <template v-if="column.key === 'version'">
           <a-tag color="blue">{{ record.version }}</a-tag>
           <a-tag v-if="index === 0" color="green" size="small">当前版本</a-tag>
-          <a-tag v-if="selectedRowKeys.includes(record.id)" color="orange" size="small">已选择</a-tag>
         </template>
         <template v-if="column.key === 'status'">
           <a-tag :color="record.status === 'release' ? 'green' : 'blue'" size="small">
@@ -85,11 +84,11 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">模型配置</span>
-          <span class="detail-mono">{{ detailVersion.modelConfig || '-' }}</span>
+          <pre class="detail-json">{{ formatConfig(detailVersion.modelConfig) }}</pre>
         </div>
         <div class="detail-row">
           <span class="detail-label">参数</span>
-          <span class="detail-mono">{{ detailVersion.variables || '-' }}</span>
+          <pre class="detail-json">{{ formatConfig(detailVersion.variables) }}</pre>
         </div>
         <a-divider />
         <div class="detail-content-title">Prompt 内容</div>
@@ -399,6 +398,19 @@ onMounted(async () => {
   font-size: 12px;
   color: #171717;
   word-break: break-all;
+}
+.detail-json {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  color: #171717;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  flex: 1;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 6px;
+  padding: 8px 12px;
 }
 .detail-content-title {
   font-size: 14px;
