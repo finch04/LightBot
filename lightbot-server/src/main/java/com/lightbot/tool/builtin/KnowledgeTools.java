@@ -27,7 +27,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component("knowledgeTools")
-@SystemTool(displayName = "知识库操作工具集", description = "知识库相关操作：列出知识库、获取思维导图、查看文档原文", tags = {"知识库"})
+@SystemTool(displayName = "知识库操作工具集", description = "知识库相关操作：列出知识库、获取思维导图、查看文档原文", type = "knowledge", tags = {"知识库"})
 @RequiredArgsConstructor
 public class KnowledgeTools {
 

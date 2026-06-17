@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component("findInDocumentTool")
-@SystemTool(displayName = "文档内容定位", description = "在知识库文档中按关键词或正则表达式定位匹配内容", tags = {"知识库"})
+@SystemTool(displayName = "文档内容定位", description = "在知识库文档中按关键词或正则表达式定位匹配内容", type = "knowledge", tags = {"知识库"})
 @RequiredArgsConstructor
 public class FindInDocumentTool {
 

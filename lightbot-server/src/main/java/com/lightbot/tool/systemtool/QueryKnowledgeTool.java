@@ -1,4 +1,4 @@
-package com.lightbot.tool.systemtool;
+package com.lightbot.tool.builtin;
 
 import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.entity.Knowledge;
@@ -29,15 +29,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 平台系统工具 — 知识库检索
- * <p>自动注入所有 Agent，由 {@link com.lightbot.tool.registrar.PlatformSystemToolRegistrar} 注册</p>
+ * 内置工具 — 知识库检索
+ * <p>由 {@link com.lightbot.tool.registrar.ToolRegistrar} 统一注册，type=knowledge，
+ * 当 Agent 绑定知识库时由中间件自动注入。</p>
  *
  * @author finch
  * @since 2026-05-22
  */
 @Slf4j
 @Component("queryKnowledgeTool")
-@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", autoInject = true, tags = {"知识库"})
+@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", type = "knowledge", tags = {"知识库"})
 @RequiredArgsConstructor
 public class QueryKnowledgeTool {
 

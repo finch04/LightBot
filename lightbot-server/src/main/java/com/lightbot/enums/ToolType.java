@@ -17,6 +17,7 @@ import lombok.Getter;
 public enum ToolType {
 
     BUILTIN("builtin", "内置"),
+    KNOWLEDGE("knowledge", "知识库"),
     CUSTOM("custom", "自定义"),
     API("api", "API调用"),
     MCP("mcp", "MCP协议");

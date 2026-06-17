@@ -29,15 +29,21 @@
         <div class="instance-header">
           <span class="instance-title">配置 {{ idx + 1 }}</span>
           <div class="instance-actions">
-            <button class="btn-icon-sm" title="从模板导入" @click="openTemplateImportFor(inst)">
-              <ImportOutlined />
-            </button>
-            <button class="btn-icon-sm" title="复制此配置" @click="addInstance()" :disabled="instances.length >= 3">
-              <CopyOutlined />
-            </button>
-            <button class="btn-icon-sm" title="删除配置" @click="removeInstance(inst.id)" v-if="instances.length > 1">
-              <DeleteOutlined />
-            </button>
+            <a-tooltip title="从模板导入">
+              <button class="btn-icon-sm" @click="openTemplateImportFor(inst)">
+                <ImportOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="复制此配置">
+              <button class="btn-icon-sm" @click="addInstance()" :disabled="instances.length >= 3">
+                <CopyOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="删除配置">
+              <button class="btn-icon-sm" @click="removeInstance(inst.id)" v-if="instances.length > 1">
+                <DeleteOutlined />
+              </button>
+            </a-tooltip>
           </div>
         </div>
 
@@ -139,14 +145,23 @@
               <MarkdownPreview v-if="msg.role === 'assistant' && msg._md" :content="msg.content" :finalized="true" />
               <div v-else class="msg-content">{{ msg.content }}</div>
               <div class="msg-actions" v-if="msg.role === 'assistant' && !inst.streaming">
-                <button class="btn-text-xs" :class="{ active: msg._md }" @click="msg._md = !msg._md" title="Markdown 渲染">
-                  <FileMarkdownOutlined />
-                </button>
+                <a-tooltip title="Markdown 渲染">
+                  <button class="btn-text-xs" :class="{ active: msg._md }" @click="msg._md = !msg._md">
+                    <FileMarkdownOutlined />
+                  </button>
+                </a-tooltip>
               </div>
             </div>
             <div v-if="inst.streaming" class="debug-msg assistant">
               <div class="msg-content">{{ inst.streamContent }}<span class="cursor">|</span></div>
             </div>
+          </div>
+          <div class="debug-footer" v-if="inst.messages.length > 0">
+            <a-tooltip title="复制">
+              <button class="btn-text-xs" @click="copyConversation(inst)">
+                <CopyOutlined /> 复制
+              </button>
+            </a-tooltip>
           </div>
           <div class="debug-input">
             <a-textarea
@@ -158,14 +173,6 @@
             />
             <div class="debug-input-actions">
               <span class="debug-hint">Ctrl+Enter 发送</span>
-              <button
-                class="btn-icon-sm"
-                :disabled="inst.messages.length === 0"
-                @click="copyConversation(inst)"
-                title="复制对话"
-              >
-                <CopyOutlined />
-              </button>
               <button
                 class="btn-primary-sm"
                 :disabled="inst.streaming || !inst.content.trim()"
@@ -839,6 +846,11 @@ function scrollToBottom(inst) {
   align-self: flex-start;
   background: #eff6ff;
   color: #171717;
+}
+.debug-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 4px;
 }
 .msg-actions {
   display: flex;

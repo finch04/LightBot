@@ -186,12 +186,16 @@
                 <MarkdownPreview v-if="msg.role === 'assistant' && msg._md" :content="msg.content" :finalized="true" />
                 <div v-else class="msg-content">{{ msg.content }}</div>
                 <div class="msg-actions" v-if="msg.role === 'assistant' && !inst.streaming">
-                  <button class="btn-text-xs" :class="{ active: msg._md }" @click="msg._md = !msg._md" title="Markdown 渲染">
-                    <FileMarkdownOutlined />
-                  </button>
-                  <button class="btn-text-xs" @click="copyText(msg.content)" title="复制">
-                    <CopyOutlined />
-                  </button>
+                  <a-tooltip title="Markdown 渲染">
+                    <button class="btn-text-xs" :class="{ active: msg._md }" @click="msg._md = !msg._md">
+                      <FileMarkdownOutlined />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip title="复制">
+                    <button class="btn-text-xs" @click="copyText(msg.content)">
+                      <CopyOutlined />
+                    </button>
+                  </a-tooltip>
                 </div>
               </div>
             </div>
