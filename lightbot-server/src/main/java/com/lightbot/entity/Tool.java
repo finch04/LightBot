@@ -8,6 +8,7 @@ import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ToolType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -35,14 +36,17 @@ public class Tool {
     private Long userId;
 
     @TableField("name")
+    @Size(max = 50, message = "工具标识不超过50字")
     @Schema(description = "Tool唯一标识")
     private String name;
 
     @TableField("display_name")
+    @Size(max = 50, message = "显示名称不超过50字")
     @Schema(description = "显示名称")
     private String displayName;
 
     @TableField("description")
+    @Size(max = 200, message = "工具描述不超过200字")
     @Schema(description = "Tool描述")
     private String description;
 

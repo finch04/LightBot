@@ -7,6 +7,7 @@ import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.KnowledgeType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -34,10 +35,12 @@ public class Knowledge {
     private Long userId;
 
     @TableField("name")
+    @Size(max = 50, message = "知识库名称不超过50字")
     @Schema(description = "知识库名称")
     private String name;
 
     @TableField("description")
+    @Size(max = 200, message = "知识库描述不超过200字")
     @Schema(description = "知识库描述")
     private String description;
 

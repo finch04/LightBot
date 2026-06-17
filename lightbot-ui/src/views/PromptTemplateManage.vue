@@ -88,13 +88,13 @@
     >
       <a-form :model="form" :label-col="{ span: 4 }">
         <a-form-item label="模板标识" required>
-          <a-input v-model:value="form.promptTemplateKey" placeholder="如：customer_service" :disabled="!!form.id" />
+          <a-input v-model:value="form.promptTemplateKey" :maxlength="100" show-count placeholder="如：customer_service (不超过100字)" :disabled="!!form.id" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.templateDesc" :rows="2" placeholder="模板用途描述" />
+          <a-textarea v-model:value="form.templateDesc" :rows="2" :maxlength="200" show-count placeholder="模板用途描述 (不超过200字)" />
         </a-form-item>
         <a-form-item label="模板内容" required>
-          <a-textarea v-model:value="form.template" :rows="10" placeholder="使用 {{变量名}} 定义变量" class="template-editor" @input="onTemplateInput" />
+          <a-textarea v-model:value="form.template" :rows="10" :maxlength="5000" show-count placeholder="使用 {{变量名}} 定义变量 (不超过5000字)" class="template-editor" @input="onTemplateInput" />
         </a-form-item>
         <a-form-item label="变量定义">
           <div v-if="detectedVars.length > 0" class="detected-vars-hint">

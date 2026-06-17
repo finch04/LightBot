@@ -112,16 +112,18 @@
     >
       <a-form :model="itemForm" :label-col="{ span: 5 }">
         <a-form-item label="输入内容" required>
-          <a-textarea v-model:value="itemForm.input" :rows="4" placeholder="用户输入内容" />
+          <a-textarea v-model:value="itemForm.input" :rows="4" :maxlength="2000" show-count placeholder="用户输入内容 (不超过2000字)" />
         </a-form-item>
         <a-form-item label="期望输出">
-          <a-textarea v-model:value="itemForm.referenceOutput" :rows="4" placeholder="期望的输出结果" />
+          <a-textarea v-model:value="itemForm.referenceOutput" :rows="4" :maxlength="2000" show-count placeholder="期望的输出结果 (不超过2000字)" />
         </a-form-item>
         <a-form-item label="扩展数据">
           <a-textarea
             v-model:value="itemForm.extraData"
             :rows="3"
-            placeholder='JSON 格式，如: {"category":"faq","difficulty":"easy"}'
+            :maxlength="500"
+            show-count
+            placeholder='JSON 格式，如: {"category":"faq","difficulty":"easy"} (不超过500字)'
           />
         </a-form-item>
       </a-form>

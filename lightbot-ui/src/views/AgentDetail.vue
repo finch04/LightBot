@@ -7,14 +7,14 @@
             <ArrowLeftOutlined /> 返回
           </button>
           <div class="page-title-row">
-            <h1 class="page-title">{{ agent.name || 'Agent 详情' }}</h1>
+            <h1 class="page-title">{{ headerName || 'Agent 详情' }}</h1>
             <a-tooltip :title="agent.id ? `ID：${agent.id}` : '新建保存后生成 ID'">
               <button type="button" class="btn-agent-id" @click="copyAgentId">
                 <IdcardOutlined />
               </button>
             </a-tooltip>
           </div>
-          <p class="page-desc">{{ agent.description || '暂无描述' }}</p>
+          <p class="page-desc">{{ headerDescription || '暂无描述' }}</p>
         </div>
       </div>
       <div class="header-actions">
@@ -81,11 +81,14 @@
       <div class="panel panel-stretch panel--basic">
         <div class="panel-header">
           <h3>基本信息</h3>
+          <a-tooltip v-if="isVersionPreview" title="基本信息不受版本管理，修改后不会随版本回滚">
+            <span class="non-version-badge"><InfoCircleOutlined /> 不受版本管理</span>
+          </a-tooltip>
         </div>
         <div class="panel-body" :class="{ 'preview-lock-zone': isVersionPreview }">
         <a-form :model="agent" :label-col="{ span: 6 }">
           <a-form-item label="名称">
-            <a-input v-model:value="agent.name" placeholder="Agent 名称" :disabled="isVersionPreview" :readonly="isVersionPreview" />
+            <a-input v-model:value="agent.name" placeholder="Agent 名称" :maxlength="50" :disabled="isVersionPreview" :readonly="isVersionPreview" show-count />
           </a-form-item>
           <a-form-item label="头像">
             <div class="avatar-upload" :class="{ 'is-readonly': isVersionPreview }">
@@ -101,7 +104,7 @@
             </div>
           </a-form-item>
           <a-form-item label="描述">
-            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" :disabled="isVersionPreview" :readonly="isVersionPreview" />
+            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" :maxlength="200" :disabled="isVersionPreview" :readonly="isVersionPreview" show-count />
           </a-form-item>
           <!-- 类型选择：放在前面，影响后续字段显示 -->
           <a-form-item label="类型">
@@ -111,77 +114,9 @@
             </a-select>
             <div v-if="agentId" class="param-hint">Agent 类型创建后不可修改</div>
           </a-form-item>
-          <!-- 系统提示词：仅非工作流类型显示 -->
-          <a-form-item v-if="agent.agentType !== 'workflow'" label="系统提示词">
-            <div class="prompt-wrapper">
-              <a-textarea
-                v-model:value="agent.systemPrompt"
-                :rows="6"
-                placeholder="定义 Agent 的行为和角色，可使用 {{变量名}} 引用下方配置的变量..."
-                :disabled="isVersionPreview"
-                :readonly="isVersionPreview"
-              />
-              <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
-                <button class="btn-ai-icon" :disabled="generatingPrompt || isVersionPreview" @click="handleGeneratePrompt">
-                  <ThunderboltOutlined :spin="generatingPrompt" />
-                </button>
-              </a-tooltip>
-            </div>
-            <div class="prompt-var-tip">
-              提示词中变量的选项来自下方「变量配置」。可通过入参变量表单填写，或对话请求的
-              <code>biz_params</code> 字段传递；传入的值将替换提示词中对应的 <code v-pre>{{变量名}}</code> 位置。
-            </div>
-            <div v-if="validPromptVariables.length" class="prompt-insert-vars">
-              <span class="insert-label">插入变量：</span>
-              <button
-                v-for="v in validPromptVariables"
-                :key="v.key"
-                type="button"
-                class="var-insert-btn"
-                :disabled="isVersionPreview"
-                @click="insertPromptVariable(v.key)"
-              >
-                {{ v.label || v.key }}
-              </button>
-            </div>
-          </a-form-item>
-          <!-- 变量配置 -->
-          <div v-if="agent.agentType !== 'workflow'" class="sub-config-card">
-            <div class="sub-config-card-header">
-              <div>
-                <h4 class="sub-config-card-title">变量配置</h4>
-                <p class="sub-config-card-desc">
-                  变量名仅支持英文、数字、下划线<br/>
-                  在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
-                </p>
-              </div>
-              <button type="button" class="btn-add-inline" :disabled="isVersionPreview" @click="addPromptVariable">
-                <PlusOutlined /> 添加
-              </button>
-            </div>
-            <div v-if="promptVariables.length === 0" class="sub-config-empty">暂无变量</div>
-            <template v-else>
-              <div class="list-table-head list-table-head--4col">
-                <span>变量名</span>
-                <span>显示名称</span>
-                <span>默认值</span>
-                <span class="col-action">操作</span>
-              </div>
-              <div class="config-list-scroll">
-                <div v-for="(v, idx) in promptVariables" :key="v._id" class="list-table-row list-table-row--4col">
-                  <a-input v-model:value="v.key" placeholder="company_name" size="small" :disabled="isVersionPreview" />
-                  <a-input v-model:value="v.label" placeholder="显示名称" size="small" :disabled="isVersionPreview" />
-                  <a-input v-model:value="v.defaultValue" placeholder="可选" size="small" :disabled="isVersionPreview" />
-                  <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removePromptVariable(idx)">
-                    <DeleteOutlined />
-                  </button>
-                </div>
-              </div>
-            </template>
-          </div>
           <!-- 欢迎语和推荐问题：对话页展示，工作流型也可配置 -->
           <a-form-item label="欢迎语">
-            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" placeholder="对话时显示的欢迎语（可选）" :disabled="isVersionPreview" :readonly="isVersionPreview" />
+            <a-textarea v-model:value="agent.welcomeMessage" :rows="2" :maxlength="200" show-count placeholder="对话时显示的欢迎语（可选）" :disabled="isVersionPreview" :readonly="isVersionPreview" />
           </a-form-item>
           <a-form-item label="推荐问题">
             <div class="inline-field-block">
@@ -203,7 +138,7 @@
               <div v-if="recommendedQuestions.length === 0" class="sub-config-empty">暂无推荐问题，最多 3 条</div>
               <div v-else class="config-list-scroll config-list-scroll--compact">
                 <div v-for="(q, i) in recommendedQuestions" :key="i" class="list-table-row list-table-row--2col">
-                  <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" size="small" :disabled="isVersionPreview" />
+                  <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" :maxlength="30" size="small" :disabled="isVersionPreview" />
                   <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeRecommendedQuestion(i)">
                     <CloseOutlined />
                   </button>
@@ -225,6 +160,7 @@
           </div>
           <a-tabs
             v-model:activeKey="configTab"
+            style="padding-top: 0px;"
             class="config-panel-tabs"
             :class="{ 'config-panel-tabs--preview': isVersionPreview }"
           >
@@ -240,6 +176,81 @@
               </button>
               <span v-if="configTab === 'model'" class="panel-tip">根据提供商动态显示</span>
             </template>
+            <a-tab-pane key="prompt" tab="提示词">
+              <div class="config-tab-pane-body" :class="{ 'preview-lock-zone': isVersionPreview }">
+                <a-form :model="agent" :label-col="{ span: 6 }">
+                  <a-form-item v-if="agent.agentType !== 'workflow'" label="系统提示词">
+                    <div class="prompt-wrapper">
+                      <a-textarea
+                        v-model:value="agent.systemPrompt"
+                        :rows="6"
+                        :maxlength="2000"
+                        show-count
+                        placeholder="定义 Agent 的行为和角色，可使用 {{变量名}} 引用下方配置的变量..."
+                        :disabled="isVersionPreview"
+                        :readonly="isVersionPreview"
+                      />
+                      <a-tooltip :title="generatingPrompt ? '生成中...' : 'AI生成提示词'">
+                        <button class="btn-ai-icon" :disabled="generatingPrompt || isVersionPreview" @click="handleGeneratePrompt">
+                          <ThunderboltOutlined :spin="generatingPrompt" />
+                        </button>
+                      </a-tooltip>
+                    </div>
+                    <div class="prompt-var-tip">
+                      提示词中变量的选项来自下方「变量配置」。可通过入参变量表单填写，或对话请求的
+                      <code>biz_params</code> 字段传递；传入的值将替换提示词中对应的 <code v-pre>{{变量名}}</code> 位置。
+                    </div>
+                    <div v-if="validPromptVariables.length" class="prompt-insert-vars">
+                      <span class="insert-label">插入变量：</span>
+                      <button
+                        v-for="v in validPromptVariables"
+                        :key="v.key"
+                        type="button"
+                        class="var-insert-btn"
+                        :disabled="isVersionPreview"
+                        @click="insertPromptVariable(v.key)"
+                      >
+                        {{ v.label || v.key }}
+                      </button>
+                    </div>
+                  </a-form-item>
+                  <!-- 变量配置 -->
+                  <div v-if="agent.agentType !== 'workflow'" class="sub-config-card">
+                    <div class="sub-config-card-header">
+                      <div>
+                        <h4 class="sub-config-card-title">变量配置</h4>
+                        <p class="sub-config-card-desc">
+                          变量名仅支持英文、数字、下划线<br/>
+                          在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
+                        </p>
+                      </div>
+                      <button type="button" class="btn-add-inline" :disabled="isVersionPreview" @click="addPromptVariable">
+                        <PlusOutlined /> 添加
+                      </button>
+                    </div>
+                    <div v-if="promptVariables.length === 0" class="sub-config-empty">暂无变量</div>
+                    <template v-else>
+                      <div class="list-table-head list-table-head--4col">
+                        <span>变量名</span>
+                        <span>显示名称</span>
+                        <span>默认值</span>
+                        <span class="col-action">操作</span>
+                      </div>
+                      <div class="config-list-scroll">
+                        <div v-for="(v, idx) in promptVariables" :key="v._id" class="list-table-row list-table-row--4col">
+                          <a-input v-model:value="v.key" placeholder="company_name" size="small" :disabled="isVersionPreview" />
+                          <a-input v-model:value="v.label" placeholder="显示名称" size="small" :disabled="isVersionPreview" />
+                          <a-input v-model:value="v.defaultValue" placeholder="可选" size="small" :disabled="isVersionPreview" />
+                          <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removePromptVariable(idx)">
+                            <DeleteOutlined />
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </a-form>
+              </div>
+            </a-tab-pane>
             <a-tab-pane key="model" tab="模型参数">
               <div class="config-tab-pane-body" :class="{ 'preview-lock-zone': isVersionPreview }">
         <a-form :model="agentConfig" :label-col="{ span: 6 }">
@@ -571,6 +582,8 @@
             <a-textarea
               v-model:value="agentConfig.summaryPrompt"
               :rows="4"
+              :maxlength="1000"
+              show-count
               placeholder="留空使用系统默认摘要提示词"
               :disabled="isVersionPreview"
             />
@@ -1359,22 +1372,12 @@
       <div v-if="versionPreview" class="version-preview-detail">
         <h4 class="preview-detail-title">版本配置快照</h4>
 
-        <!-- 1. 基本信息 -->
+        <!-- 1. 提示词 -->
         <div class="preview-section">
-          <div class="preview-section-title">基本信息</div>
+          <div class="preview-section-title">提示词</div>
           <div class="preview-field">
             <label>系统提示词</label>
             <div class="preview-value pre">{{ versionPreview.basicInfo?.systemPrompt || '（空）' }}</div>
-          </div>
-          <div class="preview-field" v-if="versionPreview.basicInfo?.welcomeMessage">
-            <label>欢迎语</label>
-            <div class="preview-value">{{ versionPreview.basicInfo.welcomeMessage }}</div>
-          </div>
-          <div class="preview-field" v-if="recommendedQuestionsPreview.length > 0">
-            <label>推荐问题</label>
-            <div class="preview-value">
-              <div v-for="(q, i) in recommendedQuestionsPreview" :key="i" class="preview-tag">{{ q }}</div>
-            </div>
           </div>
         </div>
 
@@ -1594,10 +1597,12 @@
           <div class="version-help-row"><span>Agent 名称</span><span>智能体的显示名称</span></div>
           <div class="version-help-row"><span>Agent 描述</span><span>智能体的简介描述</span></div>
           <div class="version-help-row"><span>头像</span><span>智能体头像图片</span></div>
+          <div class="version-help-row"><span>欢迎语</span><span>对话页欢迎语</span></div>
+          <div class="version-help-row"><span>推荐问题</span><span>对话页推荐问题</span></div>
           <div class="version-help-row"><span>图标</span><span>智能体图标（emoji）</span></div>
           <div class="version-help-row"><span>是否默认</span><span>默认智能体标记</span></div>
         </div>
-        <p class="version-help-note">提示：系统提示词、欢迎语、推荐问题、模型配置、工具/知识库/SubAgent 绑定等均受版本控制。</p>
+        <p class="version-help-note">提示：系统提示词、变量配置、模型配置、对话配置、工具/知识库/SubAgent 绑定等均受版本控制。</p>
       </div>
     </a-modal>
 
@@ -1640,7 +1645,7 @@ const avatarInputRef = ref(null)
 
 const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5, skill: 10 }
 /** 右侧配置卡片：模型参数 / 对话配置 */
-const configTab = ref('model')
+const configTab = ref('prompt')
 
 const promptVariables = ref([])
 const validPromptVariables = computed(() =>
@@ -1682,18 +1687,6 @@ const previewModelLabel = computed(() => {
   const provider = providerList.value.find(p => String(p.id) === String(providerId))
   const name = provider?.name || providerId || '—'
   return `${name} / ${modelId}`
-})
-
-// 版本预览 - 推荐问题
-const recommendedQuestionsPreview = computed(() => {
-  const questions = versionPreview.value?.basicInfo?.recommendedQuestions
-  if (!questions) return []
-  if (Array.isArray(questions)) return questions
-  try {
-    return JSON.parse(questions)
-  } catch {
-    return []
-  }
 })
 
 // 版本预览 - 用户敏感词
@@ -1799,6 +1792,10 @@ const agent = reactive({
   agentType: 'chat',
   icon: '',
 })
+
+// 页面标题显示的名称和描述（仅在加载和保存后更新，不随表单输入实时同步）
+const headerName = ref('')
+const headerDescription = ref('')
 
 // 模型配置（存储在 config JSONB 中）
 const agentConfig = reactive({
@@ -2498,6 +2495,8 @@ async function loadAgent() {
     }
     agentStatus.value = agentData.status?.code || agentData.status || 'draft'
     agentVersion.value = agentData.version || 0
+    headerName.value = agent.name || ''
+    headerDescription.value = agent.description || ''
 
     // 解析 config JSONB
     if (config) {
@@ -2932,8 +2931,13 @@ async function handleGeneratePrompt() {
   generatingPrompt.value = true
   try {
     const res = await generateAgentPrompt(agentId)
-    agent.systemPrompt = res.data
-    message.success('提示词生成成功')
+    const generated = res.data || ''
+    agent.systemPrompt = generated.length > 2000 ? generated.slice(0, 2000) : generated
+    if (generated.length > 2000) {
+      message.warning('生成内容已截断至 2000 字')
+    } else {
+      message.success('提示词生成成功')
+    }
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -2947,8 +2951,13 @@ async function handleGenerateQuestions() {
   try {
     const res = await generateAgentQuestions(agentId)
     const questions = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
-    recommendedQuestions.value = questions
-    message.success('推荐问题生成成功')
+    recommendedQuestions.value = questions.map(q => q.length > 30 ? q.slice(0, 30) : q)
+    const truncated = questions.some(q => q.length > 30)
+    if (truncated) {
+      message.warning('部分推荐问题已截断至 30 字')
+    } else {
+      message.success('推荐问题生成成功')
+    }
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -3217,17 +3226,6 @@ async function applyVersionPreviewToForm(data) {
   const chatConfig = data.chatConfig || {}
 
   if (basic.systemPrompt !== undefined) agent.systemPrompt = basic.systemPrompt || ''
-  if (basic.welcomeMessage !== undefined) agent.welcomeMessage = basic.welcomeMessage || ''
-
-  if (basic.recommendedQuestions !== undefined) {
-    try {
-      recommendedQuestions.value = typeof basic.recommendedQuestions === 'string'
-        ? JSON.parse(basic.recommendedQuestions)
-        : (basic.recommendedQuestions || [])
-    } catch {
-      recommendedQuestions.value = []
-    }
-  }
 
   const mergedConfig = { ...modelParams, ...chatConfig }
   Object.keys(mergedConfig).forEach(key => {
@@ -4358,11 +4356,10 @@ onMounted(async () => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  height: 100%;
 }
 .config-panel-tabs :deep(.ant-tabs-nav) {
   margin: 0;
-  padding: 12px 20px 0;
+  padding: 0px 20px 0;
 }
 .config-panel-tabs :deep(.ant-tabs-nav)::before {
   border-bottom-color: #f0f0f0;
@@ -4370,7 +4367,7 @@ onMounted(async () => {
 .config-panel-tabs :deep(.ant-tabs-extra-content) {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 1px;
 }
 .config-panel-tabs :deep(.ant-tabs-content-holder) {
   flex: 1;
@@ -4447,7 +4444,6 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
   flex-shrink: 0;
 }
 .panel-header--stack {
@@ -4464,6 +4460,15 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 600;
   color: #171717;
+}
+.non-version-badge {
+  font-size: 11px;
+  color: #9ca3af;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 100px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 .panel-tip {
   font-size: 12px;

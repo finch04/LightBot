@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -30,6 +31,7 @@ public class Skill {
     private Long id;
 
     @TableField("slug")
+    @Size(max = 50, message = "标识不超过50字")
     @Schema(description = "全局唯一标识（英文-小写-短横线）")
     private String slug;
 
@@ -57,14 +59,17 @@ public class Skill {
     private Long modelId;
 
     @TableField("name")
+    @Size(max = 50, message = "技能名称不超过50字")
     @Schema(description = "技能名称（英文短名，对模型可读）")
     private String name;
 
     @TableField("display_name")
+    @Size(max = 50, message = "显示名称不超过50字")
     @Schema(description = "显示名称（中文）")
     private String displayName;
 
     @TableField("description")
+    @Size(max = 200, message = "技能描述不超过200字")
     @Schema(description = "技能描述（给模型看，用于决定是否使用）")
     private String description;
 

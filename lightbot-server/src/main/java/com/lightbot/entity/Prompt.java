@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -25,10 +26,12 @@ public class Prompt {
     private Long id;
 
     @TableField("prompt_key")
+    @Size(max = 100, message = "Prompt Key不超过100字")
     @Schema(description = "提示词唯一标识")
     private String promptKey;
 
     @TableField("description")
+    @Size(max = 200, message = "描述不超过200字")
     @Schema(description = "提示词描述")
     private String description;
 

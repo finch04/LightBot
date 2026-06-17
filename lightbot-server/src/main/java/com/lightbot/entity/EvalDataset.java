@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -27,10 +28,12 @@ public class EvalDataset {
     private Long id;
 
     @TableField("name")
+    @Size(max = 50, message = "数据集名称不超过50字")
     @Schema(description = "数据集名称")
     private String name;
 
     @TableField("description")
+    @Size(max = 200, message = "数据集描述不超过200字")
     @Schema(description = "数据集描述")
     private String description;
 

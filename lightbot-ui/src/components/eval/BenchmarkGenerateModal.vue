@@ -12,10 +12,10 @@
     </template>
     <a-form :model="form" layout="vertical">
       <a-form-item label="基准名称" required>
-        <a-input v-model:value="form.name" placeholder="输入基准名称" />
+        <a-input v-model:value="form.name" placeholder="输入基准名称（最多50字）" :maxlength="50" show-count />
       </a-form-item>
       <a-form-item label="描述">
-        <a-textarea v-model:value="form.description" placeholder="可选描述" :rows="2" />
+        <a-textarea v-model:value="form.description" placeholder="可选描述（最多200字）" :rows="2" :maxlength="200" show-count />
       </a-form-item>
       <a-row :gutter="16">
         <a-col :span="12">

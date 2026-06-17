@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -30,10 +31,12 @@ public class EvalRagBenchmark {
     private Long knowledgeId;
 
     @TableField("name")
+    @Size(max = 50, message = "基准名称不超过50字")
     @Schema(description = "基准名称")
     private String name;
 
     @TableField("description")
+    @Size(max = 200, message = "基准描述不超过200字")
     @Schema(description = "基准描述")
     private String description;
 

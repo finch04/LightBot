@@ -14,6 +14,7 @@ import com.lightbot.service.PromptBuildTemplateService;
 import com.lightbot.service.PromptService;
 import com.lightbot.service.PromptVersionService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +48,7 @@ public class PromptController {
 
     @Operation(summary = "创建Prompt")
     @PostMapping
-    public Result<Prompt> create(@RequestBody PromptCreateRequest request) {
+    public Result<Prompt> create(@Valid @RequestBody PromptCreateRequest request) {
         return Result.ok(promptService.create(request.getPromptKey(), request.getDescription(), request.getTags(), null));
     }
 
@@ -68,7 +69,7 @@ public class PromptController {
 
     @Operation(summary = "更新Prompt")
     @PutMapping
-    public Result<Void> update(@RequestParam Long id, @RequestBody PromptCreateRequest request) {
+    public Result<Void> update(@RequestParam Long id, @Valid @RequestBody PromptCreateRequest request) {
         promptService.update(id, request.getDescription(), request.getTags());
         return Result.ok();
     }
@@ -82,7 +83,7 @@ public class PromptController {
 
     @Operation(summary = "创建Prompt版本")
     @PostMapping("/versions")
-    public Result<PromptVersion> createVersion(@RequestBody PromptVersionCreateRequest request) {
+    public Result<PromptVersion> createVersion(@Valid @RequestBody PromptVersionCreateRequest request) {
         return Result.ok(promptVersionService.create(
                 request.getPromptKey(), request.getVersion(), request.getVersionDesc(),
                 request.getTemplate(), request.getVariables(), request.getModelConfig(),
@@ -116,7 +117,7 @@ public class PromptController {
 
     @Operation(summary = "创建Prompt构建模板")
     @PostMapping("/templates")
-    public Result<PromptBuildTemplate> createTemplate(@RequestBody PromptTemplateCreateRequest request) {
+    public Result<PromptBuildTemplate> createTemplate(@Valid @RequestBody PromptTemplateCreateRequest request) {
         return Result.ok(promptBuildTemplateService.create(
                 request.getPromptTemplateKey(), request.getTemplateDesc(), request.getTemplate(),
                 request.getVariables(), request.getModelConfig(), request.getTags()));
@@ -124,7 +125,7 @@ public class PromptController {
 
     @Operation(summary = "更新Prompt构建模板")
     @PutMapping("/templates")
-    public Result<Void> updateTemplate(@RequestParam Long id, @RequestBody PromptTemplateCreateRequest request) {
+    public Result<Void> updateTemplate(@RequestParam Long id, @Valid @RequestBody PromptTemplateCreateRequest request) {
         promptBuildTemplateService.update(id, request.getTemplateDesc(), request.getTemplate(),
                 request.getVariables(), request.getModelConfig(), request.getTags());
         return Result.ok();
@@ -143,7 +144,7 @@ public class PromptController {
      */
     @Operation(summary = "流式运行Prompt调试")
     @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter run(@RequestBody PromptRunRequest request) {
+    public SseEmitter run(@Valid @RequestBody PromptRunRequest request) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
         String template = request.getTemplate();

@@ -178,7 +178,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
 
     @Override
     public Map<String, Object> getPublishedVersionDetail(Long agentId, Integer version) {
-        requireAgent(agentId);
+        Agent agent = requireAgent(agentId);
         AgentVersion row = requirePublishedRow(agentId, version);
         Map<String, Object> snap = parseJsonMap(row.getConfig());
 
@@ -192,7 +192,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
             result.put("graph", extractWorkflowGraph(row));
         } else {
             // 对话型：含 kind=chat 与旧版无 kind 的扁平快照
-            fillChatVersionDetail(result, snap);
+            fillChatVersionDetail(result, snap, agent);
         }
         return result;
     }
@@ -224,15 +224,13 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         }
     }
 
-    private void fillChatVersionDetail(Map<String, Object> result, Map<String, Object> snap) {
+    private void fillChatVersionDetail(Map<String, Object> result, Map<String, Object> snap, Agent agent) {
         result.put("kind", KIND_CHAT);
         Map<String, Object> payload = extractChatPayload(snap);
 
-        // 1. 基本信息
+        // 1. 提示词（版本管理）
         Map<String, Object> basicInfo = new HashMap<>();
         basicInfo.put("systemPrompt", payload.get("systemPrompt"));
-        basicInfo.put("welcomeMessage", payload.get("welcomeMessage"));
-        basicInfo.put("recommendedQuestions", payload.get("recommendedQuestions"));
         result.put("basicInfo", basicInfo);
 
         // 2. 模型参数（包含在 config 中）
@@ -255,15 +253,20 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         Map<String, Object> chatConfig = new HashMap<>();
         chatConfig.put("streamOutput", config.get("streamOutput"));
         chatConfig.put("maxContextMessages", config.get("maxContextMessages"));
-        chatConfig.put("enableSummary", config.get("enableSummary"));
-        chatConfig.put("summaryThresholdKb", config.get("summaryThresholdKb"));
-        chatConfig.put("userSensitiveFilterEnabled", config.get("userSensitiveFilterEnabled"));
-        chatConfig.put("userSensitiveWords", config.get("userSensitiveWords"));
-        chatConfig.put("sensitiveFilterEnabled", config.get("sensitiveFilterEnabled"));
-        chatConfig.put("sensitiveFilterStrategy", config.get("sensitiveFilterStrategy"));
-        chatConfig.put("sensitiveFilterReplaceText", config.get("sensitiveFilterReplaceText"));
-        chatConfig.put("sensitiveWords", config.get("sensitiveWords"));
+        chatConfig.put("enableSummary", config.get(ConfigKeys.Agent.ENABLE_SUMMARY));
+        chatConfig.put("summaryThresholdKb", config.get(ConfigKeys.Agent.SUMMARY_THRESHOLD_KB));
+        chatConfig.put("summaryPrompt", config.get(ConfigKeys.Agent.SUMMARY_PROMPT));
+        chatConfig.put("summaryKeepMessages", config.get(ConfigKeys.Agent.SUMMARY_KEEP_MESSAGES));
+        chatConfig.put("summaryToolResultTokenLimit", config.get(ConfigKeys.Agent.SUMMARY_TOOL_RESULT_TOKEN_LIMIT));
+        chatConfig.put("userSensitiveFilterEnabled", config.get(ConfigKeys.Agent.USER_SENSITIVE_FILTER_ENABLED));
+        chatConfig.put("userSensitiveWords", config.get(ConfigKeys.Agent.USER_SENSITIVE_WORDS));
+        chatConfig.put("sensitiveFilterEnabled", config.get(ConfigKeys.Agent.SENSITIVE_FILTER_ENABLED));
+        chatConfig.put("sensitiveFilterStrategy", config.get(ConfigKeys.Agent.SENSITIVE_FILTER_STRATEGY));
+        chatConfig.put("sensitiveFilterReplaceText", config.get(ConfigKeys.Agent.SENSITIVE_FILTER_REPLACE_TEXT));
+        chatConfig.put("sensitiveWords", config.get(ConfigKeys.Agent.SENSITIVE_WORDS));
         chatConfig.put("asyncToolCalls", config.get("asyncToolCalls"));
+        chatConfig.put("maxExecutionSteps", config.get(ConfigKeys.Agent.MAX_EXECUTION_STEPS));
+        chatConfig.put("modelRetryTimes", config.get(ConfigKeys.Agent.MODEL_RETRY_TIMES));
         chatConfig.put("enableFileRead", config.get(ConfigKeys.Agent.ENABLE_FILE_READ));
         chatConfig.put("promptVariables", config.get("promptVariables"));
         result.put("chatConfig", chatConfig);
@@ -726,16 +729,6 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         if (payload.get("systemPrompt") instanceof String sp && !sp.isBlank()) {
             agent.setSystemPrompt(sp);
         }
-        if (payload.get("welcomeMessage") instanceof String wm) {
-            agent.setWelcomeMessage(wm);
-        }
-        if (payload.get("recommendedQuestions") != null) {
-            try {
-                agent.setRecommendedQuestions(objectMapper.writeValueAsString(payload.get("recommendedQuestions")));
-            } catch (Exception ignored) {
-                // 保持原值
-            }
-        }
     }
 
     @Override
@@ -934,8 +927,6 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     private Map<String, Object> buildChatSnapshot(Agent agent) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("systemPrompt", agent.getSystemPrompt());
-        payload.put("welcomeMessage", agent.getWelcomeMessage());
-        payload.put("recommendedQuestions", agent.getRecommendedQuestions());
         payload.put("config", WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper));
         // ID转为字符串存储，避免JavaScript精度丢失
         payload.put("knowledgeIds", readBindingIdsAsStrings(agent, "knowledges"));

@@ -3,6 +3,7 @@ package com.lightbot.dto;
 import com.lightbot.enums.McpInstallType;
 import com.lightbot.enums.McpTransportType;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -17,8 +18,10 @@ public class McpServerRequest {
     private Long id;
 
     @NotNull(message = "名称不能为空")
+    @Size(max = 50, message = "服务名称不超过50字")
     private String name;
 
+    @Size(max = 200, message = "服务描述不超过200字")
     private String description;
 
     @NotNull(message = "安装类型不能为空")

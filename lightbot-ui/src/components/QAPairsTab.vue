@@ -98,10 +98,10 @@
     >
       <a-form :model="form" layout="vertical">
         <a-form-item label="问题" required>
-          <a-textarea v-model:value="form.question" placeholder="输入问题内容" :rows="3" />
+          <a-textarea v-model:value="form.question" placeholder="输入问题内容（不超过2000字）" :rows="3" :maxlength="2000" show-count />
         </a-form-item>
         <a-form-item label="标准答案" required>
-          <a-textarea v-model:value="form.answer" placeholder="输入标准答案" :rows="5" />
+          <a-textarea v-model:value="form.answer" placeholder="输入标准答案（不超过2000字）" :rows="5" :maxlength="2000" show-count />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -127,10 +127,10 @@
         <a-divider style="margin: 12px 0" />
         <a-form v-if="detailEditing" :model="detailForm" layout="vertical">
           <a-form-item label="问题" required>
-            <a-textarea v-model:value="detailForm.question" :rows="3" />
+            <a-textarea v-model:value="detailForm.question" :rows="3" placeholder="输入问题内容（不超过2000字）" :maxlength="2000" show-count />
           </a-form-item>
           <a-form-item label="标准答案" required>
-            <a-textarea v-model:value="detailForm.answer" :rows="5" />
+            <a-textarea v-model:value="detailForm.answer" :rows="5" placeholder="输入标准答案（不超过2000字）" :maxlength="2000" show-count />
           </a-form-item>
         </a-form>
         <template v-else>

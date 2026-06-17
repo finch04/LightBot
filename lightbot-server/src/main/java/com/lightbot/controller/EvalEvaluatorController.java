@@ -14,6 +14,7 @@ import com.lightbot.service.EvalEvaluatorService;
 import com.lightbot.service.EvalEvaluatorTemplateService;
 import com.lightbot.service.EvalEvaluatorVersionService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +40,7 @@ public class EvalEvaluatorController {
 
     @Operation(summary = "创建评估器")
     @PostMapping
-    public Result<EvalEvaluator> create(@RequestBody EvalEvaluatorCreateRequest request) {
+    public Result<EvalEvaluator> create(@Valid @RequestBody EvalEvaluatorCreateRequest request) {
         return Result.ok(evaluatorService.create(request.getName(), request.getDescription(), null));
     }
 
@@ -60,7 +61,7 @@ public class EvalEvaluatorController {
 
     @Operation(summary = "更新评估器")
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody EvalEvaluatorCreateRequest request) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody EvalEvaluatorCreateRequest request) {
         evaluatorService.update(id, request.getName(), request.getDescription());
         return Result.ok();
     }
@@ -74,7 +75,7 @@ public class EvalEvaluatorController {
 
     @Operation(summary = "创建评估器版本")
     @PostMapping("/versions")
-    public Result<EvalEvaluatorVersion> createVersion(@RequestBody EvalEvaluatorVersionCreateRequest request) {
+    public Result<EvalEvaluatorVersion> createVersion(@Valid @RequestBody EvalEvaluatorVersionCreateRequest request) {
         return Result.ok(evaluatorVersionService.create(
                 request.getEvaluatorId(), request.getVersion(),
                 request.getPrompt(), request.getVariables(), request.getModelConfig()));
@@ -100,7 +101,7 @@ public class EvalEvaluatorController {
 
     @Operation(summary = "测试评估器")
     @PostMapping("/test")
-    public Result<EvalScoreResult> test(@RequestBody EvalEvaluatorTestRequest request) {
+    public Result<EvalScoreResult> test(@Valid @RequestBody EvalEvaluatorTestRequest request) {
         EvalEvaluatorVersion version = evaluatorVersionService.getById(request.getEvaluatorVersionId());
         if (version == null) {
             return Result.ok(null);

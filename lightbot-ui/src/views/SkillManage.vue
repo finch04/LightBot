@@ -116,13 +116,13 @@
       </template>
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="slug" required v-if="!form.id || form.scope === 'global'">
-          <a-input v-model:value="form.slug" placeholder="英文-小写-短横线，如 deep-research" :disabled="form.id && form.isBuiltin === 1" />
+          <a-input v-model:value="form.slug" placeholder="英文-小写-短横线，如 deep-research（不超过50字）" :maxlength="50" show-count :disabled="form.id && form.isBuiltin === 1" />
         </a-form-item>
         <a-form-item label="技能名称" required>
-          <a-input v-model:value="form.name" placeholder="英文短名，对模型可读，如 deep_research" />
+          <a-input v-model:value="form.name" placeholder="英文短名，对模型可读，如 deep_research（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="显示名称">
-          <a-input v-model:value="form.displayName" placeholder="中文，如 深度研究" />
+          <a-input v-model:value="form.displayName" placeholder="中文，如 深度研究（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能，给模型看的" :maxlength="200" show-count />
@@ -134,7 +134,7 @@
           <a-select v-model:value="form.mcpServerIds" mode="multiple" placeholder="选择该 Skill 启用时附带的 MCP Server" style="width: 100%" :options="mcpOptions" />
         </a-form-item>
         <a-form-item label="提示词模板" required>
-          <a-textarea v-model:value="form.promptTemplate" :rows="8" placeholder="### 技能：xxx\n**触发条件**：...\n**执行流程**：..." />
+          <a-textarea v-model:value="form.promptTemplate" :rows="8" placeholder="### 技能：xxx\n**触发条件**：...\n**执行流程**：...（不超过5000字）" :maxlength="5000" show-count />
         </a-form-item>
         <a-form-item label="排序序号">
           <a-input-number v-model:value="form.sortOrder" :min="0" style="width: 100%" />

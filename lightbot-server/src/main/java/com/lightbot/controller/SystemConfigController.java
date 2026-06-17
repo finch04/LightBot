@@ -2,6 +2,7 @@ package com.lightbot.controller;
 
 import com.lightbot.common.Result;
 import com.lightbot.dto.DefaultAiConfigDTO;
+import jakarta.validation.Valid;
 import com.lightbot.service.SystemConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,7 +31,7 @@ public class SystemConfigController {
 
     @Operation(summary = "更新默认AI配置（兼容旧接口）")
     @PutMapping("/default-ai")
-    public Result<Void> updateDefaultAiConfig(@RequestBody DefaultAiConfigDTO config) {
+    public Result<Void> updateDefaultAiConfig(@Valid @RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultAiConfig(config);
         return Result.ok();
     }
@@ -43,7 +44,7 @@ public class SystemConfigController {
 
     @Operation(summary = "更新默认对话模型配置")
     @PutMapping("/default-chat-model")
-    public Result<Void> updateDefaultChatModel(@RequestBody DefaultAiConfigDTO config) {
+    public Result<Void> updateDefaultChatModel(@Valid @RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultChatModelConfig(config);
         return Result.ok();
     }
@@ -56,7 +57,7 @@ public class SystemConfigController {
 
     @Operation(summary = "更新默认向量模型配置")
     @PutMapping("/default-embedding-model")
-    public Result<Void> updateDefaultEmbeddingModel(@RequestBody DefaultAiConfigDTO config) {
+    public Result<Void> updateDefaultEmbeddingModel(@Valid @RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultEmbeddingModelConfig(config);
         return Result.ok();
     }
@@ -69,7 +70,7 @@ public class SystemConfigController {
 
     @Operation(summary = "更新默认TTS模型配置")
     @PutMapping("/default-tts-model")
-    public Result<Void> updateDefaultTtsModel(@RequestBody DefaultAiConfigDTO config) {
+    public Result<Void> updateDefaultTtsModel(@Valid @RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultTtsModelConfig(config);
         return Result.ok();
     }
@@ -82,7 +83,7 @@ public class SystemConfigController {
 
     @Operation(summary = "更新默认重排模型配置")
     @PutMapping("/default-rerank-model")
-    public Result<Void> updateDefaultRerankModel(@RequestBody DefaultAiConfigDTO config) {
+    public Result<Void> updateDefaultRerankModel(@Valid @RequestBody DefaultAiConfigDTO config) {
         systemConfigService.updateDefaultRerankModelConfig(config);
         return Result.ok();
     }

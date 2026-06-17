@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.ExperimentStatus;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -28,10 +29,12 @@ public class EvalExperiment {
     private Long id;
 
     @TableField("name")
+    @Size(max = 50, message = "实验名称不超过50字")
     @Schema(description = "实验名称")
     private String name;
 
     @TableField("description")
+    @Size(max = 200, message = "实验描述不超过200字")
     @Schema(description = "实验描述")
     private String description;
 

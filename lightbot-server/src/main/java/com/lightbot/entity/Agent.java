@@ -7,6 +7,7 @@ import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.AgentType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -35,18 +36,22 @@ public class Agent {
 
     @TableField("name")
     @Schema(description = "Agent名称")
+    @Size(max = 50, message = "Agent名称不超过50字")
     private String name;
 
     @TableField("description")
     @Schema(description = "Agent描述")
+    @Size(max = 200, message = "Agent描述不超过200字")
     private String description;
 
     @TableField("system_prompt")
     @Schema(description = "系统提示词")
+    @Size(max = 2000, message = "系统提示词不超过2000字")
     private String systemPrompt;
 
     @TableField("welcome_message")
     @Schema(description = "欢迎语")
+    @Size(max = 200, message = "欢迎语不超过200字")
     private String welcomeMessage;
 
     @TableField(value = "recommended_questions", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)

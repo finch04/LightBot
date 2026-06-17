@@ -75,11 +75,13 @@
           <a-input
             v-model:value="form.promptKey"
             :disabled="!!form.id"
-            placeholder="如: customer_service"
+            :maxlength="100"
+            show-count
+            placeholder="如: customer_service (不超过100字)"
           />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="3" placeholder="Prompt 的用途描述" />
+          <a-textarea v-model:value="form.description" :rows="3" :maxlength="200" show-count placeholder="Prompt 的用途描述 (不超过200字)" />
         </a-form-item>
         <a-form-item label="标签">
           <TagInput v-model="form.tags" />

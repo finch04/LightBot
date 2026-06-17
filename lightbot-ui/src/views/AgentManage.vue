@@ -93,10 +93,6 @@
             <a-select-option value="workflow">工作流型</a-select-option>
           </a-select>
         </a-form-item>
-        <!-- 系统提示词：仅非工作流类型显示 -->
-        <a-form-item v-if="form.agentType !== 'workflow'" label="系统提示词">
-          <a-textarea v-model:value="form.systemPrompt" :rows="4" placeholder="定义 Agent 的行为和角色..." />
-        </a-form-item>
         <!-- 模型：仅新建且非工作流类型显示 -->
         <a-form-item v-if="!form.id && form.agentType !== 'workflow'" label="模型" required>
           <ModelSelect v-model="form.model" placeholder="选择模型" @change="onModelChange" />
@@ -148,7 +144,7 @@ const searchText = ref('')
 const filterAgentType = ref(undefined)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const form = reactive({ id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', model: null })
+const form = reactive({ id: null, name: '', description: '', agentType: 'chat', model: null })
 const selectedProviderId = ref(null)
 const exampleModalVisible = ref(false)
 const workflowExamples = ref([])
@@ -176,11 +172,10 @@ function openDialog(row) {
       name: row.name || '',
       description: row.description || '',
       agentType: row.agentType?.code || row.agentType || 'chat',
-      systemPrompt: row.systemPrompt || '',
       model: null,
     })
   } else {
-    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat', systemPrompt: '', model: null })
+    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat', model: null })
   }
   dialogVisible.value = true
 }

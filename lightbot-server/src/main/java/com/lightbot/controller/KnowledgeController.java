@@ -25,6 +25,7 @@ import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
 import com.lightbot.util.MilvusUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -65,13 +66,13 @@ public class KnowledgeController {
 
     @Operation(summary = "创建知识库")
     @PostMapping
-    public Result<Knowledge> create(@RequestBody Knowledge knowledge) {
+    public Result<Knowledge> create(@Valid @RequestBody Knowledge knowledge) {
         return Result.ok(knowledgeService.create(knowledge));
     }
 
     @Operation(summary = "更新知识库（需要MANAGER及以上权限）")
     @PutMapping
-    public Result<Knowledge> update(@RequestBody Knowledge knowledge) {
+    public Result<Knowledge> update(@Valid @RequestBody Knowledge knowledge) {
         return Result.ok(knowledgeService.update(knowledge));
     }
 
@@ -184,7 +185,7 @@ public class KnowledgeController {
     @Operation(summary = "保存已预览的URL网页内容")
     @PostMapping("/{id}/documents/save-url")
     public Result<Document> saveUrlDocument(@PathVariable Long id,
-                                             @RequestBody @jakarta.validation.Valid UrlSaveRequest request) {
+                                             @Valid @RequestBody UrlSaveRequest request) {
         return Result.ok(documentService.saveUrlDocument(id, request));
     }
 
@@ -220,7 +221,7 @@ public class KnowledgeController {
     @Operation(summary = "文档入库：分块+向量化（需要DEVELOPER及以上权限）")
     @PostMapping("/documents/{docId}/ingest")
     public Result<Task> ingestDocument(@PathVariable Long docId,
-                                        @RequestBody @jakarta.validation.Valid IngestRequest request) throws Exception {
+                                        @Valid @RequestBody IngestRequest request) throws Exception {
         String embeddingJson = objectMapper.writeValueAsString(request);
         return Result.ok(documentService.ingestDocument(docId, embeddingJson));
     }
@@ -228,7 +229,7 @@ public class KnowledgeController {
     @Operation(summary = "预览分块结果（不入库）")
     @PostMapping("/documents/{docId}/preview-chunks")
     public Result<List<String>> previewChunks(@PathVariable Long docId,
-                                               @RequestBody @jakarta.validation.Valid IngestRequest request) throws Exception {
+                                               @Valid @RequestBody IngestRequest request) throws Exception {
         String embeddingJson = objectMapper.writeValueAsString(request);
         return Result.ok(documentService.previewChunks(docId, embeddingJson));
     }
@@ -308,14 +309,14 @@ public class KnowledgeController {
     @Operation(summary = "触发图谱抽取（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/graph/extract")
     public Result<Long> extractGraph(@PathVariable Long id,
-                                     @RequestBody @jakarta.validation.Valid GraphExtractRequest request) {
+                                     @Valid @RequestBody GraphExtractRequest request) {
         return Result.ok(graphService.extractFromDocument(id, request));
     }
 
     @Operation(summary = "批量导入三元组（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/graph/import")
     public Result<GraphStatsVO> importTriples(@PathVariable Long id,
-                                              @RequestBody @jakarta.validation.Valid GraphImportRequest request,
+                                              @Valid @RequestBody GraphImportRequest request,
                                               @RequestParam(required = false) Long providerId) {
         return Result.ok(graphService.importTriples(id, request.getTriples(), providerId));
     }
@@ -441,14 +442,14 @@ public class KnowledgeController {
     @Operation(summary = "创建问答对（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/qa-pairs")
     public Result<QaPairVO> createQaPair(@PathVariable Long id,
-                                          @RequestBody @jakarta.validation.Valid QaPairCreateDTO dto) {
+                                          @Valid @RequestBody QaPairCreateDTO dto) {
         return Result.ok(qaPairService.create(id, dto));
     }
 
     @Operation(summary = "更新问答对（需要DEVELOPER及以上权限）")
     @PutMapping("/qa-pairs/{qaPairId}")
     public Result<QaPairVO> updateQaPair(@PathVariable Long qaPairId,
-                                          @RequestBody @jakarta.validation.Valid QaPairUpdateDTO dto) {
+                                          @Valid @RequestBody QaPairUpdateDTO dto) {
         dto.setId(qaPairId);
         return Result.ok(qaPairService.update(dto));
     }
@@ -472,7 +473,7 @@ public class KnowledgeController {
     @Operation(summary = "批量导入问答对（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/qa-pairs/batch-import")
     public Result<Integer> batchImportQaPairs(@PathVariable Long id,
-                                               @RequestBody List<QaPairCreateDTO> items) {
+                                               @Valid @RequestBody List<QaPairCreateDTO> items) {
         return Result.ok(qaPairService.batchImport(id, items));
     }
 

@@ -80,10 +80,10 @@
     <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑工具' : '新增工具'" :width="640" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="工具标识" required>
-          <a-input v-model:value="form.name" placeholder="如：http_request（英文，唯一标识）" :disabled="form.toolType === 'builtin'" />
+          <a-input v-model:value="form.name" placeholder="如：http_request（英文，唯一标识）（不超过50字）" :maxlength="50" show-count :disabled="form.toolType === 'builtin'" />
         </a-form-item>
         <a-form-item label="显示名称">
-          <a-input v-model:value="form.displayName" placeholder="如：HTTP 请求" />
+          <a-input v-model:value="form.displayName" placeholder="如：HTTP 请求（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="2" placeholder="工具用途说明，供 Agent 理解" :maxlength="200" show-count />

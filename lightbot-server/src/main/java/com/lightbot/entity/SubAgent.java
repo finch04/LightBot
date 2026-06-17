@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -23,14 +24,17 @@ public class SubAgent {
     private Long id;
 
     @TableField("name")
+    @Size(max = 50, message = "标识名称不超过50字")
     @Schema(description = "唯一标识（英文）")
     private String name;
 
     @TableField("display_name")
+    @Size(max = 50, message = "显示名称不超过50字")
     @Schema(description = "显示名称（中文）")
     private String displayName;
 
     @TableField("description")
+    @Size(max = 200, message = "子智能体描述不超过200字")
     @Schema(description = "子智能体描述")
     private String description;
 

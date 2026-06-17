@@ -12,10 +12,10 @@
 
     <a-form :model="form" :label-col="{ span: 5 }">
       <a-form-item label="Prompt Key" required>
-        <a-input v-model:value="form.promptKey" placeholder="如：my_new_prompt" @input="sanitizePromptKey" />
+        <a-input v-model:value="form.promptKey" :maxlength="100" show-count placeholder="如：my_new_prompt (不超过100字)" @input="sanitizePromptKey" />
       </a-form-item>
       <a-form-item label="描述">
-        <a-textarea v-model:value="form.description" :rows="2" placeholder="Prompt用途描述" />
+        <a-textarea v-model:value="form.description" :rows="2" :maxlength="200" show-count placeholder="Prompt用途描述 (不超过200字)" />
       </a-form-item>
       <a-form-item label="标签">
         <TagInput v-model="form.tags" />

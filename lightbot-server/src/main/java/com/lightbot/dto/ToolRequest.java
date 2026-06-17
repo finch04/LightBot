@@ -3,6 +3,7 @@ package com.lightbot.dto;
 import com.lightbot.enums.AuthType;
 import com.lightbot.enums.ToolType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -18,10 +19,13 @@ public class ToolRequest {
     private Long id;
 
     @NotBlank(message = "工具标识不能为空")
+    @Size(max = 50, message = "工具标识不超过50字")
     private String name;
 
+    @Size(max = 50, message = "显示名称不超过50字")
     private String displayName;
 
+    @Size(max = 200, message = "工具描述不超过200字")
     private String description;
 
     @NotNull(message = "工具类型不能为空")

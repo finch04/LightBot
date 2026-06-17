@@ -3,6 +3,7 @@ package com.lightbot.controller;
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
+import jakarta.validation.Valid;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.service.ChatAttachmentService;
 import com.lightbot.service.ChatService;
@@ -35,7 +36,7 @@ public class ChatController {
 
     @Operation(summary = "同步对话")
     @PostMapping
-    public Result<String> chat(@RequestBody ChatRequest request) {
+    public Result<String> chat(@Valid @RequestBody ChatRequest request) {
         return Result.ok(chatService.chat(request));
     }
 
@@ -46,7 +47,7 @@ public class ChatController {
      */
     @Operation(summary = "流式对话（SSE）")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatStream(@RequestBody ChatRequest request) {
+    public SseEmitter chatStream(@Valid @RequestBody ChatRequest request) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
         // 在 boundedElastic 调度器上订阅 Flux，避免阻塞 Servlet 线程
@@ -88,7 +89,7 @@ public class ChatController {
 
     @Operation(summary = "刷新对话附件预览 URL")
     @PostMapping("/attachments/refresh-preview")
-    public Result<List<ChatAttachmentDTO>> refreshAttachmentPreview(@RequestBody List<ChatAttachmentDTO> attachments) {
+    public Result<List<ChatAttachmentDTO>> refreshAttachmentPreview(@Valid @RequestBody List<ChatAttachmentDTO> attachments) {
         return Result.ok(chatAttachmentService.refreshPreviewUrls(attachments));
     }
 

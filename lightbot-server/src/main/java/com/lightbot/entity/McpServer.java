@@ -8,6 +8,7 @@ import com.lightbot.enums.McpInstallType;
 import com.lightbot.enums.McpTransportType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -30,10 +31,12 @@ public class McpServer {
     private Long id;
 
     @TableField("name")
+    @Size(max = 50, message = "服务名称不超过50字")
     @Schema(description = "服务名称")
     private String name;
 
     @TableField("description")
+    @Size(max = 200, message = "服务描述不超过200字")
     @Schema(description = "服务描述")
     private String description;
 

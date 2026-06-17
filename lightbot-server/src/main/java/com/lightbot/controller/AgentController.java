@@ -15,6 +15,7 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,13 +41,13 @@ public class AgentController {
 
     @Operation(summary = "创建Agent")
     @PostMapping
-    public Result<Agent> create(@RequestBody Agent agent) {
+    public Result<Agent> create(@RequestBody @Valid Agent agent) {
         return Result.ok(agentService.create(agent));
     }
 
     @Operation(summary = "更新Agent")
     @PutMapping
-    public Result<Agent> update(@RequestBody Agent agent) {
+    public Result<Agent> update(@RequestBody @Valid Agent agent) {
         return Result.ok(agentService.update(agent));
     }
 

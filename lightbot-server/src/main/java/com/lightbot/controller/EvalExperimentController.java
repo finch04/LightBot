@@ -9,6 +9,7 @@ import com.lightbot.entity.EvalExperimentResult;
 import com.lightbot.service.EvalExperimentResultService;
 import com.lightbot.service.EvalExperimentService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +33,7 @@ public class EvalExperimentController {
 
     @Operation(summary = "创建实验")
     @PostMapping
-    public Result<EvalExperiment> create(@RequestBody EvalExperimentCreateRequest request) {
+    public Result<EvalExperiment> create(@Valid @RequestBody EvalExperimentCreateRequest request) {
         return Result.ok(experimentService.create(
                 request.getName(), request.getDescription(),
                 request.getDatasetId(), request.getDatasetVersionId(), request.getDatasetVersion(),

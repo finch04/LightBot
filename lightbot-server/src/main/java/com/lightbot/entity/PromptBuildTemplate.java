@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
@@ -27,6 +28,7 @@ public class PromptBuildTemplate {
     private Long id;
 
     @TableField("prompt_template_key")
+    @Size(max = 100, message = "模板标识不超过100字")
     @Schema(description = "模板唯一标识")
     private String promptTemplateKey;
 
@@ -35,10 +37,12 @@ public class PromptBuildTemplate {
     private String tags;
 
     @TableField("template_desc")
+    @Size(max = 200, message = "模板描述不超过200字")
     @Schema(description = "模板描述")
     private String templateDesc;
 
     @TableField("template")
+    @Size(max = 5000, message = "模板内容不超过5000字")
     @Schema(description = "模板内容")
     private String template;
 

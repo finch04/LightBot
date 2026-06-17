@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.QaPairSource;
 import com.lightbot.enums.QaPairStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -32,10 +33,12 @@ public class QaPair {
     private Long knowledgeId;
 
     @TableField("question")
+    @Size(max = 2000, message = "问题内容不超过2000字")
     @Schema(description = "问题内容")
     private String question;
 
     @TableField("answer")
+    @Size(max = 2000, message = "标准答案不超过2000字")
     @Schema(description = "标准答案")
     private String answer;
 

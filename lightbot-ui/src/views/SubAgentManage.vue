@@ -63,16 +63,16 @@
       </template>
       <a-form :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
         <a-form-item label="标识名称" required>
-          <a-input v-model:value="form.name" placeholder="英文标识，如 research-agent" />
+          <a-input v-model:value="form.name" placeholder="英文标识，如 research-agent（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="显示名称" required>
-          <a-input v-model:value="form.displayName" placeholder="中文显示名称" />
+          <a-input v-model:value="form.displayName" placeholder="中文显示名称（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述" required>
           <a-textarea v-model:value="form.description" placeholder="SubAgent 描述" :rows="2" :maxlength="200" show-count />
         </a-form-item>
         <a-form-item label="系统提示词" required>
-          <a-textarea v-model:value="form.systemPrompt" placeholder="SubAgent 的系统提示词" :rows="6" />
+          <a-textarea v-model:value="form.systemPrompt" placeholder="SubAgent 的系统提示词（不超过2000字）" :rows="6" :maxlength="2000" show-count />
         </a-form-item>
         <a-form-item label="绑定工具">
           <a-select

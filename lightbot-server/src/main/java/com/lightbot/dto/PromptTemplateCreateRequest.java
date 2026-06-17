@@ -1,6 +1,7 @@
 package com.lightbot.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -13,12 +14,15 @@ import lombok.Data;
 @Schema(description = "Prompt构建模板创建请求")
 public class PromptTemplateCreateRequest {
 
+    @Size(max = 100, message = "模板标识不超过100字")
     @Schema(description = "模板唯一标识")
     private String promptTemplateKey;
 
+    @Size(max = 200, message = "模板描述不超过200字")
     @Schema(description = "模板描述")
     private String templateDesc;
 
+    @Size(max = 5000, message = "模板内容不超过5000字")
     @Schema(description = "模板内容")
     private String template;
 

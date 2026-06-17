@@ -12,6 +12,7 @@ import com.lightbot.service.EvalDatasetItemService;
 import com.lightbot.service.EvalDatasetService;
 import com.lightbot.service.EvalDatasetVersionService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -36,7 +37,7 @@ public class EvalDatasetController {
 
     @Operation(summary = "创建评测集")
     @PostMapping
-    public Result<EvalDataset> create(@RequestBody EvalDatasetCreateRequest request) {
+    public Result<EvalDataset> create(@Valid @RequestBody EvalDatasetCreateRequest request) {
         return Result.ok(datasetService.create(request.getName(), request.getDescription(), request.getColumnsConfig(), null));
     }
 
@@ -57,7 +58,7 @@ public class EvalDatasetController {
 
     @Operation(summary = "更新评测集")
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody EvalDatasetCreateRequest request) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody EvalDatasetCreateRequest request) {
         datasetService.update(id, request.getName(), request.getDescription(), request.getColumnsConfig());
         return Result.ok();
     }
@@ -71,7 +72,7 @@ public class EvalDatasetController {
 
     @Operation(summary = "创建评测集版本")
     @PostMapping("/versions")
-    public Result<EvalDatasetVersion> createVersion(@RequestBody EvalDatasetVersionCreateRequest request) {
+    public Result<EvalDatasetVersion> createVersion(@Valid @RequestBody EvalDatasetVersionCreateRequest request) {
         return Result.ok(datasetVersionService.create(request.getDatasetId(), request.getVersion()));
     }
 
@@ -83,13 +84,13 @@ public class EvalDatasetController {
 
     @Operation(summary = "添加评测数据项")
     @PostMapping("/items")
-    public Result<EvalDatasetItem> addItem(@RequestBody EvalDatasetItemCreateRequest request) {
+    public Result<EvalDatasetItem> addItem(@Valid @RequestBody EvalDatasetItemCreateRequest request) {
         return Result.ok(datasetItemService.create(request.getDatasetId(), request.getDataContent()));
     }
 
     @Operation(summary = "批量添加评测数据项")
     @PostMapping("/items/batch")
-    public Result<Integer> batchAddItems(@RequestBody EvalDatasetItemCreateRequest request) {
+    public Result<Integer> batchAddItems(@Valid @RequestBody EvalDatasetItemCreateRequest request) {
         return Result.ok(datasetItemService.batchCreate(request.getDatasetId(), request.getDataContents()));
     }
 
