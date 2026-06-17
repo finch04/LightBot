@@ -37,7 +37,7 @@
             <HistoryOutlined />
           </button>
         </a-tooltip>
-        <a-tooltip v-if="isMarkdownFile" :title="previewMode ? '关闭预览' : '开启预览'">
+        <a-tooltip v-if="isMarkdownFile" :key="'preview-' + previewMode" :title="previewMode ? '关闭预览' : '开启预览'">
           <button class="btn-icon-only" @click="previewMode = !previewMode" :class="{ active: previewMode }">
             <EyeOutlined v-if="!previewMode" />
             <EyeInvisibleOutlined v-else />
@@ -305,8 +305,7 @@ async function handleRollback() {
     message.success('回滚成功，正在重新处理文档...')
     showRollbackConfirm.value = false
     showVersionDrawer.value = false
-    // 重新加载编辑器内容
-    await loadContent()
+    emit('update:open', false)
     emit('saved')
   } catch (e) {
     message.error(e.response?.data?.message || '回滚失败')
