@@ -331,8 +331,8 @@ async function handleBatchVectorize() {
   if (selectedRowKeys.value.length === 0) return
   vectorizing.value = true
   try {
-    const count = await batchVectorizeQAPairs(selectedRowKeys.value)
-    message.success(`已提交 ${count} 条向量化`)
+    const res = await batchVectorizeQAPairs(selectedRowKeys.value)
+    message.success(`已提交 ${res.data} 条向量化`)
     selectedRowKeys.value = []
     loadData()
   } catch (e) {

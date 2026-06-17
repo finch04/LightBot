@@ -433,13 +433,16 @@ public class ChatServiceImpl implements ChatService {
                                         vo.setDocumentName("问答对");
                                         Object qaPairId = row.get("id");
                                         vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                                        String q = (String) row.get("question");
+                                        String a = (String) row.get("answer");
+                                        vo.setContentPreview("问题：" + q + "\n答案：" + a);
                                     } else {
                                         vo.setSourceType("chunk");
                                         vo.setDocumentName((String) row.get("document_name"));
+                                        String content = (String) row.get("content");
+                                        vo.setContentPreview(content != null && content.length() > 200
+                                                ? content.substring(0, 200) + "..." : content);
                                     }
-                                    String content = (String) row.get("content");
-                                    vo.setContentPreview(content != null && content.length() > 200
-                                            ? content.substring(0, 200) + "..." : content);
                                     Object score = row.get("score");
                                     vo.setScore(score != null ? ((Number) score).doubleValue() : null);
                                     Object knowledgeId = row.get("knowledge_id");
@@ -762,13 +765,16 @@ public class ChatServiceImpl implements ChatService {
                             vo.setDocumentName("问答对");
                             Object qaPairId = row.get("id");
                             vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                            String q = (String) row.get("question");
+                            String a = (String) row.get("answer");
+                            vo.setContentPreview("问题：" + q + "\n答案：" + a);
                         } else {
                             vo.setSourceType("chunk");
                             vo.setDocumentName((String) row.get("document_name"));
+                            String content = (String) row.get("content");
+                            vo.setContentPreview(content != null && content.length() > 200
+                                    ? content.substring(0, 200) + "..." : content);
                         }
-                        String content = (String) row.get("content");
-                        vo.setContentPreview(content != null && content.length() > 200
-                                ? content.substring(0, 200) + "..." : content);
                         Object score = row.get("score");
                         vo.setScore(score != null ? ((Number) score).doubleValue() : null);
                         Object knowledgeId = row.get("knowledge_id");
@@ -903,13 +909,16 @@ public class ChatServiceImpl implements ChatService {
                 vo.setDocumentName("问答对");
                 Object qaPairId = row.get("id");
                 vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                String q = (String) row.get("question");
+                String a = (String) row.get("answer");
+                vo.setContentPreview("问题：" + q + "\n答案：" + a);
             } else {
                 vo.setSourceType("chunk");
                 vo.setDocumentName((String) row.get("document_name"));
+                String content = (String) row.get("content");
+                vo.setContentPreview(content != null && content.length() > 200
+                        ? content.substring(0, 200) + "..." : content);
             }
-            String content = (String) row.get("content");
-            vo.setContentPreview(content != null && content.length() > 200
-                    ? content.substring(0, 200) + "..." : content);
             Object score = row.get("score");
             vo.setScore(score != null ? ((Number) score).doubleValue() : null);
             Object knowledgeId = row.get("knowledge_id");

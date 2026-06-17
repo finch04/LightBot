@@ -201,7 +201,7 @@ public class QueryKnowledgeTool {
                     SEARCH_RESULTS_MAP.put(requestId, List.of(qaPriorityHit));
                 }
                 log.info("[Tool:query_knowledge] QA优先返回: question={}, score={}", qaQuestion, qaScore);
-                return "【问答对命中】\n问题：" + qaQuestion + "\n答案：" + qaAnswer;
+                return qaAnswer;
             }
 
             // 4.2 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata

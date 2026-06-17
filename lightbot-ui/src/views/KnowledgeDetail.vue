@@ -1474,11 +1474,17 @@ async function openDocModal(doc) {
 }
 
 function handleDownload() {
-  if (downloadUrl.value) {
-    window.open(downloadUrl.value, '_blank')
-  } else {
+  if (!downloadUrl.value) {
     message.warning('下载链接获取中，请稍后重试')
+    return
   }
+  const a = document.createElement('a')
+  a.href = downloadUrl.value
+  a.download = currentDoc.value?.name || 'download'
+  a.target = '_blank'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 function openChunkDetail(chunk) {
