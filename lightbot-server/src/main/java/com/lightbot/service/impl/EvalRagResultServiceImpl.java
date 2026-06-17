@@ -15,7 +15,7 @@ import com.lightbot.mapper.EvalRagResultMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.EvalRagBenchmarkService;
 import com.lightbot.service.EvalRagResultService;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.eval.RagEvaluationEngine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -54,7 +54,7 @@ public class EvalRagResultServiceImpl
     @Autowired
     private ModelFactory modelFactory;
     @Autowired
-    private KnowledgePermissionHelper permissionHelper;
+    private KnowledgeMemberService permissionHelper;
     @Autowired
     private ObjectMapper objectMapper;
 

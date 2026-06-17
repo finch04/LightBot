@@ -147,10 +147,8 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
 
     // ========== 权限校验 ==========
 
-    /**
-     * 校验当前用户是否为知识库成员
-     */
-    private void checkMember(Long knowledgeId) {
+    @Override
+    public void checkMember(Long knowledgeId) {
         long userId = StpUtil.getLoginIdAsLong();
         KnowledgeRole role = getMemberRole(knowledgeId, userId);
         if (role == null) {
@@ -158,10 +156,8 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
         }
     }
 
-    /**
-     * 校验当前用户是否具有指定等级的角色
-     */
-    private void checkPermission(Long knowledgeId, KnowledgeRole requiredRole) {
+    @Override
+    public void checkPermission(Long knowledgeId, KnowledgeRole requiredRole) {
         long userId = StpUtil.getLoginIdAsLong();
         if (!hasPermission(knowledgeId, userId, requiredRole)) {
             throw new BizException(ErrorCode.KNOWLEDGE_ROLE_INSUFFICIENT, requiredRole.getDesc());

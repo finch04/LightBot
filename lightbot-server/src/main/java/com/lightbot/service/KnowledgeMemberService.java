@@ -76,6 +76,21 @@ public interface KnowledgeMemberService extends IService<KnowledgeMember> {
     void removeByKnowledgeId(Long knowledgeId);
 
     /**
+     * 校验当前用户是否为知识库成员（任意角色）
+     *
+     * @param knowledgeId 知识库ID
+     */
+    void checkMember(Long knowledgeId);
+
+    /**
+     * 校验当前用户是否具有指定等级的角色
+     *
+     * @param knowledgeId  知识库ID
+     * @param requiredRole 最低要求角色
+     */
+    void checkPermission(Long knowledgeId, KnowledgeRole requiredRole);
+
+    /**
      * 查询知识库的所有成员
      *
      * @param knowledgeId 知识库ID

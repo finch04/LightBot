@@ -13,7 +13,7 @@ import com.lightbot.enums.TaskType;
 import com.lightbot.mapper.EvalRagBenchmarkItemMapper;
 import com.lightbot.mapper.EvalRagBenchmarkMapper;
 import com.lightbot.service.EvalRagBenchmarkService;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.TaskService;
 import com.lightbot.service.eval.RagEvaluationEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -48,7 +48,7 @@ public class EvalRagBenchmarkServiceImpl
     private final EvalRagBenchmarkItemMapper benchmarkItemMapper;
     private final RagEvaluationEngine evaluationEngine;
     private final TaskService taskService;
-    private final KnowledgePermissionHelper permissionHelper;
+    private final KnowledgeMemberService permissionHelper;
     private final ObjectMapper objectMapper;
 
     @Override

@@ -11,7 +11,7 @@ import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.mapper.DocumentVersionMapper;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.DocumentVersionService;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.util.MinioUtil;
 import cn.dev33.satoken.stp.StpUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +43,7 @@ public class DocumentVersionServiceImpl extends ServiceImpl<DocumentVersionMappe
     private DocumentService documentService;
 
     @Autowired
-    private KnowledgePermissionHelper permissionHelper;
+    private KnowledgeMemberService permissionHelper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)

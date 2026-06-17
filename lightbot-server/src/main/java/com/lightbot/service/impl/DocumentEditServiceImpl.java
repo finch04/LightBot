@@ -11,7 +11,7 @@ import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.DocumentEditService;
 import com.lightbot.service.DocumentService;
 import com.lightbot.service.DocumentVersionService;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +49,7 @@ public class DocumentEditServiceImpl implements DocumentEditService {
     private final DocumentService documentService;
     private final DocumentVersionService documentVersionService;
     private final MinioUtil minioUtil;
-    private final KnowledgePermissionHelper permissionHelper;
+    private final KnowledgeMemberService permissionHelper;
 
     @Override
     public EditableContentVO getEditableContent(Long documentId) {

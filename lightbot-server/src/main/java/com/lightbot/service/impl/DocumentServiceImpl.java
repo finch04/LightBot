@@ -98,7 +98,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final ObjectProvider<GraphService> graphServiceProvider;
     private final DocumentSecurityScanUtil documentSecurityScanUtil;
     private final ContentDuplicateDetectionUtil contentDuplicateDetectionUtil;
-    private final KnowledgePermissionHelper permissionHelper;
+    private final KnowledgeMemberService permissionHelper;
 
     @Override
     public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled) {

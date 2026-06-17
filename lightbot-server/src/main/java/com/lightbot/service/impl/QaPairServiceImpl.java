@@ -21,7 +21,7 @@ import com.lightbot.enums.QaPairStatus;
 import com.lightbot.enums.TaskType;
 import com.lightbot.mapper.EmbeddingMapper;
 import com.lightbot.mapper.QaPairMapper;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.QaPairService;
@@ -53,7 +53,7 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
     private EmbeddingMapper embeddingMapper;
 
     @Autowired
-    private KnowledgePermissionHelper permissionHelper;
+    private KnowledgeMemberService permissionHelper;
 
     @Autowired
     private KnowledgeService knowledgeService;

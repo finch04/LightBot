@@ -18,7 +18,7 @@ import com.lightbot.model.graph.GraphExtractor;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.service.GraphService;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.TaskService;
@@ -45,7 +45,7 @@ public class GraphServiceImpl implements GraphService {
 
     private final Neo4jUtil neo4jUtil;
     private final KnowledgeService knowledgeService;
-    private final KnowledgePermissionHelper permissionHelper;
+    private final KnowledgeMemberService permissionHelper;
     private final GraphExtractor graphExtractor;
     private final TaskService taskService;
     private final ModelProviderService modelProviderService;

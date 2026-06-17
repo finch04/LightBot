@@ -8,7 +8,7 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.service.EmbeddingService;
-import com.lightbot.service.KnowledgePermissionHelper;
+import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.service.RagService;
@@ -49,7 +49,7 @@ public class RagServiceImpl implements RagService {
 
     private final EmbeddingService embeddingService;
     private final KnowledgeService knowledgeService;
-    private final KnowledgePermissionHelper permissionHelper;
+    private final KnowledgeMemberService permissionHelper;
     private final QaPairService qaPairService;
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
