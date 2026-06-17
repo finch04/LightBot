@@ -192,6 +192,9 @@ const sidebarCollapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true
 const sidebarHidden = ref(false)
 let sidebarStateBeforeWorkflow = null
 let taskSSE = null
+let sseRetries = 0
+const SSE_MAX_RETRIES = 10
+const SSE_BASE_DELAY = 3000
 
 const taskBadgeCount = computed(() => {
   if (taskCounts.active <= 0) return 0
@@ -364,16 +367,22 @@ function connectTaskSSE() {
       const counts = JSON.parse(e.data)
       updateTaskCounts(counts)
     } catch {
-      // 兼容旧格式（纯数字）
       updateTaskCounts({ active: Number(e.data) || 0, pending: 0, running: 0 })
     }
   })
 
+  taskSSE.onopen = () => {
+    sseRetries = 0
+  }
+
   taskSSE.onerror = () => {
     taskSSE?.close()
     taskSSE = null
-    // 断线重连
-    setTimeout(connectTaskSSE, 3000)
+    sseRetries++
+    if (sseRetries <= SSE_MAX_RETRIES) {
+      const delay = Math.min(SSE_BASE_DELAY * Math.pow(1.5, sseRetries - 1), 30000)
+      setTimeout(connectTaskSSE, delay)
+    }
   }
 }
 

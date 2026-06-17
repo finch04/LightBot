@@ -164,12 +164,12 @@
           <a-select-option v-for="k in knowledgeList" :key="k.id" :value="k.id" :label="k.name">
             <div class="resource-option">
               <div class="resource-option-header">
-                <BookOutlined class="resource-option-icon knowledge" />
-                <span class="resource-option-title">{{ k.name }}</span>
                 <a-tooltip v-if="k.type" :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
-                  <CloudServerOutlined v-if="k.type === 'milvus'" class="kb-type-icon milvus" />
-                  <DatabaseOutlined v-else class="kb-type-icon pg" />
+                  <CloudServerOutlined v-if="k.type === 'milvus'" class="resource-option-icon kb-type-icon milvus" />
+                  <DatabaseOutlined v-else class="resource-option-icon kb-type-icon pg" />
                 </a-tooltip>
+                <BookOutlined v-else class="resource-option-icon knowledge" />
+                <span class="resource-option-title">{{ k.name }}</span>
               </div>
               <div v-if="k.description" class="resource-option-desc">{{ k.description }}</div>
               <div class="resource-option-meta">

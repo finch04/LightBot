@@ -134,6 +134,9 @@ const logBodyRef = ref(null)
 const detailVisible = ref(false)
 const detailLog = ref(null)
 let eventSource = null
+let logRetries = 0
+const LOG_SSE_MAX_RETRIES = 10
+const LOG_SSE_BASE_DELAY = 3000
 
 const filteredLogs = computed(() => {
   let result = logs.value.filter(l => activeLevels.value.has(l.level))
@@ -220,6 +223,7 @@ function connectSSE() {
   eventSource.onopen = () => {
     sseConnected.value = true
     connecting.value = false
+    logRetries = 0
   }
 
   eventSource.onerror = () => {
@@ -227,10 +231,13 @@ function connectSSE() {
     connecting.value = false
     eventSource?.close()
     eventSource = null
-    // 自动重连（延迟2秒避免频繁重试）
-    setTimeout(() => {
-      if (!eventSource && !connecting.value) connectSSE()
-    }, 2000)
+    logRetries++
+    if (logRetries <= LOG_SSE_MAX_RETRIES) {
+      const delay = Math.min(LOG_SSE_BASE_DELAY * Math.pow(1.5, logRetries - 1), 30000)
+      setTimeout(() => {
+        if (!eventSource && !connecting.value) connectSSE()
+      }, delay)
+    }
   }
 }
 
@@ -238,6 +245,7 @@ function disconnectSSE() {
   eventSource?.close()
   eventSource = null
   sseConnected.value = false
+  logRetries = 0
 }
 
 function scrollToBottom() {

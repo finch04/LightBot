@@ -79,7 +79,7 @@ public class TaskConsumerConfig {
     private void recoverOrphanTasks() {
         LocalDateTime threshold = LocalDateTime.now().minusMinutes(ORPHAN_TIMEOUT_MINUTES);
         List<Task> orphans = taskService.list(new LambdaQueryWrapper<Task>()
-                .eq(Task::getStatus, TaskStatus.RUNNING)
+                .in(Task::getStatus, TaskStatus.RUNNING, TaskStatus.PENDING)
                 .lt(Task::getUpdateTime, threshold));
 
         if (orphans.isEmpty()) {

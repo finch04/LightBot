@@ -4,57 +4,89 @@ export function chat(data) {
   return request.post('/chat', data)
 }
 
-export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }, signal) {
+/**
+ * 带自动重连的流式对话
+ * @param {Object} data - 对话请求数据
+ * @param {Object} callbacks - 回调函数 { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }
+ * @param {AbortSignal} signal - 取消信号
+ * @param {Object} options - 配置项 { maxRetries, retryDelay }
+ */
+export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }, signal, options = {}) {
+  const { maxRetries = 3, retryDelay = 2000 } = options
   const token = localStorage.getItem('token')
-  const response = await fetch('/api/chat/stream', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token || '',
-    },
-    body: JSON.stringify(data),
-    signal,
-  })
+  let retries = 0
 
-  if (!response.ok) {
-    throw new Error('流式请求失败')
-  }
+  async function attempt() {
+    const response = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token || '',
+      },
+      body: JSON.stringify(data),
+      signal,
+    })
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-  let doneFired = false
-  const fireDone = () => {
-    if (!doneFired) {
-      doneFired = true
-      onDone?.()
+    if (!response.ok) {
+      throw new Error(`流式请求失败: ${response.status}`)
     }
-  }
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) {
-      // 处理 buffer 中残留的数据
-      if (buffer.trim()) {
-        processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone: fireDone })
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let doneFired = false
+    const fireDone = () => {
+      if (!doneFired) {
+        doneFired = true
+        onDone?.()
       }
-      fireDone()
-      break
     }
-    buffer += decoder.decode(value, { stream: true })
-    // 按完整行处理，保留末尾不完整的行在 buffer 中
-    const lastNewline = buffer.lastIndexOf('\n')
-    if (lastNewline === -1) continue
-    const complete = buffer.substring(0, lastNewline)
-    buffer = buffer.substring(lastNewline + 1)
-    processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone: fireDone })
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          if (buffer.trim()) {
+            processSseLines(buffer, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone: fireDone })
+          }
+          fireDone()
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const lastNewline = buffer.lastIndexOf('\n')
+        if (lastNewline === -1) continue
+        const complete = buffer.substring(0, lastNewline)
+        buffer = buffer.substring(lastNewline + 1)
+        processSseLines(complete, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone: fireDone })
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        fireDone()
+        throw err
+      }
+      throw err
+    }
+  }
+
+  while (retries <= maxRetries) {
+    try {
+      await attempt()
+      return
+    } catch (err) {
+      if (err.name === 'AbortError') return
+      retries++
+      if (retries > maxRetries || signal?.aborted) {
+        throw err
+      }
+      const delay = retryDelay * Math.pow(2, retries - 1)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
   }
 }
 
 function decodeSseTextContent(raw) {
   if (!raw) return ''
   let content = raw
-  // Spring SseEmitter 可能对字符串做 JSON 编码
   if (content.startsWith('"') && content.endsWith('"')) {
     try {
       content = JSON.parse(content)
@@ -62,7 +94,6 @@ function decodeSseTextContent(raw) {
       // 保持原样
     }
   }
-  // 后端将 \n 转义为 \\n 防止 SSE 行截断
   return content.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
 }
 
@@ -76,10 +107,8 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
         continue
       }
       if (content) {
-        // 判断消息类型（先检查前缀，再处理内容）
         if (content.startsWith('[STATUS]')) {
           const statusContent = content.substring(8)
-          // 尝试解析为工具事件 JSON
           try {
             const parsed = JSON.parse(statusContent)
             if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status' || parsed.type === 'tool_complete' || parsed.type === 'reasoning_content'

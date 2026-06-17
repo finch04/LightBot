@@ -120,6 +120,7 @@ public enum ErrorCode {
     FILE_UPLOAD_FAILED(80001, "文件上传失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_DOWNLOAD_FAILED(80002, "文件下载失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_URL_FAILED(80003, "获取文件URL失败", HttpStatus.INTERNAL_SERVER_ERROR),
+    FILE_TOO_LARGE_FOR_MEMORY(80004, "文件过大，无法加载到内存，请使用流式下载", HttpStatus.BAD_REQUEST),
 
     // ========== Prompt模块 ==========
     PROMPT_NOT_FOUND(100001, "Prompt不存在", HttpStatus.BAD_REQUEST),

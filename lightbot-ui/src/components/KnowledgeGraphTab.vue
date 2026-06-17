@@ -414,6 +414,23 @@ function formatGraphData(data) {
     }
   }))
 
+  // 平行边偏移：同 source-target 的边交替向两侧弯曲
+  const edgeGroups = {}
+  edges.forEach(e => {
+    const key = [e.source, e.target].sort().join('->')
+    if (!edgeGroups[key]) edgeGroups[key] = []
+    edgeGroups[key].push(e)
+  })
+  const BASE_OFFSET = 30
+  Object.values(edgeGroups).forEach(group => {
+    if (group.length <= 1) return
+    group.forEach((edge, i) => {
+      const sign = i % 2 === 0 ? 1 : -1
+      const magnitude = Math.ceil(i / 2)
+      edge.data.curveOffset = sign * magnitude * BASE_OFFSET
+    })
+  })
+
   return { nodes, edges }
 }
 
@@ -516,6 +533,20 @@ function renderGraph(subgraph, seq) {
     edge: {
       type: 'quadratic',
       style: {
+        controlPoints: (d) => {
+          const offset = d.data?.curveOffset
+          if (!offset) return undefined
+          const sx = d.sourceNode?.style?.x ?? d.sourceNode?.x ?? 0
+          const sy = d.sourceNode?.style?.y ?? d.sourceNode?.y ?? 0
+          const tx = d.targetNode?.style?.x ?? d.targetNode?.x ?? 0
+          const ty = d.targetNode?.style?.y ?? d.targetNode?.y ?? 0
+          const mx = (sx + tx) / 2
+          const my = (sy + ty) / 2
+          const dx = tx - sx
+          const dy = ty - sy
+          const len = Math.sqrt(dx * dx + dy * dy) || 1
+          return [{ x: mx + (-dy / len) * offset, y: my + (dx / len) * offset }]
+        },
         labelText: (d) => d.data.label || '',
         labelFill: '#6b7280',
         labelFontSize: 10,
@@ -529,7 +560,7 @@ function renderGraph(subgraph, seq) {
     behaviors: [
       'drag-canvas',
       'zoom-canvas',
-      'drag-element',
+      { type: 'drag-element', key: 'drag-element', disable: true },
       {
         type: 'click-select',
         degree: 1,
@@ -565,6 +596,10 @@ function renderGraph(subgraph, seq) {
   })
   graphInstance.on('canvas:click', () => {
     detailVisible.value = false
+  })
+  // 布局动画结束后启用节点拖拽
+  graphInstance.on('afterlayout', () => {
+    graphInstance.updateBehavior({ key: 'drag-element', disable: false })
   })
 
   const data = formatGraphData(subgraph)

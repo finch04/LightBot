@@ -30,173 +30,191 @@
         </a-button>
       </div>
 
-      <!-- 消息列表 -->
-      <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
-        <div class="message-body">
-          <!-- <div v-if="msg.role === 'assistant'" class="message-meta">回复</div> -->
-          <div class="message-content-wrapper" :class="{ 'user-message-stack': msg.role === 'user' }">
-            <!-- 用户附件：固定在用户气泡上方、右对齐（发送后与历史记录一致） -->
-            <div
-              v-if="msg.role === 'user' && getMsgAttachments(msg).length && !msg._sensitiveBlock"
-              class="user-message-attachments"
-            >
-              <ChatAttachmentTile
-                v-for="(att, ai) in getMsgAttachments(msg)"
-                :key="att.id || ai"
-                :att="att"
-                :thumb-url="getAttThumbUrl(att)"
-                @preview="openAttachmentPreview"
-              />
-            </div>
-            <!-- 敏感词拦截提示（独立样式，与正常内容区分） -->
-            <div v-if="msg._sensitiveBlock" class="sensitive-block-alert" :class="msg._sensitiveBlock">
-              <WarningOutlined class="sensitive-block-icon" />
-              <span class="sensitive-block-text">{{ msg.content }}</span>
-            </div>
-            <!-- 深度思考面板 -->
-            <div v-if="msg._reasoningContent && !msg._sensitiveBlock" class="reasoning-panel">
-              <div class="reasoning-header" @click="msg._reasoningExpanded = !msg._reasoningExpanded">
-                <BulbOutlined class="reasoning-icon" />
-                <span class="reasoning-title">深度思考</span>
-                <LoadingOutlined v-if="msg._streaming && !msg._reasoningDone" class="reasoning-spinner" />
-                <RightOutlined :class="{ expanded: msg._reasoningExpanded }" class="tool-expand-icon" />
-              </div>
-              <div v-show="msg._reasoningExpanded" class="reasoning-content">{{ msg._reasoningContent }}</div>
-            </div>
-            <!-- Skill 启用（固定在回复顶部） -->
-            <div v-if="getTopCapabilityEvents(msg).length > 0 && !msg._sensitiveBlock" class="capability-block-inline">
-              <AgentCapabilityPanel
-                :events="getTopCapabilityEvents(msg)"
-                :is-done="!msg._streaming || msg._toolsDone"
-                :default-expanded="true"
-              />
-            </div>
-            <!-- 工作流节点执行（工作流型智能体） -->
-            <div v-if="msg._workflowEvents?.length > 0 && !msg._sensitiveBlock" class="workflow-block-inline">
-              <WorkflowNodesGroupComponent
-                :workflow-events="msg._workflowEvents"
-                :is-done="!msg._streaming"
-                :default-expanded="!!msg._streaming"
-                :is-streaming="!!msg._streaming"
-              />
-            </div>
-            <!-- 有工具事件：按 offset 位置插入工具块（流式/历史统一逻辑，支持多轮工具调用） -->
-            <template v-if="!msg._sensitiveBlock && msg._toolEvents?.length > 0 && getToolBlockOffsets(msg).length > 0">
-              <template v-for="(segment, si) in splitContentByOffsets(msg)" :key="si">
-                <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!msg._streaming" /></div>
-                <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
-                  <AgentCapabilityPanel
-                    v-if="getCapabilityEventsForOffset(msg, segment.offset).length > 0"
-                    :events="getCapabilityEventsForOffset(msg, segment.offset)"
-                    :is-done="isToolBlockDone(msg, segment.offset)"
-                    :default-expanded="true"
+      <!-- 虚拟滚动消息列表 -->
+      <div
+        class="virtual-list-container"
+        :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
+      >
+        <div
+          v-for="virtualRow in virtualizer.getVirtualItems()"
+          :key="virtualRow.key"
+          :data-index="virtualRow.index"
+          :ref="el => { if (el) virtualizer.measureElement(el) }"
+          :style="{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            transform: `translateY(${virtualRow.start}px)`,
+          }"
+        >
+          <div :class="['message', messages[virtualRow.index]?.role]">
+            <div class="message-body">
+              <div class="message-content-wrapper" :class="{ 'user-message-stack': messages[virtualRow.index]?.role === 'user' }">
+                <!-- 用户附件 -->
+                <div
+                  v-if="messages[virtualRow.index]?.role === 'user' && getMsgAttachments(messages[virtualRow.index]).length && !messages[virtualRow.index]._sensitiveBlock"
+                  class="user-message-attachments"
+                >
+                  <ChatAttachmentTile
+                    v-for="(att, ai) in getMsgAttachments(messages[virtualRow.index])"
+                    :key="att.id || ai"
+                    :att="att"
+                    :thumb-url="getAttThumbUrl(att)"
+                    @preview="openAttachmentPreview"
                   />
-                  <ToolCallsGroupComponent
-                    v-if="getPureToolEvents(getToolEventsForOffset(msg, segment.offset)).length > 0"
-                    :tool-events="getPureToolEvents(getToolEventsForOffset(msg, segment.offset))"
-                    :is-done="isToolBlockDone(msg, segment.offset)"
+                </div>
+                <!-- 敏感词拦截提示 -->
+                <div v-if="messages[virtualRow.index]?._sensitiveBlock" class="sensitive-block-alert" :class="messages[virtualRow.index]._sensitiveBlock">
+                  <WarningOutlined class="sensitive-block-icon" />
+                  <span class="sensitive-block-text">{{ messages[virtualRow.index].content }}</span>
+                </div>
+                <!-- 深度思考面板 -->
+                <div v-if="messages[virtualRow.index]?._reasoningContent && !messages[virtualRow.index]._sensitiveBlock" class="reasoning-panel">
+                  <div class="reasoning-header" @click="messages[virtualRow.index]._reasoningExpanded = !messages[virtualRow.index]._reasoningExpanded">
+                    <BulbOutlined class="reasoning-icon" />
+                    <span class="reasoning-title">深度思考</span>
+                    <LoadingOutlined v-if="messages[virtualRow.index]._streaming && !messages[virtualRow.index]._reasoningDone" class="reasoning-spinner" />
+                    <RightOutlined :class="{ expanded: messages[virtualRow.index]._reasoningExpanded }" class="tool-expand-icon" />
+                  </div>
+                  <div v-show="messages[virtualRow.index]._reasoningExpanded" class="reasoning-content">{{ messages[virtualRow.index]._reasoningContent }}</div>
+                </div>
+                <!-- Skill 启用 -->
+                <div v-if="getTopCapabilityEvents(messages[virtualRow.index]).length > 0 && !messages[virtualRow.index]._sensitiveBlock" class="capability-block-inline">
+                  <AgentCapabilityPanel
+                    :events="getTopCapabilityEvents(messages[virtualRow.index])"
+                    :is-done="!messages[virtualRow.index]._streaming || messages[virtualRow.index]._toolsDone"
                     :default-expanded="true"
                   />
                 </div>
-              </template>
-            </template>
-            <!-- 有工具事件但 offset 尚未到达：临时追加在末尾 -->
-            <template v-else-if="!msg._sensitiveBlock && msg._toolEvents?.length > 0">
-              <div v-if="msg.content" class="message-content"><MarkdownPreview :content="msg.content" :finalized="!msg._streaming" /></div>
-              <div class="tool-block-inline">
-                <AgentCapabilityPanel
-                  v-if="getInlineCapabilityEvents(msg).length > 0"
-                  :events="getInlineCapabilityEvents(msg)"
-                  :is-done="msg._toolsDone"
-                  :default-expanded="true"
-                />
-                <ToolCallsGroupComponent
-                  v-if="getPureToolEvents(msg._toolEvents).length > 0"
-                  :tool-events="getPureToolEvents(msg._toolEvents)"
-                  :is-done="msg._toolsDone"
-                  :default-expanded="true"
-                />
-              </div>
-            </template>
-            <!-- 无工具事件：正常渲染 -->
-            <template v-else-if="!msg._sensitiveBlock">
-              <div v-if="msg.content && msg.content !== '[附件]'" class="message-content">
-                <MarkdownPreview :content="msg.content" :finalized="!msg._streaming" />
-              </div>
-            </template>
-            <!-- 朗读 / 复制 / 重新生成 / 复制 requestId -->
-            <div
-              v-if="!msg._streaming && msg.content && !msg._sensitiveBlock"
-              class="message-actions"
-            >
-              <a-tooltip
-                v-if="msg.role === 'assistant' && showTtsBtn"
-                :title="speakingMsgKey === i ? '停止朗读' : '朗读'"
-              >
-                <button
-                  class="btn-copy"
-                  :class="{ speaking: speakingMsgKey === i }"
-                  @click="speakMessage(msg, i)"
+                <!-- 工作流节点执行 -->
+                <div v-if="messages[virtualRow.index]?._workflowEvents?.length > 0 && !messages[virtualRow.index]._sensitiveBlock" class="workflow-block-inline">
+                  <WorkflowNodesGroupComponent
+                    :workflow-events="messages[virtualRow.index]._workflowEvents"
+                    :is-done="!messages[virtualRow.index]._streaming"
+                    :default-expanded="!!messages[virtualRow.index]._streaming"
+                    :is-streaming="!!messages[virtualRow.index]._streaming"
+                  />
+                </div>
+                <!-- 有工具事件：按 offset 位置插入工具块 -->
+                <template v-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0 && getToolBlockOffsets(messages[virtualRow.index]).length > 0">
+                  <template v-for="(segment, si) in splitContentByOffsets(messages[virtualRow.index])" :key="si">
+                    <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                    <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
+                      <AgentCapabilityPanel
+                        v-if="getCapabilityEventsForOffset(messages[virtualRow.index], segment.offset).length > 0"
+                        :events="getCapabilityEventsForOffset(messages[virtualRow.index], segment.offset)"
+                        :is-done="isToolBlockDone(messages[virtualRow.index], segment.offset)"
+                        :default-expanded="true"
+                      />
+                      <ToolCallsGroupComponent
+                        v-if="getPureToolEvents(getToolEventsForOffset(messages[virtualRow.index], segment.offset)).length > 0"
+                        :tool-events="getPureToolEvents(getToolEventsForOffset(messages[virtualRow.index], segment.offset))"
+                        :is-done="isToolBlockDone(messages[virtualRow.index], segment.offset)"
+                        :default-expanded="true"
+                      />
+                    </div>
+                  </template>
+                </template>
+                <!-- 有工具事件但 offset 尚未到达 -->
+                <template v-else-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0">
+                  <div v-if="messages[virtualRow.index].content" class="message-content"><MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                  <div class="tool-block-inline">
+                    <AgentCapabilityPanel
+                      v-if="getInlineCapabilityEvents(messages[virtualRow.index]).length > 0"
+                      :events="getInlineCapabilityEvents(messages[virtualRow.index])"
+                      :is-done="messages[virtualRow.index]._toolsDone"
+                      :default-expanded="true"
+                    />
+                    <ToolCallsGroupComponent
+                      v-if="getPureToolEvents(messages[virtualRow.index]._toolEvents).length > 0"
+                      :tool-events="getPureToolEvents(messages[virtualRow.index]._toolEvents)"
+                      :is-done="messages[virtualRow.index]._toolsDone"
+                      :default-expanded="true"
+                    />
+                  </div>
+                </template>
+                <!-- 无工具事件：正常渲染 -->
+                <template v-else-if="!messages[virtualRow.index]._sensitiveBlock">
+                  <div v-if="messages[virtualRow.index].content && messages[virtualRow.index].content !== '[附件]'" class="message-content">
+                    <MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
+                  </div>
+                </template>
+                <!-- 操作按钮 -->
+                <div
+                  v-if="!messages[virtualRow.index]._streaming && messages[virtualRow.index].content && !messages[virtualRow.index]._sensitiveBlock"
+                  class="message-actions"
                 >
-                  <SoundOutlined />
-                </button>
-              </a-tooltip>
-              <a-tooltip :title="msg._copied ? '已复制' : '复制'">
-                <button
-                  class="btn-copy"
-                  :class="{ copied: msg._copied }"
-                  @click="copyMessage(msg)"
-                >
-                  <CheckOutlined v-if="msg._copied" />
-                  <CopyOutlined v-else />
-                </button>
-              </a-tooltip>
-              <a-tooltip v-if="msg.role === 'assistant' && canRegenerate(i)" title="重新生成">
-                <button class="btn-copy btn-action-text" :disabled="loading" @click="regenerateReply(i)">
-                  <ReloadOutlined />
-                </button>
-              </a-tooltip>
-              <a-tooltip
-                v-if="msg.role === 'assistant' && msg._requestId"
-                :title="msg._requestIdCopied ? '已复制' : '复制 Request ID'"
-              >
-                <button
-                  class="btn-copy btn-action-text"
-                  :class="{ copied: msg._requestIdCopied }"
-                  @click="copyRequestId(msg)"
-                >
-                  <CheckOutlined v-if="msg._requestIdCopied" />
-                  <NumberOutlined v-else />
-                </button>
-              </a-tooltip>
-            </div>
-          </div>
-          <!-- RAG引用列表（从消息metadata中解析） -->
-          <div v-if="msg.role === 'assistant' && getMsgRagRefs(msg).length > 0 && !msg._streaming" class="rag-references">
-            <div class="rag-header">
-              <FileTextOutlined />
-              <span>参考文献 ({{ getMsgRagRefs(msg).length }})</span>
-            </div>
-            <div class="rag-list">
-              <div v-for="(ref, ri) in getMsgRagRefs(msg)" :key="ri" class="rag-item">
-                <div class="rag-item-header" @click="toggleReference(msg, ri)">
-                  <RightOutlined :class="{ expanded: isReferenceExpanded(msg, ri) }" />
-                  <a-tag v-if="ref.sourceType === 'qa_pair'" color="success" class="rag-qa-tag">问答对</a-tag>
-                  <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
-                  <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
-                  <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
-                    <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
+                  <a-tooltip
+                    v-if="messages[virtualRow.index].role === 'assistant' && showTtsBtn"
+                    :title="speakingMsgKey === virtualRow.index ? '停止朗读' : '朗读'"
+                  >
+                    <button
+                      class="btn-copy"
+                      :class="{ speaking: speakingMsgKey === virtualRow.index }"
+                      @click="speakMessage(messages[virtualRow.index], virtualRow.index)"
+                    >
+                      <SoundOutlined />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip :title="messages[virtualRow.index]._copied ? '已复制' : '复制'">
+                    <button
+                      class="btn-copy"
+                      :class="{ copied: messages[virtualRow.index]._copied }"
+                      @click="copyMessage(messages[virtualRow.index])"
+                    >
+                      <CheckOutlined v-if="messages[virtualRow.index]._copied" />
+                      <CopyOutlined v-else />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant' && canRegenerate(virtualRow.index)" title="重新生成">
+                    <button class="btn-copy btn-action-text" :disabled="loading" @click="regenerateReply(virtualRow.index)">
+                      <ReloadOutlined />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip
+                    v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._requestId"
+                    :title="messages[virtualRow.index]._requestIdCopied ? '已复制' : '复制 Request ID'"
+                  >
+                    <button
+                      class="btn-copy btn-action-text"
+                      :class="{ copied: messages[virtualRow.index]._requestIdCopied }"
+                      @click="copyRequestId(messages[virtualRow.index])"
+                    >
+                      <CheckOutlined v-if="messages[virtualRow.index]._requestIdCopied" />
+                      <NumberOutlined v-else />
+                    </button>
                   </a-tooltip>
                 </div>
-                <div v-if="isReferenceExpanded(msg, ri)" class="rag-item-content">
-                  {{ ref.contentPreview }}
+              </div>
+              <!-- RAG引用列表 -->
+              <div v-if="messages[virtualRow.index]?.role === 'assistant' && getMsgRagRefs(messages[virtualRow.index]).length > 0 && !messages[virtualRow.index]._streaming" class="rag-references">
+                <div class="rag-header">
+                  <FileTextOutlined />
+                  <span>参考文献 ({{ getMsgRagRefs(messages[virtualRow.index]).length }})</span>
+                </div>
+                <div class="rag-list">
+                  <div v-for="(ref, ri) in getMsgRagRefs(messages[virtualRow.index])" :key="ri" class="rag-item">
+                    <div class="rag-item-header" @click="toggleReference(messages[virtualRow.index], ri)">
+                      <RightOutlined :class="{ expanded: isReferenceExpanded(messages[virtualRow.index], ri) }" />
+                      <a-tag v-if="ref.sourceType === 'qa_pair'" color="success" class="rag-qa-tag">问答对</a-tag>
+                      <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
+                      <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
+                      <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
+                        <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
+                      </a-tooltip>
+                    </div>
+                    <div v-if="isReferenceExpanded(messages[virtualRow.index], ri)" class="rag-item-content">
+                      {{ ref.contentPreview }}
+                    </div>
+                  </div>
                 </div>
               </div>
+              <!-- 耗时显示 -->
+              <div v-if="messages[virtualRow.index]?.role === 'assistant' && virtualRow.index === messages.length - 1 && !messages[virtualRow.index]._streaming && lastReplyElapsed !== null" class="reply-elapsed">
+                {{ formatElapsed(lastReplyElapsed) }}
+              </div>
             </div>
-          </div>
-          <!-- 耗时显示（仅最后一条AI消息且流式结束后显示） -->
-          <div v-if="msg.role === 'assistant' && i === messages.length - 1 && !msg._streaming && lastReplyElapsed !== null" class="reply-elapsed">
-            {{ formatElapsed(lastReplyElapsed) }}
           </div>
         </div>
       </div>
@@ -394,6 +412,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
 import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
@@ -451,6 +470,46 @@ const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
 const hasStreamContent = ref(false)
+
+// ===== 虚拟滚动 =====
+const isNearBottom = ref(true)
+
+const virtualizer = useVirtualizer({
+  count: messages.value.length,
+  getScrollElement: () => messagesRef.value,
+  estimateSize: (index) => {
+    const msg = messages.value[index]
+    if (!msg) return 80
+    if (msg.role === 'user') return 60
+    const len = msg.content?.length || 0
+    return Math.max(80, Math.min(600, Math.ceil(len / 40) * 22 + 60))
+  },
+  overscan: 5,
+})
+
+watch(() => messages.value.length, (newLen, oldLen) => {
+  virtualizer.value.setOptions({
+    ...virtualizer.value.options,
+    count: newLen,
+  })
+})
+
+function handleScroll() {
+  const el = messagesRef.value
+  if (!el) return
+  const threshold = 150
+  isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+}
+
+function scrollToBottom() {
+  if (!isNearBottom.value) return
+  const len = messages.value.length
+  if (len > 0) {
+    nextTick(() => {
+      virtualizer.value.scrollToIndex(len - 1, { align: 'end' })
+    })
+  }
+}
 
 /** 消息列表中是否已有流式中的助手消息（与占位加载条互斥） */
 const hasStreamingAssistantMessage = computed(() =>
@@ -816,6 +875,7 @@ async function loadHistory() {
       await loadAgentConfigVersions(session.agentId)
       await loadCurrentAgent(session.agentId)
     }
+    isNearBottom.value = true
     scrollToBottom()
   } catch (e) {
     messages.value = []
@@ -845,10 +905,11 @@ async function loadOlderMessages() {
       await enrichMessagesAttachments(olderMessages)
       messages.value = [...olderMessages, ...messages.value]
       hasMoreMessages.value = records.length === 10
-      // 保持滚动位置
+      // 保持滚动位置（虚拟滚动下通过偏移量修正）
       await nextTick()
       if (container) {
-        container.scrollTop = container.scrollHeight - oldScrollHeight
+        const newScrollHeight = container.scrollHeight
+        container.scrollTop = newScrollHeight - oldScrollHeight
       }
     } else {
       hasMoreMessages.value = false
@@ -992,6 +1053,7 @@ async function sendMessage() {
   input.value = ''
   pendingAttachments.value = []
   autoResize()
+  isNearBottom.value = true
   scrollToBottom()
 
   await runChatStream({
@@ -1010,6 +1072,7 @@ async function regenerateReply(assistantIndex) {
   if (userIdx < 0) return
   const userMsg = messages.value[userIdx]
   messages.value.pop()
+  isNearBottom.value = true
   scrollToBottom()
   await runChatStream({
     message: userMsg.content === '[附件]' ? '' : (userMsg.content || ''),
@@ -1389,12 +1452,7 @@ function goToKnowledge(knowledgeId, documentId) {
   router.push({ path: `/knowledge/${knowledgeId}`, query })
 }
 
-function scrollToBottom() {
-  requestAnimationFrame(() => {
-    const el = messagesRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
-}
+// scrollToBottom 已在虚拟滚动区域定义
 
 function agentVersionLabel(a) {
   const status = a.status?.code || a.status || 'draft'
@@ -1449,10 +1507,11 @@ onMounted(async () => {
     await loadAgentConfigVersions(selectedAgentId.value)
   }
 
-  // 滚动到顶部自动加载更早的消息
+  // 滚动到顶部自动加载更早的消息 + 虚拟滚动距离检测
   const container = messagesRef.value
   if (container) {
     container.addEventListener('scroll', () => {
+      handleScroll()
       if (container.scrollTop < 50 && hasMoreMessages.value && !loadingOlder.value && !streaming.value) {
         loadOlderMessages()
       }
@@ -1518,6 +1577,13 @@ watch(sessionId, (newVal, oldVal) => {
 .load-more-area {
   text-align: center;
   padding: 12px 0;
+}
+
+/* 虚拟滚动容器 */
+.virtual-list-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .empty-state {

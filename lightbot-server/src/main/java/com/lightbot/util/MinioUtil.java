@@ -4,7 +4,10 @@ import com.lightbot.common.BizException;
 import com.lightbot.enums.ErrorCode;
 import io.minio.*;
 import io.minio.http.Method;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.ConnectionPool;
+import okhttp3.OkHttpClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -12,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -27,19 +31,39 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class MinioUtil {
 
+    private static final long MAX_BYTES_FOR_IN_MEMORY = 10 * 1024 * 1024L;
+
     private final MinioClient minioClient;
 
     @Value("${minio.bucket}")
     private String bucket;
 
+    private volatile boolean bucketEnsured = false;
+
     public MinioUtil(
             @Value("${minio.endpoint}") String endpoint,
             @Value("${minio.access-key}") String accessKey,
             @Value("${minio.secret-key}") String secretKey) {
+        // 1. 配置 OkHttp 连接池
+        OkHttpClient httpClient = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .writeTimeout(Duration.ofSeconds(30))
+                .readTimeout(Duration.ofSeconds(30))
+                .connectionPool(new ConnectionPool(32, 5, TimeUnit.MINUTES))
+                .build();
         this.minioClient = MinioClient.builder()
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey)
+                .httpClient(httpClient)
                 .build();
+    }
+
+    /**
+     * 启动时确保 Bucket 存在（仅调用一次）
+     */
+    @PostConstruct
+    public void init() {
+        ensureBucketOnce();
     }
 
     /**
@@ -51,7 +75,6 @@ public class MinioUtil {
      */
     public String upload(MultipartFile file, String filePath) {
         try {
-            ensureBucket();
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucket)
                     .object(filePath)
@@ -76,11 +99,10 @@ public class MinioUtil {
      */
     public String upload(InputStream inputStream, String filePath, long size, String contentType) {
         try {
-            ensureBucket();
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucket)
                     .object(filePath)
-                    .stream(inputStream, size, -1)
+                    .stream(inputStream, size, 10 * 1024 * 1024)
                     .contentType(contentType)
                     .build());
             return filePath;
@@ -109,7 +131,7 @@ public class MinioUtil {
     }
 
     /**
-     * 下载文件
+     * 下载文件（返回 InputStream，调用方需自行关闭）
      *
      * @param filePath 文件路径
      * @return 输入流
@@ -127,11 +149,34 @@ public class MinioUtil {
     }
 
     /**
-     * 下载文件为字节数组
+     * 流式下载文件（返回 InputStream，适用于大文件，调用方需自行关闭）
+     *
+     * @param filePath 文件路径
+     * @return 输入流
+     */
+    public InputStream downloadStream(String filePath) {
+        return download(filePath);
+    }
+
+    /**
+     * 下载文件为字节数组（仅适用于小文件 &lt;10MB）
+     *
+     * @param filePath 文件路径
+     * @return 字节数组
      */
     public byte[] downloadBytes(String filePath) {
-        try (InputStream in = download(filePath)) {
-            return in.readAllBytes();
+        try {
+            // 1. 检查文件大小，超过 10MB 禁止全量读入内存
+            StatObjectResponse stat = minioClient.statObject(
+                    StatObjectArgs.builder().bucket(bucket).object(filePath).build());
+            if (stat.size() > MAX_BYTES_FOR_IN_MEMORY) {
+                throw new BizException(ErrorCode.FILE_TOO_LARGE_FOR_MEMORY);
+            }
+            try (InputStream in = download(filePath)) {
+                return in.readAllBytes();
+            }
+        } catch (BizException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[MinIO] 下载字节失败, path={}", filePath, e);
             throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
@@ -207,33 +252,40 @@ public class MinioUtil {
         return String.format("knowledge/%d/doc/%s%s", knowledgeId, UUID.randomUUID().toString().replace("-", ""), ext);
     }
 
-    private void ensureBucket() {
-        try {
-            boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-            if (!exists) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-                // 设置公开读取策略，允许匿名访问
-                String policy = """
-                        {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Principal": {"AWS": ["*"]},
-                                    "Action": ["s3:GetObject"],
-                                    "Resource": ["arn:aws:s3:::%s/*"]
-                                }
-                            ]
-                        }
-                        """.formatted(bucket);
-                minioClient.setBucketPolicy(SetBucketPolicyArgs.builder()
-                        .bucket(bucket)
-                        .config(policy)
-                        .build());
-                log.info("[MinIO] Bucket已创建并设置公开读取策略: {}", bucket);
+    /**
+     * 双重检查锁确保 Bucket 仅在启动时创建一次
+     */
+    private void ensureBucketOnce() {
+        if (bucketEnsured) return;
+        synchronized (this) {
+            if (bucketEnsured) return;
+            try {
+                boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+                if (!exists) {
+                    minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                    String policy = """
+                            {
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Principal": {"AWS": ["*"]},
+                                        "Action": ["s3:GetObject"],
+                                        "Resource": ["arn:aws:s3:::%s/*"]
+                                    }
+                                ]
+                            }
+                            """.formatted(bucket);
+                    minioClient.setBucketPolicy(SetBucketPolicyArgs.builder()
+                            .bucket(bucket)
+                            .config(policy)
+                            .build());
+                    log.info("[MinIO] Bucket已创建并设置公开读取策略: {}", bucket);
+                }
+                bucketEnsured = true;
+            } catch (Exception e) {
+                log.error("[MinIO] 检查/创建Bucket失败", e);
             }
-        } catch (Exception e) {
-            log.error("[MinIO] 检查/创建Bucket失败", e);
         }
     }
 }

@@ -1142,6 +1142,35 @@ async function loadKnowledge() {
   shownQuestionIndices.value.clear()
 }
 
+// ---- 文档状态轮询 ----
+const PROCESSING_STATUSES = new Set(['uploading', 'pending', 'processing'])
+let docPollTimer = null
+const DOC_POLL_INTERVAL = 3000
+
+function hasProcessingDocs() {
+  return documents.value.some(d => {
+    const s = d.status?.code || d.status
+    return PROCESSING_STATUSES.has(s)
+  })
+}
+
+function startDocPoll() {
+  stopDocPoll()
+  docPollTimer = setInterval(async () => {
+    await loadDocuments()
+    if (!hasProcessingDocs()) {
+      stopDocPoll()
+    }
+  }, DOC_POLL_INTERVAL)
+}
+
+function stopDocPoll() {
+  if (docPollTimer) {
+    clearInterval(docPollTimer)
+    docPollTimer = null
+  }
+}
+
 async function loadDocuments() {
   docLoading.value = true
   try {
@@ -1154,6 +1183,9 @@ async function loadDocuments() {
     docPagination.total = res.data?.total || 0
   } finally {
     docLoading.value = false
+    if (docPollTimer && !hasProcessingDocs()) {
+      stopDocPoll()
+    }
   }
 }
 
@@ -1161,7 +1193,7 @@ async function handleUpload(file) {
   try {
     await uploadDocument(knowledgeId, file)
     message.success('上传成功')
-    setTimeout(loadDocuments, 1500)
+    setTimeout(startDocPoll, 1500)
   } catch (e) {
     // interceptor已处理错误提示
   }
@@ -1241,7 +1273,7 @@ async function handleBatchUpload() {
     message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
     uploadFiles.value = []
-    setTimeout(loadDocuments, 1500)
+    setTimeout(startDocPoll, 1500)
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -1365,7 +1397,7 @@ async function handleConfirmUrls() {
     uploadVisible.value = false
     urlList.value = []
     urlInput.value = ''
-    setTimeout(loadDocuments, 1500)
+    setTimeout(startDocPoll, 1500)
   }
   if (errors.length > 0) {
     message.error(errors[0])
@@ -1435,7 +1467,7 @@ async function handleIngest() {
     await ingestDocument(ingestDoc.value.id, data)
     message.success('入库任务已提交，可在「任务中心」查看进度')
     ingestVisible.value = false
-    setTimeout(loadDocuments, 1500)
+    setTimeout(startDocPoll, 1500)
   } catch (e) {
     // interceptor已处理错误提示
   } finally {
@@ -2014,6 +2046,7 @@ onUnmounted(() => {
     clearInterval(questionRotateTimer)
     questionRotateTimer = null
   }
+  stopDocPoll()
 })
 </script>
 
