@@ -39,4 +39,10 @@ public @interface SystemTool {
      * false: 普通内置工具（builtin 包），isSystem=false，用户可选择绑定</p>
      */
     boolean autoInject() default false;
+
+    /**
+     * 工具标签（用于分类筛选）
+     * <p>如 {"知识库", "交互", "计算", "搜索", "图片", "数据库"}</p>
+     */
+    String[] tags() default {};
 }

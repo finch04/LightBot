@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component("calculatorTool")
-@SystemTool(displayName = "数学计算器", description = "执行基本数学运算，包括加减乘除")
+@SystemTool(displayName = "数学计算器", description = "执行基本数学运算，包括加减乘除", tags = {"计算"})
 public class CalculatorTool {
 
     @Tool(name = "calculator",

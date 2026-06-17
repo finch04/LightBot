@@ -147,7 +147,7 @@
               v-model:value="inst.userInput"
               :rows="2"
               :auto-size="{ minRows: 2, maxRows: 6 }"
-              :placeholder="inst.variables.length > 1 ? '多变量请输入JSON格式，如: {\"var1\":\"值1\"}' : inst.variables.length === 1 ? '输入 <' + inst.variables[0].key + '> 的值' : '输入内容'"
+              :placeholder="getPlaceholder(inst)"
               @keydown.enter.ctrl="handleRun(inst)"
             />
             <div class="debug-input-actions">
@@ -360,6 +360,12 @@ async function loadConfigFieldsForInstance(inst, providerId) {
       }
     }
   } catch { inst.configFields = [] }
+}
+
+function getPlaceholder(inst) {
+  if (inst.variables.length > 1) return '多变量请输入JSON格式，如: {"var1":"值1"}'
+  if (inst.variables.length === 1) return `输入 <${inst.variables[0].key}> 的值`
+  return '输入内容'
 }
 
 function onContentChange(inst) {

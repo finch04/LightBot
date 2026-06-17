@@ -145,7 +145,21 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     @Override
-    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, Boolean isSystem) {
+    public Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, Boolean isSystem, String tag) {
+        // 标签过滤需要 JSONB @> 操作符，使用自定义 SQL
+        if (StringUtils.hasText(tag)) {
+            return baseMapper.selectPage(new Page<>(pageNum, pageSize),
+                    new LambdaQueryWrapper<Tool>()
+                            .orderByDesc(Tool::getCreateTime)
+                            .and(StringUtils.hasText(keyword), w -> w
+                                    .like(Tool::getName, keyword)
+                                    .or()
+                                    .like(Tool::getDisplayName, keyword))
+                            .eq(StringUtils.hasText(toolType), Tool::getToolType, toolType)
+                            .eq(isSystem != null, Tool::getIsSystem, isSystem)
+                            .apply("tags @> '[\"{0}\"]'", tag));
+        }
+
         LambdaQueryWrapper<Tool> wrapper = new LambdaQueryWrapper<Tool>()
                 .orderByDesc(Tool::getCreateTime);
 

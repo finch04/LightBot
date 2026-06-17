@@ -22,6 +22,14 @@
         >
           <a-select-option v-for="t in toolTypeList" :key="t.value" :value="t.value">{{ t.label }}</a-select-option>
         </a-select>
+        <a-select
+          v-model:value="tagFilter"
+          placeholder="标签筛选"
+          allow-clear
+          style="width: 120px"
+        >
+          <a-select-option v-for="t in allTags" :key="t" :value="t">{{ t }}</a-select-option>
+        </a-select>
         <a-switch v-model:checked="showSystemTools" size="small">
           <template #checkedChildren>系统</template>
           <template #unCheckedChildren>普通</template>
@@ -63,6 +71,7 @@
         <div class="card-detail">
           <div class="card-tags">
             <span v-if="t.name" class="tag tag-identifier">{{ t.name }}</span>
+            <span v-for="tag in parseTags(t.tags)" :key="tag" class="tag tag-label">{{ tag }}</span>
             <span v-if="t.endpointUrl" class="tag tag-endpoint">{{ truncateText(t.endpointUrl, 30) }}</span>
           </div>
           <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
@@ -278,6 +287,8 @@ const searchText = ref('')
 const toolTypeFilter = ref(undefined)
 const toolTypeList = ref([])
 const showSystemTools = ref(false)
+const tagFilter = ref(undefined)
+const allTags = ref([])
 const systemToolHelpVisible = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -345,13 +356,31 @@ async function loadData() {
     const params = { pageNum: 1, pageSize: 50 }
     if (searchText.value) params.keyword = searchText.value
     if (toolTypeFilter.value) params.toolType = toolTypeFilter.value
+    if (tagFilter.value) params.tag = tagFilter.value
     params.isSystem = showSystemTools.value
     const res = await getTools(params)
     list.value = res.data.records || []
+    // 收集所有标签（用于筛选下拉）
+    const tagSet = new Set()
+    list.value.forEach(t => {
+      const tags = parseTags(t.tags)
+      tags.forEach(tag => tagSet.add(tag))
+    })
+    allTags.value = Array.from(tagSet).sort()
   } catch (e) {
     // interceptor handles error
   } finally {
     loading.value = false
+  }
+}
+
+function parseTags(tags) {
+  if (!tags) return []
+  if (Array.isArray(tags)) return tags
+  try {
+    return JSON.parse(tags)
+  } catch {
+    return []
   }
 }
 
@@ -367,6 +396,7 @@ async function loadToolTypes() {
 watch(searchText, () => loadData())
 watch(toolTypeFilter, () => loadData())
 watch(showSystemTools, () => loadData())
+watch(tagFilter, () => loadData())
 
 function openDialog(row) {
   if (row) {
@@ -477,6 +507,7 @@ function search(text, toolType) {
 function refresh() {
   searchText.value = ''
   toolTypeFilter.value = undefined
+  tagFilter.value = undefined
   loadData()
 }
 
@@ -652,6 +683,11 @@ defineExpose({ openDialog, search, refresh })
   color: #059669;
   border: 1px solid #d1fae5;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.tag-label {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
 }
 .tag-endpoint {
   background: #f5f3ff;

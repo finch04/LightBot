@@ -73,6 +73,8 @@ public class BuiltinToolRegistrar {
                                 .eq(Tool::getName, name)
                                 .last("LIMIT 1"));
 
+                String tagsJson = resolveTagsJson(clazz, method);
+
                 if (existing == null) {
                     Tool tool = new Tool();
                     tool.setName(name);
@@ -80,6 +82,7 @@ public class BuiltinToolRegistrar {
                     tool.setDescription(description);
                     tool.setToolType(ToolType.BUILTIN);
                     tool.setInputSchema(inputSchema);
+                    tool.setTags(tagsJson);
                     tool.setIsSystem(false);
                     tool.setStatus(CommonStatus.ACTIVE);
                     toolService.save(tool);
@@ -94,6 +97,10 @@ public class BuiltinToolRegistrar {
                     }
                     if (!inputSchema.equals(existing.getInputSchema())) {
                         existing.setInputSchema(inputSchema);
+                        changed = true;
+                    }
+                    if (!tagsJson.equals(existing.getTags() != null ? existing.getTags() : "[]")) {
+                        existing.setTags(tagsJson);
                         changed = true;
                     }
                     if (changed) {
@@ -131,6 +138,26 @@ public class BuiltinToolRegistrar {
             return classTool.displayName();
         }
         return fallback;
+    }
+
+    /**
+     * 从 @SystemTool 注解提取 tags，方法级别优先，其次类级别，合并去重
+     */
+    private String resolveTagsJson(Class<?> clazz, Method method) {
+        try {
+            java.util.LinkedHashSet<String> tags = new java.util.LinkedHashSet<>();
+            SystemTool classTool = clazz.getAnnotation(SystemTool.class);
+            if (classTool != null) {
+                java.util.Collections.addAll(tags, classTool.tags());
+            }
+            SystemTool methodTool = method.getAnnotation(SystemTool.class);
+            if (methodTool != null) {
+                java.util.Collections.addAll(tags, methodTool.tags());
+            }
+            return OBJECT_MAPPER.writeValueAsString(tags);
+        } catch (Exception e) {
+            return "[]";
+        }
     }
 
     private List<Object> findBuiltinToolBeans() {

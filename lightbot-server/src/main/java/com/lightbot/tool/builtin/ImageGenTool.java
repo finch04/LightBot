@@ -30,7 +30,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component("imageGenTool")
-@SystemTool(displayName = "AI图片生成", description = "根据文字描述生成图片")
+@SystemTool(displayName = "AI图片生成", description = "根据文字描述生成图片", tags = {"图片"})
 @RequiredArgsConstructor
 public class ImageGenTool {
 

@@ -78,6 +78,10 @@ public class Tool {
     @Schema(description = "认证配置")
     private String authConfig;
 
+    @TableField(value = "tags", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "工具标签列表")
+    private String tags;
+
     @TableField("status")
     @Schema(description = "状态")
     private CommonStatus status;

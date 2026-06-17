@@ -25,7 +25,7 @@ public interface ToolService extends IService<Tool> {
 
     Page<Tool> listTools(int pageNum, int pageSize, String toolType);
 
-    Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, Boolean isSystem);
+    Page<Tool> listToolsWithFilter(int pageNum, int pageSize, String keyword, String toolType, Boolean isSystem, String tag);
 
     void deleteById(Long id);
 

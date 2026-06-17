@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Slf4j
 @Component("pgSqlTool")
-@SystemTool(displayName = "数据库查询工具集", description = "PostgreSQL 数据库只读查询工具")
+@SystemTool(displayName = "数据库查询工具集", description = "PostgreSQL 数据库只读查询工具", tags = {"数据库"})
 @RequiredArgsConstructor
 public class PgSqlTool {
 

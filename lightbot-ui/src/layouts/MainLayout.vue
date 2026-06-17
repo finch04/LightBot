@@ -134,6 +134,7 @@
               <a-menu-item key="model-providers">模型管理</a-menu-item>
               <a-menu-item key="logs">日志</a-menu-item>
               <a-menu-divider />
+              <a-menu-item key="about">关于</a-menu-item>
               <a-menu-item key="logout">退出登录</a-menu-item>
             </a-menu>
           </template>
@@ -352,6 +353,8 @@ function handleCommand({ key }) {
     router.push('/model-providers')
   } else if (key === 'logs') {
     router.push('/logs')
+  } else if (key === 'about') {
+    router.push('/about')
   }
 }
 

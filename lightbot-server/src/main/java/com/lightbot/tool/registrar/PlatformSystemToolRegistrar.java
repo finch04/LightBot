@@ -108,6 +108,7 @@ public class PlatformSystemToolRegistrar implements ApplicationRunner {
             tool.setInputSchema(generateInputSchema(method));
             tool.setOutputSchema("{}");
             tool.setConfig("{\"exampleParams\": " + generateExampleParams(method) + "}");
+            tool.setTags(resolveTagsJson(classAnnotation, methodSystemTool));
             tool.setIsSystem(autoInject);
 
             out.add(tool);
@@ -198,6 +199,24 @@ public class PlatformSystemToolRegistrar implements ApplicationRunner {
             log.warn("[PlatformSystemToolRegistrar] 生成示例参数失败: method={}, error={}",
                     method.getName(), e.getMessage());
             return "{}";
+        }
+    }
+
+    /**
+     * 从 @SystemTool 注解提取 tags，方法级别优先，其次类级别，合并去重
+     */
+    private String resolveTagsJson(SystemTool classAnnotation, SystemTool methodAnnotation) {
+        try {
+            java.util.LinkedHashSet<String> tags = new java.util.LinkedHashSet<>();
+            if (classAnnotation != null) {
+                java.util.Collections.addAll(tags, classAnnotation.tags());
+            }
+            if (methodAnnotation != null) {
+                java.util.Collections.addAll(tags, methodAnnotation.tags());
+            }
+            return objectMapper.writeValueAsString(tags);
+        } catch (Exception e) {
+            return "[]";
         }
     }
 }

@@ -37,7 +37,7 @@ import java.util.concurrent.Executors;
  */
 @Slf4j
 @Component("queryKnowledgeTool")
-@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", autoInject = true)
+@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", autoInject = true, tags = {"知识库"})
 @RequiredArgsConstructor
 public class QueryKnowledgeTool {
 

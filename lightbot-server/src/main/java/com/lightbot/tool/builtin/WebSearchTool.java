@@ -28,7 +28,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component("webSearchTool")
-@SystemTool(displayName = "联网搜索", description = "联网搜索互联网获取最新信息")
+@SystemTool(displayName = "联网搜索", description = "联网搜索互联网获取最新信息", tags = {"搜索"})
 public class WebSearchTool {
 
     @Value("${lightbot.tavily.api-key:}")
