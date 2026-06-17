@@ -90,6 +90,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         tool.setEndpointUrl(request.getEndpointUrl());
         tool.setAuthType(request.getAuthType());
         tool.setAuthConfig(request.getAuthConfig());
+        tool.setTags(request.getTags());
         tool.setStatus(CommonStatus.ACTIVE);
         save(tool);
         return tool;
@@ -124,6 +125,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         tool.setEndpointUrl(request.getEndpointUrl());
         tool.setAuthType(request.getAuthType());
         tool.setAuthConfig(request.getAuthConfig());
+        tool.setTags(request.getTags());
         updateById(tool);
         return tool;
     }

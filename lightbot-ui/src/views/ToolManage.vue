@@ -61,10 +61,9 @@
             <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
           </div>
           <div class="card-actions">
-            <a-tooltip title="测试工具">
-              <button class="btn-icon" @click="openTestDialog(t)"><PlayCircleOutlined /></button>
+            <a-tooltip title="查看详情">
+              <button class="btn-icon" @click="openDetail(t)"><EyeOutlined /></button>
             </a-tooltip>
-            <button v-if="!t.isSystem && (t.toolType?.code || t.toolType) !== 'builtin'" class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
             <button v-if="!t.isSystem && (t.toolType?.code || t.toolType) !== 'builtin'" class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
           </div>
         </div>
@@ -96,6 +95,17 @@
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="2" placeholder="工具用途说明，供 Agent 理解" :maxlength="200" show-count />
+        </a-form-item>
+        <a-form-item label="标签">
+          <a-select
+            v-model:value="form.tags"
+            mode="tags"
+            :max-tag-count="3"
+            placeholder="输入标签后回车（最多3个）"
+            :token-separators="[',']"
+            :options="tagSuggestions.map(t => ({ value: t }))"
+          />
+          <div class="form-hint">标签用于分类筛选，最多 3 个</div>
         </a-form-item>
         <a-form-item label="工具类型" required>
           <a-select v-model:value="form.toolType" style="width: 100%" :disabled="form.id && form.toolType === 'builtin'">
@@ -204,6 +214,92 @@
       </div>
     </a-modal>
 
+    <!-- 工具详情弹窗 -->
+    <a-modal
+      v-model:open="detailVisible"
+      :title="detailTool?.displayName || detailTool?.name || '工具详情'"
+      :width="640"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="detail-section-container" v-if="detailTool">
+        <!-- 基本信息 -->
+        <div class="detail-section">
+          <div class="detail-section-header"><FileTextOutlined /> 基本信息</div>
+          <div class="detail-info-grid">
+            <div class="detail-info-item">
+              <span class="detail-info-label">工具标识</span>
+              <code class="detail-info-value detail-info-code">{{ detailTool.name }}</code>
+            </div>
+            <div class="detail-info-item">
+              <span class="detail-info-label">显示名称</span>
+              <span class="detail-info-value">{{ detailTool.displayName || '-' }}</span>
+            </div>
+            <div class="detail-info-item">
+              <span class="detail-info-label">工具类型</span>
+              <span class="detail-info-value">
+                <span class="tag" :style="{ background: typeColors[detailTool.toolType?.code || detailTool.toolType] + '15', color: typeColors[detailTool.toolType?.code || detailTool.toolType] }">
+                  {{ toolTypeLabels[detailTool.toolType?.code || detailTool.toolType] || detailTool.toolType }}
+                </span>
+              </span>
+            </div>
+            <div class="detail-info-item" v-if="detailTool.endpointUrl">
+              <span class="detail-info-label">端点地址</span>
+              <span class="detail-info-value">{{ detailTool.endpointUrl }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 描述 -->
+        <div class="detail-section" v-if="detailTool.description">
+          <div class="detail-section-header"><FileTextOutlined /> 描述</div>
+          <div class="detail-desc">{{ detailTool.description }}</div>
+        </div>
+
+        <!-- 标签 -->
+        <div class="detail-section">
+          <div class="detail-section-header"><TagsOutlined /> 标签</div>
+          <div class="detail-tags">
+            <a-tag v-for="tag in parseTags(detailTool.tags)" :key="tag" color="blue">{{ tag }}</a-tag>
+            <span v-if="parseTags(detailTool.tags).length === 0" class="detail-empty">暂无标签</span>
+          </div>
+        </div>
+
+        <!-- 参数说明 -->
+        <div class="detail-section" v-if="detailTool.inputSchema && detailTool.inputSchema !== '{}'">
+          <div class="detail-section-header"><UnorderedListOutlined /> 参数说明</div>
+          <table class="detail-params-table">
+            <thead>
+              <tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in parseToolParams(detailTool.inputSchema)" :key="p.name">
+                <td><code>{{ p.name }}</code></td>
+                <td>{{ p.type }}</td>
+                <td><span v-if="p.required" class="param-required">是</span><span v-else class="param-optional">否</span></td>
+                <td>{{ p.desc }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="parseToolParams(detailTool.inputSchema).length === 0" class="detail-empty">无可解析的参数</div>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <div class="dialog-footer-left">
+          <button v-if="!detailTool?.isSystem && (detailTool?.toolType?.code || detailTool?.toolType) !== 'builtin'" class="btn-cancel" @click="detailVisible = false; openDialog(detailTool)">
+            <EditOutlined /> 编辑
+          </button>
+        </div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="detailVisible = false">关闭</button>
+          <button class="btn-primary-sm" @click="detailVisible = false; openTestDialog(detailTool)">
+            <PlayCircleOutlined /> 测试
+          </button>
+        </div>
+      </div>
+    </a-modal>
+
     <!-- 系统工具帮助弹窗 -->
     <a-modal
       v-model:open="systemToolHelpVisible"
@@ -267,7 +363,7 @@ public String queryKnowledge(
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, QuestionCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -289,6 +385,7 @@ const toolTypeList = ref([])
 const showSystemTools = ref(false)
 const tagFilter = ref(undefined)
 const allTags = ref([])
+const tagSuggestions = ref([])
 const systemToolHelpVisible = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -296,6 +393,7 @@ const form = reactive({
   id: null, name: '', displayName: '', description: '',
   toolType: 'custom', endpointUrl: '', authType: 'none',
   inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
+  tags: [],
 })
 
 const testDialogVisible = ref(false)
@@ -308,6 +406,8 @@ const testResult = ref(null)
 const testLoading = ref(false)
 const testArgsRef = ref(null)
 const showAdvanced = ref(false)
+const detailVisible = ref(false)
+const detailTool = ref(null)
 
 /**
  * 从 JSON Schema 中解析工具参数列表
@@ -397,6 +497,7 @@ watch(searchText, () => loadData())
 watch(toolTypeFilter, () => loadData())
 watch(showSystemTools, () => loadData())
 watch(tagFilter, () => loadData())
+watch(allTags, (v) => { tagSuggestions.value = v })
 
 function openDialog(row) {
   if (row) {
@@ -404,12 +505,14 @@ function openDialog(row) {
       ...row,
       toolType: row.toolType?.code || row.toolType || 'custom',
       authType: row.authType?.code || row.authType || 'none',
+      tags: parseTags(row.tags),
     })
   } else {
     Object.assign(form, {
       id: null, name: '', displayName: '', description: '',
       toolType: 'custom', endpointUrl: '', authType: 'none',
       inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
+      tags: [],
     })
   }
   dialogVisible.value = true
@@ -419,7 +522,7 @@ async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入工具标识')
   submitting.value = true
   try {
-    const data = { ...form }
+    const data = { ...form, tags: JSON.stringify(form.tags || []) }
     if (form.id) {
       await updateTool(data)
       message.success('更新成功')
@@ -447,6 +550,11 @@ function handleDelete(id) {
       loadData()
     },
   })
+}
+
+function openDetail(tool) {
+  detailTool.value = tool
+  detailVisible.value = true
 }
 
 function openTestDialog(tool) {
@@ -1010,5 +1118,99 @@ defineExpose({ openDialog, search, refresh })
   color: #52525b;
   line-height: 1.8;
   padding-left: 20px;
+}
+
+/* 工具详情弹窗样式 */
+.detail-section-container {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.detail-section {
+  margin-bottom: 20px;
+}
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.detail-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+}
+.detail-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail-info-label {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.detail-info-value {
+  font-size: 13px;
+  color: #171717;
+}
+.detail-info-code {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #059669;
+}
+.detail-desc {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.detail-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.detail-empty {
+  font-size: 13px;
+  color: #a1a1aa;
+  font-style: italic;
+}
+.detail-params-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.detail-params-table th {
+  text-align: left;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  color: #52525b;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e5e5;
+}
+.detail-params-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #171717;
+}
+.detail-params-table code {
+  background: #f5f5f5;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #0070f3;
+}
+.dialog-footer-left {
+  display: flex;
+  gap: 8px;
 }
 </style>

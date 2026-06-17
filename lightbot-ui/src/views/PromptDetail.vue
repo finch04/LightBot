@@ -13,14 +13,8 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn-outline-sm" @click="openTemplateImport()">
-          <ImportOutlined /> 从模板导入
-        </button>
         <button class="btn-outline-sm" @click="router.push(`/prompts/${promptKey}/versions`)">
           <HistoryOutlined /> 版本记录
-        </button>
-        <button class="btn-outline-sm" @click="addInstance()" :disabled="instances.length >= 3" title="最多同时对比3个配置">
-          <CopyOutlined /> 复制配置
         </button>
         <button class="btn-primary-sm" @click="openVersionDialog()">
           <CloudUploadOutlined /> 发布版本
@@ -34,8 +28,14 @@
         <!-- 实例头部 -->
         <div class="instance-header">
           <span class="instance-title">配置 {{ idx + 1 }}</span>
-          <div class="instance-actions" v-if="instances.length > 1">
-            <button class="btn-icon-sm" title="删除配置" @click="removeInstance(inst.id)">
+          <div class="instance-actions">
+            <button class="btn-icon-sm" title="从模板导入" @click="openTemplateImportFor(inst)">
+              <ImportOutlined />
+            </button>
+            <button class="btn-icon-sm" title="复制此配置" @click="addInstance()" :disabled="instances.length >= 3">
+              <CopyOutlined />
+            </button>
+            <button class="btn-icon-sm" title="删除配置" @click="removeInstance(inst.id)" v-if="instances.length > 1">
               <DeleteOutlined />
             </button>
           </div>
@@ -136,7 +136,13 @@
               输入变量值后发送，调试 Prompt 效果
             </div>
             <div v-for="(msg, i) in inst.messages" :key="i" :class="['debug-msg', msg.role]">
-              <div class="msg-content">{{ msg.content }}</div>
+              <MarkdownPreview v-if="msg.role === 'assistant' && msg._md" :content="msg.content" :finalized="true" />
+              <div v-else class="msg-content">{{ msg.content }}</div>
+              <div class="msg-actions" v-if="msg.role === 'assistant' && !inst.streaming">
+                <button class="btn-text-xs" :class="{ active: msg._md }" @click="msg._md = !msg._md" title="Markdown 渲染">
+                  <FileMarkdownOutlined />
+                </button>
+              </div>
             </div>
             <div v-if="inst.streaming" class="debug-msg assistant">
               <div class="msg-content">{{ inst.streamContent }}<span class="cursor">|</span></div>
@@ -152,6 +158,14 @@
             />
             <div class="debug-input-actions">
               <span class="debug-hint">Ctrl+Enter 发送</span>
+              <button
+                class="btn-icon-sm"
+                :disabled="inst.messages.length === 0"
+                @click="copyConversation(inst)"
+                title="复制对话"
+              >
+                <CopyOutlined />
+              </button>
               <button
                 class="btn-primary-sm"
                 :disabled="inst.streaming || !inst.content.trim()"
@@ -212,6 +226,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, HistoryOutlined, ThunderboltOutlined,
   ImportOutlined, CloudUploadOutlined, CopyOutlined, DeleteOutlined,
+  FileMarkdownOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
@@ -220,6 +235,7 @@ import {
 import { getProviderConfigFields } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import TemplateImportModalLR from '../components/TemplateImportModalLR.vue'
+import MarkdownPreview from '../components/MarkdownPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -383,7 +399,10 @@ function buildModelConfigJson(inst) {
 }
 
 // 模板导入
-function openTemplateImport() {
+let importTargetInst = null
+
+function openTemplateImportFor(inst) {
+  importTargetInst = inst
   templateImportVisible.value = true
 }
 
@@ -391,7 +410,7 @@ async function handleTemplateImport(t) {
   if (!t) return
 
   try {
-    const inst = instances.value[0]
+    const inst = importTargetInst || instances.value[0]
     inst.content = t.template || ''
     onContentChange(inst)
     message.success('模板导入成功')
@@ -449,6 +468,12 @@ async function handlePublishVersion() {
   } finally {
     submitting.value = false
   }
+}
+
+// 复制对话内容
+function copyConversation(inst) {
+  const text = inst.messages.map(m => `[${m.role === 'user' ? '用户' : 'AI'}]\n${m.content}`).join('\n\n')
+  navigator.clipboard.writeText(text).then(() => message.success('已复制到剪贴板'))
 }
 
 // 调试运行
@@ -814,6 +839,20 @@ function scrollToBottom(inst) {
   align-self: flex-start;
   background: #eff6ff;
   color: #171717;
+}
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.debug-msg:hover .msg-actions {
+  opacity: 1;
+}
+.msg-actions .btn-text-xs.active {
+  color: #2563eb;
 }
 .cursor {
   animation: blink 1s step-end infinite;

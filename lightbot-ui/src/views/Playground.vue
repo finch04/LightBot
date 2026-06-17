@@ -183,8 +183,12 @@
             <div v-for="(msg, i) in inst.messages" :key="i" :class="['chat-msg', msg.role]">
               <div class="msg-avatar" v-if="msg.role === 'assistant'">AI</div>
               <div class="msg-body">
-                <div class="msg-content">{{ msg.content }}</div>
+                <MarkdownPreview v-if="msg.role === 'assistant' && msg._md" :content="msg.content" :finalized="true" />
+                <div v-else class="msg-content">{{ msg.content }}</div>
                 <div class="msg-actions" v-if="msg.role === 'assistant' && !inst.streaming">
+                  <button class="btn-text-xs" :class="{ active: msg._md }" @click="msg._md = !msg._md" title="Markdown 渲染">
+                    <FileMarkdownOutlined />
+                  </button>
                   <button class="btn-text-xs" @click="copyText(msg.content)" title="复制">
                     <CopyOutlined />
                   </button>
@@ -235,13 +239,14 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, CopyOutlined, DeleteOutlined, ClearOutlined, RobotOutlined, SendOutlined,
-  QuestionCircleOutlined, PlusOutlined,
+  QuestionCircleOutlined, PlusOutlined, FileMarkdownOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getPrompts, getPromptVersions, getPromptVersionDetail, runPromptStream } from '../api/prompt'
 import { getProviderConfigFields } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import CreatePromptModal from '../components/CreatePromptModal.vue'
+import MarkdownPreview from '../components/MarkdownPreview.vue'
 
 const router = useRouter()
 const promptList = ref([])
@@ -833,6 +838,9 @@ async function loadPromptsData() {
   margin-top: 4px;
   display: flex;
   gap: 4px;
+}
+.msg-actions .btn-text-xs.active {
+  color: #2563eb;
 }
 .cursor {
   animation: blink 1s step-end infinite;

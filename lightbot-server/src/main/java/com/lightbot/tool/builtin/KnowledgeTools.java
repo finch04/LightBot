@@ -35,6 +35,7 @@ public class KnowledgeTools {
     private final KnowledgeService knowledgeService;
     private final DocumentService documentService;
 
+    @SystemTool(displayName = "列出知识库")
     @Tool(name = "list_knowledge_bases",
           description = "列出当前智能体绑定的所有知识库。当用户询问有哪些知识库、知识库列表时调用此工具。")
     public String listKnowledgeBases(ToolContext context) {
@@ -71,6 +72,7 @@ public class KnowledgeTools {
         return sb.toString();
     }
 
+    @SystemTool(displayName = "获取知识库思维导图")
     @Tool(name = "get_mindmap",
           description = "获取指定知识库的思维导图。当用户想了解知识库的知识结构、目录概览时调用此工具。")
     public String getMindmap(
@@ -104,6 +106,7 @@ public class KnowledgeTools {
         return "知识库「" + kb.getName() + "」的思维导图：\n" + mindmap.toString();
     }
 
+    @SystemTool(displayName = "查看知识库文档原文")
     @Tool(name = "open_kb_document",
           description = "打开知识库中的指定文档，查看文档原文内容。当用户想查看某个文档的详细内容时调用此工具。")
     public String openKbDocument(

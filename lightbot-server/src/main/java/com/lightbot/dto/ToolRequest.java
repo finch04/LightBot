@@ -42,4 +42,7 @@ public class ToolRequest {
     private AuthType authType;
 
     private String authConfig;
+
+    /** 工具标签（JSON数组字符串） */
+    private String tags;
 }

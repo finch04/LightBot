@@ -2,7 +2,7 @@
   <div class="about-page">
     <!-- 花瓣特效 -->
     <div class="petals-container">
-      <div v-for="i in 20" :key="i" class="petal" :style="petalStyle(i)"></div>
+      <div v-for="i in 40" :key="i" class="petal" :style="petalStyle(i)"></div>
     </div>
 
     <div class="about-card">
@@ -47,8 +47,8 @@ import { GithubOutlined } from '@ant-design/icons-vue'
 function petalStyle(i) {
   const size = 10 + Math.random() * 14
   const left = Math.random() * 100
-  const delay = Math.random() * 12
-  const duration = 8 + Math.random() * 10
+  const delay = Math.random() * 6
+  const duration = 4 + Math.random() * 4
   const rotate = Math.random() * 360
   const hue = 330 + Math.random() * 40 // 粉色范围
   return {
@@ -77,7 +77,7 @@ function petalStyle(i) {
 
 /* 花瓣容器 */
 .petals-container {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   width: 100%;
