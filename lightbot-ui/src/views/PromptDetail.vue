@@ -156,13 +156,6 @@
               <div class="msg-content">{{ inst.streamContent }}<span class="cursor">|</span></div>
             </div>
           </div>
-          <div class="debug-footer" v-if="inst.messages.length > 0">
-            <a-tooltip title="复制">
-              <button class="btn-text-xs" @click="copyConversation(inst)">
-                <CopyOutlined /> 复制
-              </button>
-            </a-tooltip>
-          </div>
           <div class="debug-input">
             <a-textarea
               v-model:value="inst.userInput"
@@ -173,13 +166,20 @@
             />
             <div class="debug-input-actions">
               <span class="debug-hint">Ctrl+Enter 发送</span>
-              <button
-                class="btn-primary-sm"
-                :disabled="inst.streaming || !inst.content.trim()"
-                @click="handleRun(inst)"
-              >
-                <ThunderboltOutlined /> {{ inst.streaming ? '生成中...' : '运行' }}
-              </button>
+              <div class="debug-input-btns">
+                <a-tooltip title="复制输入内容">
+                  <button v-if="inst.userInput.trim()" class="btn-icon-sm" @click="copyInput(inst)">
+                    <CopyOutlined />
+                  </button>
+                </a-tooltip>
+                <button
+                  class="btn-primary-sm"
+                  :disabled="inst.streaming || !inst.content.trim()"
+                  @click="handleRun(inst)"
+                >
+                  <ThunderboltOutlined /> {{ inst.streaming ? '生成中...' : '运行' }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -477,10 +477,9 @@ async function handlePublishVersion() {
   }
 }
 
-// 复制对话内容
-function copyConversation(inst) {
-  const text = inst.messages.map(m => `[${m.role === 'user' ? '用户' : 'AI'}]\n${m.content}`).join('\n\n')
-  navigator.clipboard.writeText(text).then(() => message.success('已复制到剪贴板'))
+// 复制输入内容
+function copyInput(inst) {
+  navigator.clipboard.writeText(inst.userInput).then(() => message.success('已复制到剪贴板'))
 }
 
 // 调试运行
@@ -866,6 +865,30 @@ function scrollToBottom(inst) {
 .msg-actions .btn-text-xs.active {
   color: #2563eb;
 }
+.btn-text-xs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: #71717a;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-text-xs:hover {
+  background: #f4f4f5;
+  color: #171717;
+}
+.debug-footer .btn-text-xs {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.debug-footer .btn-text-xs:hover {
+  color: #171717;
+}
 .cursor {
   animation: blink 1s step-end infinite;
 }
@@ -881,6 +904,11 @@ function scrollToBottom(inst) {
   justify-content: space-between;
   align-items: center;
   margin-top: 8px;
+}
+.debug-input-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .debug-hint {
   font-size: 12px;

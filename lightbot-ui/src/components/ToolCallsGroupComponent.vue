@@ -61,11 +61,12 @@ const props = defineProps({
 
 const isExpanded = ref(props.defaultExpanded)
 const expandedResults = ref(new Set())
+const manualToggled = ref(new Set())
 
 function syncExpandedResults() {
-  const s = new Set()
+  const s = new Set(expandedResults.value)
   props.toolEvents.forEach((e, i) => {
-    if (e.type === 'tool_result' && e.result) {
+    if (e.type === 'tool_result' && e.result && !manualToggled.value.has(i)) {
       s.add(i)
     }
   })
@@ -100,6 +101,7 @@ function formatArgs(args) {
 }
 
 function toggleResult(index) {
+  manualToggled.value.add(index)
   const s = new Set(expandedResults.value)
   if (s.has(index)) s.delete(index)
   else s.add(index)

@@ -400,13 +400,11 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
             Long knowledgeId = doc.getKnowledgeId();
 
-            // 异步触发示例问题生成（提交任务，不阻塞当前入库任务）
+            // 同步触发示例问题生成
             try {
-                String questionPayload = String.format("{\"knowledgeId\":%d,\"documentId\":%d}", knowledgeId, documentId);
-                taskService.createTask(TaskType.EXAMPLE_QUESTION_GENERATE, "示例问题生成 - " + doc.getName(),
-                        doc.getUserId(), documentId, questionPayload);
+                knowledgeService.generateExampleQuestions(knowledgeId, documentId);
             } catch (Exception e) {
-                log.warn("[文档入库] 示例问题生成任务创建失败, documentId={}", documentId, e);
+                log.warn("[文档入库] 示例问题生成失败, documentId={}", documentId, e);
             }
 
             // 异步触发图谱抽取（知识库开启 graphEnabled 时自动执行）

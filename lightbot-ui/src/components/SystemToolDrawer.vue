@@ -31,17 +31,22 @@
         暂无知识库工具
       </div>
       <div v-for="t in list" :key="t.id" class="system-tool-item">
-        <div class="tool-icon-wrap">
-          <ToolOutlined />
+        <div class="tool-card-icon">
+          <span class="type-badge badge-knowledge">知识库</span>
+          {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
         </div>
-        <div class="tool-info" @click="openDetail(t)">
-          <div class="tool-name">{{ t.displayName || t.name }}</div>
-          <div class="tool-desc">{{ t.description || '暂无描述' }}</div>
+        <div class="tool-card-info" @click="openDetail(t)">
+          <div class="tool-card-name">{{ t.displayName || t.name }}</div>
+          <div class="tool-card-desc">{{ t.description || '暂无描述' }}</div>
         </div>
-        <a-tooltip title="测试工具" :getPopupContainer="getPopupContainer">
-          <button class="btn-test" @click="openTestDialog(t)"><PlayCircleOutlined /></button>
-        </a-tooltip>
-        <RightOutlined class="tool-arrow" @click="openDetail(t)" />
+        <div class="tool-card-actions">
+          <a-tooltip title="查看详情">
+            <button class="btn-icon" @click="openDetail(t)"><EyeOutlined /></button>
+          </a-tooltip>
+          <a-tooltip title="测试工具" :getPopupContainer="getPopupContainer">
+            <button class="btn-icon" @click="openTestDialog(t)"><PlayCircleOutlined /></button>
+          </a-tooltip>
+        </div>
       </div>
     </a-spin>
   </a-drawer>
@@ -263,7 +268,7 @@ public class PgSqlTool {
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { SettingOutlined, RightOutlined, ToolOutlined, QuestionCircleOutlined, PlayCircleOutlined } from '@ant-design/icons-vue'
+import { SettingOutlined, QuestionCircleOutlined, PlayCircleOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getTools, testTool as testToolApi, getToolExampleParams } from '../api/tool'
 
@@ -507,43 +512,71 @@ watch(drawerVisible, (visible) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 16px;
   background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
   transition: all 0.15s;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .system-tool-item:hover {
-  border-color: #0070f3;
-  background: #f0f7ff;
+  border-color: #7c3aed;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.08);
 }
-.tool-icon-wrap {
+.tool-card-icon {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #007cf0, #00dfd8);
+  background: linear-gradient(135deg, #10b981, #059669);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: 700;
   font-size: 16px;
+  flex-shrink: 0;
+  position: relative;
 }
-.tool-info {
+.type-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  z-index: 1;
+  color: #fff;
+}
+.badge-knowledge {
+  background: #7c3aed;
+}
+.tool-card-info {
   flex: 1;
+  min-width: 0;
   cursor: pointer;
 }
-.tool-name {
+.tool-card-name {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #171717;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tool-desc {
+.tool-card-desc {
   font-size: 12px;
-  color: #71717a;
+  color: #a1a1aa;
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.btn-test {
+.tool-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.btn-icon {
   width: 32px;
   height: 32px;
   border: none;
@@ -554,16 +587,9 @@ watch(drawerVisible, (visible) => {
   align-items: center;
   justify-content: center;
   color: #71717a;
-  transition: all 0.15s;
 }
-.btn-test:hover {
-  background: #e0f2fe;
-  color: #0070f3;
-}
-.tool-arrow {
-  color: #a1a1aa;
-  font-size: 12px;
-  cursor: pointer;
+.btn-icon:hover {
+  background: #f5f5f5;
 }
 .empty-tip {
   text-align: center;

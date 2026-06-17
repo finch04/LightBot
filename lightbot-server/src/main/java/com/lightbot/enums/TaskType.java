@@ -24,8 +24,7 @@ public enum TaskType {
     BENCHMARK_IMPORT("benchmark_import", "基准导入", "benchmarkImportExecutor"),
     RAG_EVALUATION("rag_evaluation", "RAG评估", "ragEvaluationExecutor"),
     GRAPH_EXTRACTION("graph_extraction", "图谱抽取", "graphExtractionExecutor"),
-    QA_PAIR_GENERATE("qa_pair_generate", "问答对生成", "qaPairGenerateExecutor"),
-    EXAMPLE_QUESTION_GENERATE("example_question_generate", "示例问题生成", "exampleQuestionGenerateExecutor");
+    QA_PAIR_GENERATE("qa_pair_generate", "问答对生成", "qaPairGenerateExecutor");
 
     @EnumValue
     private final String code;

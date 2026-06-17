@@ -37,7 +37,7 @@ public @interface SystemTool {
      * <p>"builtin": 通用内置工具，用户可选绑定
      * "knowledge": 知识库工具，Agent 绑定知识库时自动注入</p>
      */
-    String type() default "builtin";
+    String type() default "";
 
     /**
      * 工具标签（用于分类筛选）

@@ -995,6 +995,11 @@
           <div class="selected-knowledge">
             <div class="selected-header">
               <span class="selected-label">已绑定 {{ selectedKnowledge.length }}/{{ BIND_LIMITS.knowledge }} 个知识库</span>
+              <span v-if="selectedKnowledge.length > 0" class="kb-tool-hint">
+                <InfoCircleOutlined />
+                <span>绑定知识库后将自动导入知识库工具，</span>
+                <a @click.prevent="$refs.kbToolDrawerRef?.open()">点击查看知识库工具</a>
+              </span>
               <button v-if="!isVersionPreview && selectedKnowledge.length > 0" class="btn-clear" @click="clearSelectedKnowledge">
                 <DeleteOutlined /> 清空
               </button>
@@ -1002,11 +1007,6 @@
             <div class="selected-knowledge-tags">
               <div v-if="selectedKnowledge.length === 0" class="empty-tip">
                 暂未绑定知识库，请从下方列表选择
-              </div>
-              <div v-else class="kb-tool-hint">
-                <InfoCircleOutlined />
-                <span>绑定知识库后将自动导入知识库工具，</span>
-                <a @click.prevent="$refs.kbToolDrawerRef?.open()">点击查看知识库工具</a>
               </div>
               <div
                 v-for="k in selectedKnowledge"
@@ -4788,20 +4788,16 @@ onMounted(async () => {
 .kb-tool-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: #f5f3ff;
-  border: 1px solid #e9e5ff;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 12px;
+  color: #a1a1aa;
+  white-space: nowrap;
 }
 .kb-tool-hint a {
   color: #7c3aed;
   font-weight: 500;
   cursor: pointer;
-  white-space: nowrap;
 }
 .kb-tool-hint a:hover {
   text-decoration: underline;

@@ -503,12 +503,11 @@ function handleScroll() {
 
 function scrollToBottom() {
   if (!isNearBottom.value) return
-  const len = messages.value.length
-  if (len > 0) {
-    nextTick(() => {
-      virtualizer.value.scrollToIndex(len - 1, { align: 'end' })
-    })
-  }
+  const el = messagesRef.value
+  if (!el) return
+  nextTick(() => {
+    el.scrollTop = el.scrollHeight
+  })
 }
 
 /** 消息列表中是否已有流式中的助手消息（与占位加载条互斥） */
@@ -1172,6 +1171,7 @@ async function runChatStream({ message, attachments, regenerate }) {
           if (event.type === 'reasoning_content') {
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
             assistantMsg._reasoningDone = true
+            scrollToBottom()
             return
           }
           // 敏感词拦截事件：标记消息为拦截状态

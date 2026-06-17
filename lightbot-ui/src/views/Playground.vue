@@ -846,6 +846,23 @@ async function loadPromptsData() {
 .msg-actions .btn-text-xs.active {
   color: #2563eb;
 }
+.btn-text-xs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: #71717a;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-text-xs:hover {
+  background: #f4f4f5;
+  color: #171717;
+}
 .cursor {
   animation: blink 1s step-end infinite;
 }

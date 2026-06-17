@@ -76,24 +76,26 @@
           </div>
         </template>
         <template v-else-if="column.key === 'action'">
-          <a-button
-            v-if="record.status === 'pending' || record.status === 'running'"
-            type="link"
-            size="small"
-            danger
-            @click.stop="handleCancel(record)"
-          >
-            取消
-          </a-button>
-          <a-button
-            v-else
-            type="link"
-            size="small"
-            danger
-            @click.stop="handleDelete(record)"
-          >
-            删除
-          </a-button>
+          <a-tooltip v-if="record.status === 'pending' || record.status === 'running'" title="取消任务" :getPopupContainer="t => t.parentElement">
+            <a-button
+              type="link"
+              size="small"
+              danger
+              @click.stop="handleCancel(record)"
+            >
+              <StopOutlined />
+            </a-button>
+          </a-tooltip>
+          <a-tooltip v-else title="删除" :getPopupContainer="t => t.parentElement">
+            <a-button
+              type="link"
+              size="small"
+              danger
+              @click.stop="handleDelete(record)"
+            >
+              <DeleteOutlined />
+            </a-button>
+          </a-tooltip>
         </template>
         <template v-else-if="column.key === 'createTime'">
           {{ formatTime(record.createTime) }}
@@ -151,7 +153,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined, SearchOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTaskList, cancelTask, deleteTask, getTaskTypeCounts } from '../api/task'
 import { taskCounts } from '../stores/task'
@@ -180,8 +182,8 @@ const columns = [
   { title: '类型', dataIndex: 'type', key: 'type', width: 110 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 160 },
-  { title: '操作', key: 'action', width: 100 },
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
+  { title: '操作', key: 'action', width: 80 },
 ]
 
 const typeColor = {
@@ -391,6 +393,8 @@ onUnmounted(() => {
 }
 .type-filter-item.active {
   background: #f0f0f0;
+  outline: 2px solid #1677ff;
+  outline-offset: -1px;
 }
 .type-filter-item :deep(.ant-tag) {
   margin: 0;
