@@ -116,37 +116,30 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
     }
 
     /**
-     * 汇总统计
+     * 汇总统计（SQL 聚合，避免全量加载到内存）
      */
     @Override
     public Map<String, Object> getOverview(String traceSource) {
-        LambdaQueryWrapper<LlmTrace> chatOnly = chatTraceWrapper(traceSource);
+        // 1. SQL 聚合：total_count / total_tokens / avg_duration_ms / total_tool_calls
+        String source = StringUtils.hasText(traceSource) ? traceSource : null;
+        Map<String, Object> aggregate = baseMapper.aggregateOverview(source);
 
-        // 1. 总请求数（仅对话）
-        long totalCount = count(chatOnly);
+        long totalCount = ((Number) aggregate.getOrDefault("total_count", 0)).longValue();
 
-        // 2. 成功/失败数
-        long successCount = count(chatOnly.clone().eq(LlmTrace::getStatus, "completed"));
-        long failedCount = count(chatOnly.clone().eq(LlmTrace::getStatus, "failed"));
+        // 2. 成功/失败数（有索引，count 很快）
+        LambdaQueryWrapper<LlmTrace> base = chatTraceWrapper(traceSource);
+        long successCount = count(base.clone().eq(LlmTrace::getStatus, "completed"));
+        long failedCount = count(base.clone().eq(LlmTrace::getStatus, "failed"));
 
-        // 3. 总Token数、平均耗时 — 通过SQL聚合
-        Map<String, Object> aggregate = list(chatOnly.clone()
-                .select(LlmTrace::getTotalTokens, LlmTrace::getTotalDurationMs, LlmTrace::getToolCallCount))
-                .stream()
-                .reduce(new HashMap<>(), (acc, trace) -> {
-                    acc.merge("totalTokens", trace.getTotalTokens() != null ? trace.getTotalTokens() : 0, (a, b) -> (int) a + (int) b);
-                    acc.merge("totalDurationMs", trace.getTotalDurationMs() != null ? trace.getTotalDurationMs() : 0L, (a, b) -> (long) a + (long) b);
-                    acc.merge("totalToolCalls", trace.getToolCallCount() != null ? trace.getToolCallCount() : 0, (a, b) -> (int) a + (int) b);
-                    return acc;
-                }, (a, b) -> a);
-
+        // 3. 组装返回
         Map<String, Object> result = new HashMap<>();
         result.put("totalCount", totalCount);
         result.put("successCount", successCount);
         result.put("failedCount", failedCount);
-        result.put("totalTokens", aggregate.getOrDefault("totalTokens", 0));
-        result.put("avgDurationMs", totalCount > 0 ? (long) aggregate.getOrDefault("totalDurationMs", 0L) / totalCount : 0);
-        result.put("totalToolCalls", aggregate.getOrDefault("totalToolCalls", 0));
+        result.put("totalTokens", aggregate.getOrDefault("total_tokens", 0));
+        result.put("avgDurationMs", totalCount > 0
+                ? ((Number) aggregate.getOrDefault("avg_duration_ms", 0)).longValue() : 0);
+        result.put("totalToolCalls", aggregate.getOrDefault("total_tool_calls", 0));
         return result;
     }
 

@@ -20,10 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -49,6 +52,9 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     private static final String SEARCH_MODE_VECTOR = "vector";
     private static final String SEARCH_MODE_KEYWORD = "keyword";
     private static final String SEARCH_MODE_HYBRID = "hybrid";
+
+    /** Milvus 集合存在性缓存，避免每次检索前 RPC 调用 hasCollection */
+    private final ConcurrentHashMap<Long, Boolean> collectionExistsCache = new ConcurrentHashMap<>();
 
     public EmbeddingServiceImpl(EmbeddingMapper embeddingMapper, MilvusUtil milvusUtil,
                                 DocumentMapper documentMapper, ChunkService chunkService,
@@ -90,10 +96,11 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     public void batchSaveVectors(Long knowledgeId, List<Long> chunkIds, String modelName, List<float[]> vectors) {
         // Milvus 路由
         if (shouldRouteToMilvus(knowledgeId)) {
-            // 确保 Collection 存在（首次写入时自动创建）
-            if (!milvusUtil.hasCollection(knowledgeId) && !vectors.isEmpty()) {
+            // 确保 Collection 存在（首次写入时自动创建，使用缓存避免重复 RPC）
+            if (!hasCollectionCached(knowledgeId) && !vectors.isEmpty()) {
                 int dimension = vectors.get(0).length;
                 milvusUtil.createCollectionForKnowledge(knowledgeId, dimension);
+                collectionExistsCache.put(knowledgeId, true);
             }
             List<Chunk> chunks = chunkService.list(new LambdaQueryWrapper<Chunk>()
                     .in(Chunk::getId, chunkIds));
@@ -141,6 +148,7 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector, int topK, double threshold) {
         return searchSimilarSql(knowledgeId, queryVector, topK, threshold, null);
     }
@@ -155,6 +163,7 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
      * @param queryParams 检索配置参数（search_mode/vector_weight/bm25_weight/bm25_top_k/use_graph_retrieval 等）
      * @return 检索结果（chunk_id, content, document_id, document_name, score）
      */
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector,
                                                        int topK, double threshold,
                                                        Map<String, Object> queryParams) {
@@ -181,6 +190,8 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     private List<Map<String, Object>> searchPgvector(Long knowledgeId, float[] queryVector,
                                                       int topK, double threshold,
                                                       Map<String, Object> queryParams) {
+        // 设置 ef_search 提升召回率（SET LOCAL 仅对当前事务生效）
+        embeddingMapper.setHnswEfSearch();
         String searchMode = queryParams != null && queryParams.get("search_mode") instanceof String s
                 ? s : SEARCH_MODE_VECTOR;
 
@@ -208,6 +219,7 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         embeddingMapper.deleteByKnowledgeId(knowledgeId);
         if (shouldRouteToMilvus(knowledgeId)) {
             milvusUtil.dropCollection(knowledgeId);
+            collectionExistsCache.remove(knowledgeId);
         }
     }
 
@@ -366,13 +378,20 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     }
 
     /**
+     * 带缓存的 Collection 存在性检查（避免每次检索前 RPC 调用）
+     */
+    private boolean hasCollectionCached(Long knowledgeId) {
+        return collectionExistsCache.computeIfAbsent(knowledgeId, milvusUtil::hasCollection);
+    }
+
+    /**
      * Milvus 检索路由：根据 search_mode 分发到 vector/keyword/hybrid 检索
      */
     private List<Map<String, Object>> searchMilvus(Long knowledgeId, float[] queryVector,
                                                     int topK, double threshold,
                                                     Map<String, Object> queryParams) {
-        // Collection 不存在时直接返回空结果
-        if (!milvusUtil.hasCollection(knowledgeId)) {
+        // Collection 不存在时直接返回空结果（使用缓存避免每次 RPC）
+        if (!hasCollectionCached(knowledgeId)) {
             log.info("[Embedding] Milvus Collection 不存在, knowledgeId={}", knowledgeId);
             return List.of();
         }

@@ -7,8 +7,8 @@
 
 ## 目录
 
-1. [数据库索引优化](#1-数据库索引优化) `待实施`
-2. [向量检索索引调优](#2-向量检索索引调优) `待实施`
+1. [数据库索引优化](#1-数据库索引优化) `已完成`
+2. [向量检索索引调优](#2-向量检索索引调优) `已完成`
 3. [Redis 缓存体系建设](#3-redis-缓存体系建设) `待实施`
 4. [文件存储优化](#4-文件存储优化) `已完成`
 5. [SSE 重连机制](#5-sse-重连机制) `已完成`
@@ -114,6 +114,13 @@ public Map<String, Object> getOverview(String traceSource) {
 - 复合索引需要在生产环境创建，大表建索引会锁表。PostgreSQL 支持 `CREATE INDEX CONCURRENTLY` 不阻塞读写
 - Trace 概览改造需要兼容现有的前端展示逻辑（前端读取 `totalCount`、`totalTokens`、`avgDurationMs`、`totalToolCalls`）
 
+### 实施状态：已完成
+
+**完成内容：**
+- `sql/2026-06-17-002.sql`：新增 4 个复合索引（`idx_llm_trace_source_time`、`idx_llm_trace_agent_source`、`idx_tool_calls_created_at`、`idx_chat_session_user_agent`），使用 `CREATE INDEX CONCURRENTLY` 不阻塞读写
+- `LlmTraceMapper.java`：新增 `aggregateOverview()` 方法，SQL 层完成 COUNT/SUM/AVG 聚合
+- `LlmTraceServiceImpl.java`：`getOverview()` 改为 SQL 聚合，不再全量加载到内存；成功/失败数仍用 count 走索引
+
 ---
 
 ## 2. 向量检索索引调优
@@ -196,6 +203,14 @@ public void invalidateCollectionCache(String collectionName) {
 - 删除索引和重建索引需要在低峰期执行，期间向量检索不可用
 - `ef_search` 需要在事务内设置，需要确保 MyBatis 的事务管理正确传递
 - 召回率 vs 延迟的权衡：`ef_search=100` 大约增加 10-20ms 延迟，但召回率从 ~90% 提升到 ~98%
+
+### 实施状态：已完成
+
+**完成内容：**
+- `sql/2026-06-17-002.sql`：删除冗余的 `idx_embedding_vector`（cosine, ef_construction=64）和 `idx_embedding_vector_hnsw`（L2），重建为统一的 cosine HNSW 索引（ef_construction=200）
+- `EmbeddingMapper.java`：新增 `setHnswEfSearch()` 方法，执行 `SET LOCAL hnsw.ef_search = 100`
+- `EmbeddingServiceImpl.java`：`searchSimilarSql()` 添加 `@Transactional(readOnly = true)`，`searchPgvector()` 内调用 `setHnswEfSearch()` 提升召回率
+- `EmbeddingServiceImpl.java`：新增 `ConcurrentHashMap<Long, Boolean> collectionExistsCache`，`hasCollectionCached()` 避免每次 Milvus 检索前的 RPC 调用；集合创建/删除时自动失效缓存
 
 ---
 

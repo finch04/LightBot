@@ -19,6 +19,13 @@ import java.util.Map;
 public interface EmbeddingMapper extends BaseMapper<Embedding> {
 
     /**
+     * 设置 HNSW ef_search 参数（仅对当前事务生效）
+     * <p>提升召回率：ef_search=100 约增加 10-20ms 延迟，召回率从 ~90% 提升到 ~98%</p>
+     */
+    @Select("SET LOCAL hnsw.ef_search = 100")
+    void setHnswEfSearch();
+
+    /**
      * 存储向量（pgvector ::vector 类型转换需原生SQL）
      *
      * @param id        主键ID
