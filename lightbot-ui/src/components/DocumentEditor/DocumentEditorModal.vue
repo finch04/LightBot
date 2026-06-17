@@ -32,6 +32,11 @@
     <!-- 底部操作栏 -->
     <div v-if="editable" class="editor-footer">
       <div class="editor-footer-left">
+        <a-tooltip title="历史版本">
+          <button class="btn-icon-only" @click="openVersionDrawer">
+            <HistoryOutlined />
+          </button>
+        </a-tooltip>
         <a-tooltip v-if="isMarkdownFile" :title="previewMode ? '关闭预览' : '开启预览'">
           <button class="btn-icon-only" @click="previewMode = !previewMode" :class="{ active: previewMode }">
             <EyeOutlined v-if="!previewMode" />
@@ -78,13 +83,72 @@
       <p style="margin: 0;">保存后将自动重新处理文档（分块+向量化），确定保存？</p>
     </a-modal>
   </a-modal>
+
+  <!-- 版本历史抽屉 -->
+  <a-drawer
+    :open="showVersionDrawer"
+    title="历史版本"
+    :width="480"
+    @close="showVersionDrawer = false"
+  >
+    <div v-if="versionLoading" class="version-loading">
+      <LoadingOutlined spin /> 加载中...
+    </div>
+    <div v-else-if="versionList.length === 0" class="version-empty">
+      暂无历史版本
+    </div>
+    <div v-else class="version-list">
+      <div v-for="v in versionList" :key="v.id" class="version-item">
+        <div class="version-info">
+          <span class="version-tag">v{{ v.version }}</span>
+          <span class="version-hash">{{ v.contentHash?.substring(0, 8) }}</span>
+          <span class="version-time">{{ formatTime(v.createTime) }}</span>
+        </div>
+        <div class="version-actions">
+          <button class="btn-outline-sm" @click="handleViewVersion(v.id)">查看</button>
+          <button class="btn-outline-sm btn-rollback" @click="handleRollbackClick(v.id)">回滚</button>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- 版本内容查看弹窗 -->
+  <a-modal
+    v-model:open="showVersionContent"
+    title="版本内容"
+    :width="720"
+    centered
+    :footer="null"
+    :maskClosable="true"
+  >
+    <div v-if="versionContentLoading" class="version-loading">
+      <LoadingOutlined spin /> 加载中...
+    </div>
+    <pre v-else class="version-content-pre">{{ versionContentText }}</pre>
+  </a-modal>
+
+  <!-- 回滚确认弹窗 -->
+  <a-modal
+    v-model:open="showRollbackConfirm"
+    title="确认回滚"
+    :width="420"
+    centered
+    :maskClosable="false"
+    :closable="false"
+    @ok="handleRollback"
+    ok-text="确认回滚"
+    cancel-text="取消"
+    :confirm-loading="rollbacking"
+  >
+    <p style="margin: 0;">回滚后当前内容将被覆盖，并自动重新处理文档，确定回滚？</p>
+  </a-modal>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { LoadingOutlined, FileTextOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons-vue'
-import { getEditableContent, saveDocumentContent } from '../../api/documentEdit'
+import { LoadingOutlined, FileTextOutlined, EyeOutlined, EyeInvisibleOutlined, HistoryOutlined } from '@ant-design/icons-vue'
+import { getEditableContent, saveDocumentContent, listVersions, getVersionContent, rollbackVersion } from '../../api/documentEdit'
 import MarkdownEditor from './MarkdownEditor.vue'
 
 const props = defineProps({
@@ -108,6 +172,17 @@ const content = ref('')
 const fileHash = ref('')
 const previewMode = ref(false)
 const showSaveConfirm = ref(false)
+
+// 版本历史
+const showVersionDrawer = ref(false)
+const versionList = ref([])
+const versionLoading = ref(false)
+const showVersionContent = ref(false)
+const versionContentText = ref('')
+const versionContentLoading = ref(false)
+const rollbackTarget = ref(null)
+const showRollbackConfirm = ref(false)
+const rollbacking = ref(false)
 
 const hasChanges = computed(() => content.value !== originalContent.value)
 
@@ -190,6 +265,63 @@ async function handleSave() {
 
 let rebuildTimer = null
 
+async function openVersionDrawer() {
+  showVersionDrawer.value = true
+  versionLoading.value = true
+  try {
+    const res = await listVersions(props.documentId)
+    versionList.value = res.data || []
+  } catch {
+    message.error('加载版本列表失败')
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+async function handleViewVersion(versionId) {
+  versionContentLoading.value = true
+  showVersionContent.value = true
+  try {
+    const res = await getVersionContent(props.documentId, versionId)
+    versionContentText.value = res.data || ''
+  } catch {
+    message.error('加载版本内容失败')
+    showVersionContent.value = false
+  } finally {
+    versionContentLoading.value = false
+  }
+}
+
+function handleRollbackClick(versionId) {
+  rollbackTarget.value = versionId
+  showRollbackConfirm.value = true
+}
+
+async function handleRollback() {
+  if (!rollbackTarget.value) return
+  rollbacking.value = true
+  try {
+    await rollbackVersion(props.documentId, rollbackTarget.value)
+    message.success('回滚成功，正在重新处理文档...')
+    showRollbackConfirm.value = false
+    showVersionDrawer.value = false
+    // 重新加载编辑器内容
+    await loadContent()
+    emit('saved')
+  } catch (e) {
+    message.error(e.response?.data?.message || '回滚失败')
+  } finally {
+    rollbacking.value = false
+  }
+}
+
+function formatTime(time) {
+  if (!time) return '-'
+  const d = new Date(time)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function handleClose() {
   emit('update:open', false)
 }
@@ -207,6 +339,12 @@ function resetState() {
   fileHash.value = ''
   previewMode.value = false
   showSaveConfirm.value = false
+  showVersionDrawer.value = false
+  versionList.value = []
+  showVersionContent.value = false
+  versionContentText.value = ''
+  showRollbackConfirm.value = false
+  rollbackTarget.value = null
   if (rebuildTimer) {
     clearInterval(rebuildTimer)
     rebuildTimer = null
@@ -332,5 +470,77 @@ function resetState() {
 .btn-primary-sm:disabled {
   background: #d4d4d8;
   cursor: not-allowed;
+}
+.version-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  color: #a1a1aa;
+  font-size: 14px;
+  gap: 8px;
+}
+.version-empty {
+  text-align: center;
+  padding: 40px 0;
+  color: #a1a1aa;
+  font-size: 14px;
+}
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+}
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.version-tag {
+  font-weight: 600;
+  font-size: 13px;
+  color: #171717;
+}
+.version-hash {
+  font-size: 12px;
+  color: #a1a1aa;
+  font-family: monospace;
+}
+.version-time {
+  font-size: 12px;
+  color: #71717a;
+}
+.version-actions {
+  display: flex;
+  gap: 6px;
+}
+.btn-rollback {
+  color: #ef4444;
+  border-color: #fca5a5;
+}
+.btn-rollback:hover {
+  color: #dc2626;
+  border-color: #f87171;
+}
+.version-content-pre {
+  max-height: 50vh;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #fafafa;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #ebebeb;
+  margin: 0;
 }
 </style>
