@@ -4,13 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.EvalDatasetExampleVO;
 import com.lightbot.entity.EvalDataset;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.EvalDatasetMapper;
+import com.lightbot.service.EvalDatasetItemService;
 import com.lightbot.service.EvalDatasetService;
+import com.lightbot.util.EvalDatasetExampleTemplates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * 评测数据集服务实现类
@@ -24,8 +30,16 @@ import org.springframework.stereotype.Service;
 public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalDataset>
         implements EvalDatasetService {
 
+    private final EvalDatasetItemService datasetItemService;
+
     @Override
     public EvalDataset create(String name, String description, String columnsConfig, Long userId) {
+        // 1. 校验名称唯一性
+        long count = count(new LambdaQueryWrapper<EvalDataset>().eq(EvalDataset::getName, name));
+        if (count > 0) {
+            throw new BizException(ErrorCode.EVAL_DATASET_NAME_EXISTS);
+        }
+
         EvalDataset dataset = new EvalDataset();
         dataset.setName(name);
         dataset.setDescription(description);
@@ -41,7 +55,11 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
         if (dataset == null) {
             throw new BizException(ErrorCode.EVAL_DATASET_NOT_FOUND);
         }
-        if (name != null) {
+        if (name != null && !name.equals(dataset.getName())) {
+            long count = count(new LambdaQueryWrapper<EvalDataset>().eq(EvalDataset::getName, name));
+            if (count > 0) {
+                throw new BizException(ErrorCode.EVAL_DATASET_NAME_EXISTS);
+            }
             dataset.setName(name);
         }
         if (description != null) {
@@ -69,5 +87,35 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
                 .like(keyword != null && !keyword.isBlank(), EvalDataset::getName, keyword)
                 .orderByDesc(EvalDataset::getCreateTime);
         return baseMapper.selectPage(page, wrapper);
+    }
+
+    @Override
+    public List<EvalDatasetExampleVO> listExamples() {
+        return EvalDatasetExampleTemplates.listExamples();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public EvalDataset createFromExample(String key, Long userId) {
+        // 1. 获取示例模板数据
+        EvalDatasetExampleTemplates.ExampleDatasetData data = EvalDatasetExampleTemplates.getExampleData(key);
+        if (data == null) {
+            throw new BizException(ErrorCode.BAD_REQUEST);
+        }
+
+        // 2. 校验名称唯一性（追加后缀避免冲突）
+        String name = data.name();
+        long count = count(new LambdaQueryWrapper<EvalDataset>().eq(EvalDataset::getName, name));
+        if (count > 0) {
+            name = name + " (" + (count + 1) + ")";
+        }
+
+        // 3. 创建评测集
+        EvalDataset dataset = create(name, data.description(), data.columnsConfig(), userId);
+
+        // 4. 批量创建示例数据项
+        datasetItemService.batchCreate(dataset.getId(), data.dataContents());
+
+        return dataset;
     }
 }

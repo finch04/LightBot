@@ -17,6 +17,11 @@
         <button class="btn-outline" @click="loadData" :disabled="loading">
           <ReloadOutlined :spin="loading" /> 刷新
         </button>
+        <a-tooltip title="示例评测集">
+          <button class="btn-outline" @click="openExampleModal">
+            <ExperimentOutlined />
+          </button>
+        </a-tooltip>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新建评测集
         </button>
@@ -83,6 +88,32 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 示例评测集弹窗 -->
+    <a-modal
+      v-model:open="exampleModalVisible"
+      title="示例评测集"
+      :width="640"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="example-intro">选择一个内置示例，快速创建评测集并学习评测数据的组织方式</div>
+      <div class="example-list">
+        <div v-for="ex in examples" :key="ex.key" class="example-card">
+          <div class="example-card-header">
+            <span class="example-name">{{ ex.name }}</span>
+            <a-button type="primary" size="small" :loading="exampleCreating === ex.key" @click="handleCreateExample(ex.key)">
+              生成
+            </a-button>
+          </div>
+          <div class="example-desc-text">{{ ex.description }}</div>
+          <div class="example-tags">
+            <a-tag v-for="tag in ex.tags" :key="tag" color="blue">{{ tag }}</a-tag>
+            <span class="example-count">{{ ex.itemCount }} 条示例数据</span>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -91,11 +122,12 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
-  SearchOutlined, ReloadOutlined, DatabaseOutlined,
+  SearchOutlined, ReloadOutlined, DatabaseOutlined, ExperimentOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getEvalDatasets, createEvalDataset, updateEvalDataset, deleteEvalDataset,
+  listEvalDatasetExamples, createFromEvalDatasetExample,
 } from '../api/evalDataset'
 
 const router = useRouter()
@@ -105,6 +137,9 @@ const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, name: '', description: '' })
+const exampleModalVisible = ref(false)
+const examples = ref([])
+const exampleCreating = ref(null)
 
 onMounted(() => loadData())
 watch(searchText, () => loadData())
@@ -170,6 +205,28 @@ function handleDelete(id) {
 function formatTime(t) {
   if (!t) return ''
   return new Date(t).toLocaleDateString('zh-CN')
+}
+
+async function openExampleModal() {
+  exampleModalVisible.value = true
+  try {
+    const res = await listEvalDatasetExamples()
+    examples.value = res.data || []
+  } catch {
+    examples.value = []
+  }
+}
+
+async function handleCreateExample(key) {
+  exampleCreating.value = key
+  try {
+    await createFromEvalDatasetExample(key)
+    message.success('示例评测集创建成功')
+    exampleModalVisible.value = false
+    loadData()
+  } finally {
+    exampleCreating.value = null
+  }
 }
 </script>
 
@@ -357,4 +414,48 @@ function formatTime(t) {
   margin-top: 16px;
 }
 .dialog-footer-right { display: flex; gap: 8px; }
+.example-intro {
+  font-size: 13px;
+  color: #71717a;
+  margin-bottom: 16px;
+}
+.example-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.example-card {
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 16px;
+}
+.example-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.example-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+}
+.example-desc-text {
+  font-size: 13px;
+  color: #71717a;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.example-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.example-count {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-left: 4px;
+}
 </style>

@@ -3,6 +3,7 @@ package com.lightbot.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.EvalDatasetCreateRequest;
+import com.lightbot.dto.EvalDatasetExampleVO;
 import com.lightbot.dto.EvalDatasetItemCreateRequest;
 import com.lightbot.dto.EvalDatasetVersionCreateRequest;
 import com.lightbot.entity.EvalDataset;
@@ -108,5 +109,17 @@ public class EvalDatasetController {
     public Result<Void> deleteItem(@PathVariable Long id) {
         datasetItemService.deleteById(id);
         return Result.ok();
+    }
+
+    @Operation(summary = "获取示例评测集列表")
+    @GetMapping("/examples")
+    public Result<List<EvalDatasetExampleVO>> listExamples() {
+        return Result.ok(datasetService.listExamples());
+    }
+
+    @Operation(summary = "从示例模板创建评测集")
+    @PostMapping("/examples/{key}")
+    public Result<EvalDataset> createFromExample(@PathVariable String key) {
+        return Result.ok(datasetService.createFromExample(key, null));
     }
 }

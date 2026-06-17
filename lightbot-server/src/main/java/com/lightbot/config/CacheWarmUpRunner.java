@@ -87,6 +87,7 @@ public class CacheWarmUpRunner implements ApplicationRunner {
      * 预热 Spring Cache 管理的业务缓存（Agent/Knowledge/Tool/SystemConfig）
      */
     private void warmUpSpringCaches() {
+        log.info("[CacheWarmUp] 开始预热业务缓存...");
         warmUpCache(RedisCacheConfig.CACHE_AGENT,
                 () -> agentMapper.selectList(new LambdaQueryWrapper<Agent>().eq(Agent::getDeleted, 0)),
                 agent -> agent.getId().toString());

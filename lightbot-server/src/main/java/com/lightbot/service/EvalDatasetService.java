@@ -2,7 +2,10 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.EvalDatasetExampleVO;
 import com.lightbot.entity.EvalDataset;
+
+import java.util.List;
 
 /**
  * 评测数据集服务接口
@@ -50,4 +53,20 @@ public interface EvalDatasetService extends IService<EvalDataset> {
      * @return 分页结果
      */
     Page<EvalDataset> list(int pageNum, int pageSize, String keyword, Long userId);
+
+    /**
+     * 获取示例评测集列表
+     *
+     * @return 示例列表
+     */
+    List<EvalDatasetExampleVO> listExamples();
+
+    /**
+     * 从示例模板创建评测集（含示例数据项）
+     *
+     * @param key    示例标识
+     * @param userId 创建者ID
+     * @return 创建的数据集
+     */
+    EvalDataset createFromExample(String key, Long userId);
 }

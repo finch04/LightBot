@@ -26,6 +26,12 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
 
     @Override
     public EvalEvaluator create(String name, String description, Long userId) {
+        // 1. 校验名称唯一性
+        long count = count(new LambdaQueryWrapper<EvalEvaluator>().eq(EvalEvaluator::getName, name));
+        if (count > 0) {
+            throw new BizException(ErrorCode.EVAL_EVALUATOR_NAME_EXISTS);
+        }
+
         EvalEvaluator evaluator = new EvalEvaluator();
         evaluator.setName(name);
         evaluator.setDescription(description);
@@ -40,7 +46,11 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
         if (evaluator == null) {
             throw new BizException(ErrorCode.EVAL_EVALUATOR_NOT_FOUND);
         }
-        if (name != null) {
+        if (name != null && !name.equals(evaluator.getName())) {
+            long count = count(new LambdaQueryWrapper<EvalEvaluator>().eq(EvalEvaluator::getName, name));
+            if (count > 0) {
+                throw new BizException(ErrorCode.EVAL_EVALUATOR_NAME_EXISTS);
+            }
             evaluator.setName(name);
         }
         if (description != null) {

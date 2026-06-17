@@ -43,3 +43,11 @@ export function batchCreateEvalDatasetItems(data) {
 export function deleteEvalDatasetItem(id) {
   return request.delete(`/eval/datasets/items/${id}`)
 }
+
+export function listEvalDatasetExamples() {
+  return request.get('/eval/datasets/examples')
+}
+
+export function createFromEvalDatasetExample(key) {
+  return request.post(`/eval/datasets/examples/${key}`)
+}

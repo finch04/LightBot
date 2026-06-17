@@ -46,6 +46,12 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
             validateSlug(request.getSlug(), null);
         }
 
+        // 1.1 校验名称唯一性
+        long count = count(new LambdaQueryWrapper<Skill>().eq(Skill::getName, request.getName()));
+        if (count > 0) {
+            throw new BizException(ErrorCode.SKILL_NAME_EXISTS);
+        }
+
         // 2. 组装实体
         Skill skill = new Skill();
         skill.setSlug(request.getSlug());
@@ -79,6 +85,13 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
                 && !request.getSlug().equals(skill.getSlug())) {
             validateSlug(request.getSlug(), skill.getId());
             skill.setSlug(request.getSlug());
+        }
+        // 名称变更时校验唯一性
+        if (!skill.getName().equals(request.getName())) {
+            long count = count(new LambdaQueryWrapper<Skill>().eq(Skill::getName, request.getName()));
+            if (count > 0) {
+                throw new BizException(ErrorCode.SKILL_NAME_EXISTS);
+            }
         }
         skill.setName(request.getName());
         skill.setDisplayName(request.getDisplayName());
