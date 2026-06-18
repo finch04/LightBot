@@ -253,6 +253,80 @@ public class MinioUtil {
     }
 
     /**
+     * 列出指定前缀下的所有对象名
+     *
+     * @param prefix 路径前缀
+     * @return 对象名列表
+     */
+    public java.util.List<String> listObjects(String prefix) {
+        try {
+            java.util.List<String> result = new java.util.ArrayList<>();
+            var items = minioClient.listObjects(
+                    ListObjectsArgs.builder().bucket(bucket).prefix(prefix).recursive(true).build());
+            for (var item : items) {
+                io.minio.messages.Item obj = item.get();
+                if (!obj.isDir()) {
+                    result.add(obj.objectName());
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("[MinIO] 列举对象失败, prefix={}", prefix, e);
+            throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
+        }
+    }
+
+    /**
+     * 同 bucket 内复制对象
+     *
+     * @param sourcePath 源路径
+     * @param destPath   目标路径
+     */
+    public void copyObject(String sourcePath, String destPath) {
+        try {
+            minioClient.copyObject(CopyObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(destPath)
+                    .source(CopySource.builder().bucket(bucket).object(sourcePath).build())
+                    .build());
+        } catch (Exception e) {
+            log.error("[MinIO] 复制对象失败, src={}, dest={}", sourcePath, destPath, e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
+    /**
+     * 判断对象是否存在
+     *
+     * @param filePath 文件路径
+     * @return 是否存在
+     */
+    public boolean exists(String filePath) {
+        try {
+            minioClient.statObject(StatObjectArgs.builder().bucket(bucket).object(filePath).build());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 获取对象元数据
+     *
+     * @param filePath 文件路径
+     * @return StatObjectResponse
+     */
+    public StatObjectResponse statObject(String filePath) {
+        try {
+            return minioClient.statObject(
+                    StatObjectArgs.builder().bucket(bucket).object(filePath).build());
+        } catch (Exception e) {
+            log.error("[MinIO] 获取对象元数据失败, path={}", filePath, e);
+            throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
+        }
+    }
+
+    /**
      * 双重检查锁确保 Bucket 仅在启动时创建一次
      */
     private void ensureBucketOnce() {

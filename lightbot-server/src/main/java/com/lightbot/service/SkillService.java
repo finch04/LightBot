@@ -2,10 +2,14 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
 
+import java.io.InputStream;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Skill 服务接口
@@ -38,4 +42,19 @@ public interface SkillService extends IService<Skill> {
 
     /** 设置启用/禁用 */
     void setEnabled(Long id, boolean enabled);
+
+    /** ZIP 导入（阶段一：暂存草稿并返回预览） */
+    SkillImportPreview importZipStage(InputStream zipStream);
+
+    /** ZIP 导入（阶段二：确认提交） */
+    Skill importZipCommit(String draftId, String targetSlug);
+
+    /** ZIP 导出 */
+    byte[] exportZip(Long skillId);
+
+    /** 根据 slug 列表批量查询 */
+    List<Skill> listBySlugs(Collection<String> slugs);
+
+    /** 构建 slug -> skillDependencies 映射（用于依赖闭包展开） */
+    Map<String, List<String>> buildDependencyMap(Collection<String> slugs);
 }

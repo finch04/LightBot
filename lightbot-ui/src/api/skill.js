@@ -32,3 +32,22 @@ export function deleteSkill(id) {
 export function setSkillEnabled(id, enabled) {
   return request.put(`/skills/${id}/enabled`, null, { params: { enabled } })
 }
+
+/** ZIP 导入预览 */
+export function importSkillPreview(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/skills/import/preview', formData)
+}
+
+/** ZIP 导入确认 */
+export function importSkillCommit(draftId, targetSlug) {
+  return request.post('/skills/import/commit', null, {
+    params: { draftId, targetSlug: targetSlug || undefined }
+  })
+}
+
+/** 导出 Skill ZIP */
+export function exportSkillZip(id) {
+  return request.get(`/skills/${id}/export`, { responseType: 'blob' })
+}

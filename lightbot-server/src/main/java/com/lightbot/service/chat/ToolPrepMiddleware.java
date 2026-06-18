@@ -1,8 +1,11 @@
 package com.lightbot.service.chat;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.Agent;
+import com.lightbot.entity.Skill;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ModelProviderType;
@@ -12,6 +15,7 @@ import com.lightbot.entity.ModelProvider;
 import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.McpClientService;
+import com.lightbot.service.SkillService;
 import com.lightbot.service.ToolService;
 import com.lightbot.subagent.DelegateSubAgentTool;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +26,13 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -43,6 +52,9 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private final McpClientService mcpClientService;
     private final ModelProviderService modelProviderService;
     private final DelegateSubAgentTool delegateSubAgentTool;
+    private final SkillService skillService;
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -112,6 +124,22 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             if (ctx != null && ctx.getSkillExtraToolIds() != null) {
                 mergedToolIds.addAll(ctx.getSkillExtraToolIds());
             }
+
+            // 懒激活：合并已激活 Skill 的依赖 Tool
+            Set<String> activatedSlugs = ctx != null ? ctx.getActivatedSkills() : null;
+            if (activatedSlugs != null && !activatedSlugs.isEmpty()) {
+                Map<String, List<String>> depMap = skillService.buildDependencyMap(activatedSlugs);
+                Set<String> allSlugs = expandSkillClosure(activatedSlugs, depMap);
+                for (String slug : allSlugs) {
+                    Skill skill = skillService.getBySlug(slug);
+                    if (skill == null || skill.getStatus() != CommonStatus.ACTIVE) {
+                        continue;
+                    }
+                    mergedToolIds.addAll(parseIds(skill.getToolIds()));
+                }
+                log.info("[Chat] 懒激活 Skill 依赖展开: activated={}, expanded={}", activatedSlugs, allSlugs);
+            }
+
             if (!mergedToolIds.isEmpty()) {
                 allCallbacks.addAll(toolService.resolveToolCallbacksByIds(new java.util.ArrayList<>(mergedToolIds)));
             }
@@ -136,6 +164,20 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             if (ctx != null && ctx.getSkillExtraMcpServerIds() != null) {
                 mergedMcpIds.addAll(ctx.getSkillExtraMcpServerIds());
             }
+
+            // 懒激活：合并已激活 Skill 的依赖 MCP
+            if (activatedSlugs != null && !activatedSlugs.isEmpty()) {
+                Map<String, List<String>> depMap = skillService.buildDependencyMap(activatedSlugs);
+                Set<String> allSlugs = expandSkillClosure(activatedSlugs, depMap);
+                for (String slug : allSlugs) {
+                    Skill skill = skillService.getBySlug(slug);
+                    if (skill == null || skill.getStatus() != CommonStatus.ACTIVE) {
+                        continue;
+                    }
+                    mergedMcpIds.addAll(parseIds(skill.getMcpServerIds()));
+                }
+            }
+
             for (Long serverId : mergedMcpIds) {
                 try {
                     allCallbacks.addAll(mcpClientService.getToolCallbacks(serverId));
@@ -157,7 +199,9 @@ public class ToolPrepMiddleware implements ChatMiddleware {
 
             if (!allCallbacks.isEmpty()) {
                 toolBuilder.toolCallbacks(allCallbacks);
-                toolBuilder.toolContext(Map.of("agentId", agent.getId()));
+                // toolContext 传递 agentId 和 sessionId
+                Long sessionId = ctx != null ? ctx.getSessionId() : null;
+                toolBuilder.toolContext(Map.of("agentId", agent.getId(), "sessionId", sessionId));
                 log.info("[Chat] 加载Agent工具: agentId={}, 内置/技能工具={}, MCP Servers={}, SubAgents={}",
                         agent.getId(), mergedToolIds.size(), mergedMcpIds.size(),
                         subAgentIds != null ? subAgentIds.size() : 0);
@@ -180,5 +224,55 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                         cb -> cb.getToolDefinition().name(),
                         cb -> cb,
                         (a, b) -> b));
+    }
+
+    /**
+     * DFS 展开 Skill 依赖闭包，含循环检测
+     *
+     * @param selectedSlugs 已激活的 Skill slug 集合
+     * @param dependencyMap slug -> skillDependencies 的映射
+     * @return 展开后的完整 Skill slug 集合（拓扑序）
+     */
+    private Set<String> expandSkillClosure(Set<String> selectedSlugs,
+                                            Map<String, List<String>> dependencyMap) {
+        Set<String> visited = new LinkedHashSet<>();
+        Deque<String> stack = new ArrayDeque<>(selectedSlugs);
+
+        while (!stack.isEmpty()) {
+            String slug = stack.pop();
+            if (!visited.add(slug)) {
+                continue; // 已访问或循环
+            }
+            List<String> deps = dependencyMap.getOrDefault(slug, List.of());
+            for (String dep : deps) {
+                if (!visited.contains(dep)) {
+                    stack.push(dep);
+                }
+            }
+        }
+        return visited;
+    }
+
+    /** 解析 JSONB 数组字段（字符串 ID） */
+    private List<Long> parseIds(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<Object> raw = OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            List<Long> ids = new ArrayList<>();
+            for (Object item : raw) {
+                if (item == null) continue;
+                String text = item.toString().trim();
+                if (text.isBlank()) continue;
+                try {
+                    ids.add(Long.parseLong(text));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return ids;
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

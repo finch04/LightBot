@@ -21,6 +21,9 @@
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新增 Skill
         </button>
+        <button class="btn-primary" style="background: #7c3aed" @click="importModalVisible = true">
+          <UploadOutlined /> ZIP 导入
+        </button>
       </div>
     </div>
 
@@ -46,12 +49,18 @@
               </button>
             </a-tooltip>
             <button class="btn-icon" :disabled="s.isBuiltin === 1" @click="openDialog(s)"><EditOutlined /></button>
+            <a-tooltip title="导出 ZIP">
+              <button class="btn-icon" @click="handleExport(s)"><ExportOutlined /></button>
+            </a-tooltip>
             <button class="btn-icon danger" :disabled="s.isBuiltin === 1" @click="handleDelete(s)"><DeleteOutlined /></button>
           </div>
         </div>
         <div class="card-detail">
           <div class="card-tags">
             <span v-if="s.slug" class="tag tag-slug">{{ s.slug }}</span>
+            <span v-if="s.version" class="tag tag-version">v{{ s.version }}</span>
+            <span v-if="s.sourceType === 'builtin'" class="tag tag-builtin">内置</span>
+            <span v-else-if="s.sourceType === 'upload'" class="tag tag-upload">上传</span>
           </div>
           <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
             <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
@@ -154,6 +163,12 @@
       </div>
     </a-modal>
 
+    <!-- ZIP 导入弹窗 -->
+    <SkillImportModal
+      v-model:open="importModalVisible"
+      @imported="loadData"
+    />
+
     <!-- Skill 说明弹窗 -->
     <a-modal v-model:open="guideVisible" title="Skill 说明" :width="640" :footer="null">
       <div class="guide">
@@ -193,12 +208,13 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled } from '../api/skill'
+import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled, exportSkillZip } from '../api/skill'
 import { getTools } from '../api/tool'
 import { getMcpServers } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
+import SkillImportModal from '../components/SkillImportModal.vue'
 import { truncateText } from '../utils/format'
 
 const list = ref([])
@@ -211,6 +227,7 @@ const toolOptions = ref([])
 const mcpOptions = ref([])
 const dialogVisible = ref(false)
 const guideVisible = ref(false)
+const importModalVisible = ref(false)
 const detailVisible = ref(false)
 const detailRow = ref(null)
 const submitting = ref(false)
@@ -353,6 +370,22 @@ async function toggleEnabled(row) {
 function truncate(text, len) {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '...' : text
+}
+
+async function handleExport(row) {
+  try {
+    const res = await exportSkillZip(row.id)
+    const blob = new Blob([res.data], { type: 'application/zip' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `skill-${row.slug || row.id}.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('导出成功')
+  } catch (e) {
+    // interceptor handles error
+  }
 }
 
 onMounted(async () => {
@@ -554,6 +587,21 @@ defineExpose({ openDialog, search, refresh })
   color: #be185d;
   border: 1px solid #fbcfe8;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.tag-version {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+.tag-builtin {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.tag-upload {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
 }
 .help-icon {
   margin-left: 8px;

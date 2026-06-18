@@ -3,20 +3,32 @@ package com.lightbot.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.SkillMapper;
+import com.lightbot.model.SkillMetadata;
 import com.lightbot.service.SkillService;
+import com.lightbot.service.sandbox.SkillStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -37,8 +49,10 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final SkillStorageService skillStorageService;
 
     @Override
+    @Transactional
     public Skill create(SkillRequest request) {
         // 1. 解析作用域：默认 global
         String scope = StringUtils.hasText(request.getScope()) ? request.getScope() : "global";
@@ -53,8 +67,9 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         }
 
         // 2. 组装实体
+        String slug = request.getSlug();
         Skill skill = new Skill();
-        skill.setSlug(request.getSlug());
+        skill.setSlug(slug);
         skill.setAgentId("agent".equals(scope) ? request.getAgentId() : null);
         skill.setName(request.getName());
         skill.setDisplayName(request.getDisplayName());
@@ -68,18 +83,33 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         skill.setStatus(CommonStatus.ACTIVE);
         skill.setScope(scope);
         skill.setIsBuiltin(0);
+
+        // 3. 新字段
+        skill.setVersion(request.getVersion() != null ? request.getVersion() : "1.0.0");
+        skill.setSkillDependencies(toJsonArray(request.getSkillDependencies()));
+        skill.setSourceType(request.getSourceType() != null ? request.getSourceType() : "upload");
+
+        // 4. 写入 MinIO 并设置 objectPrefix / contentHash
+        if (slug != null && !slug.isBlank()) {
+            skill.setObjectPrefix("skills/" + slug + "/");
+            String skillMdContent = buildSkillMdContent(skill);
+            skill.setContentHash(sha256(skillMdContent));
+            skillStorageService.writeSkillMarkdown(slug, skillMdContent);
+        }
+
         save(skill);
         return skill;
     }
 
     @Override
+    @Transactional
     public Skill update(SkillRequest request) {
         Skill skill = getById(request.getId());
         if (skill == null) {
             throw new BizException(ErrorCode.SKILL_NOT_FOUND);
         }
         if (Integer.valueOf(1).equals(skill.getIsBuiltin())) {
-            throw new BizException("内置 Skill 不可编辑");
+            throw new BizException(ErrorCode.SKILL_BUILTIN_NOT_EDITABLE);
         }
         if ("global".equals(skill.getScope()) && StringUtils.hasText(request.getSlug())
                 && !request.getSlug().equals(skill.getSlug())) {
@@ -96,12 +126,33 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         skill.setName(request.getName());
         skill.setDisplayName(request.getDisplayName());
         skill.setDescription(request.getDescription());
-        skill.setPromptTemplate(request.getPromptTemplate());
         skill.setConfig(request.getConfig());
         skill.setToolIds(toJsonArray(request.getToolIds()));
         skill.setMcpServerIds(toJsonArray(request.getMcpServerIds()));
         skill.setModelId(request.getModelId());
         skill.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0);
+
+        // 新字段
+        if (request.getVersion() != null) {
+            skill.setVersion(request.getVersion());
+        }
+        if (request.getSkillDependencies() != null) {
+            skill.setSkillDependencies(toJsonArray(request.getSkillDependencies()));
+        }
+
+        // promptTemplate 变更时重写 MinIO
+        boolean promptChanged = request.getPromptTemplate() != null
+                && !request.getPromptTemplate().equals(skill.getPromptTemplate());
+        if (promptChanged) {
+            skill.setPromptTemplate(request.getPromptTemplate());
+            if (skill.getSlug() != null) {
+                skill.setObjectPrefix("skills/" + skill.getSlug() + "/");
+                String skillMdContent = buildSkillMdContent(skill);
+                skill.setContentHash(sha256(skillMdContent));
+                skillStorageService.writeSkillMarkdown(skill.getSlug(), skillMdContent);
+            }
+        }
+
         updateById(skill);
         return skill;
     }
@@ -116,13 +167,22 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     }
 
     @Override
+    @Transactional
     public void deleteById(Long id) {
         Skill skill = getById(id);
         if (skill == null) {
             throw new BizException(ErrorCode.SKILL_NOT_FOUND);
         }
         if (Integer.valueOf(1).equals(skill.getIsBuiltin())) {
-            throw new BizException("内置 Skill 不可删除");
+            throw new BizException(ErrorCode.SKILL_BUILTIN_NOT_DELETABLE);
+        }
+        // 删除 MinIO 文件
+        if (skill.getSlug() != null) {
+            try {
+                skillStorageService.deleteSkillDirectory(skill.getSlug());
+            } catch (Exception e) {
+                log.warn("[Skill] 删除 MinIO 文件失败, slug={}", skill.getSlug(), e);
+            }
         }
         if (!removeById(id)) {
             throw new BizException(ErrorCode.SKILL_NOT_FOUND);
@@ -172,21 +232,116 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         updateById(skill);
     }
 
+    // ==================== ZIP 导入导出 ====================
+
+    @Override
+    public SkillImportPreview importZipStage(InputStream zipStream) {
+        String draftId = java.util.UUID.randomUUID().toString().replace("-", "");
+        return skillStorageService.stageDraft(draftId, zipStream);
+    }
+
+    @Override
+    @Transactional
+    public Skill importZipCommit(String draftId, String targetSlug) {
+        // 1. 提交草稿到正式目录
+        String finalSlug = skillStorageService.commitDraft(draftId, targetSlug);
+
+        // 2. 读取 SKILL.md 解析元数据
+        String skillMdContent = skillStorageService.getSkillMarkdown(finalSlug);
+        SkillMetadata metadata = skillStorageService.parseSkillMarkdown(skillMdContent);
+
+        // 3. 检查 slug 冲突
+        Skill existing = getBySlug(finalSlug);
+        if (existing != null) {
+            // slug 冲突，自动追加后缀
+            String baseSlug = finalSlug;
+            for (int i = 2; i <= 100; i++) {
+                finalSlug = baseSlug + "-v" + i;
+                if (getBySlug(finalSlug) == null) {
+                    break;
+                }
+            }
+            if (getBySlug(finalSlug) != null) {
+                throw new BizException(ErrorCode.SKILL_SLUG_CONFLICT, baseSlug);
+            }
+            // 重命名 MinIO 目录
+            skillStorageService.deleteSkillDirectory(finalSlug);
+            skillStorageService.writeSkillMarkdown(finalSlug, skillMdContent);
+        }
+
+        // 4. 创建 DB 记录
+        Skill skill = new Skill();
+        skill.setSlug(finalSlug);
+        skill.setName(metadata.getName() != null ? metadata.getName() : finalSlug);
+        skill.setDisplayName(metadata.getName());
+        skill.setDescription(metadata.getDescription());
+        skill.setPromptTemplate(metadata.getPromptTemplate());
+        skill.setToolIds("[]");
+        skill.setMcpServerIds("[]");
+        skill.setSkillDependencies(toJsonArray(metadata.getSkillDependencies()));
+        skill.setVersion(metadata.getVersion() != null ? metadata.getVersion() : "1.0.0");
+        skill.setSourceType("upload");
+        skill.setObjectPrefix("skills/" + finalSlug + "/");
+        skill.setContentHash(sha256(skillMdContent));
+        skill.setSortOrder(0);
+        skill.setStatus(CommonStatus.ACTIVE);
+        skill.setScope("global");
+        skill.setIsBuiltin(0);
+        save(skill);
+
+        log.info("[Skill] ZIP 导入完成: slug={}, name={}", finalSlug, skill.getName());
+        return skill;
+    }
+
+    @Override
+    public byte[] exportZip(Long skillId) {
+        Skill skill = getById(skillId);
+        if (skill == null) {
+            throw new BizException(ErrorCode.SKILL_NOT_FOUND);
+        }
+        if (skill.getSlug() == null) {
+            throw new BizException(ErrorCode.SKILL_FILE_NOT_FOUND);
+        }
+        return skillStorageService.exportSkillZip(skill.getSlug());
+    }
+
+    @Override
+    public List<Skill> listBySlugs(Collection<String> slugs) {
+        if (slugs == null || slugs.isEmpty()) {
+            return List.of();
+        }
+        return list(new LambdaQueryWrapper<Skill>()
+                .in(Skill::getSlug, slugs)
+                .eq(Skill::getStatus, CommonStatus.ACTIVE));
+    }
+
+    @Override
+    public Map<String, List<String>> buildDependencyMap(Collection<String> slugs) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        List<Skill> skills = listBySlugs(slugs);
+        for (Skill skill : skills) {
+            result.put(skill.getSlug(), parseStringList(skill.getSkillDependencies()));
+        }
+        return result;
+    }
+
+    // ==================== 内部方法 ====================
+
     /** 校验 slug 格式与唯一性 */
     private void validateSlug(String slug, Long currentId) {
         if (!StringUtils.hasText(slug)) {
-            throw new BizException("全局 Skill 必须填写 slug");
+            throw new BizException(ErrorCode.BAD_REQUEST, "全局 Skill 必须填写 slug");
         }
         if (!SLUG_PATTERN.matcher(slug).matches()) {
-            throw new BizException("slug 只能包含小写字母、数字和短横线");
+            throw new BizException(ErrorCode.BAD_REQUEST, "slug 只能包含小写字母、数字和短横线");
         }
         Skill exists = getBySlug(slug);
         if (exists != null && !exists.getId().equals(currentId)) {
-            throw new BizException("slug 已存在: " + slug);
+            throw new BizException(ErrorCode.SKILL_SLUG_CONFLICT, slug);
         }
     }
 
-    /** 将字符串 ID 列表序列化为 JSON 数组（无元素时返回 "[]"） */
+    /** 将字符串列表序列化为 JSON 数组（无元素时返回 "[]"） */
     private String toJsonArray(List<String> items) {
         try {
             if (items == null || items.isEmpty()) {
@@ -195,6 +350,47 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
             return objectMapper.writeValueAsString(items);
         } catch (Exception e) {
             return "[]";
+        }
+    }
+
+    /** 解析 JSONB 字符串数组 */
+    private List<String> parseStringList(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<String> list = objectMapper.readValue(json, new TypeReference<>() {});
+            return list != null ? list : List.of();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** 从 Skill 实体构建 SKILL.md 内容 */
+    private String buildSkillMdContent(Skill skill) {
+        SkillMetadata metadata = SkillMetadata.builder()
+                .slug(skill.getSlug())
+                .name(skill.getName())
+                .description(skill.getDescription())
+                .version(skill.getVersion() != null ? skill.getVersion() : "1.0.0")
+                .skillDependencies(parseStringList(skill.getSkillDependencies()))
+                .promptTemplate(skill.getPromptTemplate())
+                .build();
+        return skillStorageService.buildSkillMarkdown(metadata);
+    }
+
+    /** SHA-256 哈希 */
+    private String sha256(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return String.valueOf(input.hashCode());
         }
     }
 }

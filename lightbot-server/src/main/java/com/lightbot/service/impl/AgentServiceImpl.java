@@ -160,7 +160,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 .orderByDesc(Agent::getIsDefault)
                 .orderByDesc(Agent::getCreateTime);
         if (StringUtils.hasText(agentType)) {
-            wrapper.eq(Agent::getAgentType, AgentType.valueOf(agentType));
+            wrapper.eq(Agent::getAgentType, AgentType.fromValue(agentType));
         }
         return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
     }

@@ -11,8 +11,10 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 对话管道上下文，承载整个中间件链的共享状态
@@ -48,6 +50,8 @@ public class ChatContext {
     private List<Map<String, Object>> activeSkillDetails;
     /** toolName → Skill 详情映射（用于工具调用时按需推送 skill_active 事件） */
     private Map<String, Map<String, Object>> toolNameToSkillDetail;
+    /** 已激活的 Skill slug 集合（跨轮次持久化在 Redis 中，每请求加载） */
+    private Set<String> activatedSkills;
 
     // ===== SubAgentPrepMiddleware 准备 =====
     /** 当前 Agent 绑定的可委派 SubAgent ID 列表 */
@@ -94,6 +98,7 @@ public class ChatContext {
         ctx.workflowEventsList = new ArrayList<>();
         ctx.spans = new ArrayList<>();
         ctx.pendingToolCalls = new ArrayList<>();
+        ctx.activatedSkills = new LinkedHashSet<>();
         return ctx;
     }
 }

@@ -7,6 +7,8 @@ import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.mapper.SkillMapper;
 import com.lightbot.mapper.ToolMapper;
+import com.lightbot.model.SkillMetadata;
+import com.lightbot.service.sandbox.SkillStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -37,6 +39,7 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
 
     private final SkillMapper skillMapper;
     private final ToolMapper toolMapper;
+    private final SkillStorageService skillStorageService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -56,7 +59,11 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
                 new LambdaQueryWrapper<Skill>().eq(Skill::getSlug, slug));
 
         String toolIdsJson = serializeIds(resolveToolIds(def.toolNames()));
-        String contentHash = sha256(def.promptTemplate() + "|" + def.description());
+        String skillDepsJson = serializeIds(def.skillDependencies() != null ? def.skillDependencies() : List.of());
+
+        // 构建 SKILL.md 内容并计算 hash
+        String skillMdContent = buildSkillMdContent(def);
+        String contentHash = sha256(skillMdContent);
 
         if (existing == null) {
             Skill skill = new Skill();
@@ -72,7 +79,15 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
             skill.setScope("global");
             skill.setIsBuiltin(1);
             skill.setContentHash(contentHash);
+            // 新字段
+            skill.setObjectPrefix("skills/" + slug + "/");
+            skill.setVersion("1.0.0");
+            skill.setSkillDependencies(skillDepsJson);
+            skill.setSourceType("builtin");
             skillMapper.insert(skill);
+
+            // 写入 MinIO
+            skillStorageService.writeSkillMarkdown(slug, skillMdContent);
             log.info("[BuiltInSkillRegistrar] 注册内置 Skill: slug={}", slug);
             return;
         }
@@ -80,7 +95,8 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
         // 已存在：仅当内容 hash 变化或必要字段缺失时更新
         boolean needsUpdate = !contentHash.equals(existing.getContentHash())
                 || existing.getIsBuiltin() == null
-                || !toolIdsJson.equals(existing.getToolIds());
+                || !toolIdsJson.equals(existing.getToolIds())
+                || existing.getObjectPrefix() == null;
         if (!needsUpdate) {
             return;
         }
@@ -92,11 +108,33 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
         existing.setIsBuiltin(1);
         existing.setScope("global");
         existing.setContentHash(contentHash);
+        // 新字段
+        existing.setObjectPrefix("skills/" + slug + "/");
+        existing.setVersion("1.0.0");
+        existing.setSkillDependencies(skillDepsJson);
+        existing.setSourceType("builtin");
         if (existing.getSortOrder() == null) {
             existing.setSortOrder(def.sortOrder());
         }
         skillMapper.updateById(existing);
+
+        // 更新 MinIO
+        skillStorageService.writeSkillMarkdown(slug, skillMdContent);
         log.info("[BuiltInSkillRegistrar] 更新内置 Skill: slug={}", slug);
+    }
+
+    /** 从 Definition 构建 SKILL.md 内容 */
+    private String buildSkillMdContent(BuiltInSkillDefinitions.Definition def) {
+        SkillMetadata metadata = SkillMetadata.builder()
+                .slug(def.slug())
+                .name(def.name())
+                .description(def.description())
+                .version("1.0.0")
+                .toolDependencies(def.toolNames())
+                .skillDependencies(def.skillDependencies() != null ? def.skillDependencies() : List.of())
+                .promptTemplate(def.promptTemplate())
+                .build();
+        return skillStorageService.buildSkillMarkdown(metadata);
     }
 
     /** 根据 Tool 英文标识批量解析出 Tool ID（缺失忽略） */

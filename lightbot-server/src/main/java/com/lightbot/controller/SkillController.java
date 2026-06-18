@@ -2,6 +2,7 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
 import com.lightbot.service.SkillService;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -67,5 +69,26 @@ public class SkillController {
     public Result<List<Skill>> listByAgent(@PathVariable Long agentId,
                                            @RequestParam(required = false) String name) {
         return Result.ok(skillService.listByAgentId(agentId, name));
+    }
+
+    @Operation(summary = "ZIP 导入 Skill（阶段一：暂存草稿并返回预览）")
+    @PostMapping("/import/preview")
+    public Result<SkillImportPreview> importPreview(
+            @RequestParam("file") MultipartFile file) throws Exception {
+        return Result.ok(skillService.importZipStage(file.getInputStream()));
+    }
+
+    @Operation(summary = "ZIP 导入 Skill（阶段二：确认提交）")
+    @PostMapping("/import/commit")
+    public Result<Skill> importCommit(
+            @RequestParam String draftId,
+            @RequestParam(required = false) String targetSlug) {
+        return Result.ok(skillService.importZipCommit(draftId, targetSlug));
+    }
+
+    @Operation(summary = "导出 Skill 为 ZIP")
+    @GetMapping("/{id}/export")
+    public Result<byte[]> exportZip(@PathVariable Long id) {
+        return Result.ok(skillService.exportZip(id));
     }
 }

@@ -101,6 +101,22 @@ public class Skill {
     @Schema(description = "内置 Skill 内容 hash")
     private String contentHash;
 
+    @TableField("object_prefix")
+    @Schema(description = "MinIO 路径前缀，如 skills/{slug}/")
+    private String objectPrefix;
+
+    @TableField("version")
+    @Schema(description = "语义版本号")
+    private String version;
+
+    @TableField(value = "skill_dependencies", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "依赖其他 Skill 的 slug 列表（JSON 字符串数组）")
+    private String skillDependencies;
+
+    @TableField("source_type")
+    @Schema(description = "来源类型: builtin/upload/remote")
+    private String sourceType;
+
     @TableField("user_id")
     @Schema(description = "创建者ID")
     @JsonSerialize(using = ToStringSerializer.class)

@@ -52,4 +52,13 @@ public class SkillRequest {
 
     /** 作用域：global / agent，默认 global */
     private String scope;
+
+    /** 语义版本号 */
+    private String version;
+
+    /** 依赖其他 Skill 的 slug 列表 */
+    private List<String> skillDependencies;
+
+    /** 来源类型: builtin/upload/remote */
+    private String sourceType;
 }
