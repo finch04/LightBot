@@ -1615,6 +1615,14 @@
       </div>
     </a-modal>
 
+    <!-- 保存/发布同步遮罩 -->
+    <div v-if="saving || publishing" class="sync-overlay">
+      <div class="sync-overlay-content">
+        <a-spin size="large" />
+        <p class="sync-overlay-text">{{ publishing ? 'Agent 发布中...' : 'Agent 修改正在同步中...' }}</p>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -3150,6 +3158,7 @@ async function handleSave(options = {}) {
     // 7. 更新 Skill 绑定
     await updateAgentSkills(agentId, Array.from(selectedSkillIds.value))
 
+    saving.value = false
     message.success('暂存成功')
     await loadAgent()
     return true
@@ -3483,6 +3492,7 @@ async function confirmPublishAgent() {
     const res = await publishAgent(agentId, desc ? { description: desc } : {})
     agentVersion.value = res.data?.version ?? agentVersion.value + 1
     agentStatus.value = res.data?.status || 'published'
+    publishing.value = false
     publishModalVisible.value = false
     message.success(`发布成功 v${agentVersion.value}`)
   } catch {
@@ -3509,6 +3519,7 @@ onMounted(async () => {
 
 <style scoped>
 .page {
+  position: relative;
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
@@ -5181,6 +5192,28 @@ onMounted(async () => {
   padding: 8px 12px;
   border-radius: 6px;
   border-left: 3px solid #1890ff;
+}
+
+/* 保存/发布同步遮罩 */
+.sync-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.sync-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.sync-overlay-text {
+  font-size: 14px;
+  color: #52525b;
+  font-weight: 500;
 }
 
 </style>

@@ -47,7 +47,7 @@
         </div>
       </div>
 
-      <div v-if="list.length === 0" class="empty-state">
+      <div v-if="list.length === 0 && !loading" class="empty-state">
         <AuditOutlined class="empty-icon" />
         <p v-if="searchText">没有匹配的评估器</p>
         <p v-else>还没有评估器，点击右上角创建一个吧</p>
@@ -101,6 +101,7 @@ import {
 
 const router = useRouter()
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -110,10 +111,15 @@ onMounted(() => loadData())
 watch(searchText, () => loadData())
 
 async function loadData() {
-  const params = { pageNum: 1, pageSize: 100 }
-  if (searchText.value) params.keyword = searchText.value
-  const res = await getEvaluators(params)
-  list.value = res.data?.records || []
+  loading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 100 }
+    if (searchText.value) params.keyword = searchText.value
+    const res = await getEvaluators(params)
+    list.value = res.data?.records || []
+  } finally {
+    loading.value = false
+  }
 }
 
 function openDialog(row) {

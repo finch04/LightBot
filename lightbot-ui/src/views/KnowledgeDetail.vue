@@ -45,8 +45,8 @@
             >
               <template #prefix><SearchOutlined /></template>
             </a-input>
-            <a-tooltip title="刷新">
-              <button class="btn-outline-sm" @click="loadDocuments" :disabled="docLoading">
+            <a-tooltip title="刷新" :open="docRefreshTipVisible" @open-change="v => { if (!v) docRefreshTipVisible = false }">
+              <button class="btn-outline-sm" @click="docRefreshTipVisible = false; loadDocuments()" :disabled="docLoading">
                 <ReloadOutlined :spin="docLoading" />
               </button>
             </a-tooltip>
@@ -54,7 +54,7 @@
           </div>
         </div>
         <a-spin :spinning="docLoading">
-        <div class="doc-list">
+        <div class="doc-list" :class="{ 'doc-list-min': docLoading }">
           <div v-for="doc in documents" :key="doc.id" class="doc-item" @click="openDocModal(doc)">
             <a-tooltip :title="statusText(doc.status?.code || doc.status)">
               <span class="doc-status-icon" :class="doc.status?.code || doc.status">
@@ -909,6 +909,7 @@ const knowledge = ref({})
 const milvusConnected = ref(false)
 const documents = ref([])
 const docLoading = ref(false)
+const docRefreshTipVisible = ref(false)
 const docSearch = ref('')
 const docPagination = reactive({
   current: 1,
@@ -1174,11 +1175,14 @@ function stopDocPoll() {
 async function loadDocuments(isBackground = false) {
   if (!isBackground) docLoading.value = true
   try {
-    const res = await getDocuments(knowledgeId, {
-      keyword: docSearch.value.trim() || undefined,
-      pageNum: docPagination.current,
-      pageSize: docPagination.pageSize,
-    })
+    const [res] = await Promise.all([
+      getDocuments(knowledgeId, {
+        keyword: docSearch.value.trim() || undefined,
+        pageNum: docPagination.current,
+        pageSize: docPagination.pageSize,
+      }),
+      new Promise(r => setTimeout(r, 300)),
+    ])
     documents.value = res.data?.records || []
     docPagination.total = res.data?.total || 0
   } finally {
@@ -2213,6 +2217,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.doc-list-min {
+  min-height: 120px;
 }
 .doc-item {
   display: flex;

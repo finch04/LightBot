@@ -23,6 +23,7 @@
     </div>
 
     <!-- 配置实例网格 -->
+    <a-spin :spinning="pageLoading">
     <div class="instances-grid" :class="'cols-' + instances.length">
       <div v-for="(inst, idx) in instances" :key="inst.id" class="instance-card">
         <!-- 实例头部 -->
@@ -197,6 +198,7 @@
         </div>
       </div>
     </div>
+    </a-spin>
 
     <!-- 从模板导入弹窗 -->
     <TemplateImportModalLR
@@ -261,6 +263,7 @@ const router = useRouter()
 const promptKey = route.params.id
 const prompt = ref(null)
 const versions = ref([])
+const pageLoading = ref(true)
 const submitting = ref(false)
 
 const latestVersion = computed(() => versions.value.length > 0 ? versions.value[0].version : '')
@@ -319,19 +322,23 @@ const versionForm = reactive({ version: '', versionDesc: '', status: 'pre' })
 const templateImportVisible = ref(false)
 
 onMounted(async () => {
-  await loadPrompt()
-  await loadVersions()
-  // 初始化一个配置实例
-  const inst = createInstance()
-  instances.value.push(inst)
+  try {
+    await loadPrompt()
+    await loadVersions()
+    // 初始化一个配置实例
+    const inst = createInstance()
+    instances.value.push(inst)
 
-  // 优先恢复指定版本，否则加载最新版本（通过详情API获取完整modelConfig）
-  const restoreVersion = route.query.restoreVersion
-  if (restoreVersion) {
-    await restoreByVersion(restoreVersion)
-  } else if (versions.value.length > 0) {
-    const latest = versions.value[0]
-    await restoreByVersion(latest.version)
+    // 优先恢复指定版本，否则加载最新版本（通过详情API获取完整modelConfig）
+    const restoreVersion = route.query.restoreVersion
+    if (restoreVersion) {
+      await restoreByVersion(restoreVersion)
+    } else if (versions.value.length > 0) {
+      const latest = versions.value[0]
+      await restoreByVersion(latest.version)
+    }
+  } finally {
+    pageLoading.value = false
   }
 })
 
@@ -698,6 +705,7 @@ function scrollToBottom(inst) {
 .instances-grid {
   display: grid;
   gap: 16px;
+  min-height: 200px;
 }
 .instances-grid.cols-1 { grid-template-columns: 1fr; }
 .instances-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }

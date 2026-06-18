@@ -70,7 +70,7 @@
           </a-tooltip>
         </div>
       </div>
-      <div v-if="list.length === 0" class="empty-tip">
+      <div v-if="list.length === 0 && !loading" class="empty-tip">
         {{ searchText ? '没有匹配的工具' : '暂无工具，点击右上角新增' }}
       </div>
     </div>

@@ -40,7 +40,7 @@
           <a-tag v-for="tag in t.tags.split(',').slice(0, 3)" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
         </div>
       </div>
-      <div v-if="filteredTemplates.length === 0" class="empty-state">
+      <div v-if="filteredTemplates.length === 0 && !loading" class="empty-state">
         <FileTextOutlined class="empty-icon" />
         <p>{{ searchText ? '没有匹配模板' : '暂无模板，点击右上角创建' }}</p>
       </div>

@@ -25,7 +25,8 @@
           <h3>数据项列表</h3>
           <span class="panel-count">{{ items.length }} 条</span>
         </div>
-        <div class="item-list">
+        <a-spin :spinning="itemsLoading">
+        <div class="item-list" :class="{ 'item-list-min': itemsLoading }">
           <div v-for="item in items" :key="item.id" class="item-row">
             <div class="item-content">
               <div class="item-field" v-for="(val, key) in parseItemContent(item.dataContent)" :key="key">
@@ -37,8 +38,9 @@
               <DeleteOutlined />
             </button>
           </div>
-          <div v-if="items.length === 0" class="item-empty">暂无数据项，点击右上角添加</div>
+          <div v-if="items.length === 0 && !itemsLoading" class="item-empty">暂无数据项，点击右上角添加</div>
         </div>
+        </a-spin>
         <div v-if="itemTotal > 0" class="item-pagination">
           <a-pagination
             v-model:current="pageNum"
@@ -157,6 +159,7 @@ const datasetId = route.params.id
 const dataset = ref(null)
 const versions = ref([])
 const items = ref([])
+const itemsLoading = ref(false)
 const itemTotal = ref(0)
 const pageNum = ref(1)
 const pageSize = 20
@@ -183,9 +186,14 @@ async function loadVersions() {
 }
 
 async function loadItems() {
-  const res = await getEvalDatasetItems({ datasetId, pageNum: pageNum.value, pageSize })
-  items.value = res.data?.records || []
-  itemTotal.value = res.data?.total || 0
+  itemsLoading.value = true
+  try {
+    const res = await getEvalDatasetItems({ datasetId, pageNum: pageNum.value, pageSize })
+    items.value = res.data?.records || []
+    itemTotal.value = res.data?.total || 0
+  } finally {
+    itemsLoading.value = false
+  }
 }
 
 function openVersionDialog() {
@@ -408,6 +416,9 @@ function formatTime(t) {
   gap: 8px;
   max-height: calc(100vh - 260px);
   overflow-y: auto;
+}
+.item-list-min {
+  min-height: 120px;
 }
 .item-row {
   display: flex;

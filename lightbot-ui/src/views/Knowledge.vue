@@ -14,8 +14,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <button class="btn-outline" @click="router.push('/app/graph')">
           <ApartmentOutlined /> 知识图谱
@@ -26,6 +26,7 @@
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="knowledge-grid">
       <div
         v-for="k in list"
@@ -60,11 +61,13 @@
         </div>
       </div>
 
-      <div v-if="list.length === 0" class="empty-state">
+      <div v-if="list.length === 0 && !loading" class="empty-state">
+        <DatabaseOutlined class="empty-icon" />
         <p v-if="searchText">没有匹配的知识库</p>
         <p v-else>还没有知识库，点击右上角创建一个吧</p>
       </div>
     </div>
+    </a-spin>
 
     <!-- 创建弹窗 -->
     <a-modal v-model:open="showCreate" title="新建知识库" :width="480" @ok="handleCreate" :confirm-loading="submitting" :maskClosable="false">
@@ -120,6 +123,7 @@ import { truncateText } from '../utils/format'
 
 const router = useRouter()
 const list = ref([])
+const loading = ref(false)
 const searchText = ref('')
 const showCreate = ref(false)
 const submitting = ref(false)
@@ -138,10 +142,15 @@ function openCreateModal() {
 }
 
 async function loadData() {
-  const params = { pageNum: 1, pageSize: 50 }
-  if (searchText.value) params.name = searchText.value
-  const res = await getKnowledgeList(params)
-  list.value = res.data.records || []
+  loading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 50 }
+    if (searchText.value) params.name = searchText.value
+    const res = await getKnowledgeList(params)
+    list.value = res.data.records || []
+  } finally {
+    loading.value = false
+  }
 }
 
 watch(searchText, () => loadData())
@@ -348,6 +357,11 @@ onMounted(loadData)
   text-align: center;
   padding: 60px 20px;
   color: #a1a1aa;
+}
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
 }
 
 /* 知识库类型选择卡片 */

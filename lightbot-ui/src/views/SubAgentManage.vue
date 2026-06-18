@@ -42,7 +42,7 @@
         </div>
       </div>
 
-      <div v-if="list.length === 0" class="empty-state">
+      <div v-if="list.length === 0 && !loading" class="empty-state">
         <RobotOutlined class="empty-icon" />
         <p>暂无 SubAgent，点击右上角创建</p>
       </div>

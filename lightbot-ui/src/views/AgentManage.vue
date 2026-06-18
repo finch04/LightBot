@@ -24,8 +24,8 @@
           <a-select-option value="chat">对话型</a-select-option>
           <a-select-option value="workflow">工作流型</a-select-option>
         </a-select>
-        <button class="btn-outline" @click="loadData">
-          <ReloadOutlined /> 刷新
+        <button class="btn-outline" @click="loadData" :disabled="loading">
+          <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <a-tooltip title="示例工作流">
           <button class="btn-outline" @click="openExampleModal">
@@ -38,6 +38,7 @@
       </div>
     </div>
 
+    <a-spin :spinning="loading">
     <div class="agent-grid">
       <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/app/agents/${a.id}`)">
         <div class="card-top">
@@ -64,12 +65,13 @@
         </div>
       </div>
 
-      <div v-if="list.length === 0" class="empty-state">
+      <div v-if="list.length === 0 && !loading" class="empty-state">
         <RobotOutlined class="empty-icon" />
         <p v-if="searchText">没有匹配的 Agent</p>
         <p v-else>还没有 Agent，点击右上角创建一个吧</p>
       </div>
     </div>
+    </a-spin>
 
     <!-- 创建/编辑弹窗 -->
     <a-modal
@@ -139,6 +141,7 @@ import ModelSelect from '../components/ModelSelect.vue'
 
 const router = useRouter()
 const list = ref([])
+const loading = ref(false)
 const agentStatusLabels = ref(null)
 const searchText = ref('')
 const filterAgentType = ref(undefined)
@@ -155,11 +158,16 @@ function onModelChange({ providerId }) {
 }
 
 async function loadData() {
-  const params = { pageNum: 1, pageSize: 50 }
-  if (searchText.value) params.name = searchText.value
-  if (filterAgentType.value) params.agentType = filterAgentType.value
-  const res = await getAgents(params)
-  list.value = res.data.records || []
+  loading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 50 }
+    if (searchText.value) params.name = searchText.value
+    if (filterAgentType.value) params.agentType = filterAgentType.value
+    const res = await getAgents(params)
+    list.value = res.data.records || []
+  } finally {
+    loading.value = false
+  }
 }
 
 watch(searchText, () => loadData())

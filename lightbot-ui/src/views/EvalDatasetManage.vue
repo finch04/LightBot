@@ -54,7 +54,7 @@
         </div>
       </div>
 
-      <div v-if="list.length === 0" class="empty-state">
+      <div v-if="list.length === 0 && !loading" class="empty-state">
         <DatabaseOutlined class="empty-icon" />
         <p v-if="searchText">没有匹配的评测集</p>
         <p v-else>还没有评测集，点击右上角创建一个吧</p>
