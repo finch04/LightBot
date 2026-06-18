@@ -846,11 +846,11 @@
 
     <!-- 绑定扩展（预览时 Tab 可切换查看，仅内容区只读） -->
     <a-alert
-      v-if="agent.agentType !== 'workflow' && deletedBindingCount > 0 && !isVersionPreview"
+      v-if="agent.agentType !== 'workflow' && invalidBindingCount > 0 && !isVersionPreview"
       type="warning"
       show-icon
       class="binding-deleted-alert"
-      :message="`共有 ${deletedBindingCount} 个已绑定的资源已被删除`"
+      :message="invalidBindingAlertMessage"
     >
       <template #description>
         <div class="binding-deleted-detail-row">
@@ -860,9 +860,10 @@
               :key="li"
               class="binding-deleted-detail-line"
             >{{ line }}</div>
-            <p class="binding-deleted-detail-hint">这些绑定仍保留在配置中，运行时可能无法调用。暂存或发布前将提示确认。</p>
+            <p class="binding-deleted-detail-hint">已删除的绑定运行时无法调用，已禁用的绑定需先启用才能使用。暂存或发布前将提示确认。</p>
           </div>
           <a-button
+            v-if="deletedBindingCount > 0"
             type="primary"
             danger
             size="small"
@@ -870,7 +871,7 @@
             @click="removeAllDeletedBindings"
           >
             <DeleteOutlined />
-            移除失效绑定
+            移除已删除绑定
           </a-button>
         </div>
       </template>
@@ -916,11 +917,12 @@
                 v-for="t in selectedTools"
                 :key="t.id"
                 class="knowledge-tag tool-tag"
-                :class="{ 'binding-tag--deleted': t._deleted }"
+                :class="{ 'binding-tag--deleted': t._deleted, 'binding-tag--disabled': t._disabled && !t._deleted }"
               >
                 <ToolOutlined />
                 <span>{{ t.displayName || t.name }}</span>
                 <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
+                <span v-else-if="t._disabled" class="binding-disabled-tag">已禁用</span>
                 <span v-else-if="isKnowledgeTool(t)" class="tool-knowledge-badge">知识库</span>
                 <span v-else class="tool-type-badge">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
                 <button v-if="!isVersionPreview" class="tag-remove" @click="removeTool(t.id)">
@@ -1095,11 +1097,12 @@
                 v-for="s in selectedMcpServers"
                 :key="s.id"
                 class="knowledge-tag mcp-tag"
-                :class="{ 'binding-tag--deleted': s._deleted }"
+                :class="{ 'binding-tag--deleted': s._deleted, 'binding-tag--disabled': s._disabled && !s._deleted }"
               >
                 <ApiOutlined />
                 <span>{{ s.name }}</span>
                 <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
                 <button v-if="!isVersionPreview" class="tag-remove" @click="removeMcpServer(s.id)">
                   <CloseOutlined />
                 </button>
@@ -1170,11 +1173,12 @@
                 v-for="s in selectedSubAgents"
                 :key="s.id"
                 class="knowledge-tag subagent-tag"
-                :class="{ 'binding-tag--deleted': s._deleted }"
+                :class="{ 'binding-tag--deleted': s._deleted, 'binding-tag--disabled': s._disabled && !s._deleted }"
               >
                 <RobotOutlined />
                 <span>{{ s.displayName || s.name }}</span>
                 <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
                 <button v-if="!isVersionPreview" class="tag-remove" @click="removeSubAgent(s.id)">
                   <CloseOutlined />
                 </button>
@@ -1247,7 +1251,7 @@
                 v-for="s in selectedSkills"
                 :key="s.id"
                 class="knowledge-tag skill-tag"
-                :class="{ 'binding-tag--deleted': s._deleted }"
+                :class="{ 'binding-tag--deleted': s._deleted, 'binding-tag--disabled': s._disabled && !s._deleted }"
               >
                 <ThunderboltOutlined />
                 <span class="tag-name-wrap">
@@ -1255,6 +1259,7 @@
                   <span v-if="s.isBuiltin === 1" class="binding-inline-badge">内置</span>
                 </span>
                 <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
                 <button v-if="!isVersionPreview" class="tag-remove" @click="removeSkill(s.id)">
                   <CloseOutlined />
                 </button>
@@ -1519,10 +1524,11 @@
                   v-for="t in previewToolList"
                   :key="t.id"
                   class="preview-tag"
-                  :class="{ 'preview-tag--deleted': t._deleted }"
+                  :class="{ 'preview-tag--deleted': t._deleted, 'preview-tag--disabled': t._disabled && !t._deleted }"
                 >
                   {{ t.displayName || t.name }}
                   <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
+                  <span v-else-if="t._disabled" class="binding-disabled-tag">已禁用</span>
                   <span v-else-if="isKnowledgeTool(t)" class="tool-knowledge-badge">知识库</span>
                   <span v-else class="preview-tag-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
                 </div>
@@ -1538,10 +1544,11 @@
                   v-for="m in previewMcpList"
                   :key="m.id"
                   class="preview-tag mcp"
-                  :class="{ 'preview-tag--deleted': m._deleted }"
+                  :class="{ 'preview-tag--deleted': m._deleted, 'preview-tag--disabled': m._disabled && !m._deleted }"
                 >
                   {{ m.name }}
                   <span v-if="m._deleted" class="binding-deleted-tag">已删除</span>
+                  <span v-else-if="m._disabled" class="binding-disabled-tag">已禁用</span>
                 </div>
               </div>
             </div>
@@ -1555,10 +1562,11 @@
                   v-for="s in previewSubAgentList"
                   :key="s.id"
                   class="preview-tag subagent"
-                  :class="{ 'preview-tag--deleted': s._deleted }"
+                  :class="{ 'preview-tag--deleted': s._deleted, 'preview-tag--disabled': s._disabled && !s._deleted }"
                 >
                   {{ s.displayName || s.name }}
                   <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                  <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
                 </div>
               </div>
             </div>
@@ -1572,10 +1580,11 @@
                   v-for="s in previewSkillList"
                   :key="s.id"
                   class="preview-tag subagent"
-                  :class="{ 'preview-tag--deleted': s._deleted }"
+                  :class="{ 'preview-tag--deleted': s._deleted, 'preview-tag--disabled': s._disabled && !s._deleted }"
                 >
                   {{ s.displayName || s.name }}
                   <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
+                  <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
                 </div>
               </div>
             </div>
@@ -1639,8 +1648,8 @@ import { getModelProviders, getProviderConfigFields, getProviderModelCapabilitie
 import ModelSelect from '../components/ModelSelect.vue'
 import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
-import { getEnabledSubAgents } from '../api/subagent'
-import { getEnabledSkills } from '../api/skill'
+import { getSubAgents } from '../api/subagent'
+import { getSkills } from '../api/skill'
 import { safeJsonParse } from '../utils/request'
 import { truncateText } from '../utils/format'
 import {
@@ -1649,6 +1658,7 @@ import {
   stripBindingKeysFromConfig,
   resolveBindingItems,
   countDeletedBindingItems,
+  countDisabledBindingItems,
   markBindingItemDeletedFlag,
   formatDeletedBindingDetailLines,
   removeDeletedIdsFromSet,
@@ -2321,10 +2331,10 @@ const selectedTools = computed(() =>
 )
 
 const filteredToolList = computed(() => {
-  // 知识库工具由中间件自动注入，不在用户可选列表中展示
+  // 知识库工具由中间件自动注入，不在用户可选列表中展示；已禁用的也不展示
   let list = toolList.value.filter(t => {
     const type = t.toolType?.code || t.toolType
-    return type !== 'knowledge'
+    return type !== 'knowledge' && t.status !== 'disabled'
   })
   if (toolTypeFilter.value) {
     list = list.filter(t => {
@@ -2349,12 +2359,16 @@ const selectedMcpServers = computed(() =>
 )
 
 const filteredMcpServerList = computed(() => {
-  if (!mcpSearchText.value) return mcpServerList.value
-  const keyword = mcpSearchText.value.toLowerCase()
-  return mcpServerList.value.filter(s =>
-    s.name?.toLowerCase().includes(keyword) ||
-    s.description?.toLowerCase().includes(keyword)
-  )
+  // 可选列表只展示已启用的，已禁用但已绑定的在已选列表中展示
+  let list = mcpServerList.value.filter(s => s.status !== 'disabled')
+  if (mcpSearchText.value) {
+    const keyword = mcpSearchText.value.toLowerCase()
+    list = list.filter(s =>
+      s.name?.toLowerCase().includes(keyword) ||
+      s.description?.toLowerCase().includes(keyword)
+    )
+  }
+  return list
 })
 
 const selectedSubAgents = computed(() =>
@@ -2380,6 +2394,26 @@ const deletedBindingCount = computed(() => {
     + countDeletedBindingItems(selectedSubAgents.value)
     + countDeletedBindingItems(selectedSkills.value)
   )
+})
+
+const disabledBindingCount = computed(() => {
+  if (!bindingCatalogsLoaded.value) return 0
+  return (
+    countDisabledBindingItems(selectedKnowledge.value)
+    + countDisabledBindingItems(selectedTools.value)
+    + countDisabledBindingItems(selectedMcpServers.value)
+    + countDisabledBindingItems(selectedSubAgents.value)
+    + countDisabledBindingItems(selectedSkills.value)
+  )
+})
+
+const invalidBindingCount = computed(() => deletedBindingCount.value + disabledBindingCount.value)
+
+const invalidBindingAlertMessage = computed(() => {
+  const parts = []
+  if (deletedBindingCount.value > 0) parts.push(`${deletedBindingCount.value} 个已删除`)
+  if (disabledBindingCount.value > 0) parts.push(`${disabledBindingCount.value} 个已禁用`)
+  return `共有 ${parts.join('、')} 个已绑定资源不可用`
 })
 
 /** 已删除绑定分类型明细（Alert / 保存弹窗） */
@@ -2409,24 +2443,32 @@ function removeAllDeletedBindings() {
 }
 
 const filteredSubAgentList = computed(() => {
-  if (!subAgentSearchText.value) return subAgentList.value
-  const keyword = subAgentSearchText.value.toLowerCase()
-  return subAgentList.value.filter(s =>
-    s.name?.toLowerCase().includes(keyword) ||
-    s.displayName?.toLowerCase().includes(keyword) ||
-    s.description?.toLowerCase().includes(keyword)
-  )
+  // 可选列表只展示已启用的，已禁用但已绑定的在已选列表中展示
+  let list = subAgentList.value.filter(s => s.enabled !== 0 && s.enabled !== false)
+  if (subAgentSearchText.value) {
+    const keyword = subAgentSearchText.value.toLowerCase()
+    list = list.filter(s =>
+      s.name?.toLowerCase().includes(keyword) ||
+      s.displayName?.toLowerCase().includes(keyword) ||
+      s.description?.toLowerCase().includes(keyword)
+    )
+  }
+  return list
 })
 
 const filteredSkillList = computed(() => {
-  if (!skillSearchText.value) return skillList.value
-  const keyword = skillSearchText.value.toLowerCase()
-  return skillList.value.filter(s =>
-    s.name?.toLowerCase().includes(keyword) ||
-    s.displayName?.toLowerCase().includes(keyword) ||
-    s.slug?.toLowerCase().includes(keyword) ||
-    s.description?.toLowerCase().includes(keyword)
-  )
+  // 可选列表只展示已启用的，已禁用但已绑定的在已选列表中展示
+  let list = skillList.value.filter(s => s.status !== 'disabled')
+  if (skillSearchText.value) {
+    const keyword = skillSearchText.value.toLowerCase()
+    list = list.filter(s =>
+      s.name?.toLowerCase().includes(keyword) ||
+      s.displayName?.toLowerCase().includes(keyword) ||
+      s.slug?.toLowerCase().includes(keyword) ||
+      s.description?.toLowerCase().includes(keyword)
+    )
+  }
+  return list
 })
 
 async function loadProviders() {
@@ -2627,18 +2669,27 @@ function confirmLeaveUnsaved(onConfirm) {
   })
 }
 
-/** 保存/发布前确认：仍绑定已删除的资源 */
+/** 保存/发布前确认：仍绑定已删除或已禁用的资源 */
 function confirmSaveWithDeletedBindings() {
   const lines = deletedBindingDetailLines.value
+  const hasDeleted = deletedBindingCount.value > 0
+  const hasDisabled = disabledBindingCount.value > 0
+  const title = hasDeleted && hasDisabled ? '存在已删除或已禁用的绑定'
+    : hasDeleted ? '存在已删除的绑定' : '存在已禁用的绑定'
+  const tipText = hasDeleted && hasDisabled
+    ? `仍有 ${deletedBindingCount.value} 个已删除、${disabledBindingCount.value} 个已禁用的资源处于选中状态，保存后 Agent 可能无法正常使用：`
+    : hasDeleted
+      ? `仍有 ${deletedBindingCount.value} 个已删除的资源处于选中状态，保存后 Agent 可能无法正常使用：`
+      : `仍有 ${disabledBindingCount.value} 个已禁用的资源处于选中状态，保存后 Agent 可能无法正常使用：`
   return new Promise((resolve) => {
     Modal.confirm({
-      title: '存在已删除的绑定',
+      title,
       width: 480,
       content: h('div', { class: 'deleted-binding-modal' }, [
-        h('p', { class: 'deleted-binding-modal-tip' },
-          `仍有 ${deletedBindingCount.value} 个已删除的资源处于选中状态，保存后 Agent 可能无法正常使用：`),
+        h('p', { class: 'deleted-binding-modal-tip' }, tipText),
         ...lines.map(line => h('div', { class: 'deleted-binding-modal-line' }, line)),
-        h('p', { class: 'deleted-binding-modal-foot' }, '建议先点击「一键移除已删除绑定」或手动解绑后再保存。'),
+        h('p', { class: 'deleted-binding-modal-foot' },
+          hasDeleted ? '建议先点击「移除已删除绑定」或手动解绑后再保存。' : '建议先启用对应的资源或手动解绑后再保存。'),
       ]),
       okText: '仍然保存',
       okType: 'danger',
@@ -2865,8 +2916,8 @@ function clearSelectedSkills() {
 
 async function loadSubAgentList() {
   try {
-    const res = await getEnabledSubAgents()
-    subAgentList.value = (res.data || []).map(s => ({ ...s, id: toBindingId(s.id) }))
+    const res = await getSubAgents({ pageNum: 1, pageSize: 100 })
+    subAgentList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载SubAgent列表失败:', e)
   }
@@ -2874,8 +2925,8 @@ async function loadSubAgentList() {
 
 async function loadSkillList() {
   try {
-    const res = await getEnabledSkills()
-    skillList.value = (res.data || []).map(s => ({ ...s, id: toBindingId(s.id) }))
+    const res = await getSkills({ pageNum: 1, pageSize: 100 })
+    skillList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载Skill列表失败:', e)
   }
@@ -3111,7 +3162,7 @@ async function handleSave(options = {}) {
     }
   }
 
-  if (!skipDeletedBindingCheck && deletedBindingCount.value > 0) {
+  if (!skipDeletedBindingCheck && invalidBindingCount.value > 0) {
     const proceed = await confirmSaveWithDeletedBindings()
     if (!proceed) return false
   }
@@ -3473,7 +3524,7 @@ function confirmRestoreVersion() {
 }
 
 async function handlePublish() {
-  if (deletedBindingCount.value > 0) {
+  if (invalidBindingCount.value > 0) {
     const proceed = await confirmSaveWithDeletedBindings()
     if (!proceed) return
   }
@@ -4633,6 +4684,21 @@ onMounted(async () => {
   border-radius: 4px;
   background: #fee2e2;
   color: #b91c1c;
+  font-weight: 500;
+}
+.binding-tag--disabled,
+.preview-tag--disabled {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.binding-disabled-tag {
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
   font-weight: 500;
 }
 .tag-remove {

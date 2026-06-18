@@ -38,6 +38,12 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
+        <button v-if="activeTab === 'skills'" class="btn-skill-action" style="background: #7c3aed" @click="skillRef?.openImportModal()">
+          <UploadOutlined /> ZIP 导入
+        </button>
+        <button v-if="activeTab === 'skills'" class="btn-skill-action" style="background: #0369a1" @click="skillRef?.openRemoteInstallModal()">
+          <CloudDownloadOutlined /> 远程安装
+        </button>
         <button class="btn-primary" @click="handleAdd">
           <PlusOutlined /> {{ addBtnText }}
         </button>
@@ -54,7 +60,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, SearchOutlined, UploadOutlined, CloudDownloadOutlined } from '@ant-design/icons-vue'
 import McpManage from './McpManage.vue'
 import SkillManage from './SkillManage.vue'
 import ToolManage from './ToolManage.vue'
@@ -123,12 +129,15 @@ watch(activeTab, () => {
 <style scoped>
 .extensions-page {
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   background: #fafafa;
   padding: 32px;
+  display: flex;
+  flex-direction: column;
 }
 .page-header {
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 .page-title {
   font-size: 24px;
@@ -146,6 +155,7 @@ watch(activeTab, () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .ext-tabs {
   flex: 1;
@@ -176,8 +186,31 @@ watch(activeTab, () => {
 .btn-primary:hover {
   background: #27272a;
 }
+.btn-skill-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-skill-action:hover {
+  opacity: 0.85;
+}
 .tab-content {
-  height: calc(100vh - 180px);
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
+}
+.tab-content :deep(.page) {
+  height: auto;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
 }
 </style>

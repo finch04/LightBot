@@ -306,6 +306,55 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     }
 
     @Override
+    @Transactional
+    public Skill commitRemoteSkill(String draftId, String slug) {
+        // 1. 提交草稿中指定 slug 的文件到正式目录
+        String finalSlug = skillStorageService.commitDraftForSlug(draftId, slug);
+
+        // 2. 读取 SKILL.md 解析元数据
+        String skillMdContent = skillStorageService.getSkillMarkdown(finalSlug);
+        SkillMetadata metadata = skillStorageService.parseSkillMarkdown(skillMdContent);
+
+        // 3. 检查 slug 冲突，自动追加后缀
+        Skill existing = getBySlug(finalSlug);
+        if (existing != null) {
+            String baseSlug = finalSlug;
+            for (int i = 2; i <= 100; i++) {
+                finalSlug = baseSlug + "-v" + i;
+                if (getBySlug(finalSlug) == null) break;
+            }
+            if (getBySlug(finalSlug) != null) {
+                throw new BizException(ErrorCode.SKILL_SLUG_CONFLICT, baseSlug);
+            }
+            skillStorageService.deleteSkillDirectory(finalSlug);
+            skillStorageService.writeSkillMarkdown(finalSlug, skillMdContent);
+        }
+
+        // 4. 创建 DB 记录
+        Skill skill = new Skill();
+        skill.setSlug(finalSlug);
+        skill.setName(metadata.getName() != null ? metadata.getName() : finalSlug);
+        skill.setDisplayName(metadata.getName());
+        skill.setDescription(metadata.getDescription());
+        skill.setPromptTemplate(metadata.getPromptTemplate());
+        skill.setToolIds("[]");
+        skill.setMcpServerIds("[]");
+        skill.setSkillDependencies(toJsonArray(metadata.getSkillDependencies()));
+        skill.setVersion(metadata.getVersion() != null ? metadata.getVersion() : "1.0.0");
+        skill.setSourceType("remote");
+        skill.setObjectPrefix("skills/" + finalSlug + "/");
+        skill.setContentHash(sha256(skillMdContent));
+        skill.setSortOrder(0);
+        skill.setStatus(CommonStatus.ACTIVE);
+        skill.setScope("global");
+        skill.setIsBuiltin(0);
+        save(skill);
+
+        log.info("[Skill] 远程安装完成: slug={}, name={}", finalSlug, skill.getName());
+        return skill;
+    }
+
+    @Override
     public List<Skill> listBySlugs(Collection<String> slugs) {
         if (slugs == null || slugs.isEmpty()) {
             return List.of();

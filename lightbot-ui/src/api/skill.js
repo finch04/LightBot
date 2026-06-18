@@ -51,3 +51,25 @@ export function importSkillCommit(draftId, targetSlug) {
 export function exportSkillZip(id) {
   return request.get(`/skills/${id}/export`, { responseType: 'blob' })
 }
+
+/** 远程仓库：列出可用 Skill */
+export function listRemoteSkills(source) {
+  return request.post('/skills/remote/list', { source })
+}
+
+/** 远程仓库：全局搜索 Skill */
+export function searchRemoteSkills(query) {
+  return request.post('/skills/remote/search', { source: query })
+}
+
+/** 远程仓库：准备安装（下载并暂存草稿） */
+export function prepareRemoteInstall(source, skills) {
+  return request.post('/skills/remote/prepare', { source, skills })
+}
+
+/** 远程仓库：确认安装 */
+export function commitRemoteInstall(draftId, slug) {
+  return request.post('/skills/remote/commit', null, {
+    params: { draftId, slug }
+  })
+}

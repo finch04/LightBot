@@ -117,6 +117,7 @@ public enum ErrorCode {
     SKILL_DEPENDENCY_NOT_FOUND(92006, "依赖的Skill不存在: %s", HttpStatus.BAD_REQUEST),
     SKILL_FILE_NOT_FOUND(92007, "Skill文件不存在", HttpStatus.NOT_FOUND),
     SKILL_ZIP_INVALID(92008, "ZIP包格式无效: %s", HttpStatus.BAD_REQUEST),
+    SKILL_REMOTE_FETCH_FAILED(92012, "远程仓库获取失败: %s", HttpStatus.BAD_REQUEST),
     SKILL_BUILTIN_NOT_EDITABLE(92009, "内置Skill不可编辑", HttpStatus.BAD_REQUEST),
     SKILL_BUILTIN_NOT_DELETABLE(92010, "内置Skill不可删除", HttpStatus.BAD_REQUEST),
     SANDBOX_PATH_VIOLATION(92011, "路径安全校验失败: %s", HttpStatus.FORBIDDEN),

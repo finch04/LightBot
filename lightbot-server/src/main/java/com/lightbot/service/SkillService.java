@@ -49,6 +49,9 @@ public interface SkillService extends IService<Skill> {
     /** ZIP 导入（阶段二：确认提交） */
     Skill importZipCommit(String draftId, String targetSlug);
 
+    /** 远程安装确认（提交草稿中指定 slug 的 Skill） */
+    Skill commitRemoteSkill(String draftId, String slug);
+
     /** ZIP 导出 */
     byte[] exportZip(Long skillId);
 

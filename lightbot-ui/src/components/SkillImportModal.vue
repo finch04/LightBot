@@ -18,7 +18,7 @@
           <CloudUploadOutlined />
         </p>
         <p style="font-size: 14px; color: #52525b">拖拽 ZIP 文件到此处，或点击上传</p>
-        <p style="font-size: 12px; color: #a1a1aa">ZIP 中必须包含 SKILL.md 文件</p>
+        <p style="font-size: 12px; color: #a1a1aa">ZIP 中必须包含 SKILL.md 文件，大小不超过 10MB</p>
       </a-upload-dragger>
     </div>
 
@@ -65,9 +65,9 @@ import { CloudUploadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { importSkillPreview, importSkillCommit } from '../api/skill'
 
-const props = defineProps({
-  open: Boolean,
-})
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open', 'imported'])
 
 const step = ref('upload')
@@ -86,20 +86,32 @@ watch(() => props.open, (val) => {
   }
 })
 
-async function handleBeforeUpload(file) {
+function handleBeforeUpload(file) {
+  // 文件大小校验
+  if (file.size > MAX_FILE_SIZE) {
+    message.error(`文件大小超过限制（${(file.size / 1024 / 1024).toFixed(1)}MB > 10MB），请压缩后重试`)
+    return false
+  }
+  if (!file.name.endsWith('.zip')) {
+    message.error('仅支持 .zip 格式的文件')
+    return false
+  }
+
   loading.value = true
   step.value = 'preview'
-  try {
-    const res = await importSkillPreview(file)
-    preview.value = res.data
-    draftId.value = res.data.draftId
-    overrideSlug.value = res.data.slug || ''
-  } catch (e) {
-    step.value = 'upload'
-    message.error('ZIP 解析失败，请检查格式')
-  } finally {
-    loading.value = false
-  }
+  importSkillPreview(file)
+    .then(res => {
+      preview.value = res.data
+      draftId.value = res.data.draftId
+      overrideSlug.value = res.data.slug || ''
+    })
+    .catch(() => {
+      step.value = 'upload'
+      message.error('ZIP 解析失败，请检查格式')
+    })
+    .finally(() => {
+      loading.value = false
+    })
   return false // 阻止 antd 自动上传
 }
 

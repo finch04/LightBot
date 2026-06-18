@@ -129,6 +129,7 @@ public class TaskConsumerConfig {
     }
 
     private void consumeLoop(int workerId) {
+        boolean redisWarned = false;
         while (running.get()) {
             try {
                 // 1. 阻塞弹出任务ID，超时5秒后重试
@@ -136,6 +137,7 @@ public class TaskConsumerConfig {
                 if (taskIdStr == null) {
                     continue;
                 }
+                redisWarned = false;
 
                 Long taskId = Long.parseLong(taskIdStr);
                 Task task = taskService.getById(taskId);
@@ -166,10 +168,8 @@ public class TaskConsumerConfig {
                     String result = executor.execute(task);
                     taskService.markSuccess(taskId, result);
                 } catch (Exception e) {
-                    // 构建详细的错误信息
                     String error = buildErrorMessage(e);
                     log.error("[任务消费者] 执行失败, taskId={}, error={}", taskId, error, e);
-                    // 区分用户取消和其他失败
                     if ("任务已被用户取消".equals(e.getMessage())) {
                         taskService.markCancelled(taskId, "任务被用户取消");
                     } else {
@@ -177,9 +177,32 @@ public class TaskConsumerConfig {
                     }
                 }
 
+            } catch (IllegalStateException e) {
+                // Redis 连接工厂已停止（应用正在关闭），直接退出
+                if (!running.get()) {
+                    break;
+                }
+                if (!redisWarned) {
+                    log.warn("[任务消费者] Redis 连接不可用，等待重试: {}", e.getMessage());
+                    redisWarned = true;
+                }
+                sleepQuietly(5000);
             } catch (Exception e) {
-                log.error("[任务消费者] 异常, workerId={}", workerId, e);
+                if (!running.get()) break;
+                if (!redisWarned) {
+                    log.warn("[任务消费者] Redis 异常，等待重试: {}", e.getMessage());
+                    redisWarned = true;
+                }
+                sleepQuietly(5000);
             }
+        }
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
     }
 

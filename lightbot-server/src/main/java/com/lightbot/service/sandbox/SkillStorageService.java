@@ -273,6 +273,41 @@ public class SkillStorageService {
     }
 
     /**
+     * 上传文件到草稿目录（供 GitHubSkillService 使用）
+     *
+     * @param destPath 完整目标路径（如 skill_drafts/{draftId}/{slug}/SKILL.md）
+     * @param content  文件内容
+     */
+    public void uploadDraftFile(String destPath, byte[] content) {
+        minioUtil.upload(new ByteArrayInputStream(content), destPath, content.length, "application/octet-stream");
+    }
+
+    /**
+     * 将草稿中指定 slug 的文件复制到正式目录（远程安装专用）
+     *
+     * @param draftId 草稿 ID
+     * @param slug    Skill slug（草稿中的子目录名）
+     * @return 最终 slug
+     */
+    public String commitDraftForSlug(String draftId, String slug) {
+        String draftSkillPrefix = DRAFTS_ROOT + draftId + "/" + slug + "/";
+        List<String> objects = minioUtil.listObjects(draftSkillPrefix);
+        if (objects.isEmpty()) {
+            throw new BizException(ErrorCode.SKILL_IMPORT_FAILED, "草稿中未找到 Skill: " + slug);
+        }
+
+        String targetPrefix = SKILLS_ROOT + slug + "/";
+        for (String srcPath : objects) {
+            String relativePath = srcPath.substring(draftSkillPrefix.length());
+            String destPath = targetPrefix + relativePath;
+            minioUtil.copyObject(srcPath, destPath);
+        }
+
+        log.info("[SkillStorage] 远程草稿提交: draftId={}, slug={}, 文件数={}", draftId, slug, objects.size());
+        return slug;
+    }
+
+    /**
      * 清理草稿目录
      */
     public void cleanupDraft(String draftId) {

@@ -32,10 +32,22 @@ export function stripBindingKeysFromConfig(config) {
 }
 
 /**
- * 按已选 ID 顺序合并目录实体；查不到的保留占位并标记 _deleted
+ * 判断实体是否处于禁用状态
+ * Skill/Tool/MCP 使用 CommonStatus 枚举（status === 'disabled'）
+ * SubAgent 使用 Integer 布尔（enabled === 0）
+ */
+export function isItemDisabled(item) {
+  if (!item) return false
+  if (item.status === 'disabled' || item.status === 'DISABLED') return true
+  if (item.enabled === 0 || item.enabled === false) return true
+  return false
+}
+
+/**
+ * 按已选 ID 顺序合并目录实体；查不到的保留占位并标记 _deleted；禁用的标记 _disabled
  * @param {Set<string>|Iterable<string>} selectedIdSet
  * @param {Array<object>} catalogList
- * @param {{ idKey?: string, entityLabel?: string }} options
+ * @param {{ idKey?: string, entityLabel?: string, catalogReady?: boolean }} options
  */
 export function resolveBindingItems(selectedIdSet, catalogList, options = {}) {
   const { idKey = 'id', catalogReady = true } = options
@@ -48,7 +60,7 @@ export function resolveBindingItems(selectedIdSet, catalogList, options = {}) {
   return orderedIds.map(id => {
     const found = catalogById.get(id)
     if (found) {
-      return { ...found, _deleted: false }
+      return { ...found, _deleted: false, _disabled: isItemDisabled(found) }
     }
     const label = deletedBindingDisplayName(id)
     // 目录未加载完成时不判为已删除，避免 Tab 懒加载导致误报
@@ -58,6 +70,7 @@ export function resolveBindingItems(selectedIdSet, catalogList, options = {}) {
         name: label,
         displayName: label,
         _deleted: false,
+        _disabled: false,
         _catalogPending: true,
       }
     }
@@ -66,6 +79,7 @@ export function resolveBindingItems(selectedIdSet, catalogList, options = {}) {
       name: label,
       displayName: label,
       _deleted: true,
+      _disabled: false,
     }
   })
 }
@@ -81,18 +95,32 @@ export function countDeletedBindingItems(items) {
   return (items || []).filter(i => i._deleted).length
 }
 
+/** 统计已禁用绑定数量 */
+export function countDisabledBindingItems(items) {
+  return (items || []).filter(i => i._disabled && !i._deleted).length
+}
+
 /**
- * 生成已删除绑定明细行（用于 Alert / 弹窗，多行展示）
- * @param {Array<{ label: string, items: Array<{ id, _deleted? }> }>} sections
+ * 生成失效绑定明细行（用于 Alert / 弹窗，区分已删除和已禁用）
+ * @param {Array<{ label: string, items: Array<{ id, _deleted?, _disabled? }> }>} sections
  */
 export function formatDeletedBindingDetailLines(sections) {
   const lines = []
   for (const { label, items } of sections || []) {
     const deleted = (items || []).filter(i => i._deleted)
-    if (!deleted.length) continue
-    lines.push(`${label}：${deleted.length} 个已删除的`)
-    for (const item of deleted) {
-      lines.push(`（ID：${toBindingId(item.id)}）`)
+    const disabled = (items || []).filter(i => i._disabled && !i._deleted)
+    if (!deleted.length && !disabled.length) continue
+    if (deleted.length) {
+      lines.push(`${label}：${deleted.length} 个已删除的`)
+      for (const item of deleted) {
+        lines.push(`（ID：${toBindingId(item.id)}）`)
+      }
+    }
+    if (disabled.length) {
+      lines.push(`${label}：${disabled.length} 个已禁用的`)
+      for (const item of disabled) {
+        lines.push(`（${item.displayName || item.name || toBindingId(item.id)}）`)
+      }
     }
   }
   return lines
@@ -110,14 +138,14 @@ export function removeDeletedIdsFromSet(idSet, items) {
   return n
 }
 
-/** 后端版本快照名称含「已删除」时标记，并统一为 ID：xxx 展示 */
+/** 后端版本快照名称含「已删除」时标记为 _deleted；检查 status/enabled 标记为 _disabled */
 export function markBindingItemDeletedFlag(item) {
   if (!item) return item
   const text = String(item.name || item.displayName || '')
   if (text.includes('已删除')) {
     const id = toBindingId(item.id)
     const label = deletedBindingDisplayName(id)
-    return { ...item, _deleted: true, name: label, displayName: label }
+    return { ...item, _deleted: true, _disabled: false, name: label, displayName: label }
   }
-  return item
+  return { ...item, _deleted: false, _disabled: isItemDisabled(item) }
 }

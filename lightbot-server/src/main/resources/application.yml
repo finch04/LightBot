@@ -152,6 +152,11 @@ lightbot:
 # ========================================
 # 内置工具 API Key 配置
 # ========================================
+  # GitHub API Token（可选，提升 API 速率限制，Code Search API 必需）
+  # 获取地址：https://github.com/settings/tokens → Fine-grained tokens
+  # 环境变量：GITHUB_TOKEN
+  github:
+    token: ${GITHUB_TOKEN:}
   # Tavily 联网搜索 API Key
   # 获取地址：https://tavily.com → API Keys
   # 环境变量：TAVILY_API_KEY

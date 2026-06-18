@@ -24,6 +24,9 @@
         <button class="btn-primary" style="background: #7c3aed" @click="importModalVisible = true">
           <UploadOutlined /> ZIP 导入
         </button>
+        <button class="btn-primary" style="background: #0369a1" @click="remoteInstallVisible = true">
+          <CloudDownloadOutlined /> 远程安装
+        </button>
       </div>
     </div>
 
@@ -33,6 +36,7 @@
         <div class="card-top">
           <div class="card-icon card-icon--skill">
             <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+            <span class="status-dot" :class="s.status === 'disabled' ? 'status-disabled' : 'status-active'"></span>
             <ThunderboltOutlined />
           </div>
           <div class="card-info">
@@ -42,17 +46,22 @@
             <a-tooltip title="查看详情">
               <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
             </a-tooltip>
-            <a-tooltip :title="s.status === 'disabled' ? '点击启用' : '点击禁用'">
-              <button class="btn-icon" @click="toggleEnabled(s)">
-                <CheckCircleOutlined v-if="s.status !== 'disabled'" style="color: #16a34a" />
-                <CloseCircleOutlined v-else style="color: #a3a3a3" />
-              </button>
-            </a-tooltip>
-            <button class="btn-icon" :disabled="s.isBuiltin === 1" @click="openDialog(s)"><EditOutlined /></button>
-            <a-tooltip title="导出 ZIP">
-              <button class="btn-icon" @click="handleExport(s)"><ExportOutlined /></button>
-            </a-tooltip>
-            <button class="btn-icon danger" :disabled="s.isBuiltin === 1" @click="handleDelete(s)"><DeleteOutlined /></button>
+            <button v-if="s.isBuiltin !== 1" class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
+            <a-dropdown :trigger="['click']">
+              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="toggleEnabled(s)">
+                    <CheckCircleOutlined v-if="s.status !== 'disabled'" style="color: #16a34a; margin-right: 6px" />
+                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                    {{ s.status === 'disabled' ? '启用' : '禁用' }}
+                  </a-menu-item>
+                  <a-menu-item @click="handleExport(s)">
+                    <ExportOutlined style="margin-right: 6px" /> 导出 ZIP
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
         </div>
         <div class="card-detail">
@@ -61,6 +70,7 @@
             <span v-if="s.version" class="tag tag-version">v{{ s.version }}</span>
             <span v-if="s.sourceType === 'builtin'" class="tag tag-builtin">内置</span>
             <span v-else-if="s.sourceType === 'upload'" class="tag tag-upload">上传</span>
+            <span v-else-if="s.sourceType === 'remote'" class="tag tag-remote">远程</span>
           </div>
           <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
             <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
@@ -73,24 +83,14 @@
     </div>
     </a-spin>
 
-    <a-pagination
-      v-if="total > 0"
-      class="pagination"
-      v-model:current="pageNum"
-      :total="total"
-      :page-size="pageSize"
-      show-quick-jumper
-      :show-total="(total) => `共 ${total} 条`"
-      @change="loadData"
-    />
-
     <!-- 查看详情弹窗 -->
-    <a-modal v-model:open="detailVisible" title="Skill 详情" :width="720" :footer="null">
+    <a-modal v-model:open="detailVisible" title="Skill 详情" :width="720" :footer="null" :maskClosable="false">
       <template v-if="detailRow">
         <a-descriptions bordered :column="1" size="small">
           <a-descriptions-item label="显示名称">{{ detailRow.displayName || detailRow.name }}</a-descriptions-item>
           <a-descriptions-item label="技能名称">{{ detailRow.name }}</a-descriptions-item>
           <a-descriptions-item label="slug">{{ detailRow.slug || '—' }}</a-descriptions-item>
+          <a-descriptions-item label="版本">{{ detailRow.version || '1.0.0' }}</a-descriptions-item>
           <a-descriptions-item label="状态">
             <a-tag :color="detailRow.status === 'disabled' ? 'default' : 'success'">
               {{ detailRow.status === 'disabled' ? '已禁用' : '已启用' }}
@@ -115,6 +115,16 @@
           <pre class="detail-pre">{{ detailRow.config }}</pre>
         </div>
       </template>
+      <div class="dialog-footer">
+        <div class="dialog-footer-left">
+          <button v-if="detailRow && detailRow.isBuiltin !== 1" class="btn-cancel" @click="detailVisible = false; openDialog(detailRow)">
+            <EditOutlined /> 编辑
+          </button>
+        </div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="detailVisible = false">关闭</button>
+        </div>
+      </div>
     </a-modal>
 
     <!-- 新增/编辑弹窗 -->
@@ -169,6 +179,12 @@
       @imported="loadData"
     />
 
+    <!-- 远程安装弹窗 -->
+    <SkillRemoteInstallModal
+      v-model:open="remoteInstallVisible"
+      @installed="loadData"
+    />
+
     <!-- Skill 说明弹窗 -->
     <a-modal v-model:open="guideVisible" title="Skill 说明" :width="640" :footer="null">
       <div class="guide">
@@ -208,26 +224,25 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined, CloudDownloadOutlined, MoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled, exportSkillZip } from '../api/skill'
 import { getTools } from '../api/tool'
 import { getMcpServers } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
 import SkillImportModal from '../components/SkillImportModal.vue'
+import SkillRemoteInstallModal from '../components/SkillRemoteInstallModal.vue'
 import { truncateText } from '../utils/format'
 
 const list = ref([])
 const loading = ref(false)
-const total = ref(0)
-const pageNum = ref(1)
-const pageSize = ref(20)
 const searchText = ref('')
 const toolOptions = ref([])
 const mcpOptions = ref([])
 const dialogVisible = ref(false)
 const guideVisible = ref(false)
 const importModalVisible = ref(false)
+const remoteInstallVisible = ref(false)
 const detailVisible = ref(false)
 const detailRow = ref(null)
 const submitting = ref(false)
@@ -237,18 +252,16 @@ const form = reactive({
   toolIds: [], mcpServerIds: [], scope: 'global', isBuiltin: 0,
 })
 
-watch(searchText, () => {
-  pageNum.value = 1
-  loadData()
-})
+watch(searchText, () => loadData())
 
 async function loadData() {
   loading.value = true
   try {
-    const res = await getSkills({ pageNum: pageNum.value, pageSize: pageSize.value, keyword: searchText.value || undefined })
+    const params = { pageNum: 1, pageSize: 50 }
+    if (searchText.value) params.keyword = searchText.value
+    const res = await getSkills(params)
     const data = res.data || {}
     list.value = data.records || data || []
-    total.value = data.total || 0
   } catch (e) {
     // interceptor handles error
   } finally {
@@ -402,11 +415,18 @@ function search(text) {
 
 function refresh() {
   searchText.value = ''
-  pageNum.value = 1
   loadData()
 }
 
-defineExpose({ openDialog, search, refresh })
+function openImportModal() {
+  importModalVisible.value = true
+}
+
+function openRemoteInstallModal() {
+  remoteInstallVisible.value = true
+}
+
+defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallModal })
 </script>
 
 <style scoped>
@@ -526,6 +546,9 @@ defineExpose({ openDialog, search, refresh })
   display: flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .card-type {
   font-size: 12px;
@@ -544,6 +567,22 @@ defineExpose({ openDialog, search, refresh })
   color: #fff;
   border-radius: 4px;
   z-index: 1;
+}
+.status-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  z-index: 1;
+}
+.status-active {
+  background: #16a34a;
+}
+.status-disabled {
+  background: #a3a3a3;
 }
 .card-actions { display: flex; gap: 4px; }
 .btn-icon {
@@ -602,6 +641,11 @@ defineExpose({ openDialog, search, refresh })
   background: #f0fdf4;
   color: #15803d;
   border: 1px solid #bbf7d0;
+}
+.tag-remote {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
 }
 .help-icon {
   margin-left: 8px;
@@ -670,7 +714,6 @@ defineExpose({ openDialog, search, refresh })
   padding: 48px 24px;
   color: #a1a1aa;
 }
-.pagination { margin-top: 24px; text-align: right; }
 
 .dialog-footer {
   display: flex;
@@ -680,6 +723,7 @@ defineExpose({ openDialog, search, refresh })
   border-top: 1px solid #f0f0f0;
   margin-top: 8px;
 }
+.dialog-footer-left { display: flex; gap: 8px; }
 .dialog-footer-right { display: flex; gap: 8px; }
 .btn-cancel {
   padding: 6px 14px;

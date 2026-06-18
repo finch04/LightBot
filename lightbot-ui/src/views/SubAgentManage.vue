@@ -475,6 +475,9 @@ defineExpose({ openDialog, search, refresh })
   color: #71717a;
   margin-top: 2px;
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .card-actions {
   display: flex;

@@ -2,10 +2,13 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import com.lightbot.dto.RemoteListRequest;
+import com.lightbot.dto.RemotePrepareRequest;
 import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
 import com.lightbot.service.SkillService;
+import com.lightbot.service.sandbox.GitHubSkillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -14,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "Skill管理", description = "Skill 的增删改查与 Agent 绑定")
 @RestController
@@ -22,6 +26,7 @@ import java.util.List;
 public class SkillController {
 
     private final SkillService skillService;
+    private final GitHubSkillService gitHubSkillService;
 
     @Operation(summary = "新增 Skill（全局或 Agent 私有）")
     @PostMapping
@@ -90,5 +95,33 @@ public class SkillController {
     @GetMapping("/{id}/export")
     public Result<byte[]> exportZip(@PathVariable Long id) {
         return Result.ok(skillService.exportZip(id));
+    }
+
+    // ==================== 远程安装 ====================
+
+    @Operation(summary = "列出远程仓库中的 Skill")
+    @PostMapping("/remote/list")
+    public Result<List<Map<String, String>>> listRemoteSkills(@RequestBody @Valid RemoteListRequest request) {
+        String[] parsed = gitHubSkillService.parseSource(request.getSource());
+        return Result.ok(gitHubSkillService.listRemoteSkills(parsed[0], parsed[1], parsed[2]));
+    }
+
+    @Operation(summary = "全局搜索远程 Skill")
+    @PostMapping("/remote/search")
+    public Result<List<Map<String, String>>> searchRemoteSkills(@RequestBody @Valid RemoteListRequest request) {
+        return Result.ok(gitHubSkillService.searchRemoteSkills(request.getSource()));
+    }
+
+    @Operation(summary = "远程安装准备（下载并暂存草稿）")
+    @PostMapping("/remote/prepare")
+    public Result<List<SkillImportPreview>> prepareRemoteInstall(@RequestBody @Valid RemotePrepareRequest request) {
+        String[] parsed = gitHubSkillService.parseSource(request.getSource());
+        return Result.ok(gitHubSkillService.prepareRemoteInstall(parsed[0], parsed[1], parsed[2], request.getSkills()));
+    }
+
+    @Operation(summary = "远程安装确认（提交草稿）")
+    @PostMapping("/remote/commit")
+    public Result<Skill> commitRemoteInstall(@RequestParam String draftId, @RequestParam String slug) {
+        return Result.ok(skillService.commitRemoteSkill(draftId, slug));
     }
 }
