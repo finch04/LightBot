@@ -6,7 +6,10 @@
     </div>
 
     <div class="about-card">
-      <img src="/lightbot-logo.png" alt="LightBot" class="about-logo" />
+      <div class="logo-ellipse">
+        <div class="logo-ellipse-glow"></div>
+        <img src="/lightbot-logo.png" alt="LightBot" class="about-logo" />
+      </div>
       <h1 class="about-title">LightBot</h1>
       <p class="about-desc">轻量级 AI Agent 平台</p>
 
@@ -125,11 +128,13 @@ function petalStyle(i) {
   backdrop-filter: blur(12px);
   border-radius: 16px;
   padding: 40px 36px;
+  padding-top: 48px;
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.06),
     0 0 0 1px rgba(255, 255, 255, 0.6);
   text-align: center;
   animation: cardIn 0.6s ease-out;
+  overflow: visible;
 }
 
 @keyframes cardIn {
@@ -143,11 +148,68 @@ function petalStyle(i) {
   }
 }
 
+.logo-ellipse {
+  position: absolute;
+  top: -28px;
+  left: -28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  transform-origin: 70% 20%;
+  animation: ellipseHang 3s ease-in-out infinite;
+  z-index: 2;
+}
+.logo-ellipse::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+  z-index: 3;
+}
+.logo-ellipse-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent, rgba(139, 92, 246, 0.3), transparent, rgba(59, 130, 246, 0.3), transparent);
+  animation: glowSpin 6s linear infinite;
+  z-index: 0;
+}
+.logo-ellipse::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  z-index: 1;
+}
 .about-logo {
-  width: 142px;
-  height: 72px;
-  border-radius: 16px;
-  margin-bottom: 16px;
+  position: relative;
+  z-index: 2;
+  width: 90px;
+  height: 45px;
+  border-radius: 8px;
+}
+@keyframes ellipseHang {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes glowSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .about-title {

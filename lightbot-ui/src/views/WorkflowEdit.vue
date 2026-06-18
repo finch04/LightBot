@@ -2359,7 +2359,7 @@ async function runWorkflowTest() {
 
 // 返回
 function goBack() {
-  const navigate = () => router.push(`/agents/${agentId}`)
+  const navigate = () => router.push(`/app/agents/${agentId}`)
   if (isDirty.value) {
     Modal.confirm({
       title: '未保存的修改',

@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/prompts')">
+        <button class="btn-back" @click="router.push('/app/prompts')">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title"><span v-if="latestVersion" class="version-badge">{{ latestVersion }}</span>{{ promptKey }}</h1>
@@ -13,7 +13,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn-outline-sm" @click="router.push(`/prompts/${promptKey}/versions`)">
+        <button class="btn-outline-sm" @click="router.push(`/app/prompts/${promptKey}/versions`)">
           <HistoryOutlined /> 版本记录
         </button>
         <button class="btn-primary-sm" @click="openVersionDialog()">
@@ -134,7 +134,19 @@
         <!-- 调试区域 -->
         <div class="debug-area">
           <div class="debug-header">
-            <span class="debug-title">对话测试</span>
+            <span class="debug-title">对话测试
+              <a-tooltip placement="topLeft">
+                <template #title>
+                  <div style="max-width: 280px; line-height: 1.8">
+                    <div>1. 在上方<b>参数配置</b>中填写变量默认值</div>
+                    <div>2. 下方输入框可输入内容覆盖单变量值（可选）</div>
+                    <div>3. 点击<b>运行</b>或 <b>Ctrl+Enter</b> 发送</div>
+                    <div>4. AI 回复后可点击 <b>Markdown</b> 图标切换渲染</div>
+                  </div>
+                </template>
+                <QuestionCircleOutlined class="debug-help-icon" />
+              </a-tooltip>
+            </span>
             <span class="debug-meta" v-if="inst.messages.length > 0">{{ inst.messages.length }} 条消息</span>
           </div>
           <div class="debug-messages" :ref="el => { if (el) inst.messagesRef = el }">
@@ -233,7 +245,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, HistoryOutlined, ThunderboltOutlined,
   ImportOutlined, CloudUploadOutlined, CopyOutlined, DeleteOutlined,
-  FileMarkdownOutlined,
+  FileMarkdownOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
@@ -803,6 +815,16 @@ function scrollToBottom(inst) {
   font-size: 13px;
   font-weight: 600;
   color: #171717;
+}
+.debug-help-icon {
+  margin-left: 4px;
+  font-size: 14px;
+  color: #a1a1aa;
+  cursor: help;
+  vertical-align: middle;
+}
+.debug-help-icon:hover {
+  color: #71717a;
 }
 .debug-meta {
   font-size: 12px;

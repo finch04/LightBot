@@ -17,7 +17,7 @@
         <button class="btn-outline" @click="loadData">
           <ReloadOutlined /> 刷新
         </button>
-        <button class="btn-outline" @click="router.push('/graph')">
+        <button class="btn-outline" @click="router.push('/app/graph')">
           <ApartmentOutlined /> 知识图谱
         </button>
         <button class="btn-primary" @click="openCreateModal">
@@ -31,7 +31,7 @@
         v-for="k in list"
         :key="k.id"
         class="knowledge-card"
-        @click="router.push(`/knowledge/${k.id}`)"
+        @click="router.push(`/app/knowledge/${k.id}`)"
       >
         <div class="card-header">
           <div class="card-icon">K</div>

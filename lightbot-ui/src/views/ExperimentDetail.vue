@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/eval/experiments')">
+        <button class="btn-back" @click="router.push('/app/eval/experiments')">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ experiment?.name || '实验详情' }}</h1>

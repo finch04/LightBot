@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/prompts')">
+        <button class="btn-back" @click="router.push('/app/prompts')">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">Playground
@@ -521,7 +521,7 @@ function openCreatePromptModal() {
 
 function handleCreatePromptSuccess({ promptKey }) {
   loadPromptsData()
-  router.push(`/prompts/${promptKey}`)
+  router.push(`/app/prompts/${promptKey}`)
 }
 
 async function loadPromptsData() {

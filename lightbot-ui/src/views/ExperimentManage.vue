@@ -33,7 +33,7 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
-          <a @click.stop="router.push(`/eval/experiments/${record.id}`)">{{ record.name }}</a>
+          <a @click.stop="router.push(`/app/eval/experiments/${record.id}`)">{{ record.name }}</a>
         </template>
         <template v-if="column.key === 'status'">
           <a-tag :color="statusColor(record.status?.code || record.status)">

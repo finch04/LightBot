@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/eval/datasets')">
+        <button class="btn-back" @click="router.push('/app/eval/datasets')">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ dataset?.name || '评测集详情' }}</h1>

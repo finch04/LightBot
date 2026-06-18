@@ -28,7 +28,7 @@
         v-for="item in list"
         :key="item.id"
         class="card-item"
-        @click="router.push(`/eval/evaluators/${item.id}`)"
+        @click="router.push(`/app/eval/evaluators/${item.id}`)"
       >
         <div class="card-top">
           <div class="card-icon">E</div>

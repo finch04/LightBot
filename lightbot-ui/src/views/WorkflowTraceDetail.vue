@@ -3,7 +3,7 @@
     <!-- 顶部栏 -->
     <div class="trace-header">
       <div class="header-left">
-        <a-button type="text" @click="router.push('/observability')"><ArrowLeftOutlined /> 返回</a-button>
+        <a-button type="text" @click="router.push('/app/observability')"><ArrowLeftOutlined /> 返回</a-button>
         <span class="header-title">工作流链路详情</span>
         <a-tag v-if="trace" :color="trace.status === 'completed' ? 'success' : trace.status === 'failed' ? 'error' : 'processing'">
           {{ trace.status === 'completed' ? '成功' : trace.status === 'failed' ? '失败' : '运行中' }}

@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push(`/prompts/${promptKey}`)">
+        <button class="btn-back" @click="router.push(`/app/prompts/${promptKey}`)">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">版本记录</h1>
@@ -210,7 +210,7 @@ function openDetail(v) {
 
 function restoreVersion(v) {
   if (!v) return
-  router.push(`/prompts/${promptKey}?restoreVersion=${v.version}`)
+  router.push(`/app/prompts/${promptKey}?restoreVersion=${v.version}`)
 }
 
 function compareWithPrevious(v) {

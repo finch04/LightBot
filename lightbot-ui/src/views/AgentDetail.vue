@@ -2144,7 +2144,7 @@ const workflowStats = computed(() => {
 })
 
 function goWorkflowEdit() {
-  router.push(`/workflow/${agentId}`)
+  router.push(`/app/workflow/${agentId}`)
 }
 
 function syncPromptVariablesFromConfig(parsed) {
@@ -2643,7 +2643,7 @@ function confirmSaveWithDeletedBindings() {
 
 function handleGoBack() {
   // 未保存提示统一由 onBeforeRouteLeave 处理，避免与返回按钮重复弹窗
-  router.push('/agents')
+  router.push('/app/agents')
 }
 
 async function copyAgentId() {
@@ -3493,7 +3493,7 @@ async function confirmPublishAgent() {
 }
 
 function startChat() {
-  router.push({ path: '/chat', query: { agentId: agentId } })
+  router.push({ path: '/app/chat', query: { agentId: agentId } })
 }
 
 onMounted(async () => {

@@ -765,12 +765,12 @@ function handleTableChange(pag) {
 }
 
 function goToChat(sessionId) {
-  router.push(`/chat/${sessionId}`)
+  router.push(`/app/chat/${sessionId}`)
 }
 
 async function openDetail(record) {
   if (activeTab.value === 'workflow') {
-    router.push(`/observability/workflow-trace/${record.id}`)
+    router.push(`/app/observability/workflow-trace/${record.id}`)
     return
   }
   detailVisible.value = true

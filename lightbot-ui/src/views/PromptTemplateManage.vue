@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/prompts')">
+        <button class="btn-back" @click="router.push('/app/prompts')">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">Prompt 模板</h1>

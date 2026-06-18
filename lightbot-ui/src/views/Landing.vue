@@ -55,7 +55,7 @@
             <div class="hero-actions reveal-up delay-2">
               <button class="button-base primary" @click="handleStart">
                 <span>开始体验</span>
-                <ArrowRight :size="18" />
+                <RightOutlined />
               </button>
             </div>
           </div>
@@ -73,7 +73,7 @@
                   @mouseenter="activeFeature = index"
                 >
                   <div class="feature-icon-wrap">
-                    <component :is="iconMap[feature.icon]" :size="22" />
+                    <component :is="iconMap[feature.icon]" />
                   </div>
                   <span class="feature-title">{{ feature.title }}</span>
                 </div>
@@ -101,7 +101,17 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getLandingConfig } from '../api/landing'
-import { ArrowRight, Bot, BookOpen, GitBranch, Plug, Wrench, Sparkles, BarChart3, Activity } from 'lucide-vue-next'
+import {
+  RightOutlined,
+  RobotOutlined,
+  DatabaseOutlined,
+  ApartmentOutlined,
+  ApiOutlined,
+  ToolOutlined,
+  ThunderboltOutlined,
+  ExperimentOutlined,
+  EyeOutlined,
+} from '@ant-design/icons-vue'
 
 const router = useRouter()
 
@@ -118,14 +128,14 @@ let subtitleTimer = null
 const subtitleIndex = ref(0)
 
 const iconMap = {
-  Agent: Bot,
-  Knowledge: BookOpen,
-  Workflow: GitBranch,
-  Mcp: Plug,
-  Tool: Wrench,
-  Skill: Sparkles,
-  Eval: BarChart3,
-  Observability: Activity,
+  Agent: RobotOutlined,
+  Knowledge: DatabaseOutlined,
+  Workflow: ApartmentOutlined,
+  Mcp: ApiOutlined,
+  Tool: ToolOutlined,
+  Skill: ThunderboltOutlined,
+  Eval: ExperimentOutlined,
+  Observability: EyeOutlined,
 }
 
 const features = computed(() => config.value.features || [])
@@ -175,8 +185,9 @@ function handleStart() {
 onMounted(async () => {
   try {
     const res = await getLandingConfig()
-    if (res) {
-      config.value = typeof res === 'string' ? JSON.parse(res) : res
+    const raw = res?.data ?? res
+    if (raw) {
+      config.value = typeof raw === 'string' ? JSON.parse(raw) : raw
     }
   } catch (e) {
     console.error('加载 Landing 配置失败:', e)
@@ -459,6 +470,18 @@ onUnmounted(() => {
 }
 .button-base.primary :deep(svg) {
   transition: transform 0.2s ease;
+}
+
+/* Ant Design icon sizing */
+.button-base :deep(.anticon) {
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+}
+.feature-icon-wrap :deep(.anticon) {
+  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* 右侧功能卡片 */

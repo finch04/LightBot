@@ -169,7 +169,7 @@ function handleImport() {
 
 // 打开模板管理页面
 function openTemplateManage() {
-  router.push('/prompt-templates')
+  router.push('/app/prompt-templates')
 }
 
 // 监听弹窗打开时加载模板

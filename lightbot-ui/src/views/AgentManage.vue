@@ -39,7 +39,7 @@
     </div>
 
     <div class="agent-grid">
-      <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/agents/${a.id}`)">
+      <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/app/agents/${a.id}`)">
         <div class="card-top">
           <div class="card-icon" :class="{ 'has-avatar': a.avatar }">
             <img v-if="a.avatar" :src="a.avatar" alt="" class="card-avatar-img" @error="a.avatar = ''" />
@@ -270,7 +270,7 @@ function handleCreateExample(key) {
         message.success('示例 Agent 创建成功')
         exampleModalVisible.value = false
         loadData()
-        router.push(`/agents/${res.data.id}`)
+        router.push(`/app/agents/${res.data.id}`)
       } catch {
         message.error('创建失败')
       } finally {

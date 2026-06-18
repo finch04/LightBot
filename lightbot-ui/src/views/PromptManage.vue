@@ -17,10 +17,10 @@
         <button class="btn-outline" @click="loadData" :disabled="loading">
           <ReloadOutlined :spin="loading" /> 刷新
         </button>
-        <button class="btn-outline" @click="router.push('/playground')">
+        <button class="btn-outline" @click="router.push('/app/playground')">
           <PlayCircleOutlined /> Playground
         </button>
-        <button class="btn-outline" @click="router.push('/prompt-templates')">
+        <button class="btn-outline" @click="router.push('/app/prompt-templates')">
           <SettingOutlined /> 管理模板
         </button>
         <button class="btn-primary" @click="openDialog()">
@@ -35,7 +35,7 @@
         v-for="item in list"
         :key="item.id"
         class="card-item"
-        @click="router.push(`/prompts/${item.promptKey}`)"
+        @click="router.push(`/app/prompts/${item.promptKey}`)"
       >
         <div class="card-top">
           <div class="card-icon-wrapper">
