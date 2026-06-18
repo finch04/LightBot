@@ -30,6 +30,14 @@ public interface ToolService extends IService<Tool> {
     void deleteById(Long id);
 
     /**
+     * 启用/禁用 Tool
+     *
+     * @param id      主键ID
+     * @param enabled true启用，false禁用
+     */
+    void setEnabled(Long id, boolean enabled);
+
+    /**
      * 按工具名列表解析为 Spring AI ToolCallback
      *
      * @param toolNames 工具名列表

@@ -1,10 +1,13 @@
 package com.lightbot.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lightbot.dto.AdminUserUpdateRequest;
 import com.lightbot.dto.ChangePasswordRequest;
 import com.lightbot.dto.LoginRequest;
 import com.lightbot.dto.ProfileUpdateRequest;
 import com.lightbot.dto.RegisterRequest;
 import com.lightbot.dto.UserDTO;
+import com.lightbot.entity.User;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -96,4 +99,28 @@ public interface UserService {
      * 校验当前用户是否为管理员，非管理员抛出权限异常
      */
     void checkAdmin();
+
+    /**
+     * 管理员分页查询所有用户
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页大小
+     * @param keyword  搜索关键词（用户名/昵称）
+     * @return 分页结果
+     */
+    Page<User> listAllUsers(int pageNum, int pageSize, String keyword);
+
+    /**
+     * 管理员更新用户信息
+     *
+     * @param request 更新请求
+     */
+    void adminUpdateUser(AdminUserUpdateRequest request);
+
+    /**
+     * 管理员删除用户（逻辑删除）
+     *
+     * @param userId 用户ID
+     */
+    void adminDeleteUser(Long userId);
 }

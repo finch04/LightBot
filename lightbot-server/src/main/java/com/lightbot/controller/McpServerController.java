@@ -118,6 +118,13 @@ public class McpServerController {
         return listTools(id);
     }
 
+    @Operation(summary = "启用/禁用MCP Server")
+    @PutMapping("/{id}/enabled")
+    public Result<Void> setEnabled(@PathVariable Long id, @RequestParam boolean enabled) {
+        mcpServerService.setEnabled(id, enabled);
+        return Result.ok();
+    }
+
     @Operation(summary = "启用/禁用MCP工具")
     @PutMapping("/{id}/tools/{toolName}/toggle")
     public Result<Void> toggleTool(@PathVariable Long id, @PathVariable String toolName) {

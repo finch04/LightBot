@@ -27,13 +27,36 @@
     <div class="provider-grid">
       <div v-for="s in list" :key="s.id" class="provider-card">
         <div class="card-top">
-          <div class="card-icon">{{ s.name[0] }}</div>
+          <div class="card-icon">
+            <span class="status-dot" :class="isDisabled(s) ? 'status-disabled' : 'status-active'"></span>
+            {{ s.name[0] }}
+          </div>
           <div class="card-info">
             <h3>{{ s.name }}</h3>
           </div>
           <div class="card-actions">
-            <button class="btn-icon" @click="openDialog(s)"><EditOutlined /></button>
+            <a-tooltip title="查看详情">
+              <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
+            </a-tooltip>
             <button class="btn-icon danger" @click="handleDelete(s.id)"><DeleteOutlined /></button>
+            <a-dropdown :trigger="['click']">
+              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="handleTest(s)">
+                    <ApiOutlined style="margin-right: 6px" /> 测试连接
+                  </a-menu-item>
+                  <a-menu-item @click="openToolsDrawer(s)">
+                    <ToolOutlined style="margin-right: 6px" /> 查看工具
+                  </a-menu-item>
+                  <a-menu-item @click="handleToggleEnabled(s)">
+                    <CheckCircleOutlined v-if="!isDisabled(s)" style="color: #16a34a; margin-right: 6px" />
+                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                    {{ isDisabled(s) ? '启用' : '禁用' }}
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
         </div>
         <div class="card-body">
@@ -48,14 +71,6 @@
           <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
             <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
           </a-tooltip>
-        </div>
-        <div class="card-footer">
-          <button class="btn-text" :disabled="testingId === s.id" @click="handleTest(s)">
-            <ApiOutlined /> 测试连接
-          </button>
-          <button class="btn-text" @click="openToolsDrawer(s)">
-            <ToolOutlined /> 查看工具
-          </button>
         </div>
       </div>
     </div>
@@ -201,6 +216,38 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
       </div>
     </a-modal>
 
+    <!-- 详情弹窗 -->
+    <a-modal v-model:open="detailVisible" title="MCP Server 详情" :width="640" :footer="null" :maskClosable="false">
+      <template v-if="detailRow">
+        <a-descriptions bordered :column="1" size="small">
+          <a-descriptions-item label="名称">{{ detailRow.name }}</a-descriptions-item>
+          <a-descriptions-item label="描述">{{ detailRow.description || '—' }}</a-descriptions-item>
+          <a-descriptions-item label="安装类型">
+            <a-tag :color="installTypeColor(detailRow.installType?.code || detailRow.installType)">
+              {{ getInstallTypeLabel(detailRow.installType?.code || detailRow.installType) }}
+            </a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="传输协议">{{ detailRow.transport?.code || detailRow.transport || 'stdio' }}</a-descriptions-item>
+          <a-descriptions-item v-if="detailRow.host" label="服务地址">{{ detailRow.host }}</a-descriptions-item>
+          <a-descriptions-item label="状态">
+            <a-tag :color="isDisabled(detailRow) ? 'default' : 'success'">
+              {{ isDisabled(detailRow) ? '已禁用' : '已启用' }}
+            </a-tag>
+          </a-descriptions-item>
+        </a-descriptions>
+      </template>
+      <div class="dialog-footer">
+        <div class="dialog-footer-left">
+          <button v-if="detailRow" class="btn-cancel" @click="detailVisible = false; openDialog(detailRow)">
+            <EditOutlined /> 编辑
+          </button>
+        </div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="detailVisible = false">关闭</button>
+        </div>
+      </div>
+    </a-modal>
+
     <!-- 工具列表抽屉 -->
     <a-drawer
       v-model:open="toolsDrawerVisible"
@@ -305,9 +352,9 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted, computed, h } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApiOutlined, ToolOutlined, QuestionCircleOutlined, SyncOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApiOutlined, ToolOutlined, QuestionCircleOutlined, SyncOutlined, EyeOutlined, CopyOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool } from '../api/mcp'
+import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool, setMcpServerEnabled } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
 import { truncateText } from '../utils/format'
 
@@ -327,6 +374,8 @@ const toolsServerId = ref(null)
 const currentServer = ref(null)
 const toolToggling = ref(null)
 const guideVisible = ref(false)
+const detailVisible = ref(false)
+const detailRow = ref(null)
 // 工具详情弹窗
 const toolDetailVisible = ref(false)
 const toolDetail = ref(null)
@@ -596,6 +645,28 @@ function getInstallTypeLabel(type) {
   return map[type] || type
 }
 
+function installTypeColor(type) {
+  const map = { npx: 'green', uvx: 'orange', sse: 'pink' }
+  return map[type] || 'default'
+}
+
+function isDisabled(s) {
+  const status = s.status?.code || s.status
+  return status === 'disabled' || status === 'DISABLED'
+}
+
+function openDetail(row) {
+  detailRow.value = row
+  detailVisible.value = true
+}
+
+async function handleToggleEnabled(server) {
+  const next = isDisabled(server)
+  await setMcpServerEnabled(server.id, next)
+  message.success(next ? '已启用' : '已禁用')
+  loadData()
+}
+
 function search(text) {
   const next = text || ''
   if (searchText.value === next) return
@@ -702,6 +773,23 @@ defineExpose({ openDialog, search, refresh })
   justify-content: center;
   font-weight: 700;
   font-size: 16px;
+  position: relative;
+}
+.status-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  z-index: 1;
+}
+.status-active {
+  background: #16a34a;
+}
+.status-disabled {
+  background: #a3a3a3;
 }
 .card-info {
   flex: 1;
@@ -807,6 +895,10 @@ defineExpose({ openDialog, search, refresh })
   margin-top: 8px;
 }
 .dialog-footer-right {
+  display: flex;
+  gap: 8px;
+}
+.dialog-footer-left {
   display: flex;
   gap: 8px;
 }

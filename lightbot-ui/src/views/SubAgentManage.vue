@@ -8,24 +8,29 @@
           <div class="card-icon">
             <RobotOutlined />
             <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+            <span class="status-dot" :class="s.enabled === 1 ? 'status-active' : 'status-disabled'"></span>
           </div>
           <div class="card-info">
             <h3>{{ s.displayName }}</h3>
             <span class="card-name">{{ s.name }}</span>
           </div>
           <div class="card-actions" @click.stop>
-            <a-switch
-              :checked="s.enabled === 1"
-              size="small"
-              :disabled="s.isBuiltin === 1"
-              @change="(val) => handleToggleEnabled(s, val)"
-            />
-            <button v-if="s.isBuiltin !== 1" class="btn-icon" @click="openEditDialog(s)">
-              <EditOutlined />
-            </button>
-            <button v-if="s.isBuiltin !== 1" class="btn-icon danger" @click="handleDelete(s)">
-              <DeleteOutlined />
-            </button>
+            <a-tooltip title="查看详情">
+              <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
+            </a-tooltip>
+            <button v-if="s.isBuiltin !== 1" class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
+            <a-dropdown :trigger="['click']">
+              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="handleToggleEnabled(s, s.enabled !== 1)">
+                    <CheckCircleOutlined v-if="s.enabled === 1" style="color: #16a34a; margin-right: 6px" />
+                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                    {{ s.enabled === 1 ? '禁用' : '启用' }}
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
         </div>
         <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
@@ -159,6 +164,7 @@
       :title="currentDetail?.displayName || 'SubAgent 详情'"
       :width="640"
       :footer="null"
+      :maskClosable="false"
     >
       <div class="detail-section">
         <div class="detail-row">
@@ -200,13 +206,23 @@
           <pre class="detail-prompt">{{ currentDetail?.systemPrompt }}</pre>
         </div>
       </div>
+      <div class="dialog-footer">
+        <div class="dialog-footer-left">
+          <button v-if="currentDetail && currentDetail.isBuiltin !== 1" class="btn-cancel" @click="detailVisible = false; openEditDialog(currentDetail)">
+            <EditOutlined /> 编辑
+          </button>
+        </div>
+        <div class="dialog-footer-right">
+          <button class="btn-cancel" @click="detailVisible = false">关闭</button>
+        </div>
+      </div>
     </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined, EyeOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
@@ -457,6 +473,22 @@ defineExpose({ openDialog, search, refresh })
   color: #fff;
   border-radius: 4px;
 }
+.status-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  z-index: 1;
+}
+.status-active {
+  background: #16a34a;
+}
+.status-disabled {
+  background: #a3a3a3;
+}
 .card-info {
   flex: 1;
   min-width: 0;
@@ -584,6 +616,35 @@ defineExpose({ openDialog, search, refresh })
 }
 .help-icon:hover {
   color: #d97706;
+}
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 8px;
+}
+.dialog-footer-left {
+  display: flex;
+  gap: 8px;
+}
+.dialog-footer-right {
+  display: flex;
+  gap: 8px;
+}
+.btn-cancel {
+  padding: 6px 14px;
+  background: #fff;
+  color: #71717a;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-cancel:hover {
+  border-color: #171717;
+  color: #171717;
 }
 .guide {
   max-height: 60vh;

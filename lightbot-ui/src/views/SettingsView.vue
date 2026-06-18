@@ -1,10 +1,18 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <h1 class="page-title">系统设置</h1>
-      <p class="page-desc">配置系统默认 AI 模型，用于 Agent 配置之外的系统级 AI 调用</p>
+      <h1 class="page-title">系统管理</h1>
+      <p class="page-desc">管理系统配置、Landing 页面和用户</p>
     </div>
 
+    <a-tabs v-model:activeKey="activeTab" class="settings-tabs">
+      <a-tab-pane key="model" tab="默认模型管理" />
+      <a-tab-pane key="landing" tab="Landing 管理" />
+      <a-tab-pane key="users" tab="用户管理" />
+    </a-tabs>
+
+    <!-- Tab 1: 默认模型管理 -->
+    <div v-show="activeTab === 'model'">
     <div class="content-grid">
       <!-- 默认对话模型 -->
       <div class="panel">
@@ -130,9 +138,10 @@
         </div>
       </div>
     </div>
+    </div>
 
-    <!-- Landing 页面配置 -->
-    <div class="section-title">Landing 页面配置</div>
+    <!-- Tab 2: Landing 管理 -->
+    <div v-show="activeTab === 'landing'">
     <div class="panel landing-panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -223,6 +232,12 @@
         </a-form>
       </div>
     </div>
+    </div>
+
+    <!-- Tab 3: 用户管理 -->
+    <div v-show="activeTab === 'users'">
+      <UserManage />
+    </div>
   </div>
 </template>
 
@@ -247,6 +262,9 @@ import {
 } from '../api/systemConfig'
 import { getLandingConfig, updateLandingConfig } from '../api/landing'
 import ModelSelect from '../components/ModelSelect.vue'
+import UserManage from './UserManage.vue'
+
+const activeTab = ref('model')
 
 const chatValue = ref(null)
 const embeddingValue = ref(null)
@@ -479,6 +497,12 @@ async function saveLandingConfig() {
   overflow-y: auto;
   background: #fafafa;
 }
+.settings-tabs {
+  margin-bottom: 24px;
+}
+.settings-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
 .page-header {
   margin-bottom: 24px;
 }
@@ -562,12 +586,6 @@ async function saveLandingConfig() {
 }
 .panel-tip :deep(svg) {
   flex-shrink: 0;
-}
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #171717;
-  margin: 32px 0 16px;
 }
 .landing-panel {
   grid-column: 1 / -1;

@@ -53,6 +53,7 @@ const routes = [
         path: 'model-providers',
         name: 'ModelProviders',
         component: () => import('../views/ModelProviderManage.vue'),
+        meta: { requiresAdmin: true },
       },
       {
         path: 'agents',

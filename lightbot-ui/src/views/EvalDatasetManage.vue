@@ -358,11 +358,14 @@ async function handleCreateExample(key) {
   font-size: 16px;
   flex-shrink: 0;
 }
-.card-info { flex: 1; }
+.card-info { flex: 1; min-width: 0; }
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
   color: #171717;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin: 0;
 }
 .card-type {

@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.constant.ConfigKeys;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lightbot.dto.AdminUserUpdateRequest;
 import com.lightbot.dto.ChangePasswordRequest;
 import com.lightbot.dto.LoginRequest;
 import com.lightbot.dto.ProfileUpdateRequest;
@@ -276,5 +278,72 @@ public class UserServiceImpl implements UserService {
         if (user == null || user.getRole() != UserRole.ADMIN) {
             throw new BizException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    @Override
+    public Page<User> listAllUsers(int pageNum, int pageSize, String keyword) {
+        Page<User> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .orderByDesc(User::getCreateTime);
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.and(w -> w.like(User::getUsername, keyword.trim())
+                    .or().like(User::getNickname, keyword.trim()));
+        }
+        return userMapper.selectPage(page, wrapper);
+    }
+
+    @Override
+    public void adminUpdateUser(AdminUserUpdateRequest request) {
+        checkAdmin();
+
+        User user = userMapper.selectById(request.getUserId());
+        if (user == null) {
+            throw new BizException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        // 不允许修改自己的角色（防止误降级）
+        long currentUserId = StpUtil.getLoginIdAsLong();
+        if (request.getUserId().equals(currentUserId) && request.getRole() != null
+                && request.getRole() != user.getRole()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "不能修改自己的角色");
+        }
+
+        if (request.getNickname() != null) {
+            user.setNickname(request.getNickname());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
+        if (request.getStatus() != null) {
+            user.setStatus(request.getStatus());
+        }
+
+        userMapper.updateById(user);
+        log.info("[Admin] 更新用户: userId={}, operatorId={}", request.getUserId(), currentUserId);
+    }
+
+    @Override
+    public void adminDeleteUser(Long userId) {
+        checkAdmin();
+
+        // 不允许删除自己
+        long currentUserId = StpUtil.getLoginIdAsLong();
+        if (userId.equals(currentUserId)) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "不能删除自己的账号");
+        }
+
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        userMapper.deleteById(userId);
+        log.info("[Admin] 删除用户: userId={}, operatorId={}", userId, currentUserId);
     }
 }

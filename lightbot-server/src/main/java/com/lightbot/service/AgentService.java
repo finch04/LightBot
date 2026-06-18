@@ -219,4 +219,12 @@ public interface AgentService extends IService<Agent> {
      * @return 创建的 Agent
      */
     Agent createFromWorkflowExample(String key);
+
+    /**
+     * 按用户ID查询Agent列表（管理员用）
+     *
+     * @param userId 用户ID
+     * @return Agent列表
+     */
+    List<Agent> listByUserId(Long userId);
 }

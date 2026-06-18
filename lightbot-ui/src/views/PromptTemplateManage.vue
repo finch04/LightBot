@@ -446,13 +446,16 @@ function handleDelete(id) {
   flex-shrink: 0;
 }
 
-.card-info { flex: 1; }
+.card-info { flex: 1; min-width: 0; }
 
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
   color: #171717;
   margin: 0 0 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-desc {

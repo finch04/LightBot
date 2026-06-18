@@ -46,6 +46,7 @@
           <div class="card-icon card-icon--tool">
             <span v-if="(t.toolType?.code || t.toolType) === 'builtin'" class="type-badge badge-builtin">内置</span>
             <span v-else-if="(t.toolType?.code || t.toolType) === 'knowledge'" class="type-badge badge-knowledge">知识库</span>
+            <span class="status-dot" :class="isDisabled(t) ? 'status-disabled' : 'status-active'"></span>
             {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
           </div>
           <div class="card-info">
@@ -57,6 +58,21 @@
               <button class="btn-icon" @click="openDetail(t)"><EyeOutlined /></button>
             </a-tooltip>
             <button v-if="(t.toolType?.code || t.toolType) !== 'builtin' && (t.toolType?.code || t.toolType) !== 'knowledge'" class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+            <a-dropdown :trigger="['click']">
+              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="openTestDialog(t)">
+                    <PlayCircleOutlined style="margin-right: 6px" /> 测试
+                  </a-menu-item>
+                  <a-menu-item @click="handleToggleEnabled(t)">
+                    <CheckCircleOutlined v-if="!isDisabled(t)" style="color: #16a34a; margin-right: 6px" />
+                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                    {{ isDisabled(t) ? '启用' : '禁用' }}
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
         </div>
         <div class="card-detail">
@@ -285,9 +301,6 @@
         </div>
         <div class="dialog-footer-right">
           <button class="btn-cancel" @click="detailVisible = false">关闭</button>
-          <button class="btn-primary-sm" @click="detailVisible = false; openTestDialog(detailTool)">
-            <PlayCircleOutlined /> 测试
-          </button>
         </div>
       </div>
     </a-modal>
@@ -298,9 +311,9 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getTools, createTool, updateTool, deleteTool, testTool } from '../api/tool'
+import { getTools, createTool, updateTool, deleteTool, testTool, setToolEnabled } from '../api/tool'
 import { getToolTypes } from '../api/enum'
 import JsonInput from '../components/JsonInput.vue'
 import { truncateText } from '../utils/format'
@@ -488,6 +501,18 @@ function openDetail(tool) {
   detailVisible.value = true
 }
 
+function isDisabled(t) {
+  const status = t.status?.code || t.status
+  return status === 'disabled' || status === 'DISABLED'
+}
+
+async function handleToggleEnabled(tool) {
+  const next = isDisabled(tool)
+  await setToolEnabled(tool.id, next)
+  message.success(next ? '已启用' : '已禁用')
+  loadData()
+}
+
 function openTestDialog(tool) {
   testToolId.value = tool.id
   testToolName.value = tool.displayName || tool.name
@@ -644,6 +669,22 @@ defineExpose({ openDialog, search, refresh })
   font-size: 16px;
   flex-shrink: 0;
   position: relative;
+}
+.status-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  z-index: 1;
+}
+.status-active {
+  background: #16a34a;
+}
+.status-disabled {
+  background: #a3a3a3;
 }
 .card-info {
   flex: 1;

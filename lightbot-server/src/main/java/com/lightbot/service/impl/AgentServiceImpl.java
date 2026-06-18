@@ -615,4 +615,11 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         agentVersionService.initDraftWithWorkflow(agent, snapshot);
         return agent;
     }
+
+    @Override
+    public List<Agent> listByUserId(Long userId) {
+        return list(new LambdaQueryWrapper<Agent>()
+                .eq(Agent::getUserId, userId)
+                .orderByDesc(Agent::getCreateTime));
+    }
 }

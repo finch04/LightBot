@@ -63,6 +63,13 @@ public class ToolController {
         return Result.ok(toolService.getExampleParams(id));
     }
 
+    @Operation(summary = "启用/禁用Tool")
+    @PutMapping("/{id}/enabled")
+    public Result<Void> setEnabled(@PathVariable Long id, @RequestParam boolean enabled) {
+        toolService.setEnabled(id, enabled);
+        return Result.ok();
+    }
+
     @Operation(summary = "测试执行Tool")
     @PostMapping("/{id}/test")
     public Result<String> testTool(@PathVariable Long id, @RequestBody Map<String, String> body) {

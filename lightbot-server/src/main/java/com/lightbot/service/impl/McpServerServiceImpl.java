@@ -117,6 +117,18 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
 
     @Override
     @CacheEvict(value = RedisCacheConfig.CACHE_MCP_SERVER, key = "#id")
+    public void setEnabled(Long id, boolean enabled) {
+        McpServer server = getById(id);
+        if (server == null) {
+            throw new BizException(ErrorCode.MCP_SERVER_NOT_FOUND);
+        }
+        server.setStatus(enabled ? CommonStatus.ACTIVE : CommonStatus.DISABLED);
+        updateById(server);
+        mcpClientService.clearCache(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_MCP_SERVER, key = "#id")
     public void deleteById(Long id) {
         if (!removeById(id)) {
             throw new BizException(ErrorCode.MCP_SERVER_NOT_FOUND);

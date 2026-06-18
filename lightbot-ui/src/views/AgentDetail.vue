@@ -860,19 +860,19 @@
               :key="li"
               class="binding-deleted-detail-line"
             >{{ line }}</div>
-            <p class="binding-deleted-detail-hint">已删除的绑定运行时无法调用，已禁用的绑定需先启用才能使用。暂存或发布前将提示确认。</p>
+            <a-button
+              v-if="deletedBindingCount > 0"
+              type="link"
+              danger
+              size="small"
+              class="btn-remove-deleted-bindings"
+              @click="removeAllDeletedBindings"
+            >
+              <DeleteOutlined />
+              移除已删除绑定
+            </a-button>
           </div>
-          <a-button
-            v-if="deletedBindingCount > 0"
-            type="primary"
-            danger
-            size="small"
-            class="btn-remove-deleted-bindings"
-            @click="removeAllDeletedBindings"
-          >
-            <DeleteOutlined />
-            移除已删除绑定
-          </a-button>
+          <p class="binding-deleted-detail-hint">已删除的绑定运行时无法调用，已禁用的绑定需先启用才能使用。暂存或发布前将提示确认。</p>
         </div>
       </template>
     </a-alert>
@@ -2413,7 +2413,7 @@ const invalidBindingAlertMessage = computed(() => {
   const parts = []
   if (deletedBindingCount.value > 0) parts.push(`${deletedBindingCount.value} 个已删除`)
   if (disabledBindingCount.value > 0) parts.push(`${disabledBindingCount.value} 个已禁用`)
-  return `共有 ${parts.join('、')} 个已绑定资源不可用`
+  return `已绑定资源中有 ${parts.join('、')} 不可用`
 })
 
 /** 已删除绑定分类型明细（Alert / 保存弹窗） */
@@ -4635,37 +4635,30 @@ onMounted(async () => {
   margin-top: 16px;
 }
 .binding-deleted-detail-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
   margin-top: 4px;
 }
 .binding-deleted-detail-text {
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 .binding-deleted-detail-line {
   font-size: 13px;
   line-height: 1.6;
   color: #52525b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 .binding-deleted-detail-hint {
   margin: 8px 0 0;
   font-size: 12px;
   color: #71717a;
+  text-align: right;
 }
 .btn-remove-deleted-bindings {
-  flex-shrink: 0;
-  align-self: center;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 6px;
-  font-weight: 500;
+  font-size: 13px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .btn-remove-deleted-bindings:hover {

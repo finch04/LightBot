@@ -111,16 +111,12 @@ export function formatDeletedBindingDetailLines(sections) {
     const disabled = (items || []).filter(i => i._disabled && !i._deleted)
     if (!deleted.length && !disabled.length) continue
     if (deleted.length) {
-      lines.push(`${label}：${deleted.length} 个已删除的`)
-      for (const item of deleted) {
-        lines.push(`（ID：${toBindingId(item.id)}）`)
-      }
+      const names = deleted.map(item => toBindingId(item.id)).join('、')
+      lines.push(`${label}：${deleted.length} 个已删除（${names}）`)
     }
     if (disabled.length) {
-      lines.push(`${label}：${disabled.length} 个已禁用的`)
-      for (const item of disabled) {
-        lines.push(`（${item.displayName || item.name || toBindingId(item.id)}）`)
-      }
+      const names = disabled.map(item => item.displayName || item.name || toBindingId(item.id)).join('、')
+      lines.push(`${label}：${disabled.length} 个已禁用（${names}）`)
     }
   }
   return lines

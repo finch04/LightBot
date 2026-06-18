@@ -27,3 +27,7 @@ export function testTool(id, args) {
 export function getToolExampleParams(id) {
   return request.get(`/tools/${id}/example`)
 }
+
+export function setToolEnabled(id, enabled) {
+  return request.put(`/tools/${id}/enabled`, null, { params: { enabled } })
+}

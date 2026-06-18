@@ -35,3 +35,7 @@ export function refreshMcpServerTools(id) {
 export function toggleMcpTool(serverId, toolName) {
   return request.put(`/mcp-servers/${serverId}/tools/${toolName}/toggle`)
 }
+
+export function setMcpServerEnabled(id, enabled) {
+  return request.put(`/mcp-servers/${id}/enabled`, null, { params: { enabled } })
+}

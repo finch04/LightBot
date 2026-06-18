@@ -182,6 +182,17 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
 
     @Override
     @CacheEvict(value = RedisCacheConfig.CACHE_TOOL, key = "#id")
+    public void setEnabled(Long id, boolean enabled) {
+        Tool tool = getById(id);
+        if (tool == null) {
+            throw new BizException(ErrorCode.TOOL_NOT_FOUND);
+        }
+        tool.setStatus(enabled ? CommonStatus.ACTIVE : CommonStatus.DISABLED);
+        updateById(tool);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_TOOL, key = "#id")
     public void deleteById(Long id) {
         Tool tool = getById(id);
         if (tool == null) {

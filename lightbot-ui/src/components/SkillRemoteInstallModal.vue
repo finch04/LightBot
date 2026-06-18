@@ -2,7 +2,7 @@
   <a-modal
     :open="open"
     title="远程安装 Skill"
-    :width="700"
+    :width="760"
     :maskClosable="false"
     :footer="null"
     @cancel="handleCancel"
@@ -15,23 +15,45 @@
           <div class="fetch-row">
             <a-input
               v-model:value="repoSource"
-              placeholder="GitHub 仓库地址，如 owner/repo 或 https://github.com/owner/repo"
+              placeholder="来源仓库，如 anthropics/skills 或 GitHub URL"
               @pressEnter="handleFetchRepo"
             />
             <button class="btn-fetch" :disabled="fetching" @click="handleFetchRepo">
               {{ fetching ? '拉取中...' : '拉取技能' }}
             </button>
           </div>
+          <div class="repo-hint-text">
+            支持 `owner/repo` 或 GitHub URL。可前往
+            <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer">skills.sh</a>
+            查询开源 skills。 也支持 ModelScope 单个 Skill 地址，每次仅限安装一个：
+            `https://modelscope.cn/skills/&lt;skill-id&gt;`。 Skill ID 可在
+            <a href="https://modelscope.cn/skills" target="_blank" rel="noopener noreferrer">ModelScope Skill 市场</a>
+            进入详情后从地址栏获取。
+          </div>
+
           <a-spin :spinning="fetching">
             <div v-if="repoSkills.length > 0" class="skill-list">
-              <a-checkbox-group v-model:value="selectedRepoSlugs" style="width: 100%">
-                <div v-for="skill in repoSkills" :key="skill.name" class="skill-item">
-                  <a-checkbox :value="skill.name">
-                    <span class="skill-name">{{ skill.name }}</span>
-                  </a-checkbox>
-                  <span class="skill-desc">{{ skill.description || '—' }}</span>
+              <!-- 单个 ModelScope Skill 展示 -->
+              <template v-if="isModelScope && repoSkills.length === 1">
+                <div class="single-skill-card">
+                  <div class="single-skill-name">{{ repoSkills[0].name }}</div>
+                  <div class="single-skill-meta">{{ repoSkills[0].description || '暂无描述' }}</div>
+                  <div v-if="repoSkills[0].source === 'modelscope'" class="single-skill-badge">
+                    <a-tag color="blue">ModelScope</a-tag>
+                  </div>
                 </div>
-              </a-checkbox-group>
+              </template>
+              <!-- 多选列表 -->
+              <template v-else>
+                <a-checkbox-group v-model:value="selectedRepoSlugs" style="width: 100%">
+                  <div v-for="skill in repoSkills" :key="skill.name" class="skill-item">
+                    <a-checkbox :value="skill.name">
+                      <span class="skill-name">{{ skill.name }}</span>
+                    </a-checkbox>
+                    <span class="skill-desc">{{ skill.description || '暂无描述' }}</span>
+                  </div>
+                </a-checkbox-group>
+              </template>
             </div>
             <div v-else-if="repoFetched && !fetching" class="empty-tip">
               该仓库未发现包含 SKILL.md 的技能目录
@@ -40,17 +62,21 @@
         </a-tab-pane>
 
         <!-- Tab 2: 全局搜索 -->
-        <a-tab-pane key="search" tab="全局搜索">
+        <a-tab-pane key="search" tab="全局搜索发现">
           <div class="fetch-row">
             <a-input
               v-model:value="searchKeyword"
-              placeholder="输入关键词搜索 GitHub 上的 Skill（如 research、design）"
+              placeholder="输入 web、python 等关键字进行全局查找"
               @pressEnter="handleSearch"
             />
             <button class="btn-fetch" :disabled="searching" @click="handleSearch">
-              {{ searching ? '搜索中...' : '搜索' }}
+              {{ searching ? '搜索中...' : '查找技能' }}
             </button>
           </div>
+          <div class="repo-hint-text">
+            直接输入关键字检索 skills.sh 上的开源 Skills 并批量拉取安装。需要配置 GitHub Token。
+          </div>
+
           <a-spin :spinning="searching">
             <div v-if="searchResults.length > 0" class="skill-list">
               <a-checkbox-group v-model:value="selectedSearchSlugs" style="width: 100%">
@@ -58,7 +84,7 @@
                   <a-checkbox :value="skill.name" :disabled="!skill.repo">
                     <span class="skill-name">{{ skill.name }}</span>
                   </a-checkbox>
-                  <span class="skill-desc">{{ skill.description || '—' }}</span>
+                  <span class="skill-desc">{{ skill.description || '暂无描述' }}</span>
                   <span v-if="skill.repo" class="skill-repo">{{ skill.repo }}</span>
                 </div>
               </a-checkbox-group>
@@ -77,7 +103,7 @@
           :disabled="currentSelected.length === 0"
           @click="handlePrepare"
         >
-          下一步（{{ currentSelected.length }} 个技能）
+          解析并确认（已选 {{ currentSelected.length }} 个）
         </button>
       </div>
     </div>
@@ -129,6 +155,8 @@ import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { listRemoteSkills, searchRemoteSkills, prepareRemoteInstall, commitRemoteInstall } from '../api/skill'
 
+const MODELSCOPE_PREFIX = 'https://modelscope.cn/skills/'
+
 const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open', 'installed'])
 
@@ -156,8 +184,14 @@ const committing = ref(false)
 const commitProgress = ref(0)
 const draftId = ref(null)
 
+const isModelScope = computed(() => repoSource.value.trim().startsWith(MODELSCOPE_PREFIX))
+
 const currentSelected = computed(() =>
-  activeTab.value === 'repo' ? selectedRepoSlugs.value : selectedSearchSlugs.value
+  activeTab.value === 'repo'
+    ? (isModelScope.value && repoSkills.value.length === 1
+        ? [repoSkills.value[0].name]
+        : selectedRepoSlugs.value)
+    : selectedSearchSlugs.value
 )
 const currentSource = computed(() =>
   activeTab.value === 'repo' ? repoSource.value.trim() : ''
@@ -191,6 +225,10 @@ async function handleFetchRepo() {
     const res = await listRemoteSkills(repoSource.value.trim())
     repoSkills.value = res.data || []
     repoFetched.value = true
+    // ModelScope 单个 Skill 自动选中
+    if (isModelScope.value && repoSkills.value.length === 1) {
+      selectedRepoSlugs.value = [repoSkills.value[0].name]
+    }
     if (repoSkills.value.length === 0) message.info('该仓库未发现 Skill')
   } catch (e) {
     // interceptor handles error
@@ -224,7 +262,6 @@ async function handlePrepare() {
   // 全局搜索时需要确定 source（从搜索结果中取 repo）
   let source = currentSource.value
   if (activeTab.value === 'search') {
-    // 搜索结果中每个 skill 带有 repo 字段，按 repo 分组
     const repoMap = {}
     for (const skill of searchResults.value) {
       if (slugs.includes(skill.name) && skill.repo) {
@@ -290,7 +327,7 @@ function handleCancel() {
 .fetch-row {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .btn-fetch {
   flex-shrink: 0;
@@ -307,6 +344,20 @@ function handleCancel() {
 }
 .btn-fetch:hover:not(:disabled) { background: #27272a; }
 .btn-fetch:disabled { background: #d4d4d8; cursor: not-allowed; }
+.repo-hint-text {
+  font-size: 12px;
+  color: #a1a1aa;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+.repo-hint-text a {
+  color: #2563eb;
+  text-decoration: none;
+}
+.repo-hint-text a:hover { text-decoration: underline; }
 .skill-list {
   max-height: 300px;
   overflow-y: auto;
@@ -344,6 +395,25 @@ function handleCancel() {
   padding: 2px 8px;
   border-radius: 4px;
   flex-shrink: 0;
+}
+.single-skill-card {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+.single-skill-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 4px;
+}
+.single-skill-meta {
+  font-size: 13px;
+  color: #71717a;
+}
+.single-skill-badge {
+  margin-top: 8px;
 }
 .preview-card {
   padding: 12px 16px;

@@ -416,4 +416,165 @@ public class GitHubSkillService {
         }
         return normalized.replace("/" + SKILL_MD, "").replace(SKILL_MD, "");
     }
+
+    // ==================== ModelScope 支持 ====================
+
+    /**
+     * 列出 ModelScope 单个 Skill 信息
+     * <p>URL 格式：https://modelscope.cn/skills/{skill-id}</p>
+     *
+     * @param source ModelScope Skill URL
+     * @return 单元素列表，包含 name 和 description
+     */
+    public List<Map<String, String>> listModelScopeSkills(String source) {
+        String skillId = parseModelScopeSkillId(source);
+        log.info("[GitHubSkill] ModelScope Skill: skillId={}", skillId);
+
+        // 尝试通过 ModelScope API 获取 Skill 信息
+        try {
+            String apiUrl = "https://modelscope.cn/api/v1/skills/" + skillId;
+            JsonNode node = restTemplate.getForObject(apiUrl, JsonNode.class);
+            String description = "";
+            String name = skillId;
+            if (node != null) {
+                JsonNode data = node.has("data") ? node.get("data") : node;
+                if (data.has("description")) {
+                    description = data.get("description").asText("");
+                }
+                if (data.has("name")) {
+                    name = data.get("name").asText(skillId);
+                }
+            }
+            Map<String, String> item = new LinkedHashMap<>();
+            item.put("name", name);
+            item.put("description", description);
+            item.put("source", "modelscope");
+            return List.of(item);
+        } catch (Exception e) {
+            log.warn("[GitHubSkill] ModelScope API 获取失败: skillId={}, error={}", skillId, e.getMessage());
+            // 降级：返回基本信息
+            Map<String, String> item = new LinkedHashMap<>();
+            item.put("name", skillId);
+            item.put("description", "ModelScope Skill");
+            item.put("source", "modelscope");
+            return List.of(item);
+        }
+    }
+
+    /**
+     * 从 ModelScope URL 解析 Skill ID
+     * <p>https://modelscope.cn/skills/@org/skill-name → @org/skill-name</p>
+     */
+    private String parseModelScopeSkillId(String source) {
+        String s = source.trim();
+        if (s.startsWith(MODELSCOPE_PREFIX)) {
+            s = s.substring(MODELSCOPE_PREFIX.length());
+        }
+        s = s.replaceAll("/+$", "");
+        if (s.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "ModelScope URL 中未找到 Skill ID");
+        }
+        return s;
+    }
+
+    /**
+     * 准备 ModelScope Skill 安装
+     * <p>通过 git clone 下载 Skill 文件并暂存为草稿</p>
+     *
+     * @param source     ModelScope Skill URL
+     * @param skillSlugs 选中的 Skill slug 列表（ModelScope 场景下只有一个）
+     * @return SkillImportPreview 列表
+     */
+    public List<SkillImportPreview> prepareModelScopeInstall(String source, List<String> skillSlugs) {
+        String skillId = parseModelScopeSkillId(source);
+        String draftId = UUID.randomUUID().toString().replace("-", "");
+
+        // ModelScope Skill 的 git 仓库地址
+        String gitUrl = "https://modelscope.cn/" + skillId + ".git";
+        Path tempDir = null;
+
+        try {
+            // 1. git clone 到临时目录
+            tempDir = Files.createTempDirectory("modelscope-skill-");
+            ProcessBuilder pb = new ProcessBuilder("git", "clone", "--depth=1", gitUrl, tempDir.resolve("skill").toString());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            String cloneOutput = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                log.warn("[GitHubSkill] ModelScope git clone 失败: skillId={}, output={}", skillId, cloneOutput);
+                throw new BizException(ErrorCode.SKILL_REMOTE_FETCH_FAILED, "ModelScope Skill 下载失败: " + skillId);
+            }
+
+            // 2. 查找 SKILL.md
+            Path skillDir = tempDir.resolve("skill");
+            Path skillMd = findSkillMd(skillDir);
+            if (skillMd == null) {
+                throw new BizException(ErrorCode.SKILL_IMPORT_FAILED, "ModelScope Skill 中未找到 SKILL.md: " + skillId);
+            }
+
+            Path skillRoot = skillMd.getParent();
+            String slug = skillRoot.getFileName().toString();
+            byte[] mdContent = Files.readAllBytes(skillMd);
+            String skillMdContent = new String(mdContent, StandardCharsets.UTF_8);
+
+            // 3. 暂存所有文件到草稿目录
+            List<String> fileNames = new ArrayList<>();
+            Files.walk(skillRoot)
+                    .filter(Files::isRegularFile)
+                    .forEach(file -> {
+                        String relative = skillRoot.relativize(file).toString().replace("\\", "/");
+                        fileNames.add(relative);
+                        String destPath = "skill_drafts/" + draftId + "/" + slug + "/" + relative;
+                        try (InputStream fis = Files.newInputStream(file)) {
+                            byte[] fileBytes = fis.readAllBytes();
+                            skillStorageService.uploadDraftFile(destPath, fileBytes);
+                        } catch (Exception e) {
+                            log.warn("[GitHubSkill] ModelScope 暂存文件失败: {}", destPath, e);
+                        }
+                    });
+
+            // 4. 解析 SKILL.md 元数据
+            SkillMetadata metadata = skillStorageService.parseSkillMarkdown(skillMdContent);
+            SkillImportPreview preview = new SkillImportPreview();
+            preview.setDraftId(draftId);
+            preview.setSlug(slug);
+            preview.setName(metadata.getName());
+            preview.setDescription(metadata.getDescription());
+            preview.setVersion(metadata.getVersion());
+            preview.setToolDependencies(metadata.getToolDependencies());
+            preview.setSkillDependencies(metadata.getSkillDependencies());
+            preview.setFileNames(fileNames);
+
+            log.info("[GitHubSkill] ModelScope 安装准备完成: skillId={}, draftId={}", skillId, draftId);
+            return List.of(preview);
+
+        } catch (BizException e) {
+            skillStorageService.cleanupDraft(draftId);
+            throw e;
+        } catch (Exception e) {
+            skillStorageService.cleanupDraft(draftId);
+            throw new BizException(ErrorCode.SKILL_REMOTE_FETCH_FAILED, "ModelScope Skill 下载失败: " + e.getMessage());
+        } finally {
+            if (tempDir != null) {
+                try {
+                    Files.walk(tempDir)
+                            .sorted(java.util.Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(File::delete);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    /** 在目录树中查找 SKILL.md */
+    private Path findSkillMd(Path root) throws IOException {
+        try (var stream = Files.walk(root)) {
+            return stream
+                    .filter(p -> SKILL_MD.equals(p.getFileName().toString()))
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
 }

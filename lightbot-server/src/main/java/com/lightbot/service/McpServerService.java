@@ -44,4 +44,12 @@ public interface McpServerService extends IService<McpServer> {
      * @param id 主键ID
      */
     void deleteById(Long id);
+
+    /**
+     * 启用/禁用 MCP Server
+     *
+     * @param id      主键ID
+     * @param enabled true启用，false禁用
+     */
+    void setEnabled(Long id, boolean enabled);
 }

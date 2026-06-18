@@ -102,7 +102,11 @@ public class SkillController {
     @Operation(summary = "列出远程仓库中的 Skill")
     @PostMapping("/remote/list")
     public Result<List<Map<String, String>>> listRemoteSkills(@RequestBody @Valid RemoteListRequest request) {
-        String[] parsed = gitHubSkillService.parseSource(request.getSource());
+        String source = request.getSource().trim();
+        if (gitHubSkillService.isModelScopeUrl(source)) {
+            return Result.ok(gitHubSkillService.listModelScopeSkills(source));
+        }
+        String[] parsed = gitHubSkillService.parseSource(source);
         return Result.ok(gitHubSkillService.listRemoteSkills(parsed[0], parsed[1], parsed[2]));
     }
 
@@ -115,7 +119,11 @@ public class SkillController {
     @Operation(summary = "远程安装准备（下载并暂存草稿）")
     @PostMapping("/remote/prepare")
     public Result<List<SkillImportPreview>> prepareRemoteInstall(@RequestBody @Valid RemotePrepareRequest request) {
-        String[] parsed = gitHubSkillService.parseSource(request.getSource());
+        String source = request.getSource().trim();
+        if (gitHubSkillService.isModelScopeUrl(source)) {
+            return Result.ok(gitHubSkillService.prepareModelScopeInstall(source, request.getSkills()));
+        }
+        String[] parsed = gitHubSkillService.parseSource(source);
         return Result.ok(gitHubSkillService.prepareRemoteInstall(parsed[0], parsed[1], parsed[2], request.getSkills()));
     }
 
