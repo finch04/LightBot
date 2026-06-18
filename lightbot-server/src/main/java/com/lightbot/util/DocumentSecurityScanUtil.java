@@ -100,16 +100,38 @@ public class DocumentSecurityScanUtil {
     /**
      * 扫描文档正文
      *
+     * @param knowledge       知识库（从中读取扫描模型配置）
      * @param documentContent 文档内容
      * @return 扫描结果
      */
-    public ScanResult scanDocument(String documentContent) {
+    public ScanResult scanDocument(Knowledge knowledge, String documentContent) {
         String sample = documentContent.substring(0, Math.min(documentContent.length(), MAX_SCAN_CHARS));
-        Long providerId = resolveProviderId();
+
+        // 优先使用知识库配置的扫描模型，未配置时回退到系统默认
+        Long providerId = null;
+        String modelId = null;
+        if (knowledge != null && knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
+            try {
+                JsonNode node = objectMapper.readTree(knowledge.getConfig());
+                if (node.has("scanModelProviderId") && !node.get("scanModelProviderId").isNull()) {
+                    providerId = node.get("scanModelProviderId").asLong();
+                }
+                if (node.has("scanModelId") && !node.get("scanModelId").isNull()) {
+                    modelId = node.get("scanModelId").asText();
+                }
+            } catch (Exception e) {
+                log.warn("[DocumentSecurityScan] 解析知识库扫描模型配置失败, knowledgeId={}", knowledge.getId(), e);
+            }
+        }
+        if (providerId == null) {
+            providerId = resolveProviderId();
+        }
         DefaultAiConfigDTO defaultConfig = systemConfigService.getDefaultAiConfig();
 
         Map<String, Object> options = new HashMap<>();
-        if (defaultConfig.getModelId() != null && !defaultConfig.getModelId().isBlank()) {
+        if (modelId != null && !modelId.isBlank()) {
+            options.put("modelId", modelId);
+        } else if (defaultConfig.getModelId() != null && !defaultConfig.getModelId().isBlank()) {
             options.put("modelId", defaultConfig.getModelId());
         }
         ChatOptions chatOptions = modelFactory.buildChatOptions(providerId, options);

@@ -2712,12 +2712,28 @@ async function copyAgentId() {
     message.info('新建保存后生成 ID')
     return
   }
+  const text = String(agent.id)
   try {
-    await navigator.clipboard.writeText(String(agent.id))
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      fallbackCopy(text)
+    }
     message.success('已复制智能体 ID')
   } catch {
-    message.info(`智能体 ID：${agent.id}`)
+    fallbackCopy(text)
+    message.success('已复制智能体 ID')
   }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.cssText = 'position:fixed;left:-9999px'
+  document.body.appendChild(ta)
+  ta.select()
+  document.execCommand('copy')
+  document.body.removeChild(ta)
 }
 
 onBeforeRouteLeave((_to, _from, next) => {
@@ -3171,6 +3187,24 @@ async function handleSave(options = {}) {
 
   saving.value = true
   try {
+    // 0. 开关关闭时清除关联配置
+    if (!agentConfig.userSensitiveFilterEnabled) {
+      userSensitiveWords.value = ['']
+      agentConfig.userSensitiveWords = []
+    }
+    if (!agentConfig.sensitiveFilterEnabled) {
+      sensitiveWords.value = ['']
+      agentConfig.sensitiveWords = []
+      agentConfig.sensitiveFilterStrategy = 'replace'
+      agentConfig.sensitiveFilterReplaceText = '***'
+    }
+    if (!agentConfig.enableSummary) {
+      agentConfig.summaryThresholdKb = 100
+      agentConfig.summaryPrompt = ''
+      agentConfig.summaryKeepMessages = 6
+      agentConfig.summaryToolResultTokenLimit = 500
+    }
+
     // 1. 构建 config JSONB（包含 provider + 所有配置项）
     const serializedVars = serializePromptVariables()
     const serializedUserSensitiveWords = userSensitiveWords.value

@@ -102,11 +102,12 @@ public class LlmNodeProcessor implements NodeProcessor {
         Consumer<String> streamCallback = context.getOnStreamChunk();
         boolean useStream = streamCallback != null && Boolean.TRUE.equals(nodeData.get("enableStreaming"));
 
+        int[] tokenUsage = {0, 0};
         String llmOutput;
         if (useStream) {
-            llmOutput = callStream(chatModel, messages, chatOptions, streamCallback);
+            llmOutput = callStream(chatModel, messages, chatOptions, streamCallback, tokenUsage);
         } else {
-            llmOutput = callSync(chatModel, messages, chatOptions);
+            llmOutput = callSync(chatModel, messages, chatOptions, tokenUsage);
         }
 
         // 7. 获取下一个节点
@@ -119,6 +120,8 @@ public class LlmNodeProcessor implements NodeProcessor {
 
         Map<String, Object> traceData = new HashMap<>();
         traceData.put("llmMessages", llmContextSnapshot);
+        traceData.put("inputTokens", tokenUsage[0]);
+        traceData.put("outputTokens", tokenUsage[1]);
 
         log.info("[LlmNodeProcessor] LLM调用完成: nodeId={}, stream={}, outputLength={}",
                 context.getCurrentNodeId(), useStream, llmOutput.length());
@@ -231,9 +234,10 @@ public class LlmNodeProcessor implements NodeProcessor {
     /**
      * 同步调用 LLM
      */
-    private String callSync(ChatModel chatModel, List<Message> messages, ChatOptions chatOptions) {
+    private String callSync(ChatModel chatModel, List<Message> messages, ChatOptions chatOptions, int[] tokenUsage) {
         ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
                 chatModel.call(new Prompt(messages, chatOptions)));
+        accumulateUsage(response, tokenUsage);
         return response.getResult().getOutput().getText();
     }
 
@@ -241,12 +245,13 @@ public class LlmNodeProcessor implements NodeProcessor {
      * 流式调用 LLM，逐 token 回调
      */
     private String callStream(ChatModel chatModel, List<Message> messages,
-                              ChatOptions chatOptions, Consumer<String> onChunk) {
+                              ChatOptions chatOptions, Consumer<String> onChunk, int[] tokenUsage) {
         StringBuilder full = new StringBuilder();
         chatModel.stream(new Prompt(messages, chatOptions))
                 .doOnError(e -> log.error("[LlmNodeProcessor] 流式调用异常: {}", e.getMessage(), e))
                 .toStream()
                 .forEach(response -> {
+                    accumulateUsage(response, tokenUsage);
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return;
                     }
@@ -257,6 +262,25 @@ public class LlmNodeProcessor implements NodeProcessor {
                     }
                 });
         return full.toString();
+    }
+
+    /**
+     * 累加流式/非流式响应中的 Token 用量
+     */
+    private void accumulateUsage(ChatResponse response, int[] tokenUsage) {
+        if (response == null || response.getMetadata() == null) {
+            return;
+        }
+        var usage = response.getMetadata().getUsage();
+        if (usage == null) {
+            return;
+        }
+        if (usage.getPromptTokens() != null) {
+            tokenUsage[0] += usage.getPromptTokens();
+        }
+        if (usage.getCompletionTokens() != null) {
+            tokenUsage[1] += usage.getCompletionTokens();
+        }
     }
 
     /**

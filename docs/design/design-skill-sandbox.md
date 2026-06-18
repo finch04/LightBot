@@ -845,5 +845,214 @@ Agent 使用 web_search 执行深度研究
 
 ---
 
+---
+
+## 九、Skill 代码执行能力分析（Yuxi 深度调研）
+
+### 9.1 Yuxi Skill 如何绑定代码
+
+Yuxi 的 Skill **不是"代码即 Skill"**，而是 **"SKILL.md 指令 + 附属脚本"** 的组合模式：
+
+```
+skills/mysql-reporter/
+├── SKILL.md                    ← 核心：YAML frontmatter + 指令正文
+└── scripts/
+    ├── list_tables.py          ← 辅助脚本：列出数据库表
+    ├── describe_table.py       ← 辅助脚本：查看表结构
+    └── query.py                ← 辅助脚本：执行 SQL 查询
+```
+
+**SKILL.md 中不直接写代码**，而是写"操作流程"告诉 LLM 如何使用这些脚本：
+
+```markdown
+## 操作流程
+1. 理解用户的指令，明确报表的需求和目标
+2. 通过 terminal 进入技能目录：`cd /home/gem/skills/mysql-reporter`
+3. 使用 `uv run scripts/list_tables.py` 查看可用表
+4. 用 `uv run scripts/describe_table.py --table 表名` 查看表结构
+5. 生成正确且高效的只读 SQL，通过 `uv run scripts/query.py --sql "SQL语句" --timeout 60` 执行查询
+```
+
+**关键洞察**：Skill 的"代码执行"实际上是 **LLM 自主决定调用 `terminal` 工具来运行脚本**，而非 Skill 引擎自动执行代码。SKILL.md 本质上是一份"使用说明书"，教 LLM 怎么用附属脚本完成任务。
+
+### 9.2 执行链路
+
+```
+用户: "帮我查一下最近7天的销售报表"
+    │
+    ▼
+Agent (LLM) 读取 mysql-reporter 的 SKILL.md（已激活）
+    │
+    ▼
+LLM 决定执行: cd /home/gem/skills/mysql-reporter && uv run scripts/list_tables.py
+    │
+    ▼
+terminal 工具 → ProvisionerSandboxBackend.execute(command)
+    │
+    ▼
+远程沙箱容器（Docker）执行命令，返回结果
+    │
+    ▼
+LLM 解析结果，生成 SQL，调用 uv run scripts/query.py --sql "SELECT ..."
+    │
+    ▼
+循环直到报表完成
+```
+
+**沙箱容器的关键能力**：
+- 预装 `uv`（Python 包管理器），脚本用 PEP 723 内联声明依赖（`# /// script\ndependencies = ["pymysql>=1.1.0"]`）
+- 文件系统隔离：`/home/gem/skills/`（只读）、`/home/gem/user-data/workspace/`（读写）
+- 环境变量注入：用户配置的 `MYSQL_HOST` 等通过 `agent_envs` 表注入沙箱
+- 命令执行超时：默认 180s，输出截断 262KB
+
+### 9.3 Java 实现复杂度评估
+
+#### 方案 A：轻量级 — LLM 驱动 + MinIO 文件系统（推荐先行）
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Agent 运行时                            │
+│                                                          │
+│  LLM 读取 SKILL.md → 决定执行脚本 → 调用 execute_tool     │
+│                                                          │
+│  execute_tool(command)                                    │
+│      │                                                   │
+│      ▼                                                   │
+│  ┌─────────────────────────────────────────────┐         │
+│  │  方案 A: MinIO 虚拟文件系统（无代码执行）      │         │
+│  │  - read_file → MinIO getObject              │         │
+│  │  - write_file → MinIO putObject             │         │
+│  │  - execute → ❌ 不支持                       │         │
+│  └─────────────────────────────────────────────┘         │
+│                                                          │
+│  ┌─────────────────────────────────────────────┐         │
+│  │  方案 B: 宿主机 ProcessBuilder（有限隔离）    │         │
+│  │  - execute → ProcessBuilder(command)        │         │
+│  │  - 风险: 无容器隔离，可访问宿主机资源          │         │
+│  └─────────────────────────────────────────────┘         │
+│                                                          │
+│  ┌─────────────────────────────────────────────┐         │
+│  │  方案 C: Docker 容器沙箱（完全隔离）          │         │
+│  │  - execute → Docker API exec                │         │
+│  │  - 文件挂载: skills/ 只读, workspace/ 读写    │         │
+│  │  - 环境变量注入                              │         │
+│  └─────────────────────────────────────────────┘         │
+└──────────────────────────────────────────────────────────┘
+```
+
+| 方案 | 隔离级别 | 实现复杂度 | 适用场景 |
+|------|---------|-----------|---------|
+| **A: MinIO 文件系统** | 无代码执行 | 低（2周） | Skill 文件管理、懒激活、依赖管理 |
+| **B: 宿主机 ProcessBuilder** | 进程级 | 中（1周） | 内部可信环境快速验证 |
+| **C: Docker 容器沙箱** | 容器级 | 高（4-6周） | 生产环境、多租户、不可信代码 |
+
+#### 方案 C 的关键实现点（对标 Yuxi）
+
+| 组件 | Yuxi 实现 | Java 对标 | 复杂度 |
+|------|----------|----------|--------|
+| 沙箱 Provisioner 服务 | 独立微服务（HTTP API） | 需新建 SpringBoot 服务或用 Docker Java API | 高 |
+| 沙箱生命周期管理 | `ProvisionerSandboxProvider`（按 uid+threadId 缓存） | 需实现：创建→keepalive→销毁 | 中 |
+| 文件挂载 | Provisioner 配置 volume mount | Docker Java API 的 `HostConfig.binds` | 中 |
+| 命令执行 | `shell.exec_command()` HTTP API | Docker `exec_create` + `exec_start` | 中 |
+| 文件读写 | Sandbox file API（HTTP） | Docker `copy_to` / `copy_from` 或共享 volume | 中 |
+| 环境变量注入 | 创建沙箱时传入 | Docker `Env` 配置 | 低 |
+| 路径安全 | `_normalize_path()` + 读写白名单 | `SandboxPathValidator`（已有设计） | 低 |
+| Python 运行时 | 预装 `uv` 的 Docker 镜像 | 需构建自定义镜像：`FROM python:3.12 + uv` | 低 |
+| 超时/输出截断 | `sandbox_exec_timeout_seconds` | `Process.waitFor(timeout)` 或 Docker exec 超时 | 低 |
+
+#### 核心难点
+
+**1. 沙箱 Provisioner 是一个独立服务**
+
+Yuxi 的沙箱不是"在后端进程里开个 Docker"，而是一个独立的 **沙箱调度服务**（类似 E2B、Modal）。它负责：
+- 容器池管理（预热、复用、回收）
+- 按 uid+threadId 路由到对应容器
+- 容器健康检查和 keepalive
+- 文件 API 和命令执行 API
+
+这意味着 LightBot 要么：
+- **自建**：写一个 `lightbot-sandbox` 微服务（工作量大）
+- **集成第三方**：用 E2B、Modal、Fly.io Machines 等沙箱服务（成本问题）
+- **简化版**：直接用 Docker Java API 在本机管理容器（适合单机部署，不适合集群）
+
+**2. SKILL.md 中的路径是硬编码的**
+
+```markdown
+2. 通过 terminal 进入技能目录：`cd /home/gem/skills/mysql-reporter`
+3. 使用 `uv run scripts/list_tables.py` 查看可用表
+```
+
+路径 `/home/gem/skills/` 是 Yuxi 沙箱的固定挂载点。LightBot 如果要兼容远程安装的 Skill（来自 skills.sh 社区），需要保持相同路径结构，否则 SKILL.md 中的指令会失效。
+
+**3. Python 依赖管理**
+
+Yuxi 用 `uv run` + PEP 723 内联依赖（`# /// script`），沙箱容器预装了 `uv`。LightBot 需要：
+- 构建包含 `uv` 的 Docker 基础镜像
+- 或者用 `pip install` + `requirements.txt` 的传统方式（更慢但更通用）
+
+### 9.4 推荐实施路径
+
+```
+Phase 1 (当前): Skill 文件化 + 懒激活 + MinIO 虚拟文件系统
+    ↓
+Phase 2: 会话工作区 (read_file / write_file / list_files)
+    ↓
+Phase 3: 宿主机 ProcessBuilder 验证（内部可信 Skill，如 deep-research）
+    ↓
+Phase 4: Docker 容器沙箱（生产级隔离，支持社区 Skill 的代码执行）
+```
+
+**Phase 3 的具体实现**（轻量级，适合快速验证）：
+
+```java
+/**
+ * 宿主机命令执行器（Phase 3 过渡方案）
+ * 注意：仅限内部可信 Skill，不支持用户上传的不可信代码
+ */
+@Component
+public class HostCommandExecutor {
+
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(180);
+
+    public CommandResult execute(String command, Path workDir, Map<String, String> env) {
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", command);
+        pb.directory(workDir.toFile());
+        pb.environment().putAll(env);
+        pb.redirectErrorStream(true);
+
+        try {
+            Process process = pb.start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            boolean finished = process.waitFor(DEFAULT_TIMEOUT);
+            if (!finished) {
+                process.destroyForcibly();
+                return new CommandResult("执行超时", 1, true);
+            }
+            return new CommandResult(output, process.exitCode(), false);
+        } catch (Exception e) {
+            return new CommandResult("执行失败: " + e.getMessage(), 1, false);
+        }
+    }
+}
+```
+
+**Phase 4 的关键决策点**：
+- 是否需要自建 Provisioner 服务，还是集成 E2B 等第三方
+- 容器镜像策略：预构建 vs 动态构建
+- 容器池大小和回收策略
+
+### 9.5 结论
+
+| 问题 | 回答 |
+|------|------|
+| Yuxi Skill 能绑定 Python 代码吗？ | **能**，通过 `scripts/` 目录 + SKILL.md 指令告诉 LLM 用 terminal 执行 |
+| 代码跑在文件沙箱里吗？ | **不是文件沙箱**，是 **Docker 容器沙箱**（远程 Provisioner 服务） |
+| Java 实现复杂吗？ | **Skill 文件化本身不复杂**（Level 1-3，4周）；**容器沙箱很复杂**（Level 4，4-6周+独立服务） |
+| 能不能先不做容器沙箱？ | **完全可以**。Skill 的文件管理、懒激活、依赖管理、ZIP 导入导出都不需要容器沙箱 |
+| 社区 Skill 兼容性？ | 如果要兼容 skills.sh 社区的 Skill（含 Python 脚本），最终需要容器沙箱。但可以渐进实施 |
+
+---
+
 *文档生成时间: 2026-06-18*
 *基于 Yuxi Skill 系统 + Sandbox 模块分析，结合 LightBot 现有架构设计*
+*最后更新: 2026-06-18 — 新增第九章：Skill 代码执行能力分析*

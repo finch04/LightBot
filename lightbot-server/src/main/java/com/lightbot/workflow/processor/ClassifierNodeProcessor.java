@@ -56,20 +56,20 @@ public class ClassifierNodeProcessor extends AbstractFlowNodeProcessor implement
 
         String inputText = resolveInputText(nodeData, context.getVariables(), context.getUserInput());
         if (inputText == null || inputText.isBlank()) {
-            return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "", "输入文本为空，走默认分支");
+            return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "", "输入文本为空，走默认分支", 0, 0);
         }
 
         Long providerId = resolveProviderId(nodeData, context.getAgent().getConfig());
         if (providerId == null) {
             String err = "意图分类节点未配置模型提供商，请在节点配置中选择提供商和模型";
             log.warn("[ClassifierNodeProcessor] {}", err);
-            return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "", err);
+            return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "", err, 0, 0);
         }
 
         String modelName = resolveModelName(nodeData);
         List<Map<String, Object>> conditions = (List<Map<String, Object>>) nodeData.get("conditions");
         if (conditions == null || conditions.isEmpty()) {
-            return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "", "未配置意图分类项，走默认分支");
+            return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "", "未配置意图分类项，走默认分支", 0, 0);
         }
 
         String modeSwitch = nodeData.get("mode_switch") != null
@@ -94,23 +94,31 @@ public class ClassifierNodeProcessor extends AbstractFlowNodeProcessor implement
 
             ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
                     chatModel.call(new Prompt(messages, chatOptions)));
+            int inputTokens = 0;
+            int outputTokens = 0;
+            if (response.getMetadata() != null && response.getMetadata().getUsage() != null) {
+                var usage = response.getMetadata().getUsage();
+                if (usage.getPromptTokens() != null) inputTokens = usage.getPromptTokens();
+                if (usage.getCompletionTokens() != null) outputTokens = usage.getCompletionTokens();
+            }
             String raw = response.getResult().getOutput().getText();
             ClassificationResult parsed = parseClassificationResult(raw, conditions);
 
             log.info("[ClassifierNodeProcessor] 分类完成: nodeId={}, intentId={}, subject={}",
                     context.getCurrentNodeId(), parsed.intentId(), parsed.subject());
 
-            return buildResult(context, parsed.intentId(), parsed.subject(), parsed.thought(), raw);
+            return buildResult(context, parsed.intentId(), parsed.subject(), parsed.thought(), raw, inputTokens, outputTokens);
         } catch (Exception e) {
             log.error("[ClassifierNodeProcessor] 意图分类失败: nodeId={}, error={}",
                     context.getCurrentNodeId(), e.getMessage(), e);
             return buildResult(context, DEFAULT_INTENT_ID, "其他意图", "",
-                    "意图分类失败: " + e.getMessage());
+                    "意图分类失败: " + e.getMessage(), 0, 0);
         }
     }
 
     private NodeExecutionResult buildResult(NodeExecutionContext context, String intentId,
-                                            String subject, String thought, String rawResponse) {
+                                            String subject, String thought, String rawResponse,
+                                            int inputTokens, int outputTokens) {
         String matchedIntentId = normalizeIntentId(intentId);
         String sourceHandle = DEFAULT_INTENT_ID.equals(matchedIntentId)
                 ? context.getCurrentNodeId() + "_default"
@@ -129,9 +137,14 @@ public class ClassifierNodeProcessor extends AbstractFlowNodeProcessor implement
         }
         outputs.put("classificationRaw", rawResponse);
 
+        Map<String, Object> traceData = new HashMap<>();
+        traceData.put("inputTokens", inputTokens);
+        traceData.put("outputTokens", outputTokens);
+
         return NodeExecutionResult.builder()
                 .nextNodeId(nextNodeId)
                 .outputs(outputs)
+                .traceData(traceData)
                 .streamContent(null)
                 .finished(false)
                 .build();

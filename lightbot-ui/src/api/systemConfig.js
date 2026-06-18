@@ -1,5 +1,9 @@
 import request from '../utils/request'
 
+export function checkHealth() {
+  return request.get('/system-config/health')
+}
+
 export function getDefaultAiConfig() {
   return request.get('/system-config/default-ai')
 }

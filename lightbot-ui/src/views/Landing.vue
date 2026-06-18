@@ -1,7 +1,18 @@
 <template>
   <div class="landing-container">
+    <!-- 后端不可用 -->
+    <div v-if="isBackendDown" class="loading-container">
+      <img src="/lightbot-logo-single.png" alt="LightBot" class="error-logo" />
+      <h2 class="error-title">服务连接失败</h2>
+      <p class="error-desc">无法连接到 LightBot 后端服务，请确认服务已启动。</p>
+      <button class="button-base primary retry-btn" @click="retryHealthCheck">
+        <SyncOutlined />
+        <span>重新连接</span>
+      </button>
+    </div>
+
     <!-- 加载中 -->
-    <div v-if="isLoading" class="loading-container">
+    <div v-else-if="isLoading" class="loading-container">
       <a-spin size="large" />
       <p class="loading-text">正在加载...</p>
     </div>
@@ -56,9 +67,6 @@
                   </div>
                 </a-menu-item>
                 <a-menu-divider />
-                <a-menu-item key="enter" @click="router.push('/app/chat')">
-                  <span>进入后台</span>
-                </a-menu-item>
                 <a-menu-item key="logout" @click="handleLogout">
                   <span>退出登录</span>
                 </a-menu-item>
@@ -133,6 +141,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getLandingConfig } from '../api/landing'
+import { checkHealth } from '../api/systemConfig'
 import { useUserStore } from '../stores/user'
 import {
   RightOutlined,
@@ -184,6 +193,7 @@ function handleLogout() {
 }
 
 const isLoading = ref(true)
+const isBackendDown = ref(false)
 const config = ref({})
 const activeFeature = ref(0)
 let featureTimer = null
@@ -269,11 +279,7 @@ function handleStart() {
   }
 }
 
-onMounted(async () => {
-  // 已登录但用户信息未加载时，拉取用户数据
-  if (isLoggedIn.value && !userStore.user) {
-    try { await userStore.fetchUser() } catch { /* ignore */ }
-  }
+async function loadLandingConfig() {
   try {
     const res = await getLandingConfig()
     const raw = res?.data ?? res
@@ -282,7 +288,6 @@ onMounted(async () => {
     }
   } catch (e) {
     console.error('加载 Landing 配置失败:', e)
-    // 使用默认值
     config.value = {
       title: 'LightBot',
       subtitle: 'AI Native 智能体平台',
@@ -303,11 +308,34 @@ onMounted(async () => {
       github: 'https://github.com/finch04/LightBot',
       copyright: '© 2026 LightBot. All Rights Reserved.',
     }
-  } finally {
+  }
+}
+
+async function doHealthCheck() {
+  isBackendDown.value = false
+  isLoading.value = true
+  try {
+    await checkHealth()
+    // 健康检查通过，加载配置
+    if (isLoggedIn.value && !userStore.user) {
+      try { await userStore.fetchUser() } catch { /* ignore */ }
+    }
+    await loadLandingConfig()
     isLoading.value = false
     startFeatureCycle()
     startSubtitleCycle()
+  } catch {
+    isBackendDown.value = true
+    isLoading.value = false
   }
+}
+
+function retryHealthCheck() {
+  doHealthCheck()
+}
+
+onMounted(() => {
+  doHealthCheck()
 })
 
 onUnmounted(() => {
@@ -322,7 +350,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   color: var(--color-ink);
-  background: var(--color-canvas);
+  background: linear-gradient(180deg, #f0f6ff 0%, var(--color-canvas) 40%, #f8faff 100%);
   position: relative;
   overflow-x: hidden;
   font-family: var(--font-sans);
@@ -341,6 +369,31 @@ onUnmounted(() => {
   color: var(--color-mute);
   font-size: 14px;
 }
+.error-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+.error-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 8px;
+}
+.error-desc {
+  color: var(--color-mute);
+  font-size: 14px;
+  margin: 0 0 24px;
+  text-align: center;
+  max-width: 360px;
+}
+.retry-btn {
+  height: 40px;
+  padding: 0 24px;
+  font-size: 14px;
+}
 
 /* 背景装饰 */
 .ambient {
@@ -357,35 +410,35 @@ onUnmounted(() => {
   will-change: transform;
 }
 .orb-1 {
-  width: 500px;
-  height: 500px;
-  top: -180px;
-  right: -120px;
-  background: rgba(0, 112, 243, 0.08);
+  width: 560px;
+  height: 560px;
+  top: -200px;
+  right: -140px;
+  background: radial-gradient(circle, rgba(0, 112, 243, 0.12), rgba(56, 152, 236, 0.04) 70%);
   animation: orbFloat 20s ease-in-out infinite;
 }
 .orb-2 {
-  width: 420px;
-  height: 420px;
-  bottom: -160px;
-  left: -100px;
-  background: rgba(121, 40, 202, 0.06);
+  width: 480px;
+  height: 480px;
+  bottom: -180px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(121, 40, 202, 0.10), rgba(168, 85, 247, 0.03) 70%);
   animation: orbFloat 24s ease-in-out infinite reverse;
 }
 .orb-3 {
-  width: 350px;
-  height: 350px;
-  top: 40%;
-  left: 55%;
-  background: rgba(80, 227, 194, 0.06);
+  width: 400px;
+  height: 400px;
+  top: 35%;
+  left: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.10), rgba(0, 112, 243, 0.03) 70%);
   animation: orbFloat 28s ease-in-out infinite;
 }
 .grid-mesh {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0, 112, 243, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 112, 243, 0.04) 1px, transparent 1px);
   background-size: 64px 64px;
   -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 10%, #000, transparent 70%);
   mask-image: radial-gradient(ellipse 70% 50% at 50% 10%, #000, transparent 70%);
@@ -398,14 +451,14 @@ onUnmounted(() => {
   align-items: center;
   width: 100%;
   padding: 16px 40px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(1.2);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  border-bottom: 1px solid var(--color-hairline);
+  border-bottom: 1px solid rgba(0, 112, 243, 0.08);
 }
 .logo {
   display: flex;
@@ -442,8 +495,8 @@ onUnmounted(() => {
   transition: color 0.2s, background 0.2s;
 }
 .github-link:hover {
-  color: var(--color-ink);
-  background: var(--color-canvas-soft-2);
+  color: #0070f3;
+  background: rgba(0, 112, 243, 0.06);
 }
 .github-link svg {
   fill: currentColor;
@@ -462,8 +515,9 @@ onUnmounted(() => {
   font-family: var(--font-sans);
 }
 .btn-login-header:hover {
-  border-color: var(--color-ink);
-  background: var(--color-canvas-soft);
+  border-color: #0070f3;
+  background: rgba(0, 112, 243, 0.04);
+  color: #0070f3;
 }
 .header-avatar-wrap {
   cursor: pointer;
@@ -546,8 +600,11 @@ onUnmounted(() => {
   font-weight: 600;
   margin: 0;
   letter-spacing: -0.03em;
-  line-height: 1.05;
-  color: var(--color-ink);
+  line-height: 1.25;
+  background: linear-gradient(135deg, #0c0c0d 10%, #1a5fb4 55%, #0070f3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* 副标题轮播 */
@@ -603,13 +660,13 @@ onUnmounted(() => {
   font-family: var(--font-sans);
 }
 .button-base.primary {
-  background: var(--color-ink);
-  color: var(--color-canvas);
-  box-shadow: 0 4px 16px -4px rgba(23, 23, 23, 0.3);
+  background: linear-gradient(135deg, #0070f3, #3898ec);
+  color: #fff;
+  box-shadow: 0 8px 24px -4px rgba(0, 112, 243, 0.4);
 }
 .button-base.primary:hover {
-  background: #27272a;
-  box-shadow: 0 8px 24px -4px rgba(23, 23, 23, 0.35);
+  background: linear-gradient(135deg, #005bcc, #0070f3);
+  box-shadow: 0 12px 28px -4px rgba(0, 112, 243, 0.5);
 }
 .button-base.primary:hover :deep(svg) {
   transform: translateX(3px);
@@ -641,18 +698,18 @@ onUnmounted(() => {
   max-width: 620px;
   padding: 28px;
   border-radius: 16px;
-  background: var(--color-canvas);
+  background: linear-gradient(165deg, #ffffff, #f6f9ff);
   border: 1px solid var(--color-hairline);
-  box-shadow: var(--shadow-4);
+  box-shadow: 0 24px 48px -20px rgba(0, 112, 243, 0.12), var(--shadow-4);
   overflow: hidden;
 }
 .visual-glow {
   position: absolute;
   top: -30%;
   right: -15%;
-  width: 60%;
-  height: 60%;
-  background: radial-gradient(circle, rgba(0, 112, 243, 0.06), transparent 70%);
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(circle, rgba(0, 112, 243, 0.10), rgba(56, 152, 236, 0.03) 60%, transparent 80%);
   pointer-events: none;
 }
 
@@ -697,10 +754,10 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 .feature-item.active .feature-icon-wrap {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
-  color: var(--color-canvas);
-  box-shadow: 0 4px 12px -2px rgba(23, 23, 23, 0.25);
+  background: linear-gradient(135deg, #0070f3, #3898ec);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 16px -2px rgba(0, 112, 243, 0.35);
 }
 .feature-title {
   font-size: 12px;
@@ -723,8 +780,8 @@ onUnmounted(() => {
   margin-top: 20px;
   padding: 16px 20px;
   border-radius: 10px;
-  background: var(--color-canvas-soft);
-  border: 1px solid var(--color-hairline);
+  background: linear-gradient(135deg, #f6f9ff, #f0f4ff);
+  border: 1px solid rgba(0, 112, 243, 0.08);
   position: relative;
   z-index: 1;
   min-height: 88px;
@@ -756,9 +813,10 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   margin-top: auto;
-  border-top: 1px solid var(--color-hairline);
+  border-top: 1px solid rgba(0, 112, 243, 0.06);
   text-align: center;
   padding: 20px;
+  background: linear-gradient(180deg, transparent, rgba(0, 112, 243, 0.02));
 }
 .copyright {
   color: var(--color-mute);

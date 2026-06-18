@@ -93,6 +93,9 @@ public class WorkflowNodeRunner {
             if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
                 completeEvent.put("outputs", nodeResult.getOutputs());
             }
+            if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
+                completeEvent.put("traceData", nodeResult.getTraceData());
+            }
             emitEvent(context, completeEvent);
         }
 

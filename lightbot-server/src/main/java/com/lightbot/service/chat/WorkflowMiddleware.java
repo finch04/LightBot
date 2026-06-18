@@ -414,7 +414,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
 
         // LLM / Classifier 节点：构建嵌套 llm_call 子 span
         if ("llm".equals(nodeType) || "classifier".equals(nodeType)) {
-            buildLlmSpan(nodeId, nodeDef, nodeConfig, nodeStartMs, durationMs, success, spans, llmTokenAgg);
+            buildLlmSpan(nodeId, nodeDef, nodeConfig, complete, nodeStartMs, durationMs, success, spans, llmTokenAgg);
         }
     }
 
@@ -422,6 +422,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
      * 为 LLM 节点构建嵌套的 llm_call 子 span
      */
     private void buildLlmSpan(String nodeId, WorkflowNode nodeDef, Map<String, Object> nodeConfig,
+                              Map<String, Object> complete,
                               long nodeStartMs, long durationMs, boolean success,
                               List<LlmTraceSpan> spans, int[] llmTokenAgg) {
         String model = extractString(nodeConfig, "model");
@@ -434,10 +435,20 @@ public class WorkflowMiddleware implements ChatMiddleware {
         if (promptTemplate != null) llmAttrs.put("promptTemplate", truncate(promptTemplate, 300));
         llmAttrs.put("streaming", Boolean.TRUE.equals(nodeConfig.get("enableStreaming")));
 
-        // LLM token 统计（从节点事件中提取，如有）
-        // 工作流 LLM 节点目前不输出 token 统计到事件中，保留扩展点
-        llmAttrs.put("inputTokens", 0);
-        llmAttrs.put("outputTokens", 0);
+        // LLM token 统计（从节点 traceData 中提取）
+        int inputTokens = 0;
+        int outputTokens = 0;
+        Object traceDataObj = complete.get("traceData");
+        if (traceDataObj instanceof Map<?, ?> traceMap) {
+            Object inVal = traceMap.get("inputTokens");
+            Object outVal = traceMap.get("outputTokens");
+            if (inVal instanceof Number n) inputTokens = n.intValue();
+            if (outVal instanceof Number n) outputTokens = n.intValue();
+        }
+        llmAttrs.put("inputTokens", inputTokens);
+        llmAttrs.put("outputTokens", outputTokens);
+        llmTokenAgg[0] += inputTokens;
+        llmTokenAgg[1] += outputTokens;
 
         String llmSpanId = "llm:" + nodeId;
         String parentSpanId = "node:" + nodeId;

@@ -1,5 +1,10 @@
 <template>
   <div class="login-wrapper">
+    <!-- 后端不可用提示 -->
+    <div v-if="isBackendDown" class="health-banner">
+      <span>后端服务未就绪，请稍后刷新页面重试</span>
+    </div>
+
     <!-- 登录卡片 -->
     <div class="login-card">
       <!-- 左侧背景图 -->
@@ -68,17 +73,27 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '../stores/user'
+import { checkHealth } from '../api/systemConfig'
 import { UserOutlined, LockOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
+const isBackendDown = ref(false)
 
 const form = reactive({ username: '', password: '' })
+
+onMounted(async () => {
+  try {
+    await checkHealth()
+  } catch {
+    isBackendDown.value = true
+  }
+})
 
 async function handleLogin() {
   if (!form.username || !form.password) {
@@ -105,6 +120,21 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
+}
+
+.health-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #fff2f0;
+  border-bottom: 1px solid #ffccc7;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #cf1322;
 }
 
 /* 登录卡片 */

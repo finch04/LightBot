@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * 系统配置接口
  *
@@ -93,5 +95,11 @@ public class SystemConfigController {
         userService.checkAdmin();
         systemConfigService.updateDefaultRerankModelConfig(config);
         return Result.ok();
+    }
+
+    @Operation(summary = "健康检查（公开接口，无需认证）")
+    @GetMapping("/health")
+    public Result<Map<String, String>> health() {
+        return Result.ok(Map.of("status", "ok"));
     }
 }
