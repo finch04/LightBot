@@ -71,7 +71,7 @@ function petalStyle(i) {
   position: relative;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   padding: 40px 20px;
   min-height: 100%;
   background: linear-gradient(135deg, #fdf2f8 0%, #f0f4ff 50%, #f5f3ff 100%);
@@ -123,12 +123,12 @@ function petalStyle(i) {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 520px;
+  max-width: 680px;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
-  border-radius: 16px;
-  padding: 40px 36px;
-  padding-top: 48px;
+  border-radius: 20px;
+  padding: 56px 48px;
+  padding-top: 64px;
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.06),
     0 0 0 1px rgba(255, 255, 255, 0.6);
@@ -150,13 +150,13 @@ function petalStyle(i) {
 
 .logo-ellipse {
   position: absolute;
-  top: -28px;
-  left: -28px;
+  top: 12px;
+  left: -62px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 120px;
-  height: 64px;
+  width: 180px;
+  height: 96px;
   border-radius: 50%;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   box-shadow:
@@ -170,14 +170,16 @@ function petalStyle(i) {
 .logo-ellipse::before {
   content: '';
   position: absolute;
-  top: 4px;
+  top: 6px;
   left: 50%;
   transform: translateX(-50%);
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+  background: radial-gradient(circle at 35% 35%, #e4e4e7, #a1a1aa 60%, #71717a);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6);
   z-index: 3;
 }
 .logo-ellipse-glow {
@@ -199,9 +201,9 @@ function petalStyle(i) {
 .about-logo {
   position: relative;
   z-index: 2;
-  width: 90px;
-  height: 45px;
-  border-radius: 8px;
+  width: 130px;
+  height: 65px;
+  border-radius: 10px;
 }
 @keyframes ellipseHang {
   0%, 100% { transform: rotate(-3deg); }
@@ -213,7 +215,7 @@ function petalStyle(i) {
 }
 
 .about-title {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 700;
   color: #171717;
   margin: 0 0 4px;
@@ -221,9 +223,9 @@ function petalStyle(i) {
 }
 
 .about-desc {
-  font-size: 14px;
+  font-size: 15px;
   color: #71717a;
-  margin: 0 0 28px;
+  margin: 0 0 32px;
 }
 
 .about-info {
@@ -242,12 +244,12 @@ function petalStyle(i) {
 .info-label {
   width: 80px;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: #a1a1aa;
 }
 
 .info-value {
-  font-size: 14px;
+  font-size: 15px;
   color: #27272a;
 }
 
@@ -284,9 +286,9 @@ function petalStyle(i) {
 }
 
 .about-features li {
-  font-size: 13px;
+  font-size: 14px;
   color: #52525b;
-  padding: 5px 0;
+  padding: 6px 0;
   padding-left: 16px;
   position: relative;
 }

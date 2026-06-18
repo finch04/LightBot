@@ -11,6 +11,9 @@ export const useUserStore = defineStore('user', () => {
     token.value = res.data.token
     user.value = res.data.user
     localStorage.setItem('token', res.data.token)
+    if (res.data.user?.role) {
+      localStorage.setItem('role', res.data.user.role)
+    }
     if (res.data.user.firstLogin) {
       localStorage.setItem('first-login', '1')
     }
@@ -20,6 +23,9 @@ export const useUserStore = defineStore('user', () => {
   async function fetchUser() {
     const res = await getMe()
     user.value = res.data
+    if (res.data?.role) {
+      localStorage.setItem('role', res.data.role)
+    }
   }
 
   async function logout() {
@@ -31,6 +37,7 @@ export const useUserStore = defineStore('user', () => {
     token.value = ''
     user.value = null
     localStorage.removeItem('token')
+    localStorage.removeItem('role')
   }
 
   return { token, user, login, fetchUser, logout }

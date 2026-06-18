@@ -4,6 +4,7 @@ import com.lightbot.common.Result;
 import com.lightbot.dto.DefaultAiConfigDTO;
 import jakarta.validation.Valid;
 import com.lightbot.service.SystemConfigService;
+import com.lightbot.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class SystemConfigController {
 
     private final SystemConfigService systemConfigService;
+    private final UserService userService;
 
     @Operation(summary = "获取默认AI配置（兼容旧接口，等同于默认对话模型）")
     @GetMapping("/default-ai")
@@ -32,6 +34,7 @@ public class SystemConfigController {
     @Operation(summary = "更新默认AI配置（兼容旧接口）")
     @PutMapping("/default-ai")
     public Result<Void> updateDefaultAiConfig(@Valid @RequestBody DefaultAiConfigDTO config) {
+        userService.checkAdmin();
         systemConfigService.updateDefaultAiConfig(config);
         return Result.ok();
     }
@@ -45,6 +48,7 @@ public class SystemConfigController {
     @Operation(summary = "更新默认对话模型配置")
     @PutMapping("/default-chat-model")
     public Result<Void> updateDefaultChatModel(@Valid @RequestBody DefaultAiConfigDTO config) {
+        userService.checkAdmin();
         systemConfigService.updateDefaultChatModelConfig(config);
         return Result.ok();
     }
@@ -58,6 +62,7 @@ public class SystemConfigController {
     @Operation(summary = "更新默认向量模型配置")
     @PutMapping("/default-embedding-model")
     public Result<Void> updateDefaultEmbeddingModel(@Valid @RequestBody DefaultAiConfigDTO config) {
+        userService.checkAdmin();
         systemConfigService.updateDefaultEmbeddingModelConfig(config);
         return Result.ok();
     }
@@ -71,6 +76,7 @@ public class SystemConfigController {
     @Operation(summary = "更新默认TTS模型配置")
     @PutMapping("/default-tts-model")
     public Result<Void> updateDefaultTtsModel(@Valid @RequestBody DefaultAiConfigDTO config) {
+        userService.checkAdmin();
         systemConfigService.updateDefaultTtsModelConfig(config);
         return Result.ok();
     }
@@ -84,6 +90,7 @@ public class SystemConfigController {
     @Operation(summary = "更新默认重排模型配置")
     @PutMapping("/default-rerank-model")
     public Result<Void> updateDefaultRerankModel(@Valid @RequestBody DefaultAiConfigDTO config) {
+        userService.checkAdmin();
         systemConfigService.updateDefaultRerankModelConfig(config);
         return Result.ok();
     }

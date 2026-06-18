@@ -130,12 +130,83 @@
         </div>
       </div>
     </div>
+
+    <!-- Landing 页面配置 -->
+    <div class="section-title">Landing 页面配置</div>
+    <div class="panel landing-panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h3>首页内容配置</h3>
+          <span class="panel-desc">配置公开 Landing 页的标题、描述、功能展示等内容</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <a-form :label-col="{ span: 4 }" :wrapper-col="{ span: 18 }">
+          <a-form-item label="主标题">
+            <a-input v-model:value="landing.title" placeholder="LightBot" />
+          </a-form-item>
+          <a-form-item label="副标题轮播">
+            <div class="subtitle-list">
+              <div v-for="(sub, idx) in landing.subtitles" :key="idx" class="subtitle-row">
+                <a-input v-model:value="landing.subtitles[idx]" placeholder="副标题" style="flex:1" />
+                <button class="btn-icon-danger" @click="landing.subtitles.splice(idx, 1)">
+                  <DeleteOutlined />
+                </button>
+              </div>
+              <button class="btn-add" @click="landing.subtitles.push('')">
+                <PlusOutlined /> 添加副标题
+              </button>
+            </div>
+          </a-form-item>
+          <a-form-item label="描述文字">
+            <a-textarea v-model:value="landing.description" :rows="3" placeholder="平台介绍文字" />
+          </a-form-item>
+          <a-form-item label="GitHub 地址">
+            <a-input v-model:value="landing.github" placeholder="https://github.com/..." />
+          </a-form-item>
+          <a-form-item label="版权信息">
+            <a-input v-model:value="landing.copyright" placeholder="© 2026 LightBot" />
+          </a-form-item>
+          <a-form-item label="功能展示">
+            <div class="feature-list">
+              <div v-for="(feat, idx) in landing.features" :key="idx" class="feature-card">
+                <div class="feature-card-header">
+                  <span class="feature-index">#{{ idx + 1 }}</span>
+                  <button class="btn-icon-danger" @click="landing.features.splice(idx, 1)">
+                    <DeleteOutlined />
+                  </button>
+                </div>
+                <a-form-item label="图标" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                  <a-select v-model:value="feat.icon" placeholder="选择图标">
+                    <a-select-option v-for="ic in featureIconOptions" :key="ic" :value="ic">{{ ic }}</a-select-option>
+                  </a-select>
+                </a-form-item>
+                <a-form-item label="标题" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                  <a-input v-model:value="feat.title" placeholder="功能名称" />
+                </a-form-item>
+                <a-form-item label="描述" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                  <a-textarea v-model:value="feat.desc" :rows="2" placeholder="功能描述" />
+                </a-form-item>
+              </div>
+              <button class="btn-add" @click="landing.features.push({ icon: '', title: '', desc: '' })">
+                <PlusOutlined /> 添加功能
+              </button>
+            </div>
+          </a-form-item>
+          <a-form-item :wrapper-col="{ offset: 4, span: 18 }">
+            <button class="btn-primary" :disabled="landingSaving" @click="saveLandingConfig">
+              <SaveOutlined /> {{ landingSaving ? '保存中...' : '保存 Landing 配置' }}
+            </button>
+          </a-form-item>
+        </a-form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { SaveOutlined, BulbOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, onMounted } from 'vue'
+import { SaveOutlined, BulbOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
   getDefaultChatModel, updateDefaultChatModel,
@@ -143,6 +214,7 @@ import {
   getDefaultTtsModel, updateDefaultTtsModel,
   getDefaultRerankModel, updateDefaultRerankModel,
 } from '../api/systemConfig'
+import { getLandingConfig, updateLandingConfig } from '../api/landing'
 import ModelSelect from '../components/ModelSelect.vue'
 
 const chatValue = ref(null)
@@ -166,7 +238,7 @@ const ttsProviderId = ref(null)
 const ttsModelId = ref(null)
 
 onMounted(async () => {
-  await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig(), loadRerankConfig()])
+  await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig(), loadRerankConfig(), loadLandingConfig()])
 })
 
 function onModelChange(kind, { providerId, modelId }) {
@@ -281,6 +353,60 @@ async function saveTtsModel() {
     ttsSaving.value = false
   }
 }
+
+// Landing 配置
+const landingSaving = ref(false)
+const landing = reactive({
+  title: '',
+  subtitles: [],
+  description: '',
+  features: [],
+  github: '',
+  copyright: '',
+})
+
+const featureIconOptions = [
+  'Agent', 'Knowledge', 'Workflow', 'Mcp', 'Tool', 'Skill', 'Eval', 'Observability',
+]
+
+async function loadLandingConfig() {
+  try {
+    const res = await getLandingConfig()
+    const raw = res?.data ?? res
+    const cfg = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (cfg) {
+      landing.title = cfg.title || ''
+      landing.subtitles = cfg.subtitles || []
+      landing.description = cfg.description || ''
+      landing.features = (cfg.features || []).map(f => ({ ...f }))
+      landing.github = cfg.github || ''
+      landing.copyright = cfg.copyright || ''
+    }
+  } catch (e) {
+    console.error('[Settings] 加载 Landing 配置失败:', e)
+  }
+}
+
+async function saveLandingConfig() {
+  if (!landing.title.trim()) return message.warning('请输入主标题')
+  landingSaving.value = true
+  try {
+    const payload = JSON.stringify({
+      title: landing.title,
+      subtitles: landing.subtitles.filter(s => s.trim()),
+      description: landing.description,
+      features: landing.features.filter(f => f.title.trim()),
+      github: landing.github,
+      copyright: landing.copyright,
+    })
+    await updateLandingConfig(payload)
+    message.success('Landing 配置已保存')
+  } catch (e) {
+    message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    landingSaving.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -373,5 +499,78 @@ async function saveTtsModel() {
 }
 .panel-tip :deep(svg) {
   flex-shrink: 0;
+}
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #171717;
+  margin: 32px 0 16px;
+}
+.landing-panel {
+  grid-column: 1 / -1;
+}
+.subtitle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.subtitle-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-icon-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-icon-danger:hover {
+  background: #fef2f2;
+}
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: 1px dashed #d4d4d8;
+  background: #fafafa;
+  color: #52525b;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-add:hover {
+  border-color: #171717;
+  color: #171717;
+}
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.feature-card {
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: #fafafa;
+}
+.feature-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.feature-index {
+  font-size: 13px;
+  font-weight: 600;
+  color: #71717a;
 }
 </style>

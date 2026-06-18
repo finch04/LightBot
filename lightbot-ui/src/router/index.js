@@ -188,6 +188,7 @@ const routes = [
         path: 'settings',
         name: 'Settings',
         component: () => import('../views/SettingsView.vue'),
+        meta: { requiresAdmin: true },
       },
       {
         path: 'about',
@@ -206,6 +207,8 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   if (!to.meta.public && !localStorage.getItem('token')) {
     next('/login')
+  } else if (to.meta.requiresAdmin && localStorage.getItem('role') !== 'admin') {
+    next('/app/chat')
   } else {
     next()
   }

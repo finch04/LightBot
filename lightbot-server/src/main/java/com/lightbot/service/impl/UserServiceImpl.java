@@ -268,4 +268,13 @@ public class UserServiceImpl implements UserService {
             return new HashMap<>();
         }
     }
+
+    @Override
+    public void checkAdmin() {
+        long userId = StpUtil.getLoginIdAsLong();
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getRole() != UserRole.ADMIN) {
+            throw new BizException(ErrorCode.FORBIDDEN);
+        }
+    }
 }

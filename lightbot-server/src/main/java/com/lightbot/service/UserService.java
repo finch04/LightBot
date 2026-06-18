@@ -91,4 +91,9 @@ public interface UserService {
      * @return 头像URL
      */
     String uploadAvatar(MultipartFile file);
+
+    /**
+     * 校验当前用户是否为管理员，非管理员抛出权限异常
+     */
+    void checkAdmin();
 }
