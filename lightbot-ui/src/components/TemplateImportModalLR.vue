@@ -79,6 +79,7 @@
     <div class="dialog-footer">
       <div class="dialog-footer-left">
         <span class="template-count">共 {{ templates.length }} 个模板</span>
+        <span class="template-tip">仅导入提示词内容，不导入模型配置</span>
       </div>
       <div class="dialog-footer-right">
         <button class="btn-cancel" @click="visible = false">取消</button>
@@ -372,6 +373,11 @@ onMounted(() => {
 .template-count {
   font-size: 13px;
   color: #71717a;
+}
+.template-tip {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-left: 12px;
 }
 
 .dialog-footer-right {

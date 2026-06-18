@@ -26,7 +26,7 @@ function ensureConfigured() {
           return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
         },
       },
-      breaks: true,
+      breaks: false,
       gfm: true,
     }
   )

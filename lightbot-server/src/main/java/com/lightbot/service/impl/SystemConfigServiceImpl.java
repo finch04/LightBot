@@ -143,6 +143,11 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         }
     }
 
+    @Override
+    public String getLandingConfig() {
+        return getConfigValue(ConfigKeys.System.LANDING_CONFIG);
+    }
+
     /**
      * 解析模型配置JSON
      */

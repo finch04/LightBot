@@ -24,6 +24,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
             SaRouter.match("/api/tasks/stream").stop();
             SaRouter.match("/api/auth/login").stop();
             SaRouter.match("/api/auth/register").stop();
+            SaRouter.match("/api/landing/**").stop();
             // 其余接口需要登录
             StpUtil.checkLogin();
         })).addPathPatterns("/api/**");

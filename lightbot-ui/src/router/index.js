@@ -2,6 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   {
+    path: '/',
+    name: 'Landing',
+    component: () => import('../views/Landing.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
@@ -14,9 +20,9 @@ const routes = [
     meta: { public: true },
   },
   {
-    path: '/',
+    path: '/app',
     component: () => import('../layouts/MainLayout.vue'),
-    redirect: '/chat',
+    redirect: '/app/chat',
     children: [
       {
         path: 'chat',
@@ -131,7 +137,7 @@ const routes = [
       },
       {
         path: 'eval',
-        redirect: '/eval/datasets',
+        redirect: '/app/eval/datasets',
       },
       {
         path: 'eval/datasets',

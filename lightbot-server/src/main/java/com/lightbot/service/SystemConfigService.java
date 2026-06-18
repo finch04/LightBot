@@ -93,4 +93,11 @@ public interface SystemConfigService extends IService<SystemConfig> {
      * 更新默认重排模型配置
      */
     void updateDefaultRerankModelConfig(DefaultAiConfigDTO config);
+
+    /**
+     * 获取 Landing 页面配置
+     *
+     * @return Landing 配置 JSON 字符串
+     */
+    String getLandingConfig();
 }

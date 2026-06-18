@@ -37,7 +37,7 @@
         :class="{ active: typeFilter === typeName }"
         @click="typeFilter = typeFilter === typeName ? '' : typeName"
       >
-        <a-tag :color="color" :class="{ 'type-tag-selected': typeFilter === typeName }" size="small">{{ typeName }}</a-tag>
+        <a-tag :color="color" size="small">{{ typeName }}</a-tag>
         <span class="type-count">{{ typeCounts[typeName] || 0 }}</span>
       </span>
     </div>
@@ -399,10 +399,6 @@ onUnmounted(() => {
 .type-filter-item :deep(.ant-tag) {
   margin: 0;
   cursor: pointer;
-}
-.type-tag-selected {
-  outline: 2px solid #1677ff;
-  outline-offset: -1px;
 }
 .type-count {
   font-size: 12px;

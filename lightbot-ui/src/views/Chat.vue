@@ -19,7 +19,7 @@
         </div>
         <!-- 无默认Agent提示 -->
         <div v-if="!selectedAgentId && agents.length > 0" class="no-default-hint">
-          没有默认Agent，<router-link to="/agents">去创建</router-link>
+          没有默认Agent，<router-link to="/app/agents">去创建</router-link>
         </div>
       </div>
 
@@ -253,7 +253,7 @@
           <a-popover v-if="agents.length === 0" trigger="click" placement="topLeft">
             <template #content>
               <div class="empty-agent-tip">
-                系统里还没有智能体，<router-link to="/agents">点击创建智能体</router-link>
+                系统里还没有智能体，<router-link to="/app/agents">点击创建智能体</router-link>
               </div>
             </template>
             <button type="button" class="btn-agent">
@@ -1108,7 +1108,7 @@ async function runChatStream({ message, attachments, regenerate }) {
       const res = await createSession(currentAgentId || undefined)
       sid = res.data.id
       skipNextWatch.value = true
-      router.replace(`/chat/${sid}`)
+      router.replace(`/app/chat/${sid}`)
     }
 
     const chatPayload = {
@@ -1449,7 +1449,7 @@ function formatElapsed(ms) {
 
 function goToKnowledge(knowledgeId, documentId) {
   const query = documentId ? { docId: String(documentId) } : {}
-  router.push({ path: `/knowledge/${knowledgeId}`, query })
+  router.push({ path: `/app/knowledge/${knowledgeId}`, query })
 }
 
 // scrollToBottom 已在虚拟滚动区域定义
@@ -1502,7 +1502,7 @@ onMounted(async () => {
   if (queryAgentId) {
     await loadCurrentAgent(queryAgentId)
     await loadAgentConfigVersions(queryAgentId)
-    router.replace({ path: '/chat' })
+    router.replace({ path: '/app/chat' })
   } else if (selectedAgentId.value) {
     await loadAgentConfigVersions(selectedAgentId.value)
   }

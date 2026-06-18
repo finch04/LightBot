@@ -239,7 +239,7 @@ import { message } from 'ant-design-vue'
 import {
   getPrompts, getPromptVersions, getPromptVersionDetail, createPromptVersion, runPromptStream,
 } from '../api/prompt'
-import { getProviderConfigFields, getModelProvider } from '../api/modelProvider'
+import { getProviderConfigFields } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import TemplateImportModalLR from '../components/TemplateImportModalLR.vue'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
@@ -313,12 +313,13 @@ onMounted(async () => {
   const inst = createInstance()
   instances.value.push(inst)
 
-  // 优先恢复指定版本，否则加载最新版本
+  // 优先恢复指定版本，否则加载最新版本（通过详情API获取完整modelConfig）
   const restoreVersion = route.query.restoreVersion
   if (restoreVersion) {
     await restoreByVersion(restoreVersion)
   } else if (versions.value.length > 0) {
-    await applyVersionToInstance(inst, versions.value[0])
+    const latest = versions.value[0]
+    await restoreByVersion(latest.version)
   }
 })
 
@@ -355,15 +356,12 @@ async function applyVersionToInstance(inst, versionData) {
   if (versionData.modelConfig) {
     try {
       const cfg = typeof versionData.modelConfig === 'string' ? JSON.parse(versionData.modelConfig) : versionData.modelConfig
-      if (cfg.providerId) {
-        inst.providerId = cfg.providerId
-        await loadConfigFieldsForInstance(inst, cfg.providerId)
-        if (cfg.modelId) inst.modelId = cfg.modelId
-        for (const [k, v] of Object.entries(cfg)) {
-          if (k !== 'providerId' && k !== 'modelId') {
-            inst.modelConfig[k] = v
-          }
-        }
+      const pid = cfg.providerId != null ? String(cfg.providerId) : null
+      if (pid) {
+        inst.providerId = pid
+        await loadConfigFieldsForInstance(inst, pid)
+        if (cfg.modelId) inst.modelId = String(cfg.modelId)
+        applyModelConfigToInstance(inst, cfg)
       }
     } catch { /* ignore */ }
   }
@@ -409,9 +407,9 @@ async function loadConfigFieldsForInstance(inst, providerId) {
 }
 
 function getPlaceholder(inst) {
-  if (inst.variables.length > 1) return '留空使用默认值，或输入 JSON 覆盖，如: {"var1":"值1"}'
-  if (inst.variables.length === 1) return `留空使用默认值，或输入内容覆盖 <${inst.variables[0].key}>`
-  return '输入内容'
+  if (inst.variables.length > 1) return '输入对话内容（可选），留空则直接使用上方参数配置'
+  if (inst.variables.length === 1) return `输入 <${inst.variables[0].key}> 的值，留空使用上方默认值`
+  return '输入对话内容'
 }
 
 function onContentChange(inst) {
@@ -421,6 +419,24 @@ function onContentChange(inst) {
     const existing = inst.variables.find(v => v.key === key)
     return { key, defaultValue: existing?.defaultValue || '' }
   })
+}
+
+/**
+ * 将导入/恢复的模型配置应用到实例，只覆盖提供商支持的字段
+ */
+/**
+ * @param {boolean} filterByFields - 是否按 configFields 白名单过滤（版本恢复时过滤，模板导入时不过滤）
+ */
+function applyModelConfigToInstance(inst, cfg, filterByFields = true) {
+  if (!cfg) return
+  if (!inst.modelConfig) inst.modelConfig = {}
+  const fields = inst.configFields || []
+  const supportedKeys = filterByFields && fields.length > 0 ? new Set(fields.map(f => f.key)) : null
+  for (const [k, v] of Object.entries(cfg)) {
+    if (k !== 'providerId' && k !== 'modelId' && (supportedKeys === null || supportedKeys.has(k))) {
+      inst.modelConfig[k] = v
+    }
+  }
 }
 
 function buildModelConfigJson(inst) {
@@ -438,37 +454,10 @@ function openTemplateImportFor(inst) {
 
 async function handleTemplateImport(t) {
   if (!t) return
-
-  try {
-    const inst = importTargetInst || instances.value[0]
-    inst.content = t.template || ''
-    onContentChange(inst)
-    message.success('模板导入成功')
-
-    // 模型配置导入（需验证提供商存在）
-    if (t.modelConfig) {
-      try {
-        const cfg = typeof t.modelConfig === 'string' ? JSON.parse(t.modelConfig) : t.modelConfig
-        if (cfg.providerId) {
-          // 验证提供商是否存在，不存在则跳过模型配置导入
-          await getModelProvider(cfg.providerId)
-          inst.providerId = cfg.providerId
-          await loadConfigFieldsForInstance(inst, cfg.providerId)
-          if (cfg.modelId) inst.modelId = cfg.modelId
-          if (!inst.modelConfig) inst.modelConfig = {}
-          for (const [k, v] of Object.entries(cfg)) {
-            if (k !== 'providerId' && k !== 'modelId') {
-              inst.modelConfig[k] = v
-            }
-          }
-        }
-      } catch {
-        // 提供商不存在或配置导入失败，跳过模型配置导入
-      }
-    }
-  } catch (e) {
-    message.error('模板导入失败')
-  }
+  const inst = importTargetInst || instances.value[0]
+  inst.content = t.template || ''
+  onContentChange(inst)
+  message.success('模板导入成功')
 }
 
 // 发布版本
@@ -511,29 +500,16 @@ function copyInput(inst) {
 async function handleRun(inst) {
   if (inst.streaming || !inst.content.trim()) return
 
-  let variables = '{}'
-  // 合并变量默认值
-  if (inst.variables.length > 0) {
-    const vars = {}
-    for (const v of inst.variables) {
-      if (v.key) vars[v.key] = v.defaultValue || ''
-    }
-    variables = JSON.stringify(vars)
+  // 从参数配置区构建变量 JSON
+  const vars = {}
+  for (const v of inst.variables) {
+    if (v.key) vars[v.key] = v.defaultValue || ''
   }
-  if (inst.userInput.trim()) {
-    try {
-      const parsed = JSON.parse(inst.userInput)
-      variables = JSON.stringify({ ...JSON.parse(variables), ...parsed })
-    } catch {
-      // 单变量时自动将纯文本包装为 JSON
-      if (inst.variables.length === 1) {
-        const wrapped = { [inst.variables[0].key]: inst.userInput.trim() }
-        variables = JSON.stringify({ ...JSON.parse(variables), ...wrapped })
-      } else {
-        return message.warning('多变量场景下请输入 JSON 格式，如: {"var1":"值1","var2":"值2"}')
-      }
-    }
+  // 单变量时，用户输入框的内容作为该变量值
+  if (inst.variables.length === 1 && inst.userInput.trim()) {
+    vars[inst.variables[0].key] = inst.userInput.trim()
   }
+  const variables = JSON.stringify(vars)
 
   inst.messages.push({ role: 'user', content: inst.userInput || variables })
   inst.userInput = ''

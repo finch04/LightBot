@@ -4,7 +4,7 @@
     <aside :class="['sidebar', { collapsed: sidebarCollapsed && !sidebarHidden, hidden: sidebarHidden }]">
       <!-- Logo + 收起按钮 -->
       <div class="sidebar-header">
-        <div class="sidebar-logo" @click="sidebarCollapsed ? toggleSidebar() : router.push('/chat')">
+        <div class="sidebar-logo" @click="sidebarCollapsed ? toggleSidebar() : router.push('/app/chat')">
           <img src="/lightbot-logo.png" alt="LightBot" class="logo-img logo-full" />
           <img src="/lightbot-logo-single.png" alt="LightBot" class="logo-img logo-single" />
           <div class="logo-unfold-icon">
@@ -104,7 +104,7 @@
       </a-modal>
 
       <!-- 左下角任务徽标 -->
-      <div v-if="taskBadgeCount" class="sidebar-task-badge" @click="router.push('/tasks')">
+      <div v-if="taskBadgeCount" class="sidebar-task-badge" @click="router.push('/app/tasks')">
         <a-badge :count="taskBadgeCount" :number-style="taskBadgeStyle" />
       </div>
 
@@ -149,7 +149,7 @@
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <router-view :key="route.path.startsWith('/chat') ? '/chat' : route.path" />
+      <router-view :key="route.path.startsWith('/app/chat') ? '/app/chat' : route.path" />
     </main>
 
   </div>
@@ -212,13 +212,13 @@ const taskBadgeStyle = computed(() => sidebarCollapsed.value
 )
 
 const navItems = [
-  { path: '/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
-  { path: '/knowledge', label: '知识库', icon: markRaw(DatabaseOutlined) },
-  { path: '/extensions', label: '扩展', icon: markRaw(ToolOutlined) },
-  { path: '/prompts', label: 'Prompt', icon: markRaw(FileTextOutlined) },
-  { path: '/eval', label: '评测', icon: markRaw(ExperimentOutlined) },
-  { path: '/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
-  { path: '/observability', label: '可观测', icon: markRaw(EyeOutlined) },
+  { path: '/app/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
+  { path: '/app/knowledge', label: '知识库', icon: markRaw(DatabaseOutlined) },
+  { path: '/app/extensions', label: '扩展', icon: markRaw(ToolOutlined) },
+  { path: '/app/prompts', label: 'Prompt', icon: markRaw(FileTextOutlined) },
+  { path: '/app/eval', label: '评测', icon: markRaw(ExperimentOutlined) },
+  { path: '/app/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
+  { path: '/app/observability', label: '可观测', icon: markRaw(EyeOutlined) },
 ]
 
 function isActive(path) {
@@ -231,7 +231,7 @@ function toggleSidebar() {
 }
 
 function syncSidebarForRoute(path) {
-  const hide = path.startsWith('/workflow/')
+  const hide = path.startsWith('/app/workflow/')
   if (hide) {
     if (sidebarStateBeforeWorkflow === null) {
       sidebarStateBeforeWorkflow = sidebarCollapsed.value
@@ -277,12 +277,12 @@ function refreshSessionsWithRetry() {
 
 function newChat() {
   currentSessionId.value = null
-  router.push('/chat')
+  router.push('/app/chat')
 }
 
 function switchSession(session) {
   currentSessionId.value = session.id
-  router.push(`/chat/${session.id}`)
+  router.push(`/app/chat/${session.id}`)
 }
 
 function handleSessionMenu(key, session) {
@@ -318,7 +318,7 @@ function handleDeleteSession(session) {
         await deleteSession(session.id)
         sessions.value = sessions.value.filter(s => s.id !== session.id)
         if (currentSessionId.value === session.id) {
-          router.push('/chat')
+          router.push('/app/chat')
         }
       } catch {
         // interceptor已处理错误提示
@@ -348,17 +348,17 @@ function handleCommand({ key }) {
     userStore.logout()
     router.push('/login')
   } else if (key === 'profile') {
-    router.push('/profile')
+    router.push('/app/profile')
   } else if (key === 'tasks') {
-    router.push('/tasks')
+    router.push('/app/tasks')
   } else if (key === 'settings') {
-    router.push('/settings')
+    router.push('/app/settings')
   } else if (key === 'model-providers') {
-    router.push('/model-providers')
+    router.push('/app/model-providers')
   } else if (key === 'logs') {
-    router.push('/logs')
+    router.push('/app/logs')
   } else if (key === 'about') {
-    router.push('/about')
+    router.push('/app/about')
   }
 }
 
@@ -420,8 +420,8 @@ onUnmounted(() => {
 })
 
 watch(() => route.path, (path) => {
-  if (path.startsWith('/chat')) {
-    const match = path.match(/\/chat\/(\d+)/)
+  if (path.startsWith('/app/chat')) {
+    const match = path.match(/\/app\/chat\/(\d+)/)
     const newId = match ? match[1] : null
     if (newId && newId !== currentSessionId.value) {
       // 新会话创建后刷新侧边栏列表

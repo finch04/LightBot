@@ -103,5 +103,7 @@ public final class ConfigKeys {
         public static final String DEFAULT_TTS_MODEL = "default_tts_model";
         /** 默认重排模型配置 */
         public static final String DEFAULT_RERANK_MODEL = "default_rerank_model";
+        /** Landing 页面配置 */
+        public static final String LANDING_CONFIG = "landing_config";
     }
 }

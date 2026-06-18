@@ -17,9 +17,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
 /**
  * 文档上传任务执行器：MinIO上传 + Tika解析 + OCR + Markdown转换
@@ -67,11 +69,29 @@ public class DocumentUploadExecutor implements TaskExecutor {
             log.info("[文档上传执行器] MinIO上传完成, documentId={}", documentId);
             checkCancelled(task.getId());
 
-            // 2. Tika 解析为 Markdown
+            // 2. Tika 解析为 Markdown（DOCX 提取图片）
             taskService.updateProgress(task.getId(), 30, "正在解析文档...");
             String markdownContent = null;
-            try (InputStream is = Files.newInputStream(temp)) {
-                markdownContent = tikaUtil.parseToMarkdown(is, doc.getName());
+            if ("docx".equals(doc.getFileType())) {
+                try (InputStream is = Files.newInputStream(temp)) {
+                    var result = tikaUtil.parseDocxToMarkdownWithImages(is);
+                    markdownContent = result.markdown();
+                    // 上传图片到 MinIO 并替换占位符
+                    for (var img : result.images()) {
+                        String imgPath = String.format("knowledge/%d/images/%s_%s",
+                                doc.getKnowledgeId(), UUID.randomUUID(), img.fileName());
+                        minioUtil.upload(new ByteArrayInputStream(img.data()), imgPath, img.data().length, img.contentType());
+                        String url = minioUtil.getPresignedUrl(imgPath);
+                        markdownContent = markdownContent.replace(img.placeholder(), "![image](" + url + ")");
+                    }
+                    if (!result.images().isEmpty()) {
+                        log.info("[文档上传执行器] DOCX图片提取完成, documentId={}, count={}", documentId, result.images().size());
+                    }
+                }
+            } else {
+                try (InputStream is = Files.newInputStream(temp)) {
+                    markdownContent = tikaUtil.parseToMarkdown(is, doc.getName());
+                }
             }
             checkCancelled(task.getId());
 

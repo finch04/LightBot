@@ -20,10 +20,15 @@ import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Component;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * 文档解析工具
@@ -333,5 +338,159 @@ public class TikaUtil {
         }
         int dot = filename.lastIndexOf('.');
         return dot >= 0 ? filename.substring(dot + 1).toLowerCase() : "";
+    }
+
+    // ==================== DOCX 图片提取 ====================
+
+    /** 支持的图片 MIME 类型 */
+    private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of(
+            "image/png", "image/jpeg", "image/gif", "image/bmp"
+    );
+
+    /** 图片大小上限：10MB */
+    private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+    /**
+     * DOCX 图片数据
+     *
+     * @param placeholder Markdown 中的占位符（如 {{IMG:uuid}}）
+     * @param data        图片二进制数据
+     * @param contentType 图片 MIME 类型
+     * @param fileName    原始文件名
+     */
+    public record ImageData(String placeholder, byte[] data, String contentType, String fileName) {}
+
+    /**
+     * Markdown 解析结果（含图片）
+     *
+     * @param markdown Markdown 文本（含图片占位符）
+     * @param images   提取的图片列表
+     */
+    public record MarkdownResult(String markdown, List<ImageData> images) {}
+
+    /**
+     * 解析 DOCX 为 Markdown，同时提取内嵌图片
+     * <p>图片以 {{IMG:uuid}} 占位符插入 Markdown，调用方负责上传图片并替换占位符为实际 URL</p>
+     *
+     * @param inputStream DOCX 文件输入流
+     * @return MarkdownResult 包含 Markdown 文本和图片列表
+     */
+    public MarkdownResult parseDocxWithImages(InputStream inputStream) throws IOException {
+        try (XWPFDocument doc = new XWPFDocument(inputStream)) {
+            StringBuilder sb = new StringBuilder();
+            List<ImageData> images = new ArrayList<>();
+            // rId 去重：同一 rId 只收集一次
+            Map<String, String> rIdToPlaceholder = new HashMap<>();
+
+            for (var element : doc.getBodyElements()) {
+                if (element instanceof XWPFTable table) {
+                    appendDocxTableAsMarkdown(sb, table);
+                    sb.append("\n");
+                } else if (element instanceof org.apache.poi.xwpf.usermodel.XWPFParagraph para) {
+                    // 遍历 Run，分别处理文本和图片
+                    for (var run : para.getRuns()) {
+                        // 文本内容
+                        String text = run.text();
+                        if (text != null && !text.isBlank()) {
+                            sb.append(text);
+                        }
+                        // 内嵌图片
+                        extractRunPictures(run, sb, images, rIdToPlaceholder);
+                    }
+                    // 段落结束换行
+                    if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
+                        sb.append("\n\n");
+                    }
+                }
+            }
+            return new MarkdownResult(sb.toString().trim(), images);
+        }
+    }
+
+    /**
+     * 提取 Run 中的图片
+     */
+    private void extractRunPictures(org.apache.poi.xwpf.usermodel.XWPFRun run,
+                                    StringBuilder sb, List<ImageData> images, Map<String, String> rIdToPlaceholder) {
+        var pictures = run.getEmbeddedPictures();
+        if (pictures == null || pictures.isEmpty()) {
+            return;
+        }
+        for (var pic : pictures) {
+            String rId = pic.getPictureData() != null ? pic.getPictureData().getPackagePart().getPartName().getName() : null;
+            // 同一图片去重
+            if (rId != null && rIdToPlaceholder.containsKey(rId)) {
+                sb.append(rIdToPlaceholder.get(rId));
+                continue;
+            }
+            // 检查图片格式
+            var picData = pic.getPictureData();
+            if (picData == null) {
+                continue;
+            }
+            var picType = picData.getPictureTypeEnum();
+            String contentType = picType != null ? picType.getContentType() : null;
+            if (contentType == null || !SUPPORTED_IMAGE_TYPES.contains(contentType.toLowerCase())) {
+                sb.append("[图片: 不支持的格式]");
+                continue;
+            }
+            // 检查大小
+            byte[] data = picData.getData();
+            if (data == null || data.length > MAX_IMAGE_SIZE) {
+                sb.append("[图片: 文件过大]");
+                continue;
+            }
+            // 生成占位符
+            String placeholder = "{{IMG:" + UUID.randomUUID() + "}}";
+            String ext = contentTypeToExt(contentType);
+            String fileName = "image_" + UUID.randomUUID().toString().substring(0, 8) + "." + ext;
+            images.add(new ImageData(placeholder, data, contentType, fileName));
+            sb.append(placeholder);
+            if (rId != null) {
+                rIdToPlaceholder.put(rId, placeholder);
+            }
+        }
+    }
+
+    /**
+     * MIME 类型转扩展名
+     */
+    private String contentTypeToExt(String contentType) {
+        return switch (contentType.toLowerCase()) {
+            case "image/png" -> "png";
+            case "image/jpeg" -> "jpg";
+            case "image/gif" -> "gif";
+            case "image/bmp" -> "bmp";
+            default -> "bin";
+        };
+    }
+
+    /**
+     * 解析 DOCX 为 Markdown（含图片），对外公共方法
+     * <p>内部将输入流缓冲为字节数组，确保图片提取失败时可降级重试</p>
+     *
+     * @param inputStream DOCX 文件输入流
+     * @return MarkdownResult
+     */
+    public MarkdownResult parseDocxToMarkdownWithImages(InputStream inputStream) {
+        // 缓冲到内存，因为 XWPFDocument 构造器会关闭流，需要两次读取机会
+        byte[] bytes;
+        try {
+            bytes = inputStream.readAllBytes();
+        } catch (IOException e) {
+            log.warn("[TikaUtil] 读取DOCX流失败: error={}", e.getMessage());
+            return new MarkdownResult("", List.of());
+        }
+        try {
+            return parseDocxWithImages(new ByteArrayInputStream(bytes));
+        } catch (Exception e) {
+            log.warn("[TikaUtil] DOCX图片提取失败, 降级为纯文本解析: error={}", e.getMessage());
+            try {
+                String fallback = parse(new ByteArrayInputStream(bytes), "fallback.docx");
+                return new MarkdownResult(fallback != null ? fallback : "", List.of());
+            } catch (Exception ex) {
+                return new MarkdownResult("", List.of());
+            }
+        }
     }
 }

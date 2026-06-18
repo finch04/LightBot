@@ -89,7 +89,7 @@ async function handleLogin() {
   try {
     await userStore.login(form)
     message.success('登录成功')
-    router.push('/')
+    router.push('/app')
   } finally {
     loading.value = false
   }

@@ -49,16 +49,21 @@
             <span v-if="inst.promptKey" class="instance-subtitle">({{ inst.promptKey }})</span>
           </span>
           <div class="instance-actions">
-            <button class="btn-icon-sm" title="清空对话" @click="clearChat(inst)"
-              v-if="inst.messages.length > 0">
-              <ClearOutlined />
-            </button>
-            <button class="btn-icon-sm" title="复制配置" @click="addInstance(inst)" :disabled="instances.length >= 3">
-              <CopyOutlined />
-            </button>
-            <button class="btn-icon-sm" title="删除配置" @click="removeInstance(inst.id)" v-if="instances.length > 1">
-              <DeleteOutlined />
-            </button>
+            <a-tooltip title="清空对话" :getPopupContainer="t => t.parentElement" v-if="inst.messages.length > 0">
+              <button class="btn-icon-sm" @click="clearChat(inst)">
+                <ClearOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="复制配置" :getPopupContainer="t => t.parentElement">
+              <button class="btn-icon-sm" @click="addInstance(inst)" :disabled="instances.length >= 3">
+                <CopyOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="删除配置" :getPopupContainer="t => t.parentElement" v-if="instances.length > 1">
+              <button class="btn-icon-sm" @click="removeInstance(inst.id)">
+                <DeleteOutlined />
+              </button>
+            </a-tooltip>
           </div>
         </div>
 
