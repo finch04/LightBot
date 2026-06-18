@@ -204,6 +204,31 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         updateById(knowledge);
     }
 
+    @Override
+    public void refreshStats(Long knowledgeId) {
+        // 1. 查询该知识库所有文档，全量重算统计
+        List<Document> documents = documentService.listByKnowledgeId(knowledgeId);
+        int docCount = documents.size();
+        int chunkCount = 0;
+        long tokenCount = 0;
+        for (Document doc : documents) {
+            chunkCount += doc.getChunkCount() != null ? doc.getChunkCount() : 0;
+            tokenCount += doc.getTokenCount() != null ? doc.getTokenCount() : 0;
+        }
+
+        // 2. 更新知识库统计
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            return;
+        }
+        knowledge.setDocumentCount(docCount);
+        knowledge.setChunkCount(chunkCount);
+        knowledge.setTotalTokens(tokenCount);
+        updateById(knowledge);
+        log.info("[知识库统计] 全量重算完成 knowledgeId=[{}], docCount={}, chunkCount={}, tokenCount={}",
+                knowledgeId, docCount, chunkCount, tokenCount);
+    }
+
     // ========== 思维导图 ==========
 
     @Override

@@ -162,6 +162,13 @@ public class KnowledgeController {
         return Result.ok(Map.of("available", milvusUtil.isAvailable()));
     }
 
+    @Operation(summary = "全量重算知识库统计信息（需要成员权限）")
+    @PostMapping("/{id}/stats/refresh")
+    public Result<Void> refreshStats(@PathVariable Long id) {
+        knowledgeService.refreshStats(id);
+        return Result.ok();
+    }
+
     // ========== 文档管理 ==========
 
     @Operation(summary = "上传文档到知识库（需要DEVELOPER及以上权限）")

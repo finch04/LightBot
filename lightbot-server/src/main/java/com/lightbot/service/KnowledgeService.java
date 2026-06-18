@@ -67,6 +67,13 @@ public interface KnowledgeService extends IService<Knowledge> {
     void updateStats(Long knowledgeId, int docDelta, int chunkDelta, long tokenDelta);
 
     /**
+     * 全量重算知识库统计信息（从所有文档记录重新汇总）
+     *
+     * @param knowledgeId 知识库ID
+     */
+    void refreshStats(Long knowledgeId);
+
+    /**
      * AI生成思维导图
      *
      * @param knowledgeId 知识库ID

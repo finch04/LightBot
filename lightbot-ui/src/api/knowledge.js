@@ -152,6 +152,10 @@ export function checkMilvusHealth(knowledgeId) {
   return request.get(`/knowledge/${knowledgeId}/milvus-health`)
 }
 
+export function refreshKnowledgeStats(knowledgeId) {
+  return request.post(`/knowledge/${knowledgeId}/stats/refresh`)
+}
+
 // ========== OCR ==========
 
 export function checkOcrHealth() {

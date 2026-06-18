@@ -17,6 +17,31 @@
           </span>
         </h1>
         <p class="page-desc">{{ knowledge.description || '暂无描述' }}</p>
+        <div class="kb-stats-bar">
+          <div class="kb-stat-item">
+            <FileTextOutlined />
+            <span class="kb-stat-value">{{ knowledge.documentCount || 0 }}</span>
+            <span class="kb-stat-label">文档</span>
+          </div>
+          <div class="kb-stat-divider"></div>
+          <div class="kb-stat-item">
+            <BlockOutlined />
+            <span class="kb-stat-value">{{ knowledge.chunkCount || 0 }}</span>
+            <span class="kb-stat-label">分片</span>
+          </div>
+          <div class="kb-stat-divider"></div>
+          <div class="kb-stat-item">
+            <FontColorsOutlined />
+            <span class="kb-stat-value">{{ formatTokenCount(knowledge.totalTokens) }}</span>
+            <span class="kb-stat-label">Token</span>
+          </div>
+          <a-tooltip title="重新计算统计数据">
+            <button class="kb-stats-refresh" :disabled="statsRepairing" @click="handleRefreshStats">
+              <LoadingOutlined v-if="statsRepairing" spin />
+              <ReloadOutlined v-else />
+            </button>
+          </a-tooltip>
+        </div>
       </div>
       <div class="header-actions">
         <button class="btn-outline-sm" @click="openMembersModal">
@@ -877,6 +902,7 @@ import {
   UploadOutlined, RedoOutlined,
   GlobalOutlined, EyeOutlined, SettingOutlined,
   DatabaseOutlined, CloudServerOutlined,
+  FileTextOutlined, BlockOutlined, FontColorsOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -886,6 +912,7 @@ import {
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
   fetchUrlDocument, previewUrlDocument, saveUrlDocument, getQueryParams, checkMilvusHealth,
+  refreshKnowledgeStats,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import { getProvidersWithModels } from '../api/modelProvider'
@@ -910,6 +937,7 @@ const knowledgeId = route.params.id
 
 const knowledge = ref({})
 const milvusConnected = ref(false)
+const statsRepairing = ref(false)
 const documents = ref([])
 const docLoading = ref(false)
 const docRefreshTipVisible = ref(false)
@@ -1147,6 +1175,19 @@ async function loadKnowledge() {
   shownQuestionIndices.value.clear()
 }
 
+async function handleRefreshStats() {
+  statsRepairing.value = true
+  try {
+    await refreshKnowledgeStats(knowledgeId)
+    await loadKnowledge()
+    message.success('统计已更新')
+  } catch {
+    // interceptor已处理错误提示
+  } finally {
+    statsRepairing.value = false
+  }
+}
+
 // ---- 文档状态轮询 ----
 const PROCESSING_STATUSES = new Set(['uploading', 'pending', 'processing'])
 let docPollTimer = null
@@ -1165,6 +1206,7 @@ function startDocPoll() {
     await loadDocuments(true)
     if (!hasProcessingDocs()) {
       stopDocPoll()
+      loadKnowledge()
     }
   }, DOC_POLL_INTERVAL)
 }
@@ -1745,6 +1787,7 @@ function deleteDoc(docId) {
         await deleteDocument(docId)
         message.success('删除成功')
         loadDocuments()
+        loadKnowledge()
       } catch (e) {
         // interceptor已处理错误提示
       }
@@ -1824,6 +1867,13 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function formatTokenCount(count) {
+  if (!count || count <= 0) return '0'
+  if (count >= 1000000) return (count / 1000000).toFixed(1) + 'M'
+  if (count >= 1000) return (count / 1000).toFixed(1) + 'K'
+  return String(count)
 }
 
 function docStatusColor(status) {
@@ -2158,6 +2208,54 @@ onUnmounted(() => {
 .page-desc {
   font-size: 14px;
   color: #71717a;
+}
+.kb-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+.kb-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #71717a;
+}
+.kb-stat-value {
+  font-weight: 600;
+  font-size: 14px;
+  color: #171717;
+}
+.kb-stat-label {
+  color: #a1a1aa;
+}
+.kb-stat-divider {
+  width: 1px;
+  height: 16px;
+  background: #ebebeb;
+}
+.kb-stats-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.kb-stats-refresh:hover:not(:disabled) {
+  color: var(--color-primary, #0070f3);
+  background: rgba(0, 112, 243, 0.06);
+}
+.kb-stats-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .content-grid {

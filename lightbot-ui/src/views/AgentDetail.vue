@@ -878,6 +878,7 @@
         </div>
       </template>
     </a-alert>
+    <a-spin :spinning="bindingLoading">
     <a-tabs
       v-if="agent.agentType !== 'workflow'"
       v-model:activeKey="bindingTab"
@@ -1315,6 +1316,7 @@
       </a-tab-pane>
 
     </a-tabs>
+    </a-spin>
     </div>
     <a-modal
       v-model:open="publishModalVisible"
@@ -1971,6 +1973,7 @@ function toggleAllCapabilities() {
 const modelList = ref([])
 const selectedKnowledgeIds = ref(new Set())
 const knowledgeList = ref([])
+const knowledgeLoading = ref(false)
 /** 绑定资源目录是否已加载（避免 Tab 懒加载导致误判「已删除」） */
 const bindingCatalogsLoaded = ref(false)
 const searchText = ref('')
@@ -2122,16 +2125,20 @@ const agentVersion = ref(0)
 const selectedMcpServerIds = ref(new Set())
 const mcpServerList = ref([])
 const mcpSearchText = ref('')
+const mcpLoading = ref(false)
 
 // SubAgent 绑定
 const selectedSubAgentIds = ref(new Set())
 const subAgentList = ref([])
 const subAgentSearchText = ref('')
+const subAgentLoading = ref(false)
 
 // Skill 绑定
 const selectedSkillIds = ref(new Set())
 const skillList = ref([])
 const skillSearchText = ref('')
+const skillLoading = ref(false)
+const bindingLoading = computed(() => knowledgeLoading.value || mcpLoading.value || subAgentLoading.value || skillLoading.value)
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
@@ -2745,11 +2752,14 @@ onBeforeRouteLeave((_to, _from, next) => {
 })
 
 async function loadKnowledgeList() {
+  knowledgeLoading.value = true
   try {
     const res = await getKnowledgeList({ pageNum: 1, pageSize: 100 })
     knowledgeList.value = (res.data.records || []).map(k => ({ ...k, id: toBindingId(k.id) }))
   } catch (e) {
     // ignore
+  } finally {
+    knowledgeLoading.value = false
   }
 }
 
@@ -2933,20 +2943,26 @@ function clearSelectedSkills() {
 }
 
 async function loadSubAgentList() {
+  subAgentLoading.value = true
   try {
     const res = await getSubAgents({ pageNum: 1, pageSize: 100 })
     subAgentList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载SubAgent列表失败:', e)
+  } finally {
+    subAgentLoading.value = false
   }
 }
 
 async function loadSkillList() {
+  skillLoading.value = true
   try {
     const res = await getSkills({ pageNum: 1, pageSize: 100 })
     skillList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载Skill列表失败:', e)
+  } finally {
+    skillLoading.value = false
   }
 }
 
@@ -2994,11 +3010,14 @@ async function onBindingTabChange(tab) {
 }
 
 async function loadMcpServerList() {
+  mcpLoading.value = true
   try {
     const res = await getMcpServers({ pageNum: 1, pageSize: 100 })
     mcpServerList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
   } catch (e) {
     console.error('[AgentDetail] 加载MCP Server列表失败:', e)
+  } finally {
+    mcpLoading.value = false
   }
 }
 

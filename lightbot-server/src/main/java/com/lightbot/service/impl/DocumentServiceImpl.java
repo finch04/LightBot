@@ -528,8 +528,14 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         }
         // 2. 删除文档关联的向量
         embeddingService.deleteByDocumentId(documentId);
-        // 3. 删除文档记录
+        // 3. 删除文档关联的分片
+        chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
+        // 4. 逻辑删除文档记录
         removeById(documentId);
+        // 5. 递减知识库统计
+        int chunkCount = doc.getChunkCount() != null ? doc.getChunkCount() : 0;
+        long tokenCount = doc.getTokenCount() != null ? doc.getTokenCount() : 0;
+        knowledgeServiceProvider.getObject().updateStats(doc.getKnowledgeId(), -1, -chunkCount, -tokenCount);
     }
 
     @Override
