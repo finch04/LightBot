@@ -20,6 +20,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -44,6 +46,9 @@ public class GitHubSkillService {
     private static final String GITHUB_API = "https://api.github.com";
     private static final String SKILL_MD = "SKILL.md";
     private static final String MODELSCOPE_PREFIX = "https://modelscope.cn/skills/";
+    /** npx skills find 输出格式：owner/repo@skill-name [installs] */
+    private static final Pattern SEARCH_LINE_PATTERN = Pattern.compile(
+            "^([a-zA-Z0-9_.\\-]+/[a-zA-Z0-9_.\\-]+)@([a-zA-Z0-9_.\\-]+)(?:\\s+(.*))?$");
 
     public GitHubSkillService(SkillStorageService skillStorageService) {
         this.skillStorageService = skillStorageService;
@@ -144,55 +149,89 @@ public class GitHubSkillService {
     }
 
     /**
-     * 全局搜索 GitHub 上的 Skill（通过 Code Search API）
+     * 全局搜索 Skill（通过 npx skills find，无需 GitHub Token）
      *
      * @param keyword 搜索关键词
-     * @return Skill 摘要列表（name + description + repo）
+     * @return Skill 摘要列表（name + source + installs）
      */
     public List<Map<String, String>> searchRemoteSkills(String keyword) {
-        if (githubToken == null || githubToken.isBlank()) {
-            throw new BizException(ErrorCode.BAD_REQUEST, "全局搜索需要配置 GitHub Token，请在 lightbot.github.token 中设置");
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
         }
-        String query = "filename:SKILL.md " + keyword;
-        String url = GITHUB_API + "/search/code?q=" + java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8)
-                + "&per_page=20";
+        // 安全校验：防止命令注入
+        if (keyword.contains("\n") || keyword.contains("\r") || keyword.contains("\0")) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "搜索关键字包含非法字符");
+        }
 
-        List<Map<String, String>> result = new ArrayList<>();
         try {
-            JsonNode node = githubGet(url);
-            if (node == null || !node.has("items")) return result;
+            // 创建隔离临时目录（避免污染全局 npm 环境）
+            Path tempHome = Files.createTempDirectory(".skills-find-");
+            try {
+                ProcessBuilder pb = new ProcessBuilder(
+                        "npx", "-y", "skills", "find", keyword.trim()
+                );
+                pb.environment().put("HOME", tempHome.toString());
+                pb.directory(tempHome.toFile());
+                pb.redirectErrorStream(true);
 
-            for (JsonNode item : node.get("items")) {
-                String filePath = item.has("path") ? item.get("path").asText() : "";
-                JsonNode repoNode = item.get("repository");
-                if (repoNode == null) continue;
+                Process process = pb.start();
+                String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                int exitCode = process.waitFor();
 
-                String repoFullName = repoNode.has("full_name") ? repoNode.get("full_name").asText() : "";
-                String slug = extractSlugFromPath(filePath);
-
-                // 尝试获取 SKILL.md 内容解析描述
-                String[] parts = repoFullName.split("/");
-                if (parts.length < 2) continue;
-                try {
-                    String content = getFileContent(parts[0], parts[1], filePath, null);
-                    String description = "";
-                    if (content != null) {
-                        SkillMetadata metadata = skillStorageService.parseSkillMarkdown(content);
-                        description = metadata.getDescription() != null ? metadata.getDescription() : "";
-                    }
-                    Map<String, String> entry = new LinkedHashMap<>();
-                    entry.put("name", slug);
-                    entry.put("description", description);
-                    entry.put("repo", repoFullName);
-                    result.add(entry);
-                } catch (Exception e) {
-                    log.warn("[GitHubSkill] 搜索结果解析失败: repo={}, path={}", repoFullName, filePath);
+                if (exitCode != 0) {
+                    log.warn("[GitHubSkill] npx skills find 失败: keyword={}, exitCode={}, output={}", keyword, exitCode, output);
+                    return List.of();
                 }
+
+                return parseSearchOutput(output);
+            } finally {
+                // 清理临时目录
+                Files.walk(tempHome)
+                        .sorted(java.util.Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
             }
         } catch (Exception e) {
             log.warn("[GitHubSkill] 全局搜索失败: keyword={}, error={}", keyword, e.getMessage());
+            return List.of();
         }
-        return result;
+    }
+
+    /**
+     * 解析 npx skills find 输出
+     * <p>格式：owner/repo@skill-name [installs]</p>
+     * <p>示例：vercel-labs/agent-skills@web-design-guidelines 339.3K installs</p>
+     */
+    private List<Map<String, String>> parseSearchOutput(String output) {
+        // 清理 ANSI 转义序列
+        String cleaned = output.replaceAll("\\x1B\\[[0-?]*[ -/]*[@-~]", "")
+                .replaceAll("\r", "\n");
+        List<Map<String, String>> results = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        for (String line : cleaned.split("\n")) {
+            line = line.strip();
+            // 去掉 npx 的装饰字符
+            line = line.replaceAll("^[│┌└◇◒◐◓◑■●]+\\s*", "").strip();
+            if (line.isEmpty()) continue;
+
+            Matcher matcher = SEARCH_LINE_PATTERN.matcher(line);
+            if (matcher.matches()) {
+                String source = matcher.group(1);
+                String name = matcher.group(2);
+                String installs = matcher.group(3);
+                String key = source + "@" + name;
+                if (seen.contains(key)) continue;
+                seen.add(key);
+
+                Map<String, String> entry = new LinkedHashMap<>();
+                entry.put("name", name);
+                entry.put("source", source);
+                entry.put("installs", installs != null ? installs.strip() : "");
+                results.add(entry);
+            }
+        }
+        return results;
     }
 
     /**

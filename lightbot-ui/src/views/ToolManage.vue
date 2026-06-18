@@ -62,13 +62,13 @@
               <button class="btn-icon" @click.prevent><MoreOutlined /></button>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item @click="openTestDialog(t)">
-                    <PlayCircleOutlined style="margin-right: 6px" /> 测试
-                  </a-menu-item>
                   <a-menu-item @click="handleToggleEnabled(t)">
                     <CheckCircleOutlined v-if="!isDisabled(t)" style="color: #16a34a; margin-right: 6px" />
                     <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
                     {{ isDisabled(t) ? '启用' : '禁用' }}
+                  </a-menu-item>
+                  <a-menu-item @click="openTestDialog(t)">
+                    <PlayCircleOutlined style="margin-right: 6px" /> 测试工具
                   </a-menu-item>
                 </a-menu>
               </template>

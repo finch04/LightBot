@@ -43,16 +43,16 @@
               <button class="btn-icon" @click.prevent><MoreOutlined /></button>
               <template #overlay>
                 <a-menu>
+                  <a-menu-item @click="handleToggleEnabled(s)">
+                    <CheckCircleOutlined v-if="!isDisabled(s)" style="color: #16a34a; margin-right: 6px" />
+                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                    {{ isDisabled(s) ? '启用' : '禁用' }}
+                  </a-menu-item>
                   <a-menu-item @click="handleTest(s)">
                     <ApiOutlined style="margin-right: 6px" /> 测试连接
                   </a-menu-item>
                   <a-menu-item @click="openToolsDrawer(s)">
                     <ToolOutlined style="margin-right: 6px" /> 查看工具
-                  </a-menu-item>
-                  <a-menu-item @click="handleToggleEnabled(s)">
-                    <CheckCircleOutlined v-if="!isDisabled(s)" style="color: #16a34a; margin-right: 6px" />
-                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
-                    {{ isDisabled(s) ? '启用' : '禁用' }}
                   </a-menu-item>
                 </a-menu>
               </template>

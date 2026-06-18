@@ -655,10 +655,13 @@
         <a-form-item label="内容安全扫描">
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-switch v-model:checked="editForm.contentScanEnabled" />
-            <a-tooltip title="上传文件/网页抓取时使用系统默认模型检测 Prompt 注入">
+            <a-tooltip title="上传文件/网页抓取时使用 AI 模型检测 Prompt 注入">
               <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
             </a-tooltip>
           </div>
+        </a-form-item>
+        <a-form-item v-if="editForm.contentScanEnabled" label="扫描模型" required>
+          <ModelSelect v-model="editForm.scanModel" model-type="llm" placeholder="选择安全扫描模型" />
         </a-form-item>
         <a-form-item label="重复检测">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -1054,6 +1057,7 @@ const editForm = reactive({
   autoGenerateQuestions: false,
   graphEnabled: false,
   contentScanEnabled: false,
+  scanModel: '',
   duplicateDetectionEnabled: false,
   duplicateThreshold: 0.8,
 })
@@ -1571,6 +1575,12 @@ async function openEditDialog() {
     } catch { /* ignore */ }
   }
 
+  // 解析扫描模型复合值
+  let scanModelComposite = ''
+  if (config.scanModelProviderId && config.scanModelId) {
+    scanModelComposite = `${config.scanModelProviderId}:${config.scanModelId}`
+  }
+
   selectedEmbeddingModelId.value = k.embeddingModel || null
   Object.assign(editForm, {
     name: k.name || '',
@@ -1580,6 +1590,7 @@ async function openEditDialog() {
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
     graphEnabled: k.graphEnabled ?? false,
     contentScanEnabled: config.contentScanEnabled ?? false,
+    scanModel: scanModelComposite,
     duplicateDetectionEnabled: config.duplicateDetectionEnabled ?? false,
     duplicateThreshold: config.duplicateThreshold ?? 0.8,
   })
@@ -1596,12 +1607,22 @@ async function openEditDialog() {
 async function handleEdit() {
   if (!editForm.name.trim()) return message.warning('请输入名称')
   if (!editForm.embeddingModel) return message.warning('请选择 Embed 模型')
+  if (editForm.contentScanEnabled && !editForm.scanModel) return message.warning('请选择安全扫描模型')
   editSubmitting.value = true
   try {
+    // 解析扫描模型
+    let scanModelProviderId = null, scanModelId = null
+    if (editForm.scanModel) {
+      const [pid, mid] = editForm.scanModel.split(':')
+      scanModelProviderId = pid ? Number(pid) : null
+      scanModelId = mid || null
+    }
     const config = JSON.stringify({
       defaultChunkSize: editForm.chunkSize,
       autoGenerateQuestions: editForm.autoGenerateQuestions,
       contentScanEnabled: editForm.contentScanEnabled,
+      scanModelProviderId,
+      scanModelId,
       duplicateDetectionEnabled: editForm.duplicateDetectionEnabled,
       duplicateThreshold: editForm.duplicateThreshold,
     })

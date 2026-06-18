@@ -62,7 +62,10 @@
         </a-tab-pane>
 
         <!-- Tab 2: 全局搜索 -->
-        <a-tab-pane key="search" tab="全局搜索发现">
+        <a-tab-pane key="search">
+          <template #tab>
+            <span>全局搜索发现 <QuestionCircleOutlined class="search-help-icon" @click.stop="searchGuideVisible = true" /></span>
+          </template>
           <div class="fetch-row">
             <a-input
               v-model:value="searchKeyword"
@@ -74,18 +77,19 @@
             </button>
           </div>
           <div class="repo-hint-text">
-            直接输入关键字检索 skills.sh 上的开源 Skills 并批量拉取安装。需要配置 GitHub Token。
+            直接输入关键字检索 skills.sh 上的开源 Skills 并批量拉取安装。无需配置任何 Token。
           </div>
 
           <a-spin :spinning="searching">
             <div v-if="searchResults.length > 0" class="skill-list">
               <a-checkbox-group v-model:value="selectedSearchSlugs" style="width: 100%">
-                <div v-for="skill in searchResults" :key="skill.repo + '/' + skill.name" class="skill-item">
-                  <a-checkbox :value="skill.name" :disabled="!skill.repo">
+                <div v-for="skill in searchResults" :key="skill.source + '/' + skill.name" class="skill-item">
+                  <a-checkbox :value="skill.name" :disabled="!skill.source">
                     <span class="skill-name">{{ skill.name }}</span>
                   </a-checkbox>
                   <span class="skill-desc">{{ skill.description || '暂无描述' }}</span>
-                  <span v-if="skill.repo" class="skill-repo">{{ skill.repo }}</span>
+                  <span v-if="skill.installs" class="skill-installs">{{ skill.installs }}</span>
+                  <span v-if="skill.source" class="skill-repo">{{ skill.source }}</span>
                 </div>
               </a-checkbox-group>
             </div>
@@ -147,12 +151,42 @@
         </button>
       </div>
     </div>
+
+    <!-- 全局搜索说明弹窗 -->
+    <a-modal v-model:open="searchGuideVisible" title="全局搜索安装说明" :width="560" :footer="null">
+      <div class="guide">
+        <div class="guide-section">
+          <div class="guide-h3">什么是全局搜索？</div>
+          <p>全局搜索基于 <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer">skills.sh</a> 社区索引，可直接输入关键字（如 <code>web</code>、<code>python</code>、<code>git</code>）发现开源 Skills 并一键安装，无需手动输入仓库地址。</p>
+        </div>
+        <div class="guide-section">
+          <div class="guide-h3">工作原理</div>
+          <p>系统调用 <code>npx -y skills find &lt;keyword&gt;</code> 命令检索 skills.sh 社区维护的 Skill 索引，返回匹配的 Skill 列表及其来源仓库和安装量。整个过程<strong>无需配置 GitHub Token</strong>，也不依赖 GitHub API。</p>
+        </div>
+        <div class="guide-section">
+          <div class="guide-h3">安装流程</div>
+          <div class="guide-step">
+            <span class="guide-num">1</span>
+            <div><b>搜索</b><p>输入关键字，查看匹配的 Skill 列表及安装量。</p></div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">2</span>
+            <div><b>选择</b><p>勾选需要的 Skill（暂不支持跨仓库同时安装）。</p></div>
+          </div>
+          <div class="guide-step">
+            <span class="guide-num">3</span>
+            <div><b>确认</b><p>系统自动下载并解析 SKILL.md 元数据，确认后一键安装。</p></div>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </a-modal>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { listRemoteSkills, searchRemoteSkills, prepareRemoteInstall, commitRemoteInstall } from '../api/skill'
 
 const MODELSCOPE_PREFIX = 'https://modelscope.cn/skills/'
@@ -176,6 +210,7 @@ const searching = ref(false)
 const searchDone = ref(false)
 const searchResults = ref([])
 const selectedSearchSlugs = ref([])
+const searchGuideVisible = ref(false)
 
 // 确认阶段
 const preparing = ref(false)
@@ -259,14 +294,14 @@ async function handlePrepare() {
   const slugs = currentSelected.value
   if (slugs.length === 0) return
 
-  // 全局搜索时需要确定 source（从搜索结果中取 repo）
+  // 全局搜索时需要确定 source（从搜索结果中取 source）
   let source = currentSource.value
   if (activeTab.value === 'search') {
     const repoMap = {}
     for (const skill of searchResults.value) {
-      if (slugs.includes(skill.name) && skill.repo) {
-        if (!repoMap[skill.repo]) repoMap[skill.repo] = []
-        repoMap[skill.repo].push(skill.name)
+      if (slugs.includes(skill.name) && skill.source) {
+        if (!repoMap[skill.source]) repoMap[skill.source] = []
+        repoMap[skill.source].push(skill.name)
       }
     }
     const repos = Object.keys(repoMap)
@@ -496,4 +531,30 @@ function handleCancel() {
 }
 .btn-primary-sm:hover:not(:disabled) { background: #27272a; }
 .btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
+.search-help-icon {
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: 4px;
+}
+.search-help-icon:hover { color: #d97706; }
+.skill-installs {
+  font-size: 12px;
+  color: #16a34a;
+  background: #f0fdf4;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+/* 全局搜索说明弹窗样式 */
+.guide { max-height: 60vh; overflow-y: auto; }
+.guide-section { margin-bottom: 20px; }
+.guide-section:last-child { margin-bottom: 0; }
+.guide-h3 { font-size: 15px; font-weight: 600; color: #171717; margin-bottom: 8px; }
+.guide-section p { font-size: 13px; color: #52525b; line-height: 1.6; margin: 0 0 8px; }
+.guide-section code { font-size: 12px; background: #f4f4f5; padding: 1px 4px; border-radius: 4px; }
+.guide-step { display: flex; gap: 12px; margin-bottom: 12px; }
+.guide-num { width: 22px; height: 22px; border-radius: 50%; background: #fffbeb; color: #b45309; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.guide-step b { display: block; font-size: 13px; margin-bottom: 4px; }
+.guide-step p { margin: 0; font-size: 12px; color: #71717a; }
 </style>

@@ -850,28 +850,30 @@
       type="warning"
       show-icon
       class="binding-deleted-alert"
-      :message="invalidBindingAlertMessage"
     >
+      <template #message>
+        <div class="binding-alert-message-row">
+          <span>{{ invalidBindingAlertMessage }}</span>
+          <a-button
+            v-if="deletedBindingCount > 0"
+            type="link"
+            danger
+            size="small"
+            class="btn-remove-deleted-bindings"
+            @click="removeAllDeletedBindings"
+          >
+            <DeleteOutlined />
+            移除已删除绑定
+          </a-button>
+        </div>
+      </template>
       <template #description>
         <div class="binding-deleted-detail-row">
-          <div class="binding-deleted-detail-text">
-            <div
-              v-for="(line, li) in deletedBindingDetailLines"
-              :key="li"
-              class="binding-deleted-detail-line"
-            >{{ line }}</div>
-            <a-button
-              v-if="deletedBindingCount > 0"
-              type="link"
-              danger
-              size="small"
-              class="btn-remove-deleted-bindings"
-              @click="removeAllDeletedBindings"
-            >
-              <DeleteOutlined />
-              移除已删除绑定
-            </a-button>
-          </div>
+          <div
+            v-for="(line, li) in deletedBindingDetailLines"
+            :key="li"
+            class="binding-deleted-detail-line"
+          >{{ line }}</div>
           <p class="binding-deleted-detail-hint">已删除的绑定运行时无法调用，已禁用的绑定需先启用才能使用。暂存或发布前将提示确认。</p>
         </div>
       </template>
@@ -2413,7 +2415,7 @@ const invalidBindingAlertMessage = computed(() => {
   const parts = []
   if (deletedBindingCount.value > 0) parts.push(`${deletedBindingCount.value} 个已删除`)
   if (disabledBindingCount.value > 0) parts.push(`${disabledBindingCount.value} 个已禁用`)
-  return `已绑定资源中有 ${parts.join('、')} 不可用`
+  return `已绑定资源中有 ${parts.join('、')}`
 })
 
 /** 已删除绑定分类型明细（Alert / 保存弹窗） */
@@ -4634,14 +4636,14 @@ onMounted(async () => {
 .binding-deleted-alert {
   margin-top: 16px;
 }
+.binding-alert-message-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
 .binding-deleted-detail-row {
   margin-top: 4px;
-}
-.binding-deleted-detail-text {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
 }
 .binding-deleted-detail-line {
   font-size: 13px;
@@ -4655,6 +4657,7 @@ onMounted(async () => {
   text-align: right;
 }
 .btn-remove-deleted-bindings {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;

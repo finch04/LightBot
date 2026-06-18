@@ -34,6 +34,7 @@ public class MinioUtil {
     private static final long MAX_BYTES_FOR_IN_MEMORY = 10 * 1024 * 1024L;
 
     private final MinioClient minioClient;
+    private final String endpoint;
 
     @Value("${minio.bucket}")
     private String bucket;
@@ -44,6 +45,7 @@ public class MinioUtil {
             @Value("${minio.endpoint}") String endpoint,
             @Value("${minio.access-key}") String accessKey,
             @Value("${minio.secret-key}") String secretKey) {
+        this.endpoint = endpoint;
         // 1. 配置 OkHttp 连接池
         OkHttpClient httpClient = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(5))
@@ -234,6 +236,18 @@ public class MinioUtil {
             log.error("[MinIO] 获取预签名URL失败, path={}", filePath, e);
             throw new BizException(ErrorCode.FILE_URL_FAILED);
         }
+    }
+
+    /**
+     * 获取文件永久公开URL（需 Bucket 开启公开读权限）
+     * <p>格式：{endpoint}/{bucket}/{filePath}</p>
+     *
+     * @param filePath 文件路径
+     * @return 公开访问URL
+     */
+    public String getPublicUrl(String filePath) {
+        String base = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
+        return base + "/" + bucket + "/" + filePath;
     }
 
     /**

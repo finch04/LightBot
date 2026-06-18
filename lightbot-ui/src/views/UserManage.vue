@@ -46,6 +46,9 @@
               {{ record.status === 'active' ? '正常' : '已禁用' }}
             </a-tag>
           </template>
+          <template v-else-if="column.key === 'lastLoginAt'">
+            {{ formatTime(record.lastLoginAt) }}
+          </template>
           <template v-else-if="column.key === 'createTime'">
             {{ formatTime(record.createTime) }}
           </template>
@@ -57,7 +60,7 @@
               <button class="btn-icon" @click="openEdit(record)">
                 <EditOutlined />
               </button>
-              <button class="btn-icon danger" @click="handleDelete(record)">
+              <button v-if="record.role !== 'admin'" class="btn-icon danger" @click="handleDelete(record)">
                 <DeleteOutlined />
               </button>
             </div>
@@ -218,10 +221,10 @@ const pagination = reactive({
 
 const columns = [
   { title: '用户', key: 'user', dataIndex: 'username', width: 200 },
-  { title: '邮箱', dataIndex: 'email', width: 180, ellipsis: true },
   { title: '手机', dataIndex: 'phone', width: 130 },
   { title: '角色', key: 'role', width: 100, align: 'center' },
   { title: '状态', key: 'status', width: 90, align: 'center' },
+  { title: '最后登录', key: 'lastLoginAt', width: 170 },
   { title: '注册时间', key: 'createTime', width: 170 },
   { title: '操作', key: 'action', width: 110, align: 'center', fixed: 'right' },
 ]

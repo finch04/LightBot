@@ -103,11 +103,6 @@
         />
       </a-modal>
 
-      <!-- 左下角任务徽标 -->
-      <div v-if="taskBadgeCount" class="sidebar-task-badge" @click="router.push('/app/tasks')">
-        <a-badge :count="taskBadgeCount" :number-style="taskBadgeStyle" />
-      </div>
-
       <!-- 用户信息 -->
       <div class="sidebar-footer">
         <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown">
@@ -120,6 +115,13 @@
             </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
             <LevelBadge :level="userStore.user?.level" :size="32" class="sidebar-text" />
+            <a-badge
+              v-if="taskBadgeCount"
+              :count="taskBadgeCount"
+              :number-style="taskBadgeStyle"
+              class="sidebar-task-badge-inline"
+              @click.stop="router.push('/app/tasks')"
+            />
             <span class="sidebar-text">
               <UpOutlined v-if="userDropdownOpen" />
               <DownOutlined v-else />
@@ -206,10 +208,7 @@ const taskBadgeCount = computed(() => {
   return taskCounts.active > 10 ? '10+' : taskCounts.active
 })
 
-const taskBadgeStyle = computed(() => sidebarCollapsed.value
-  ? { fontSize: '8px', boxShadow: 'none', backgroundColor: '#f5222d', minWidth: '14px', height: '14px', lineHeight: '14px', padding: '0 3px' }
-  : { fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }
-)
+const taskBadgeStyle = { fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }
 
 const navItems = [
   { path: '/app/agents', label: 'Agent', icon: markRaw(RobotOutlined) },
@@ -484,17 +483,12 @@ watch(() => route.path, (path) => {
   padding: 8px 4px;
   position: relative;
 }
-.sidebar-task-badge {
-  position: absolute;
-  bottom: 56px;
-  left: 12px;
+.sidebar-task-badge-inline {
   cursor: pointer;
-  z-index: 2;
+  flex-shrink: 0;
 }
-.sidebar.collapsed .sidebar-task-badge {
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 52px;
+.sidebar.collapsed .sidebar-task-badge-inline {
+  display: none;
 }
 .sidebar.collapsed .sidebar-footer {
   padding: 12px 6px;

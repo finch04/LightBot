@@ -81,7 +81,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
                         String imgPath = String.format("knowledge/%d/images/%s_%s",
                                 doc.getKnowledgeId(), UUID.randomUUID(), img.fileName());
                         minioUtil.upload(new ByteArrayInputStream(img.data()), imgPath, img.data().length, img.contentType());
-                        String url = minioUtil.getPresignedUrl(imgPath);
+                        String url = minioUtil.getPublicUrl(imgPath);
                         markdownContent = markdownContent.replace(img.placeholder(), "![image](" + url + ")");
                     }
                     if (!result.images().isEmpty()) {

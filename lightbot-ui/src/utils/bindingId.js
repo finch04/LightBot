@@ -111,7 +111,7 @@ export function formatDeletedBindingDetailLines(sections) {
     const disabled = (items || []).filter(i => i._disabled && !i._deleted)
     if (!deleted.length && !disabled.length) continue
     if (deleted.length) {
-      const names = deleted.map(item => toBindingId(item.id)).join('、')
+      const names = deleted.map(item => `ID：${toBindingId(item.id)}`).join('、')
       lines.push(`${label}：${deleted.length} 个已删除（${names}）`)
     }
     if (disabled.length) {

@@ -33,6 +33,7 @@ public class UserDTO {
     private UserRole role;
     private UserStatus status;
     private LocalDateTime createTime;
+    private LocalDateTime lastLoginAt;
     private Boolean firstLogin;
     private String avatarFrame;
     private Integer level;
@@ -48,6 +49,7 @@ public class UserDTO {
         dto.setRole(user.getRole());
         dto.setStatus(user.getStatus());
         dto.setCreateTime(user.getCreateTime());
+        dto.setLastLoginAt(user.getLastLoginAt());
         dto.setAvatarFrame(extractConfigString(user.getConfig(), ConfigKeys.User.AVATAR_FRAME));
         dto.setLevel(extractConfigInt(user.getConfig(), ConfigKeys.User.LEVEL));
         return dto;

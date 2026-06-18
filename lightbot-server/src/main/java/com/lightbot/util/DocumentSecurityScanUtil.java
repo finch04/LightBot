@@ -73,7 +73,7 @@ public class DocumentSecurityScanUtil {
         if (content == null || content.isBlank()) {
             return;
         }
-        ScanResult result = scanDocument(content);
+        ScanResult result = scanDocument(knowledge, content);
         if (!result.clean()) {
             log.warn("[DocumentSecurityScan] 内容未通过扫描, knowledgeId={}, detail={}",
                     knowledge.getId(), result.detail());
