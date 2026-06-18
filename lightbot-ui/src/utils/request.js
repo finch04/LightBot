@@ -70,10 +70,22 @@ request.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status
+
+    // 无响应（后端未启动/网络断开）→ 跳 Landing 页
+    if (!error.response) {
+      if (!error.config?.silent) {
+        message.error('服务不可用，请稍后重试')
+      }
+      router.push('/')
+      return Promise.reject(error)
+    }
+
+    // 401 → 跳登录页
     if (status === 401) {
       localStorage.removeItem('token')
       router.push('/login')
     }
+
     // 优先从 response body 中提取业务错误信息（GlobalExceptionHandler 返回的 Result）
     const res = error.response?.data
     const msg = (res?.code && res?.message)

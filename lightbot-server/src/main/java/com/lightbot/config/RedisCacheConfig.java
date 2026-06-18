@@ -15,13 +15,16 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
 /**
  * Redis 缓存配置
  * <p>基于 Spring Cache + RedisCacheManager，为不同业务对象配置独立 TTL</p>
- * <p>缓存 Key 前缀统一为 cacheName::key，便于 Redis 管理</p>
+ * <p>缓存 Key 前缀统一为 lightbot:{cacheName}:{key}</p>
  *
  * @author finch
  * @since 2026-06-17
@@ -39,6 +42,9 @@ public class RedisCacheConfig {
     public static final String CACHE_PROMPT = "prompt";
     public static final String CACHE_SYSTEM_CONFIG = "systemConfig";
 
+    /** 统一缓存前缀 */
+    private static final String KEY_PREFIX = "lightbot";
+
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory factory) {
         ObjectMapper om = new ObjectMapper();
@@ -52,6 +58,8 @@ public class RedisCacheConfig {
 
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(30))
+                .computePrefixWith(cacheName -> KEY_PREFIX + ":" + cacheName + ":")
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 

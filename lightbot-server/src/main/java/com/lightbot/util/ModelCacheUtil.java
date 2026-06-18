@@ -29,7 +29,7 @@ public class ModelCacheUtil {
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
 
-    private static final String CACHE_PREFIX = "model:";
+    private static final String CACHE_PREFIX = "lightbot:model:";
     private static final String ALL_MODELS_KEY = CACHE_PREFIX + "all";
 
     /**

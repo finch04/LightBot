@@ -36,7 +36,37 @@
               ></path>
             </svg>
           </a>
-          <button class="btn-login-header" @click="router.push('/login')">登录</button>
+          <!-- 已登录：头像 + 下拉菜单 -->
+          <a-dropdown v-if="isLoggedIn" :trigger="['click']" overlay-class-name="landing-user-dropdown">
+            <div class="header-avatar-wrap">
+              <div class="header-avatar">
+                <img v-if="userStore.user?.avatar" :src="userStore.user.avatar" alt="avatar" class="header-avatar-img" @error="e => e.target.style.display = 'none'" />
+                <span v-else>{{ avatarInitial }}</span>
+              </div>
+            </div>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="user-info" class="menu-user-info" @click="router.push('/app/profile')">
+                  <div class="user-info-display">
+                    <div class="user-info-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</div>
+                    <div class="user-info-meta">
+                      <span class="user-info-id">ID: {{ userStore.user?.id }}</span>
+                      <span class="user-info-role">{{ userRoleText }}</span>
+                    </div>
+                  </div>
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="enter" @click="router.push('/app/chat')">
+                  <span>进入后台</span>
+                </a-menu-item>
+                <a-menu-item key="logout" @click="handleLogout">
+                  <span>退出登录</span>
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+          <!-- 未登录：登录按钮 -->
+          <button v-else class="btn-login-header" @click="router.push('/login')">登录</button>
         </div>
       </header>
 
@@ -70,7 +100,8 @@
                   :key="feature.icon"
                   class="feature-item"
                   :class="{ active: activeFeature === index }"
-                  @mouseenter="activeFeature = index"
+                  @mouseenter="onFeatureHover(index)"
+                  @mouseleave="onFeatureLeave"
                 >
                   <div class="feature-icon-wrap">
                     <component :is="iconMap[feature.icon]" />
@@ -100,7 +131,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { getLandingConfig } from '../api/landing'
+import { useUserStore } from '../stores/user'
 import {
   RightOutlined,
   RobotOutlined,
@@ -111,13 +144,43 @@ import {
   ThunderboltOutlined,
   ExperimentOutlined,
   EyeOutlined,
+  TeamOutlined,
+  FormOutlined,
+  NodeIndexOutlined,
+  BranchesOutlined,
+  CloudOutlined,
+  CodeOutlined,
+  FileTextOutlined,
+  RocketOutlined,
+  SafetyOutlined,
+  SettingOutlined,
+  SyncOutlined,
+  AppstoreOutlined,
+  ControlOutlined,
+  ClusterOutlined,
+  BlockOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
+const userStore = useUserStore()
+const isLoggedIn = computed(() => !!userStore.token)
 
-// 已登录则跳转应用
-if (localStorage.getItem('token')) {
-  router.replace('/app')
+const avatarInitial = computed(() => {
+  const name = userStore.user?.nickname || userStore.user?.username || ''
+  return name.charAt(0).toUpperCase() || 'U'
+})
+
+const userRoleText = computed(() => {
+  const role = userStore.user?.role
+  if (role === 'admin') return '管理员'
+  if (role === 'user') return '普通用户'
+  return '未知角色'
+})
+
+function handleLogout() {
+  userStore.logout()
+  message.success('已退出登录')
+  router.push('/')
 }
 
 const isLoading = ref(true)
@@ -129,13 +192,28 @@ const subtitleIndex = ref(0)
 
 const iconMap = {
   Agent: RobotOutlined,
+  SubAgent: TeamOutlined,
   Knowledge: DatabaseOutlined,
   Workflow: ApartmentOutlined,
   Mcp: ApiOutlined,
   Tool: ToolOutlined,
   Skill: ThunderboltOutlined,
+  Prompt: FormOutlined,
   Eval: ExperimentOutlined,
   Observability: EyeOutlined,
+  NodeIndexOutlined: NodeIndexOutlined,
+  BranchesOutlined: BranchesOutlined,
+  CloudOutlined: CloudOutlined,
+  CodeOutlined: CodeOutlined,
+  FileTextOutlined: FileTextOutlined,
+  RocketOutlined: RocketOutlined,
+  SafetyOutlined: SafetyOutlined,
+  SettingOutlined: SettingOutlined,
+  SyncOutlined: SyncOutlined,
+  AppstoreOutlined: AppstoreOutlined,
+  ControlOutlined: ControlOutlined,
+  ClusterOutlined: ClusterOutlined,
+  BlockOutlined: BlockOutlined,
 }
 
 const features = computed(() => config.value.features || [])
@@ -149,7 +227,7 @@ function startFeatureCycle() {
   if (features.value.length <= 1) return
   featureTimer = setInterval(() => {
     activeFeature.value = (activeFeature.value + 1) % features.value.length
-  }, 3000)
+  }, 5000)
 }
 
 function stopFeatureCycle() {
@@ -159,12 +237,21 @@ function stopFeatureCycle() {
   }
 }
 
+function onFeatureHover(index) {
+  stopFeatureCycle()
+  activeFeature.value = index
+}
+
+function onFeatureLeave() {
+  startFeatureCycle()
+}
+
 function startSubtitleCycle() {
   stopSubtitleCycle()
   if (subtitles.value.length <= 1) return
   subtitleTimer = setInterval(() => {
     subtitleIndex.value = (subtitleIndex.value + 1) % subtitles.value.length
-  }, 2800)
+  }, 4500)
 }
 
 function stopSubtitleCycle() {
@@ -175,14 +262,18 @@ function stopSubtitleCycle() {
 }
 
 function handleStart() {
-  if (localStorage.getItem('token')) {
-    router.push('/app')
+  if (userStore.token) {
+    router.push('/app/chat')
   } else {
     router.push('/login')
   }
 }
 
 onMounted(async () => {
+  // 已登录但用户信息未加载时，拉取用户数据
+  if (isLoggedIn.value && !userStore.user) {
+    try { await userStore.fetchUser() } catch { /* ignore */ }
+  }
   try {
     const res = await getLandingConfig()
     const raw = res?.data ?? res
@@ -199,8 +290,15 @@ onMounted(async () => {
       description: '构建智能体、知识库、工作流与工具集成的统一平台。',
       features: [
         { icon: 'Agent', title: '智能体', desc: '多模型驱动的自主推理 Agent' },
+        { icon: 'SubAgent', title: '子智能体', desc: '多 Agent 协作编排与任务分解' },
         { icon: 'Knowledge', title: '知识库', desc: '向量检索 + 图谱融合的 RAG 引擎' },
         { icon: 'Workflow', title: '工作流', desc: '可视化 DAG 编排' },
+        { icon: 'Mcp', title: 'MCP 协议', desc: '标准 Model Context Protocol 集成' },
+        { icon: 'Tool', title: '工具系统', desc: '多类型工具统一 Schema 定义' },
+        { icon: 'Skill', title: '技能市场', desc: '可复用 Prompt + Tool 组合' },
+        { icon: 'Prompt', title: 'Prompt 工程', desc: '模板化提示词版本管理与优化' },
+        { icon: 'Eval', title: '评测中心', desc: '数据集管理与自动评估' },
+        { icon: 'Observability', title: '可观测性', desc: '全链路 Trace 追踪与监控' },
       ],
       github: 'https://github.com/finch04/LightBot',
       copyright: '© 2026 LightBot. All Rights Reserved.',
@@ -367,6 +465,54 @@ onUnmounted(() => {
   border-color: var(--color-ink);
   background: var(--color-canvas-soft);
 }
+.header-avatar-wrap {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.header-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0070f3, #7928ca);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.header-avatar:hover {
+  box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.3);
+}
+.header-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.menu-user-info {
+  cursor: default !important;
+}
+.menu-user-info:hover {
+  background: transparent !important;
+}
+.user-info-display {
+  padding: 4px 0;
+}
+.user-info-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-bottom: 4px;
+}
+.user-info-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--color-mute);
+}
 
 /* Hero 区域 */
 .hero-section {
@@ -381,11 +527,11 @@ onUnmounted(() => {
 }
 .hero-layout {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: 1fr 1fr;
   gap: 48px;
   align-items: center;
   width: 100%;
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 .hero-content {
@@ -492,7 +638,7 @@ onUnmounted(() => {
 .visual-card {
   position: relative;
   width: 100%;
-  max-width: 480px;
+  max-width: 620px;
   padding: 28px;
   border-radius: 16px;
   background: var(--color-canvas);
@@ -510,10 +656,10 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* 功能网格 2x4 */
+/* 功能网格 2x5 */
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   position: relative;
   z-index: 1;
@@ -528,6 +674,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   border: 1px solid transparent;
+  min-height: 88px;
 }
 .feature-item:hover {
   background: var(--color-canvas-soft);
@@ -561,6 +708,10 @@ onUnmounted(() => {
   color: var(--color-body);
   text-align: center;
   line-height: 1.3;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .feature-item.active .feature-title {
   color: var(--color-ink);
@@ -576,7 +727,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-hairline);
   position: relative;
   z-index: 1;
-  min-height: 76px;
+  min-height: 88px;
 }
 .feature-desc-title {
   font-size: 15px;
@@ -655,7 +806,7 @@ onUnmounted(() => {
     margin: 0 auto;
   }
   .feature-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
 }
 
@@ -673,7 +824,7 @@ onUnmounted(() => {
     font-size: 18px;
   }
   .feature-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
   }
   .feature-item {

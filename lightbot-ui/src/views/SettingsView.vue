@@ -143,12 +143,12 @@
       <div class="panel-body">
         <a-form :label-col="{ span: 4 }" :wrapper-col="{ span: 18 }">
           <a-form-item label="主标题">
-            <a-input v-model:value="landing.title" placeholder="LightBot" />
+            <a-input v-model:value="landing.title" placeholder="LightBot" :maxlength="30" show-count />
           </a-form-item>
           <a-form-item label="副标题轮播">
             <div class="subtitle-list">
               <div v-for="(sub, idx) in landing.subtitles" :key="idx" class="subtitle-row">
-                <a-input v-model:value="landing.subtitles[idx]" placeholder="副标题" style="flex:1" />
+                <a-input v-model:value="landing.subtitles[idx]" placeholder="副标题" style="flex:1" :maxlength="30" show-count />
                 <button class="btn-icon-danger" @click="landing.subtitles.splice(idx, 1)">
                   <DeleteOutlined />
                 </button>
@@ -159,33 +159,55 @@
             </div>
           </a-form-item>
           <a-form-item label="描述文字">
-            <a-textarea v-model:value="landing.description" :rows="3" placeholder="平台介绍文字" />
+            <a-textarea v-model:value="landing.description" :rows="3" placeholder="平台介绍文字" :maxlength="200" show-count />
           </a-form-item>
           <a-form-item label="GitHub 地址">
-            <a-input v-model:value="landing.github" placeholder="https://github.com/..." />
+            <a-input v-model:value="landing.github" placeholder="https://github.com/..." :maxlength="200" />
           </a-form-item>
           <a-form-item label="版权信息">
-            <a-input v-model:value="landing.copyright" placeholder="© 2026 LightBot" />
+            <a-input v-model:value="landing.copyright" placeholder="© 2026 LightBot" :maxlength="100" show-count />
           </a-form-item>
           <a-form-item label="功能展示">
             <div class="feature-list">
               <div v-for="(feat, idx) in landing.features" :key="idx" class="feature-card">
                 <div class="feature-card-header">
                   <span class="feature-index">#{{ idx + 1 }}</span>
-                  <button class="btn-icon-danger" @click="landing.features.splice(idx, 1)">
-                    <DeleteOutlined />
-                  </button>
+                  <div class="feature-card-actions">
+                    <a-tooltip title="上移">
+                      <button class="btn-icon-move" :disabled="idx === 0" @click="moveFeature(idx, -1)">
+                        <UpOutlined />
+                      </button>
+                    </a-tooltip>
+                    <a-tooltip title="下移">
+                      <button class="btn-icon-move" :disabled="idx === landing.features.length - 1" @click="moveFeature(idx, 1)">
+                        <DownOutlined />
+                      </button>
+                    </a-tooltip>
+                    <a-tooltip title="删除">
+                      <button class="btn-icon-danger" @click="landing.features.splice(idx, 1)">
+                        <DeleteOutlined />
+                      </button>
+                    </a-tooltip>
+                  </div>
                 </div>
-                <a-form-item label="图标" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-                  <a-select v-model:value="feat.icon" placeholder="选择图标">
-                    <a-select-option v-for="ic in featureIconOptions" :key="ic" :value="ic">{{ ic }}</a-select-option>
+                <a-form-item label="图标" :label-col="{ span: 3 }" :wrapper-col="{ span: 20 }">
+                  <a-select
+                    v-model:value="feat.icon"
+                    placeholder="选择图标"
+                  >
+                    <a-select-option v-for="ic in iconOptions" :key="ic.value" :value="ic.value">
+                      <div class="icon-grid-option">
+                        <component :is="ic.icon" />
+                        <span>{{ ic.label }}</span>
+                      </div>
+                    </a-select-option>
                   </a-select>
                 </a-form-item>
-                <a-form-item label="标题" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-                  <a-input v-model:value="feat.title" placeholder="功能名称" />
+                <a-form-item label="标题" :label-col="{ span: 3 }" :wrapper-col="{ span: 20 }">
+                  <a-input v-model:value="feat.title" placeholder="功能名称" :maxlength="20" show-count />
                 </a-form-item>
-                <a-form-item label="描述" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-                  <a-textarea v-model:value="feat.desc" :rows="2" placeholder="功能描述" />
+                <a-form-item label="描述" :label-col="{ span: 3 }" :wrapper-col="{ span: 20 }">
+                  <a-textarea v-model:value="feat.desc" :rows="2" placeholder="功能描述（建议不超过40字）" :maxlength="40" show-count />
                 </a-form-item>
               </div>
               <button class="btn-add" @click="landing.features.push({ icon: '', title: '', desc: '' })">
@@ -205,8 +227,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { SaveOutlined, BulbOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, onMounted, markRaw } from 'vue'
+import {
+  SaveOutlined, BulbOutlined, PlusOutlined, DeleteOutlined,
+  UpOutlined, DownOutlined,
+  RobotOutlined, TeamOutlined, ApartmentOutlined, ApiOutlined,
+  ToolOutlined, ThunderboltOutlined, ExperimentOutlined, EyeOutlined,
+  FormOutlined, DatabaseOutlined, NodeIndexOutlined, BranchesOutlined,
+  CloudOutlined, CodeOutlined, FileTextOutlined, RocketOutlined,
+  SafetyOutlined, SettingOutlined, ThunderboltFilled, SyncOutlined,
+  AppstoreOutlined, ControlOutlined, ClusterOutlined, BlockOutlined,
+} from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
   getDefaultChatModel, updateDefaultChatModel,
@@ -365,9 +396,41 @@ const landing = reactive({
   copyright: '',
 })
 
-const featureIconOptions = [
-  'Agent', 'Knowledge', 'Workflow', 'Mcp', 'Tool', 'Skill', 'Eval', 'Observability',
+// 图标选项（value 对应 Landing.vue 的 iconMap key）
+const iconOptions = [
+  { value: 'Agent', label: '智能体', icon: markRaw(RobotOutlined) },
+  { value: 'SubAgent', label: '子智能体', icon: markRaw(TeamOutlined) },
+  { value: 'Knowledge', label: '知识库', icon: markRaw(DatabaseOutlined) },
+  { value: 'Workflow', label: '工作流', icon: markRaw(ApartmentOutlined) },
+  { value: 'Mcp', label: 'MCP', icon: markRaw(ApiOutlined) },
+  { value: 'Tool', label: '工具', icon: markRaw(ToolOutlined) },
+  { value: 'Skill', label: '技能', icon: markRaw(ThunderboltOutlined) },
+  { value: 'Prompt', label: 'Prompt', icon: markRaw(FormOutlined) },
+  { value: 'Eval', label: '评测', icon: markRaw(ExperimentOutlined) },
+  { value: 'Observability', label: '可观测', icon: markRaw(EyeOutlined) },
+  { value: 'NodeIndexOutlined', label: '节点', icon: markRaw(NodeIndexOutlined) },
+  { value: 'BranchesOutlined', label: '分支', icon: markRaw(BranchesOutlined) },
+  { value: 'CloudOutlined', label: '云端', icon: markRaw(CloudOutlined) },
+  { value: 'CodeOutlined', label: '代码', icon: markRaw(CodeOutlined) },
+  { value: 'FileTextOutlined', label: '文档', icon: markRaw(FileTextOutlined) },
+  { value: 'RocketOutlined', label: '部署', icon: markRaw(RocketOutlined) },
+  { value: 'SafetyOutlined', label: '安全', icon: markRaw(SafetyOutlined) },
+  { value: 'SettingOutlined', label: '配置', icon: markRaw(SettingOutlined) },
+  { value: 'SyncOutlined', label: '同步', icon: markRaw(SyncOutlined) },
+  { value: 'AppstoreOutlined', label: '应用', icon: markRaw(AppstoreOutlined) },
+  { value: 'ControlOutlined', label: '控制', icon: markRaw(ControlOutlined) },
+  { value: 'ClusterOutlined', label: '集群', icon: markRaw(ClusterOutlined) },
+  { value: 'BlockOutlined', label: '模块', icon: markRaw(BlockOutlined) },
 ]
+
+function moveFeature(idx, direction) {
+  const target = idx + direction
+  if (target < 0 || target >= landing.features.length) return
+  const arr = landing.features
+  const temp = arr[idx]
+  arr[idx] = arr[target]
+  arr[target] = temp
+}
 
 async function loadLandingConfig() {
   try {
@@ -391,14 +454,14 @@ async function saveLandingConfig() {
   if (!landing.title.trim()) return message.warning('请输入主标题')
   landingSaving.value = true
   try {
-    const payload = JSON.stringify({
+    const payload = {
       title: landing.title,
       subtitles: landing.subtitles.filter(s => s.trim()),
       description: landing.description,
       features: landing.features.filter(f => f.title.trim()),
       github: landing.github,
       copyright: landing.copyright,
-    })
+    }
     await updateLandingConfig(payload)
     message.success('Landing 配置已保存')
   } catch (e) {
@@ -534,6 +597,41 @@ async function saveLandingConfig() {
 }
 .btn-icon-danger:hover {
   background: #fef2f2;
+}
+.btn-icon-move {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d4d4d8;
+  background: #fff;
+  color: #52525b;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-icon-move:hover:not(:disabled) {
+  background: #f4f4f5;
+  border-color: #a1a1aa;
+}
+.btn-icon-move:disabled {
+  color: #d4d4d8;
+  cursor: not-allowed;
+}
+.feature-card-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.icon-grid-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.icon-grid-option :deep(.anticon) {
+  font-size: 16px;
 }
 .btn-add {
   display: inline-flex;

@@ -4,7 +4,7 @@
     <aside :class="['sidebar', { collapsed: sidebarCollapsed && !sidebarHidden, hidden: sidebarHidden }]">
       <!-- Logo + 收起按钮 -->
       <div class="sidebar-header">
-        <div class="sidebar-logo" @click="sidebarCollapsed ? toggleSidebar() : router.push('/app/chat')">
+        <div class="sidebar-logo" @click="sidebarCollapsed ? toggleSidebar() : router.push('/')">
           <img src="/lightbot-logo.png" alt="LightBot" class="logo-img logo-full" />
           <img src="/lightbot-logo-single.png" alt="LightBot" class="logo-img logo-single" />
           <div class="logo-unfold-icon">
@@ -402,8 +402,9 @@ onMounted(async () => {
   if (!userStore.user) {
     try {
       await userStore.fetchUser()
-    } catch {
-      router.push('/login')
+    } catch (e) {
+      const status = e?.response?.status
+      router.push(status === 401 ? '/login' : '/')
       return
     }
   }

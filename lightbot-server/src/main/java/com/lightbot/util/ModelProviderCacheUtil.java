@@ -28,7 +28,7 @@ public class ModelProviderCacheUtil {
     private final ObjectMapper objectMapper;
 
     /** Redis key前缀 */
-    private static final String CACHE_PREFIX = "model_provider:";
+    private static final String CACHE_PREFIX = "lightbot:model_provider:";
     private static final String ALL_PROVIDERS_KEY = CACHE_PREFIX + "all";
 
     /**

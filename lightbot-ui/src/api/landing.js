@@ -5,5 +5,5 @@ export function getLandingConfig() {
 }
 
 export function updateLandingConfig(data) {
-  return request.put('/landing/config', data)
+  return request.put('/landing/config', data, { headers: { 'Content-Type': 'application/json' } })
 }

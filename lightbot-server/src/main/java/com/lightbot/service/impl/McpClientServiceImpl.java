@@ -52,7 +52,7 @@ public class McpClientServiceImpl implements McpClientService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /** Redis 缓存 key 前缀 */
-    private static final String MCP_TOOLS_CACHE_KEY = "mcp:tools:";
+    private static final String MCP_TOOLS_CACHE_KEY = "lightbot:mcp:tools:";
 
     /** 客户端缓存：serverId → McpSyncClient */
     private final ConcurrentHashMap<Long, McpSyncClient> clientCache = new ConcurrentHashMap<>();
