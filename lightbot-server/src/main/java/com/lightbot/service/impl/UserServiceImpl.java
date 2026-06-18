@@ -284,7 +284,7 @@ public class UserServiceImpl implements UserService {
     public Page<User> listAllUsers(int pageNum, int pageSize, String keyword) {
         Page<User> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
-                .orderByDesc(User::getCreateTime);
+                .orderByAsc(User::getCreateTime);
         if (keyword != null && !keyword.isBlank()) {
             wrapper.and(w -> w.like(User::getUsername, keyword.trim())
                     .or().like(User::getNickname, keyword.trim()));

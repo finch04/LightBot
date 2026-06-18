@@ -39,6 +39,8 @@ public class RedisCacheConfig {
     public static final String CACHE_TOOL = "tool";
     public static final String CACHE_MCP_SERVER = "mcpServer";
     public static final String CACHE_SUBAGENT = "subagent";
+    public static final String CACHE_SKILL = "skill";
+    public static final String CACHE_AGENT_BINDING = "agentBinding";
     public static final String CACHE_PROMPT = "prompt";
     public static final String CACHE_SYSTEM_CONFIG = "systemConfig";
 
@@ -69,6 +71,8 @@ public class RedisCacheConfig {
                 CACHE_TOOL,         defaultConfig.entryTtl(Duration.ofMinutes(10)),
                 CACHE_MCP_SERVER,   defaultConfig.entryTtl(Duration.ofMinutes(10)),
                 CACHE_SUBAGENT,     defaultConfig.entryTtl(Duration.ofMinutes(10)),
+                CACHE_SKILL,        defaultConfig.entryTtl(Duration.ofMinutes(10)),
+                CACHE_AGENT_BINDING, defaultConfig.entryTtl(Duration.ofMinutes(10)),
                 CACHE_PROMPT,       defaultConfig.entryTtl(Duration.ofMinutes(30)),
                 CACHE_SYSTEM_CONFIG, defaultConfig.entryTtl(Duration.ofHours(1))
         );

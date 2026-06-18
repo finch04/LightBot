@@ -90,4 +90,14 @@ public class RedisUtil {
     public boolean exists(String key) {
         return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
     }
+
+    /**
+     * 自增（key 不存在时自动从 0 开始）
+     *
+     * @return 自增后的值
+     */
+    public long increment(String key) {
+        Long val = stringRedisTemplate.opsForValue().increment(key);
+        return val != null ? val : 1L;
+    }
 }

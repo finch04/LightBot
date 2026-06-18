@@ -119,6 +119,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public Agent update(Agent agent) {
         // 1. 校验存在性
         Agent existing = getById(agent.getId());
@@ -223,7 +224,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
-    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT, key = "#id")
+    @CacheEvict(value = {RedisCacheConfig.CACHE_AGENT, RedisCacheConfig.CACHE_AGENT_BINDING}, allEntries = true)
     public void deleteById(Long id) {
         Agent agent = getById(id);
         if (agent == null) {
@@ -319,6 +320,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':knowledgeIds'")
     public List<Long> getKnowledgeIds(Long agentId) {
         Agent agent = getById(agentId);
         if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
@@ -350,6 +352,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public void updateKnowledgeBindings(Long agentId, List<Long> knowledgeIds) {
         Agent agent = getById(agentId);
         if (agent == null) {
@@ -376,11 +379,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':toolIds'")
     public List<Long> getToolIds(Long agentId) {
         return readBindingIdsFromConfig(agentId, "tools");
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public void updateToolBindings(Long agentId, List<Long> toolIds) {
         writeBindingIdsToConfig(agentId, "tools", toolIds);
     }
@@ -395,11 +400,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':mcpServerIds'")
     public List<Long> getMcpServerIds(Long agentId) {
         return readBindingIdsFromConfig(agentId, "mcpServers");
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public void updateMcpServerBindings(Long agentId, List<Long> mcpServerIds) {
         writeBindingIdsToConfig(agentId, "mcpServers", mcpServerIds);
     }
@@ -414,21 +421,25 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':subAgentIds'")
     public List<Long> getSubAgentIds(Long agentId) {
         return readBindingIdsFromConfig(agentId, "subagents");
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public void updateSubAgentBindings(Long agentId, List<Long> subAgentIds) {
         writeBindingIdsToConfig(agentId, "subagents", subAgentIds);
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':skillIds'")
     public List<Long> getSkillIds(Long agentId) {
         return readBindingIdsFromConfig(agentId, "skills");
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public void updateSkillBindings(Long agentId, List<Long> skillIds) {
         writeBindingIdsToConfig(agentId, "skills", skillIds);
     }

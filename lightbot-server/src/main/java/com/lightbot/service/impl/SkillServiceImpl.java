@@ -15,11 +15,16 @@ import com.lightbot.mapper.SkillMapper;
 import com.lightbot.model.SkillMetadata;
 import com.lightbot.service.SkillService;
 import com.lightbot.service.sandbox.SkillStorageService;
+import com.lightbot.config.RedisCacheConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.io.Serializable;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -52,7 +57,29 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     private final SkillStorageService skillStorageService;
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "#id")
+    public Skill getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, key = "#entity.id")
+    public boolean updateById(Skill entity) {
+        return super.updateById(entity);
+    }
+
+    @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "'slug:' + #slug")
+    public Skill getBySlug(String slug) {
+        if (!StringUtils.hasText(slug)) {
+            return null;
+        }
+        return getOne(new LambdaQueryWrapper<Skill>().eq(Skill::getSlug, slug), false);
+    }
+
+    @Override
     @Transactional
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, allEntries = true)
     public Skill create(SkillRequest request) {
         // 1. 解析作用域：默认 global
         String scope = StringUtils.hasText(request.getScope()) ? request.getScope() : "global";
@@ -103,6 +130,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, allEntries = true)
     public Skill update(SkillRequest request) {
         Skill skill = getById(request.getId());
         if (skill == null) {
@@ -168,6 +196,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, key = "#id")
     public void deleteById(Long id) {
         Skill skill = getById(id);
         if (skill == null) {
@@ -215,14 +244,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     }
 
     @Override
-    public Skill getBySlug(String slug) {
-        if (!StringUtils.hasText(slug)) {
-            return null;
-        }
-        return getOne(new LambdaQueryWrapper<Skill>().eq(Skill::getSlug, slug), false);
-    }
-
-    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, key = "#id")
     public void setEnabled(Long id, boolean enabled) {
         Skill skill = getById(id);
         if (skill == null) {
@@ -242,6 +264,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, allEntries = true)
     public Skill importZipCommit(String draftId, String targetSlug) {
         // 1. 提交草稿到正式目录
         String finalSlug = skillStorageService.commitDraft(draftId, targetSlug);
@@ -307,6 +330,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisCacheConfig.CACHE_SKILL, allEntries = true)
     public Skill commitRemoteSkill(String draftId, String slug) {
         // 1. 提交草稿中指定 slug 的文件到正式目录
         String finalSlug = skillStorageService.commitDraftForSlug(draftId, slug);

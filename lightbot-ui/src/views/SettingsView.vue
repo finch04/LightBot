@@ -177,7 +177,14 @@
             <a-input v-model:value="landing.copyright" placeholder="© 2026 LightBot" :maxlength="100" show-count />
           </a-form-item>
           <a-form-item label="功能展示">
-            <div class="feature-list">
+            <div class="features-toggle-bar">
+              <span class="features-count">共 {{ landing.features.length }} 项</span>
+              <button class="btn-text-toggle" @click="featuresExpanded = !featuresExpanded">
+                {{ featuresExpanded ? '收起' : '展开' }}
+                <RightOutlined class="features-toggle-icon" :class="{ expanded: featuresExpanded }" />
+              </button>
+            </div>
+            <div v-show="featuresExpanded" class="feature-list">
               <div v-for="(feat, idx) in landing.features" :key="idx" class="feature-card">
                 <div class="feature-card-header">
                   <span class="feature-index">#{{ idx + 1 }}</span>
@@ -404,6 +411,7 @@ async function saveTtsModel() {
 }
 
 // Landing 配置
+const featuresExpanded = ref(true)
 const landingSaving = ref(false)
 const landing = reactive({
   title: '',
@@ -671,6 +679,39 @@ async function saveLandingConfig() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+.features-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.features-count {
+  font-size: 12px;
+  color: #a1a1aa;
+}
+.btn-text-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  color: #0070f3;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.btn-text-toggle:hover {
+  background: rgba(0, 112, 243, 0.06);
+}
+.features-toggle-icon {
+  font-size: 11px;
+  transition: transform 0.2s;
+}
+.features-toggle-icon.expanded {
+  transform: rotate(90deg);
 }
 .feature-card {
   border: 1px solid #ebebeb;

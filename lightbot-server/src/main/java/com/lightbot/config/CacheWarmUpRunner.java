@@ -38,6 +38,9 @@ public class CacheWarmUpRunner implements ApplicationRunner {
     private final AgentMapper agentMapper;
     private final KnowledgeMapper knowledgeMapper;
     private final ToolMapper toolMapper;
+    private final McpServerMapper mcpServerMapper;
+    private final SubAgentMapper subAgentMapper;
+    private final SkillMapper skillMapper;
     private final SystemConfigMapper systemConfigMapper;
 
     @Override
@@ -84,7 +87,7 @@ public class CacheWarmUpRunner implements ApplicationRunner {
     }
 
     /**
-     * 预热 Spring Cache 管理的业务缓存（Agent/Knowledge/Tool/SystemConfig）
+     * 预热 Spring Cache 管理的业务缓存（Agent/Knowledge/Tool/McpServer/SubAgent/Skill/SystemConfig）
      */
     private void warmUpSpringCaches() {
         log.info("[CacheWarmUp] 开始预热业务缓存...");
@@ -97,6 +100,15 @@ public class CacheWarmUpRunner implements ApplicationRunner {
         warmUpCache(RedisCacheConfig.CACHE_TOOL,
                 () -> toolMapper.selectList(new LambdaQueryWrapper<Tool>().eq(Tool::getDeleted, 0)),
                 t -> t.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_MCP_SERVER,
+                () -> mcpServerMapper.selectList(new LambdaQueryWrapper<McpServer>().eq(McpServer::getDeleted, 0)),
+                m -> m.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_SUBAGENT,
+                () -> subAgentMapper.selectList(new LambdaQueryWrapper<SubAgent>().eq(SubAgent::getDeleted, 0)),
+                s -> s.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_SKILL,
+                () -> skillMapper.selectList(new LambdaQueryWrapper<Skill>().eq(Skill::getDeleted, 0)),
+                s -> s.getId().toString());
         // SystemConfig 无 deleted 字段，全量加载
         warmUpCache(RedisCacheConfig.CACHE_SYSTEM_CONFIG,
                 () -> systemConfigMapper.selectList(null),
