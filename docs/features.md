@@ -1,4 +1,4 @@
-# LightBot 项目功能文档
+# LightBot Roadmap
 
 > 轻量级 Java AI Agent 平台
 >
@@ -6,410 +6,443 @@
 
 ---
 
-## 一、用户管理
+## 项目概览
 
-### 1.1 用户注册
+LightBot 是一个面向 AI 场景的全栈 Agent 平台，支持对话、工作流编排、RAG 知识库、工具调用、MCP 协议等核心能力。
+
+**架构特点：**
+- 单体架构，渐进式演进
+- AI Native，围绕 AI 能力设计
+- Java First，后端统一 Java
+- 模块化，边界清晰
+
+---
+
+## 一、已完成功能
+
+### 1.1 用户体系
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 用户注册/登录 | ✅ | 用户名+密码，Sa-Token 鉴权 |
+| 用户管理 | ✅ | 管理员 CRUD，角色/状态管理 |
+| 个人资料 | ✅ | 昵称/头像/密码修改 |
+| 健康检查 | ✅ | 免鉴权端点 |
+
+### 1.2 模型提供商
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 多提供商支持 | ✅ | DashScope/OpenAI/DeepSeek/Ollama |
+| 动态模型路由 | ✅ | ModelFactory 按 providerId 动态创建 ChatModel |
+| API Key 加密 | ✅ | 敏感信息加密存储 |
+| 模型缓存 | ✅ | Redis 缓存模型配置 |
+
+### 1.3 AI 对话
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 流式对话 | ✅ | SSE 流式输出，支持中断恢复 |
+| 会话管理 | ✅ | 创建/查询/归档/标题异步生成 |
+| 消息历史 | ✅ | 自动加载最近 20 条历史 |
+| 文件附件 | ✅ | 图片/文件上传，多模态对话 |
+| 对话缓存 | ✅ | 会话列表 Redis 缓存 |
+
+### 1.4 Agent 体系
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| Agent CRUD | ✅ | 创建/编辑/删除/复制 |
+| Agent 类型 | ✅ | 对话型/工作流型 |
+| 系统提示词 | ✅ | 支持 AI 生成 |
+| 推荐问题 | ✅ | 支持 AI 生成 |
+| 版本管理 | ✅ | 发布/预览/恢复历史版本 |
+| 默认 Agent | ✅ | 系统级默认 Agent |
+| 头像上传 | ✅ | MinIO 存储 |
+
+### 1.5 工作流引擎
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| DAG 执行 | ✅ | 串行/条件分支执行 |
+| 可视化编排 | ✅ | Vue Flow 画布 |
+| 节点类型 | ✅ | LLM/Tool/Condition/Variable/Knowledge/Code/Start/End |
+| 变量透传 | ✅ | `{{nodeId.output}}` 语法 |
+| 18 种节点 | ✅ | 完整节点库 |
+| 工作流示例 | ✅ | 内置多种模板 |
+
+### 1.6 Tool 体系
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| Tool CRUD | ✅ | 创建/编辑/删除 |
+| Tool 类型 | ✅ | HTTP/Code/内置 |
+| 认证支持 | ✅ | None/API Key/Bearer |
+| 标签管理 | ✅ | Tool 分类标签 |
+| 输入输出 Schema | ✅ | JSON Schema 定义 |
+
+### 1.7 MCP 协议
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| MCP Client | ✅ | 连接外部 MCP Server |
+| 传输方式 | ✅ | stdio/SSE/Streamable HTTP |
+| Tool 适配 | ✅ | MCPToolAdapter 统一注册 |
+| 服务管理 | ✅ | 安装/卸载/启用/禁用 |
+| 全局搜索 | ✅ | npx skills find 集成 |
+
+### 1.8 Skill 体系
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| Skill CRUD | ✅ | 创建/编辑/删除 |
+| 轻量编排 | ✅ | 注入 prompt + 合并依赖 Tool/MCP |
+| 作用域 | ✅ | 全局/Agent 私有 |
+| 远程安装 | ✅ | 从 GitHub/skills.sh 安装 |
+
+### 1.9 SubAgent 体系
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| SubAgent CRUD | ✅ | 创建/编辑/删除 |
+| 独立推理 | ✅ | 独立系统提示词 + 工具集 |
+| 委派调用 | ✅ | `delegate_to_subagent` 工具 |
+
+### 1.10 RAG 知识库
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 知识库 CRUD | ✅ | 创建/编辑/删除 |
+| 成员权限 | ✅ | Creator/Manager/Developer/Viewer |
+| 文档管理 | ✅ | 上传/预览/删除 |
+| 文档解析 | ✅ | Tika + OCR（扫描件） |
+| 分块策略 | ✅ | 按标题拆分 + 按大小切分 |
+| 向量化 | ✅ | pgvector/Milvus 双引擎 |
+| RAG 问答 | ✅ | 语义检索 + 上下文注入 |
+| 在线编辑 | ✅ | Markdown 编辑器 + 增量更新 |
+| 思维导图 | ✅ | AI 生成知识结构 |
+| 示例问题 | ✅ | AI 生成示例问题 |
+
+### 1.11 问答对（QA Pair）
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| QA Pair CRUD | ✅ | 创建/编辑/删除 |
+| 批量导入 | ✅ | JSONL 格式 |
+| AI 提取 | ✅ | 从文档自动生成 |
+| 高优先级检索 | ✅ | 相似度 >= 0.85 直接返回答案 |
+| Agent 集成 | ✅ | 自动注入对话上下文 |
+
+### 1.12 知识图谱
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 图谱构建 | ✅ | LLM 自动抽取 + 手动导入 |
+| Neo4j 存储 | ✅ | 每个知识库独立 Label |
+| 图谱检索 | ✅ | 实体识别 + 1-2 跳子图展开 |
+| 可视化 | ✅ | @antv/g6 力导向图 |
+| 手动编辑 | ✅ | 添加/删除实体关系 |
+
+### 1.13 评测体系
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 评测集管理 | ✅ | CRUD + 版本管理 |
+| 评测基准 | ✅ | AI 生成 + JSONL 导入 |
+| 评估器 | ✅ | 自定义评估逻辑 |
+| 实验运行 | ✅ | 批量评测 + 结果统计 |
+
+### 1.14 Prompt 管理
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| Prompt CRUD | ✅ | 创建/编辑/删除 |
+| Prompt 模板 | ✅ | 变量模板 + 版本管理 |
+| 标签管理 | ✅ | Prompt 分类 |
+
+### 1.15 可观测性
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| LLM Trace | ✅ | 调用链路记录 |
+| Tool Call 记录 | ✅ | 工具调用追踪 |
+| 仪表盘 | ✅ | 统计概览 |
+| 日志监控 | ✅ | SSE 实时日志流 |
+| 任务中心 | ✅ | 异步任务状态跟踪 |
+
+### 1.16 前端能力
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| Landing 页 | ✅ | 可配置落地页 |
+| 暗色主题 | ✅ | 主题切换 |
+| 响应式布局 | ✅ | 移动端适配 |
+| 虚拟滚动 | ✅ | @tanstack/vue-virtual |
+| SSE 重连 | ✅ | 指数退避重连 |
+
+---
+
+## 二、Phase 1：生产环境优化（已完成）
+
+> 目标：单体架构下完成核心性能优化，具备上线能力
+
+| 优化项 | 状态 | 说明 |
+|--------|------|------|
+| 数据库索引优化 | ✅ | 复合索引 + Trace 概览 SQL 聚合 |
+| 向量检索调优 | ✅ | 统一 HNSW 索引 + ef_search 提升 |
+| Redis 缓存体系 | ✅ | Spring Cache + 7 域缓存 + 预热 |
+| 文件存储优化 | ✅ | ensureBucket 单次调用 + 流式下载 |
+| SSE 重连机制 | ✅ | 对话/任务/日志三场景指数退避 |
+| 大列表虚拟滚动 | ✅ | 消息列表虚拟滚动 |
+| 会话标题优化 | ✅ | 专用轮询端点 + 系统默认模型生成 |
+
+**关键指标提升：**
+- Trace 概览查询：秒级 → 毫秒级
+- 向量检索召回率：~90% → ~98%
+- 缓存命中后 DB 查询：100+ QPS → 0 QPS
+- 长对话滚动性能：100+ 消息无卡顿
+
+---
+
+## 三、Phase 2：性能与稳定性（规划中）
+
+> 目标：引入中间件提升系统稳定性和可维护性
+
+### 3.1 API 网关与限流（P1，8.5d）
 
 | 项目 | 说明 |
 |------|------|
-| 接口 | `POST /api/auth/register` |
-| 请求体 | `{ username, password, nickname?, email? }` |
-| 业务规则 | 用户名3-32字符，唯一；密码6-64字符，BCrypt加密存储；默认角色为普通用户 |
-| 响应 | 用户信息（不含密码） |
+| Spring Cloud Gateway | 统一入口、路由、负载均衡 |
+| Sentinel 限流 | 用户级 QPS 限制、熔断降级 |
+| LLM 成本控制 | Token 预算、日用量限制 |
 
-### 1.2 用户登录
-
-| 项目 | 说明 |
-|------|------|
-| 接口 | `POST /api/auth/login` |
-| 请求体 | `{ username, password }` |
-| 业务规则 | 校验用户名密码；校验账号状态（禁用账号不可登录）；更新最后登录时间；Sa-Token创建会话 |
-| 响应 | `{ token, user }` |
-
-### 1.3 用户登出
+### 3.2 消息队列解耦（P1，8.5d）
 
 | 项目 | 说明 |
 |------|------|
-| 接口 | `POST /api/auth/logout` |
-| 业务规则 | 清除 Sa-Token 会话 |
+| RocketMQ 集成 | 替代 Redis List 任务队列 |
+| 重试机制 | 自动重试 + 死信队列 |
+| Trace 异步写入 | MQ 保障持久化 |
 
-### 1.4 获取当前用户
+### 3.3 LLM 调用治理（P1，8.5d）
 
 | 项目 | 说明 |
 |------|------|
-| 接口 | `GET /api/auth/me` |
-| 业务规则 | 通过 Sa-Token 获取当前登录用户信息 |
+| HTTP 连接池 | OkHttp/Reactor 连接池配置 |
+| 超时控制 | LLM 调用整体超时 |
+| 响应式重试 | 替代 Thread.sleep |
 
-### 1.5 用户角色
+### 3.4 文档处理优化（P1，6d）
 
-| 角色 | code | 说明 |
-|------|------|------|
-| 管理员 | admin | 系统管理权限 |
-| 普通用户 | user | 基础使用权限 |
-
-### 1.6 用户状态
-
-| 状态 | code | 说明 |
-|------|------|------|
-| 正常 | active | 可正常登录使用 |
-| 禁用 | disabled | 无法登录 |
-
----
-
-## 二、模型提供商管理
-
-### 2.1 功能概述
-
-管理 AI 模型提供商的 API 配置，支持多家模型服务商。
-
-### 2.2 支持的提供商类型
-
-| 类型 | code | 说明 |
-|------|------|------|
-| 通义千问 | dashscope | 阿里云 DashScope |
-| OpenAI | openai | OpenAI API |
-| DeepSeek | deepseek | DeepSeek API |
-| Ollama | ollama | 本地 Ollama 服务 |
-
-### 2.3 接口列表
-
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/model-providers` | POST | 新增提供商 |
-| `/api/model-providers` | PUT | 更新提供商 |
-| `/api/model-providers/{id}` | DELETE | 删除提供商 |
-| `/api/model-providers` | GET | 分页查询 |
-| `/api/model-providers/{id}` | GET | 获取单个详情 |
-
-### 2.4 业务规则
-
-- API Key 加密存储
-- 提供商状态：active（启用）/ disabled（禁用）
-- 软删除
-
----
-
-## 三、AI 对话
-
-### 3.1 功能概述
-
-基于 SpringAI 的 AI 对话能力，支持同步和流式（SSE）两种模式。
-
-### 3.2 接口列表
-
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/chat` | POST | 同步对话 |
-| `/api/chat/stream` | POST | 流式对话（SSE） |
-
-### 3.3 业务规则
-
-- 消息自动持久化到 `message` 表
-- 支持会话管理（创建、查询、归档）
-- 自动加载最近20条历史消息保持对话连贯
-- 流式模式下，AI回复完整后才持久化
-- 每次对话自动更新会话统计（消息数、token数、最后消息时间）
-
-### 3.4 消息角色
-
-| 角色 | code | 说明 |
-|------|------|------|
-| 用户 | user | 用户发送的消息 |
-| 助手 | assistant | AI 回复 |
-| 系统 | system | 系统提示词 |
-| 工具 | tool | 工具调用结果 |
-
-### 3.5 内容类型
-
-| 类型 | code | 说明 |
-|------|------|------|
-| 文本 | text | 纯文本消息 |
-| 图片 | image | 图片消息 |
-| 文件 | file | 文件消息 |
-
----
-
-## 四、对话会话管理
-
-### 4.1 功能概述
-
-管理用户的对话会话，支持会话的创建、查询、归档、消息历史查看。
-
-### 4.2 接口列表
-
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/chat/sessions` | POST | 创建新会话 |
-| `/api/chat/sessions` | GET | 分页查询当前用户的会话列表 |
-| `/api/chat/sessions/{id}` | GET | 获取会话详情 |
-| `/api/chat/sessions/{id}/messages` | GET | 获取会话的消息历史 |
-| `/api/chat/sessions/{id}/title` | PUT | 更新会话标题 |
-| `/api/chat/sessions/{id}/archive` | PUT | 归档会话 |
-
-### 4.3 会话状态
-
-| 状态 | code | 说明 |
-|------|------|------|
-| 活跃 | active | 正常使用中 |
-| 已归档 | archived | 已归档，不再显示在列表中 |
-
-### 4.4 会话统计
-
-- `messageCount`：消息总数
-- `totalTokens`：总 Token 消耗
-- `lastMessageAt`：最后消息时间（用于排序）
-
----
-
-## 五、知识库管理
-
-### 5.1 功能概述
-
-知识库是 RAG（检索增强生成）的核心数据载体。用户可以创建知识库、上传文档、管理成员权限，并基于知识库进行 AI 问答。
-
-### 5.2 权限模型
-
-知识库采用成员制权限管理，**非成员无法访问知识库内容**。
-
-| 角色 | code | 权限说明 |
-|------|------|----------|
-| 创建者 | creator | 完全权限：删除知识库、管理所有成员、所有操作 |
-| 管理者 | manager | 可拉人/踢人、上传文档、文档增删改查、提问 |
-| 开发者 | developer | 可上传文档、文档增删改查、提问 |
-| 查看者 | viewer | 只可提问、查看文档 |
-
-**权限等级**：CREATOR > MANAGER > DEVELOPER > VIEWER
-
-**权限校验规则**：
-- 创建知识库时，创建者自动成为 CREATOR 角色成员
-- 所有知识库操作都需要校验用户是否为成员
-- 文档上传/删除需要 DEVELOPER 及以上权限
-- 成员管理需要 MANAGER 及以上权限
-- 删除知识库仅 CREATOR 可操作
-- RAG 问答需要 VIEWER 及以上权限
-
-### 5.3 知识库接口
-
-| 接口 | 方法 | 权限要求 | 说明 |
-|------|------|----------|------|
-| `/api/knowledge` | POST | 登录用户 | 创建知识库 |
-| `/api/knowledge` | PUT | MANAGER+ | 更新知识库 |
-| `/api/knowledge` | GET | 登录用户 | 查询有权限的知识库 |
-| `/api/knowledge/{id}` | GET | 成员 | 获取知识库详情 |
-| `/api/knowledge/{id}` | DELETE | CREATOR | 删除知识库 |
-
-### 5.4 成员管理接口
-
-| 接口 | 方法 | 权限要求 | 说明 |
-|------|------|----------|------|
-| `/api/knowledge/{id}/members` | POST | MANAGER+ | 添加成员 |
-| `/api/knowledge/{id}/members/{userId}` | PUT | MANAGER+ | 更新成员角色 |
-| `/api/knowledge/{id}/members/{userId}` | DELETE | MANAGER+ | 移除成员 |
-| `/api/knowledge/{id}/members` | GET | 成员 | 获取成员列表 |
-
-### 5.5 知识库配置
-
-| 字段 | 默认值 | 说明 |
-|------|--------|------|
-| embeddingModel | text-embedding-3-small | 向量化模型 |
-| chunkSize | 512 | 分块大小（字符数） |
-| chunkOverlap | 50 | 分块重叠（字符数） |
-
----
-
-## 六、文档管理
-
-### 6.1 功能概述
-
-知识库下的文档管理，支持 Markdown 文件上传、异步处理（分块+向量化）、预览。
-
-### 6.2 接口列表
-
-| 接口 | 方法 | 权限要求 | 说明 |
-|------|------|----------|------|
-| `/api/knowledge/{id}/documents` | POST | DEVELOPER+ | 上传文档 |
-| `/api/knowledge/{id}/documents` | GET | 成员 | 获取文档列表 |
-| `/api/knowledge/documents/{docId}` | GET | 成员 | 获取文档详情 |
-| `/api/knowledge/documents/{docId}` | DELETE | DEVELOPER+ | 删除文档 |
-| `/api/knowledge/documents/{docId}/preview` | GET | 成员 | 预览文档内容 |
-| `/api/knowledge/documents/{docId}/chunks` | GET | 成员 | 获取分块列表 |
-
-### 6.3 文档处理流程
-
-```
-用户上传 Markdown 文件
-    ↓
-1. 校验文件类型（仅支持 .md）
-    ↓
-2. 计算文件 MD5 哈希，检查去重
-    ↓
-3. 上传文件到 MinIO
-    ↓
-4. 创建文档记录（状态：pending）
-    ↓
-5. 异步处理（@Async）
-    ├─ 5.1 更新状态为 processing
-    ├─ 5.2 从 MinIO 读取文件内容
-    ├─ 5.3 Markdown 分块（先按标题，再按大小）
-    ├─ 5.4 保存分块到数据库
-    ├─ 5.5 更新文档状态为 completed
-    └─ 5.6 更新知识库统计
-```
-
-### 6.4 文档状态
-
-| 状态 | code | 说明 |
-|------|------|------|
-| 待处理 | pending | 已上传，等待处理 |
-| 处理中 | processing | 正在分块和向量化 |
-| 已完成 | completed | 处理完成，可用于 RAG |
-| 失败 | failed | 处理失败，errorMessage 记录原因 |
-
-### 6.5 分块策略
-
-1. **按标题拆分**：优先按 Markdown 标题（# ## ### 等）拆分段落
-2. **按大小切分**：超长段落按字符数切分，支持重叠窗口
-3. **Token 估算**：中文 1字≈1.5token，英文 1词≈1token
-
----
-
-## 七、RAG 问答
-
-### 7.1 功能概述
-
-基于知识库的检索增强生成（RAG）问答能力。
-
-### 7.2 接口
-
-| 接口 | 方法 | 权限要求 | 说明 |
-|------|------|----------|------|
-| `/api/knowledge/{id}/ask` | POST | VIEWER+ | 基于知识库 RAG 问答 |
-
-### 7.3 RAG 流程
-
-```
-用户提问
-    ↓
-1. 问题文本向量化（EmbeddingModel）
-    ↓
-2. pgvector 余弦相似度检索（Top-5，阈值 0.5）
-    ↓
-3. 构建参考资料上下文
-    ↓
-4. 调用 ChatModel 生成回答
-    ↓
-5. 返回回答
-```
-
-### 7.4 向量存储
-
-- 使用 PostgreSQL pgvector 扩展
-- 向量维度：1536（text-embedding-3-small）
-- 索引类型：HNSW（m=16, ef_construction=64）
-- 相似度算法：余弦距离（cosine）
-
----
-
-## 八、文件存储（MinIO）
-
-### 8.1 功能概述
-
-通过 MinIO 提供对象存储能力，用于存储知识库文档。
-
-### 8.2 存储路径规则
-
-```
-knowledge/{knowledgeId}/doc/{uuid}.{ext}
-```
-
-### 8.3 能力列表
-
-| 方法 | 说明 |
+| 项目 | 说明 |
 |------|------|
-| upload | 上传文件（MultipartFile / InputStream） |
-| download | 下载文件（返回 InputStream） |
-| delete | 删除文件 |
-| getPresignedUrl | 获取预签名URL（7天有效） |
-| generatePath | 生成存储路径 |
+| 批量 INSERT | Chunk 批量保存 |
+| Embedding 并行 | CompletableFuture 并行调用 |
+| 动态线程池 | 按负载扩缩容 |
+
+### 3.5 缓存一致性（P2，3d）
+
+| 项目 | 说明 |
+|------|------|
+| 布隆过滤器 | 防穿透 |
+| 分布式锁 | 防击穿 |
+| 随机 TTL | 防雪崩 |
+
+### 3.6 可观测性增强（P2，11d）
+
+| 项目 | 说明 |
+|------|------|
+| Prometheus + Grafana | Metrics 指标监控 |
+| SkyWalking | 分布式链路追踪 |
+| ELK | 日志聚合检索 |
+| 告警规则 | 主动告警通知 |
+
+### 3.7 安全加固（P0，7.5d）
+
+| 项目 | 说明 |
+|------|------|
+| 密码策略 | 首次登录强制修改 |
+| 审计日志 | 操作记录追踪 |
+| 敏感信息脱敏 | Trace 中遮蔽系统提示词 |
+| PgSqlTool 限制 | 禁止危险 SQL |
 
 ---
 
-## 九、待实现功能
+## 四、Phase 3：架构升级（远期）
 
-### 9.1 Agent 管理
+> 目标：微服务化 + 企业级能力
 
-- Agent 的 CRUD（创建、编辑、发布、归档）
-- Agent 类型：chat（对话型）、workflow（工作流型）、assistant（助手型）
-- Agent 配置：系统提示词、模型选择、工具绑定
+### 4.1 微服务拆分（P3，31d）
 
-### 9.2 Tool 体系
+| 服务 | 职责 |
+|------|------|
+| lightbot-gateway | API 网关、认证、限流 |
+| lightbot-chat | 对话核心、会话管理 |
+| lightbot-agent | Agent/Version/Workflow |
+| lightbot-rag | 知识库/文档/向量检索 |
+| lightbot-tool | Tool/MCP/Skill |
+| lightbot-obs | 可观测性 |
+| lightbot-eval | 评测体系 |
 
-- Tool 的 CRUD
-- Tool 类型：builtin（内置）、custom（自定义）、api（API调用）、mcp（MCP协议）
-- Tool 认证：none、api_key、oauth、bearer
+**技术选型：** Nacos 注册中心 + OpenFeign + SkyWalking
 
-### 9.3 Skill 体系
+### 4.2 工作流并行执行（P3，12d）
 
-- Agent 技能管理
-- Skill 关联 Tool 和 Prompt 模板
-- 技能排序和启用/禁用
+| 项目 | 说明 |
+|------|------|
+| DAG 拓扑排序 | Kahn 算法计算入度 |
+| 并行执行器 | WorkStealingPool 并行节点 |
+| 变量上下文安全 | ConcurrentHashMap |
 
-### 9.4 Workflow 引擎
+### 4.3 多租户与权限（P3，19d）
 
-- Workflow 的 CRUD
-- DAG 图编辑器
-- 节点类型：start、end、llm、tool、condition、code
-- 节点间数据传递（NodeContext）
+| 项目 | 说明 |
+|------|------|
+| 租户隔离 | tenant_id 字段 + TenantLineHandler |
+| RBAC 权限 | 角色 + 权限 + 数据权限 |
+| 资源配额 | Token/存储/Agent 数量限制 |
 
-### 9.5 Dashboard 仪表盘
+### 4.4 配置中心（P1，5d）
 
-- 系统概览统计
-- 使用量趋势图
-- 知识库和 Agent 统计
+| 项目 | 说明 |
+|------|------|
+| Nacos Config | 多环境配置隔离 |
+| 密钥管理 | 环境变量/Vault |
+| 动态配置 | 运行时热更新 |
 
-### 9.6 操作日志
+### 4.5 数据库迁移（P1，2d）
 
-- 用户操作日志记录
-- 日志查询和导出
-
-### 9.7 MCP 协议
-
-- MCP Server 注册
-- Tool 对外暴露
-- MCP 请求路由
+| 项目 | 说明 |
+|------|------|
+| Flyway 集成 | 自动迁移 + 版本管理 |
+| 基线脚本 | 现有 SQL 整理为 V1 |
 
 ---
 
-## 十、技术架构
+## 五、技术架构
 
-### 10.1 后端架构
-
-```
-Controller → Service(Interface) → ServiceImpl → Mapper → Database
-                ↓
-            Util（中间件封装：MinIO/Redis）
-```
-
-### 10.2 前端架构
+### 5.1 后端架构
 
 ```
-Vue3 + Vite + Element Plus + Pinia + Vue Router
+┌─────────────────────────────────────────────────────────┐
+│                    lightbot-server                      │
+├─────────────────────────────────────────────────────────┤
+│  Controller → Service(Interface) → ServiceImpl → Mapper │
+│                      ↓                                  │
+│                  Util（MinIO/Redis）                     │
+│                      ↓                                  │
+│  SpringAI ← ModelFactory ← ModelProvider               │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 5.2 前端架构
+
+```
+Vue3 + Vite + Ant Design Vue + Pinia + Vue Router
     ↓
 API 层（axios） → 后端接口
     ↓
 页面组件（views/） → 布局组件（layouts/）
+    ↓
+虚拟滚动 + SSE 重连 + 主题切换
 ```
 
-### 10.3 数据库
+### 5.3 数据层
 
-- PostgreSQL 15 + pgvector 扩展
-- 14 张业务表（见 sql/init.sql）
-- 雪花算法主键（BIGINT）
-- 逻辑删除（SMALLINT deleted 字段）
-- 自动填充 create_time / update_time
+| 组件 | 用途 |
+|------|------|
+| PostgreSQL 15 | 主数据库（38 张表） |
+| pgvector | 向量存储（HNSW 索引） |
+| Redis | 缓存 + 会话 + 任务队列 |
+| MinIO | 文件存储 |
+| Neo4j | 知识图谱 |
+| Milvus | 向量检索（可选） |
 
-### 10.4 认证鉴权
+### 5.4 认证鉴权
 
-- Sa-Token 1.39.0
-- Token 模式
-- 会话管理
+- Sa-Token 1.39.0 Token 模式
+- 路由级鉴权 + 排除健康检查端点
+- 会话管理 + 自动续期
+
+---
+
+## 六、数据库概览
+
+| 域 | 核心表 | 说明 |
+|----|--------|------|
+| 用户 | users, system_config | 用户管理、系统配置 |
+| Agent | agent, agent_version, subagent, skill | Agent 及其组件 |
+| 对话 | chat_session, message | 会话和消息 |
+| 知识库 | knowledge, document, chunk, embedding, qa_pair, knowledge_graph | RAG 全链路 |
+| 工具 | tool, mcp_server, tool_call | 工具体系 |
+| 工作流 | workflow_node, workflow_edge, workflow_variable | 工作流引擎 |
+| 评测 | eval_dataset, eval_benchmark, eval_experiment, eval_evaluator | 评测体系 |
+| 可观测 | llm_trace, llm_trace_event | 调用追踪 |
+| Prompt | prompt, prompt_version, prompt_build_template | Prompt 管理 |
+
+---
+
+## 七、开发规范
+
+| 规范 | 说明 |
+|------|------|
+| 包结构 | controller/service/entity/dto/mapper/util/config/constant/enums/exception |
+| DTO 规范 | @Valid 校验 + @Size 限制（name=50, desc=50） |
+| Service 规范 | Interface + ServiceImpl 分离 |
+| Entity 规范 | @TableField + @Schema + JSONB TypeHandler |
+| 数据库 | MyBatis-Plus + 不使用 t_ 前缀 |
+| 异常处理 | ErrorCode 枚举 + BizException |
+| 缓存 | Spring Cache + RedisCacheManager |
+| 文件存储 | MinIO Util 封装 |
+
+---
+
+## 八、部署架构
+
+### 8.1 单体部署（当前）
+
+```
+┌──────────────────────────────────────┐
+│           Nginx (反向代理)            │
+├──────────────────────────────────────┤
+│  lightbot-server (Spring Boot)       │
+│  ├── PostgreSQL + pgvector           │
+│  ├── Redis                           │
+│  ├── MinIO                           │
+│  └── Neo4j                           │
+└──────────────────────────────────────┘
+```
+
+### 8.2 微服务部署（Phase 3）
+
+```
+┌──────────────────────────────────────┐
+│     Spring Cloud Gateway             │
+├──────────────────────────────────────┤
+│  ├── lightbot-chat                   │
+│  ├── lightbot-agent                  │
+│  ├── lightbot-rag                    │
+│  ├── lightbot-tool                   │
+│  ├── lightbot-obs                    │
+│  └── lightbot-eval                   │
+├──────────────────────────────────────┤
+│  Nacos (注册中心 + 配置中心)          │
+│  RocketMQ (消息队列)                  │
+│  Prometheus + Grafana (监控)          │
+└──────────────────────────────────────┘
+```
+
+---
+
+## 九、版本历史
+
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| v1.0 | 2026-05 | 基础框架：用户/模型/对话/Agent |
+| v1.1 | 2026-05 | RAG 知识库 + 文档管理 |
+| v1.2 | 2026-05 | 工作流引擎 + 可视化编排 |
+| v1.3 | 2026-05 | Tool/MCP/Skill/SubAgent 体系 |
+| v1.4 | 2026-06 | QA Pair + 知识图谱 + 评测体系 |
+| v1.5 | 2026-06 | Phase 1 性能优化（缓存/索引/SSE） |
+| v2.0 | 规划中 | API 网关 + 消息队列 + 可观测性 |
+| v3.0 | 规划中 | 微服务化 + 多租户 |

@@ -35,6 +35,11 @@ public class EvalEvaluator {
     @Schema(description = "评估器描述")
     private String description;
 
+    @TableField("tags")
+    @Size(max = 200, message = "标签不超过200字")
+    @Schema(description = "标签，逗号分隔")
+    private String tags;
+
     @TableField("user_id")
     @Schema(description = "创建者ID")
     @JsonSerialize(using = ToStringSerializer.class)

@@ -50,9 +50,21 @@
           </a-tooltip>
         </div>
         <div class="card-stats">
-          <span>{{ k.documentCount || 0 }} 文档</span>
-          <span>{{ k.chunkCount || 0 }} 分块</span>
-          <span>{{ formatTokenCount(k.totalTokens) }} Token</span>
+          <span class="card-stat-item">
+            <FileTextOutlined class="card-stat-icon" />
+            <span class="card-stat-value">{{ k.documentCount || 0 }}</span>
+            <span class="card-stat-label">文档</span>
+          </span>
+          <span class="card-stat-item">
+            <BlockOutlined class="card-stat-icon" />
+            <span class="card-stat-value">{{ k.chunkCount || 0 }}</span>
+            <span class="card-stat-label">分片</span>
+          </span>
+          <span class="card-stat-item">
+            <NumberOutlined class="card-stat-icon" />
+            <span class="card-stat-value">{{ formatTokenCount(k.totalTokens) }}</span>
+            <span class="card-stat-label">Token</span>
+          </span>
           <span v-if="k.type" class="card-type-icon-wrap">
             <a-tooltip :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
               <CloudServerOutlined v-if="k.type === 'milvus'" class="card-type-icon milvus" />
@@ -116,7 +128,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined, DatabaseOutlined, CloudServerOutlined, FileTextOutlined, BlockOutlined, NumberOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 import ModelSelect from '../components/ModelSelect.vue'
@@ -340,10 +352,31 @@ onMounted(loadData)
 }
 .card-stats {
   display: flex;
-  gap: 16px;
-  font-size: 13px;
-  color: #a1a1aa;
+  gap: 6px;
+  font-size: 12px;
+  color: #71717a;
   align-items: center;
+}
+.card-stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #f4f4f5;
+  border-radius: 10px;
+  line-height: 1;
+}
+.card-stat-icon {
+  font-size: 11px;
+  color: #a1a1aa;
+}
+.card-stat-value {
+  font-weight: 600;
+  color: #3f3f46;
+  font-variant-numeric: tabular-nums;
+}
+.card-stat-label {
+  color: #a1a1aa;
 }
 .card-type-icon-wrap {
   margin-left: auto;

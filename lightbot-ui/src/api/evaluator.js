@@ -39,3 +39,11 @@ export function getEvaluatorTemplate(key) {
 export function testEvaluator(data) {
   return request.post('/eval/evaluators/test', data)
 }
+
+export function listEvaluatorExamples() {
+  return request.get('/eval/evaluators/examples')
+}
+
+export function createFromEvaluatorExample(key) {
+  return request.post(`/eval/evaluators/examples/${key}`)
+}

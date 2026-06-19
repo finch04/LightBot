@@ -19,11 +19,17 @@
         </button>
         <a-tooltip title="示例评测集">
           <button class="btn-outline" @click="openExampleModal">
-            <ExperimentOutlined />
+            <SnippetsOutlined />
           </button>
         </a-tooltip>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新建评测集
+        </button>
+        <button class="btn-outline" @click="router.push('/app/eval/evaluators')">
+          <AuditOutlined /> 评估器
+        </button>
+        <button class="btn-outline" @click="router.push('/app/eval/experiments')">
+          <ExperimentOutlined /> 实验
         </button>
       </div>
     </div>
@@ -122,7 +128,7 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
-  SearchOutlined, ReloadOutlined, DatabaseOutlined, ExperimentOutlined,
+  SearchOutlined, ReloadOutlined, DatabaseOutlined, ExperimentOutlined, SnippetsOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {

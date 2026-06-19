@@ -8,6 +8,7 @@ import com.lightbot.entity.EvalExperiment;
 import com.lightbot.entity.EvalExperimentResult;
 import com.lightbot.service.EvalExperimentResultService;
 import com.lightbot.service.EvalExperimentService;
+import cn.dev33.satoken.stp.StpUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,10 +35,11 @@ public class EvalExperimentController {
     @Operation(summary = "创建实验")
     @PostMapping
     public Result<EvalExperiment> create(@Valid @RequestBody EvalExperimentCreateRequest request) {
+        long userId = StpUtil.getLoginIdAsLong();
         return Result.ok(experimentService.create(
                 request.getName(), request.getDescription(),
                 request.getDatasetId(), request.getDatasetVersionId(), request.getDatasetVersion(),
-                request.getEvaluationObjectConfig(), request.getEvaluatorConfig(), null));
+                request.getEvaluationObjectConfig(), request.getEvaluatorConfig(), userId));
     }
 
     @Operation(summary = "获取实验详情")
@@ -53,27 +55,27 @@ public class EvalExperimentController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status) {
-        return Result.ok(experimentService.list(pageNum, pageSize, keyword, status, null));
+        return Result.ok(experimentService.list(pageNum, pageSize, keyword, status, StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "停止实验")
     @PutMapping("/{id}/stop")
     public Result<Void> stop(@PathVariable Long id) {
-        experimentService.stop(id, null);
+        experimentService.stop(id, StpUtil.getLoginIdAsLong());
         return Result.ok();
     }
 
     @Operation(summary = "删除实验")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
-        experimentService.deleteById(id, null);
+        experimentService.deleteById(id, StpUtil.getLoginIdAsLong());
         return Result.ok();
     }
 
     @Operation(summary = "重启实验")
     @PutMapping("/{id}/restart")
     public Result<EvalExperiment> restart(@PathVariable Long id) {
-        return Result.ok(experimentService.restart(id, null));
+        return Result.ok(experimentService.restart(id, StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "获取实验结果概览")

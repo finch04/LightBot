@@ -830,6 +830,7 @@ CREATE TABLE eval_evaluator (
     id              BIGINT          NOT NULL,
     name            VARCHAR(128)    NOT NULL,
     description     VARCHAR(512),
+    tags            VARCHAR(200),
     user_id         BIGINT,
     create_time     TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time     TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -838,6 +839,7 @@ CREATE TABLE eval_evaluator (
 );
 CREATE INDEX idx_eval_evaluator_user_id ON eval_evaluator (user_id);
 COMMENT ON TABLE eval_evaluator IS '评估器表';
+COMMENT ON COLUMN eval_evaluator.tags IS '标签，逗号分隔';
 
 -- ========================================
 -- 评估器版本表

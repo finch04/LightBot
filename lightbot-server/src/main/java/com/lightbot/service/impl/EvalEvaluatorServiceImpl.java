@@ -4,13 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.EvalEvaluatorExampleVO;
 import com.lightbot.entity.EvalEvaluator;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.EvalEvaluatorMapper;
 import com.lightbot.service.EvalEvaluatorService;
-import lombok.RequiredArgsConstructor;
+import com.lightbot.service.EvalEvaluatorVersionService;
+import com.lightbot.util.EvalEvaluatorExampleTemplates;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * 评测器服务实现类
@@ -20,12 +26,17 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, EvalEvaluator>
         implements EvalEvaluatorService {
 
+    private final EvalEvaluatorVersionService evaluatorVersionService;
+
+    public EvalEvaluatorServiceImpl(@Lazy EvalEvaluatorVersionService evaluatorVersionService) {
+        this.evaluatorVersionService = evaluatorVersionService;
+    }
+
     @Override
-    public EvalEvaluator create(String name, String description, Long userId) {
+    public EvalEvaluator create(String name, String description, String tags, Long userId) {
         // 1. 校验名称唯一性
         long count = count(new LambdaQueryWrapper<EvalEvaluator>().eq(EvalEvaluator::getName, name));
         if (count > 0) {
@@ -35,13 +46,14 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
         EvalEvaluator evaluator = new EvalEvaluator();
         evaluator.setName(name);
         evaluator.setDescription(description);
+        evaluator.setTags(tags);
         evaluator.setUserId(userId);
         save(evaluator);
         return evaluator;
     }
 
     @Override
-    public void update(Long id, String name, String description) {
+    public void update(Long id, String name, String description, String tags) {
         EvalEvaluator evaluator = getById(id);
         if (evaluator == null) {
             throw new BizException(ErrorCode.EVAL_EVALUATOR_NOT_FOUND);
@@ -55,6 +67,9 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
         }
         if (description != null) {
             evaluator.setDescription(description);
+        }
+        if (tags != null) {
+            evaluator.setTags(tags);
         }
         updateById(evaluator);
     }
@@ -75,5 +90,35 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
                 .like(keyword != null && !keyword.isBlank(), EvalEvaluator::getName, keyword)
                 .orderByDesc(EvalEvaluator::getCreateTime);
         return baseMapper.selectPage(page, wrapper);
+    }
+
+    @Override
+    public List<EvalEvaluatorExampleVO> listExamples() {
+        return EvalEvaluatorExampleTemplates.listExamples();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public EvalEvaluator createFromExample(String key, Long userId) {
+        // 1. 获取示例模板数据
+        EvalEvaluatorExampleTemplates.ExampleEvaluatorData data = EvalEvaluatorExampleTemplates.getExampleData(key);
+        if (data == null) {
+            throw new BizException(ErrorCode.BAD_REQUEST);
+        }
+
+        // 2. 校验名称唯一性（追加后缀避免冲突）
+        String name = data.name();
+        long count = count(new LambdaQueryWrapper<EvalEvaluator>().eq(EvalEvaluator::getName, name));
+        if (count > 0) {
+            name = name + " (" + (count + 1) + ")";
+        }
+
+        // 3. 创建评估器
+        EvalEvaluator evaluator = create(name, data.description(), null, userId);
+
+        // 4. 创建首个版本（v1）
+        evaluatorVersionService.create(evaluator.getId(), "v1", data.prompt(), data.variables(), data.modelConfig());
+
+        return evaluator;
     }
 }

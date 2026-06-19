@@ -2,7 +2,10 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.EvalEvaluatorExampleVO;
 import com.lightbot.entity.EvalEvaluator;
+
+import java.util.List;
 
 /**
  * 评测器服务接口
@@ -20,7 +23,7 @@ public interface EvalEvaluatorService extends IService<EvalEvaluator> {
      * @param userId      创建者ID
      * @return 评测器实体
      */
-    EvalEvaluator create(String name, String description, Long userId);
+    EvalEvaluator create(String name, String description, String tags, Long userId);
 
     /**
      * 更新评测器
@@ -29,7 +32,7 @@ public interface EvalEvaluatorService extends IService<EvalEvaluator> {
      * @param name        评测器名称
      * @param description 描述
      */
-    void update(Long id, String name, String description);
+    void update(Long id, String name, String description, String tags);
 
     /**
      * 删除评测器（逻辑删除）
@@ -48,4 +51,20 @@ public interface EvalEvaluatorService extends IService<EvalEvaluator> {
      * @return 分页结果
      */
     Page<EvalEvaluator> list(int pageNum, int pageSize, String keyword, Long userId);
+
+    /**
+     * 获取示例评估器列表
+     *
+     * @return 示例列表
+     */
+    List<EvalEvaluatorExampleVO> listExamples();
+
+    /**
+     * 从示例模板创建评估器（含首个版本）
+     *
+     * @param key    示例标识
+     * @param userId 创建者ID
+     * @return 创建的评估器实体
+     */
+    EvalEvaluator createFromExample(String key, Long userId);
 }

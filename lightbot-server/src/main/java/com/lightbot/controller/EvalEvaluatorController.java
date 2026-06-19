@@ -3,6 +3,7 @@ package com.lightbot.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.EvalEvaluatorCreateRequest;
+import com.lightbot.dto.EvalEvaluatorExampleVO;
 import com.lightbot.dto.EvalEvaluatorTestRequest;
 import com.lightbot.dto.EvalEvaluatorVersionCreateRequest;
 import com.lightbot.dto.EvalScoreResult;
@@ -13,6 +14,7 @@ import com.lightbot.service.EvalChatService;
 import com.lightbot.service.EvalEvaluatorService;
 import com.lightbot.service.EvalEvaluatorTemplateService;
 import com.lightbot.service.EvalEvaluatorVersionService;
+import cn.dev33.satoken.stp.StpUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,7 +43,7 @@ public class EvalEvaluatorController {
     @Operation(summary = "创建评估器")
     @PostMapping
     public Result<EvalEvaluator> create(@Valid @RequestBody EvalEvaluatorCreateRequest request) {
-        return Result.ok(evaluatorService.create(request.getName(), request.getDescription(), null));
+        return Result.ok(evaluatorService.create(request.getName(), request.getDescription(), request.getTags(), StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "获取评估器详情")
@@ -56,13 +58,13 @@ public class EvalEvaluatorController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
-        return Result.ok(evaluatorService.list(pageNum, pageSize, keyword, null));
+        return Result.ok(evaluatorService.list(pageNum, pageSize, keyword, StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "更新评估器")
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody EvalEvaluatorCreateRequest request) {
-        evaluatorService.update(id, request.getName(), request.getDescription());
+        evaluatorService.update(id, request.getName(), request.getDescription(), request.getTags());
         return Result.ok();
     }
 
@@ -109,5 +111,17 @@ public class EvalEvaluatorController {
         EvalScoreResult result = evalChatService.callEvaluator(
                 version.getModelConfig(), version.getPrompt(), request.getVariables());
         return Result.ok(result);
+    }
+
+    @Operation(summary = "获取示例评估器列表")
+    @GetMapping("/examples")
+    public Result<List<EvalEvaluatorExampleVO>> listExamples() {
+        return Result.ok(evaluatorService.listExamples());
+    }
+
+    @Operation(summary = "从示例模板创建评估器")
+    @PostMapping("/examples/{key}")
+    public Result<EvalEvaluator> createFromExample(@PathVariable String key) {
+        return Result.ok(evaluatorService.createFromExample(key, StpUtil.getLoginIdAsLong()));
     }
 }

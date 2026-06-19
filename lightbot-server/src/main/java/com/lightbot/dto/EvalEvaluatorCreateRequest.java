@@ -19,4 +19,7 @@ public class EvalEvaluatorCreateRequest {
 
     @Size(max = 50, message = "评估器描述不超过50字")
     private String description;
+
+    @Size(max = 200, message = "标签不超过200字")
+    private String tags;
 }

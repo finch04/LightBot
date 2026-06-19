@@ -17,6 +17,9 @@
         <button class="btn-outline" @click="loadData" :disabled="loading">
           <ReloadOutlined :spin="loading" /> 刷新
         </button>
+        <button class="btn-outline" @click="router.push('/app/eval/datasets')">
+          <ArrowLeftOutlined /> 返回评测
+        </button>
         <button class="btn-primary" @click="openCreateDialog()">
           <PlusOutlined /> 创建实验
         </button>
@@ -231,7 +234,7 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
-  DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined,
+  DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined, ArrowLeftOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {

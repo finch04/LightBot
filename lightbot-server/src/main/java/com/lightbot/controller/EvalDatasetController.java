@@ -12,6 +12,7 @@ import com.lightbot.entity.EvalDatasetVersion;
 import com.lightbot.service.EvalDatasetItemService;
 import com.lightbot.service.EvalDatasetService;
 import com.lightbot.service.EvalDatasetVersionService;
+import cn.dev33.satoken.stp.StpUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,7 +40,7 @@ public class EvalDatasetController {
     @Operation(summary = "创建评测集")
     @PostMapping
     public Result<EvalDataset> create(@Valid @RequestBody EvalDatasetCreateRequest request) {
-        return Result.ok(datasetService.create(request.getName(), request.getDescription(), request.getColumnsConfig(), null));
+        return Result.ok(datasetService.create(request.getName(), request.getDescription(), request.getColumnsConfig(), StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "获取评测集详情")
@@ -54,7 +55,7 @@ public class EvalDatasetController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
-        return Result.ok(datasetService.list(pageNum, pageSize, keyword, null));
+        return Result.ok(datasetService.list(pageNum, pageSize, keyword, StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "更新评测集")
@@ -120,6 +121,6 @@ public class EvalDatasetController {
     @Operation(summary = "从示例模板创建评测集")
     @PostMapping("/examples/{key}")
     public Result<EvalDataset> createFromExample(@PathVariable String key) {
-        return Result.ok(datasetService.createFromExample(key, null));
+        return Result.ok(datasetService.createFromExample(key, StpUtil.getLoginIdAsLong()));
     }
 }

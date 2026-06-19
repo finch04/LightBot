@@ -22,14 +22,15 @@
           <h3>版本列表</h3>
         </div>
         <div class="version-list">
-          <div v-for="v in versions" :key="v.id" class="version-item" @click="selectVersion(v)">
+          <div v-for="v in versions" :key="v.id" class="version-item" :class="{ active: debugForm.versionId === v.id }" @click="selectVersion(v)">
             <div class="version-info">
               <span class="version-tag">{{ v.version }}</span>
-              <a-tag :color="v.status === 'release' ? 'green' : 'blue'" size="small">
-                {{ v.status === 'release' ? '已发布' : '草稿' }}
+              <a-tag :color="v.status === 'published' ? 'green' : 'blue'" size="small">
+                {{ v.status === 'published' ? '已发布' : '草稿' }}
               </a-tag>
+              <button class="btn-icon" title="查看详情" @click.stop="openVersionDetail(v)"><EyeOutlined /></button>
             </div>
-            <div class="version-meta">{{ truncate(v.prompt, 80) }}</div>
+            <div class="version-meta">{{ truncate(v.prompt, 40) }}</div>
           </div>
           <div v-if="versions.length === 0" class="version-empty">暂无版本，点击右上角创建</div>
         </div>
@@ -82,6 +83,34 @@
         </div>
       </div>
     </div>
+
+    <!-- 版本详情弹窗 -->
+    <a-modal
+      v-model:open="versionDetailVisible"
+      :title="'版本详情 - ' + (detailVersion?.version || '')"
+      :width="720"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div v-if="detailVersion" class="version-detail">
+        <div class="detail-row">
+          <div class="detail-section" style="flex:6">
+            <div class="detail-label">评估 Prompt</div>
+            <pre class="detail-pre">{{ detailVersion.prompt }}</pre>
+          </div>
+          <div class="detail-col">
+            <div class="detail-section">
+              <div class="detail-label">变量定义</div>
+              <pre class="detail-pre">{{ formatJson(detailVersion.variables) }}</pre>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">模型配置</div>
+              <pre class="detail-pre">{{ formatJson(detailVersion.modelConfig) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a-modal>
 
     <!-- 新建版本弹窗 -->
     <a-modal
@@ -136,7 +165,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PlusOutlined, ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ArrowLeftOutlined, ThunderboltOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
   getEvaluator,
@@ -153,6 +182,8 @@ const versionDialogVisible = ref(false)
 const submitting = ref(false)
 const debugging = ref(false)
 const debugResult = ref(null)
+const versionDetailVisible = ref(false)
+const detailVersion = ref(null)
 
 const versionForm = reactive({
   version: '',
@@ -251,6 +282,20 @@ function truncate(str, len) {
   if (!str) return ''
   return str.length > len ? str.substring(0, len) + '...' : str
 }
+
+function openVersionDetail(v) {
+  detailVersion.value = v
+  versionDetailVisible.value = true
+}
+
+function formatJson(str) {
+  if (!str) return '-'
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2)
+  } catch {
+    return str
+  }
+}
 </script>
 
 <style scoped>
@@ -319,7 +364,7 @@ function truncate(str, len) {
 
 .content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 2fr 3fr;
   gap: 16px;
 }
 .panel {
@@ -327,6 +372,8 @@ function truncate(str, len) {
   border: 1px solid #ebebeb;
   border-radius: 8px;
   padding: 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 .panel-header {
   display: flex;
@@ -354,8 +401,27 @@ function truncate(str, len) {
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s;
+  overflow: hidden;
 }
 .version-item:hover { border-color: #0070f3; }
+.version-item.active {
+  border-color: #0070f3;
+  background: #f0f7ff;
+}
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  margin-left: auto;
+}
+.btn-icon:hover { background: #f5f5f5; color: #0070f3; }
 .version-info {
   display: flex;
   align-items: center;
@@ -441,4 +507,28 @@ function truncate(str, len) {
   margin-top: 16px;
 }
 .dialog-footer-right { display: flex; gap: 8px; }
+
+.version-detail { display: flex; flex-direction: column; gap: 16px; }
+.detail-row { display: flex; gap: 16px; }
+.detail-col { flex: 4; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.detail-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #71717a;
+  margin-bottom: 8px;
+}
+.detail-pre {
+  background: #f9fafb;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #171717;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
 </style>
