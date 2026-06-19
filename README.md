@@ -70,16 +70,16 @@
 
 |  |                                                              |
 |:---:|:---:|
-| ![image-20260618224412024](README.assets/image-20260618224412024.png) | ![image-20260618234659562](README.assets/image-20260618234659562.png) |
-| Landing 首页 | 多轮对话 + 流式输出 |
-| ![image-20260619102651488](README.assets/image-20260619102651488.png) | ![image-20260619102737470](README.assets/image-20260619102737470.png) |
-| Agent 详情 | 可视化工作流编排 |
-| ![知识库](docs/assets/screenshots/knowledge-detail.png) | ![RAG 问答](docs/assets/screenshots/rag-search.png) |
-| 知识库管理 + 统计 | RAG 检索测试 |
-| ![知识图谱](docs/assets/screenshots/graph-visualization.png) | ![可观测](docs/assets/screenshots/observability-trace.png) |
+| ![image-20260618224412024](docs/assets/screenshots/image-20260618224412024.png) | ![image-20260618234659562](docs/assets/screenshots/image-20260618234659562.png) |
+| Landing 首页 | Agent对话 |
+| ![image-20260619102651488](docs/assets/screenshots/image-20260619102651488.png) | ![image-20260619102737470](docs/assets/screenshots/image-20260619102737470.png) |
+| Agent 详情 | 工作流编排 |
+| ![image-20260619105227653](docs/assets/screenshots/image-20260619105227653.png) | ![image-20260619124438102](docs/assets/screenshots/image-20260619124438102.png) |
+| 知识库管理 | RAG 检索测试 |
+| ![image-20260619112823386](docs/assets/screenshots/image-20260619112823386.png) | ![image-20260619112906983](docs/assets/screenshots/image-20260619112906983.png) |
 | 知识图谱可视化 | 全链路 Trace 追踪 |
-| ![评测](docs/assets/screenshots/eval-experiment.png) | ![Prompt](docs/assets/screenshots/prompt-manage.png) |
-| 评测实验 | Prompt 版本管理 |
+| ![image-20260619123952397](docs/assets/screenshots/image-20260619123952397.png) | ![image-20260619123813254](docs/assets/screenshots/image-20260619123813254.png) |
+| 扩展管理 | Prompt 工程 |
 
 ---
 

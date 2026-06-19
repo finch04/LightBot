@@ -451,7 +451,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         // 1. 优先读取已转换的Markdown文件
         if (doc.getMarkdownPath() != null) {
             try (InputStream is = minioUtil.download(doc.getMarkdownPath())) {
-                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                return rewriteImageUrls(content, doc.getKnowledgeId());
             } catch (Exception e) {
                 log.warn("[文档预览] 读取Markdown文件失败，回退到实时转换, documentId={}", documentId, e);
             }
@@ -463,6 +464,20 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             log.warn("[文档预览] 解析失败, documentId={}", documentId, e);
             return null;
         }
+    }
+
+    /**
+     * 将 Markdown 中的 MinIO 直连图片 URL 重写为后端代理 URL
+     * 匹配模式：{minio_endpoint}/{bucket}/knowledge/{knowledgeId}/images/{filename}
+     * 替换为：/api/knowledge/images/{knowledgeId}/{filename}
+     */
+    private String rewriteImageUrls(String content, Long knowledgeId) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+        String minioPrefix = minioUtil.getPublicUrl("knowledge/" + knowledgeId + "/images/");
+        // 匹配 ![...](minioPrefix...) 中的完整 MinIO URL
+        return content.replace(minioPrefix, "/api/knowledge/images/" + knowledgeId + "/");
     }
 
     @Override

@@ -78,10 +78,11 @@ public class DocumentUploadExecutor implements TaskExecutor {
                     markdownContent = result.markdown();
                     // 上传图片到 MinIO 并替换占位符
                     for (var img : result.images()) {
-                        String imgPath = String.format("knowledge/%d/images/%s_%s",
-                                doc.getKnowledgeId(), UUID.randomUUID(), img.fileName());
+                        String imgFileName = UUID.randomUUID() + "_" + img.fileName();
+                        String imgPath = String.format("knowledge/%d/images/%s",
+                                doc.getKnowledgeId(), imgFileName);
                         minioUtil.upload(new ByteArrayInputStream(img.data()), imgPath, img.data().length, img.contentType());
-                        String url = minioUtil.getPublicUrl(imgPath);
+                        String url = "/api/knowledge/images/" + doc.getKnowledgeId() + "/" + imgFileName;
                         markdownContent = markdownContent.replace(img.placeholder(), "![image](" + url + ")");
                     }
                     if (!result.images().isEmpty()) {

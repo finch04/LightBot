@@ -31,3 +31,6 @@ logs/
 
 # Claude Code
 .claude/
+
+# CodeGraph
+.codegraph/

@@ -8,9 +8,11 @@ import com.lightbot.entity.Document;
 import com.lightbot.entity.GraphDocument;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.entity.KnowledgeGraph;
+import com.lightbot.entity.Task;
 import com.lightbot.enums.DocumentStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.GraphTaskStatus;
+import com.lightbot.enums.TaskStatus;
 import com.lightbot.mapper.DocumentMapper;
 import com.lightbot.mapper.GraphDocumentMapper;
 import com.lightbot.mapper.KnowledgeGraphMapper;
@@ -99,16 +101,18 @@ public class GraphServiceImpl implements GraphService {
         boolean isPartial = documentIds != null && !documentIds.isEmpty();
         boolean isSingleDoc = isPartial && documentIds.size() == 1;
 
-        // 2. 幂等检查 + 构建 payload
+        // 2. 幂等检查：清理无效状态 + 验证 taskId 真实有效
         List<Long> targetDocIds;
         List<Long> graphDocIds = new ArrayList<>();
+
+        cleanStaleStatus(kg);
 
         if (isSingleDoc) {
             // 单文档抽取：创建/更新 GraphDocument 记录用于状态跟踪
             targetDocIds = filterRunningDocs(kg.getId(), documentIds);
             if (targetDocIds.isEmpty()) {
                 log.info("[图谱] 所有文档均已有运行中的任务, 复用: knowledgeId={}", knowledgeId);
-                return kg.getTaskId() != null ? kg.getTaskId() : kg.getId();
+                return resolveReturnId(kg);
             }
             // 查询已有的 GraphDocument 记录（包括已完成/失败的）
             List<GraphDocument> existingGds = graphDocumentMapper.selectList(
@@ -143,15 +147,13 @@ public class GraphServiceImpl implements GraphService {
         } else if (isPartial) {
             // 多文档合并抽取：不创建 GraphDocument 记录，只做幂等检查
             if (kg.getStatus() == GraphTaskStatus.PENDING || kg.getStatus() == GraphTaskStatus.RUNNING) {
-                log.info("[图谱] 已有抽取任务在运行, 复用: knowledgeId={}, taskId={}", knowledgeId, kg.getTaskId());
-                return kg.getTaskId() != null ? kg.getTaskId() : kg.getId();
+                return resolveReturnId(kg);
             }
             targetDocIds = documentIds;
         } else {
             // 全量抽取：检查是否已有全量任务在运行
             if (kg.getStatus() == GraphTaskStatus.PENDING || kg.getStatus() == GraphTaskStatus.RUNNING) {
-                log.info("[图谱] 已有抽取任务在运行, 复用: knowledgeId={}, taskId={}", knowledgeId, kg.getTaskId());
-                return kg.getTaskId() != null ? kg.getTaskId() : kg.getId();
+                return resolveReturnId(kg);
             }
             targetDocIds = null;
         }
@@ -408,7 +410,7 @@ public class GraphServiceImpl implements GraphService {
         if (kg != null) {
             kg.setNodeCount(0);
             kg.setEdgeCount(0);
-            kg.setStatus(GraphTaskStatus.PENDING);
+            kg.setStatus(GraphTaskStatus.COMPLETED);
             kg.setTaskId(null);
             kg.setErrorMessage(null);
             knowledgeGraphMapper.updateById(kg);
@@ -554,6 +556,47 @@ public class GraphServiceImpl implements GraphService {
         return knowledgeGraphMapper.selectOne(
                 new LambdaQueryWrapper<KnowledgeGraph>()
                         .eq(KnowledgeGraph::getKnowledgeId, knowledgeId));
+    }
+
+    /**
+     * 清理无效状态：状态为 PENDING/RUNNING 但对应 Task 已完成/失败/取消/不存在，重置状态允许重新提交。
+     * 返回 true 表示执行了清理（kg.status 已变为 COMPLETED），调用方应跳过幂等检查直接创建新任务。
+     */
+    private boolean cleanStaleStatus(KnowledgeGraph kg) {
+        if (kg.getStatus() != GraphTaskStatus.PENDING && kg.getStatus() != GraphTaskStatus.RUNNING) {
+            return false;
+        }
+        Task task = kg.getTaskId() != null ? taskService.getById(kg.getTaskId()) : null;
+        // taskId 为空 / Task 已删除 / Task 已完成或失败 → 状态不同步，重置
+        if (task == null || task.getStatus() == TaskStatus.SUCCESS
+                || task.getStatus() == TaskStatus.FAILED || task.getStatus() == TaskStatus.CANCELLED) {
+            log.warn("[图谱] 状态不同步(kg.status={}, taskStatus={}, taskId={}), 重置状态: knowledgeId={}",
+                    kg.getStatus(), task != null ? task.getStatus() : "null", kg.getTaskId(), kg.getKnowledgeId());
+            kg.setStatus(GraphTaskStatus.COMPLETED);
+            kg.setTaskId(null);
+            kg.setErrorMessage(null);
+            knowledgeGraphMapper.updateById(kg);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 幂等返回：验证 taskId 对应的 Task 真实存在且仍在运行，否则清理并返回 kg.getId()
+     */
+    private Long resolveReturnId(KnowledgeGraph kg) {
+        Task task = kg.getTaskId() != null ? taskService.getById(kg.getTaskId()) : null;
+        if (task != null && (task.getStatus() == TaskStatus.PENDING || task.getStatus() == TaskStatus.RUNNING)) {
+            log.info("[图谱] 已有抽取任务在运行, 复用: knowledgeId={}, taskId={}", kg.getKnowledgeId(), kg.getTaskId());
+            return kg.getTaskId();
+        }
+        log.warn("[图谱] 引用的Task无效(taskId={}, status={}), 清理状态: knowledgeId={}",
+                kg.getTaskId(), task != null ? task.getStatus() : "null", kg.getKnowledgeId());
+        kg.setStatus(GraphTaskStatus.COMPLETED);
+        kg.setTaskId(null);
+        kg.setErrorMessage(null);
+        knowledgeGraphMapper.updateById(kg);
+        return kg.getId();
     }
 
     /**

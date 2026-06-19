@@ -25,6 +25,7 @@ import com.lightbot.entity.Task;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
 import com.lightbot.util.MilvusUtil;
+import com.lightbot.util.MinioUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +43,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -65,6 +67,7 @@ public class KnowledgeController {
     private final GraphService graphService;
     private final QaPairService qaPairService;
     private final MilvusUtil milvusUtil;
+    private final MinioUtil minioUtil;
     private final ObjectMapper objectMapper;
 
     // ========== 知识库 CRUD ==========
@@ -269,6 +272,24 @@ public class KnowledgeController {
                 .contentType(MediaType.parseMediaType(stream.getContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(new InputStreamResource(stream.getInputStream()));
+    }
+
+    @Operation(summary = "代理获取知识库文档图片（供 Markdown 预览）")
+    @GetMapping("/images/{knowledgeId}/{filename}")
+    public ResponseEntity<InputStreamResource> getKnowledgeImage(
+            @PathVariable Long knowledgeId, @PathVariable String filename) {
+        String filePath = String.format("knowledge/%d/images/%s", knowledgeId, filename);
+        try {
+            var statObj = minioUtil.statObject(filePath);
+            String contentType = statObj.contentType();
+            InputStream is = minioUtil.downloadStream(filePath);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType != null ? contentType : "application/octet-stream"))
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofDays(7)))
+                    .body(new InputStreamResource(is));
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     // ========== 分块查看 ==========

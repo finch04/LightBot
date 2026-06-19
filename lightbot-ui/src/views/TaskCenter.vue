@@ -216,8 +216,8 @@ const statusBadge = {
 
 let pollTimer = null
 
-async function loadTasks() {
-  loading.value = true
+async function loadTasks(silent = false) {
+  if (!silent) loading.value = true
   try {
     const params = { pageNum: pagination.current, pageSize: pagination.pageSize }
     if (searchText.value) params.name = searchText.value
@@ -229,7 +229,7 @@ async function loadTasks() {
   } catch (e) {
     // interceptor handled
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -331,7 +331,7 @@ onMounted(() => {
   loadTasks()
   loadTypeCounts()
   pollTimer = setInterval(() => {
-    loadTasks()
+    loadTasks(true)
     loadTypeCounts()
   }, 5000)
 })
