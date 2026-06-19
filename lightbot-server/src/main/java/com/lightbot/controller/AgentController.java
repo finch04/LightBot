@@ -57,8 +57,9 @@ public class AgentController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "50") int pageSize,
             @RequestParam(required = false) String name,
-            @RequestParam(required = false) String agentType) {
-        return Result.ok(agentService.listMyAgents(pageNum, pageSize, name, agentType));
+            @RequestParam(required = false) String agentType,
+            @RequestParam(defaultValue = "true") boolean includeDefault) {
+        return Result.ok(agentService.listMyAgents(pageNum, pageSize, name, agentType, includeDefault));
     }
 
     @Operation(summary = "获取内置示例工作流列表")

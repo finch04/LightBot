@@ -153,10 +153,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
-    public Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType) {
+    public Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType, boolean includeDefault) {
         long userId = StpUtil.getLoginIdAsLong();
         LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<Agent>()
-                .eq(Agent::getUserId, userId)
+                .and(includeDefault
+                        ? w -> w.eq(Agent::getUserId, userId).or().eq(Agent::getIsDefault, true)
+                        : w -> w.eq(Agent::getUserId, userId))
                 .like(StringUtils.hasText(name), Agent::getName, name)
                 .orderByDesc(Agent::getIsDefault)
                 .orderByDesc(Agent::getCreateTime);

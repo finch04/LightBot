@@ -160,7 +160,7 @@ function onModelChange({ providerId }) {
 async function loadData() {
   loading.value = true
   try {
-    const params = { pageNum: 1, pageSize: 50 }
+    const params = { pageNum: 1, pageSize: 50, includeDefault: false }
     if (searchText.value) params.name = searchText.value
     if (filterAgentType.value) params.agentType = filterAgentType.value
     const res = await getAgents(params)

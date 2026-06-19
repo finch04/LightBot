@@ -44,7 +44,7 @@ public interface AgentService extends IService<Agent> {
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType);
+    Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType, boolean includeDefault);
 
     /**
      * 查询用户的默认Agent

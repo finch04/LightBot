@@ -261,16 +261,7 @@ async function loadSessions() {
 }
 
 // 标题异步生成完成后刷新侧边栏（重试3次，间隔2秒，覆盖AI生成标题的延迟）
-function refreshSessionsWithRetry() {
-  let count = 0
-  const maxRetries = 3
-  const interval = 2000
-  const timer = setInterval(() => {
-    loadSessions()
-    count++
-    if (count >= maxRetries) clearInterval(timer)
-  }, interval)
-  // 立即刷新一次
+function refreshSessions() {
   loadSessions()
 }
 
@@ -408,14 +399,14 @@ onMounted(async () => {
     }
   }
   loadSessions()
-  // 监听对话标题更新事件（异步生成完成后刷新侧边栏，带重试）
-  window.addEventListener('session-title-updated', refreshSessionsWithRetry)
+  // 监听对话标题更新事件（Chat.vue 轮询标题接口后触发，刷新侧边栏）
+  window.addEventListener('session-title-updated', refreshSessions)
   // SSE 实时监听任务计数（需等 user 加载完成后才有 userId）
   connectTaskSSE()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('session-title-updated', refreshSessionsWithRetry)
+  window.removeEventListener('session-title-updated', refreshSessions)
   disconnectTaskSSE()
 })
 

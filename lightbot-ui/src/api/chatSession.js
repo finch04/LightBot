@@ -12,6 +12,10 @@ export function getSession(id) {
   return request.get(`/chat/sessions/${id}`)
 }
 
+export function getSessionTitle(id) {
+  return request.get(`/chat/sessions/${id}/title`)
+}
+
 export function getSessionMessages(id, params = {}) {
   return request.get(`/chat/sessions/${id}/messages`, { params })
 }

@@ -52,6 +52,7 @@
         <div class="card-stats">
           <span>{{ k.documentCount || 0 }} 文档</span>
           <span>{{ k.chunkCount || 0 }} 分块</span>
+          <span>{{ formatTokenCount(k.totalTokens) }} Token</span>
           <span v-if="k.type" class="card-type-icon-wrap">
             <a-tooltip :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
               <CloudServerOutlined v-if="k.type === 'milvus'" class="card-type-icon milvus" />
@@ -134,6 +135,13 @@ const form = reactive({
   type: 'pg',
   embeddingModel: null,
 })
+
+function formatTokenCount(count) {
+  if (!count || count <= 0) return '0'
+  if (count >= 1000000) return (count / 1000000).toFixed(1) + 'M'
+  if (count >= 1000) return (count / 1000).toFixed(1) + 'K'
+  return String(count)
+}
 
 function openCreateModal() {
   form.embeddingModel = null

@@ -15,6 +15,8 @@ import com.lightbot.service.LlmTraceService;
 import com.lightbot.service.MessageService;
 import com.lightbot.util.RedisUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,7 +40,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     private final LlmTraceService llmTraceService;
     private final RedisUtil redisUtil;
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     private static final String CACHE_PREFIX = "lightbot:session:";
     private static final String LIST_CACHE_PREFIX = "lightbot:session:list:";
     private static final String LIST_VERSION_PREFIX = "lightbot:session:list:ver:";
@@ -151,6 +155,13 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             log.warn("[Session] 列表缓存写入失败: userId={}", userId);
         }
         return page;
+    }
+
+    @Override
+    public String getTitle(Long sessionId) {
+        // 直接查DB，跳过缓存，用于轻量轮询
+        ChatSession session = baseMapper.selectById(sessionId);
+        return session != null ? session.getTitle() : null;
     }
 
     @Override

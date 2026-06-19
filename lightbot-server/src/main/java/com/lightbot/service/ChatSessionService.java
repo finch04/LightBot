@@ -30,6 +30,14 @@ public interface ChatSessionService extends IService<ChatSession> {
     Page<ChatSession> listMySessions(int pageNum, int pageSize);
 
     /**
+     * 获取会话标题（轻量查询，跳过缓存）
+     *
+     * @param sessionId 会话ID
+     * @return 标题，不存在返回null
+     */
+    String getTitle(Long sessionId);
+
+    /**
      * 更新会话标题
      *
      * @param sessionId 会话ID

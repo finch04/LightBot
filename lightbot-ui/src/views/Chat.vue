@@ -426,7 +426,7 @@ import {
   validatePendingAttachmentMix,
 } from '../utils/chatAttachment'
 import { captureVideoThumbnail, enrichVideoThumbnails } from '../utils/videoThumbnail'
-import { getSessionMessages, getSession, createSession } from '../api/chatSession'
+import { getSessionMessages, getSession, createSession, getSessionTitle } from '../api/chatSession'
 import { getAgents, getAgentDetail, getAgentChatCapabilities, listAgentVersions } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
@@ -1281,9 +1281,8 @@ async function runChatStream({ message, attachments, regenerate }) {
           currentStatus.value = ''
           lastReplyElapsed.value = Date.now() - sendStartTime
           abortController.value = null
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('session-title-updated'))
-          }, 1000)
+          // 轮询等待标题生成完成
+          pollSessionTitle(sid)
         },
       },
       abortController.value?.signal
@@ -1488,6 +1487,28 @@ async function loadAgents(preferredAgentId) {
   } catch (e) {
     // ignore
   }
+}
+
+/** 轮询等待会话标题生成完成（轻量接口，跳过缓存） */
+function pollSessionTitle(sid) {
+  if (!sid) return
+  let count = 0
+  const maxRetries = 8
+  const interval = 2000
+  const timer = setInterval(async () => {
+    try {
+      const res = await getSessionTitle(sid)
+      const title = res.data
+      if (title && title !== '新对话') {
+        clearInterval(timer)
+        window.dispatchEvent(new CustomEvent('session-title-updated'))
+      }
+    } catch {
+      // ignore
+    }
+    count++
+    if (count >= maxRetries) clearInterval(timer)
+  }, interval)
 }
 
 onUnmounted(() => {

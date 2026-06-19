@@ -43,6 +43,19 @@
           </div>
 
           <div class="form-item">
+            <label class="form-label">确认密码</label>
+            <div class="input-wrapper">
+              <LockOutlined class="input-icon" />
+              <input
+                v-model="form.confirmPassword"
+                type="password"
+                placeholder="再次输入密码"
+                autocomplete="new-password"
+              />
+            </div>
+          </div>
+
+          <div class="form-item">
             <label class="form-label">昵称 <span class="optional">可选</span></label>
             <div class="input-wrapper">
               <SmileOutlined class="input-icon" />
@@ -89,7 +102,7 @@ import { UserOutlined, LockOutlined, SmileOutlined, LoadingOutlined } from '@ant
 const router = useRouter()
 const loading = ref(false)
 
-const form = reactive({ username: '', password: '', nickname: '' })
+const form = reactive({ username: '', password: '', confirmPassword: '', nickname: '' })
 
 async function handleRegister() {
   if (!form.username || form.username.length < 3) {
@@ -100,9 +113,14 @@ async function handleRegister() {
     message.warning('密码至少6个字符')
     return
   }
+  if (form.password !== form.confirmPassword) {
+    message.warning('两次输入的密码不一致')
+    return
+  }
   loading.value = true
   try {
-    await register(form)
+    const { confirmPassword, ...submitData } = form
+    await register(submitData)
     message.success('注册成功，请登录')
     router.push('/login')
   } finally {

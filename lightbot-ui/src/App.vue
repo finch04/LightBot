@@ -94,6 +94,16 @@ body {
   border-color: #27272a !important;
 }
 
+.ant-btn-primary:disabled,
+.ant-btn-primary.ant-btn-disabled {
+  background: #171717 !important;
+  border-color: #171717 !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  opacity: 0.65;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
 .ant-btn-default {
   border-radius: var(--radius-pill) !important;
   font-weight: 500;

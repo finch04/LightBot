@@ -878,7 +878,6 @@
         </div>
       </template>
     </a-alert>
-    <a-spin :spinning="bindingLoading">
     <a-tabs
       v-if="agent.agentType !== 'workflow'"
       v-model:activeKey="bindingTab"
@@ -1316,7 +1315,6 @@
       </a-tab-pane>
 
     </a-tabs>
-    </a-spin>
     </div>
     <a-modal
       v-model:open="publishModalVisible"
@@ -2138,7 +2136,6 @@ const selectedSkillIds = ref(new Set())
 const skillList = ref([])
 const skillSearchText = ref('')
 const skillLoading = ref(false)
-const bindingLoading = computed(() => knowledgeLoading.value || mcpLoading.value || subAgentLoading.value || skillLoading.value)
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)

@@ -252,16 +252,9 @@ public class TraceMiddleware implements ChatMiddleware {
                 conversationText.append(role).append("：").append(msg.getContent()).append("\n");
             }
 
-            // 4. 使用对话运行时模型配置（必须带 modelId，否则会 fallback 为 unknown-model）
+            // 4. 统一使用系统默认模型（速度快，不占用对话模型资源）
+            Long providerId = initMiddleware.getDefaultProviderId();
             Map<String, Object> titleConfig = new HashMap<>();
-            if (runtimeConfig != null && !runtimeConfig.isEmpty()) {
-                titleConfig.putAll(runtimeConfig);
-            } else if (agent != null && agent.getConfig() != null) {
-                titleConfig.putAll(initMiddleware.parseConfig(agent.getConfig()));
-            }
-            Long providerId = titleConfig.isEmpty()
-                    ? resolveTitleProviderId(agent)
-                    : initMiddleware.getProviderId(titleConfig);
             modelFactory.ensureModelIdInConfig(providerId, titleConfig);
             ChatOptions options = modelFactory.buildChatOptions(providerId, titleConfig);
 
@@ -289,19 +282,6 @@ public class TraceMiddleware implements ChatMiddleware {
         }
     }
 
-    /**
-     * 解析标题生成使用的providerId
-     */
-    public Long resolveTitleProviderId(Agent agent) {
-        if (agent != null) {
-            Map<String, Object> configMap = initMiddleware.parseConfig(agent.getConfig());
-            Long providerId = initMiddleware.getProviderId(configMap);
-            if (providerId != null) {
-                return providerId;
-            }
-        }
-        return initMiddleware.getDefaultProviderId();
-    }
 
     /**
      * 构建持久化 metadata：合并 ragMetadata + reasoningContent

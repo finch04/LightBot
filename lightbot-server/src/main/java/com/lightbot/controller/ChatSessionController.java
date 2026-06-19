@@ -57,6 +57,12 @@ public class ChatSessionController {
         return Result.ok(messageService.listBySessionIdPage(id, pageNum, pageSize));
     }
 
+    @Operation(summary = "获取会话标题（轻量轮询，跳过缓存）")
+    @GetMapping("/{id}/title")
+    public Result<String> getTitle(@PathVariable Long id) {
+        return Result.ok(chatSessionService.getTitle(id));
+    }
+
     @Operation(summary = "更新会话标题")
     @PutMapping("/{id}/title")
     public Result<Void> updateTitle(@PathVariable Long id, @RequestParam String title) {

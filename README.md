@@ -66,6 +66,23 @@
 
 ---
 
+## 项目展示
+
+|  |                                                              |
+|:---:|:---:|
+| ![image-20260618224412024](README.assets/image-20260618224412024.png) | ![image-20260618234659562](README.assets/image-20260618234659562.png) |
+| Landing 首页 | 多轮对话 + 流式输出 |
+| ![Agent](docs/assets/screenshots/agent-detail.png) | ![Workflow](docs/assets/screenshots/workflow-editor.png) |
+| Agent 详情 | 可视化工作流编排 |
+| ![知识库](docs/assets/screenshots/knowledge-detail.png) | ![RAG 问答](docs/assets/screenshots/rag-search.png) |
+| 知识库管理 + 统计 | RAG 检索测试 |
+| ![知识图谱](docs/assets/screenshots/graph-visualization.png) | ![可观测](docs/assets/screenshots/observability-trace.png) |
+| 知识图谱可视化 | 全链路 Trace 追踪 |
+| ![评测](docs/assets/screenshots/eval-experiment.png) | ![Prompt](docs/assets/screenshots/prompt-manage.png) |
+| 评测实验 | Prompt 版本管理 |
+
+---
+
 ## 功能特性
 
 ### Agent 引擎
@@ -116,7 +133,8 @@
 - 可配置分块策略（策略/大小/重叠/分隔符），支持分块预览
 - 向量检索（pgvector + HNSW 索引）+ Rerank 重排序
 - 流式 RAG 问答（SSE），返回引用来源
-- 知识库成员权限管理（owner/editor/viewer）
+- 知识库统计（文档数/分片数/Token 数）实时更新，支持手动全量重算
+- 知识库成员权限管理（creator/manager/developer/viewer）
 
 ### 知识图谱
 
@@ -186,7 +204,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Frontend (Vue 3 + Element Plus)                  │
+│                        Frontend (Vue 3 + Ant Design Vue)                │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │
 │  │  Chat    │ │ Workflow │ │ Knowledge│ │  Eval   │ │Dashboard │     │
 │  │  对话    │ │  编排    │ │  知识库  │ │  评测   │ │  统计    │     │
@@ -264,7 +282,7 @@
 | 技术 | 版本 | 说明 |
 |------|------|------|
 | Vue | 3.4+ | 前端框架 |
-| Element Plus | 2.x | UI 组件库 |
+| Ant Design Vue | 4.x | UI 组件库 |
 | Vue Flow | 1.x | 工作流可视化画布 |
 | Pinia | 2.x | 状态管理 |
 | Axios | 1.x | HTTP 客户端 |
@@ -286,7 +304,7 @@
 
 ## 数据库设计
 
-LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **35 张业务表**，覆盖 10 个业务域。
+LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **40 张业务表**，覆盖 10 个业务域。
 
 | 业务域 | 表数量 | 核心表 |
 |--------|--------|--------|
@@ -294,7 +312,7 @@ LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **35 张业务表
 | 模型管理 | 2 | `model_provider`, `model` |
 | Agent | 3 | `agent`, `agent_version`, `subagent` |
 | 对话 | 2 | `chat_session`, `message` |
-| 知识库/RAG | 7 | `knowledge`, `document`, `chunk`, `embedding`, `qa_pair`, `knowledge_member`, `graph_extraction_task` |
+| 知识库/RAG | 10 | `knowledge`, `document`, `document_version`, `chunk`, `embedding`, `qa_pair`, `knowledge_member`, `knowledge_graph`, `graph_document`, `graph_extraction_task` |
 | 工具/MCP | 4 | `tool`, `skill`, `tool_calls`, `mcp_server` |
 | Prompt | 3 | `prompt`, `prompt_version`, `prompt_build_template` |
 | 评测 | 10 | `eval_dataset`, `eval_evaluator`, `eval_experiment`, `eval_rag_benchmark` 等 |
@@ -302,7 +320,7 @@ LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **35 张业务表
 | 可观测 | 1 | `llm_trace` |
 | 系统配置 | 1 | `system_config` |
 
-> 完整建表 SQL 见 [`sql/init-2026-05-29.sql`](sql/init-2026-05-29.sql)，包含所有表结构和预制数据。
+> 完整建表 SQL 见 [`sql/2026-06-18-init.sql`](sql/2026-06-18-init.sql)，包含所有表结构和预制数据。
 
 ---
 
@@ -323,7 +341,7 @@ docker-compose -f docker-compose-middleware.yml up -d
 cd ..
 
 # 3. 初始化数据库
-psql -U postgres -h localhost -f sql/init-2026-05-29.sql
+psql -U postgres -h localhost -f sql/2026-06-18-init.sql
 
 # 4. 配置模型 API Key（编辑 application.yml 或设置环境变量）
 export OPENAI_API_KEY=sk-xxx
@@ -459,12 +477,12 @@ volumes:
 lightbot/
 ├── lightbot-server/                 # 后端服务（单体 Spring Boot 应用）
 │   └── src/main/java/com/lightbot/
-│       ├── controller/              # REST API（27 个 Controller）
-│       ├── service/                 # 业务接口（43 个 Service）
+│       ├── controller/              # REST API（30 个 Controller）
+│       ├── service/                 # 业务接口（45 个 Service）
 │       │   ├── chat/                # 对话引擎
 │       │   ├── eval/                # 评测引擎
 │       │   └── impl/                # 业务实现
-│       ├── entity/                  # 数据库实体（37 个 Entity）
+│       ├── entity/                  # 数据库实体（39 个 Entity）
 │       ├── dto/                     # 数据传输对象
 │       ├── mapper/                  # MyBatis-Plus Mapper
 │       ├── enums/                   # 业务枚举
@@ -491,8 +509,7 @@ lightbot/
 │       ├── stores/                  # Pinia 状态管理
 │       └── utils/                   # 工具函数
 ├── sql/                             # 数据库脚本
-│   ├── init.sql                     # 初始化建表
-│   └── 2026-05-*.sql                # 增量迁移
+│   └── 2026-06-18-init.sql          # 完整建表 + 预制数据（唯一需要执行的 SQL）
 ├── docker/                          # Docker 配置
 └── docs/                            # 项目文档
 ```
@@ -589,7 +606,7 @@ scope：agent | workflow | tool | rag | eval | chat | model | common
 ### 代码规范
 
 - 后端：Java 17 + Spring Boot 3 + MyBatis-Plus，遵循项目 CLAUDE.md
-- 前端：Vue 3 Composition API + Element Plus + pnpm
+- 前端：Vue 3 Composition API + Ant Design Vue + pnpm
 - 数据库：PostgreSQL，表名不加 `t_` 前缀，时间字段使用 `TIMESTAMP`
 - 所有 Long ID 字段使用 `@JsonSerialize(using = ToStringSerializer.class)` 防止前端精度丢失
 
