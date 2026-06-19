@@ -60,7 +60,7 @@
 | 定位 | **Agent Framework + Platform** | Application Platform | Framework |
 | 部署 | **单体 / Docker Compose** | Docker Compose | Library |
 | 企业集成 | **Spring 生态无缝集成** | API 为主 | API 为主 |
-| 工作流 | **可视化 DAG + 9 种节点** | 可视化 | LangGraph |
+| 工作流 | **可视化 DAG + 18 种节点** | 可视化 | LangGraph |
 | RAG | **向量 + 知识图谱 + QA 对** | 向量检索 | 向量检索 |
 | 评测 | **内置 Eval 体系** | 无 | 无 |
 
@@ -96,7 +96,7 @@
 ### Workflow 可视化编排
 
 - 基于 Vue Flow 的可视化 DAG 工作流画布
-- **9 种节点类型**：Start、End、LLM、Condition、Classifier、Tool、Retrieval、Loop、Batch
+- **18 种节点类型**：Start、End、LLM、Condition、Classifier、Tool、Retrieval、Loop、Batch、Variable、Knowledge、Code、MCP、Input、Output、Script、ParameterExtractor、AppComponent
 - 画布内拖拽编排、连线插入、节点配置面板
 - 工作流草稿保存 / 发布 / 版本管理 / 版本回滚
 - 单节点调试 + 全流程调试，实时查看运行日志和变量
@@ -466,13 +466,17 @@ LightBot 提供 **200+ RESTful API**，30 个 Controller：
 
 ### 2. 可视化 Workflow 引擎
 
-基于 DAG 的工作流引擎，支持 9 种节点类型：
+基于 DAG 的工作流引擎，支持 18 种节点类型：
+- **Start / End**：流程入口和出口
 - **LLM 节点**：调用大模型，支持变量注入和模型选择
 - **Condition 节点**：条件分支，支持多条件组合
 - **Classifier 节点**：意图分类，自动路由到不同分支
 - **Tool 节点**：调用已注册的工具
-- **Retrieval 节点**：知识库检索
+- **Retrieval / Knowledge 节点**：知识库检索
 - **Loop / Batch 节点**：循环和批量处理
+- **Variable / VariableHandle 节点**：变量赋值与处理
+- **Code / Script 节点**：自定义代码和脚本执行
+- **MCP / API / Input / Output / ParameterExtractor / AppComponent 节点**：扩展能力
 - 支持单节点调试和全流程调试
 
 ### 3. 多层次 RAG
@@ -557,16 +561,18 @@ pnpm dev
 
 ## Roadmap
 
-> 完整路线图请查看 [ROADMAP.md](ROADMAP.md)
+> 完整路线图请查看 [docs/features.md](docs/features.md)
 
-- [x] v0.1 MVP — Agent 基础能力 + 对话 + Tool Calling
-- [x] v0.2 — 自定义工具 + MCP 协议 + RAG 知识库
-- [x] v0.3 — 可视化 Workflow 编排 (9 种节点)
-- [x] v0.4 — 评测体系 + 全链路可观测
-- [ ] v1.0 — 生产可用（Docker 部署 + 稳定性）
-- [ ] v1.1 — 多租户 + 开放 API
-- [ ] v1.2 — 记忆系统 + 多模态
-- [ ] v1.3 — 企业级特性
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| v1.0 | 2026-05 | 基础框架：用户/模型/对话/Agent |
+| v1.1 | 2026-05 | RAG 知识库 + 文档管理 |
+| v1.2 | 2026-05 | 工作流引擎 + 可视化编排 |
+| v1.3 | 2026-05 | Tool/MCP/Skill/SubAgent 体系 |
+| v1.4 | 2026-06 | QA Pair + 知识图谱 + 评测体系 |
+| v1.5 | 2026-06 | Phase 1 性能优化（缓存/索引/SSE） |
+| v2.0 | 规划中 | API 网关 + 消息队列 + 可观测性 |
+| v3.0 | 规划中 | 微服务化 + 多租户 |
 
 ---
 

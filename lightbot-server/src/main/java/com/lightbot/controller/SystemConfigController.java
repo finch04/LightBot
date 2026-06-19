@@ -2,6 +2,7 @@ package com.lightbot.controller;
 
 import com.lightbot.common.Result;
 import com.lightbot.dto.DefaultAiConfigDTO;
+import com.lightbot.dto.DefaultModelsConfigDTO;
 import jakarta.validation.Valid;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.UserService;
@@ -95,6 +96,12 @@ public class SystemConfigController {
         userService.checkAdmin();
         systemConfigService.updateDefaultRerankModelConfig(config);
         return Result.ok();
+    }
+
+    @Operation(summary = "获取所有默认模型配置")
+    @GetMapping("/default-models")
+    public Result<DefaultModelsConfigDTO> getAllDefaultModels() {
+        return Result.ok(systemConfigService.getAllDefaultModels());
     }
 
     @Operation(summary = "健康检查（公开接口，无需认证）")

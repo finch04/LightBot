@@ -4,6 +4,11 @@ export function checkHealth() {
   return request.get('/system-config/health')
 }
 
+// 获取所有默认模型配置（合并接口）
+export function getAllDefaultModels() {
+  return request.get('/system-config/default-models')
+}
+
 export function getDefaultAiConfig() {
   return request.get('/system-config/default-ai')
 }

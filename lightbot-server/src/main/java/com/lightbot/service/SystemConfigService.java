@@ -2,6 +2,7 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.DefaultAiConfigDTO;
+import com.lightbot.dto.DefaultModelsConfigDTO;
 import com.lightbot.entity.SystemConfig;
 
 /**
@@ -93,6 +94,13 @@ public interface SystemConfigService extends IService<SystemConfig> {
      * 更新默认重排模型配置
      */
     void updateDefaultRerankModelConfig(DefaultAiConfigDTO config);
+
+    /**
+     * 获取所有默认模型配置（对话/向量/TTS/重排）
+     *
+     * @return 汇总配置
+     */
+    DefaultModelsConfigDTO getAllDefaultModels();
 
     /**
      * 获取 Landing 页面配置

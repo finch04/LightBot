@@ -24,6 +24,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
+import cn.dev33.satoken.stp.StpUtil;
+
 import java.util.List;
 
 /**
@@ -49,7 +51,7 @@ public class PromptController {
     @Operation(summary = "创建Prompt")
     @PostMapping
     public Result<Prompt> create(@Valid @RequestBody PromptCreateRequest request) {
-        return Result.ok(promptService.create(request.getPromptKey(), request.getDescription(), request.getTags(), null));
+        return Result.ok(promptService.create(request.getPromptKey(), request.getDescription(), request.getTags(), StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "获取Prompt详情")
@@ -64,7 +66,7 @@ public class PromptController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
-        return Result.ok(promptService.list(pageNum, pageSize, keyword, null));
+        return Result.ok(promptService.list(pageNum, pageSize, keyword, StpUtil.getLoginIdAsLong()));
     }
 
     @Operation(summary = "更新Prompt")

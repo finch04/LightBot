@@ -11,6 +11,9 @@
       >
         <template #prefix><SearchOutlined /></template>
       </a-input>
+      <button class="btn-refresh" @click="loadUsers" :disabled="loading">
+        <ReloadOutlined :spin="loading" /> 刷新
+      </button>
     </div>
 
     <!-- 用户表格 -->
@@ -202,7 +205,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import {
-  SearchOutlined, EyeOutlined, EditOutlined, DeleteOutlined,
+  SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined, DeleteOutlined,
   RobotOutlined, DatabaseOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
@@ -377,6 +380,21 @@ function formatTime(t) {
   align-items: center;
   gap: 12px;
 }
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-refresh:hover:not(:disabled) { border-color: #0070f3; color: #0070f3; }
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 .user-cell {
   display: flex;
   align-items: center;
@@ -388,7 +406,7 @@ function formatTime(t) {
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  background: #f0f0f0;
+  background: linear-gradient(135deg, #0070f3, #7928ca);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -401,7 +419,7 @@ function formatTime(t) {
 .user-avatar-small .avatar-placeholder {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: #fff;
 }
 .user-info-cell {
   min-width: 0;
@@ -457,7 +475,7 @@ function formatTime(t) {
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  background: #f0f0f0;
+  background: linear-gradient(135deg, #0070f3, #7928ca);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -470,7 +488,7 @@ function formatTime(t) {
 .avatar-placeholder-lg {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: #fff;
 }
 .detail-user-info h3 {
   margin: 0;

@@ -13,6 +13,7 @@
 
     <!-- Tab 1: 默认模型管理 -->
     <div v-show="activeTab === 'model'">
+    <a-spin :spinning="modelLoading">
     <div class="content-grid">
       <!-- 默认对话模型 -->
       <div class="panel">
@@ -138,10 +139,12 @@
         </div>
       </div>
     </div>
+    </a-spin>
     </div>
 
     <!-- Tab 2: Landing 管理 -->
     <div v-show="activeTab === 'landing'">
+    <a-spin :spinning="landingLoading">
     <div class="panel landing-panel">
       <div class="panel-header">
         <div class="panel-title-wrap">
@@ -239,6 +242,7 @@
         </a-form>
       </div>
     </div>
+    </a-spin>
     </div>
 
     <!-- Tab 3: 用户管理 -->
@@ -249,7 +253,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, markRaw } from 'vue'
+import { ref, reactive, onMounted, watch, markRaw } from 'vue'
 import {
   SaveOutlined, BulbOutlined, PlusOutlined, DeleteOutlined,
   UpOutlined, DownOutlined,
@@ -262,16 +266,20 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
-  getDefaultChatModel, updateDefaultChatModel,
-  getDefaultEmbeddingModel, updateDefaultEmbeddingModel,
-  getDefaultTtsModel, updateDefaultTtsModel,
-  getDefaultRerankModel, updateDefaultRerankModel,
+  getAllDefaultModels,
+  updateDefaultChatModel,
+  updateDefaultEmbeddingModel,
+  updateDefaultTtsModel,
+  updateDefaultRerankModel,
 } from '../api/systemConfig'
 import { getLandingConfig, updateLandingConfig } from '../api/landing'
 import ModelSelect from '../components/ModelSelect.vue'
 import UserManage from './UserManage.vue'
 
 const activeTab = ref('model')
+const modelLoading = ref(false)
+const landingLoading = ref(false)
+const loadedTabs = new Set()
 
 const chatValue = ref(null)
 const embeddingValue = ref(null)
@@ -293,9 +301,47 @@ const rerankModelId = ref(null)
 const ttsProviderId = ref(null)
 const ttsModelId = ref(null)
 
-onMounted(async () => {
-  await Promise.all([loadChatConfig(), loadEmbeddingConfig(), loadTtsConfig(), loadRerankConfig(), loadLandingConfig()])
+onMounted(() => {
+  loadTabData('model')
 })
+
+watch(activeTab, (tab) => {
+  loadTabData(tab)
+})
+
+async function loadTabData(tab) {
+  if (loadedTabs.has(tab)) return
+  loadedTabs.add(tab)
+  if (tab === 'model') {
+    modelLoading.value = true
+    try {
+      const res = await getAllDefaultModels()
+      const data = res.data || {}
+      applyModelConfig('chat', data.chat)
+      applyModelConfig('embedding', data.embedding)
+      applyModelConfig('tts', data.tts)
+      applyModelConfig('rerank', data.rerank)
+    } finally {
+      modelLoading.value = false
+    }
+  } else if (tab === 'landing') {
+    landingLoading.value = true
+    try {
+      await loadLandingConfig()
+    } finally {
+      landingLoading.value = false
+    }
+  }
+}
+
+function applyModelConfig(kind, cfg) {
+  const pid = cfg?.providerId ? String(cfg.providerId) : null
+  const mid = cfg?.modelId ? String(cfg.modelId) : null
+  if (kind === 'chat') { chatProviderId.value = pid; chatModelId.value = mid; if (pid && mid) chatValue.value = `${pid}:${mid}` }
+  else if (kind === 'embedding') { embeddingProviderId.value = pid; embeddingModelId.value = mid; if (pid && mid) embeddingValue.value = `${pid}:${mid}` }
+  else if (kind === 'rerank') { rerankProviderId.value = pid; rerankModelId.value = mid; if (pid && mid) rerankValue.value = `${pid}:${mid}` }
+  else if (kind === 'tts') { ttsProviderId.value = pid; ttsModelId.value = mid; if (pid && mid) ttsValue.value = `${pid}:${mid}` }
+}
 
 function onModelChange(kind, { providerId, modelId }) {
   const pid = providerId ? String(providerId) : providerId
@@ -304,58 +350,6 @@ function onModelChange(kind, { providerId, modelId }) {
   else if (kind === 'embedding') { embeddingProviderId.value = pid; embeddingModelId.value = mid }
   else if (kind === 'rerank') { rerankProviderId.value = pid; rerankModelId.value = mid }
   else if (kind === 'tts') { ttsProviderId.value = pid; ttsModelId.value = mid }
-}
-
-async function loadChatConfig() {
-  try {
-    const res = await getDefaultChatModel()
-    const pid = res.data?.providerId ? String(res.data.providerId) : null
-    const mid = res.data?.modelId ? String(res.data.modelId) : null
-    chatProviderId.value = pid
-    chatModelId.value = mid
-    if (pid && mid) chatValue.value = `${pid}:${mid}`
-  } catch (e) {
-    console.error('[Settings] 加载对话模型配置失败:', e)
-  }
-}
-
-async function loadEmbeddingConfig() {
-  try {
-    const res = await getDefaultEmbeddingModel()
-    const pid = res.data?.providerId ? String(res.data.providerId) : null
-    const mid = res.data?.modelId ? String(res.data.modelId) : null
-    embeddingProviderId.value = pid
-    embeddingModelId.value = mid
-    if (pid && mid) embeddingValue.value = `${pid}:${mid}`
-  } catch (e) {
-    console.error('[Settings] 加载向量模型配置失败:', e)
-  }
-}
-
-async function loadRerankConfig() {
-  try {
-    const res = await getDefaultRerankModel()
-    const pid = res.data?.providerId ? String(res.data.providerId) : null
-    const mid = res.data?.modelId ? String(res.data.modelId) : null
-    rerankProviderId.value = pid
-    rerankModelId.value = mid
-    if (pid && mid) rerankValue.value = `${pid}:${mid}`
-  } catch (e) {
-    console.error('[Settings] 加载重排模型配置失败:', e)
-  }
-}
-
-async function loadTtsConfig() {
-  try {
-    const res = await getDefaultTtsModel()
-    const pid = res.data?.providerId ? String(res.data.providerId) : null
-    const mid = res.data?.modelId ? String(res.data.modelId) : null
-    ttsProviderId.value = pid
-    ttsModelId.value = mid
-    if (pid && mid) ttsValue.value = `${pid}:${mid}`
-  } catch (e) {
-    console.error('[Settings] 加载TTS模型配置失败:', e)
-  }
 }
 
 async function saveChatModel() {

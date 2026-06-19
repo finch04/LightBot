@@ -114,7 +114,7 @@
               </div>
             </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.username || userStore.user?.nickname || '用户' }}</span>
-            <LevelBadge :level="userStore.user?.level" :size="32" class="sidebar-text" />
+            <LevelTag :level="userStore.user?.level" size="small" />
             <a-badge
               v-if="taskBadgeCount"
               :count="taskBadgeCount"
@@ -181,7 +181,7 @@ import { taskCounts, updateTaskCounts } from '../stores/task'
 import { Modal } from 'ant-design-vue'
 import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
 import AvatarFrame from '../components/AvatarFrame.vue'
-import LevelBadge from '../components/LevelBadge.vue'
+import LevelTag from '../components/LevelTag.vue'
 
 const route = useRoute()
 const router = useRouter()

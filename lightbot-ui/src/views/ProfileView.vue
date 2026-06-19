@@ -118,17 +118,17 @@
     <div class="panel level-panel">
       <div class="panel-header">
         <h3>等级</h3>
-        <p class="panel-subtitle">选择你的等级徽章</p>
+        <p class="panel-subtitle">选择你的等级</p>
       </div>
       <div class="level-options">
         <div
           v-for="opt in levelOptions"
           :key="opt.value"
           class="level-option"
-          :class="{ active: selectedLevel === opt.value }"
+          :class="{ active: selectedLevel === opt.value, 'level-5-option': opt.value === 5 }"
           @click="selectedLevel = opt.value"
         >
-          <LevelBadge v-if="opt.value > 0" :level="opt.value" :size="135" />
+          <LevelTag v-if="opt.value > 0" :level="opt.value" />
           <span v-else class="level-option-empty">无</span>
         </div>
       </div>
@@ -146,7 +146,7 @@ import { message } from 'ant-design-vue'
 import { getMe, updateProfile, changePassword, updateAvatarFrame, uploadAvatar } from '../api/auth'
 import { useUserStore } from '../stores/user'
 import AvatarFrame from '../components/AvatarFrame.vue'
-import LevelBadge from '../components/LevelBadge.vue'
+import LevelTag from '../components/LevelTag.vue'
 
 const userStore = useUserStore()
 const saving = ref(false)
@@ -529,21 +529,29 @@ onMounted(loadProfile)
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 135px;
-  height: 135px;
+  width: 80px;
+  height: 52px;
   padding: 0;
   border: 2px solid #ebebeb;
   border-radius: 12px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: all 0.25s;
   overflow: hidden;
 }
 .level-option:hover {
   border-color: #0070f3;
+  transform: translateY(-2px);
 }
 .level-option.active {
   border-color: #0070f3;
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
+  background: rgba(0, 112, 243, 0.02);
+}
+.level-5-option:hover {
+  border-color: #e4e4e7;
+  transform: none;
+  box-shadow: none;
+  background: transparent;
 }
 .level-option-empty {
   font-size: 14px;

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.DefaultAiConfigDTO;
+import com.lightbot.dto.DefaultModelsConfigDTO;
 import com.lightbot.entity.SystemConfig;
 import com.lightbot.mapper.SystemConfigMapper;
 import com.lightbot.service.SystemConfigService;
@@ -141,6 +142,16 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         } catch (Exception e) {
             log.error("[SystemConfig] 更新默认重排模型配置失败: {}", e.getMessage());
         }
+    }
+
+    @Override
+    public DefaultModelsConfigDTO getAllDefaultModels() {
+        DefaultModelsConfigDTO result = new DefaultModelsConfigDTO();
+        result.setChat(getDefaultChatModelConfig());
+        result.setEmbedding(getDefaultEmbeddingModelConfig());
+        result.setTts(getDefaultTtsModelConfig());
+        result.setRerank(getDefaultRerankModelConfig());
+        return result;
     }
 
     @Override

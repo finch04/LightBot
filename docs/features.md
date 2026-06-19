@@ -2,7 +2,7 @@
 
 > 轻量级 Java AI Agent 平台
 >
-> Tech Stack: SpringBoot 3.3.6 + SpringAI 1.0.0 + Vue3 + PostgreSQL 15 + pgvector
+> Tech Stack: SpringBoot 3.3.6 + SpringAI 1.1.2 + Vue3 + PostgreSQL 15 + pgvector
 
 ---
 

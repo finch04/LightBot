@@ -138,12 +138,12 @@ const routes = [
       },
       {
         path: 'eval',
-        redirect: '/app/eval/datasets',
+        name: 'Eval',
+        component: () => import('../views/Eval.vue'),
       },
       {
         path: 'eval/datasets',
-        name: 'EvalDatasets',
-        component: () => import('../views/EvalDatasetManage.vue'),
+        redirect: '/app/eval',
       },
       {
         path: 'eval/datasets/:id',
@@ -152,8 +152,7 @@ const routes = [
       },
       {
         path: 'eval/evaluators',
-        name: 'Evaluators',
-        component: () => import('../views/EvaluatorManage.vue'),
+        redirect: '/app/eval',
       },
       {
         path: 'eval/evaluators/:id',
@@ -162,8 +161,7 @@ const routes = [
       },
       {
         path: 'eval/experiments',
-        name: 'Experiments',
-        component: () => import('../views/ExperimentManage.vue'),
+        redirect: '/app/eval',
       },
       {
         path: 'eval/experiments/:id',
