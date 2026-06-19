@@ -537,7 +537,7 @@ const canSend = computed(() =>
   !loading.value && (input.value.trim().length > 0 || pendingAttachments.value.length > 0))
 
 const userInitial = computed(() => {
-  const name = userStore.user?.nickname || userStore.user?.username || 'U'
+  const name = userStore.user?.username || userStore.user?.nickname || 'U'
   return name[0].toUpperCase()
 })
 

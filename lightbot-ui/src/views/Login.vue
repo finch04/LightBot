@@ -141,7 +141,7 @@ async function handleLogin() {
 .login-card {
   display: flex;
   width: 900px;
-  height: 500px;
+  height: 560px;
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0px 1px 1px rgba(0,0,0,0.02), 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);

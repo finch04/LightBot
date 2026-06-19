@@ -18,54 +18,52 @@
         <form class="register-form" @submit.prevent="handleRegister">
           <div class="form-item">
             <label class="form-label">用户名</label>
-            <div class="input-wrapper">
+            <div class="input-wrapper" :class="{ 'input-error': errors.username }">
               <UserOutlined class="input-icon" />
               <input
                 v-model="form.username"
                 type="text"
                 placeholder="3-32个字符"
                 autocomplete="username"
+                @blur="validateUsername"
+                @input="clearError('username')"
               />
             </div>
+            <span v-if="errors.username" class="field-error">{{ errors.username }}</span>
           </div>
 
           <div class="form-item">
             <label class="form-label">密码</label>
-            <div class="input-wrapper">
+            <div class="input-wrapper" :class="{ 'input-error': errors.password }">
               <LockOutlined class="input-icon" />
               <input
                 v-model="form.password"
                 type="password"
                 placeholder="6-64个字符"
                 autocomplete="new-password"
+                @blur="validatePassword"
+                @input="clearError('password')"
               />
             </div>
+            <span v-if="errors.password" class="field-error">{{ errors.password }}</span>
           </div>
 
           <div class="form-item">
             <label class="form-label">确认密码</label>
-            <div class="input-wrapper">
+            <div class="input-wrapper" :class="{ 'input-error': errors.confirmPassword }">
               <LockOutlined class="input-icon" />
               <input
                 v-model="form.confirmPassword"
                 type="password"
                 placeholder="再次输入密码"
                 autocomplete="new-password"
+                @blur="validateConfirmPassword"
+                @input="clearError('confirmPassword')"
               />
             </div>
+            <span v-if="errors.confirmPassword" class="field-error">{{ errors.confirmPassword }}</span>
           </div>
 
-          <div class="form-item">
-            <label class="form-label">昵称 <span class="optional">可选</span></label>
-            <div class="input-wrapper">
-              <SmileOutlined class="input-icon" />
-              <input
-                v-model="form.nickname"
-                type="text"
-                placeholder="你的昵称"
-              />
-            </div>
-          </div>
 
           <button class="btn-register" type="submit" :disabled="loading">
             <LoadingOutlined v-if="loading" />
@@ -97,26 +95,48 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { register } from '../api/auth'
-import { UserOutlined, LockOutlined, SmileOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { UserOutlined, LockOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
 const loading = ref(false)
 
-const form = reactive({ username: '', password: '', confirmPassword: '', nickname: '' })
+const form = reactive({ username: '', password: '', confirmPassword: '' })
+const errors = reactive({ username: '', password: '', confirmPassword: '' })
+
+function clearError(field) {
+  errors[field] = ''
+}
+
+function validateUsername() {
+  const v = form.username
+  if (!v) { errors.username = '请输入用户名'; return false }
+  if (v.length < 3) { errors.username = '用户名至少3个字符'; return false }
+  if (v.length > 32) { errors.username = '用户名最多32个字符'; return false }
+  errors.username = ''
+  return true
+}
+
+function validatePassword() {
+  const v = form.password
+  if (!v) { errors.password = '请输入密码'; return false }
+  if (v.length < 6) { errors.password = '密码至少6个字符'; return false }
+  if (v.length > 64) { errors.password = '密码最多64个字符'; return false }
+  errors.password = ''
+  // 如果确认密码已输入，联动校验
+  if (form.confirmPassword) validateConfirmPassword()
+  return true
+}
+
+function validateConfirmPassword() {
+  const v = form.confirmPassword
+  if (!v) { errors.confirmPassword = '请再次输入密码'; return false }
+  if (v !== form.password) { errors.confirmPassword = '两次输入的密码不一致'; return false }
+  errors.confirmPassword = ''
+  return true
+}
 
 async function handleRegister() {
-  if (!form.username || form.username.length < 3) {
-    message.warning('用户名至少3个字符')
-    return
-  }
-  if (!form.password || form.password.length < 6) {
-    message.warning('密码至少6个字符')
-    return
-  }
-  if (form.password !== form.confirmPassword) {
-    message.warning('两次输入的密码不一致')
-    return
-  }
+  if (!validateUsername() || !validatePassword() || !validateConfirmPassword()) return
   loading.value = true
   try {
     const { confirmPassword, ...submitData } = form
@@ -144,7 +164,7 @@ async function handleRegister() {
 .register-card {
   display: flex;
   width: 900px;
-  height: 500px;
+  height: 560px;
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0px 1px 1px rgba(0,0,0,0.02), 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
@@ -214,6 +234,21 @@ async function handleRegister() {
   font-size: 14px;
   font-weight: 500;
   color: #171717;
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+}
+
+.input-error:focus-within {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15) !important;
+}
+
+.field-error {
+  font-size: 12px;
+  color: #ef4444;
+  line-height: 1;
 }
 
 .optional {

@@ -178,7 +178,7 @@ const levelOptions = [
 ]
 
 const initialLetter = computed(() => {
-  return (profileForm.nickname || profileForm.username || 'U')[0]
+  return (profileForm.username || profileForm.nickname || 'U')[0]
 })
 
 const profileForm = reactive({

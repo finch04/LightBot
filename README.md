@@ -72,7 +72,7 @@
 |:---:|:---:|
 | ![image-20260618224412024](README.assets/image-20260618224412024.png) | ![image-20260618234659562](README.assets/image-20260618234659562.png) |
 | Landing 首页 | 多轮对话 + 流式输出 |
-| ![Agent](docs/assets/screenshots/agent-detail.png) | ![Workflow](docs/assets/screenshots/workflow-editor.png) |
+| ![image-20260619102651488](README.assets/image-20260619102651488.png) | ![image-20260619102737470](README.assets/image-20260619102737470.png) |
 | Agent 详情 | 可视化工作流编排 |
 | ![知识库](docs/assets/screenshots/knowledge-detail.png) | ![RAG 问答](docs/assets/screenshots/rag-search.png) |
 | 知识库管理 + 统计 | RAG 检索测试 |

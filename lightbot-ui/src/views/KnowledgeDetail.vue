@@ -761,10 +761,10 @@
             <div class="member-info">
               <div class="member-avatar">
                 <img v-if="member.avatar" :src="member.avatar" alt="avatar" class="member-avatar-img" @error="member.avatar = ''" />
-                <span v-else>{{ (member.nickname || member.username || 'U')[0] }}</span>
+                <span v-else>{{ (member.username || member.nickname || 'U')[0] }}</span>
               </div>
               <div class="member-detail">
-                <span class="member-name">{{ member.nickname || member.username || '用户' }}</span>
+                <span class="member-name">{{ member.username || member.nickname || '用户' }}</span>
               </div>
               <a-tag :color="roleColor(member.role)">{{ roleText(member.role) }}</a-tag>
             </div>
@@ -815,10 +815,10 @@
             <div class="invite-user">
               <div class="member-avatar">
                 <img v-if="u.avatar" :src="u.avatar" alt="avatar" class="member-avatar-img" @error="u.avatar = ''" />
-                <span v-else>{{ (u.nickname || u.username || 'U')[0] }}</span>
+                <span v-else>{{ (u.username || u.nickname || 'U')[0] }}</span>
               </div>
               <div class="invite-info">
-                <span class="invite-name">{{ u.nickname || u.username }}</span>
+                <span class="invite-name">{{ u.username || u.nickname }}</span>
                 <span class="invite-username">@{{ u.username }}</span>
               </div>
             </div>

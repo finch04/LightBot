@@ -110,10 +110,10 @@
             <AvatarFrame :frame="userStore.user?.avatarFrame" :size="28">
               <div class="user-avatar">
                 <img v-if="userStore.user?.avatar" :src="userStore.user.avatar" alt="avatar" class="user-avatar-img" @error="userStore.user.avatar = ''" />
-                <span v-else>{{ (userStore.user?.nickname || userStore.user?.username || 'U')[0] }}</span>
+                <span v-else>{{ (userStore.user?.username || userStore.user?.nickname || 'U')[0] }}</span>
               </div>
             </AvatarFrame>
-            <span class="sidebar-text user-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</span>
+            <span class="sidebar-text user-name">{{ userStore.user?.username || userStore.user?.nickname || '用户' }}</span>
             <LevelBadge :level="userStore.user?.level" :size="32" class="sidebar-text" />
             <a-badge
               v-if="taskBadgeCount"

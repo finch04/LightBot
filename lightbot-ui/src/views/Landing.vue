@@ -59,7 +59,7 @@
               <a-menu>
                 <a-menu-item key="user-info" class="menu-user-info" @click="router.push('/app/profile')">
                   <div class="user-info-display">
-                    <div class="user-info-name">{{ userStore.user?.nickname || userStore.user?.username || '用户' }}</div>
+                    <div class="user-info-name">{{ userStore.user?.username || userStore.user?.nickname || '用户' }}</div>
                     <div class="user-info-meta">
                       <span class="user-info-id">ID: {{ userStore.user?.id }}</span>
                       <span class="user-info-role">{{ userRoleText }}</span>
@@ -175,7 +175,7 @@ const userStore = useUserStore()
 const isLoggedIn = computed(() => !!userStore.token)
 
 const avatarInitial = computed(() => {
-  const name = userStore.user?.nickname || userStore.user?.username || ''
+  const name = userStore.user?.username || userStore.user?.nickname || ''
   return name.charAt(0).toUpperCase() || 'U'
 })
 
