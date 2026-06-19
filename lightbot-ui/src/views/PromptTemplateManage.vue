@@ -91,7 +91,7 @@
           <a-input v-model:value="form.promptTemplateKey" :maxlength="100" show-count placeholder="如：customer_service (不超过100字)" :disabled="!!form.id" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.templateDesc" :rows="2" :maxlength="200" show-count placeholder="模板用途描述 (不超过200字)" />
+          <a-textarea v-model:value="form.templateDesc" :rows="2" :maxlength="50" show-count placeholder="模板用途描述 (不超过50字)" />
         </a-form-item>
         <a-form-item label="模板内容" required>
           <a-textarea v-model:value="form.template" :rows="10" :maxlength="5000" show-count placeholder="使用 {{变量名}} 定义变量 (不超过5000字)" class="template-editor" @input="onTemplateInput" />

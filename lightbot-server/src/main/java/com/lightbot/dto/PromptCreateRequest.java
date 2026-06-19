@@ -15,7 +15,7 @@ public class PromptCreateRequest {
     @Size(max = 100, message = "Prompt Key不超过100字")
     private String promptKey;
 
-    @Size(max = 200, message = "描述不超过200字")
+    @Size(max = 50, message = "描述不超过50字")
     private String description;
 
     private String tags;

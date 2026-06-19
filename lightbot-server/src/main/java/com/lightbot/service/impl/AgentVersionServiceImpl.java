@@ -1033,11 +1033,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         if (description == null || description.isBlank()) {
             return null;
         }
-        String trimmed = description.trim();
-        if (trimmed.length() > 50) {
-            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "发布说明不能超过50字");
-        }
-        return trimmed;
+        return description.trim();
     }
 
     private Agent requireAgent(Long agentId) {

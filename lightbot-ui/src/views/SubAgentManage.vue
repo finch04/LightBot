@@ -74,7 +74,7 @@
           <a-input v-model:value="form.displayName" placeholder="中文显示名称（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述" required>
-          <a-textarea v-model:value="form.description" placeholder="SubAgent 描述" :rows="2" :maxlength="200" show-count />
+          <a-textarea v-model:value="form.description" placeholder="SubAgent 描述（不超过50字）" :rows="2" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="系统提示词" required>
           <a-textarea v-model:value="form.systemPrompt" placeholder="SubAgent 的系统提示词（不超过2000字）" :rows="6" :maxlength="2000" show-count />

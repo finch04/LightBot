@@ -18,7 +18,7 @@ public class PromptTemplateCreateRequest {
     @Schema(description = "模板唯一标识")
     private String promptTemplateKey;
 
-    @Size(max = 200, message = "模板描述不超过200字")
+    @Size(max = 50, message = "模板描述不超过50字")
     @Schema(description = "模板描述")
     private String templateDesc;
 

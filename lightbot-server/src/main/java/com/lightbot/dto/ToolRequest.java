@@ -25,7 +25,7 @@ public class ToolRequest {
     @Size(max = 50, message = "显示名称不超过50字")
     private String displayName;
 
-    @Size(max = 200, message = "工具描述不超过200字")
+    @Size(max = 50, message = "工具描述不超过50字")
     private String description;
 
     @NotNull(message = "工具类型不能为空")

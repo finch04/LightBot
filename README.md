@@ -131,7 +131,7 @@
 - 多格式文档支持（PDF、Word、Markdown、TXT 等），支持 OCR
 - URL 内容抓取入库，批量上传
 - 可配置分块策略（策略/大小/重叠/分隔符），支持分块预览
-- 向量检索（pgvector + HNSW 索引）+ Rerank 重排序
+- 向量检索（Milvus 密集 + 稀疏混合检索）+ Rerank 重排序
 - 流式 RAG 问答（SSE），返回引用来源
 - 知识库统计（文档数/分片数/Token 数）实时更新，支持手动全量重算
 - 知识库成员权限管理（creator/manager/developer/viewer）
@@ -253,6 +253,11 @@
 │  │  主数据存储   │ │  缓存/会话   │ │  知识图谱    │ │  文件存储    │  │
 │  │  + pgvector   │ │  Sa-Token    │ │  Graph DB    │ │  文档/头像   │  │
 │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘  │
+│  ┌──────────────┐                                                     │
+│  │    Milvus    │                                                     │
+│  │  向量数据库   │                                                     │
+│  │  混合检索     │                                                     │
+│  └──────────────┘                                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -270,12 +275,13 @@
 | MyBatis-Plus | 3.5.9 | ORM 框架 |
 | PostgreSQL | 15+ | 主数据库 |
 | pgvector | 0.1.6 | 向量检索扩展（HNSW 索引） |
+| Milvus | 2.6+ | 向量数据库（密集 + 稀疏混合检索） |
 | Redis | 7+ | 缓存、会话管理、Sa-Token 存储 |
 | Neo4j | 5.26+ | 图数据库（知识图谱） |
 | MinIO | 8.5+ | 对象存储（文档、头像） |
 | Sa-Token | 1.39+ | 权限认证框架 |
 | SpringDoc | 2.6+ | OpenAPI 3 / Swagger 文档 |
-| RapidOCR | - | OCR 文字识别（可选） |
+| RapidOCR | 0.0.7 | OCR 文字识别（可选） |
 
 ### 前端
 
@@ -294,17 +300,17 @@
 | 提供商 | 模型示例 | 接入方式 |
 |--------|----------|----------|
 | OpenAI | GPT-4o / GPT-4o-mini | API Key |
-| 通义千问 | Qwen-Max / Qwen-Plus | DashScope API |
+| DashScope | Qwen-Max / Qwen-Plus | DashScope API |
 | DeepSeek | DeepSeek-V3 / DeepSeek-R1 | OpenAI 兼容 API |
 | Ollama | Llama / Qwen / 任意本地模型 | 本地部署 |
-| SiliconFlow | 图片生成等多模态模型 | API Key |
+| MiMo | MiMo 系列模型 | API Key |
 | 自定义 | 任何 OpenAI 兼容 API | Base URL + API Key |
 
 ---
 
 ## 数据库设计
 
-LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **40 张业务表**，覆盖 10 个业务域。
+LightBot 使用 **PostgreSQL + pgvector + Milvus + Neo4j** 组合，共 **40 张业务表**，覆盖 11 个业务域。
 
 | 业务域 | 表数量 | 核心表 |
 |--------|--------|--------|
@@ -312,10 +318,10 @@ LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **40 张业务表
 | 模型管理 | 2 | `model_provider`, `model` |
 | Agent | 3 | `agent`, `agent_version`, `subagent` |
 | 对话 | 2 | `chat_session`, `message` |
-| 知识库/RAG | 10 | `knowledge`, `document`, `document_version`, `chunk`, `embedding`, `qa_pair`, `knowledge_member`, `knowledge_graph`, `graph_document`, `graph_extraction_task` |
+| 知识库/RAG | 10 | `knowledge`, `knowledge_member`, `document`, `document_version`, `chunk`, `embedding`, `qa_pair`, `knowledge_graph`, `graph_document`, `graph_extraction_task` |
 | 工具/MCP | 4 | `tool`, `skill`, `tool_calls`, `mcp_server` |
 | Prompt | 3 | `prompt`, `prompt_version`, `prompt_build_template` |
-| 评测 | 10 | `eval_dataset`, `eval_evaluator`, `eval_experiment`, `eval_rag_benchmark` 等 |
+| 评测 | 12 | `eval_dataset`, `eval_dataset_version`, `eval_dataset_item`, `eval_evaluator`, `eval_evaluator_version`, `eval_evaluator_template`, `eval_experiment`, `eval_experiment_result`, `eval_rag_benchmark`, `eval_rag_benchmark_item`, `eval_rag_result`, `eval_rag_result_detail` |
 | 异步任务 | 1 | `task` |
 | 可观测 | 1 | `llm_trace` |
 | 系统配置 | 1 | `system_config` |
@@ -335,7 +341,7 @@ LightBot 使用 **PostgreSQL + pgvector + Neo4j** 组合，共 **40 张业务表
 git clone https://github.com/finch04/LightBot.git
 cd LightBot
 
-# 2. 启动中间件（PostgreSQL + Redis + Neo4j + MinIO）
+# 2. 启动中间件（PostgreSQL + Redis + Neo4j + MinIO + Milvus）
 cd docker
 docker-compose -f docker-compose-middleware.yml up -d
 cd ..
@@ -363,111 +369,7 @@ pnpm dev
 
 ## Docker 部署
 
-### docker-compose 一键部署
-
-```bash
-cd docker
-docker-compose up -d
-```
-
-### docker-compose.yml
-
-```yaml
-version: '3.8'
-
-services:
-  lightbot-server:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.server
-    container_name: lightbot-server
-    ports:
-      - "8081:8081"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/lightbot
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=lightbot
-      - SPRING_DATA_REDIS_HOST=redis
-      - SPRING_DATA_REDIS_PORT=6379
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USERNAME=neo4j
-      - NEO4J_PASSWORD=lightbot
-      - MINIO_ENDPOINT=http://minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-    depends_on:
-      - postgres
-      - redis
-      - neo4j
-      - minio
-    restart: unless-stopped
-
-  lightbot-ui:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.ui
-    container_name: lightbot-ui
-    ports:
-      - "5173:80"
-    depends_on:
-      - lightbot-server
-    restart: unless-stopped
-
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: lightbot-postgres
-    environment:
-      - POSTGRES_DB=lightbot
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=lightbot
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    container_name: lightbot-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-  neo4j:
-    image: neo4j:5-community
-    container_name: lightbot-neo4j
-    environment:
-      - NEO4J_AUTH=neo4j/lightbot
-    volumes:
-      - neo4j_data:/data
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    restart: unless-stopped
-
-  minio:
-    image: minio/minio:latest
-    container_name: lightbot-minio
-    command: server /data --console-address ":9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-  redis_data:
-  neo4j_data:
-  minio_data:
-```
+> Docker Compose 配置正在完善中，敬请期待。当前请参考 [快速开始](#5-分钟快速启动) 章节手动部署。
 
 ---
 
@@ -482,13 +384,13 @@ lightbot/
 │       │   ├── chat/                # 对话引擎
 │       │   ├── eval/                # 评测引擎
 │       │   └── impl/                # 业务实现
-│       ├── entity/                  # 数据库实体（39 个 Entity）
+│       ├── entity/                  # 数据库实体（40 个 Entity）
 │       ├── dto/                     # 数据传输对象
 │       ├── mapper/                  # MyBatis-Plus Mapper
 │       ├── enums/                   # 业务枚举
 │       ├── config/                  # 配置类
 │       ├── common/                  # 公共工具（Result、BizException）
-│       ├── util/                    # 工具类（MinIO/Redis 等中间件封装）
+│       ├── util/                    # 工具类（MinIO/Redis/Milvus 等中间件封装）
 │       ├── workflow/                # 工作流引擎
 │       │   └── processor/           # 节点处理器
 │       ├── tool/                    # Tool 体系
@@ -510,7 +412,6 @@ lightbot/
 │       └── utils/                   # 工具函数
 ├── sql/                             # 数据库脚本
 │   └── 2026-06-18-init.sql          # 完整建表 + 预制数据（唯一需要执行的 SQL）
-├── docker/                          # Docker 配置
 └── docs/                            # 项目文档
 ```
 
@@ -518,25 +419,36 @@ lightbot/
 
 ## API 概览
 
-LightBot 提供 **200+ RESTful API**，主要模块：
+LightBot 提供 **200+ RESTful API**，30 个 Controller：
 
 | 模块 | 路径前缀 | 说明 |
 |------|----------|------|
 | 认证 | `/api/auth` | 注册、登录、用户信息 |
+| 管理后台 | `/api/admin` | 用户管理、系统管理 |
 | Agent | `/api/agents` | Agent CRUD、版本管理、绑定配置 |
-| 工作流 | `/api/agents/{id}/workflow` | 草稿保存、发布、调试、版本管理 |
+| 工作流 | `/api/agents/{agentId}/workflow` | 草稿保存、发布、调试、版本管理 |
+| SubAgent | `/api/subagents` | SubAgent 管理、运行时覆盖 |
 | 对话 | `/api/chat` | 同步/流式对话、附件上传 |
 | 会话 | `/api/chat/sessions` | 会话管理（创建、归档、置顶） |
 | 知识库 | `/api/knowledge` | 知识库 CRUD、文档管理、RAG 问答 |
+| 知识库评测 | `/api/knowledge/{id}/eval` | 知识库级 RAG 评测 |
+| 文档编辑 | `/api/documents` | 文档内容编辑、版本管理 |
 | 知识图谱 | `/api/graph` | 图谱 CRUD、语义搜索、JSONL 导入 |
-| 模型 | `/api/model-providers` | 提供商管理、连接测试、模型发现 |
+| 模型提供商 | `/api/model-providers` | 提供商管理、连接测试、模型发现 |
+| 模型 | `/api/models` | 模型列表、全局默认模型配置 |
 | 工具 | `/api/tools` | 工具 CRUD、测试执行 |
+| 工具调用 | `/api/tool-calls` | 工具调用记录查询 |
 | MCP | `/api/mcp-servers` | MCP Server 管理、工具发现 |
 | 技能 | `/api/skills` | 技能 CRUD、启用/禁用 |
 | Prompt | `/api/prompts` | Prompt 版本管理、模板、调试运行 |
 | 评测 | `/api/eval/*` | 数据集、评估器、实验管理 |
 | 可观测 | `/api/observability` | LLM Trace 查询、统计概览 |
 | 任务 | `/api/tasks` | 异步任务列表、取消、SSE 推送 |
+| 日志 | `/api/logs` | 实时日志流（SSE）、历史查询 |
+| OCR | `/api/ocr` | OCR 文字识别 |
+| 枚举 | `/api/enums` | 前端枚举数据接口 |
+| Landing | `/api/landing` | Landing 页配置 |
+| 系统配置 | `/api/system-config` | 系统配置管理 |
 | 仪表盘 | `/api/dashboard` | 平台统计概览 |
 
 > 完整 API 文档启动后端后访问 http://localhost:8081/swagger-ui.html
@@ -565,9 +477,9 @@ LightBot 提供 **200+ RESTful API**，主要模块：
 
 ### 3. 多层次 RAG
 
-- **文档向量检索**：pgvector + HNSW 近似最近邻搜索
+- **文档向量检索**：Milvus 密集 + 稀疏混合检索（HNSW + BM25），支持向量、关键词、混合三种模式
 - **QA 对检索**：问答对独立向量化，精确匹配常见问题
-- **知识图谱检索**：Neo4j 结构化知识，支持实体关系查询
+- **知识图谱检索**：Neo4j 结构化知识，支持实体关系查询，图谱向量存储于 Milvus
 - **Rerank 重排序**：可配置 Rerank 模型对检索结果二次排序
 - **RAG 评测**：内置 Benchmark + 多维度评分（检索准确率、回答质量）
 

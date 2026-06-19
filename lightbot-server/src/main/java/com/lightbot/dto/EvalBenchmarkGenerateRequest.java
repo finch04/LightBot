@@ -22,7 +22,7 @@ public class EvalBenchmarkGenerateRequest {
     @Schema(description = "基准名称", requiredMode = Schema.RequiredMode.REQUIRED)
     private String name;
 
-    @Size(max = 200, message = "基准描述不超过200字")
+    @Size(max = 50, message = "基准描述不超过50字")
     @Schema(description = "基准描述")
     private String description;
 

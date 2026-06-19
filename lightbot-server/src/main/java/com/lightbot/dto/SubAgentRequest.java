@@ -31,7 +31,7 @@ public class SubAgentRequest {
     private String displayName;
 
     @NotBlank(message = "描述不能为空")
-    @Size(max = 200, message = "子智能体描述不超过200字")
+    @Size(max = 50, message = "子智能体描述不超过50字")
     @Schema(description = "子智能体描述")
     private String description;
 

@@ -125,7 +125,7 @@ const columns = [
   { title: '状态', key: 'status', width: 80, align: 'center' },
   { title: '输入参数', key: 'toolInput', width: 220, ellipsis: true },
   { title: '输出结果', key: 'toolOutput', width: 300, ellipsis: true },
-  { title: '时间', key: 'createdAt', width: 140 },
+  { title: '时间', key: 'createdAt', width: 170 },
   { title: '操作', key: 'action', width: 70, align: 'center' },
 ]
 

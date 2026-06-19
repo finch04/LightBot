@@ -40,10 +40,11 @@ public class SkillRequest {
     @Size(max = 50, message = "显示名称不超过50字")
     private String displayName;
 
-    @Size(max = 200, message = "技能描述不超过200字")
+    @Size(max = 50, message = "技能描述不超过50字")
     private String description;
 
     /** 提示词模板（注入主 Agent 系统提示） */
+    @Size(max = 5000, message = "提示词模板不超过5000字")
     private String promptTemplate;
 
     private String config;

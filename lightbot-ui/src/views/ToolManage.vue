@@ -102,7 +102,7 @@
           <a-input v-model:value="form.displayName" placeholder="如：HTTP 请求（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="2" placeholder="工具用途说明，供 Agent 理解" :maxlength="200" show-count />
+          <a-textarea v-model:value="form.description" :rows="2" placeholder="工具用途说明（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="标签">
           <a-select

@@ -17,7 +17,7 @@ public class EvalDatasetCreateRequest {
     @Size(max = 50, message = "数据集名称不超过50字")
     private String name;
 
-    @Size(max = 200, message = "数据集描述不超过200字")
+    @Size(max = 50, message = "数据集描述不超过50字")
     private String description;
 
     private String columnsConfig;

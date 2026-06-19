@@ -254,7 +254,7 @@ public class AgentController {
     @PostMapping("/{id}/publish")
     public Result<Map<String, Object>> publishAgent(
             @PathVariable Long id,
-            @RequestBody(required = false) AgentPublishRequest body) {
+            @RequestBody(required = false) @Valid AgentPublishRequest body) {
         String description = body != null ? body.getDescription() : null;
         return Result.ok(agentVersionService.publishChatAgent(id, description));
     }

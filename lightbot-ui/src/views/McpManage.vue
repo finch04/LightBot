@@ -87,7 +87,7 @@
           <a-input v-model:value="form.name" placeholder="如：filesystem-server（最多50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
-          <a-input v-model:value="form.description" placeholder="服务用途说明" :maxlength="200" show-count />
+          <a-input v-model:value="form.description" placeholder="服务用途说明（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="安装类型" required>
           <a-select v-model:value="form.installType" style="width: 100%" @change="onInstallTypeChange">

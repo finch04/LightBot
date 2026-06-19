@@ -104,7 +104,7 @@
             </div>
           </a-form-item>
           <a-form-item label="描述">
-            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述" :maxlength="200" :disabled="isVersionPreview" :readonly="isVersionPreview" show-count />
+            <a-textarea v-model:value="agent.description" :rows="2" placeholder="Agent 描述（不超过50字）" :maxlength="50" :disabled="isVersionPreview" :readonly="isVersionPreview" show-count />
           </a-form-item>
           <!-- 类型选择：放在前面，影响后续字段显示 -->
           <a-form-item label="类型">

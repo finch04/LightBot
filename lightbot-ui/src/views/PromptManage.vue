@@ -83,7 +83,7 @@
           />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="3" :maxlength="200" show-count placeholder="Prompt 的用途描述 (不超过200字)" />
+          <a-textarea v-model:value="form.description" :rows="3" :maxlength="50" show-count placeholder="Prompt 的用途描述 (不超过50字)" />
         </a-form-item>
         <a-form-item label="标签">
           <TagInput v-model="form.tags" />

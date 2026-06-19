@@ -653,7 +653,7 @@
           <a-input v-model:value="editForm.name" placeholder="知识库名称（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述（不超过200字）" :maxlength="200" show-count />
+          <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="Embed模型" required>
           <ModelSelect v-model="editForm.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" @change="onEmbeddingModelChange" />

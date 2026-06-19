@@ -511,7 +511,7 @@ const toolColumns = [
   { title: '状态', key: 'status', width: 80, align: 'center' },
   { title: '输入参数', key: 'toolInput', width: 220, ellipsis: true },
   { title: '输出结果', key: 'toolOutput', width: 300, ellipsis: true },
-  { title: '时间', key: 'createdAt', width: 140 },
+  { title: '时间', key: 'createdAt', width: 170 },
   { title: '操作', key: 'action', width: 70, align: 'center' },
 ]
 
@@ -524,7 +524,7 @@ const pagination = reactive({
 })
 
 const chatColumns = [
-  { title: '时间', key: 'createTime', width: 100 },
+  { title: '时间', key: 'createTime', width: 170 },
   { title: 'Request ID', dataIndex: 'requestId', width: 160, ellipsis: true },
   { title: 'Agent', dataIndex: 'agentName', width: 120, ellipsis: true },
   { title: '模型', dataIndex: 'model', width: 140, ellipsis: true },
@@ -536,7 +536,7 @@ const chatColumns = [
 ]
 
 const workflowColumns = [
-  { title: '时间', key: 'createTime', width: 100 },
+  { title: '时间', key: 'createTime', width: 170 },
   { title: 'Request ID', dataIndex: 'requestId', width: 160, ellipsis: true },
   { title: 'Agent', dataIndex: 'agentName', width: 120, ellipsis: true },
   { title: 'Token (入/出)', key: 'totalTokens', width: 130 },
@@ -786,10 +786,11 @@ async function openDetail(record) {
 function formatTime(t) {
   if (!t) return '-'
   if (Array.isArray(t)) {
-    return `${String(t[3]).padStart(2,'0')}:${String(t[4]).padStart(2,'0')}:${String(t[5]).padStart(2,'0')}`
+    return `${t[0]}-${String(t[1]).padStart(2,'0')}-${String(t[2]).padStart(2,'0')} ${String(t[3]).padStart(2,'0')}:${String(t[4]).padStart(2,'0')}:${String(t[5]).padStart(2,'0')}`
   }
   const d = new Date(t)
-  return d.toLocaleTimeString('zh-CN', { hour12: false })
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 function formatDuration(ms) {

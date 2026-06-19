@@ -80,12 +80,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     public Knowledge create(Knowledge knowledge) {
         long userId = StpUtil.getLoginIdAsLong();
 
-        // 1. 参数校验
-        if (knowledge.getDescription() != null && knowledge.getDescription().length() > 50) {
-            throw new BizException("知识库描述不能超过50个字符");
-        }
-
-        // 1.1 校验名称唯一性
+        // 1. 校验名称唯一性
         long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, knowledge.getName()));
         if (count > 0) {
             throw new BizException(ErrorCode.KNOWLEDGE_NAME_EXISTS);
@@ -114,12 +109,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         // 1. 权限校验：需要MANAGER及以上权限
         checkPermission(knowledge.getId(), KnowledgeRole.MANAGER);
 
-        // 2. 参数校验
-        if (knowledge.getDescription() != null && knowledge.getDescription().length() > 50) {
-            throw new BizException("知识库描述不能超过50个字符");
-        }
-
-        // 3. 校验存在性
+        // 2. 校验存在性
         Knowledge existing = getById(knowledge.getId());
         if (existing == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);

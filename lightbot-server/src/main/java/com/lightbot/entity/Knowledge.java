@@ -40,7 +40,7 @@ public class Knowledge {
     private String name;
 
     @TableField("description")
-    @Size(max = 200, message = "知识库描述不超过200字")
+    @Size(max = 50, message = "知识库描述不超过50字")
     @Schema(description = "知识库描述")
     private String description;
 

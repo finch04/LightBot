@@ -144,7 +144,7 @@
           <a-input v-model:value="form.displayName" placeholder="中文，如 深度研究（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能，给模型看的" :maxlength="200" show-count />
+          <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="依赖工具">
           <a-select v-model:value="form.toolIds" mode="multiple" placeholder="选择该 Skill 启用时附带的工具" style="width: 100%" :options="toolOptions" />

@@ -1,5 +1,6 @@
 package com.lightbot.dto;
 
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.List;
@@ -17,6 +18,7 @@ public class EvalDatasetItemCreateRequest {
 
     private Long datasetVersionId;
 
+    @Size(max = 2000, message = "数据内容不超过2000字")
     private String dataContent;
 
     private List<String> dataContents;
