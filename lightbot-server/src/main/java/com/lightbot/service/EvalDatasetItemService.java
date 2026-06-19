@@ -51,6 +51,14 @@ public interface EvalDatasetItemService extends IService<EvalDatasetItem> {
     List<EvalDatasetItem> listAllByDatasetId(Long datasetId);
 
     /**
+     * 根据ID列表查询数据集条目
+     *
+     * @param ids 条目ID列表
+     * @return 条目列表
+     */
+    List<EvalDatasetItem> listByIds(List<Long> ids);
+
+    /**
      * 删除数据集条目
      *
      * @param id 主键ID

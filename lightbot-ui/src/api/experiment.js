@@ -12,6 +12,10 @@ export function createExperiment(data) {
   return request.post('/eval/experiments', data)
 }
 
+export function updateExperiment(id, data) {
+  return request.put(`/eval/experiments/${id}`, data)
+}
+
 export function stopExperiment(id) {
   return request.put(`/eval/experiments/${id}/stop`)
 }

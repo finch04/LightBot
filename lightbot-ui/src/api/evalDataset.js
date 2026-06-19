@@ -28,6 +28,10 @@ export function createEvalDatasetVersion(data) {
   return request.post('/eval/datasets/versions', data)
 }
 
+export function getEvalDatasetVersionItems(versionId) {
+  return request.get(`/eval/datasets/versions/${versionId}/items`)
+}
+
 export function getEvalDatasetItems(params) {
   return request.get('/eval/datasets/items', { params })
 }

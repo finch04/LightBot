@@ -422,7 +422,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined,
   DatabaseOutlined, AuditOutlined, SnippetsOutlined,
@@ -446,7 +446,8 @@ import { getEvalDatasetVersions } from '../api/evalDataset'
 import { getPrompts, getPromptVersions } from '../api/prompt'
 
 const router = useRouter()
-const activeTab = ref('datasets')
+const route = useRoute()
+const activeTab = ref(route.query.tab || 'datasets')
 const searchText = ref('')
 const loading = ref(false)
 const submitting = ref(false)
@@ -513,7 +514,8 @@ const searchPlaceholder = computed(() => {
 // ========== 初始化 ==========
 onMounted(() => loadData())
 
-watch(activeTab, () => {
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
   searchText.value = ''
   loadData()
 })

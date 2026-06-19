@@ -547,7 +547,7 @@ onMounted(loadProfile)
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
   background: rgba(0, 112, 243, 0.02);
 }
-.level-5-option:hover {
+.level-5-option:hover:not(.active) {
   border-color: #e4e4e7;
   transform: none;
   box-shadow: none;

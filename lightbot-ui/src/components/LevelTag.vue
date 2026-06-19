@@ -93,43 +93,35 @@ defineProps({
 
 /* ========== Lv 5: 彩虹流光 ========== */
 .level-tag.level-5 {
-  color: #e11d48;
-  background: linear-gradient(135deg, rgba(225, 29, 72, 0.06), rgba(124, 58, 237, 0.06), rgba(0, 112, 243, 0.06));
+  color: #c026d3;
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.05), rgba(124, 58, 237, 0.05), rgba(0, 112, 243, 0.05));
   border: 1px solid transparent;
   background-clip: padding-box;
-  text-shadow: 0 0 10px rgba(225, 29, 72, 0.3);
-  box-shadow: 0 0 8px rgba(225, 29, 72, 0.15), 0 0 16px rgba(124, 58, 237, 0.08);
-  animation: tagGlow 3s ease-in-out infinite;
+  text-shadow: 0 0 6px rgba(192, 38, 211, 0.2);
+  box-shadow: 0 0 4px rgba(192, 38, 211, 0.1);
 }
 .level-tag.level-5::before {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: -1px;
   border-radius: inherit;
   background: linear-gradient(135deg, #e11d48, #7c3aed, #0070f3, #e11d48);
   background-size: 300% 300%;
   animation: tagRainbow 4s linear infinite;
+  opacity: 0.45;
   z-index: -1;
 }
 .level-tag.level-5::after {
   content: '';
   position: absolute;
-  inset: 1px;
+  inset: 0;
   border-radius: 3px;
-  background: inherit;
+  background: #fff;
   z-index: -1;
-}
-.level-tag.level-5 .level-tag-inner {
-  background: linear-gradient(90deg, #e11d48, #7c3aed, #0070f3, #e11d48);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: tagTextFlow 3s linear infinite;
 }
 .level-tag.level-5:hover {
   transform: none !important;
-  box-shadow: 0 0 8px rgba(225, 29, 72, 0.15), 0 0 16px rgba(124, 58, 237, 0.08) !important;
+  box-shadow: 0 0 4px rgba(192, 38, 211, 0.1) !important;
 }
 
 /* 侧边栏暗色主题覆盖 */
@@ -156,9 +148,10 @@ defineProps({
   box-shadow: 0 0 6px rgba(251, 191, 36, 0.12);
 }
 .level-tag.small.level-5 {
-  background: rgba(225, 29, 72, 0.06);
-  text-shadow: 0 0 10px rgba(225, 29, 72, 0.3);
-  box-shadow: 0 0 8px rgba(225, 29, 72, 0.12), 0 0 16px rgba(124, 58, 237, 0.06);
+  color: #e879f9;
+  background: rgba(192, 38, 211, 0.06);
+  text-shadow: 0 0 6px rgba(192, 38, 211, 0.2);
+  box-shadow: 0 0 4px rgba(192, 38, 211, 0.1);
 }
 
 /* ========== 动画 ========== */
@@ -168,8 +161,8 @@ defineProps({
 }
 
 @keyframes tagGlow {
-  0%, 100% { box-shadow: 0 0 8px rgba(225, 29, 72, 0.15), 0 0 16px rgba(124, 58, 237, 0.08); }
-  50% { box-shadow: 0 0 12px rgba(225, 29, 72, 0.25), 0 0 24px rgba(124, 58, 237, 0.15); }
+  0%, 100% { box-shadow: 0 0 4px rgba(192, 38, 211, 0.1); }
+  50% { box-shadow: 0 0 8px rgba(192, 38, 211, 0.18); }
 }
 
 @keyframes tagRainbow {

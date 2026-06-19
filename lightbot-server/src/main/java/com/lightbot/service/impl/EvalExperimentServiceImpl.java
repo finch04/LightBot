@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.EvalExperimentCreateRequest;
 import com.lightbot.entity.*;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ExperimentStatus;
@@ -33,6 +34,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
         implements EvalExperimentService {
 
     private final TaskService taskService;
+    private final EvalDatasetService datasetService;
     private final EvalDatasetVersionService datasetVersionService;
     private final EvalDatasetItemService datasetItemService;
     private final PromptVersionService promptVersionService;
@@ -45,6 +47,10 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     @Override
     public EvalExperiment create(String name, String description, Long datasetId, Long datasetVersionId,
                                   String datasetVersion, String evaluationObjectConfig, String evaluatorConfig, Long userId) {
+        // 0. 参数校验
+        if (datasetVersionId == null) {
+            throw new BizException(ErrorCode.EVAL_DATASET_VERSION_NOT_FOUND);
+        }
         // 1. 构建实验记录
         EvalExperiment experiment = new EvalExperiment();
         experiment.setName(name);
@@ -97,6 +103,27 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     }
 
     @Override
+    public EvalExperiment update(Long id, EvalExperimentCreateRequest request) {
+        EvalExperiment experiment = getById(id);
+        if (experiment == null) {
+            throw new BizException(ErrorCode.EVAL_EXPERIMENT_NOT_FOUND);
+        }
+        // 只允许修改非运行中的实验
+        if (experiment.getStatus() == ExperimentStatus.RUNNING) {
+            throw new BizException(ErrorCode.EVAL_EXPERIMENT_STATUS_INVALID);
+        }
+        if (request.getName() != null) experiment.setName(request.getName());
+        if (request.getDescription() != null) experiment.setDescription(request.getDescription());
+        if (request.getDatasetId() != null) experiment.setDatasetId(request.getDatasetId());
+        if (request.getDatasetVersionId() != null) experiment.setDatasetVersionId(request.getDatasetVersionId());
+        if (request.getDatasetVersion() != null) experiment.setDatasetVersion(request.getDatasetVersion());
+        if (request.getEvaluationObjectConfig() != null) experiment.setEvaluationObjectConfig(request.getEvaluationObjectConfig());
+        if (request.getEvaluatorConfig() != null) experiment.setEvaluatorConfig(request.getEvaluatorConfig());
+        updateById(experiment);
+        return experiment;
+    }
+
+    @Override
     public EvalExperiment restart(Long id, Long userId) {
         EvalExperiment experiment = getById(id);
         if (experiment == null) {
@@ -130,12 +157,19 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                 .like(keyword != null && !keyword.isBlank(), EvalExperiment::getName, keyword)
                 .eq(status != null && !status.isBlank(), EvalExperiment::getStatus, status)
                 .orderByDesc(EvalExperiment::getCreateTime);
-        return baseMapper.selectPage(page, wrapper);
+        Page<EvalExperiment> result = baseMapper.selectPage(page, wrapper);
+        result.getRecords().forEach(this::enrichExperiment);
+        return result;
     }
 
     @Override
     public EvalExperiment getDetail(Long id) {
-        return getById(id);
+        EvalExperiment experiment = getById(id);
+        if (experiment == null) {
+            return null;
+        }
+        enrichExperiment(experiment);
+        return experiment;
     }
 
     @Override
@@ -163,6 +197,9 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                 throw new BizException(ErrorCode.EVAL_DATASET_VERSION_NOT_FOUND);
             }
             List<Long> itemIds = objectMapper.readValue(datasetVersion.getDatasetItems(), new TypeReference<>() {});
+            if (itemIds.isEmpty()) {
+                throw new BizException(ErrorCode.EVAL_DATASET_EMPTY);
+            }
             List<EvalDatasetItem> items = datasetItemService.listByIds(itemIds);
 
             // 3. 加载Prompt版本
@@ -295,6 +332,47 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
             return objectMapper.writeValueAsString(variables);
         } catch (Exception e) {
             return "{}";
+        }
+    }
+
+    /**
+     * 填充实验的展示字段（数据集名称、Prompt信息、评估器信息）
+     */
+    private void enrichExperiment(EvalExperiment experiment) {
+        // 1. 数据集名称
+        if (experiment.getDatasetId() != null) {
+            EvalDataset dataset = datasetService.getById(experiment.getDatasetId());
+            if (dataset != null) {
+                experiment.setDatasetName(dataset.getName());
+            }
+        }
+        // 2. 从 evaluationObjectConfig 提取 Prompt 信息
+        try {
+            JsonNode objectConfig = objectMapper.readTree(experiment.getEvaluationObjectConfig());
+            JsonNode config = objectConfig.get("config");
+            if (config != null) {
+                experiment.setPromptKey(config.has("promptKey") ? config.get("promptKey").asText() : null);
+                experiment.setPromptVersion(config.has("version") ? config.get("version").asText() : null);
+            }
+        } catch (Exception ignored) {
+        }
+        // 3. 从 evaluatorConfig 提取评估器信息
+        try {
+            List<Map<String, Object>> evaluatorConfigs = objectMapper.readValue(
+                    experiment.getEvaluatorConfig(), new TypeReference<>() {});
+            if (!evaluatorConfigs.isEmpty()) {
+                Map<String, Object> first = evaluatorConfigs.get(0);
+                Long evaluatorVersionId = Long.parseLong(first.get("evaluatorVersionId").toString());
+                EvalEvaluatorVersion evVersion = evaluatorVersionService.getById(evaluatorVersionId);
+                if (evVersion != null) {
+                    experiment.setEvaluatorVersion(String.valueOf(evVersion.getVersion()));
+                    EvalEvaluator evaluator = evaluatorService.getById(evVersion.getEvaluatorId());
+                    if (evaluator != null) {
+                        experiment.setEvaluatorName(evaluator.getName());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 }

@@ -274,7 +274,10 @@ const createForm = reactive({
 })
 
 const columns = [
-  { title: '实验名称', key: 'name', dataIndex: 'name', width: 240 },
+  { title: '实验名称', key: 'name', dataIndex: 'name', width: 200 },
+  { title: '评测集', key: 'datasetName', dataIndex: 'datasetName', width: 140 },
+  { title: 'Prompt', key: 'promptKey', dataIndex: 'promptKey', width: 140 },
+  { title: '评估器', key: 'evaluatorName', dataIndex: 'evaluatorName', width: 140 },
   { title: '状态', key: 'status', dataIndex: 'status', width: 100 },
   { title: '进度', key: 'progress', dataIndex: 'progress', width: 160 },
   { title: '创建时间', key: 'createTime', dataIndex: 'createTime', width: 180 },
@@ -379,7 +382,8 @@ async function handleCreate() {
 
     // 查找 datasetVersionId
     const dsVersion = datasetVersions.value.find(v => v.version === createForm.datasetVersion)
-    const datasetVersionId = dsVersion?.id || null
+    if (!dsVersion) return message.warning('评测集版本无效，请重新选择')
+    const datasetVersionId = dsVersion.id
 
     // 查找 evaluatorVersionId
     const evVersion = evaluatorVersions.value.find(v => v.version === createForm.evaluatorVersion)

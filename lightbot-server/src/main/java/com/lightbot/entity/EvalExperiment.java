@@ -94,4 +94,26 @@ public class EvalExperiment {
     @TableLogic
     @Schema(description = "逻辑删除标记")
     private Integer deleted;
+
+    // ========== 展示用瞬态字段（不映射数据库） ==========
+
+    @TableField(exist = false)
+    @Schema(description = "数据集名称")
+    private String datasetName;
+
+    @TableField(exist = false)
+    @Schema(description = "Prompt Key")
+    private String promptKey;
+
+    @TableField(exist = false)
+    @Schema(description = "Prompt 版本")
+    private String promptVersion;
+
+    @TableField(exist = false)
+    @Schema(description = "评估器名称")
+    private String evaluatorName;
+
+    @TableField(exist = false)
+    @Schema(description = "评估器版本")
+    private String evaluatorVersion;
 }

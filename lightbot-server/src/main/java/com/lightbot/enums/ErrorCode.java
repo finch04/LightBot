@@ -148,6 +148,7 @@ public enum ErrorCode {
     EVAL_DATASET_NOT_FOUND(100101, "评测集不存在", HttpStatus.BAD_REQUEST),
     EVAL_DATASET_NAME_EXISTS(100103, "评测集名称已存在", HttpStatus.BAD_REQUEST),
     EVAL_DATASET_VERSION_NOT_FOUND(100102, "评测集版本不存在", HttpStatus.BAD_REQUEST),
+    EVAL_DATASET_EMPTY(100104, "数据集暂无数据项，请先添加数据项再创建版本", HttpStatus.BAD_REQUEST),
 
     // ========== 评估器模块 ==========
     EVAL_EVALUATOR_NOT_FOUND(100201, "评估器不存在", HttpStatus.BAD_REQUEST),

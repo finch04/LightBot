@@ -72,6 +72,12 @@ public class EvalExperimentController {
         return Result.ok();
     }
 
+    @Operation(summary = "更新实验")
+    @PutMapping("/{id}")
+    public Result<EvalExperiment> update(@PathVariable Long id, @Valid @RequestBody EvalExperimentCreateRequest request) {
+        return Result.ok(experimentService.update(id, request));
+    }
+
     @Operation(summary = "重启实验")
     @PutMapping("/{id}/restart")
     public Result<EvalExperiment> restart(@PathVariable Long id) {

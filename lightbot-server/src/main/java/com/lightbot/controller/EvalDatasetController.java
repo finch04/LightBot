@@ -84,6 +84,12 @@ public class EvalDatasetController {
         return Result.ok(datasetVersionService.listByDatasetId(datasetId));
     }
 
+    @Operation(summary = "获取版本的数据项快照")
+    @GetMapping("/versions/{versionId}/items")
+    public Result<List<EvalDatasetItem>> listVersionItems(@PathVariable Long versionId) {
+        return Result.ok(datasetVersionService.getItemsByVersionId(versionId));
+    }
+
     @Operation(summary = "添加评测数据项")
     @PostMapping("/items")
     public Result<EvalDatasetItem> addItem(@Valid @RequestBody EvalDatasetItemCreateRequest request) {

@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/app/eval/experiments')">
+        <button class="btn-back" @click="router.push({ path: '/app/eval', query: { tab: 'experiments' } })">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ experiment?.name || '实验详情' }}</h1>
@@ -20,11 +20,11 @@
           <PauseCircleOutlined /> 停止
         </button>
         <button
-          v-if="experimentStatus === 'stopped'"
+          v-if="experimentStatus === 'stopped' || experimentStatus === 'failed' || experimentStatus === 'completed'"
           class="btn-outline"
           @click="handleRestart"
         >
-          <PlayCircleOutlined /> 重启
+          <ReloadOutlined /> 重新评测
         </button>
       </div>
     </div>
@@ -33,15 +33,15 @@
     <div class="info-cards">
       <div class="info-card">
         <div class="info-label">评测集</div>
-        <div class="info-value">{{ experiment?.datasetName || '-' }}</div>
+        <div class="info-value"><a-tag v-if="experiment?.datasetVersion" color="blue" size="small">{{ experiment.datasetVersion }}</a-tag>{{ experiment?.datasetName || '-' }}</div>
       </div>
       <div class="info-card">
         <div class="info-label">Prompt</div>
-        <div class="info-value">{{ experiment?.promptKey || '-' }} {{ experiment?.promptVersion ? 'v' + experiment.promptVersion : '' }}</div>
+        <div class="info-value"><a-tag v-if="experiment?.promptVersion" color="blue" size="small">{{ experiment.promptVersion }}</a-tag>{{ experiment?.promptKey || '-' }}</div>
       </div>
       <div class="info-card">
         <div class="info-label">评估器</div>
-        <div class="info-value">{{ experiment?.evaluatorName || '-' }} {{ experiment?.evaluatorVersion ? 'v' + experiment.evaluatorVersion : '' }}</div>
+        <div class="info-value"><a-tag v-if="experiment?.evaluatorVersion" color="blue" size="small">{{ experiment.evaluatorVersion }}</a-tag>{{ experiment?.evaluatorName || '-' }}</div>
       </div>
       <div class="info-card">
         <div class="info-label">创建时间</div>
@@ -49,10 +49,22 @@
       </div>
     </div>
 
+    <!-- 失败原因 -->
+    <a-alert
+      v-if="experimentStatus === 'failed' && errorMessage"
+      type="error"
+      show-icon
+      :message="'实验执行失败'"
+      :description="errorMessage"
+      style="margin-bottom: 16px; border-radius: 8px;"
+    />
+
     <!-- Tab 切换 -->
+    <div class="tabs-container">
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
       <!-- 概览 Tab -->
       <a-tab-pane key="overview" tab="概览">
+        <a-spin :spinning="overviewLoading">
         <div class="evaluator-cards">
           <div
             v-for="ev in evaluatorResults"
@@ -61,7 +73,7 @@
           >
             <div class="evaluator-card-header">
               <span class="evaluator-name">{{ ev.evaluatorName }}</span>
-              <span class="evaluator-version" v-if="ev.evaluatorVersion">v{{ ev.evaluatorVersion }}</span>
+              <span class="evaluator-version" v-if="ev.evaluatorVersion">{{ ev.evaluatorVersion }}</span>
             </div>
             <div class="evaluator-score" :class="scoreClass(ev.avgScore)">
               <span class="score-value">{{ ev.avgScore?.toFixed(2) ?? '-' }}</span>
@@ -77,9 +89,10 @@
             </div>
           </div>
         </div>
-        <div v-if="evaluatorResults.length === 0" class="empty-state">
+        <div v-if="evaluatorResults.length === 0 && !overviewLoading" class="empty-state">
           暂无评测结果
         </div>
+        </a-spin>
       </a-tab-pane>
 
       <!-- 评测结果 Tab -->
@@ -94,6 +107,7 @@
               :dataSource="getResultsForEvaluator(ev.evaluatorName)"
               :columns="resultColumns"
               :pagination="{ pageSize: 20, showTotal: (total) => `共 ${total} 条` }"
+              :loading="resultsLoading"
               rowKey="id"
               size="middle"
             >
@@ -130,18 +144,127 @@
         <div v-else class="empty-state">暂无评测结果</div>
       </a-tab-pane>
     </a-tabs>
+    <!-- 运行中遮罩 -->
+    <div v-if="experimentStatus === 'running'" class="running-mask">
+      <div class="running-mask-content">
+        <a-spin size="large" />
+        <p class="running-mask-text">实验正在评测中，当前进度 {{ experiment?.progress || 0 }}%</p>
+        <button class="btn-outline-sm" @click="handleRefreshResults">
+          <ReloadOutlined /> 刷新结果
+        </button>
+      </div>
+    </div>
+    </div>
+
+    <!-- 重新评测弹窗 -->
+    <a-modal
+      v-model:open="restartDialogVisible"
+      title="重新评测"
+      :width="restartStep === 0 ? 480 : 720"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div v-if="restartStep === 0">
+        <p style="color: #71717a; margin-bottom: 16px;">选择重新评测方式：</p>
+        <a-radio-group v-model:value="restartMode" style="display: flex; flex-direction: column; gap: 12px;">
+          <a-radio value="direct">
+            <div>
+              <div style="font-weight: 500;">直接重新评测</div>
+              <div style="font-size: 12px; color: #a1a1aa;">使用当前配置立即重新运行</div>
+            </div>
+          </a-radio>
+          <a-radio value="modify">
+            <div>
+              <div style="font-weight: 500;">修改配置后重新评测</div>
+              <div style="font-size: 12px; color: #a1a1aa;">修改实验名称、评测集版本、Prompt 版本、评估器版本等</div>
+            </div>
+          </a-radio>
+        </a-radio-group>
+        <div class="dialog-footer">
+          <div></div>
+          <div class="dialog-footer-right">
+            <button class="btn-cancel" @click="restartDialogVisible = false">取消</button>
+            <button class="btn-primary-sm" :disabled="restartSubmitting" @click="handleRestartConfirm">
+              {{ restartMode === 'direct' ? (restartSubmitting ? '重启中...' : '确认重启') : '下一步' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="restartStep === 1">
+        <a-spin :spinning="restartFormLoading" tip="加载配置中...">
+        <a-form :model="editForm" :label-col="{ span: 5 }" :style="{ opacity: restartFormLoading ? 0.4 : 1, transition: 'opacity 0.2s' }">
+          <a-form-item label="实验名称" required>
+            <a-input v-model:value="editForm.name" placeholder="实验名称" />
+          </a-form-item>
+          <a-form-item label="描述">
+            <a-textarea v-model:value="editForm.description" :rows="2" placeholder="实验描述" />
+          </a-form-item>
+          <a-form-item label="评测集" required>
+            <a-select v-model:value="editForm.datasetId" placeholder="选择评测集" @change="onEditDatasetChange">
+              <a-select-option v-for="d in datasetList" :key="d.id" :value="d.id">{{ d.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="数据版本" required>
+            <a-select v-model:value="editForm.datasetVersion" placeholder="选择数据版本">
+              <a-select-option v-for="v in datasetVersions" :key="v.version" :value="v.version">{{ v.version }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="Prompt" required>
+            <a-select v-model:value="editForm.promptKey" placeholder="选择 Prompt" @change="onEditPromptChange">
+              <a-select-option v-for="p in promptList" :key="p.promptKey" :value="p.promptKey">{{ p.promptKey }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="Prompt 版本" required>
+            <a-select v-model:value="editForm.promptVersion" placeholder="选择版本">
+              <a-select-option v-for="v in promptVersions" :key="v.version" :value="v.version">{{ v.version }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="变量映射">
+            <a-textarea v-model:value="editForm.variableMapping" :rows="2" placeholder='JSON: {"input":"user_input"}' />
+          </a-form-item>
+          <a-form-item label="评估器" required>
+            <a-select v-model:value="editForm.evaluatorId" placeholder="选择评估器" @change="onEditEvaluatorChange">
+              <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">{{ e.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="评估器版本" required>
+            <a-select v-model:value="editForm.evaluatorVersion" placeholder="选择版本">
+              <a-select-option v-for="v in evaluatorVersions" :key="v.version" :value="v.version">{{ v.version }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="参数映射">
+            <a-textarea v-model:value="editForm.evaluatorParamMapping" :rows="2" placeholder='JSON: {"actual_output":"output"}' />
+          </a-form-item>
+        </a-form>
+        </a-spin>
+        <div class="dialog-footer">
+          <button class="btn-cancel" @click="restartStep = 0">上一步</button>
+          <div class="dialog-footer-right">
+            <button class="btn-cancel" @click="restartDialogVisible = false">取消</button>
+            <button class="btn-primary-sm" :disabled="restartSubmitting" @click="handleEditSubmit">
+              {{ restartSubmitting ? '提交中...' : '更新并重新评测' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
-  getExperiment, stopExperiment, restartExperiment,
+  getExperiment, updateExperiment, stopExperiment, restartExperiment,
   getExperimentResults, getExperimentDetailResults,
 } from '../api/experiment'
+import { getTask } from '../api/task'
+import { getEvalDatasets, getEvalDatasetVersions } from '../api/evalDataset'
+import { getPrompts, getPromptVersions } from '../api/prompt'
+import { getEvaluators, getEvaluatorVersions } from '../api/evaluator'
 
 const route = useRoute()
 const router = useRouter()
@@ -151,6 +274,30 @@ const activeTab = ref('overview')
 const resultEvaluatorTab = ref('')
 const evaluatorResults = ref([])
 const detailResults = ref([])
+const overviewLoading = ref(false)
+const resultsLoading = ref(false)
+const errorMessage = ref('')
+
+// 重新评测弹窗
+const restartDialogVisible = ref(false)
+const restartMode = ref('direct')
+const restartSubmitting = ref(false)
+const restartFormLoading = ref(false)
+const restartStep = ref(0)
+const editForm = reactive({
+  name: '', description: '',
+  datasetId: null, datasetVersion: '',
+  promptKey: '', promptVersion: '',
+  variableMapping: '',
+  evaluatorId: null, evaluatorVersion: '',
+  evaluatorParamMapping: '',
+})
+const datasetList = ref([])
+const datasetVersions = ref([])
+const promptList = ref([])
+const promptVersions = ref([])
+const evaluatorList = ref([])
+const evaluatorVersions = ref([])
 
 const resultColumns = [
   { title: '输入', dataIndex: 'input', key: 'input', width: 200 },
@@ -180,24 +327,51 @@ onMounted(async () => {
 async function loadExperiment() {
   const res = await getExperiment(experimentId)
   experiment.value = res.data || {}
+  // 加载失败原因
+  if (experimentStatus.value === 'failed' && experiment.value?.taskId) {
+    try {
+      const taskRes = await getTask(experiment.value.taskId)
+      errorMessage.value = taskRes.data?.error || ''
+    } catch { /* ignore */ }
+  }
 }
 
 async function loadResults() {
+  overviewLoading.value = true
   try {
     const res = await getExperimentResults(experimentId)
     evaluatorResults.value = res.data || []
     if (evaluatorResults.value.length > 0) {
       resultEvaluatorTab.value = evaluatorResults.value[0].evaluatorName
     }
-  } catch { /* ignore */ }
+  } catch { /* ignore */ } finally {
+    overviewLoading.value = false
+  }
+}
+
+async function handleRefreshResults() {
+  const promises = [loadExperiment(), loadResults()]
+  if (activeTab.value === 'results' && detailResults.value.length > 0) {
+    resultsLoading.value = true
+    promises.push(
+      getExperimentDetailResults(experimentId)
+        .then(res => { detailResults.value = res.data?.records || [] })
+        .catch(() => {})
+        .finally(() => { resultsLoading.value = false })
+    )
+  }
+  await Promise.all(promises)
 }
 
 async function onTabChange(tab) {
   if (tab === 'results' && detailResults.value.length === 0) {
+    resultsLoading.value = true
     try {
       const res = await getExperimentDetailResults(experimentId)
       detailResults.value = res.data?.records || []
-    } catch { /* ignore */ }
+    } catch { /* ignore */ } finally {
+      resultsLoading.value = false
+    }
   }
 }
 
@@ -220,17 +394,184 @@ function handleStop() {
 }
 
 function handleRestart() {
-  Modal.confirm({
-    title: '确认重启',
-    content: '将重新运行该实验，是否继续？',
-    okText: '确认重启',
-    cancelText: '取消',
-    async onOk() {
+  restartMode.value = 'direct'
+  restartStep.value = 0
+  restartDialogVisible.value = true
+}
+
+async function handleRestartConfirm() {
+  if (restartMode.value === 'direct') {
+    restartSubmitting.value = true
+    try {
       await restartExperiment(experimentId)
       message.success('实验已重启')
+      restartDialogVisible.value = false
       loadExperiment()
-    },
-  })
+      loadResults()
+    } finally {
+      restartSubmitting.value = false
+    }
+  } else {
+    restartStep.value = 1
+    restartFormLoading.value = true
+    try {
+      initEditForm()
+      await loadDropdowns()
+    } finally {
+      restartFormLoading.value = false
+    }
+  }
+}
+
+function initEditForm() {
+  const exp = experiment.value
+  editForm.name = exp.name || ''
+  editForm.description = exp.description || ''
+  editForm.datasetId = exp.datasetId
+  editForm.datasetVersion = exp.datasetVersion || ''
+  editForm.promptKey = ''
+  editForm.promptVersion = ''
+  editForm.variableMapping = ''
+  editForm.evaluatorId = null
+  editForm.evaluatorVersion = ''
+  editForm.evaluatorParamMapping = ''
+  // 解析 evaluationObjectConfig
+  try {
+    const objConfig = JSON.parse(exp.evaluationObjectConfig)
+    const config = objConfig.config || {}
+    editForm.promptKey = config.promptKey || ''
+    editForm.promptVersion = config.version || ''
+    const varMap = config.variableMap || []
+    if (varMap.length > 0) {
+      const mapped = {}
+      varMap.forEach(m => { mapped[m.promptVariable] = m.datasetColumn })
+      editForm.variableMapping = JSON.stringify(mapped)
+    }
+  } catch { /* ignore */ }
+  // 解析 evaluatorConfig
+  try {
+    const evalConfigs = JSON.parse(exp.evaluatorConfig)
+    if (evalConfigs.length > 0) {
+      const eVarMap = evalConfigs[0].variableMap || []
+      if (eVarMap.length > 0) {
+        const mapped = {}
+        eVarMap.forEach(m => { mapped[m.evaluatorVariable] = m.source })
+        editForm.evaluatorParamMapping = JSON.stringify(mapped)
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+async function loadDropdowns() {
+  const [dsRes, pRes, eRes] = await Promise.all([
+    getEvalDatasets({ pageNum: 1, pageSize: 100 }),
+    getPrompts({ pageNum: 1, pageSize: 100 }),
+    getEvaluators({ pageNum: 1, pageSize: 100 }),
+  ])
+  datasetList.value = dsRes.data?.records || []
+  promptList.value = pRes.data?.records || []
+  evaluatorList.value = eRes.data?.records || []
+  // 级联加载已有值的版本列表
+  if (editForm.datasetId) {
+    const res = await getEvalDatasetVersions(editForm.datasetId)
+    datasetVersions.value = res.data || []
+  }
+  if (editForm.promptKey) {
+    const res = await getPromptVersions(editForm.promptKey)
+    promptVersions.value = res.data || []
+  }
+  // 从 evaluatorConfig 中的 evaluatorVersionId 反查 evaluatorId
+  if (experiment.value?.evaluatorConfig) {
+    try {
+      const evalConfigs = JSON.parse(experiment.value.evaluatorConfig)
+      if (evalConfigs.length > 0) {
+        const evVersionId = evalConfigs[0].evaluatorVersionId
+        for (const ev of evaluatorList.value) {
+          const vers = await getEvaluatorVersions(ev.id)
+          const match = (vers.data || []).find(v => String(v.id) === String(evVersionId))
+          if (match) {
+            editForm.evaluatorId = ev.id
+            evaluatorVersions.value = vers.data
+            editForm.evaluatorVersion = match.version
+            break
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+}
+
+async function onEditDatasetChange(id) {
+  editForm.datasetVersion = ''
+  const res = await getEvalDatasetVersions(id)
+  datasetVersions.value = res.data || []
+}
+
+async function onEditPromptChange(key) {
+  editForm.promptVersion = ''
+  const res = await getPromptVersions(key)
+  promptVersions.value = res.data || []
+}
+
+async function onEditEvaluatorChange(id) {
+  editForm.evaluatorVersion = ''
+  const res = await getEvaluatorVersions(id)
+  evaluatorVersions.value = res.data || []
+}
+
+async function handleEditSubmit() {
+  if (!editForm.name.trim()) return message.warning('请输入实验名称')
+  if (!editForm.datasetId || !editForm.datasetVersion) return message.warning('请选择评测集和版本')
+  if (!editForm.promptKey || !editForm.promptVersion) return message.warning('请选择 Prompt 和版本')
+  if (!editForm.evaluatorId || !editForm.evaluatorVersion) return message.warning('请选择评估器和版本')
+
+  restartSubmitting.value = true
+  try {
+    let variableMap = []
+    if (editForm.variableMapping.trim()) {
+      try {
+        const parsed = JSON.parse(editForm.variableMapping)
+        variableMap = Object.entries(parsed).map(([promptVariable, datasetColumn]) => ({ promptVariable, datasetColumn }))
+      } catch { return message.warning('变量映射 JSON 格式不正确') }
+    }
+    let evaluatorParamMap = []
+    if (editForm.evaluatorParamMapping.trim()) {
+      try {
+        const parsed = JSON.parse(editForm.evaluatorParamMapping)
+        evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
+      } catch { return message.warning('参数映射 JSON 格式不正确') }
+    }
+    const dsVersion = datasetVersions.value.find(v => v.version === editForm.datasetVersion)
+    if (!dsVersion) return message.warning('评测集版本无效')
+    const evVersion = evaluatorVersions.value.find(v => v.version === editForm.evaluatorVersion)
+    const evaluatorVersionId = evVersion?.id || null
+
+    const evaluationObjectConfig = JSON.stringify({
+      type: 'prompt',
+      config: { promptKey: editForm.promptKey, version: editForm.promptVersion, variableMap },
+    })
+    const evaluatorConfig = JSON.stringify([{
+      evaluatorVersionId: evaluatorVersionId ? String(evaluatorVersionId) : '',
+      variableMap: evaluatorParamMap,
+    }])
+
+    await updateExperiment(experimentId, {
+      name: editForm.name,
+      description: editForm.description,
+      datasetId: editForm.datasetId,
+      datasetVersionId: dsVersion.id,
+      datasetVersion: editForm.datasetVersion,
+      evaluationObjectConfig,
+      evaluatorConfig,
+    })
+    await restartExperiment(experimentId)
+    message.success('实验已更新并重启')
+    restartDialogVisible.value = false
+    loadExperiment()
+    loadResults()
+  } finally {
+    restartSubmitting.value = false
+  }
 }
 
 function scoreClass(score) {
@@ -323,15 +664,16 @@ function formatTime(t) {
 /* 信息卡片 */
 .info-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  margin-bottom: 32px;
+  margin: 0 auto 32px;
+  max-width: 1200px;
 }
 .info-card {
   background: #fff;
   border: 1px solid #ebebeb;
   border-radius: 12px;
-  padding: 16px 20px;
+  padding: 20px 24px;
 }
 .info-label {
   font-size: 13px;
@@ -419,4 +761,73 @@ function formatTime(t) {
   padding: 60px 20px;
   color: #a1a1aa;
 }
+.tabs-container {
+  position: relative;
+}
+.running-mask {
+  position: absolute;
+  inset: 32px 0 0;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 8px;
+}
+.running-mask-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.running-mask-text {
+  font-size: 14px;
+  color: #52525b;
+  margin: 0;
+}
+.btn-outline-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline-sm:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+.dialog-footer-right { display: flex; gap: 8px; }
+.btn-primary-sm {
+  padding: 6px 16px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-primary-sm:hover:not(:disabled) { background: #27272a; }
+.btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
+.btn-cancel {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
 </style>

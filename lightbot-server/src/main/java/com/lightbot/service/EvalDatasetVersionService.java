@@ -1,6 +1,7 @@
 package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.entity.EvalDatasetItem;
 import com.lightbot.entity.EvalDatasetVersion;
 
 import java.util.List;
@@ -29,4 +30,12 @@ public interface EvalDatasetVersionService extends IService<EvalDatasetVersion> 
      * @return 版本列表
      */
     List<EvalDatasetVersion> listByDatasetId(Long datasetId);
+
+    /**
+     * 获取版本的数据项快照
+     *
+     * @param versionId 版本ID
+     * @return 数据项列表
+     */
+    List<EvalDatasetItem> getItemsByVersionId(Long versionId);
 }

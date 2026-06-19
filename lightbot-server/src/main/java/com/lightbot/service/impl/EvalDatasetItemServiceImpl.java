@@ -69,6 +69,14 @@ public class EvalDatasetItemServiceImpl extends ServiceImpl<EvalDatasetItemMappe
     }
 
     @Override
+    public List<EvalDatasetItem> listByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return super.listByIds(ids);
+    }
+
+    @Override
     public void deleteById(Long id) {
         removeById(id);
     }

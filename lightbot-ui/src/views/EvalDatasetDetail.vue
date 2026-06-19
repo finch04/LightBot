@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/app/eval/datasets')">
+        <button class="btn-back" @click="router.push({ path: '/app/eval', query: { tab: 'datasets' } })">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ dataset?.name || '评测集详情' }}</h1>
@@ -31,7 +31,10 @@
             <div class="item-content">
               <div class="item-field" v-for="(val, key) in parseItemContent(item.dataContent)" :key="key">
                 <span class="item-key">{{ key }}:</span>
-                <span class="item-val">{{ truncate(val, 80) }}</span>
+                <a-tooltip v-if="val && val.length > 80" :title="val" placement="topLeft" :overlay-style="{ maxWidth: '500px' }">
+                  <span class="item-val">{{ truncate(val, 80) }}</span>
+                </a-tooltip>
+                <span v-else class="item-val">{{ val }}</span>
               </div>
             </div>
             <button class="btn-icon-sm danger" @click="handleDeleteItem(item.id)">
@@ -61,16 +64,23 @@
         </div>
         <div class="version-list">
           <div v-for="v in versions" :key="v.id" class="version-item">
-            <div class="version-info">
-              <span class="version-tag">{{ v.version }}</span>
-              <a-tag :color="v.status === 'published' ? 'green' : 'blue'" size="small">
-                {{ v.status === 'published' ? '已发布' : '草稿' }}
-              </a-tag>
+            <div class="version-body">
+              <div class="version-info">
+                <span class="version-tag">{{ v.version }}</span>
+                <a-tag :color="v.status === 'published' ? 'green' : 'blue'" size="small">
+                  {{ v.status === 'published' ? '已发布' : '草稿' }}
+                </a-tag>
+              </div>
+              <div class="version-meta">
+                <span>{{ v.dataCount || 0 }} 条数据</span>
+                <span>{{ formatTime(v.createTime) }}</span>
+              </div>
             </div>
-            <div class="version-meta">
-              <span>{{ v.dataCount || 0 }} 条数据</span>
-              <span>{{ formatTime(v.createTime) }}</span>
-            </div>
+            <a-tooltip title="查看详情">
+              <button class="btn-icon-sm" @click.stop="openVersionDetail(v)">
+                <EyeOutlined />
+              </button>
+            </a-tooltip>
           </div>
           <div v-if="versions.length === 0" class="item-empty">暂无版本</div>
         </div>
@@ -139,17 +149,43 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 版本数据项详情弹窗 -->
+    <a-modal
+      v-model:open="versionDetailVisible"
+      :title="`版本 ${versionDetailVersion} 数据项快照`"
+      :width="720"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <a-spin :spinning="versionDetailLoading">
+        <div class="version-detail-list">
+          <div v-for="item in versionDetailItems" :key="item.id" class="item-row">
+            <div class="item-content">
+              <div class="item-field" v-for="(val, key) in parseItemContent(item.dataContent)" :key="key">
+                <span class="item-key">{{ key }}:</span>
+                <a-tooltip v-if="val && val.length > 80" :title="val" placement="topLeft" :overlay-style="{ maxWidth: '500px' }">
+                  <span class="item-val">{{ truncate(val, 80) }}</span>
+                </a-tooltip>
+                <span v-else class="item-val">{{ val }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="versionDetailItems.length === 0 && !versionDetailLoading" class="item-empty">该版本无数据项</div>
+        </div>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PlusOutlined, ArrowLeftOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ArrowLeftOutlined, HistoryOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getEvalDataset,
-  getEvalDatasetVersions, createEvalDatasetVersion,
+  getEvalDatasetVersions, createEvalDatasetVersion, getEvalDatasetVersionItems,
   getEvalDatasetItems, createEvalDatasetItem, deleteEvalDatasetItem,
 } from '../api/evalDataset'
 
@@ -165,6 +201,10 @@ const pageNum = ref(1)
 const pageSize = 20
 const versionDialogVisible = ref(false)
 const itemDialogVisible = ref(false)
+const versionDetailVisible = ref(false)
+const versionDetailLoading = ref(false)
+const versionDetailVersion = ref('')
+const versionDetailItems = ref([])
 const submitting = ref(false)
 
 const versionForm = reactive({ version: '' })
@@ -197,6 +237,9 @@ async function loadItems() {
 }
 
 function openVersionDialog() {
+  if (items.value.length === 0) {
+    return message.warning('数据集暂无数据项，请先添加数据项再创建版本')
+  }
   Object.assign(versionForm, { version: '' })
   versionDialogVisible.value = true
 }
@@ -214,6 +257,21 @@ async function handleCreateVersion() {
     loadVersions()
   } finally {
     submitting.value = false
+  }
+}
+
+async function openVersionDetail(v) {
+  versionDetailVersion.value = v.version
+  versionDetailVisible.value = true
+  versionDetailLoading.value = true
+  versionDetailItems.value = []
+  try {
+    const res = await getEvalDatasetVersionItems(v.id)
+    versionDetailItems.value = res.data || []
+  } catch {
+    versionDetailItems.value = []
+  } finally {
+    versionDetailLoading.value = false
   }
 }
 
@@ -384,7 +442,7 @@ function formatTime(t) {
 
 .content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 3fr 2fr;
   gap: 16px;
 }
 .panel {
@@ -392,6 +450,8 @@ function formatTime(t) {
   border: 1px solid #ebebeb;
   border-radius: 8px;
   padding: 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 .panel-header {
   display: flex;
@@ -433,9 +493,6 @@ function formatTime(t) {
 .item-field {
   font-size: 13px;
   line-height: 1.6;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .item-key {
   color: #71717a;
@@ -464,10 +521,19 @@ function formatTime(t) {
   overflow-y: auto;
 }
 .version-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px;
   border: 1px solid #f5f5f5;
   border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+.version-item:hover {
+  border-color: #e4e4e7;
+  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+.version-body { flex: 1; min-width: 0; }
 .version-info {
   display: flex;
   align-items: center;
@@ -492,4 +558,11 @@ function formatTime(t) {
   margin-top: 16px;
 }
 .dialog-footer-right { display: flex; gap: 8px; }
+.version-detail-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 </style>

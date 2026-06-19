@@ -1,6 +1,7 @@
 package com.lightbot.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.entity.EvalDataset;
@@ -43,6 +44,9 @@ public class EvalDatasetVersionServiceImpl extends ServiceImpl<EvalDatasetVersio
         }
         // 快照当前数据集的所有条目ID
         List<EvalDatasetItem> items = datasetItemService.listAllByDatasetId(datasetId);
+        if (items.isEmpty()) {
+            throw new BizException(ErrorCode.EVAL_DATASET_EMPTY);
+        }
         List<Long> itemIds = items.stream().map(EvalDatasetItem::getId).collect(Collectors.toList());
         String datasetItemsJson;
         try {
@@ -67,5 +71,23 @@ public class EvalDatasetVersionServiceImpl extends ServiceImpl<EvalDatasetVersio
                 .eq(EvalDatasetVersion::getDatasetId, datasetId)
                 .orderByDesc(EvalDatasetVersion::getCreateTime)
                 .list();
+    }
+
+    @Override
+    public List<EvalDatasetItem> getItemsByVersionId(Long versionId) {
+        EvalDatasetVersion version = getById(versionId);
+        if (version == null) {
+            throw new BizException(ErrorCode.EVAL_DATASET_VERSION_NOT_FOUND);
+        }
+        try {
+            List<Long> itemIds = objectMapper.readValue(version.getDatasetItems(), new TypeReference<>() {});
+            if (itemIds.isEmpty()) {
+                return List.of();
+            }
+            return datasetItemService.listByIds(itemIds);
+        } catch (Exception e) {
+            log.warn("[评测集版本] 解析数据项失败, versionId={}, error={}", versionId, e.getMessage());
+            return List.of();
+        }
     }
 }

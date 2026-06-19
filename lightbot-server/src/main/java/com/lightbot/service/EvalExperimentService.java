@@ -2,6 +2,7 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.EvalExperimentCreateRequest;
 import com.lightbot.entity.EvalExperiment;
 import com.lightbot.entity.Task;
 
@@ -43,6 +44,15 @@ public interface EvalExperimentService extends IService<EvalExperiment> {
      * @param userId 操作者ID
      */
     void deleteById(Long id, Long userId);
+
+    /**
+     * 更新实验配置（仅非运行中的实验可修改）
+     *
+     * @param id      实验ID
+     * @param request 更新请求
+     * @return 更新后的实验实体
+     */
+    EvalExperiment update(Long id, EvalExperimentCreateRequest request);
 
     /**
      * 重新运行评测实验
