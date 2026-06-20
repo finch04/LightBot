@@ -356,21 +356,27 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
             }
         } catch (Exception ignored) {
         }
-        // 3. 从 evaluatorConfig 提取评估器信息
+        // 3. 从 evaluatorConfig 提取评估器信息（支持多个评估器）
         try {
             List<Map<String, Object>> evaluatorConfigs = objectMapper.readValue(
                     experiment.getEvaluatorConfig(), new TypeReference<>() {});
-            if (!evaluatorConfigs.isEmpty()) {
-                Map<String, Object> first = evaluatorConfigs.get(0);
-                Long evaluatorVersionId = Long.parseLong(first.get("evaluatorVersionId").toString());
+            List<String> nameList = new ArrayList<>();
+            List<String> versionList = new ArrayList<>();
+            for (Map<String, Object> cfg : evaluatorConfigs) {
+                Long evaluatorVersionId = Long.parseLong(cfg.get("evaluatorVersionId").toString());
                 EvalEvaluatorVersion evVersion = evaluatorVersionService.getById(evaluatorVersionId);
                 if (evVersion != null) {
-                    experiment.setEvaluatorVersion(String.valueOf(evVersion.getVersion()));
+                    versionList.add(String.valueOf(evVersion.getVersion()));
                     EvalEvaluator evaluator = evaluatorService.getById(evVersion.getEvaluatorId());
-                    if (evaluator != null) {
-                        experiment.setEvaluatorName(evaluator.getName());
-                    }
+                    nameList.add(evaluator != null ? evaluator.getName() : "未知");
                 }
+            }
+            experiment.setEvaluatorNameList(nameList);
+            experiment.setEvaluatorVersionList(versionList);
+            // 兼容旧字段：取第一个
+            if (!nameList.isEmpty()) {
+                experiment.setEvaluatorName(nameList.get(0));
+                experiment.setEvaluatorVersion(versionList.get(0));
             }
         } catch (Exception ignored) {
         }

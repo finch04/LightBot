@@ -39,7 +39,7 @@
       </div>
     </div>
 
-    <a-spin :spinning="loading">
+    <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
       <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'knowledge-card': (t.toolType?.code || t.toolType) === 'knowledge' }">
         <div class="card-top">

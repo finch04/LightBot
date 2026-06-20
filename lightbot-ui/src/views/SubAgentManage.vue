@@ -1,7 +1,7 @@
 <template>
   <div class="subagent-manage">
     <!-- 卡片列表 -->
-    <a-spin :spinning="loading">
+    <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="subagent-grid">
       <div v-for="s in list" :key="s.id" class="subagent-card" @click="openDetail(s)">
         <div class="card-top">

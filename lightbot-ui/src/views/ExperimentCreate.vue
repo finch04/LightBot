@@ -95,40 +95,51 @@
         </a-form>
       </div>
 
-      <!-- Step 4: 配置评估器 -->
+      <!-- Step 4: 配置评估器（支持多个） -->
       <div v-show="currentStep === 3">
-        <a-form :model="createForm" :label-col="{ span: 4 }">
-          <a-form-item label="评估器" required>
-            <a-select
-              v-model:value="createForm.evaluatorId"
-              placeholder="选择评估器"
-              style="width: 100%"
-              @change="onEvaluatorChange"
-            >
-              <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">
-                {{ e.name }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="评估器版本" required>
-            <a-select
-              v-model:value="createForm.evaluatorVersion"
-              placeholder="选择版本"
-              style="width: 100%"
-            >
-              <a-select-option v-for="v in evaluatorVersions" :key="v.version" :value="v.version">
-                {{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="参数映射">
-            <a-textarea
-              v-model:value="createForm.evaluatorParamMapping"
-              :rows="3"
-              placeholder='评估器变量映射，JSON 格式：{"actual_output":"output","expected_output":"reference"}'
-            />
-          </a-form-item>
-        </a-form>
+        <div v-for="(ev, idx) in createForm.evaluators" :key="idx" class="evaluator-config-block">
+          <div class="evaluator-config-header">
+            <span class="evaluator-config-title">评估器 {{ idx + 1 }}</span>
+            <a-tooltip v-if="createForm.evaluators.length > 1" title="移除">
+              <button class="btn-icon danger" @click="removeEvaluator(idx)"><DeleteOutlined /></button>
+            </a-tooltip>
+          </div>
+          <a-form :label-col="{ span: 5 }">
+            <a-form-item label="评估器" required>
+              <a-select
+                v-model:value="ev.evaluatorId"
+                placeholder="选择评估器"
+                style="width: 100%"
+                @change="(id) => onEvaluatorChange(idx, id)"
+              >
+                <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">
+                  {{ e.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="评估器版本" required>
+              <a-select
+                v-model:value="ev.evaluatorVersion"
+                placeholder="选择版本"
+                style="width: 100%"
+              >
+                <a-select-option v-for="v in ev.versions" :key="v.version" :value="v.version">
+                  {{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="参数映射">
+              <a-textarea
+                v-model:value="ev.evaluatorParamMapping"
+                :rows="2"
+                placeholder='评估器变量映射，JSON 格式：{"actual_output":"output","expected_output":"reference"}'
+              />
+            </a-form-item>
+          </a-form>
+        </div>
+        <button class="btn-outline" style="margin-top: 8px" @click="addEvaluator">
+          <PlusOutlined /> 添加评估器
+        </button>
       </div>
 
       <!-- 底部按钮 -->
@@ -151,7 +162,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeftOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { createExperiment } from '../api/experiment'
 import { getEvalDatasets, getEvalDatasetVersions } from '../api/evalDataset'
@@ -167,7 +178,6 @@ const datasetVersions = ref([])
 const promptList = ref([])
 const promptVersions = ref([])
 const evaluatorList = ref([])
-const evaluatorVersions = ref([])
 
 const createForm = reactive({
   name: '',
@@ -177,9 +187,7 @@ const createForm = reactive({
   promptKey: '',
   promptVersion: '',
   variableMapping: '',
-  evaluatorId: null,
-  evaluatorVersion: '',
-  evaluatorParamMapping: '',
+  evaluators: [{ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] }],
 })
 
 onMounted(() => loadDropdowns())
@@ -213,12 +221,20 @@ async function onPromptChange(key) {
   } catch { promptVersions.value = [] }
 }
 
-async function onEvaluatorChange(id) {
-  createForm.evaluatorVersion = ''
+async function onEvaluatorChange(idx, id) {
+  createForm.evaluators[idx].evaluatorVersion = ''
   try {
     const res = await getEvaluatorVersions(id)
-    evaluatorVersions.value = res.data || []
-  } catch { evaluatorVersions.value = [] }
+    createForm.evaluators[idx].versions = res.data || []
+  } catch { createForm.evaluators[idx].versions = [] }
+}
+
+function addEvaluator() {
+  createForm.evaluators.push({ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] })
+}
+
+function removeEvaluator(idx) {
+  createForm.evaluators.splice(idx, 1)
 }
 
 function nextStep() {
@@ -229,7 +245,12 @@ function nextStep() {
 }
 
 async function handleCreate() {
-  if (!createForm.evaluatorId || !createForm.evaluatorVersion) return message.warning('请选择评估器和版本')
+  if (createForm.evaluators.length === 0) return message.warning('请至少添加一个评估器')
+  for (let i = 0; i < createForm.evaluators.length; i++) {
+    const ev = createForm.evaluators[i]
+    if (!ev.evaluatorId || !ev.evaluatorVersion) return message.warning(`请选择评估器 ${i + 1} 的评估器和版本`)
+  }
+
   submitting.value = true
   try {
     let variableMap = []
@@ -239,19 +260,9 @@ async function handleCreate() {
         variableMap = Object.entries(parsed).map(([promptVariable, datasetColumn]) => ({ promptVariable, datasetColumn }))
       } catch { return message.warning('变量映射 JSON 格式不正确') }
     }
-    let evaluatorParamMap = []
-    if (createForm.evaluatorParamMapping.trim()) {
-      try {
-        const parsed = JSON.parse(createForm.evaluatorParamMapping)
-        evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
-      } catch { return message.warning('参数映射 JSON 格式不正确') }
-    }
 
     const dsVersion = datasetVersions.value.find(v => v.version === createForm.datasetVersion)
     const datasetVersionId = dsVersion?.id || null
-
-    const evVersion = evaluatorVersions.value.find(v => v.version === createForm.evaluatorVersion)
-    const evaluatorVersionId = evVersion?.id || null
 
     const evaluationObjectConfig = JSON.stringify({
       type: 'prompt',
@@ -261,10 +272,21 @@ async function handleCreate() {
         variableMap,
       },
     })
-    const evaluatorConfig = JSON.stringify([{
-      evaluatorVersionId: evaluatorVersionId ? String(evaluatorVersionId) : '',
-      variableMap: evaluatorParamMap,
-    }])
+
+    const evaluatorConfigArr = createForm.evaluators.map(ev => {
+      let evaluatorParamMap = []
+      if (ev.evaluatorParamMapping.trim()) {
+        try {
+          const parsed = JSON.parse(ev.evaluatorParamMapping)
+          evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
+        } catch { throw new Error('评估器参数映射 JSON 格式不正确') }
+      }
+      const evVersion = ev.versions.find(v => v.version === ev.evaluatorVersion)
+      return {
+        evaluatorVersionId: evVersion?.id ? String(evVersion.id) : '',
+        variableMap: evaluatorParamMap,
+      }
+    })
 
     await createExperiment({
       name: createForm.name,
@@ -273,10 +295,12 @@ async function handleCreate() {
       datasetVersionId,
       datasetVersion: createForm.datasetVersion,
       evaluationObjectConfig,
-      evaluatorConfig,
+      evaluatorConfig: JSON.stringify(evaluatorConfigArr),
     })
     message.success('实验创建成功')
-    router.push('/app/eval')
+    router.push('/app/eval?tab=experiments')
+  } catch (e) {
+    if (e.message) message.warning(e.message)
   } finally {
     submitting.value = false
   }
@@ -355,4 +379,49 @@ async function handleCreate() {
   font-size: 14px;
 }
 .btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 100px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-outline:hover { border-color: #0070f3; color: #0070f3; }
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+}
+.btn-icon:hover { background: #f5f5f5; }
+.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.evaluator-config-block {
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.evaluator-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.evaluator-config-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
 </style>

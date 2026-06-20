@@ -9,7 +9,7 @@
         <p class="page-desc">{{ experiment?.description || '' }}</p>
       </div>
       <div class="page-header-actions">
-        <a-tag :color="statusColor" style="font-size: 14px; padding: 4px 12px;">
+        <a-tag v-if="experimentStatus" :color="statusColor" style="font-size: 14px; padding: 4px 12px;">
           {{ statusLabel }}
         </a-tag>
         <button
@@ -41,7 +41,12 @@
       </div>
       <div class="info-card">
         <div class="info-label">评估器</div>
-        <div class="info-value"><a-tag v-if="experiment?.evaluatorVersion" color="blue" size="small">{{ experiment.evaluatorVersion }}</a-tag>{{ experiment?.evaluatorName || '-' }}</div>
+        <div class="info-value" v-if="experiment?.evaluatorNameList?.length">
+          <div v-for="(name, i) in experiment.evaluatorNameList" :key="i" class="evaluator-info-item">
+            <a-tag v-if="experiment.evaluatorVersionList?.[i]" color="blue" size="small">{{ experiment.evaluatorVersionList[i] }}</a-tag>{{ name }}
+          </div>
+        </div>
+        <div class="info-value" v-else>-</div>
       </div>
       <div class="info-card">
         <div class="info-label">创建时间</div>
@@ -64,8 +69,8 @@
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
       <!-- 概览 Tab -->
       <a-tab-pane key="overview" tab="概览">
-        <a-spin :spinning="overviewLoading">
-        <div class="evaluator-cards">
+        <a-spin :spinning="overviewLoading" style="min-height: 200px; display: block;">
+        <div class="evaluator-cards" style="min-height: 200px;">
           <div
             v-for="ev in evaluatorResults"
             :key="ev.evaluatorName"
@@ -193,6 +198,7 @@
 
       <div v-if="restartStep === 1">
         <a-spin :spinning="restartFormLoading" tip="加载配置中...">
+        <div class="restart-form-scroll">
         <a-form :model="editForm" :label-col="{ span: 5 }" :style="{ opacity: restartFormLoading ? 0.4 : 1, transition: 'opacity 0.2s' }">
           <a-form-item label="实验名称" required>
             <a-input v-model:value="editForm.name" :maxlength="30" show-count placeholder="实验名称 (不超过30字)" />
@@ -223,20 +229,32 @@
           <a-form-item label="变量映射">
             <a-textarea v-model:value="editForm.variableMapping" :rows="2" placeholder='JSON: {"input":"user_input"}' />
           </a-form-item>
-          <a-form-item label="评估器" required>
-            <a-select v-model:value="editForm.evaluatorId" placeholder="选择评估器" @change="onEditEvaluatorChange">
-              <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">{{ e.name }}</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="评估器版本" required>
-            <a-select v-model:value="editForm.evaluatorVersion" placeholder="选择版本">
-              <a-select-option v-for="v in evaluatorVersions" :key="v.version" :value="v.version">{{ v.version }}</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="参数映射">
-            <a-textarea v-model:value="editForm.evaluatorParamMapping" :rows="2" placeholder='JSON: {"actual_output":"output"}' />
-          </a-form-item>
+          <div v-for="(ev, idx) in editForm.evaluators" :key="idx" class="evaluator-config-block">
+            <div class="evaluator-config-header">
+              <span class="evaluator-config-title">评估器 {{ idx + 1 }}</span>
+              <a-tooltip v-if="editForm.evaluators.length > 1" title="移除">
+                <button class="btn-icon danger" @click="removeEditEvaluator(idx)"><DeleteOutlined /></button>
+              </a-tooltip>
+            </div>
+            <a-form-item label="评估器" required>
+              <a-select v-model:value="ev.evaluatorId" placeholder="选择评估器" @change="(id) => onEditEvaluatorChange(idx, id)">
+                <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">{{ e.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="评估器版本" required>
+              <a-select v-model:value="ev.evaluatorVersion" placeholder="选择版本">
+                <a-select-option v-for="v in ev.versions" :key="v.version" :value="v.version">{{ v.version }}</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="参数映射">
+              <a-textarea v-model:value="ev.evaluatorParamMapping" :rows="2" placeholder='JSON: {"actual_output":"output"}' />
+            </a-form-item>
+          </div>
+          <a-button type="dashed" size="small" block @click="addEditEvaluator" style="margin-top: 4px;">
+            <PlusOutlined /> 添加评估器
+          </a-button>
         </a-form>
+        </div>
         </a-spin>
         <div class="dialog-footer">
           <button class="btn-cancel" @click="restartStep = 0">上一步</button>
@@ -255,7 +273,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeftOutlined, PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, PauseCircleOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   getExperiment, updateExperiment, stopExperiment, restartExperiment,
@@ -289,15 +307,13 @@ const editForm = reactive({
   datasetId: null, datasetVersion: '',
   promptKey: '', promptVersion: '',
   variableMapping: '',
-  evaluatorId: null, evaluatorVersion: '',
-  evaluatorParamMapping: '',
+  evaluators: [],
 })
 const datasetList = ref([])
 const datasetVersions = ref([])
 const promptList = ref([])
 const promptVersions = ref([])
 const evaluatorList = ref([])
-const evaluatorVersions = ref([])
 
 const resultColumns = [
   { title: '输入', dataIndex: 'input', key: 'input', width: 200 },
@@ -432,9 +448,7 @@ function initEditForm() {
   editForm.promptKey = ''
   editForm.promptVersion = ''
   editForm.variableMapping = ''
-  editForm.evaluatorId = null
-  editForm.evaluatorVersion = ''
-  editForm.evaluatorParamMapping = ''
+  editForm.evaluators = []
   // 解析 evaluationObjectConfig
   try {
     const objConfig = JSON.parse(exp.evaluationObjectConfig)
@@ -448,17 +462,25 @@ function initEditForm() {
       editForm.variableMapping = JSON.stringify(mapped)
     }
   } catch { /* ignore */ }
-  // 解析 evaluatorConfig
+  // 解析 evaluatorConfig（支持多个评估器）
   try {
     const evalConfigs = JSON.parse(exp.evaluatorConfig)
-    if (evalConfigs.length > 0) {
-      const eVarMap = evalConfigs[0].variableMap || []
+    editForm.evaluators = evalConfigs.map(cfg => {
+      const eVarMap = cfg.variableMap || []
+      let paramMapping = ''
       if (eVarMap.length > 0) {
         const mapped = {}
         eVarMap.forEach(m => { mapped[m.evaluatorVariable] = m.source })
-        editForm.evaluatorParamMapping = JSON.stringify(mapped)
+        paramMapping = JSON.stringify(mapped)
       }
-    }
+      return {
+        evaluatorId: null,
+        evaluatorVersion: '',
+        evaluatorParamMapping: paramMapping,
+        evaluatorVersionId: cfg.evaluatorVersionId || '',
+        versions: [],
+      }
+    })
   } catch { /* ignore */ }
 }
 
@@ -480,24 +502,20 @@ async function loadDropdowns() {
     const res = await getPromptVersions(editForm.promptKey)
     promptVersions.value = res.data || []
   }
-  // 从 evaluatorConfig 中的 evaluatorVersionId 反查 evaluatorId
-  if (experiment.value?.evaluatorConfig) {
-    try {
-      const evalConfigs = JSON.parse(experiment.value.evaluatorConfig)
-      if (evalConfigs.length > 0) {
-        const evVersionId = evalConfigs[0].evaluatorVersionId
-        for (const ev of evaluatorList.value) {
-          const vers = await getEvaluatorVersions(ev.id)
-          const match = (vers.data || []).find(v => String(v.id) === String(evVersionId))
-          if (match) {
-            editForm.evaluatorId = ev.id
-            evaluatorVersions.value = vers.data
-            editForm.evaluatorVersion = match.version
-            break
-          }
-        }
+  // 从 evaluatorConfig 中的 evaluatorVersionId 反查 evaluatorId（支持多个评估器）
+  for (const evCfg of editForm.evaluators) {
+    const evVersionId = evCfg.evaluatorVersionId
+    if (!evVersionId) continue
+    for (const ev of evaluatorList.value) {
+      const vers = await getEvaluatorVersions(ev.id)
+      const match = (vers.data || []).find(v => String(v.id) === String(evVersionId))
+      if (match) {
+        evCfg.evaluatorId = ev.id
+        evCfg.versions = vers.data || []
+        evCfg.evaluatorVersion = match.version
+        break
       }
-    } catch { /* ignore */ }
+    }
   }
 }
 
@@ -513,17 +531,31 @@ async function onEditPromptChange(key) {
   promptVersions.value = res.data || []
 }
 
-async function onEditEvaluatorChange(id) {
-  editForm.evaluatorVersion = ''
-  const res = await getEvaluatorVersions(id)
-  evaluatorVersions.value = res.data || []
+async function onEditEvaluatorChange(idx, id) {
+  editForm.evaluators[idx].evaluatorVersion = ''
+  try {
+    const res = await getEvaluatorVersions(id)
+    editForm.evaluators[idx].versions = res.data || []
+  } catch { editForm.evaluators[idx].versions = [] }
+}
+
+function addEditEvaluator() {
+  editForm.evaluators.push({ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] })
+}
+
+function removeEditEvaluator(idx) {
+  editForm.evaluators.splice(idx, 1)
 }
 
 async function handleEditSubmit() {
   if (!editForm.name.trim()) return message.warning('请输入实验名称')
   if (!editForm.datasetId || !editForm.datasetVersion) return message.warning('请选择评测集和版本')
   if (!editForm.promptKey || !editForm.promptVersion) return message.warning('请选择 Prompt 和版本')
-  if (!editForm.evaluatorId || !editForm.evaluatorVersion) return message.warning('请选择评估器和版本')
+  if (editForm.evaluators.length === 0) return message.warning('请至少添加一个评估器')
+  for (let i = 0; i < editForm.evaluators.length; i++) {
+    const ev = editForm.evaluators[i]
+    if (!ev.evaluatorId || !ev.evaluatorVersion) return message.warning(`请选择评估器 ${i + 1} 的评估器和版本`)
+  }
 
   restartSubmitting.value = true
   try {
@@ -534,26 +566,29 @@ async function handleEditSubmit() {
         variableMap = Object.entries(parsed).map(([promptVariable, datasetColumn]) => ({ promptVariable, datasetColumn }))
       } catch { return message.warning('变量映射 JSON 格式不正确') }
     }
-    let evaluatorParamMap = []
-    if (editForm.evaluatorParamMapping.trim()) {
-      try {
-        const parsed = JSON.parse(editForm.evaluatorParamMapping)
-        evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
-      } catch { return message.warning('参数映射 JSON 格式不正确') }
-    }
+
     const dsVersion = datasetVersions.value.find(v => v.version === editForm.datasetVersion)
     if (!dsVersion) return message.warning('评测集版本无效')
-    const evVersion = evaluatorVersions.value.find(v => v.version === editForm.evaluatorVersion)
-    const evaluatorVersionId = evVersion?.id || null
+
+    const evaluatorConfigArr = editForm.evaluators.map(ev => {
+      let evaluatorParamMap = []
+      if (ev.evaluatorParamMapping.trim()) {
+        try {
+          const parsed = JSON.parse(ev.evaluatorParamMapping)
+          evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
+        } catch { throw new Error('评估器参数映射 JSON 格式不正确') }
+      }
+      const evVersion = ev.versions.find(v => v.version === ev.evaluatorVersion)
+      return {
+        evaluatorVersionId: evVersion?.id ? String(evVersion.id) : (ev.evaluatorVersionId || ''),
+        variableMap: evaluatorParamMap,
+      }
+    })
 
     const evaluationObjectConfig = JSON.stringify({
       type: 'prompt',
       config: { promptKey: editForm.promptKey, version: editForm.promptVersion, variableMap },
     })
-    const evaluatorConfig = JSON.stringify([{
-      evaluatorVersionId: evaluatorVersionId ? String(evaluatorVersionId) : '',
-      variableMap: evaluatorParamMap,
-    }])
 
     await updateExperiment(experimentId, {
       name: editForm.name,
@@ -562,13 +597,15 @@ async function handleEditSubmit() {
       datasetVersionId: dsVersion.id,
       datasetVersion: editForm.datasetVersion,
       evaluationObjectConfig,
-      evaluatorConfig,
+      evaluatorConfig: JSON.stringify(evaluatorConfigArr),
     })
     await restartExperiment(experimentId)
     message.success('实验已更新并重启')
     restartDialogVisible.value = false
     loadExperiment()
     loadResults()
+  } catch (e) {
+    if (e.message) message.warning(e.message)
   } finally {
     restartSubmitting.value = false
   }
@@ -767,8 +804,7 @@ function formatTime(t) {
 .running-mask {
   position: absolute;
   inset: 32px 0 0;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(2px);
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -830,4 +866,45 @@ function formatTime(t) {
   font-size: 13px;
 }
 .btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+}
+.btn-icon:hover { background: #f5f5f5; }
+.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.evaluator-info-item {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.restart-form-scroll {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.evaluator-config-block {
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.evaluator-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.evaluator-config-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
 </style>

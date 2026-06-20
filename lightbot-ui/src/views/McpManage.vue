@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <a-spin :spinning="loading">
+    <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
       <div v-for="s in list" :key="s.id" class="provider-card">
         <div class="card-top">

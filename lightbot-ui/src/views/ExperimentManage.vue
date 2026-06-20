@@ -53,6 +53,10 @@
         <template v-if="column.key === 'createTime'">
           {{ formatTime(record.createTime) }}
         </template>
+        <template v-if="column.key === 'evaluatorName'">
+          <span v-if="record.evaluatorNameList?.length">{{ record.evaluatorNameList.join('、') }}</span>
+          <span v-else>{{ record.evaluatorName || '-' }}</span>
+        </template>
         <template v-if="column.key === 'action'">
           <div class="table-actions">
             <a-tooltip v-if="(record.status?.code || record.status) === 'running'" title="停止">

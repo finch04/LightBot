@@ -23,8 +23,8 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="handleRefresh" :disabled="loading">
-          <ReloadOutlined :spin="loading" /> 刷新
+        <button class="btn-outline" @click="handleRefresh" :disabled="getTabLoading(activeTab).value">
+          <ReloadOutlined :spin="getTabLoading(activeTab).value" /> 刷新
         </button>
         <a-tooltip v-if="activeTab === 'datasets'" title="示例评测集">
           <button class="btn-outline" @click="openDatasetExampleModal">
@@ -44,8 +44,8 @@
 
     <div class="tab-content">
       <!-- 评测集 Tab -->
-      <div v-show="activeTab === 'datasets'">
-        <a-spin :spinning="loading">
+      <div v-show="activeTab === 'datasets'" style="min-height: 400px;">
+        <a-spin :spinning="datasetsLoading" style="min-height: 400px; display: block;">
           <div class="card-grid">
             <div
               v-for="item in datasets"
@@ -74,7 +74,7 @@
                 <span class="card-time">{{ formatTime(item.createTime) }}</span>
               </div>
             </div>
-            <div v-if="datasets.length === 0 && !loading" class="empty-state">
+            <div v-if="datasets.length === 0 && !datasetsLoading" class="empty-state">
               <DatabaseOutlined class="empty-icon" />
               <p v-if="searchText">没有匹配的评测集</p>
               <p v-else>还没有评测集，点击右上角创建一个吧</p>
@@ -84,8 +84,8 @@
       </div>
 
       <!-- 评估器 Tab -->
-      <div v-show="activeTab === 'evaluators'">
-        <a-spin :spinning="loading">
+      <div v-show="activeTab === 'evaluators'" style="min-height: 400px;">
+        <a-spin :spinning="evaluatorsLoading" style="min-height: 400px; display: block;">
           <div class="card-grid">
             <div
               v-for="item in evaluators"
@@ -113,7 +113,7 @@
                 <a-tag v-for="tag in item.tags.split(',')" :key="tag" color="purple">{{ tag.trim() }}</a-tag>
               </div>
             </div>
-            <div v-if="evaluators.length === 0 && !loading" class="empty-state">
+            <div v-if="evaluators.length === 0 && !evaluatorsLoading" class="empty-state">
               <AuditOutlined class="empty-icon" />
               <p v-if="searchText">没有匹配的评估器</p>
               <p v-else>还没有评估器，点击右上角创建一个吧</p>
@@ -123,14 +123,15 @@
       </div>
 
       <!-- 实验 Tab -->
-      <div v-show="activeTab === 'experiments'">
+      <div v-show="activeTab === 'experiments'" style="min-height: 400px;">
+        <a-spin :spinning="experimentsLoading" style="min-height: 400px; display: block;">
         <a-table
           :dataSource="experiments"
           :columns="experimentColumns"
           :pagination="{ pageSize: 20, showTotal: (total) => `共 ${total} 条` }"
           rowKey="id"
           size="middle"
-          :loading="loading"
+          :loading="false"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
@@ -150,6 +151,10 @@
             </template>
             <template v-if="column.key === 'createTime'">
               {{ formatTime(record.createTime) }}
+            </template>
+            <template v-if="column.key === 'evaluatorName'">
+              <span v-if="record.evaluatorNameList?.length">{{ record.evaluatorNameList.join('、') }}</span>
+              <span v-else>{{ record.evaluatorName || '-' }}</span>
             </template>
             <template v-if="column.key === 'action'">
               <div class="table-actions">
@@ -181,6 +186,7 @@
             </template>
           </template>
         </a-table>
+        </a-spin>
       </div>
     </div>
 
@@ -458,9 +464,18 @@ const router = useRouter()
 const route = useRoute()
 const activeTab = ref(route.query.tab || 'datasets')
 const searchText = ref('')
-const loading = ref(false)
+const datasetsLoading = ref(false)
+const evaluatorsLoading = ref(false)
+const experimentsLoading = ref(false)
 const submitting = ref(false)
 const exampleCreating = ref(null)
+const loadedTabs = new Set()
+
+function getTabLoading(tab) {
+  if (tab === 'datasets') return datasetsLoading
+  if (tab === 'evaluators') return evaluatorsLoading
+  return experimentsLoading
+}
 
 // ========== 数据 ==========
 const datasets = ref([])
@@ -524,12 +539,12 @@ const searchPlaceholder = computed(() => {
 })
 
 // ========== 初始化 ==========
-onMounted(() => loadData())
+onMounted(() => loadData(activeTab.value, true))
 
 watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } })
   searchText.value = ''
-  loadData()
+  loadData(tab)
 })
 
 // ========== 数据加载 ==========
@@ -541,15 +556,18 @@ function handleRefresh() {
   loadData()
 }
 
-async function loadData() {
+async function loadData(tab = activeTab.value, force = false) {
+  if (!force && loadedTabs.has(tab)) return
+  loadedTabs.add(tab)
+  const loading = getTabLoading(tab)
   loading.value = true
   try {
     const params = { pageNum: 1, pageSize: 100 }
     if (searchText.value) params.keyword = searchText.value
-    if (activeTab.value === 'datasets') {
+    if (tab === 'datasets') {
       const res = await getEvalDatasets(params)
       datasets.value = res.data?.records || []
-    } else if (activeTab.value === 'evaluators') {
+    } else if (tab === 'evaluators') {
       const res = await getEvaluators(params)
       evaluators.value = res.data?.records || []
     } else {

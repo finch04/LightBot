@@ -11,6 +11,7 @@ import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 评估实验表
@@ -116,4 +117,12 @@ public class EvalExperiment {
     @TableField(exist = false)
     @Schema(description = "评估器版本")
     private String evaluatorVersion;
+
+    @TableField(exist = false)
+    @Schema(description = "评估器名称列表")
+    private List<String> evaluatorNameList;
+
+    @TableField(exist = false)
+    @Schema(description = "评估器版本列表")
+    private List<String> evaluatorVersionList;
 }
