@@ -39,7 +39,7 @@
       >
         <div class="card-top">
           <div class="card-icon-wrapper">
-            <div class="card-icon">P</div>
+            <div class="card-icon">{{ (item.promptKey || 'P')[0].toUpperCase() }}</div>
             <span class="card-version-badge" v-if="item.latestVersion">{{ item.latestVersion }}</span>
           </div>
           <div class="card-info">
@@ -312,7 +312,7 @@ function handleDelete(id) {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #e11d48, #be123c);
   color: #fff;
   display: flex;
   align-items: center;

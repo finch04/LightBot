@@ -29,7 +29,7 @@
         <div class="card-top">
           <div class="card-icon">
             <span class="status-dot" :class="isDisabled(s) ? 'status-disabled' : 'status-active'"></span>
-            {{ s.name[0] }}
+            {{ (s.name || 'M')[0].toUpperCase() }}
           </div>
           <div class="card-info">
             <h3>{{ s.name }}</h3>

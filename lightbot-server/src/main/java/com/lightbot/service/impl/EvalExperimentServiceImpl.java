@@ -33,6 +33,8 @@ import java.util.*;
 public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper, EvalExperiment>
         implements EvalExperimentService {
 
+    private static final int MAX_EVALUATORS = 5;
+
     private final TaskService taskService;
     private final EvalDatasetService datasetService;
     private final EvalDatasetVersionService datasetVersionService;
@@ -51,6 +53,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
         if (datasetVersionId == null) {
             throw new BizException(ErrorCode.EVAL_DATASET_VERSION_NOT_FOUND);
         }
+        validateEvaluatorCount(evaluatorConfig);
         // 1. 构建实验记录
         EvalExperiment experiment = new EvalExperiment();
         experiment.setName(name);
@@ -118,7 +121,10 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
         if (request.getDatasetVersionId() != null) experiment.setDatasetVersionId(request.getDatasetVersionId());
         if (request.getDatasetVersion() != null) experiment.setDatasetVersion(request.getDatasetVersion());
         if (request.getEvaluationObjectConfig() != null) experiment.setEvaluationObjectConfig(request.getEvaluationObjectConfig());
-        if (request.getEvaluatorConfig() != null) experiment.setEvaluatorConfig(request.getEvaluatorConfig());
+        if (request.getEvaluatorConfig() != null) {
+            validateEvaluatorCount(request.getEvaluatorConfig());
+            experiment.setEvaluatorConfig(request.getEvaluatorConfig());
+        }
         updateById(experiment);
         return experiment;
     }
@@ -332,6 +338,24 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
             return objectMapper.writeValueAsString(variables);
         } catch (Exception e) {
             return "{}";
+        }
+    }
+
+    /**
+     * 校验评估器数量不超过上限
+     *
+     * @param evaluatorConfig 评估器配置JSON
+     */
+    private void validateEvaluatorCount(String evaluatorConfig) {
+        try {
+            List<Map<String, Object>> configs = objectMapper.readValue(evaluatorConfig, new TypeReference<>() {});
+            if (configs.size() > MAX_EVALUATORS) {
+                throw new BizException(ErrorCode.EVAL_EXPERIMENT_EVALUATOR_LIMIT);
+            }
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("[评测实验] 评估器配置解析失败, evaluatorConfig={}", evaluatorConfig, e);
         }
     }
 

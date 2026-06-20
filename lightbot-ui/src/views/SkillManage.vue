@@ -37,7 +37,7 @@
           <div class="card-icon card-icon--skill">
             <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
             <span class="status-dot" :class="s.status === 'disabled' ? 'status-disabled' : 'status-active'"></span>
-            <ThunderboltOutlined />
+            {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
           </div>
           <div class="card-info">
             <h3>{{ s.displayName || s.name }}</h3>
@@ -149,10 +149,18 @@
           <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能（不超过50字）" :maxlength="50" show-count />
         </a-form-item>
         <a-form-item label="依赖工具">
-          <a-select v-model:value="form.toolIds" mode="multiple" placeholder="选择该 Skill 启用时附带的工具" style="width: 100%" :options="toolOptions" />
+          <a-select v-model:value="form.toolIds" mode="multiple" placeholder="选择该 Skill 启用时附带的工具" style="width: 100%" option-label-prop="label">
+            <a-select-option v-for="t in toolList" :key="t.id" :value="String(t.id)" :label="t.displayName || t.name">
+              <EntitySelectOption type="tool" :name="t.displayName || t.name" :tag="getToolTypeLabel(t.toolType)" :desc="t.description" />
+            </a-select-option>
+          </a-select>
         </a-form-item>
         <a-form-item label="依赖 MCP Server">
-          <a-select v-model:value="form.mcpServerIds" mode="multiple" placeholder="选择该 Skill 启用时附带的 MCP Server" style="width: 100%" :options="mcpOptions" />
+          <a-select v-model:value="form.mcpServerIds" mode="multiple" placeholder="选择该 Skill 启用时附带的 MCP Server" style="width: 100%" option-label-prop="label">
+            <a-select-option v-for="m in mcpList" :key="m.id" :value="String(m.id)" :label="m.name">
+              <EntitySelectOption type="mcp" :name="m.name" :tag="({ npx: 'NPX', uvx: 'UVX', sse: 'SSE' })[m.installType?.code || m.installType] || m.installType?.code || m.installType || ''" :desc="m.description" />
+            </a-select-option>
+          </a-select>
         </a-form-item>
         <a-form-item label="提示词模板" required>
           <a-textarea v-model:value="form.promptTemplate" :rows="8" placeholder="### 技能：xxx\n**触发条件**：...\n**执行流程**：...（不超过5000字）" :maxlength="5000" show-count />
@@ -226,8 +234,9 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined, CloudDownloadOutlined, MoreOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined, CloudDownloadOutlined, MoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
+import EntitySelectOption from '../components/EntitySelectOption.vue'
 import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled, exportSkillZip } from '../api/skill'
 import { getTools } from '../api/tool'
 import { getMcpServers } from '../api/mcp'
@@ -235,12 +244,15 @@ import JsonInput from '../components/JsonInput.vue'
 import SkillImportModal from '../components/SkillImportModal.vue'
 import SkillRemoteInstallModal from '../components/SkillRemoteInstallModal.vue'
 import { truncateText } from '../utils/format'
+import { getToolTypeLabel } from '../utils/bindingTheme'
 
 const list = ref([])
 const loading = ref(false)
 const searchText = ref('')
 const toolOptions = ref([])
 const mcpOptions = ref([])
+const toolList = ref([])
+const mcpList = ref([])
 const dialogVisible = ref(false)
 const guideVisible = ref(false)
 const importModalVisible = ref(false)
@@ -251,7 +263,7 @@ const submitting = ref(false)
 const form = reactive({
   id: null, slug: '', name: '', displayName: '',
   description: '', promptTemplate: '', config: '{}', sortOrder: 0,
-  toolIds: [], mcpServerIds: [], scope: 'global', isBuiltin: 0,
+  toolIds: [], mcpServerIds: [], skillDependencies: [], scope: 'global', isBuiltin: 0,
 })
 
 watch(searchText, () => loadData())
@@ -277,11 +289,13 @@ async function loadOptions() {
       getTools({ pageNum: 1, pageSize: 200 }),
       getMcpServers({ pageNum: 1, pageSize: 100 }),
     ])
-    toolOptions.value = (toolRes.data.records || []).map(t => ({
+    toolList.value = toolRes.data.records || []
+    mcpList.value = mcpRes.data.records || []
+    toolOptions.value = toolList.value.map(t => ({
       label: t.displayName || t.name,
       value: String(t.id),
     }))
-    mcpOptions.value = (mcpRes.data.records || []).map(m => ({
+    mcpOptions.value = mcpList.value.map(m => ({
       label: m.name,
       value: String(m.id),
     }))
@@ -308,13 +322,14 @@ function openDialog(row) {
       ...row,
       toolIds: parseIdArray(row.toolIds),
       mcpServerIds: parseIdArray(row.mcpServerIds),
+      skillDependencies: parseIdArray(row.skillDependencies),
       config: row.config || '{}',
     })
   } else {
     Object.assign(form, {
       id: null, slug: '', name: '', displayName: '',
       description: '', promptTemplate: '', config: '{}', sortOrder: 0,
-      toolIds: [], mcpServerIds: [], scope: 'global', isBuiltin: 0,
+      toolIds: [], mcpServerIds: [], skillDependencies: [], scope: 'global', isBuiltin: 0,
     })
   }
   dialogVisible.value = true
@@ -512,7 +527,8 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 16px;
   flex-shrink: 0;
   position: relative;
 }

@@ -26,7 +26,7 @@
     <div class="template-grid">
       <div v-for="t in filteredTemplates" :key="t.id" class="template-card" @click="previewTemplate(t)">
         <div class="card-top">
-          <div class="card-icon">T</div>
+          <div class="card-icon">{{ (t.promptTemplateKey || 'T')[0].toUpperCase() }}</div>
           <div class="card-info">
             <h3>{{ t.promptTemplateKey }}</h3>
             <span class="card-desc">{{ t.templateDesc || '暂无描述' }}</span>
@@ -440,7 +440,7 @@ function handleDelete(id) {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #10b981, #34d399);
+  background: linear-gradient(135deg, #475569, #334155);
   color: #fff;
   display: flex;
   align-items: center;

@@ -54,7 +54,7 @@
               @click="router.push(`/app/eval/datasets/${item.id}`)"
             >
               <div class="card-top">
-                <div class="card-icon dataset-icon">D</div>
+                <div class="card-icon dataset-icon">{{ (item.name || 'D')[0].toUpperCase() }}</div>
                 <div class="card-info">
                   <h3>{{ item.name }}</h3>
                   <span class="card-version" v-if="item.latestVersion">v{{ item.latestVersion }}</span>
@@ -94,7 +94,7 @@
               @click="router.push(`/app/eval/evaluators/${item.id}`)"
             >
               <div class="card-top">
-                <div class="card-icon evaluator-icon">E</div>
+                <div class="card-icon evaluator-icon">{{ (item.name || 'E')[0].toUpperCase() }}</div>
                 <div class="card-info">
                   <h3>{{ item.name }}</h3>
                   <span class="card-version" v-if="item.latestVersion">{{ item.latestVersion }}</span>
@@ -549,11 +549,11 @@ watch(activeTab, (tab) => {
 
 // ========== 数据加载 ==========
 function handleSearch() {
-  loadData()
+  loadData(activeTab.value, true)
 }
 
 function handleRefresh() {
-  loadData()
+  loadData(activeTab.value, true)
 }
 
 async function loadData(tab = activeTab.value, force = false) {
@@ -634,7 +634,7 @@ async function handleCreateDatasetExample(key) {
     await createFromEvalDatasetExample(key)
     message.success('示例评测集创建成功')
     datasetExampleVisible.value = false
-    loadData()
+    loadData(activeTab.value, true)
   } finally { exampleCreating.value = null }
 }
 
@@ -685,7 +685,7 @@ async function handleCreateEvaluatorExample(key) {
     await createFromEvaluatorExample(key)
     message.success('示例评估器创建成功')
     evaluatorExampleVisible.value = false
-    loadData()
+    loadData(activeTab.value, true)
   } finally { exampleCreating.value = null }
 }
 
@@ -990,8 +990,8 @@ function formatTime(t) {
   font-size: 16px;
   flex-shrink: 0;
 }
-.dataset-icon { background: linear-gradient(135deg, #10b981, #059669); }
-.evaluator-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.dataset-icon { background: linear-gradient(135deg, #0891b2, #0e7490); }
+.evaluator-icon { background: linear-gradient(135deg, #f97316, #ea580c); }
 .card-info { flex: 1; min-width: 0; }
 .card-info h3 {
   font-size: 16px;

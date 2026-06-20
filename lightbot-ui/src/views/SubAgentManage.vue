@@ -6,7 +6,7 @@
       <div v-for="s in list" :key="s.id" class="subagent-card" @click="openDetail(s)">
         <div class="card-top">
           <div class="card-icon">
-            <RobotOutlined />
+            {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
             <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
             <span class="status-dot" :class="s.enabled === 1 ? 'status-active' : 'status-disabled'"></span>
           </div>
@@ -91,23 +91,20 @@
             option-label-prop="label"
           >
             <template #option="{ value, label, toolType, description }">
-              <div class="tool-option-item">
-                <span class="tool-option-icon-wrap">
-                  <ToolOutlined />
-                </span>
-                <span class="tool-option-name">{{ label }}</span>
-                <span v-if="toolType" class="tool-option-tag">{{ toolType }}</span>
-                <span v-if="description" class="tool-option-desc">{{ description }}</span>
-              </div>
+              <EntitySelectOption type="tool" :name="label" :tag="toolType" :desc="description" />
             </template>
           </a-select>
         </a-form-item>
         <a-form-item label="模型配置">
+          <a-switch v-model:checked="inheritModel" style="margin-right: 8px" />
+          <span style="font-size: 13px; color: #71717a;">{{ inheritModel ? '继承主 Agent 模型' : '使用独立模型' }}</span>
           <a-select
+            v-if="!inheritModel"
             v-model:value="form.modelId"
-            placeholder="不选则继承主 Agent 模型"
+            placeholder="请选择模型"
             allow-clear
             show-search
+            style="margin-top: 8px; width: 100%"
             :filter-option="(input, option) => option.label?.toLowerCase().includes(input.toLowerCase())"
           >
             <a-select-option
@@ -226,10 +223,12 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined, EyeOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
+import EntitySelectOption from '../components/EntitySelectOption.vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
 import { getProvidersWithModels } from '../api/modelProvider'
 import { truncateText } from '../utils/format'
+import { getToolTypeLabel } from '../utils/bindingTheme'
 
 const props = defineProps({
   hideHeader: { type: Boolean, default: false }
@@ -244,6 +243,7 @@ const searchText = ref('')
 const dialogVisible = ref(false)
 const guideVisible = ref(false)
 const editingId = ref(null)
+const inheritModel = ref(true)
 const form = reactive({
   name: '',
   displayName: '',
@@ -272,7 +272,7 @@ const toolOptions = computed(() => {
   return toolList.value.map(t => ({
     value: t.name,
     label: t.displayName || t.name,
-    toolType: t.toolType,
+    toolType: getToolTypeLabel(t.toolType),
     description: t.description,
   }))
 })
@@ -325,12 +325,14 @@ function refresh() {
 
 function openDialog() {
   editingId.value = null
+  inheritModel.value = true
   Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', tools: [], modelId: null, enabled: true })
   dialogVisible.value = true
 }
 
 function openEditDialog(record) {
   editingId.value = record.id
+  inheritModel.value = !record.modelId
   Object.assign(form, {
     name: record.name,
     displayName: record.displayName,
@@ -355,7 +357,7 @@ async function handleSave() {
       description: form.description,
       systemPrompt: form.systemPrompt,
       tools: form.tools,
-      modelId: form.modelId || null,
+      modelId: inheritModel.value ? null : (form.modelId || null),
       enabled: form.enabled
     }
     if (editingId.value) {
@@ -453,15 +455,16 @@ defineExpose({ openDialog, search, refresh })
   margin-bottom: 8px;
 }
 .card-icon {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 16px;
   flex-shrink: 0;
   position: relative;
 }
@@ -715,12 +718,13 @@ defineExpose({ openDialog, search, refresh })
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: #ecfdf5;
-  color: #059669;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 .tool-option-name {

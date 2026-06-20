@@ -43,7 +43,7 @@
         @click="router.push(`/app/eval/evaluators/${item.id}`)"
       >
         <div class="card-top">
-          <div class="card-icon">E</div>
+          <div class="card-icon">{{ (item.name || 'E')[0].toUpperCase() }}</div>
           <div class="card-info">
             <h3>{{ item.name }}</h3>
             <span class="card-type" v-if="item.latestVersion">{{ item.latestVersion }}</span>
@@ -358,7 +358,7 @@ async function handleCreateExample(key) {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, #f97316, #ea580c);
   color: #fff;
   display: flex;
   align-items: center;

@@ -1,6 +1,6 @@
 /**
- * Agent 绑定能力统一主题色（工具 / 知识库 / MCP / SubAgent / Skill）
- * 用于 Agent 详情、扩展管理、知识库列表等所有带「头像/图标底色」的展示场景
+ * 实体统一主题色
+ * 用于卡片头像、绑定列表、下拉选项等所有带「头像/图标底色」的展示场景
  */
 
 export const BINDING_TYPES = {
@@ -9,6 +9,11 @@ export const BINDING_TYPES = {
   mcp: 'mcp',
   subagent: 'subagent',
   skill: 'skill',
+  agent: 'agent',
+  prompt: 'prompt',
+  dataset: 'dataset',
+  evaluator: 'evaluator',
+  template: 'template',
 }
 
 /** 渐变背景（图标容器） */
@@ -18,6 +23,11 @@ export const BINDING_GRADIENTS = {
   mcp: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
   subagent: 'linear-gradient(135deg, #f59e0b, #d97706)',
   skill: 'linear-gradient(135deg, #ec4899, #db2777)',
+  agent: 'linear-gradient(135deg, #7928ca, #ff0080)',
+  prompt: 'linear-gradient(135deg, #e11d48, #be123c)',
+  dataset: 'linear-gradient(135deg, #0891b2, #0e7490)',
+  evaluator: 'linear-gradient(135deg, #f97316, #ea580c)',
+  template: 'linear-gradient(135deg, #475569, #334155)',
 }
 
 /** 标签/选中态浅色背景 */
@@ -27,6 +37,11 @@ export const BINDING_TAG_BG = {
   mcp: '#f5f3ff',
   subagent: '#fffbeb',
   skill: '#fdf2f8',
+  agent: '#fdf4ff',
+  prompt: '#fff1f2',
+  dataset: '#ecfeff',
+  evaluator: '#fff7ed',
+  template: '#f8fafc',
 }
 
 export const BINDING_TAG_BORDER = {
@@ -35,6 +50,11 @@ export const BINDING_TAG_BORDER = {
   mcp: '#ddd6fe',
   subagent: '#fcd34d',
   skill: '#f9a8d4',
+  agent: '#e9d5ff',
+  prompt: '#fecdd3',
+  dataset: '#a5f3fc',
+  evaluator: '#fed7aa',
+  template: '#cbd5e1',
 }
 
 export const BINDING_TAG_TEXT = {
@@ -43,6 +63,11 @@ export const BINDING_TAG_TEXT = {
   mcp: '#6d28d9',
   subagent: '#b45309',
   skill: '#be185d',
+  agent: '#7c3aed',
+  prompt: '#be123c',
+  dataset: '#0e7490',
+  evaluator: '#c2410c',
+  template: '#334155',
 }
 
 /** 内置标记色（统一蓝，与能力类型无关） */
@@ -63,6 +88,13 @@ export function getBindingTheme(type) {
     tagBorder: BINDING_TAG_BORDER[key],
     tagText: BINDING_TAG_TEXT[key],
   }
+}
+
+/** 工具类型中文标签 */
+const TOOL_TYPE_LABEL_MAP = { builtin: '内置', knowledge: '知识库', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
+
+export function getToolTypeLabel(toolType) {
+  return TOOL_TYPE_LABEL_MAP[toolType?.code || toolType] || toolType || ''
 }
 
 /** 图标容器行内样式 */

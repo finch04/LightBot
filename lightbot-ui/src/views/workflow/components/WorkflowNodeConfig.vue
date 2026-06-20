@@ -164,12 +164,7 @@
           <a-select-option v-for="k in knowledgeList" :key="k.id" :value="k.id" :label="k.name">
             <div class="resource-option">
               <div class="resource-option-header">
-                <a-tooltip v-if="k.type" :title="k.type === 'milvus' ? 'Milvus' : 'PostgreSQL'">
-                  <CloudServerOutlined v-if="k.type === 'milvus'" class="resource-option-icon kb-type-icon milvus" />
-                  <DatabaseOutlined v-else class="resource-option-icon kb-type-icon pg" />
-                </a-tooltip>
-                <BookOutlined v-else class="resource-option-icon knowledge" />
-                <span class="resource-option-title">{{ k.name }}</span>
+                <EntitySelectOption type="knowledge" :name="k.name" />
               </div>
               <div v-if="k.description" class="resource-option-desc">{{ k.description }}</div>
               <div class="resource-option-meta">
@@ -238,21 +233,7 @@
             :value="t.id"
             :label="t.displayName || t.name"
           >
-            <div class="resource-option">
-              <div class="resource-option-header">
-                <span class="resource-option-icon-wrap tool">
-                  <ToolOutlined class="resource-option-icon" />
-                  <span v-if="(t.toolType?.code || t.toolType) === 'knowledge'" class="option-badge option-badge--knowledge">知识库</span>
-                  <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="option-badge option-badge--builtin">内置</span>
-                </span>
-                <span class="resource-option-title">{{ t.displayName || t.name }}</span>
-                <span v-if="t.type" class="resource-tag">{{ getToolTypeLabel(t.type) }}</span>
-              </div>
-              <div v-if="t.description" class="resource-option-desc" :title="t.description">{{ truncateText(t.description, 50) }}</div>
-              <div class="resource-option-meta">
-                <span v-if="t.name && t.displayName">标识: {{ t.name }}</span>
-              </div>
-            </div>
+            <EntitySelectOption type="tool" :name="t.displayName || t.name" :tag="getToolTypeLabel(t.toolType)" :desc="t.description" />
           </a-select-option>
         </a-select>
       </a-form-item>
@@ -598,9 +579,7 @@
           >
             <div class="resource-option">
               <div class="resource-option-header">
-                <ApiOutlined class="resource-option-icon mcp" />
-                <span class="resource-option-title">{{ s.name }}</span>
-                <span v-if="mcpInstallTypeLabel(s)" class="resource-tag">{{ mcpInstallTypeLabel(s) }}</span>
+                <EntitySelectOption type="mcp" :name="s.name" :tag="mcpInstallTypeLabel(s)" />
               </div>
               <div v-if="s.description" class="resource-option-desc">{{ s.description }}</div>
             </div>
@@ -628,9 +607,7 @@
             >
               <div class="resource-option">
                 <div class="resource-option-header">
-                  <ToolOutlined class="resource-option-icon tool" />
-                  <span class="resource-option-title">{{ t.name }}</span>
-                  <span v-if="t.enabled === false" class="resource-tag resource-tag--muted">已禁用</span>
+                  <EntitySelectOption type="tool" :name="t.name" :tag-muted="t.enabled === false ? '已禁用' : ''" />
                 </div>
                 <div v-if="t.description" class="resource-option-desc" :title="t.description">{{ truncateText(t.description, 50) }}</div>
               </div>
@@ -660,7 +637,7 @@
 <script setup>
 import { computed, watch, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { DeleteOutlined, PlusOutlined, BookOutlined, ToolOutlined, CopyOutlined, ApiOutlined, SyncOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, PlusOutlined, CopyOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { getMcpServers, getMcpServerTools, refreshMcpServerTools } from '../../../api/mcp'
 import ShortMemoryForm from './ShortMemoryForm.vue'
 import ConfigFieldLabel from './ConfigFieldLabel.vue'
@@ -669,6 +646,8 @@ import CodeEditor from './CodeEditor.vue'
 import ConditionGroupForm from './ConditionGroupForm.vue'
 import JsonInput from '../../../components/JsonInput.vue'
 import ModelSelect from '../../../components/ModelSelect.vue'
+import EntitySelectOption from '../../../components/EntitySelectOption.vue'
+import { getToolTypeLabel } from '../../../utils/bindingTheme'
 import { createConditionId } from '../nodeMeta'
 import { BUILTIN_VARIABLES, getFieldHint, getScriptExampleConfig } from '../nodeConfigMeta'
 import { truncateText } from '../../../utils/format'
@@ -1145,15 +1124,6 @@ function removeGroupVar(idx) {
 .kb-type-icon { font-size: 13px; flex-shrink: 0; cursor: help; }
 .kb-type-icon.pg { color: #3b82f6; }
 .kb-type-icon.milvus { color: #8b5cf6; }
-.resource-option-icon { font-size: 14px; flex-shrink: 0; }
-.resource-option-icon-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
-.resource-option-icon-wrap.tool { background: #ecfdf5; color: #059669; }
-.option-badge { position: absolute; top: -4px; right: -4px; font-size: 9px; padding: 0 3px; border-radius: 3px; line-height: 14px; white-space: nowrap; z-index: 1; }
-.option-badge--knowledge { background: #7c3aed; color: #fff; }
-.option-badge--builtin { background: #0070f3; color: #fff; }
-.resource-option-icon.knowledge { color: #4f46e5; }
-.resource-option-icon.tool { font-size: 12px; }
-.resource-option-icon.mcp { color: #7c3aed; }
 .mcp-tool-picker {
   display: flex;
   gap: 8px;

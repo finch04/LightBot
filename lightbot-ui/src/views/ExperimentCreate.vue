@@ -137,9 +137,10 @@
             </a-form-item>
           </a-form>
         </div>
-        <button class="btn-outline" style="margin-top: 8px" @click="addEvaluator">
+        <button v-if="createForm.evaluators.length < 5" class="btn-outline" style="margin-top: 8px" @click="addEvaluator">
           <PlusOutlined /> 添加评估器
         </button>
+        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 8px; font-size: 12px; color: #a1a1aa;">最多添加5个评估器</div>
       </div>
 
       <!-- 底部按钮 -->
@@ -230,6 +231,7 @@ async function onEvaluatorChange(idx, id) {
 }
 
 function addEvaluator() {
+  if (createForm.evaluators.length >= 5) return message.warning('每个实验最多添加5个评估器')
   createForm.evaluators.push({ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] })
 }
 

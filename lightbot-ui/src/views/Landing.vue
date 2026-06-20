@@ -316,7 +316,14 @@ async function doHealthCheck() {
   isLoading.value = true
   try {
     await checkHealth()
-    // 健康检查通过，加载配置
+    // 健康检查通过，尝试恢复上次停留的页面
+    const lastRoute = localStorage.getItem('lastRoute')
+    if (lastRoute) {
+      localStorage.removeItem('lastRoute')
+      router.replace(lastRoute)
+      return
+    }
+    // 加载配置
     if (isLoggedIn.value && !userStore.user) {
       try { await userStore.fetchUser() } catch { /* ignore */ }
     }

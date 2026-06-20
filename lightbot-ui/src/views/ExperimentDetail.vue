@@ -250,9 +250,10 @@
               <a-textarea v-model:value="ev.evaluatorParamMapping" :rows="2" placeholder='JSON: {"actual_output":"output"}' />
             </a-form-item>
           </div>
-          <a-button type="dashed" size="small" block @click="addEditEvaluator" style="margin-top: 4px;">
+          <a-button v-if="editForm.evaluators.length < 5" type="dashed" size="small" block @click="addEditEvaluator" style="margin-top: 4px;">
             <PlusOutlined /> 添加评估器
           </a-button>
+          <div v-if="editForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: #a1a1aa; text-align: center;">最多添加5个评估器</div>
         </a-form>
         </div>
         </a-spin>
@@ -540,6 +541,7 @@ async function onEditEvaluatorChange(idx, id) {
 }
 
 function addEditEvaluator() {
+  if (editForm.evaluators.length >= 5) return message.warning('每个实验最多添加5个评估器')
   editForm.evaluators.push({ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] })
 }
 
@@ -800,10 +802,14 @@ function formatTime(t) {
 }
 .tabs-container {
   position: relative;
+  margin-top: 16px;
+}
+.tabs-container :deep(.ant-tabs-nav) {
+  margin-bottom: 16px;
 }
 .running-mask {
   position: absolute;
-  inset: 32px 0 0;
+  inset: 0;
   background: #fff;
   display: flex;
   align-items: center;

@@ -35,7 +35,7 @@
         @click="router.push(`/app/knowledge/${k.id}`)"
       >
         <div class="card-header">
-          <div class="card-icon">K</div>
+          <div class="card-icon">{{ (k.name || 'K')[0].toUpperCase() }}</div>
           <div class="card-info">
             <h3 class="card-title">{{ k.name }}</h3>
             <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">

@@ -71,11 +71,18 @@ request.interceptors.response.use(
   (error) => {
     const status = error.response?.status
 
-    // 无响应（后端未启动/网络断开）→ 跳 Landing 页
+    // 无响应（后端未启动/网络断开）→ 记录当前路径后跳 Landing 页
     if (!error.response) {
       if (!error.config?.silent) {
         message.error('服务不可用，请稍后重试')
       }
+      try {
+        const current = router.currentRoute.value
+        if (current && !current.meta?.public) {
+          const fullPath = current.fullPath
+          localStorage.setItem('lastRoute', fullPath)
+        }
+      } catch { /* ignore */ }
       router.push('/')
       return Promise.reject(error)
     }

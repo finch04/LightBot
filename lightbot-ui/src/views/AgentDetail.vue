@@ -929,7 +929,7 @@
                 class="knowledge-tag tool-tag"
                 :class="{ 'binding-tag--deleted': t._deleted, 'binding-tag--disabled': t._disabled && !t._deleted }"
               >
-                <ToolOutlined />
+                <span class="tag-avatar" style="background: linear-gradient(135deg, #10b981, #059669)">{{ (t.displayName || t.name || '?')[0].toUpperCase() }}</span>
                 <span>{{ t.displayName || t.name }}</span>
                 <span v-if="t._deleted" class="binding-deleted-tag">已删除</span>
                 <span v-else-if="t._disabled" class="binding-disabled-tag">已禁用</span>
@@ -978,7 +978,7 @@
                 <div class="item-icon tool-icon-bg">
                   <span v-if="isKnowledgeTool(t)" class="knowledge-badge">知识库</span>
                   <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
-                  <ToolOutlined />
+                  {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ t.displayName || t.name }}</div>
@@ -1026,6 +1026,7 @@
                 class="knowledge-tag"
                 :class="{ 'binding-tag--deleted': k._deleted }"
               >
+                <span class="tag-avatar" style="background: linear-gradient(135deg, #6366f1, #4f46e5)">{{ (k.name || 'K')[0].toUpperCase() }}</span>
                 <span>{{ k.name }}</span>
                 <span v-if="k._deleted" class="binding-deleted-tag">已删除</span>
                 <button v-if="!isVersionPreview" class="tag-remove" @click="removeKnowledge(k.id)">
@@ -1056,7 +1057,7 @@
                 @click="!isVersionPreview && toggleKnowledge(k)"
               >
                 <div class="item-icon knowledge-icon">
-                  <BookOutlined />
+                  {{ (k.name || 'K')[0].toUpperCase() }}
                 </div>
                 <div class="item-info">
                   <div class="item-name">
@@ -1109,7 +1110,7 @@
                 class="knowledge-tag mcp-tag"
                 :class="{ 'binding-tag--deleted': s._deleted, 'binding-tag--disabled': s._disabled && !s._deleted }"
               >
-                <ApiOutlined />
+                <span class="tag-avatar" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed)">{{ (s.name || 'M')[0].toUpperCase() }}</span>
                 <span>{{ s.name }}</span>
                 <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
                 <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
@@ -1141,7 +1142,7 @@
                 @click="!isVersionPreview && toggleMcpServer(s)"
               >
                 <div class="item-icon mcp-icon-bg">
-                  <ApiOutlined />
+                  {{ (s.name || 'M')[0].toUpperCase() }}
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ s.name }}</div>
@@ -1185,7 +1186,7 @@
                 class="knowledge-tag subagent-tag"
                 :class="{ 'binding-tag--deleted': s._deleted, 'binding-tag--disabled': s._disabled && !s._deleted }"
               >
-                <RobotOutlined />
+                <span class="tag-avatar" style="background: linear-gradient(135deg, #f59e0b, #d97706)">{{ (s.displayName || s.name || 'S')[0].toUpperCase() }}</span>
                 <span>{{ s.displayName || s.name }}</span>
                 <span v-if="s._deleted" class="binding-deleted-tag">已删除</span>
                 <span v-else-if="s._disabled" class="binding-disabled-tag">已禁用</span>
@@ -1218,7 +1219,7 @@
               >
                 <div class="item-icon subagent-icon">
                   <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
-                  <RobotOutlined />
+                  {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ s.displayName }}</div>
@@ -1263,7 +1264,7 @@
                 class="knowledge-tag skill-tag"
                 :class="{ 'binding-tag--deleted': s._deleted, 'binding-tag--disabled': s._disabled && !s._deleted }"
               >
-                <ThunderboltOutlined />
+                <span class="tag-avatar" style="background: linear-gradient(135deg, #ec4899, #db2777)">{{ (s.displayName || s.name || 'S')[0].toUpperCase() }}</span>
                 <span class="tag-name-wrap">
                   <span>{{ s.displayName || s.name }}</span>
                   <span v-if="s.isBuiltin === 1" class="binding-inline-badge">内置</span>
@@ -1299,7 +1300,7 @@
               >
                 <div class="item-icon skill-icon">
                   <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
-                  <ThunderboltOutlined />
+                  {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
                 </div>
                 <div class="item-info">
                   <div class="item-name">{{ s.displayName || s.name }}</div>
@@ -4690,6 +4691,18 @@ onMounted(async () => {
   border-radius: 100px;
   font-size: 13px;
   color: #1e40af;
+}
+.tag-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 .binding-deleted-alert {
   margin-top: 16px;

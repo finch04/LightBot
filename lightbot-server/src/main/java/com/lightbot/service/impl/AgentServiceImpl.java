@@ -326,12 +326,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     public List<Long> getKnowledgeIds(Long agentId) {
         Agent agent = getById(agentId);
         if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
-            return List.of();
+            return new ArrayList<>();
         }
         try {
             var configNode = objectMapper.readTree(agent.getConfig());
             if (!configNode.has("knowledges")) {
-                return List.of();
+                return new ArrayList<>();
             }
             // 逐个用 JsonNode.longValue() 转换，避免 ObjectMapper.convertValue 对大数精度丢失
             var knowledgesNode = configNode.get("knowledges");
@@ -349,7 +349,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             return ids;
         } catch (Exception e) {
             log.warn("[Agent] 解析config.knowledges失败: agentId={}, error={}", agentId, e.getMessage());
-            return List.of();
+            return new ArrayList<>();
         }
     }
 
@@ -396,7 +396,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     public List<Tool> getToolDetails(Long agentId) {
         List<Long> toolIds = getToolIds(agentId);
         if (toolIds.isEmpty()) {
-            return List.of();
+            return new ArrayList<>();
         }
         return toolService.listByIds(toolIds);
     }
@@ -417,7 +417,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     public List<McpServer> getMcpServerDetails(Long agentId) {
         List<Long> serverIds = getMcpServerIds(agentId);
         if (serverIds.isEmpty()) {
-            return List.of();
+            return new ArrayList<>();
         }
         return mcpServerService.listByIds(serverIds);
     }
@@ -452,12 +452,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private List<Long> readBindingIdsFromConfig(Long agentId, String field) {
         Agent agent = getById(agentId);
         if (agent == null || agent.getConfig() == null || agent.getConfig().isBlank()) {
-            return List.of();
+            return new ArrayList<>();
         }
         try {
             var configNode = objectMapper.readTree(agent.getConfig());
             if (!configNode.has(field)) {
-                return List.of();
+                return new ArrayList<>();
             }
             List<Long> ids = new ArrayList<>();
             for (var node : configNode.get(field)) {
@@ -473,7 +473,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             return ids;
         } catch (Exception e) {
             log.warn("[Agent] 解析config.{}失败: agentId={}, error={}", field, agentId, e.getMessage());
-            return List.of();
+            return new ArrayList<>();
         }
     }
 

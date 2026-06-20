@@ -43,7 +43,7 @@
         @click="router.push(`/app/eval/datasets/${item.id}`)"
       >
         <div class="card-top">
-          <div class="card-icon">D</div>
+          <div class="card-icon">{{ (item.name || 'D')[0].toUpperCase() }}</div>
           <div class="card-info">
             <h3>{{ item.name }}</h3>
             <span class="card-type" v-if="item.latestVersion">v{{ item.latestVersion }}</span>
@@ -359,7 +359,7 @@ async function handleCreateExample(key) {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #0891b2, #0e7490);
   color: #fff;
   display: flex;
   align-items: center;
