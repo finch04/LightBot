@@ -51,9 +51,15 @@
             <span class="card-type">{{ agentTypeLabel(a.agentType) }}</span>
           </div>
           <div class="card-actions" @click.stop>
-            <button v-if="!a.isDefault" class="btn-icon" title="设为默认" @click="handleSetDefault(a.id)"><StarOutlined /></button>
-            <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
-            <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
+            <a-tooltip v-if="!a.isDefault" title="设为默认">
+              <button class="btn-icon" @click="handleSetDefault(a.id)"><StarOutlined /></button>
+            </a-tooltip>
+            <a-tooltip title="编辑">
+              <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
+            </a-tooltip>
+            <a-tooltip title="删除">
+              <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
+            </a-tooltip>
           </div>
         </div>
         <p class="card-desc">{{ a.description || '暂无描述' }}</p>

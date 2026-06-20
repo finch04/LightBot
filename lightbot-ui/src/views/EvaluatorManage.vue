@@ -49,8 +49,12 @@
             <span class="card-type" v-if="item.latestVersion">{{ item.latestVersion }}</span>
           </div>
           <div class="card-actions" @click.stop>
-            <button class="btn-icon" @click="openDialog(item)"><EditOutlined /></button>
-            <button class="btn-icon danger" @click="handleDelete(item.id)"><DeleteOutlined /></button>
+            <a-tooltip title="编辑">
+              <button class="btn-icon" @click="openDialog(item)"><EditOutlined /></button>
+            </a-tooltip>
+            <a-tooltip title="删除">
+              <button class="btn-icon danger" @click="handleDelete(item.id)"><DeleteOutlined /></button>
+            </a-tooltip>
           </div>
         </div>
         <p class="card-desc">{{ item.description || '暂无描述' }}</p>

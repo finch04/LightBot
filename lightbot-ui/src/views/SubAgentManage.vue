@@ -18,7 +18,9 @@
             <a-tooltip title="查看详情">
               <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
             </a-tooltip>
-            <button v-if="s.isBuiltin !== 1" class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
+            <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
+              <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
+            </a-tooltip>
             <a-dropdown :trigger="['click']">
               <button class="btn-icon" @click.prevent><MoreOutlined /></button>
               <template #overlay>

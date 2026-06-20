@@ -31,8 +31,12 @@
               size="small"
               @change="(checked) => handleToggleStatus(p, checked)"
             />
-            <button class="btn-icon" @click="openDialog(p)"><EditOutlined /></button>
-            <button class="btn-icon danger" @click="handleDelete(p.id)"><DeleteOutlined /></button>
+            <a-tooltip title="编辑">
+              <button class="btn-icon" @click="openDialog(p)"><EditOutlined /></button>
+            </a-tooltip>
+            <a-tooltip title="删除">
+              <button class="btn-icon danger" @click="handleDelete(p.id)"><DeleteOutlined /></button>
+            </a-tooltip>
           </div>
         </div>
         <div class="card-detail">
@@ -147,7 +151,9 @@
             </a-tooltip>
             <span class="model-type-tag">{{ modelTypeText(m.type?.code || m.type) }}</span>
           </div>
-          <button class="btn-icon danger" @click="handleDeleteModel(m.id)"><DeleteOutlined /></button>
+          <a-tooltip title="删除">
+            <button class="btn-icon danger" @click="handleDeleteModel(m.id)"><DeleteOutlined /></button>
+          </a-tooltip>
         </div>
       </div>
       <div v-else-if="!showAddModel" class="model-empty">暂无模型，点击上方按钮添加</div>

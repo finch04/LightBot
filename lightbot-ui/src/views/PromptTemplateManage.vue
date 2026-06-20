@@ -32,8 +32,12 @@
             <span class="card-desc">{{ t.templateDesc || '暂无描述' }}</span>
           </div>
           <div class="card-actions" @click.stop>
-            <button class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
-            <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+            <a-tooltip title="编辑">
+              <button class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
+            </a-tooltip>
+            <a-tooltip title="删除">
+              <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+            </a-tooltip>
           </div>
         </div>
         <div class="card-tags" v-if="t.tags">

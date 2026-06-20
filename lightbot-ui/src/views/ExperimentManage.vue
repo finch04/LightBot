@@ -55,28 +55,28 @@
         </template>
         <template v-if="column.key === 'action'">
           <div class="table-actions">
-            <button
-              v-if="(record.status?.code || record.status) === 'running'"
-              class="btn-icon"
-              title="停止"
-              @click="handleStop(record.id)"
-            >
-              <PauseCircleOutlined />
-            </button>
-            <button
-              v-if="(record.status?.code || record.status) === 'stopped'"
-              class="btn-icon"
-              title="重启"
-              @click="handleRestart(record.id)"
-            >
-              <PlayCircleOutlined />
-            </button>
-            <button
-              class="btn-icon danger"
-              title="删除"
-              @click="handleDelete(record.id)"
-            >
-              <DeleteOutlined />
+            <a-tooltip v-if="(record.status?.code || record.status) === 'running'" title="停止">
+              <button
+                class="btn-icon"
+                @click="handleStop(record.id)"
+              >
+                <PauseCircleOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip v-if="(record.status?.code || record.status) === 'stopped'" title="重启">
+              <button
+                class="btn-icon"
+                @click="handleRestart(record.id)"
+              >
+                <PlayCircleOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="删除">
+              <button
+                class="btn-icon danger"
+                @click="handleDelete(record.id)"
+              >
+                <DeleteOutlined />
             </button>
           </div>
         </template>

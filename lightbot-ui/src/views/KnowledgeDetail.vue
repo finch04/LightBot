@@ -471,9 +471,11 @@
             <span class="upload-file-status" :class="file._status">
               {{ file._status === 'uploading' ? '上传中...' : file._status === 'success' ? '上传成功' : file._status === 'error' ? '上传失败' : '' }}
             </span>
-            <button class="btn-icon-sm danger" @click="removeUploadFile(i)">
-              <CloseOutlined />
-            </button>
+            <a-tooltip title="移除">
+              <button class="btn-icon-sm danger" @click="removeUploadFile(i)">
+                <CloseOutlined />
+              </button>
+            </a-tooltip>
           </div>
         </div>
 
@@ -780,13 +782,14 @@
                 <a-select-option value="developer">开发者</a-select-option>
                 <a-select-option value="viewer">查看者</a-select-option>
               </a-select>
-              <button
-                v-if="member.role !== 'creator'"
-                class="btn-icon-sm danger"
-                @click="handleRemoveMember(member.userId)"
-              >
-                <CloseOutlined />
-              </button>
+              <a-tooltip v-if="member.role !== 'creator'" title="移除成员">
+                <button
+                  class="btn-icon-sm danger"
+                  @click="handleRemoveMember(member.userId)"
+                >
+                  <CloseOutlined />
+                </button>
+              </a-tooltip>
             </div>
           </div>
           <div v-if="membersWithInfo.length === 0" class="empty-tip">暂无成员</div>

@@ -28,7 +28,9 @@
               <a-tag :color="v.status === 'published' ? 'green' : 'blue'" size="small">
                 {{ v.status === 'published' ? '已发布' : '草稿' }}
               </a-tag>
-              <button class="btn-icon" title="查看详情" @click.stop="openVersionDetail(v)"><EyeOutlined /></button>
+              <a-tooltip title="查看详情">
+                <button class="btn-icon" @click.stop="openVersionDetail(v)"><EyeOutlined /></button>
+              </a-tooltip>
             </div>
             <div class="version-meta">{{ truncate(v.prompt, 40) }}</div>
           </div>

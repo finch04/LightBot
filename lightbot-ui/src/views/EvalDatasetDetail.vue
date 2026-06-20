@@ -37,9 +37,11 @@
                 <span v-else class="item-val">{{ val }}</span>
               </div>
             </div>
-            <button class="btn-icon-sm danger" @click="handleDeleteItem(item.id)">
-              <DeleteOutlined />
-            </button>
+            <a-tooltip title="删除">
+              <button class="btn-icon-sm danger" @click="handleDeleteItem(item.id)">
+                <DeleteOutlined />
+              </button>
+            </a-tooltip>
           </div>
           <div v-if="items.length === 0 && !itemsLoading" class="item-empty">暂无数据项，点击右上角添加</div>
         </div>

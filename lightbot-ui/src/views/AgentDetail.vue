@@ -139,9 +139,11 @@
               <div v-else class="config-list-scroll config-list-scroll--compact">
                 <div v-for="(q, i) in recommendedQuestions" :key="i" class="list-table-row list-table-row--2col">
                   <a-input v-model:value="recommendedQuestions[i]" placeholder="输入推荐问题（不超过 30 字）" :maxlength="30" size="small" :disabled="isVersionPreview" />
-                  <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeRecommendedQuestion(i)">
-                    <CloseOutlined />
-                  </button>
+                  <a-tooltip title="删除">
+                    <button type="button" class="btn-icon-sm danger" :disabled="isVersionPreview" @click="removeRecommendedQuestion(i)">
+                      <CloseOutlined />
+                    </button>
+                  </a-tooltip>
                 </div>
               </div>
             </div>
@@ -241,9 +243,11 @@
                           <a-input v-model:value="v.key" placeholder="company_name" size="small" :disabled="isVersionPreview" />
                           <a-input v-model:value="v.label" placeholder="显示名称" size="small" :disabled="isVersionPreview" />
                           <a-input v-model:value="v.defaultValue" placeholder="可选" size="small" :disabled="isVersionPreview" />
-                          <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removePromptVariable(idx)">
-                            <DeleteOutlined />
-                          </button>
+                          <a-tooltip title="删除">
+                            <button type="button" class="btn-icon-sm danger" :disabled="isVersionPreview" @click="removePromptVariable(idx)">
+                              <DeleteOutlined />
+                            </button>
+                          </a-tooltip>
                         </div>
                       </div>
                     </template>
@@ -715,9 +719,11 @@
                 <div class="sensitive-word-list">
                   <div v-for="(word, idx) in userSensitiveWords" :key="'usw-' + idx" class="list-table-row list-table-row--2col">
                     <a-input v-model:value="userSensitiveWords[idx]" placeholder="命中则拦截用户消息" size="small" :disabled="isVersionPreview" />
-                    <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeUserSensitiveWord(idx)">
-                      <DeleteOutlined />
-                    </button>
+                    <a-tooltip title="删除">
+                      <button type="button" class="btn-icon-sm danger" :disabled="isVersionPreview" @click="removeUserSensitiveWord(idx)">
+                        <DeleteOutlined />
+                      </button>
+                    </a-tooltip>
                   </div>
                 </div>
               </div>
@@ -760,9 +766,11 @@
                 <div class="sensitive-word-list">
                   <div v-for="(word, idx) in sensitiveWords" :key="'sw-' + idx" class="list-table-row list-table-row--2col">
                     <a-input v-model:value="sensitiveWords[idx]" placeholder="AI 输出命中则处理" size="small" :disabled="isVersionPreview" />
-                    <button type="button" class="btn-icon-sm danger" title="删除" :disabled="isVersionPreview" @click="removeSensitiveWord(idx)">
-                      <DeleteOutlined />
-                    </button>
+                    <a-tooltip title="删除">
+                      <button type="button" class="btn-icon-sm danger" :disabled="isVersionPreview" @click="removeSensitiveWord(idx)">
+                        <DeleteOutlined />
+                      </button>
+                    </a-tooltip>
                   </div>
                 </div>
               </div>

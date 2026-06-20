@@ -60,8 +60,12 @@
                   <span class="card-version" v-if="item.latestVersion">v{{ item.latestVersion }}</span>
                 </div>
                 <div class="card-actions" @click.stop>
-                  <button class="btn-icon" @click="openDatasetDialog(item)"><EditOutlined /></button>
-                  <button class="btn-icon danger" @click="handleDeleteDataset(item.id)"><DeleteOutlined /></button>
+                  <a-tooltip title="编辑">
+                    <button class="btn-icon" @click="openDatasetDialog(item)"><EditOutlined /></button>
+                  </a-tooltip>
+                  <a-tooltip title="删除">
+                    <button class="btn-icon danger" @click="handleDeleteDataset(item.id)"><DeleteOutlined /></button>
+                  </a-tooltip>
                 </div>
               </div>
               <p class="card-desc">{{ item.description || '暂无描述' }}</p>
@@ -96,8 +100,12 @@
                   <span class="card-version" v-if="item.latestVersion">{{ item.latestVersion }}</span>
                 </div>
                 <div class="card-actions" @click.stop>
-                  <button class="btn-icon" @click="openEvaluatorDialog(item)"><EditOutlined /></button>
-                  <button class="btn-icon danger" @click="handleDeleteEvaluator(item.id)"><DeleteOutlined /></button>
+                  <a-tooltip title="编辑">
+                    <button class="btn-icon" @click="openEvaluatorDialog(item)"><EditOutlined /></button>
+                  </a-tooltip>
+                  <a-tooltip title="删除">
+                    <button class="btn-icon danger" @click="handleDeleteEvaluator(item.id)"><DeleteOutlined /></button>
+                  </a-tooltip>
                 </div>
               </div>
               <p class="card-desc">{{ item.description || '暂无描述' }}</p>
@@ -145,29 +153,30 @@
             </template>
             <template v-if="column.key === 'action'">
               <div class="table-actions">
-                <button
-                  v-if="(record.status?.code || record.status) === 'running'"
-                  class="btn-icon"
-                  title="停止"
-                  @click="handleStopExperiment(record.id)"
-                >
-                  <PauseCircleOutlined />
-                </button>
-                <button
-                  v-if="(record.status?.code || record.status) === 'stopped'"
-                  class="btn-icon"
-                  title="重启"
-                  @click="handleRestartExperiment(record.id)"
-                >
-                  <PlayCircleOutlined />
-                </button>
-                <button
-                  class="btn-icon danger"
-                  title="删除"
-                  @click="handleDeleteExperiment(record.id)"
-                >
-                  <DeleteOutlined />
-                </button>
+                <a-tooltip v-if="(record.status?.code || record.status) === 'running'" title="停止">
+                  <button
+                    class="btn-icon"
+                    @click="handleStopExperiment(record.id)"
+                  >
+                    <PauseCircleOutlined />
+                  </button>
+                </a-tooltip>
+                <a-tooltip v-if="(record.status?.code || record.status) === 'stopped'" title="重启">
+                  <button
+                    class="btn-icon"
+                    @click="handleRestartExperiment(record.id)"
+                  >
+                    <PlayCircleOutlined />
+                  </button>
+                </a-tooltip>
+                <a-tooltip title="删除">
+                  <button
+                    class="btn-icon danger"
+                    @click="handleDeleteExperiment(record.id)"
+                  >
+                    <DeleteOutlined />
+                  </button>
+                </a-tooltip>
               </div>
             </template>
           </template>
