@@ -14,7 +14,7 @@ import lombok.Data;
 @Schema(description = "Prompt构建模板创建请求")
 public class PromptTemplateCreateRequest {
 
-    @Size(max = 100, message = "模板标识不超过100字")
+    @Size(max = 30, message = "模板标识不超过30字")
     @Schema(description = "模板唯一标识")
     private String promptTemplateKey;
 

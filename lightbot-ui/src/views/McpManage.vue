@@ -84,7 +84,7 @@
       </template>
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="如：filesystem-server（最多50字）" :maxlength="50" show-count />
+          <a-input v-model:value="form.name" placeholder="如：filesystem-server（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-input v-model:value="form.description" placeholder="服务用途说明（不超过50字）" :maxlength="50" show-count />

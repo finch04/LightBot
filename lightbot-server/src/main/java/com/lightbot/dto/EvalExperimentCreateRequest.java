@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class EvalExperimentCreateRequest {
 
-    @Size(max = 50, message = "实验名称不超过50字")
+    @Size(max = 30, message = "实验名称不超过30字")
     private String name;
 
     @Size(max = 50, message = "实验描述不超过50字")

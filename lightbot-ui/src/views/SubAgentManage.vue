@@ -68,10 +68,10 @@
       </template>
       <a-form :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
         <a-form-item label="标识名称" required>
-          <a-input v-model:value="form.name" placeholder="英文标识，如 research-agent（不超过50字）" :maxlength="50" show-count />
+          <a-input v-model:value="form.name" placeholder="英文标识，如 research-agent（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="显示名称" required>
-          <a-input v-model:value="form.displayName" placeholder="中文显示名称（不超过50字）" :maxlength="50" show-count />
+          <a-input v-model:value="form.displayName" placeholder="中文显示名称（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="描述" required>
           <a-textarea v-model:value="form.description" placeholder="SubAgent 描述（不超过50字）" :rows="2" :maxlength="50" show-count />

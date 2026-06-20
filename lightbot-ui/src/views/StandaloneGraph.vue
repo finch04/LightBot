@@ -151,7 +151,7 @@
     >
       <a-form :model="nodeForm" :label-col="{ span: 4 }">
         <a-form-item label="名称">
-          <a-input v-model:value="nodeForm.name" placeholder="实体名称（必填）" />
+          <a-input v-model:value="nodeForm.name" placeholder="实体名称（必填）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="类型">
           <a-select v-model:value="nodeForm.entityType" placeholder="选择实体类型">

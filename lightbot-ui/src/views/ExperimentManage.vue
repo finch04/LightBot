@@ -103,10 +103,10 @@
       <div v-show="currentStep === 0">
         <a-form :model="createForm" :label-col="{ span: 5 }">
           <a-form-item label="实验名称" required>
-            <a-input v-model:value="createForm.name" placeholder="如：客服 Prompt v1 vs v2 对比" />
+            <a-input v-model:value="createForm.name" :maxlength="30" show-count placeholder="如：客服 Prompt v1 vs v2 对比 (不超过30字)" />
           </a-form-item>
           <a-form-item label="描述">
-            <a-textarea v-model:value="createForm.description" :rows="3" placeholder="实验目的说明" />
+            <a-textarea v-model:value="createForm.description" :rows="3" :maxlength="50" show-count placeholder="实验目的说明 (不超过50字)" />
           </a-form-item>
         </a-form>
       </div>

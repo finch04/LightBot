@@ -195,10 +195,10 @@
         <a-spin :spinning="restartFormLoading" tip="加载配置中...">
         <a-form :model="editForm" :label-col="{ span: 5 }" :style="{ opacity: restartFormLoading ? 0.4 : 1, transition: 'opacity 0.2s' }">
           <a-form-item label="实验名称" required>
-            <a-input v-model:value="editForm.name" placeholder="实验名称" />
+            <a-input v-model:value="editForm.name" :maxlength="30" show-count placeholder="实验名称 (不超过30字)" />
           </a-form-item>
           <a-form-item label="描述">
-            <a-textarea v-model:value="editForm.description" :rows="2" placeholder="实验描述" />
+            <a-textarea v-model:value="editForm.description" :rows="2" :maxlength="50" show-count placeholder="实验描述 (不超过50字)" />
           </a-form-item>
           <a-form-item label="评测集" required>
             <a-select v-model:value="editForm.datasetId" placeholder="选择评测集" @change="onEditDatasetChange">

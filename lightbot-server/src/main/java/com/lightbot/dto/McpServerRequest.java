@@ -18,7 +18,7 @@ public class McpServerRequest {
     private Long id;
 
     @NotNull(message = "名称不能为空")
-    @Size(max = 50, message = "服务名称不超过50字")
+    @Size(max = 30, message = "服务名称不超过30字")
     private String name;
 
     @Size(max = 50, message = "服务描述不超过50字")

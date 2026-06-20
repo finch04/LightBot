@@ -19,10 +19,10 @@ public class ToolRequest {
     private Long id;
 
     @NotBlank(message = "工具标识不能为空")
-    @Size(max = 50, message = "工具标识不超过50字")
+    @Size(max = 30, message = "工具标识不超过30字")
     private String name;
 
-    @Size(max = 50, message = "显示名称不超过50字")
+    @Size(max = 30, message = "显示名称不超过30字")
     private String displayName;
 
     @Size(max = 50, message = "工具描述不超过50字")

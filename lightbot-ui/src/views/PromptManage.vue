@@ -77,9 +77,9 @@
           <a-input
             v-model:value="form.promptKey"
             :disabled="!!form.id"
-            :maxlength="100"
+            :maxlength="30"
             show-count
-            placeholder="如: customer_service (不超过100字)"
+            placeholder="如: customer_service (不超过30字)"
           />
         </a-form-item>
         <a-form-item label="描述">

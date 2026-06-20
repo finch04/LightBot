@@ -49,7 +49,7 @@
     <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" :footer="null" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="如：通义千问" />
+          <a-input v-model:value="form.name" placeholder="如：通义千问" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="类型" required>
           <a-select v-model:value="form.type" style="width: 100%" placeholder="选择提供商类型">

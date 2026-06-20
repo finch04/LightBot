@@ -650,7 +650,7 @@
     <a-modal v-model:open="editVisible" title="编辑知识库" :width="520" @ok="handleEdit" :confirm-loading="editSubmitting" :bodyStyle="{ maxHeight: '70vh', overflowY: 'auto', paddingRight: '24px' }">
       <a-form :model="editForm" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="editForm.name" placeholder="知识库名称（不超过50字）" :maxlength="50" show-count />
+          <a-input v-model:value="editForm.name" placeholder="知识库名称（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="editForm.description" :rows="3" placeholder="知识库描述（不超过50字）" :maxlength="50" show-count />

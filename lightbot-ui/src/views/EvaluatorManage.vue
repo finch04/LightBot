@@ -102,7 +102,7 @@
     >
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="如：准确性评估器" />
+          <a-input v-model:value="form.name" placeholder="如：准确性评估器" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="3" placeholder="评估器的用途描述" />

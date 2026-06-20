@@ -135,13 +135,13 @@
       </template>
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="slug" required v-if="!form.id || form.scope === 'global'">
-          <a-input v-model:value="form.slug" placeholder="英文-小写-短横线，如 deep-research（不超过50字）" :maxlength="50" show-count :disabled="form.id && form.isBuiltin === 1" />
+          <a-input v-model:value="form.slug" placeholder="英文-小写-短横线，如 deep-research（不超过30字）" :maxlength="30" show-count :disabled="form.id && form.isBuiltin === 1" />
         </a-form-item>
         <a-form-item label="技能名称" required>
-          <a-input v-model:value="form.name" placeholder="英文短名，对模型可读，如 deep_research（不超过50字）" :maxlength="50" show-count />
+          <a-input v-model:value="form.name" placeholder="英文短名，对模型可读，如 deep_research（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="显示名称">
-          <a-input v-model:value="form.displayName" placeholder="中文，如 深度研究（不超过50字）" :maxlength="50" show-count />
+          <a-input v-model:value="form.displayName" placeholder="中文，如 深度研究（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="2" placeholder="什么场景启用这个技能（不超过50字）" :maxlength="50" show-count />

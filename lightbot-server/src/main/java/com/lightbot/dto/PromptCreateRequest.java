@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class PromptCreateRequest {
 
-    @Size(max = 100, message = "Prompt Key不超过100字")
+    @Size(max = 30, message = "Prompt Key不超过30字")
     private String promptKey;
 
     @Size(max = 50, message = "描述不超过50字")

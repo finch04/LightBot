@@ -185,7 +185,7 @@
     >
       <a-form :model="datasetForm" :label-col="{ span: 5 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="datasetForm.name" :maxlength="50" show-count placeholder="如：客服问答评测集 (不超过50字)" />
+          <a-input v-model:value="datasetForm.name" :maxlength="30" show-count placeholder="如：客服问答评测集 (不超过30字)" />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="datasetForm.description" :rows="3" :maxlength="50" show-count placeholder="评测集的用途描述 (不超过50字)" />
@@ -212,10 +212,10 @@
     >
       <a-form :model="evaluatorForm" :label-col="{ span: 5 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="evaluatorForm.name" placeholder="如：准确性评估器" />
+          <a-input v-model:value="evaluatorForm.name" :maxlength="30" show-count placeholder="如：准确性评估器 (不超过30字)" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="evaluatorForm.description" :rows="3" placeholder="评估器的用途描述" />
+          <a-textarea v-model:value="evaluatorForm.description" :rows="3" :maxlength="50" show-count placeholder="评估器的用途描述 (不超过50字)" />
         </a-form-item>
         <a-form-item label="标签">
           <TagInput v-model="evaluatorForm.tags" />
@@ -302,10 +302,10 @@
       <!-- Step 1: 基本信息 -->
       <a-form v-show="experimentStep === 0" :model="experimentForm" :label-col="{ span: 5 }">
         <a-form-item label="实验名称" required>
-          <a-input v-model:value="experimentForm.name" placeholder="如：客服 Prompt v1 vs v2 对比" />
+          <a-input v-model:value="experimentForm.name" :maxlength="30" show-count placeholder="如：客服 Prompt v1 vs v2 对比 (不超过30字)" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="experimentForm.description" :rows="3" placeholder="实验目的说明" />
+          <a-textarea v-model:value="experimentForm.description" :rows="3" :maxlength="50" show-count placeholder="实验目的说明 (不超过50字)" />
         </a-form-item>
       </a-form>
 
@@ -493,7 +493,10 @@ const expEvaluatorList = ref([])
 const expEvaluatorVersions = ref([])
 
 const experimentColumns = [
-  { title: '实验名称', key: 'name', dataIndex: 'name', width: 240 },
+  { title: '实验名称', key: 'name', dataIndex: 'name', width: 200 },
+  { title: '评测集', key: 'datasetName', dataIndex: 'datasetName', width: 140 },
+  { title: 'Prompt', key: 'promptKey', dataIndex: 'promptKey', width: 140 },
+  { title: '评估器', key: 'evaluatorName', dataIndex: 'evaluatorName', width: 140 },
   { title: '状态', key: 'status', dataIndex: 'status', width: 100 },
   { title: '进度', key: 'progress', dataIndex: 'progress', width: 160 },
   { title: '创建时间', key: 'createTime', dataIndex: 'createTime', width: 180 },
@@ -806,7 +809,7 @@ function progressStatus(s) {
 
 function formatTime(t) {
   if (!t) return ''
-  return new Date(t).toLocaleDateString('zh-CN')
+  return new Date(t).toLocaleString('zh-CN')
 }
 </script>
 

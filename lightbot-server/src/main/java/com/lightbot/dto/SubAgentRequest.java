@@ -21,12 +21,12 @@ public class SubAgentRequest {
     private Long id;
 
     @NotBlank(message = "名称不能为空")
-    @Size(max = 50, message = "标识名称不超过50字")
+    @Size(max = 30, message = "标识名称不超过30字")
     @Schema(description = "唯一标识（英文）")
     private String name;
 
     @NotBlank(message = "显示名称不能为空")
-    @Size(max = 50, message = "显示名称不超过50字")
+    @Size(max = 30, message = "显示名称不超过30字")
     @Schema(description = "显示名称（中文）")
     private String displayName;
 

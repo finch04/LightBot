@@ -18,7 +18,7 @@ import lombok.Data;
 public class EvalBenchmarkGenerateRequest {
 
     @NotBlank(message = "基准名称不能为空")
-    @Size(max = 50, message = "基准名称不超过50字")
+    @Size(max = 30, message = "基准名称不超过30字")
     @Schema(description = "基准名称", requiredMode = Schema.RequiredMode.REQUIRED)
     private String name;
 

@@ -86,7 +86,7 @@
     <a-modal v-model:open="showCreate" title="新建知识库" :width="480" @ok="handleCreate" :confirm-loading="submitting" :maskClosable="false">
       <a-form :model="form" :label-col="{ span: 6 }">
         <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="知识库名称（不超过50字）" :maxlength="50" show-count />
+          <a-input v-model:value="form.name" placeholder="知识库名称（不超过30字）" :maxlength="30" show-count />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model:value="form.description" :rows="3" placeholder="知识库描述（不超过50字，可选）" :maxlength="50" show-count />
