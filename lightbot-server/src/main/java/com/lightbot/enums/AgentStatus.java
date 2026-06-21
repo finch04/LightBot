@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum AgentStatus {
+public enum AgentStatus implements EnumDisplay {
 
     DRAFT("draft", "草稿"),
     PUBLISHED("published", "已发布"),

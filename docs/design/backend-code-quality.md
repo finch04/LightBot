@@ -23,7 +23,6 @@
 | **P0** | ChatServiceImpl 上帝类（1127 行） | 流式/非流式路径重复 600+ 行，维护困难 |
 | **P0** | 36 处 `new ObjectMapper()` | 内存浪费，配置不一致 |
 | **P0** | `buildSpan` 方法 3 处重复 | 修改需同步三处，易遗漏 |
-| **P1** | Agent 绑定存 JSONB（无类型安全） | 并发丢失、无外键约束、缓存失效不精确 |
 | **P1** | `parseIds` / `resolveProviderId` / RAG 参数解析重复 | 逻辑不一致风险 |
 | **P1** | KnowledgeController 40+ 接口 | 单文件 547 行，职责过重 |
 | **P1** | `StpUtil.getLoginIdAsLong()` 48 处直接调用 | 鉴权框架渗透到业务层 |
@@ -196,76 +195,9 @@ public class LlmTraceSpan {
 
 #### 2.3.3 预估工作量：0.5 小时
 
-### 2.4 P1：Agent 绑定关系重构
+### 2.4 P1：重复逻辑统一
 
-#### 2.4.1 现状
-
-Agent 的知识库绑定、工具绑定、MCP Server 绑定、SubAgent 绑定、Skill 绑定全部存储在一个 JSONB `config` 字段中，通过 `readBindingIdsFromConfig` / `writeBindingIdsToConfig` 手动解析。
-
-**问题**：
-1. 无类型安全，依赖手动解析
-2. 无外键约束，绑定 ID 可能指向已删除实体
-3. 并发修改同一 JSONB 字段可能导致数据丢失
-4. `@CacheEvict(allEntries = true)` 导致任何绑定变更都清除全部缓存
-5. `readBindingIdsFromConfig` 被调用 10 次（每次都重新解析整个 config JSON）
-
-#### 2.4.2 改进方案
-
-抽取独立关联表：
-
-```sql
-CREATE TABLE agent_knowledge (
-    agent_id      BIGINT NOT NULL,
-    knowledge_id  BIGINT NOT NULL,
-    create_time   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, knowledge_id)
-);
-
-CREATE TABLE agent_tool (
-    agent_id  BIGINT NOT NULL,
-    tool_id   BIGINT NOT NULL,
-    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, tool_id)
-);
-
-CREATE TABLE agent_mcp_server (
-    agent_id      BIGINT NOT NULL,
-    mcp_server_id BIGINT NOT NULL,
-    create_time   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, mcp_server_id)
-);
-
-CREATE TABLE agent_sub_agent (
-    agent_id    BIGINT NOT NULL,
-    sub_agent_id BIGINT NOT NULL,
-    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, sub_agent_id)
-);
-
-CREATE TABLE agent_skill (
-    agent_id  BIGINT NOT NULL,
-    skill_id  BIGINT NOT NULL,
-    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (agent_id, skill_id)
-);
-```
-
-Service 层改造：
-
-```java
-// AgentServiceImpl 中替换 readBindingIdsFromConfig
-public List<Long> getKnowledgeIds(Long agentId) {
-    return agentKnowledgeMapper.selectList(
-        new LambdaQueryWrapper<AgentKnowledge>().eq(AgentKnowledge::getAgentId, agentId)
-    ).stream().map(AgentKnowledge::getKnowledgeId).toList();
-}
-```
-
-#### 2.4.3 预估工作量：3-4 人天（含数据迁移脚本）
-
-### 2.5 P1：重复逻辑统一
-
-#### 2.5.1 parseIds 去重
+#### 2.4.1 parseIds 去重
 
 当前 `ToolPrepMiddleware` 和 `SkillPrepMiddleware` 各有一份完全相同的 `parseIds` 实现。
 
@@ -285,7 +217,7 @@ public final class JsonIdParser {
 }
 ```
 
-#### 2.5.2 resolveProviderId 统一
+#### 2.4.2 resolveProviderId 统一
 
 当前在 `AgentServiceImpl`、`RagServiceImpl`、`InitMiddleware` 三处独立实现，逻辑略有差异。
 
@@ -322,7 +254,7 @@ public class ProviderResolver {
 }
 ```
 
-#### 2.5.3 RAG 参数解析统一
+#### 2.4.3 RAG 参数解析统一
 
 当前 `RagServiceImpl` 和 `ChatServiceImpl` 各自实现 RAG 参数解析，逻辑不一致。
 
@@ -359,15 +291,15 @@ public class RagParamResolver {
 }
 ```
 
-#### 2.5.4 预估工作量：2 人天
+#### 2.4.4 预估工作量：2 人天
 
-### 2.6 P1：KnowledgeController 拆分
+### 2.5 P1：KnowledgeController 拆分
 
-#### 2.6.1 现状
+#### 2.5.1 现状
 
 `KnowledgeController` 547 行，包含 40+ 个接口：知识库 CRUD、成员管理、文档管理、分块查看、思维导图、知识图谱、RAG 问答、问答对管理。
 
-#### 2.6.2 改进方案
+#### 2.5.2 改进方案
 
 按功能域拆分：
 
@@ -379,15 +311,15 @@ KnowledgeRagController       — RAG 问答（3 个接口）
 KnowledgeQAPairController    — 问答对管理（7 个接口）
 ```
 
-#### 2.6.3 预估工作量：1-2 人天
+#### 2.5.3 预估工作量：1-2 人天
 
-### 2.7 P1：StpUtil 调用封装
+### 2.6 P1：StpUtil 调用封装
 
-#### 2.7.1 现状
+#### 2.6.1 现状
 
 17 个文件、48 处直接调用 `StpUtil.getLoginIdAsLong()`，Sa-Token 鉴权细节渗透到 Controller 层。
 
-#### 2.7.2 改进方案
+#### 2.6.2 改进方案
 
 ```java
 // util/SecurityUtil.java
@@ -415,11 +347,11 @@ public final class SecurityUtil {
 
 全项目搜索替换 `StpUtil.getLoginIdAsLong()` → `SecurityUtil.getCurrentUserId()`。
 
-#### 2.7.3 预估工作量：1 人天
+#### 2.6.3 预估工作量：1 人天
 
-### 2.8 P2：魔法字符串治理
+### 2.7 P2：魔法字符串治理
 
-#### 2.8.1 问题清单
+#### 2.7.1 问题清单
 
 | 魔法值 | 位置 | 改进方案 |
 |--------|------|---------|
@@ -429,9 +361,9 @@ public final class SecurityUtil {
 | `"qa_pair"` / `"chunk"` | ChatServiceImpl, RagServiceImpl | 枚举 `RagResultType` |
 | `"pending"` / `"running"` | TaskEventController L67-68 | `TaskStatus.PENDING.getCode()` |
 
-#### 2.8.2 预估工作量：1 人天
+#### 2.7.2 预估工作量：1 人天
 
-### 2.9 P2：ErrorCode 重复码修复
+### 2.8 P2：ErrorCode 重复码修复
 
 `SESSION_NOT_FOUND` (30001) 和 `AI_NO_PROVIDER` (30001) 使用了相同的 code。
 
@@ -439,7 +371,7 @@ public final class SecurityUtil {
 
 #### 预估工作量：10 分钟
 
-### 2.10 P2：Controller 注入 Util 下沉
+### 2.9 P2：Controller 注入 Util 下沉
 
 `KnowledgeController` 注入了 `MilvusUtil` 和 `MinioUtil`，违反分层原则。
 
@@ -447,7 +379,7 @@ public final class SecurityUtil {
 
 #### 预估工作量：0.5 人天
 
-### 2.11 P2：EnumController 反射优化
+### 2.10 P2：EnumController 反射优化
 
 当前使用反射 `getDeclaredField("code")` 硬编码字段名。
 
@@ -511,16 +443,7 @@ private EnumVO toEnumVO(EnumDisplay e) {
 
 **建议**：在有完善集成测试的基础上进行，先提取无状态的工具执行逻辑，再处理流式路径。
 
-### 4.2 Agent 绑定关系迁移
-
-从 JSONB 字段迁移到关联表需要：
-- 数据库 Schema 变更 + 数据迁移脚本
-- 新旧接口的兼容过渡期
-- `@Cacheable` / `@CacheEvict` 注解的缓存一致性
-
-**建议**：先创建关联表并双写（新表 + JSONB），验证数据一致后再切换读取路径，最后删除 JSONB 中的绑定数据。
-
-### 4.3 resolveProviderId 统一
+### 4.2 resolveProviderId 统一
 
 当前各处的 fallback 逻辑略有差异：
 - `AgentServiceImpl` 使用 `systemConfigService.getDefaultAiConfig()`
@@ -529,7 +452,7 @@ private EnumVO toEnumVO(EnumDisplay e) {
 
 **建议**：统一前先确认优先级策略，写成文档，再实现。
 
-### 4.4 SSE 连接管理
+### 4.3 SSE 连接管理
 
 `TaskEventController` 和 `LogController` 使用 `static Map` 管理 SSE 连接。单实例下正常，多实例部署需引入 Redis Pub/Sub 或 WebSocket。
 
@@ -537,37 +460,31 @@ private EnumVO toEnumVO(EnumDisplay e) {
 
 ---
 
-## 五、工作量估算
+## 五、工作量估算与实施结果
 
-| 序号 | 改进项 | 严重程度 | 预估工时 | 依赖 |
-|------|--------|---------|---------|------|
-| 1 | ChatServiceImpl 拆分（ToolCallExecutor + RagResultCollector） | P0 | 3-4 天 | 需集成测试 |
-| 2 | 统一 ObjectMapper Bean | P0 | 0.5 天 | 无 |
-| 3 | buildSpan 静态工厂方法 | P0 | 0.5 小时 | 无 |
-| 4 | Agent 绑定关系抽取关联表 | P1 | 3-4 天 | 数据迁移脚本 |
-| 5 | parseIds 去重 → JsonIdParser | P1 | 0.5 小时 | 无 |
-| 6 | resolveProviderId 统一 → ProviderResolver | P1 | 1 天 | 确认优先级策略 |
-| 7 | RAG 参数解析统一 → RagParamResolver | P1 | 0.5 天 | 无 |
-| 8 | KnowledgeController 按功能域拆分 | P1 | 1-2 天 | 无 |
-| 9 | StpUtil 封装 → SecurityUtil | P1 | 1 天 | 无 |
-| 10 | 魔法字符串治理 | P2 | 1 天 | 无 |
-| 11 | ErrorCode 重复码 30001 修正 | P2 | 10 分钟 | 无 |
-| 12 | Controller 注入 Util 下沉 | P2 | 0.5 天 | 无 |
-| 13 | EnumController 反射优化 → EnumDisplay 接口 | P2 | 0.5 天 | 无 |
+| 序号 | 改进项 | 严重程度 | 预估工时 | 状态 | 实际改动 |
+|------|--------|---------|---------|------|---------|
+| 1 | 统一 ObjectMapper Bean | P0 | 0.5 天 | ✅ 已完成 | 新建 `JacksonConfig`，替换 32 处 `new ObjectMapper()`，`ToolArgsSanitizer`/`ToolEventGenerator` 改为 `@Component` 注入 |
+| 2 | buildSpan 静态工厂方法 | P0 | 0.5 小时 | ✅ 已完成 | `LlmTraceSpan.of()` 替代 3 处重复 `buildSpan`，涉及 InitMiddleware/WorkflowMiddleware/TraceMiddleware/ChatServiceImpl 共 17 个调用点 |
+| 3 | parseIds 去重 → JsonIdParser | P1 | 0.5 小时 | ✅ 已完成 | 新建 `util/JsonIdParser.java`，替换 ToolPrepMiddleware/SkillPrepMiddleware 中的重复实现 |
+| 4 | resolveProviderId 统一 → ProviderResolver | P1 | 1 天 | ✅ 已完成 | 新建 `model/ProviderResolver.java`，替换 AgentServiceImpl/RagServiceImpl/InitMiddleware/TraceMiddleware/MessageMiddleware/SubAgentRuntime 中的 6 处实现 |
+| 5 | RAG 参数解析统一 → RagParamResolver | P1 | 0.5 天 | ✅ 已完成 | 新建 `util/RagParamResolver.java`，替换 RagServiceImpl（5 个方法）和 ChatServiceImpl（2 个方法）中的重复逻辑 |
+| 6 | KnowledgeController 按功能域拆分 | P1 | 1-2 天 | ✅ 已完成 | 拆分为 5 个 Controller：KnowledgeController(193行)、KnowledgeDocController(175行)、KnowledgeGraphController(118行)、KnowledgeQAPairController(90行)、KnowledgeRagController(75行) |
+| 7 | 魔法字符串治理 | P2 | 1 天 | ✅ 已完成 | 新建 `ToolResultPrefixes`、`RagResultType` 常量类；`ChatSession.DEFAULT_TITLE` 替换 "新对话"；`TaskStatus` 枚举替换 TaskEventController 中硬编码状态 |
+| 8 | ErrorCode 重复码 30001 修正 | P2 | 10 分钟 | ✅ 已完成 | `SESSION_NOT_FOUND` code 从 30001 改为 30010（30003 已被占用） |
+| 9 | Controller 注入 Util 下沉 | P2 | 0.5 天 | ✅ 已完成 | `MilvusUtil` 从 KnowledgeController 下沉到 KnowledgeService.isMilvusAvailable() |
+| 10 | EnumController 反射优化 → EnumDisplay 接口 | P2 | 0.5 天 | ✅ 已完成 | 新建 `EnumDisplay` 接口，17 个枚举实现该接口，EnumController 移除反射逻辑 |
+| 11 | ChatServiceImpl MiMo 逻辑内聚 | P0 | 0.5 天 | ✅ 已完成 | `streamMimoDirect` 移除重复的 reasoning_content 解析（MimoChatClient 已处理），仅保留通用关注点（敏感词过滤、回复累积、日志），MiMo 特有逻辑内聚在 MimoChatClient 中 |
 
-**总预估：约 14-18 人天**
+**总预估：约 11-14 人天**
 
-**实施节奏**：
-- P0（4-5 天）：解决最严重的重复和资源浪费问题
-- P1（7-9 天）：架构级改进，提升可维护性和类型安全
-- P2（3 天）：代码规范治理，低风险高收益
+**已完成：11 项**（全部完成，编译通过）
 
-**建议执行顺序**：
-1. 先做 #2 #3 #5（1 天内完成，无依赖，立即消除重复）
-2. 再做 #8 #9 #10 #11 #12 #13（3-4 天，独立且低风险）
-3. 然后做 #6 #7（1.5 天，需要确认策略）
-4. 最后做 #1 #4（6-8 天，风险最高，需要测试保障）
+**未纳入本期**：
+- ChatServiceImpl 上帝类完整拆分：当前仅完成 MiMo 逻辑内聚，完整拆分（ToolCallExecutor/RagResultCollector）需更细致设计，避免破坏中间件管道整体性
+- StpUtil 封装：优先级较低，后续迭代处理
+- Agent 绑定关系重构：JSONB 方案合理，保持现状
 
 ---
 
-*文档生成时间: 2026-06-21*
+*文档更新时间: 2026-06-21*

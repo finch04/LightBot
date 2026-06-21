@@ -1,7 +1,5 @@
 package com.lightbot.service.chat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Skill;
 import com.lightbot.entity.Tool;
@@ -10,6 +8,7 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.SkillService;
 import com.lightbot.service.ToolService;
 import com.lightbot.service.sandbox.SkillActivationStore;
+import com.lightbot.util.JsonIdParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -40,8 +39,6 @@ public class SkillPrepMiddleware implements ChatMiddleware {
     private final SkillService skillService;
     private final ToolService toolService;
     private final SkillActivationStore skillActivationStore;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -135,7 +132,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
         Map<String, Map<String, Object>> toolNameToSkill = new HashMap<>();
         Set<Long> allSkillToolIds = new LinkedHashSet<>();
         for (Skill skill : skills) {
-            allSkillToolIds.addAll(parseIds(skill.getToolIds()));
+            allSkillToolIds.addAll(JsonIdParser.parseIds(skill.getToolIds()));
         }
         if (!allSkillToolIds.isEmpty()) {
             try {
@@ -149,7 +146,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
                 for (int i = 0; i < skills.size(); i++) {
                     Skill skill = skills.get(i);
                     Map<String, Object> detail = activeDetails.get(i);
-                    List<Long> sToolIds = parseIds(skill.getToolIds());
+                    List<Long> sToolIds = JsonIdParser.parseIds(skill.getToolIds());
                     for (Long tid : sToolIds) {
                         String tName = toolIdToName.get(tid);
                         if (tName != null && !toolNameToSkill.containsKey(tName)) {
@@ -174,32 +171,9 @@ public class SkillPrepMiddleware implements ChatMiddleware {
                 agent.getId(), activeNames, ctx.getActivatedSkills());
     }
 
-    /** 解析 JSONB 数组字段（字符串 ID） */
-    private List<Long> parseIds(String json) {
-        if (json == null || json.isBlank()) {
-            return List.of();
-        }
-        try {
-            List<Object> raw = OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
-            List<Long> ids = new ArrayList<>();
-            for (Object item : raw) {
-                if (item == null) continue;
-                String text = item.toString().trim();
-                if (text.isBlank()) continue;
-                try {
-                    ids.add(Long.parseLong(text));
-                } catch (NumberFormatException ignored) {
-                }
-            }
-            return ids;
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
-
     /** 解析 toolIds JSON 为工具名称列表 */
     private List<String> resolveToolNames(String toolIdsJson) {
-        List<Long> ids = parseIds(toolIdsJson);
+        List<Long> ids = JsonIdParser.parseIds(toolIdsJson);
         if (ids.isEmpty()) {
             return List.of();
         }

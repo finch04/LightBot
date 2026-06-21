@@ -25,7 +25,7 @@ import java.util.Map;
 public class BuiltInSubAgentRegistrar implements ApplicationRunner {
 
     private final SubAgentMapper subAgentMapper;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /**
      * 内置 SubAgent 配置

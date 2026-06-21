@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum CommonStatus {
+public enum CommonStatus implements EnumDisplay {
 
     ACTIVE("active", "启用"),
     DISABLED("disabled", "禁用");

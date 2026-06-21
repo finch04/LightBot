@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/app/prompts')">
+        <button class="btn-back" @click="router.back()">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title"><span v-if="latestVersion" class="version-badge">{{ latestVersion }}</span>{{ promptKey }}</h1>

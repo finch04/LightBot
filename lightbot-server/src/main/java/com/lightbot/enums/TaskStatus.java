@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum TaskStatus {
+public enum TaskStatus implements EnumDisplay {
 
     PENDING("pending", "等待中"),
     RUNNING("running", "执行中"),

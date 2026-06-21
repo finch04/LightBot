@@ -42,7 +42,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
     private final TraceMiddleware traceMiddleware;
     private final LlmTraceService llmTraceService;
     private final TaskExecutor taskExecutor;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -67,7 +67,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
                 Consumer<Map<String, Object>> emit = event -> {
                     ctx.getWorkflowEventsList().add(event);
                     try {
-                        sink.next(STATUS_PREFIX + OBJECT_MAPPER.writeValueAsString(event));
+                        sink.next(STATUS_PREFIX + objectMapper.writeValueAsString(event));
                     } catch (Exception ex) {
                         sink.error(ex);
                     }
@@ -81,7 +81,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
                         Map<String, Object> chunkEvent = new LinkedHashMap<>();
                         chunkEvent.put("type", "workflow_llm_chunk");
                         chunkEvent.put("content", chunk);
-                        sink.next(STATUS_PREFIX + OBJECT_MAPPER.writeValueAsString(chunkEvent));
+                        sink.next(STATUS_PREFIX + objectMapper.writeValueAsString(chunkEvent));
                     } catch (Exception ex) {
                         log.warn("[WorkflowMiddleware] 流式 chunk 推送失败: {}", ex.getMessage());
                     }
@@ -122,7 +122,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
                 if (ctx.getRequest().getConfigVersion() != null) {
                     metadataMap.put("configVersion", ctx.getRequest().getConfigVersion());
                 }
-                ctx.getRagMetadataHolder()[0] = OBJECT_MAPPER.writeValueAsString(metadataMap);
+                ctx.getRagMetadataHolder()[0] = objectMapper.writeValueAsString(metadataMap);
 
                 // 流式已逐 token 推送，不再重复发送完整结果
                 if (!streamed[0] && result != null && !result.isEmpty()) {
@@ -294,7 +294,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
                 }
                 rootAttrs.put("nodes", nodeList);
             }
-            spans.add(buildSpan("workflow_run", null, "workflow_run",
+            spans.add(LlmTraceSpan.of("workflow_run", null, "workflow_run",
                     startTime, totalDurationMs, rootStatus, rootAttrs));
 
             // 3. 收集每个节点的 start/complete 事件
@@ -351,7 +351,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
             trace.setTotalDurationMs(totalDurationMs);
             trace.setReplyContent(result);
             trace.setErrorMessage(errorMessage);
-            trace.setSpans(OBJECT_MAPPER.writeValueAsString(spans));
+            trace.setSpans(objectMapper.writeValueAsString(spans));
             llmTraceService.recordTrace(trace);
         } catch (Exception e) {
             log.error("[WorkflowMiddleware] 工作流 trace 构建失败: agentId={}, error={}",
@@ -409,7 +409,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
         }
 
         String spanId = "node:" + nodeId;
-        spans.add(buildSpan(spanId, "workflow_run", "node:" + nodeType,
+        spans.add(LlmTraceSpan.of(spanId, "workflow_run", "node:" + nodeType,
                 nodeStartMs, durationMs, success ? "completed" : "failed", attrs));
 
         // LLM / Classifier 节点：构建嵌套 llm_call 子 span
@@ -452,7 +452,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
 
         String llmSpanId = "llm:" + nodeId;
         String parentSpanId = "node:" + nodeId;
-        spans.add(buildSpan(llmSpanId, parentSpanId, "llm_call",
+        spans.add(LlmTraceSpan.of(llmSpanId, parentSpanId, "llm_call",
                 nodeStartMs, durationMs, success ? "completed" : "failed", llmAttrs));
     }
 
@@ -507,20 +507,6 @@ public class WorkflowMiddleware implements ChatMiddleware {
             case "loop" -> List.of("loopCondition", "maxIterations");
             default -> List.of();
         };
-    }
-
-    private static LlmTraceSpan buildSpan(String spanId, String parentSpanId, String name,
-                                           long startTime, long durationMs, String status,
-                                           Map<String, Object> attributes) {
-        LlmTraceSpan span = new LlmTraceSpan();
-        span.setSpanId(spanId);
-        span.setParentSpanId(parentSpanId);
-        span.setName(name);
-        span.setStartTime(startTime);
-        span.setDurationMs(durationMs);
-        span.setStatus(status);
-        span.setAttributes(attributes != null ? attributes : Map.of());
-        return span;
     }
 
     private static String extractString(Map<String, Object> map, String key) {

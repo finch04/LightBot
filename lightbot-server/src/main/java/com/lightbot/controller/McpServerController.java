@@ -32,7 +32,7 @@ public class McpServerController {
 
     private final McpServerService mcpServerService;
     private final McpClientService mcpClientService;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Operation(summary = "新增MCP Server")
     @PostMapping
@@ -98,7 +98,7 @@ public class McpServerController {
             // 提取参数 Schema
             if (tool.inputSchema() != null) {
                 try {
-                    vo.setInputSchema(OBJECT_MAPPER.writeValueAsString(tool.inputSchema()));
+                    vo.setInputSchema(objectMapper.writeValueAsString(tool.inputSchema()));
                 } catch (Exception e) {
                     vo.setInputSchema("{}");
                 }
@@ -145,7 +145,7 @@ public class McpServerController {
 
         // 3. 更新数据库
         try {
-            server.setDisabledTools(OBJECT_MAPPER.writeValueAsString(new ArrayList<>(disabledTools)));
+            server.setDisabledTools(objectMapper.writeValueAsString(new ArrayList<>(disabledTools)));
             mcpServerService.updateById(server);
             // 4. 清除缓存
             mcpClientService.clearCache(id);
@@ -165,7 +165,7 @@ public class McpServerController {
             return new HashSet<>();
         }
         try {
-            List<String> list = OBJECT_MAPPER.readValue(disabledToolsJson,
+            List<String> list = objectMapper.readValue(disabledToolsJson,
                     new com.fasterxml.jackson.core.type.TypeReference<>() {});
             return new HashSet<>(list);
         } catch (Exception e) {

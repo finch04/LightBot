@@ -13,6 +13,7 @@ import com.lightbot.entity.ToolCall;
 import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.ProviderResolver;
 import com.lightbot.service.*;
 import com.lightbot.util.LlmTraceMessageSerializer;
 import com.lightbot.util.SensitiveWordFilter;
@@ -48,14 +49,13 @@ public class TraceMiddleware implements ChatMiddleware {
     private final TaskExecutor taskExecutor;
     private final LlmTraceService llmTraceService;
     private final MessageMiddleware messageMiddleware;
-    private final InitMiddleware initMiddleware;
+    private final ProviderResolver providerResolver;
     private final ModelFactory modelFactory;
     private final AgentService agentService;
     private final ChatSessionService chatSessionService;
     private final MessageMapper messageMapper;
     private final ToolCallService toolCallService;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -107,13 +107,13 @@ public class TraceMiddleware implements ChatMiddleware {
                                 .map(org.springframework.ai.chat.messages.SystemMessage.class::cast)
                                 .findFirst()
                                 .ifPresent(sm -> llmInputAttrs.put("systemPrompt", sm.getText()));
-                        ctx.getSpans().add(buildSpan("llm_input", null, "messages_to_llm",
+                        ctx.getSpans().add(LlmTraceSpan.of("llm_input", null, "messages_to_llm",
                                 ctx.getStartTime(), 0, "OK", llmInputAttrs));
                     }
 
                     // 5. 追加AI思考内容到spans
                     if (ctx.getReasoningContent().length() > 0) {
-                        ctx.getSpans().add(buildSpan("reasoning", null, "ai_reasoning",
+                        ctx.getSpans().add(LlmTraceSpan.of("reasoning", null, "ai_reasoning",
                                 ctx.getStartTime(), tEnd - ctx.getStartTime(), "OK",
                                 Map.of("content", ctx.getReasoningContent().toString())));
                     }
@@ -151,7 +151,7 @@ public class TraceMiddleware implements ChatMiddleware {
         if (attrs.isEmpty()) {
             return;
         }
-        ctx.getSpans().add(buildSpan("user_input", null, "user_message",
+        ctx.getSpans().add(LlmTraceSpan.of("user_input", null, "user_message",
                 ctx.getStartTime(), 0, "OK", attrs));
     }
 
@@ -208,7 +208,7 @@ public class TraceMiddleware implements ChatMiddleware {
         trace.setReplyContent(replyContent);
         trace.setErrorMessage(errorMessage);
         try {
-            trace.setSpans(OBJECT_MAPPER.writeValueAsString(ctx.getSpans()));
+            trace.setSpans(objectMapper.writeValueAsString(ctx.getSpans()));
         } catch (Exception ex) {
             trace.setSpans("[]");
         }
@@ -231,7 +231,7 @@ public class TraceMiddleware implements ChatMiddleware {
         try {
             // 1. 检查会话是否存在且标题仍为默认值
             ChatSession session = chatSessionService.getById(sessionId);
-            if (session == null || !"新对话".equals(session.getTitle())) {
+            if (session == null || !ChatSession.DEFAULT_TITLE.equals(session.getTitle())) {
                 return;
             }
 
@@ -253,7 +253,7 @@ public class TraceMiddleware implements ChatMiddleware {
             }
 
             // 4. 统一使用系统默认模型（速度快，不占用对话模型资源）
-            Long providerId = initMiddleware.getDefaultProviderId();
+            Long providerId = providerResolver.resolve();
             Map<String, Object> titleConfig = new HashMap<>();
             modelFactory.ensureModelIdInConfig(providerId, titleConfig);
             ChatOptions options = modelFactory.buildChatOptions(providerId, titleConfig);
@@ -293,7 +293,7 @@ public class TraceMiddleware implements ChatMiddleware {
             String ragMeta = ctx.getRagMetadataHolder()[0];
             if (ragMeta != null && !ragMeta.isBlank()) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> existing = OBJECT_MAPPER.readValue(ragMeta, Map.class);
+                Map<String, Object> existing = objectMapper.readValue(ragMeta, Map.class);
                 meta.putAll(existing);
             }
             // 追加 reasoningContent
@@ -307,27 +307,11 @@ public class TraceMiddleware implements ChatMiddleware {
             if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
                 meta.put("requestId", ctx.getRequestId());
             }
-            return meta.isEmpty() ? null : OBJECT_MAPPER.writeValueAsString(meta);
+            return meta.isEmpty() ? null : objectMapper.writeValueAsString(meta);
         } catch (Exception e) {
             log.warn("[Chat] 构建持久化metadata失败: {}", e.getMessage());
             return ctx.getRagMetadataHolder()[0];
         }
     }
 
-    /**
-     * 构建调用链Span对象
-     */
-    public LlmTraceSpan buildSpan(String spanId, String parentSpanId, String name,
-                                    long startTime, long durationMs, String status,
-                                    Map<String, Object> attributes) {
-        LlmTraceSpan span = new LlmTraceSpan();
-        span.setSpanId(spanId);
-        span.setParentSpanId(parentSpanId);
-        span.setName(name);
-        span.setStartTime(startTime);
-        span.setDurationMs(durationMs);
-        span.setStatus(status);
-        span.setAttributes(attributes != null ? attributes : Map.of());
-        return span;
-    }
 }

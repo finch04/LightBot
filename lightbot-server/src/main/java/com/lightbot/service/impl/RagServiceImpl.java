@@ -2,10 +2,12 @@ package com.lightbot.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.constant.RagResultType;
 import com.lightbot.dto.RagSearchResultVO;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.ProviderResolver;
 import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.service.EmbeddingService;
 import com.lightbot.service.KnowledgeMemberService;
@@ -14,6 +16,7 @@ import com.lightbot.service.QaPairService;
 import com.lightbot.service.RagService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.LlmTraceContext;
+import com.lightbot.util.RagParamResolver;
 import com.lightbot.util.TextNormalizeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,11 +57,9 @@ public class RagServiceImpl implements RagService {
     private final EmbeddingModel embeddingModel;
     private final ModelFactory modelFactory;
     private final SystemConfigService systemConfigService;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final int DEFAULT_TOP_K = 5;
-    private static final double DEFAULT_THRESHOLD = 0.5;
-
+    private final ObjectMapper objectMapper;
+    private final ProviderResolver providerResolver;
+    private final RagParamResolver ragParamResolver;
     private static final String RAG_SYSTEM_PROMPT = """
             你是 LightBot 智能助手。请基于以下参考资料回答用户的问题。
             如果参考资料中没有相关信息，请如实告知用户。
@@ -78,11 +79,11 @@ public class RagServiceImpl implements RagService {
         permissionHelper.checkMember(knowledgeId);
 
         // 1.1 解析providerId（为空时使用默认提供商）
-        Long actualProviderId = resolveProviderId(providerId);
+        Long actualProviderId = providerResolver.resolve(providerId);
 
         // 1.2 从知识库配置中读取检索参数
-        int topK = parseRagTopK(knowledge);
-        double threshold = parseRagThreshold(knowledge);
+        int topK = ragParamResolver.resolveTopK(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_TOP_K);
+        double threshold = ragParamResolver.resolveThreshold(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_THRESHOLD);
         log.info("[RAG] 问答开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
                 knowledgeId, actualProviderId, topK, threshold, question);
 
@@ -135,11 +136,11 @@ public class RagServiceImpl implements RagService {
         permissionHelper.checkMember(knowledgeId);
 
         // 1.1 解析providerId（为空时使用默认提供商）
-        Long actualProviderId = resolveProviderId(providerId);
+        Long actualProviderId = providerResolver.resolve(providerId);
 
         // 1.2 从知识库配置中读取检索参数
-        int topK = parseRagTopK(knowledge);
-        double threshold = parseRagThreshold(knowledge);
+        int topK = ragParamResolver.resolveTopK(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_TOP_K);
+        double threshold = ragParamResolver.resolveThreshold(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_THRESHOLD);
         log.info("[RAG] 流式问答开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
                 knowledgeId, actualProviderId, topK, threshold, question);
 
@@ -197,8 +198,9 @@ public class RagServiceImpl implements RagService {
         permissionHelper.checkMember(knowledgeId);
 
         // 2. 解析检索参数：overrides > queryParams > config > 默认值
-        int topK = resolveTopK(knowledge, overrides);
-        double threshold = resolveThreshold(knowledge, overrides);
+        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
+        int topK = ragParamResolver.resolveTopK(overrides, queryParams, knowledge.getConfig(), RagParamResolver.DEFAULT_TOP_K);
+        double threshold = ragParamResolver.resolveThreshold(overrides, queryParams, knowledge.getConfig(), RagParamResolver.DEFAULT_THRESHOLD);
         boolean qaEnabled = resolveQaEnabled(knowledge, overrides);
         log.info("[RAG] 检索测试开始: knowledgeId={}, topK={}, threshold={}, qaEnabled={}, question={}",
                 knowledgeId, topK, threshold, qaEnabled, question);
@@ -240,7 +242,7 @@ public class RagServiceImpl implements RagService {
             vo.setRank(++rank);
             vo.setScore(qa.getScore());
             vo.setDocumentName("问答对");
-            vo.setResultType("qa_pair");
+            vo.setResultType(RagResultType.QA_PAIR);
             voList.add(vo);
         }
 
@@ -253,7 +255,7 @@ public class RagServiceImpl implements RagService {
             vo.setDocumentName((String) row.get("document_name"));
             Object documentId = row.get("document_id");
             vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
-            vo.setResultType("chunk");
+            vo.setResultType(RagResultType.CHUNK);
             voList.add(vo);
         }
         return voList;
@@ -266,101 +268,6 @@ public class RagServiceImpl implements RagService {
         EmbeddingResponse response = embeddingModel.call(
                 new EmbeddingRequest(List.of(text), null));
         return response.getResult().getOutput();
-    }
-
-    /**
-     * 解析providerId，为空时使用系统默认配置（或第一个可用的）
-     */
-    private Long resolveProviderId(Long providerId) {
-        // 1. 优先使用传入的 providerId
-        if (providerId != null) {
-            return providerId;
-        }
-
-        // 2. 其次使用系统默认AI配置
-        var defaultConfig = systemConfigService.getDefaultAiConfig();
-        if (defaultConfig.getProviderId() != null) {
-            return defaultConfig.getProviderId();
-        }
-
-        // 3. 最后使用第一个可用的提供商
-        var providers = modelFactory.getAvailableProviderIds();
-        if (providers.isEmpty()) {
-            throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
-        }
-        return providers.get(0);
-    }
-
-    /**
-     * 解析 TopK 参数（无 overrides 版本，用于 ask/askStream）
-     * 优先级：queryParams > config > 默认值
-     */
-    private int parseRagTopK(Knowledge knowledge) {
-        return resolveTopK(knowledge, null);
-    }
-
-    /**
-     * 解析 threshold 参数（无 overrides 版本，用于 ask/askStream）
-     * 优先级：queryParams > config > 默认值
-     */
-    private double parseRagThreshold(Knowledge knowledge) {
-        return resolveThreshold(knowledge, null);
-    }
-
-    /**
-     * 解析 TopK 参数，支持 overrides 覆盖
-     * 优先级：overrides > queryParams > config > 默认值
-     */
-    private int resolveTopK(Knowledge knowledge, Map<String, Object> overrides) {
-        // 1. overrides 最高优先
-        if (overrides != null) {
-            Object val = overrides.get("final_top_k");
-            if (val instanceof Number n) {
-                return n.intValue();
-            }
-        }
-        // 2. query_params 专有字段
-        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
-        Object qpVal = queryParams.get("final_top_k");
-        if (qpVal instanceof Number n) {
-            return n.intValue();
-        }
-        // 3. 兼容旧 config 中的 ragTopK
-        Map<String, Object> config = parseJson(knowledge.getConfig());
-        Object cfgVal = config.get("ragTopK");
-        if (cfgVal instanceof Number n) {
-            return n.intValue();
-        }
-        // 4. 默认值
-        return DEFAULT_TOP_K;
-    }
-
-    /**
-     * 解析 threshold 参数，支持 overrides 覆盖
-     * 优先级：overrides > queryParams > config > 默认值
-     */
-    private double resolveThreshold(Knowledge knowledge, Map<String, Object> overrides) {
-        // 1. overrides 最高优先
-        if (overrides != null) {
-            Object val = overrides.get("similarity_threshold");
-            if (val instanceof Number n) {
-                return n.doubleValue();
-            }
-        }
-        // 2. query_params 专有字段
-        Map<String, Object> queryParams = parseJson(knowledge.getQueryParams());
-        Object qpVal = queryParams.get("similarity_threshold");
-        if (qpVal instanceof Number n) {
-            return n.doubleValue();
-        }
-        // 3. 兼容旧 config 中的 ragThreshold
-        Map<String, Object> config = parseJson(knowledge.getConfig());
-        Object cfgVal = config.get("ragThreshold");
-        if (cfgVal instanceof Number n) {
-            return n.doubleValue();
-        }
-        // 4. 默认值
-        return DEFAULT_THRESHOLD;
     }
 
     private boolean resolveQaEnabled(Knowledge knowledge, Map<String, Object> overrides) {
@@ -408,7 +315,7 @@ public class RagServiceImpl implements RagService {
             return Map.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(json, Map.class);
+            return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
             return Map.of();
         }

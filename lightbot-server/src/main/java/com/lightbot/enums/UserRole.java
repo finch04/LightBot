@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum UserRole {
+public enum UserRole implements EnumDisplay {
 
     ADMIN("admin", "管理员"),
     USER("user", "普通用户");

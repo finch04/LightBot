@@ -1,5 +1,6 @@
 package com.lightbot.controller;
 
+import com.lightbot.enums.TaskStatus;
 import com.lightbot.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -64,8 +65,8 @@ public class TaskEventController {
 
     private void sendCount(Long userId, SseEmitter emitter) {
         try {
-            long pending = taskService.countByStatus(userId, "pending");
-            long running = taskService.countByStatus(userId, "running");
+            long pending = taskService.countByStatus(userId, TaskStatus.PENDING.getCode());
+            long running = taskService.countByStatus(userId, TaskStatus.RUNNING.getCode());
             long active = pending + running;
             // 推送分状态计数 JSON，前端同时用于导航角标和任务中心
             emitter.send(SseEmitter.event().name("count")

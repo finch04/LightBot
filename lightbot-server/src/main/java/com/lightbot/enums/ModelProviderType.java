@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum ModelProviderType {
+public enum ModelProviderType implements EnumDisplay {
 
     OPENAI("OPENAI", "OpenAI"),
     DASHSCOPE("DASHSCOPE", "通义千问"),

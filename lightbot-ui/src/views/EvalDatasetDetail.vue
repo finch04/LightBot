@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push({ path: '/app/eval', query: { tab: 'datasets' } })">
+        <button class="btn-back" @click="router.back()">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ dataset?.name || '评测集详情' }}</h1>
@@ -324,10 +324,20 @@ function handleDeleteItem(id) {
   })
 }
 
+const FIELD_LABEL_MAP = {
+  input: '用户输入',
+  reference_output: '期望输出',
+}
+
 function parseItemContent(dataContent) {
   if (!dataContent) return {}
   try {
-    return typeof dataContent === 'string' ? JSON.parse(dataContent) : dataContent
+    const raw = typeof dataContent === 'string' ? JSON.parse(dataContent) : dataContent
+    const result = {}
+    for (const [key, val] of Object.entries(raw)) {
+      result[FIELD_LABEL_MAP[key] || key] = val
+    }
+    return result
   } catch {
     return { content: dataContent }
   }

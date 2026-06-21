@@ -52,7 +52,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     private final ObjectMapper objectMapper;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, key = "#id", unless = "#result == null")
     public EvalExperiment getById(Serializable id) {
         return super.getById(id);
     }
@@ -401,17 +401,25 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                     experiment.getEvaluatorConfig(), new TypeReference<>() {});
             List<String> nameList = new ArrayList<>();
             List<String> versionList = new ArrayList<>();
+            List<String> idList = new ArrayList<>();
             for (Map<String, Object> cfg : evaluatorConfigs) {
                 Long evaluatorVersionId = Long.parseLong(cfg.get("evaluatorVersionId").toString());
                 EvalEvaluatorVersion evVersion = evaluatorVersionService.getById(evaluatorVersionId);
                 if (evVersion != null) {
                     versionList.add(String.valueOf(evVersion.getVersion()));
                     EvalEvaluator evaluator = evaluatorService.getById(evVersion.getEvaluatorId());
-                    nameList.add(evaluator != null ? evaluator.getName() : "未知");
+                    if (evaluator != null) {
+                        nameList.add(evaluator.getName());
+                        idList.add(String.valueOf(evaluator.getId()));
+                    } else {
+                        nameList.add("未知");
+                        idList.add(String.valueOf(evVersion.getEvaluatorId()));
+                    }
                 }
             }
             experiment.setEvaluatorNameList(nameList);
             experiment.setEvaluatorVersionList(versionList);
+            experiment.setEvaluatorIdList(idList);
             // 兼容旧字段：取第一个
             if (!nameList.isEmpty()) {
                 experiment.setEvaluatorName(nameList.get(0));

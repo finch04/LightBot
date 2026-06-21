@@ -41,7 +41,7 @@ public class ToolRegistrar {
 
     private final ToolService toolService;
     private final ApplicationContext applicationContext;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @PostConstruct
     public void registerAllTools() {
@@ -163,7 +163,7 @@ public class ToolRegistrar {
             if (methodTool != null) {
                 java.util.Collections.addAll(tags, methodTool.tags());
             }
-            return OBJECT_MAPPER.writeValueAsString(tags);
+            return objectMapper.writeValueAsString(tags);
         } catch (Exception e) {
             return "[]";
         }
@@ -233,7 +233,7 @@ public class ToolRegistrar {
 
             schema.put("properties", properties);
             schema.put("required", required);
-            return OBJECT_MAPPER.writeValueAsString(schema);
+            return objectMapper.writeValueAsString(schema);
         } catch (Exception e) {
             log.warn("[ToolRegistrar] 生成 inputSchema 失败: {}", e.getMessage());
             return "{}";
@@ -242,7 +242,7 @@ public class ToolRegistrar {
 
     private String generateExampleParams(Method method) {
         try {
-            var example = OBJECT_MAPPER.createObjectNode();
+            var example = objectMapper.createObjectNode();
             for (Parameter param : method.getParameters()) {
                 if (param.getType().equals(org.springframework.ai.chat.model.ToolContext.class)) {
                     continue;
@@ -273,7 +273,7 @@ public class ToolRegistrar {
                     example.put(paramName, exampleValue);
                 }
             }
-            return OBJECT_MAPPER.writeValueAsString(example);
+            return objectMapper.writeValueAsString(example);
         } catch (Exception e) {
             log.warn("[ToolRegistrar] 生成示例参数失败: method={}, error={}", method.getName(), e.getMessage());
             return "{}";

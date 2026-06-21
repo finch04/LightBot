@@ -99,7 +99,7 @@
                 <!-- 有工具事件：按 offset 位置插入工具块 -->
                 <template v-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0 && getToolBlockOffsets(messages[virtualRow.index]).length > 0">
                   <template v-for="(segment, si) in splitContentByOffsets(messages[virtualRow.index])" :key="si">
-                    <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                    <div v-if="segment.type === 'text'" class="message-content"><pre v-if="rawModeMessages.has(virtualRow.index)" class="raw-content">{{ segment.text }}</pre><MarkdownPreview v-else :content="segment.text" :finalized="!messages[virtualRow.index]._streaming" /></div>
                     <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
                       <AgentCapabilityPanel
                         v-if="getCapabilityEventsForOffset(messages[virtualRow.index], segment.offset).length > 0"
@@ -118,7 +118,7 @@
                 </template>
                 <!-- 有工具事件但 offset 尚未到达 -->
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0">
-                  <div v-if="messages[virtualRow.index].content" class="message-content"><MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                  <div v-if="messages[virtualRow.index].content" class="message-content"><pre v-if="rawModeMessages.has(virtualRow.index)" class="raw-content">{{ messages[virtualRow.index].content }}</pre><MarkdownPreview v-else :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" /></div>
                   <div class="tool-block-inline">
                     <AgentCapabilityPanel
                       v-if="getInlineCapabilityEvents(messages[virtualRow.index]).length > 0"
@@ -137,7 +137,8 @@
                 <!-- 无工具事件：正常渲染 -->
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock">
                   <div v-if="messages[virtualRow.index].content && messages[virtualRow.index].content !== '[附件]'" class="message-content">
-                    <MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
+                    <pre v-if="rawModeMessages.has(virtualRow.index)" class="raw-content">{{ messages[virtualRow.index].content }}</pre>
+                    <MarkdownPreview v-else :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
                   </div>
                 </template>
                 <!-- 操作按钮 -->
@@ -183,6 +184,15 @@
                     >
                       <CheckOutlined v-if="messages[virtualRow.index]._requestIdCopied" />
                       <NumberOutlined v-else />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant'" :title="rawModeMessages.has(virtualRow.index) ? '以 Markdown 展示' : '以原始内容展示'">
+                    <button
+                      class="btn-copy"
+                      :class="{ active: rawModeMessages.has(virtualRow.index) }"
+                      @click="toggleRawMode(virtualRow.index)"
+                    >
+                      <EyeOutlined />
                     </button>
                   </a-tooltip>
                 </div>
@@ -470,6 +480,8 @@ const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
 const hasStreamContent = ref(false)
+/** 以原始内容展示的消息索引集合 */
+const rawModeMessages = ref(new Set())
 
 // ===== 虚拟滚动 =====
 const isNearBottom = ref(true)
@@ -1329,6 +1341,16 @@ function copyRequestId(msg) {
   })
 }
 
+function toggleRawMode(index) {
+  const s = new Set(rawModeMessages.value)
+  if (s.has(index)) {
+    s.delete(index)
+  } else {
+    s.add(index)
+  }
+  rawModeMessages.value = s
+}
+
 function stopGenerating() {
   if (abortController.value) {
     abortController.value.abort()
@@ -1785,6 +1807,23 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-copy.copied {
   color: #16a34a;
   opacity: 1;
+}
+.btn-copy.active {
+  color: #0070f3;
+  background: #e8f4ff;
+}
+
+/* 原始内容展示 */
+.raw-content {
+  margin: 0;
+  padding: 0;
+  background: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #171717;
 }
 
 /* Markdown 渲染 */

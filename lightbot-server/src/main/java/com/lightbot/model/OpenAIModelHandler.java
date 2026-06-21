@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -28,9 +29,10 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OpenAIModelHandler implements ModelProviderHandler {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public ModelProviderType getProviderType() {
@@ -206,7 +208,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
             return;
         }
         try {
-            Map<String, String> headers = OBJECT_MAPPER.readValue(headersJson, new TypeReference<>() {});
+            Map<String, String> headers = objectMapper.readValue(headersJson, new TypeReference<>() {});
             headers.forEach(builder::defaultHeader);
         } catch (Exception e) {
             log.warn("[OpenAIHandler] 解析额外请求头失败: {}", e.getMessage());

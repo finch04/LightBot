@@ -34,7 +34,7 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
     private static final String DEFAULT_AI_PROVIDER_KEY = "default_ai_provider";
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_SYSTEM_CONFIG, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_SYSTEM_CONFIG, key = "#id", unless = "#result == null")
     public SystemConfig getById(Serializable id) {
         return super.getById(id);
     }

@@ -145,4 +145,11 @@ public interface KnowledgeService extends IService<Knowledge> {
      * @param params      检索配置
      */
     void updateQueryParams(Long knowledgeId, Map<String, Object> params);
+
+    /**
+     * 检查 Milvus 向量数据库连接状态
+     *
+     * @return 是否可用
+     */
+    boolean isMilvusAvailable();
 }

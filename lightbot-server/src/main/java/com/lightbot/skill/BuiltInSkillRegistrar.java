@@ -40,7 +40,7 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
     private final SkillMapper skillMapper;
     private final ToolMapper toolMapper;
     private final SkillStorageService skillStorageService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public void run(ApplicationArguments args) {

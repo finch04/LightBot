@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push({ path: '/app/eval', query: { tab: 'evaluators' } })">
+        <button class="btn-back" @click="router.back()">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ evaluator?.name || '评估器详情' }}</h1>
@@ -21,7 +21,8 @@
         <div class="panel-header">
           <h3>版本列表</h3>
         </div>
-        <div class="version-list">
+        <a-spin :spinning="versionsLoading">
+        <div class="version-list" :class="{ 'version-list-min': versionsLoading }">
           <div v-for="v in versions" :key="v.id" class="version-item" :class="{ active: debugForm.versionId === v.id }" @click="selectVersion(v)">
             <div class="version-info">
               <span class="version-tag">{{ v.version }}</span>
@@ -34,8 +35,9 @@
             </div>
             <div class="version-meta">{{ truncate(v.prompt, 40) }}</div>
           </div>
-          <div v-if="versions.length === 0" class="version-empty">暂无版本，点击右上角创建</div>
+          <div v-if="versions.length === 0 && !versionsLoading" class="version-empty">暂无版本，点击右上角创建</div>
         </div>
+        </a-spin>
       </div>
 
       <!-- 右侧：调试区域 -->
@@ -50,6 +52,7 @@
                 v-model:value="debugForm.versionId"
                 placeholder="选择要调试的版本"
                 style="width: 100%"
+                @change="onVersionSelectChange"
               >
                 <a-select-option v-for="v in versions" :key="v.id" :value="v.id">
                   {{ v.version }}
@@ -57,11 +60,23 @@
               </a-select>
             </a-form-item>
             <a-form-item label="输入变量">
+              <div v-if="Object.keys(variableForm).length > 0" class="variable-form-fields">
+                <div v-for="(_, key) in variableForm" :key="key" class="variable-field-row">
+                  <label class="variable-field-label">{{ key }}</label>
+                  <a-textarea
+                    v-model:value="variableForm[key]"
+                    :rows="2"
+                    :placeholder="`请输入 ${key}`"
+                  />
+                </div>
+              </div>
               <a-textarea
+                v-else
                 v-model:value="debugForm.variables"
                 :rows="5"
                 placeholder='JSON 格式，如: {"actual_output":"回答内容","expected_output":"期望内容","input":"用户输入"}'
               />
+              <div v-if="Object.keys(variableForm).length === 0 && !selectedVersionObj" class="variable-hint">请先在左侧选择一个版本</div>
             </a-form-item>
           </a-form>
           <div class="debug-actions">
@@ -186,6 +201,9 @@ const debugging = ref(false)
 const debugResult = ref(null)
 const versionDetailVisible = ref(false)
 const detailVersion = ref(null)
+const versionsLoading = ref(false)
+const variableForm = reactive({})
+const selectedVersionObj = ref(null)
 
 const versionForm = reactive({
   version: '',
@@ -211,12 +229,43 @@ async function loadEvaluator() {
 }
 
 async function loadVersions() {
-  const res = await getEvaluatorVersions(evaluatorId)
-  versions.value = res.data || []
+  versionsLoading.value = true
+  try {
+    const res = await getEvaluatorVersions(evaluatorId)
+    versions.value = res.data || []
+  } finally {
+    versionsLoading.value = false
+  }
 }
 
 function selectVersion(v) {
   debugForm.versionId = v.id
+  populateVariableForm(v)
+}
+
+function onVersionSelectChange(versionId) {
+  const v = versions.value.find(v => v.id === versionId)
+  if (v) populateVariableForm(v)
+}
+
+function populateVariableForm(v) {
+  // 清空旧变量
+  Object.keys(variableForm).forEach(k => delete variableForm[k])
+  selectedVersionObj.value = v
+  // 从版本的 variables 字段解析变量定义
+  if (v.variables) {
+    try {
+      const defs = typeof v.variables === 'string' ? JSON.parse(v.variables) : v.variables
+      if (Array.isArray(defs)) {
+        defs.forEach(d => {
+          const name = d.name || d.variable || d
+          if (typeof name === 'string') {
+            variableForm[name] = ''
+          }
+        })
+      }
+    } catch { /* ignore */ }
+  }
 }
 
 function openVersionDialog() {
@@ -249,7 +298,10 @@ async function handleCreateVersion() {
 async function handleDebug() {
   if (!debugForm.versionId) return message.warning('请选择版本')
   let variables = '{}'
-  if (debugForm.variables.trim()) {
+  if (Object.keys(variableForm).length > 0) {
+    // 使用表单输入的变量
+    variables = JSON.stringify(variableForm)
+  } else if (debugForm.variables.trim()) {
     try {
       JSON.parse(debugForm.variables)
       variables = debugForm.variables
@@ -397,6 +449,9 @@ function formatJson(str) {
   max-height: calc(100vh - 260px);
   overflow-y: auto;
 }
+.version-list-min {
+  min-height: 120px;
+}
 .version-item {
   padding: 10px 12px;
   border: 1px solid #f5f5f5;
@@ -532,5 +587,26 @@ function formatJson(str) {
   margin: 0;
   max-height: 300px;
   overflow-y: auto;
+}
+
+.variable-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.variable-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.variable-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #171717;
+}
+.variable-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-top: 4px;
 }
 </style>

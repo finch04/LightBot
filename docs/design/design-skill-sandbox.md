@@ -660,6 +660,636 @@ public Set<String> expandSkillClosure(Set<String> selectedSlugs,
 
 ---
 
+---
+
+## 十、Java 原生脚本沙箱设计（Level 3.5）
+
+> 不依赖 Docker 容器，纯 JVM 内实现脚本安全隔离
+> 适用场景：工作流脚本节点安全加固、Skill 脚本执行
+
+### 10.1 现状问题
+
+当前 `ScriptNodeProcessor` 直接使用 Nashorn 执行用户脚本，**无任何安全隔离**：
+
+```java
+// 当前实现：裸奔
+ScriptEngine engine = new ScriptEngineManager().getEngineByName("javascript");
+engine.eval(script, bindings);  // 用户脚本可访问 JVM 一切
+```
+
+风险：
+- `Java.type('java.lang.Runtime').getRuntime().exec('rm -rf /')` — 任意命令执行
+- `Java.type('java.io.File')` — 任意文件读写
+- `while(true){}` — 无限循环阻塞线程
+- `Java.type('java.lang.System').getenv()` — 泄露环境变量
+
+### 10.2 方案选型
+
+| 方案 | 隔离级别 | 性能 | 复杂度 | 适用场景 |
+|------|---------|------|--------|---------|
+| Nashorn ClassFilter | 类访问控制 | 零开销 | 低 | **首选** |
+| Thread + 超时 | 执行时间限制 | 微小开销 | 低 | 必须配合 |
+| SecurityManager | 文件/网络/线程 | 中等开销 | 高 | JDK17+ 已废弃 |
+| GraalVM Sandbox | 完整沙箱 | 较高开销 | 中 | 需要 GraalVM |
+| Docker 容器 | 完全隔离 | 秒级启动 | 高 | Level 4 |
+
+**选定方案**：Nashorn ClassFilter + Thread 超时 + 输出限制
+
+### 10.3 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ScriptSandbox（沙箱执行器）                    │
+│                                                                 │
+│  ┌───────────────────┐  ┌───────────────────┐  ┌────────────┐ │
+│  │ SandboxClassFilter│  │ SandboxWatchdog   │  │ OutputLimi │ │
+│  │ (类访问白名单)     │  │ (超时监控线程)     │  │ (输出截断) │ │
+│  └─────────┬─────────┘  └─────────┬─────────┘  └─────┬──────┘ │
+│            │                      │                   │        │
+│            ▼                      ▼                   ▼        │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │              Nashorn ScriptEngine                        │  │
+│  │  ┌─────────────────────────────────────────────────┐    │  │
+│  │  │  用户脚本                                        │    │  │
+│  │  │  function main(params) {                        │    │  │
+│  │  │    // 只能访问白名单内的 Java 类                  │    │  │
+│  │  │    var Math = Java.type('java.lang.Math');      │    │  │
+│  │  │    var result = Math.random() * 100;            │    │  │
+│  │  │    return { score: result };                    │    │  │
+│  │  │  }                                              │    │  │
+│  │  └─────────────────────────────────────────────────┘    │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  输入：params Map<String, Object>                               │
+│  输出：SandboxResult { success, output, error, durationMs }    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 10.4 核心实现
+
+#### 10.4.1 SandboxClassFilter — 类访问白名单
+
+```java
+/**
+ * Nashorn ClassFilter 实现：白名单模式
+ * 只允许访问安全的 Java 类，禁止危险操作
+ */
+public class SandboxClassFilter implements ClassFilter {
+
+    // 白名单：允许访问的 Java 类
+    private static final Set<String> ALLOWED_CLASSES = Set.of(
+        // 基础类型
+        "java.lang.String",
+        "java.lang.Integer", "java.lang.Long", "java.lang.Double", "java.lang.Float",
+        "java.lang.Boolean", "java.lang.Short", "java.lang.Byte",
+        "java.lang.Number", "java.lang.Character",
+
+        // 集合框架
+        "java.util.List", "java.util.ArrayList", "java.util.LinkedList",
+        "java.util.Map", "java.util.HashMap", "java.util.LinkedHashMap", "java.util.TreeMap",
+        "java.util.Set", "java.util.HashSet", "java.util.LinkedHashSet",
+        "java.util.Collections", "java.util.Arrays",
+        "java.util.stream.Collectors",
+
+        // 数学运算
+        "java.lang.Math", "java.math.BigDecimal", "java.math.BigInteger",
+
+        // 日期时间
+        "java.time.LocalDate", "java.time.LocalDateTime", "java.time.Instant",
+        "java.time.format.DateTimeFormatter", "java.time.Duration", "java.time.Period",
+
+        // JSON 处理（通过注入的安全 API）
+        // "com.fasterxml.jackson.databind.ObjectMapper",  // 不直接暴露，通过 SafeApi
+
+        // 正则表达式
+        "java.util.regex.Pattern", "java.util.regex.Matcher",
+
+        // 字符串处理
+        "java.text.MessageFormat", "java.text.SimpleDateFormat"
+    );
+
+    // 黑名单前缀：绝对禁止
+    private static final Set<String> BLOCKED_PREFIXES = Set.of(
+        "java.lang.Runtime",
+        "java.lang.ProcessBuilder",
+        "java.lang.Process",
+        "java.io.",
+        "java.net.",
+        "java.nio.",
+        "java.lang.reflect.",
+        "java.lang.invoke.",
+        "java.lang.Thread",
+        "java.lang.ClassLoader",
+        "java.lang.System",
+        "java.lang.SecurityManager",
+        "javax.script.ScriptEngine",      // 禁止脚本引擎嵌套
+        "org.openjdk.nashorn.",           // 禁止访问 Nashorn 内部
+        "com.lightbot."                   // 禁止访问项目业务类
+    );
+
+    @Override
+    public boolean exposeToScripts(String className) {
+        // 1. 检查黑名单前缀
+        for (String prefix : BLOCKED_PREFIXES) {
+            if (className.startsWith(prefix) || className.equals(prefix)) {
+                log.warn("[SandboxClassFilter] 拦截危险类访问: {}", className);
+                return false;
+            }
+        }
+
+        // 2. 检查白名单
+        return ALLOWED_CLASSES.contains(className);
+    }
+}
+```
+
+#### 10.4.2 SandboxWatchdog — 超时监控
+
+```java
+/**
+ * 脚本执行超时监控器
+ * 使用守护线程监控执行时间，超时则中断
+ */
+@Slf4j
+public class SandboxWatchdog {
+
+    private static final long DEFAULT_TIMEOUT_MS = 5000;      // 默认 5 秒
+    private static final long MAX_TIMEOUT_MS = 30_000;         // 最大 30 秒
+    private static final long MAX_OUTPUT_BYTES = 1024 * 1024;  // 最大输出 1MB
+
+    private final long timeoutMs;
+
+    public SandboxWatchdog(long timeoutMs) {
+        this.timeoutMs = Math.min(timeoutMs, MAX_TIMEOUT_MS);
+    }
+
+    public SandboxWatchdog() {
+        this(DEFAULT_TIMEOUT_MS);
+    }
+
+    /**
+     * 在超时限制内执行脚本
+     */
+    public SandboxResult execute(ScriptEngine engine, String script,
+                                  Bindings bindings, ClassFilter classFilter) {
+        long startTime = System.currentTimeMillis();
+        AtomicReference<Object> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AtomicBoolean timedOut = new AtomicBoolean(false);
+
+        // 创建执行线程
+        Thread worker = new Thread(() -> {
+            try {
+                // Nashorn 需要在 eval 前设置 ClassFilter
+                // 但 Nashorn 15.4 的 ClassFilter 是通过 NashornScriptEngineFactory 设置的
+                // 所以需要在创建引擎时就注入，这里做二次校验
+                Object mainFn = bindings.get("main");
+
+                // 执行脚本
+                engine.eval(script, bindings);
+
+                // 调用 main 函数
+                if (bindings.get("main") != null) {
+                    result.set(engine.eval("main(params)", bindings));
+                } else {
+                    result.set(bindings.get("result"));
+                }
+            } catch (Exception e) {
+                error.set(e);
+            }
+        }, "sandbox-worker");
+
+        worker.setDaemon(true);
+        worker.start();
+
+        try {
+            // 等待执行完成或超时
+            worker.join(timeoutMs);
+
+            if (worker.isAlive()) {
+                // 超时：中断线程
+                timedOut.set(true);
+                worker.interrupt();
+                worker.join(1000); // 等待 1 秒让线程清理
+
+                if (worker.isAlive()) {
+                    worker.stop(); // 最后手段
+                }
+
+                long duration = System.currentTimeMillis() - startTime;
+                log.warn("[SandboxWatchdog] 脚本执行超时: {}ms", duration);
+                return SandboxResult.timeout(duration);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return SandboxResult.error("执行被中断", 0);
+        }
+
+        long duration = System.currentTimeMillis() - startTime;
+
+        // 检查错误
+        if (error.get() != null) {
+            return SandboxResult.error(error.get().getMessage(), duration);
+        }
+
+        // 检查输出大小
+        Object output = result.get();
+        if (output != null) {
+            String outputStr = String.valueOf(output);
+            if (outputStr.length() > MAX_OUTPUT_BYTES) {
+                return SandboxResult.error("输出超过大小限制: " + MAX_OUTPUT_BYTES + " bytes", duration);
+            }
+        }
+
+        return SandboxResult.success(output, duration);
+    }
+}
+```
+
+#### 10.4.3 ScriptSandbox — 沙箱执行器主类
+
+```java
+/**
+ * 脚本沙箱执行器
+ * 集成 ClassFilter + Watchdog + 安全 API
+ */
+@Slf4j
+@Component
+public class ScriptSandbox {
+
+    private static final long DEFAULT_TIMEOUT_MS = 5000;
+    private static final int MAX_SCRIPT_LENGTH = 100_000; // 100KB
+
+    private final SandboxClassFilter classFilter;
+    private final NashornScriptEngineFactory engineFactory;
+
+    public ScriptSandbox() {
+        this.classFilter = new SandboxClassFilter();
+        this.engineFactory = new NashornScriptEngineFactory();
+    }
+
+    /**
+     * 在沙箱中执行 JavaScript 脚本
+     *
+     * @param script   脚本内容
+     * @param params   输入参数
+     * @param timeout  超时时间（毫秒）
+     * @return 执行结果
+     */
+    public SandboxResult execute(String script, Map<String, Object> params, long timeout) {
+        // 1. 基础校验
+        if (script == null || script.isBlank()) {
+            return SandboxResult.error("脚本内容为空", 0);
+        }
+        if (script.length() > MAX_SCRIPT_LENGTH) {
+            return SandboxResult.error("脚本超过长度限制: " + MAX_SCRIPT_LENGTH + " 字符", 0);
+        }
+
+        // 2. 创建带 ClassFilter 的引擎
+        ScriptEngine engine;
+        try {
+            engine = engineFactory.getScriptEngine(classFilter);
+        } catch (Exception e) {
+            return SandboxResult.error("创建脚本引擎失败: " + e.getMessage(), 0);
+        }
+
+        // 3. 构建安全的 Bindings
+        Bindings bindings = engine.createBindings();
+        bindings.put("params", params != null ? params : Map.of());
+
+        // 注入安全 API
+        injectSafeApis(bindings);
+
+        // 4. 使用 Watchdog 执行
+        SandboxWatchdog watchdog = new SandboxWatchdog(timeout);
+        return watchdog.execute(engine, script, bindings, classFilter);
+    }
+
+    /**
+     * 默认超时执行
+     */
+    public SandboxResult execute(String script, Map<String, Object> params) {
+        return execute(script, params, DEFAULT_TIMEOUT_MS);
+    }
+
+    /**
+     * 注入安全的 API 给脚本使用
+     */
+    private void injectSafeApis(Bindings bindings) {
+        // 安全的 JSON 工具
+        bindings.put("JSON", new SafeJsonApi());
+
+        // 安全的 HTTP 工具（白名单 URL）
+        bindings.put("HTTP", new SafeHttpApi());
+
+        // 安全的日志工具
+        bindings.put("LOG", new SafeLogApi());
+    }
+}
+```
+
+#### 10.4.4 SandboxResult — 执行结果
+
+```java
+/**
+ * 沙箱执行结果
+ */
+@Data
+@AllArgsConstructor
+public class SandboxResult {
+
+    private boolean success;
+    private Object output;
+    private String error;
+    private long durationMs;
+    private boolean timedOut;
+
+    public static SandboxResult success(Object output, long durationMs) {
+        return new SandboxResult(true, output, null, durationMs, false);
+    }
+
+    public static SandboxResult error(String error, long durationMs) {
+        return new SandboxResult(false, null, error, durationMs, false);
+    }
+
+    public static SandboxResult timeout(long durationMs) {
+        return new SandboxResult(false, null, "脚本执行超时", durationMs, true);
+    }
+}
+```
+
+### 10.5 安全 API 设计
+
+#### 10.5.1 SafeJsonApi — 安全的 JSON 操作
+
+```java
+/**
+ * 安全的 JSON API，暴露给脚本使用
+ * 不直接暴露 ObjectMapper，避免反序列型漏洞
+ */
+public class SafeJsonApi {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * JSON 字符串转对象
+     */
+    public Object parse(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return MAPPER.readValue(json, Object.class);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("JSON 解析失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 对象转 JSON 字符串
+     */
+    public String stringify(Object obj) {
+        if (obj == null) return "null";
+        try {
+            return MAPPER.writeValueAsString(obj);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("JSON 序列化失败: " + e.getMessage());
+        }
+    }
+}
+```
+
+#### 10.5.2 SafeHttpApi — 安全的 HTTP 请求
+
+```java
+/**
+ * 安全的 HTTP API，限制请求目标
+ */
+@Slf4j
+public class SafeHttpApi {
+
+    // 允许的域名白名单（可配置）
+    private static final List<String> ALLOWED_HOSTS = List.of(
+        "api.example.com",
+        "httpbin.org"
+        // 生产环境从配置读取
+    );
+
+    private static final int TIMEOUT_MS = 5000;
+    private static final int MAX_RESPONSE_SIZE = 1024 * 1024; // 1MB
+
+    /**
+     * GET 请求
+     */
+    public String get(String url) {
+        validateUrl(url);
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(TIMEOUT_MS))
+                .build();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMillis(TIMEOUT_MS))
+                .GET()
+                .build();
+
+            HttpResponse<String> response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+            if (response.body().length() > MAX_RESPONSE_SIZE) {
+                throw new IllegalArgumentException("响应超过大小限制");
+            }
+
+            return response.body();
+        } catch (Exception e) {
+            log.warn("[SafeHttpApi] 请求失败: url={}, error={}", url, e.getMessage());
+            throw new IllegalArgumentException("HTTP 请求失败: " + e.getMessage());
+        }
+    }
+
+    private void validateUrl(String url) {
+        if (url == null || url.isBlank()) {
+            throw new IllegalArgumentException("URL 不能为空");
+        }
+        try {
+            URI uri = URI.create(url);
+            String host = uri.getHost();
+            if (host == null || !ALLOWED_HOSTS.contains(host)) {
+                throw new IllegalArgumentException("不允许访问的域名: " + host);
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("无效的 URL: " + url);
+        }
+    }
+}
+```
+
+### 10.6 ScriptNodeProcessor 改造
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements NodeProcessor {
+
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^}]+)}}");
+    private static final long DEFAULT_TIMEOUT_MS = 5000;
+
+    private final ObjectMapper objectMapper;
+    private final ScriptSandbox scriptSandbox;  // 注入沙箱执行器
+
+    @Override
+    public NodeExecutionResult execute(NodeExecutionContext context) {
+        Map<String, Object> nodeData = context.getCurrentNodeData();
+        if (nodeData == null) {
+            return passThrough(context, "result", null);
+        }
+
+        Map<String, Object> params = buildScriptParams(nodeData, context.getVariables());
+        String script = stringVal(nodeData.get("scriptContent"));
+        String language = stringVal(nodeData.get("scriptLanguage"));
+
+        if (script.isBlank()) {
+            throw new IllegalArgumentException("脚本内容不能为空");
+        }
+        if (!"javascript".equalsIgnoreCase(language) && !language.isBlank()) {
+            log.warn("[ScriptNodeProcessor] 暂仅支持 javascript，当前: {}", language);
+        }
+
+        // 使用沙箱执行，替代原来的裸执行
+        long timeout = parseTimeout(nodeData);
+        SandboxResult result = scriptSandbox.execute(script, params, timeout);
+
+        if (!result.isSuccess()) {
+            throw new IllegalArgumentException("脚本执行失败: " + result.getError());
+        }
+
+        Map<String, Object> outputs = normalizeOutputs(result.getOutput(), nodeData);
+        context.getVariables().putAll(outputs);
+
+        log.info("[ScriptNodeProcessor] 脚本执行成功, 耗时: {}ms", result.getDurationMs());
+
+        return NodeExecutionResult.builder()
+                .nextNodeId(resolveNextNodeId(context))
+                .outputs(outputs)
+                .build();
+    }
+
+    private long parseTimeout(Map<String, Object> nodeData) {
+        Object timeout = nodeData.get("timeout");
+        if (timeout instanceof Number n) {
+            return Math.min(n.longValue(), 30_000);
+        }
+        return DEFAULT_TIMEOUT_MS;
+    }
+
+    // ... 其他方法不变
+}
+```
+
+### 10.7 Skill 脚本执行扩展
+
+未来如果 Skill 需要支持自定义脚本，可以复用 `ScriptSandbox`：
+
+```java
+/**
+ * Skill 脚本执行工具
+ * 从 MinIO 加载 Skill 的 scripts/ 目录下的脚本并在沙箱中执行
+ */
+@Component
+public class ExecuteSkillScriptTool implements Tool {
+
+    private final ScriptSandbox scriptSandbox;
+    private final SkillStorageService skillStorageService;
+    private final SkillActivationStore activationStore;
+
+    @Override
+    public String getName() {
+        return "execute_skill_script";
+    }
+
+    @Override
+    public String getDescription() {
+        return "在安全沙箱中执行当前 Skill 的脚本文件。只能执行已激活 Skill 的 scripts/ 目录下的 .js 文件。";
+    }
+
+    @Override
+    public ToolResult execute(ToolInput input) {
+        String slug = input.getString("skill_slug");
+        String scriptFile = input.getString("script");
+        String inputData = input.getString("input_data", "{}");
+
+        // 1. 校验 Skill 已激活
+        Long sessionId = input.getContext().getSessionId();
+        Set<String> activated = activationStore.getActivated(sessionId);
+        if (!activated.contains(slug)) {
+            return ToolResult.error("只能执行已激活的 Skill 脚本");
+        }
+
+        // 2. 校验脚本文件路径安全
+        SandboxPathValidator.checkReadable("skills/" + slug + "/scripts/" + scriptFile);
+        if (!scriptFile.endsWith(".js")) {
+            return ToolResult.error("只支持执行 .js 脚本文件");
+        }
+
+        // 3. 从 MinIO 加载脚本
+        String scriptContent = skillStorageService.getFileContent(slug, "scripts/" + scriptFile);
+
+        // 4. 解析输入参数
+        Map<String, Object> params = parseInputData(inputData);
+
+        // 5. 沙箱执行
+        SandboxResult result = scriptSandbox.execute(scriptContent, params);
+
+        if (!result.isSuccess()) {
+            return ToolResult.error("脚本执行失败: " + result.getError());
+        }
+
+        return ToolResult.success(JSON.toJSONString(result.getOutput()));
+    }
+}
+```
+
+### 10.8 安全等级对比
+
+| 等级 | 方案 | 防护能力 | 性能开销 | 实现复杂度 |
+|------|------|---------|---------|-----------|
+| **L0（当前）** | 裸执行 | 无 | 零 | 无 |
+| **L1** | ClassFilter 白名单 | 禁止危险类访问 | 零 | 低 |
+| **L2** | L1 + Watchdog 超时 | + 防止无限循环 | 微小 | 低 |
+| **L3** | L2 + 输出限制 | + 防止内存溢出 | 微小 | 低 |
+| **L4** | L3 + 安全 API | + 限制外部调用 | 小 | 中 |
+| **L5** | GraalVM Sandbox | 完整隔离 | 中 | 中 |
+| **L6** | Docker 容器 | 完全隔离 | 大 | 高 |
+
+**建议**：当前实现 **L4 级别**，覆盖主要安全风险，性能开销可接受。
+
+### 10.9 涉及文件
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `sandbox/ScriptSandbox.java` | 新增 | 沙箱执行器主类 |
+| `sandbox/SandboxClassFilter.java` | 新增 | ClassFilter 白名单实现 |
+| `sandbox/SandboxWatchdog.java` | 新增 | 超时监控器 |
+| `sandbox/SandboxResult.java` | 新增 | 执行结果封装 |
+| `sandbox/SafeJsonApi.java` | 新增 | 安全 JSON API |
+| `sandbox/SafeHttpApi.java` | 新增 | 安全 HTTP API |
+| `workflow/processor/ScriptNodeProcessor.java` | 修改 | 接入 ScriptSandbox |
+| `tool/builtin/ExecuteSkillScriptTool.java` | 新增 | Skill 脚本执行工具（可选） |
+
+### 10.10 实施计划
+
+| 阶段 | 内容 | 工作量 |
+|------|------|--------|
+| Phase 1 | ScriptSandbox + ClassFilter + Watchdog | 2d |
+| Phase 2 | 改造 ScriptNodeProcessor 接入沙箱 | 1d |
+| Phase 3 | SafeJsonApi + SafeHttpApi | 1d |
+| Phase 4 | ExecuteSkillScriptTool（可选） | 1d |
+| **总计** | | **~5d** |
+
+---
+
 *文档生成时间: 2026-06-18*
 *基于 Yuxi Skill 系统 + Sandbox 模块分析，结合 LightBot 现有架构设计*
-*最后更新: 2026-06-21 — 补充实现状态追踪、API 端点清单、已实现/未实现差异分析*
+*最后更新: 2026-06-21 — 补充实现状态追踪、API 端点清单、已实现/未实现差异分析、Java 原生沙箱设计*

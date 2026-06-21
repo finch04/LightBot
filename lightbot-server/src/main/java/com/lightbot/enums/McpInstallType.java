@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum McpInstallType {
+public enum McpInstallType implements EnumDisplay {
 
     NPX("npx", "NPX (Node.js)"),
     UVX("uvx", "UVX (Python)"),

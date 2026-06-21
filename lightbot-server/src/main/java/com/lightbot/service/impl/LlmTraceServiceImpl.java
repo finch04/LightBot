@@ -14,6 +14,7 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.LlmTraceMapper;
 import com.lightbot.service.LlmTraceService;
 import com.lightbot.util.LlmTraceContext;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.scheduling.annotation.Async;
@@ -34,11 +35,12 @@ import java.util.Map;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         implements LlmTraceService {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /**
      * 分页查询调用链列表
@@ -103,7 +105,7 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         // 解析spans JSON字符串为对象列表
         if (trace.getSpans() != null && !trace.getSpans().isBlank()) {
             try {
-                List<LlmTraceSpan> spans = OBJECT_MAPPER.readValue(trace.getSpans(), new TypeReference<>() {});
+                List<LlmTraceSpan> spans = objectMapper.readValue(trace.getSpans(), new TypeReference<>() {});
                 vo.setSpans(spans);
             } catch (Exception e) {
                 log.warn("[LLMTrace] spans解析失败, id={}, error={}", id, e.getMessage());

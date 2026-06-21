@@ -36,10 +36,9 @@ public class DelegateSubAgentTool {
 
     public static final String TOOL_NAME = "delegate_to_subagent";
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final SubAgentService subAgentService;
     private final SubAgentRuntime subAgentRuntime;
+    private final ObjectMapper objectMapper;
 
     /**
      * 为给定的一组 SubAgent ID 构造一个动态工具回调。
@@ -109,7 +108,7 @@ public class DelegateSubAgentTool {
                 .inputSchema(inputSchema)
                 .build();
 
-        return new DelegateCallback(definition, byName, subAgentRuntime);
+        return new DelegateCallback(definition, byName, subAgentRuntime, objectMapper);
     }
 
     /** 自定义 ToolCallback：在 call 中解析参数并委派 */
@@ -117,11 +116,13 @@ public class DelegateSubAgentTool {
         private final ToolDefinition definition;
         private final Map<String, SubAgent> byName;
         private final SubAgentRuntime runtime;
+        private final ObjectMapper objectMapper;
 
-        DelegateCallback(ToolDefinition definition, Map<String, SubAgent> byName, SubAgentRuntime runtime) {
+        DelegateCallback(ToolDefinition definition, Map<String, SubAgent> byName, SubAgentRuntime runtime, ObjectMapper objectMapper) {
             this.definition = definition;
             this.byName = byName;
             this.runtime = runtime;
+            this.objectMapper = objectMapper;
         }
 
         @Override
@@ -144,7 +145,7 @@ public class DelegateSubAgentTool {
             String subName;
             String task;
             try {
-                Map<String, Object> args = OBJECT_MAPPER.readValue(
+                Map<String, Object> args = objectMapper.readValue(
                         toolInput != null ? toolInput : "{}", new TypeReference<>() {});
                 subName = args.get("subagent_name") != null ? args.get("subagent_name").toString() : null;
                 task = args.get("task") != null ? args.get("task").toString() : null;

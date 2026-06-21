@@ -6,6 +6,7 @@ import com.lightbot.common.BizException;
 import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.SkillMetadata;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -34,11 +35,12 @@ import java.util.zip.ZipInputStream;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GitHubSkillService {
 
     private final SkillStorageService skillStorageService;
+    private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${lightbot.github.token:}")
     private String githubToken;
@@ -49,10 +51,6 @@ public class GitHubSkillService {
     /** npx skills find 输出格式：owner/repo@skill-name [installs] */
     private static final Pattern SEARCH_LINE_PATTERN = Pattern.compile(
             "^([a-zA-Z0-9_.\\-]+/[a-zA-Z0-9_.\\-]+)@([a-zA-Z0-9_.\\-]+)(?:\\s+(.*))?$");
-
-    public GitHubSkillService(SkillStorageService skillStorageService) {
-        this.skillStorageService = skillStorageService;
-    }
 
     /**
      * 判断是否为 ModelScope Skill 地址

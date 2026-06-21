@@ -39,7 +39,7 @@ public class ImageGenTool {
     @Value("${lightbot.siliconflow.api-key:}")
     private String apiKey;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -71,7 +71,7 @@ public class ImageGenTool {
                     .uri(URI.create("https://api.siliconflow.cn/v1/images/generations"))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                     .timeout(Duration.ofSeconds(120))
                     .build();
 
@@ -82,7 +82,7 @@ public class ImageGenTool {
                 return "图片生成失败，HTTP状态码: " + response.statusCode();
             }
 
-            JsonNode root = MAPPER.readTree(response.body());
+            JsonNode root = objectMapper.readTree(response.body());
             JsonNode data = root.get("data");
             if (data == null || !data.isArray() || data.isEmpty()) {
                 return "图片生成失败：未返回图片数据";

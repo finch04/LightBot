@@ -53,11 +53,11 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     /** Skill slug 规范：3~64 个字符的英文/数字/短横线 */
     private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private final SkillStorageService skillStorageService;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "#id", unless = "#result == null")
     public Skill getById(Serializable id) {
         return super.getById(id);
     }

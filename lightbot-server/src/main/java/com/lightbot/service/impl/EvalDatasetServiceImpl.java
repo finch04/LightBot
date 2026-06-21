@@ -44,7 +44,7 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
     private final ObjectMapper objectMapper;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_DATASET, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_DATASET, key = "#id", unless = "#result == null")
     public EvalDataset getById(Serializable id) {
         return super.getById(id);
     }

@@ -25,7 +25,7 @@ import java.util.Set;
 public class SkillActivationStore {
 
     private final RedisUtil redisUtil;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     private static final String PREFIX = "skill:activated:";
     private static final long TTL_SECONDS = 24 * 3600; // 24h

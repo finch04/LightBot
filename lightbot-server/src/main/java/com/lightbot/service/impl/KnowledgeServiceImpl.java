@@ -23,6 +23,7 @@ import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.LlmTraceContext;
+import com.lightbot.util.MilvusUtil;
 import com.lightbot.util.MindmapUtil;
 import com.lightbot.config.RedisCacheConfig;
 import lombok.RequiredArgsConstructor;
@@ -61,9 +62,10 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     private final ObjectMapper objectMapper;
     private final MindmapUtil mindmapUtil;
     private final SystemConfigService systemConfigService;
+    private final MilvusUtil milvusUtil;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_KNOWLEDGE, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_KNOWLEDGE, key = "#id", unless = "#result == null")
     public Knowledge getById(Serializable id) {
         return super.getById(id);
     }
@@ -681,6 +683,11 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
         updateById(knowledge);
         log.info("[Knowledge] 检索配置已更新: knowledgeId={}", knowledgeId);
+    }
+
+    @Override
+    public boolean isMilvusAvailable() {
+        return milvusUtil.isAvailable();
     }
 
     @SuppressWarnings("unchecked")

@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push({ path: '/app/eval', query: { tab: 'experiments' } })">
+        <button class="btn-back" @click="router.back()">
           <ArrowLeftOutlined /> 返回
         </button>
         <h1 class="page-title">{{ experiment?.name || '实验详情' }}</h1>
@@ -33,17 +33,26 @@
     <div class="info-cards">
       <div class="info-card">
         <div class="info-label">评测集</div>
-        <div class="info-value"><a-tag v-if="experiment?.datasetVersion" color="blue" size="small">{{ experiment.datasetVersion }}</a-tag>{{ experiment?.datasetName || '-' }}</div>
+        <div class="info-value">
+          <a-tag v-if="experiment?.datasetVersion" color="blue" size="small">{{ experiment.datasetVersion }}</a-tag>
+          <a v-if="experiment?.datasetId" @click="router.push(`/app/eval/datasets/${experiment.datasetId}`)">{{ experiment?.datasetName || '-' }}</a>
+          <span v-else>{{ experiment?.datasetName || '-' }}</span>
+        </div>
       </div>
       <div class="info-card">
         <div class="info-label">Prompt</div>
-        <div class="info-value"><a-tag v-if="experiment?.promptVersion" color="blue" size="small">{{ experiment.promptVersion }}</a-tag>{{ experiment?.promptKey || '-' }}</div>
+        <div class="info-value">
+          <a-tag v-if="experiment?.promptVersion" color="blue" size="small">{{ experiment.promptVersion }}</a-tag>
+          <a v-if="experiment?.promptKey" @click="router.push(`/app/prompts/${experiment.promptKey}`)">{{ experiment.promptKey }}</a>
+          <span v-else>-</span>
+        </div>
       </div>
       <div class="info-card">
         <div class="info-label">评估器</div>
         <div class="info-value" v-if="experiment?.evaluatorNameList?.length">
           <div v-for="(name, i) in experiment.evaluatorNameList" :key="i" class="evaluator-info-item">
-            <a-tag v-if="experiment.evaluatorVersionList?.[i]" color="blue" size="small">{{ experiment.evaluatorVersionList[i] }}</a-tag>{{ name }}
+            <a-tag v-if="experiment.evaluatorVersionList?.[i]" color="blue" size="small">{{ experiment.evaluatorVersionList[i] }}</a-tag>
+            <a @click="router.push(`/app/eval/evaluators/${experiment.evaluatorIdList?.[i]}`)">{{ name }}</a>
           </div>
         </div>
         <div class="info-value" v-else>-</div>
@@ -141,6 +150,9 @@
                   <a-tooltip :title="record.reason">
                     <span class="cell-preview">{{ truncate(record.reason, 60) }}</span>
                   </a-tooltip>
+                </template>
+                <template v-if="column.key === 'detailAction'">
+                  <a-button type="link" size="small" @click="openDetailModal(record)">详情</a-button>
                 </template>
               </template>
             </a-table>
@@ -268,6 +280,42 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 结果详情弹窗 -->
+    <a-modal
+      v-model:open="detailModalVisible"
+      title="评测结果详情"
+      :width="720"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="result-detail-scroll" v-if="detailRecord">
+        <div class="result-detail-item">
+          <div class="result-detail-label">输入</div>
+          <div class="result-detail-value">{{ detailRecord.input || '-' }}</div>
+        </div>
+        <div class="result-detail-item">
+          <div class="result-detail-label">实际输出</div>
+          <div class="result-detail-value">{{ detailRecord.actualOutput || '-' }}</div>
+        </div>
+        <div class="result-detail-item">
+          <div class="result-detail-label">期望输出</div>
+          <div class="result-detail-value">{{ detailRecord.referenceOutput || '-' }}</div>
+        </div>
+        <div class="result-detail-item">
+          <div class="result-detail-label">评分</div>
+          <div class="result-detail-value">
+            <span class="score-tag" :class="scoreClass(detailRecord.score)">
+              {{ detailRecord.score?.toFixed(2) ?? '-' }}
+            </span>
+          </div>
+        </div>
+        <div class="result-detail-item">
+          <div class="result-detail-label">评分理由</div>
+          <div class="result-detail-value">{{ detailRecord.reason || '-' }}</div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -322,7 +370,11 @@ const resultColumns = [
   { title: '期望输出', dataIndex: 'referenceOutput', key: 'referenceOutput', width: 200 },
   { title: '评分', dataIndex: 'score', key: 'score', width: 80 },
   { title: '评分理由', dataIndex: 'reason', key: 'reason' },
+  { title: '操作', key: 'detailAction', width: 80 },
 ]
+
+const detailModalVisible = ref(false)
+const detailRecord = ref(null)
 
 const experimentStatus = computed(() => experiment.value?.status?.code || experiment.value?.status || '')
 
@@ -627,6 +679,11 @@ function progressColor(score) {
   return '#ff4d4f'
 }
 
+function openDetailModal(record) {
+  detailRecord.value = record
+  detailModalVisible.value = true
+}
+
 function truncate(str, len) {
   if (!str) return ''
   return str.length > len ? str.substring(0, len) + '...' : str
@@ -723,6 +780,16 @@ function formatTime(t) {
   font-size: 15px;
   font-weight: 600;
   color: #171717;
+}
+.info-value a {
+  color: #0070f3;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.info-value a:hover {
+  color: #005bb5;
+  text-decoration: underline;
 }
 
 /* 评估器卡片 */
@@ -912,5 +979,30 @@ function formatTime(t) {
   font-size: 14px;
   font-weight: 600;
   color: #171717;
+}
+.result-detail-scroll {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.result-detail-item {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.result-detail-label {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-bottom: 6px;
+}
+.result-detail-value {
+  font-size: 14px;
+  color: #171717;
+  line-height: 1.8;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 </style>

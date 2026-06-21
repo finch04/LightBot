@@ -1,5 +1,6 @@
 package com.lightbot.tool.builtin;
 
+import com.lightbot.constant.RagResultType;
 import com.lightbot.dto.QaPairSearchResultVO;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
@@ -134,7 +135,7 @@ public class QueryKnowledgeTool {
                                             row.put("score", qa.getScore());
                                             row.put("knowledge_id", knowledgeId);
                                             row.put("document_name", "问答对");
-                                            row.put("result_type", "qa_pair");
+                                            row.put("result_type", RagResultType.QA_PAIR);
                                             return row;
                                         }).toList();
                                     } catch (Exception e) {
@@ -151,7 +152,7 @@ public class QueryKnowledgeTool {
                             List<Map<String, Object>> qaResults = qaFuture.join();
 
                             // 标记 chunk 结果类型
-                            chunkResults.forEach(row -> row.putIfAbsent("result_type", "chunk"));
+                            chunkResults.forEach(row -> row.putIfAbsent("result_type", RagResultType.CHUNK));
 
                             log.info("[Tool:query_knowledge] 知识库检索结果: name={}, chunkCount={}, qaCount={}",
                                     kbName, chunkResults.size(), qaResults.size());
@@ -225,7 +226,7 @@ public class QueryKnowledgeTool {
                 Map<String, Object> row = allResults.get(i);
                 String content = TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")));
                 String resultType = (String) row.get("result_type");
-                String label = "qa_pair".equals(resultType) ? "问答对" : String.valueOf(row.get("document_name"));
+                String label = RagResultType.QA_PAIR.equals(resultType) ? "问答对" : String.valueOf(row.get("document_name"));
                 sb.append(String.format("【%d. %s】\n%s\n\n", i + 1, label, content));
             }
 

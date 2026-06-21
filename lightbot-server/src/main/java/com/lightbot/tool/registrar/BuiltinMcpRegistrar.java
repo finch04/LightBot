@@ -28,7 +28,7 @@ import java.util.Map;
 public class BuiltinMcpRegistrar {
 
     private final McpServerService mcpServerService;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /** 内置 MCP Server 定义 */
     private static final List<BuiltInMcp> BUILT_IN_MCPS = List.of(
@@ -70,7 +70,7 @@ public class BuiltinMcpRegistrar {
                     server.setTransport(def.transport);
                     server.setHost(def.host);
                     server.setDeployConfig(def.deployConfig != null
-                            ? OBJECT_MAPPER.writeValueAsString(def.deployConfig) : null);
+                            ? objectMapper.writeValueAsString(def.deployConfig) : null);
                     server.setStatus(CommonStatus.DISABLED);
                     mcpServerService.save(server);
                     imported++;

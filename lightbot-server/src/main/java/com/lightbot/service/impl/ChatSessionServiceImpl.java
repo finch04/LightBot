@@ -15,8 +15,6 @@ import com.lightbot.service.LlmTraceService;
 import com.lightbot.service.MessageService;
 import com.lightbot.util.RedisUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,9 +38,8 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     private final LlmTraceService llmTraceService;
     private final RedisUtil redisUtil;
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper objectMapper;
+
     private static final String CACHE_PREFIX = "lightbot:session:";
     private static final String LIST_CACHE_PREFIX = "lightbot:session:list:";
     private static final String LIST_VERSION_PREFIX = "lightbot:session:list:ver:";
@@ -85,7 +82,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         String json = redisUtil.get(cacheKey(Long.parseLong(id.toString())));
         if (json != null) {
             try {
-                return OBJECT_MAPPER.readValue(json, ChatSession.class);
+                return objectMapper.readValue(json, ChatSession.class);
             } catch (Exception e) {
                 log.warn("[Session] 反序列化缓存失败: id={}", id);
             }
@@ -93,7 +90,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         ChatSession session = super.getById(id);
         if (session != null) {
             try {
-                redisUtil.set(cacheKey(session.getId()), OBJECT_MAPPER.writeValueAsString(session), CACHE_TTL_SECONDS);
+                redisUtil.set(cacheKey(session.getId()), objectMapper.writeValueAsString(session), CACHE_TTL_SECONDS);
             } catch (Exception e) {
                 log.warn("[Session] 写入缓存失败: id={}", id);
             }
@@ -119,7 +116,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         ChatSession session = new ChatSession();
         session.setUserId(userId);
         session.setAgentId(finalAgentId);
-        session.setTitle("新对话");
+        session.setTitle(ChatSession.DEFAULT_TITLE);
         session.setStatus(SessionStatus.ACTIVE);
         session.setMessageCount(0);
         session.setTotalTokens(0L);
@@ -138,7 +135,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         String cached = redisUtil.get(listKey);
         if (cached != null) {
             try {
-                return OBJECT_MAPPER.readValue(cached, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                return objectMapper.readValue(cached, new com.fasterxml.jackson.core.type.TypeReference<>() {});
             } catch (Exception e) {
                 log.warn("[Session] 列表缓存反序列化失败: userId={}", userId);
             }
@@ -150,7 +147,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                         .orderByDesc(ChatSession::getPinned)
                         .orderByDesc(ChatSession::getLastMessageAt));
         try {
-            redisUtil.set(listKey, OBJECT_MAPPER.writeValueAsString(page), LIST_CACHE_TTL_SECONDS);
+            redisUtil.set(listKey, objectMapper.writeValueAsString(page), LIST_CACHE_TTL_SECONDS);
         } catch (Exception e) {
             log.warn("[Session] 列表缓存写入失败: userId={}", userId);
         }

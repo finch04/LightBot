@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum ToolType {
+public enum ToolType implements EnumDisplay {
 
     BUILTIN("builtin", "内置"),
     KNOWLEDGE("knowledge", "知识库"),

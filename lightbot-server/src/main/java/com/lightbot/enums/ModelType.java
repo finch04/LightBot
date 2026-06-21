@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum ModelType {
+public enum ModelType implements EnumDisplay {
 
     LLM("llm", "对话模型"),
     EMBEDDING("embedding", "嵌入模型"),

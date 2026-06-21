@@ -13,7 +13,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum ChunkStatus {
+public enum ChunkStatus implements EnumDisplay {
 
     CHUNKED("chunked", "已分块"),
     VECTORIZING("vectorizing", "向量化中"),

@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum TaskType {
+public enum TaskType implements EnumDisplay {
 
     DOCUMENT_UPLOAD("document_upload", "文档上传", "documentUploadExecutor"),
     DOCUMENT_INGEST("document_ingest", "文档入库", "documentIngestExecutor"),

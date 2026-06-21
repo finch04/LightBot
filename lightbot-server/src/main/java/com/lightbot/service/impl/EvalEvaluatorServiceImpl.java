@@ -41,7 +41,7 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
     }
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_EVALUATOR, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_EVALUATOR, key = "#id", unless = "#result == null")
     public EvalEvaluator getById(Serializable id) {
         return super.getById(id);
     }

@@ -2,10 +2,11 @@ package com.lightbot.subagent;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.constant.ToolResultPrefixes;
 import com.lightbot.entity.SubAgent;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.ProviderResolver;
 import com.lightbot.service.ToolService;
-import com.lightbot.service.chat.InitMiddleware;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -42,11 +43,11 @@ import java.util.Map;
 public class SubAgentRuntime {
 
     private static final int MAX_LOOP_DEPTH = 6;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final ModelFactory modelFactory;
     private final ToolService toolService;
-    private final InitMiddleware initMiddleware;
+    private final ProviderResolver providerResolver;
+    private final ObjectMapper objectMapper;
 
     /**
      * 同步执行一个 SubAgent，返回最终回答文本。
@@ -77,7 +78,7 @@ public class SubAgentRuntime {
         // 2. 准备模型（优先使用 SubAgent 独立配置的 providerId，否则 fallback 到主 Agent）
         Long providerId = subAgent.getModelId() != null
                 ? subAgent.getModelId()
-                : (parentProviderId != null ? parentProviderId : initMiddleware.getDefaultProviderId());
+                : (parentProviderId != null ? parentProviderId : providerResolver.resolve());
         ChatModel chatModel = modelFactory.getChatModel(providerId);
 
         // 3. 构造消息：系统提示词 + 主 Agent 给的任务
@@ -124,7 +125,7 @@ public class SubAgentRuntime {
                 String result;
                 ToolCallback cb = toolMap.get(tc.name());
                 if (cb == null) {
-                    result = "工具不存在: " + tc.name();
+                    result = ToolResultPrefixes.NOT_FOUND + ": " + tc.name();
                 } else {
                     try {
                         result = cb.call(tc.arguments() != null ? tc.arguments() : "{}",
@@ -135,7 +136,7 @@ public class SubAgentRuntime {
                     } catch (Exception e) {
                         log.warn("[SubAgent] 工具执行异常: subAgent={}, tool={}, error={}",
                                 subAgent.getName(), tc.name(), e.getMessage());
-                        result = "工具执行失败: " + e.getMessage();
+                        result = ToolResultPrefixes.FAILURE + ": " + e.getMessage();
                     }
                 }
                 toolResponses.add(new ToolResponseMessage.ToolResponse(tc.id(), tc.name(), result));
@@ -154,7 +155,7 @@ public class SubAgentRuntime {
             return List.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("[SubAgent] 解析 tools JSON 失败: {}", e.getMessage());
             return List.of();

@@ -137,6 +137,14 @@
             <template v-if="column.key === 'name'">
               <a @click.stop="router.push(`/app/eval/experiments/${record.id}`)">{{ record.name }}</a>
             </template>
+            <template v-if="column.key === 'datasetName'">
+              <a v-if="record.datasetId" @click.stop="router.push(`/app/eval/datasets/${record.datasetId}`)">{{ record.datasetName || '-' }}</a>
+              <span v-else>{{ record.datasetName || '-' }}</span>
+            </template>
+            <template v-if="column.key === 'promptKey'">
+              <a v-if="record.promptKey" @click.stop="router.push(`/app/prompts/${record.promptKey}`)">{{ record.promptKey }}</a>
+              <span v-else>-</span>
+            </template>
             <template v-if="column.key === 'status'">
               <a-tag :color="statusColor(record.status?.code || record.status)">
                 {{ statusLabel(record.status?.code || record.status) }}
@@ -153,7 +161,16 @@
               {{ formatTime(record.createTime) }}
             </template>
             <template v-if="column.key === 'evaluatorName'">
-              <span v-if="record.evaluatorNameList?.length">{{ record.evaluatorNameList.join('、') }}</span>
+              <template v-if="record.evaluatorNameList?.length">
+                <template v-for="(name, i) in record.evaluatorNameList.slice(0, 2)" :key="i">
+                  <a v-if="record.evaluatorIdList?.[i]" @click.stop="router.push(`/app/eval/evaluators/${record.evaluatorIdList[i]}`)">{{ name }}</a>
+                  <span v-else>{{ name }}</span>
+                  <span v-if="i < Math.min(1, record.evaluatorNameList.length - 1)" style="color: #a1a1aa;">、</span>
+                </template>
+                <a-tooltip v-if="record.evaluatorNameList.length > 2" :title="record.evaluatorNameList.join('、')">
+                  <span style="color: #a1a1aa; cursor: pointer;">...等{{ record.evaluatorNameList.length }}个</span>
+                </a-tooltip>
+              </template>
               <span v-else>{{ record.evaluatorName || '-' }}</span>
             </template>
             <template v-if="column.key === 'action'">

@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum ContentType {
+public enum ContentType implements EnumDisplay {
 
     TEXT("text", "文本"),
     IMAGE("image", "图片"),

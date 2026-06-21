@@ -40,7 +40,7 @@ public class McpServerServiceImpl extends ServiceImpl<McpServerMapper, McpServer
     private McpClientService mcpClientService;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_MCP_SERVER, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_MCP_SERVER, key = "#id", unless = "#result == null")
     public McpServer getById(Serializable id) {
         return super.getById(id);
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -29,12 +30,13 @@ import java.util.Map;
 @Slf4j
 @Component("webSearchTool")
 @SystemTool(displayName = "联网搜索", description = "联网搜索互联网获取最新信息", tags = {"搜索"})
+@RequiredArgsConstructor
 public class WebSearchTool {
 
     @Value("${lightbot.tavily.api-key:}")
     private String apiKey;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -63,7 +65,7 @@ public class WebSearchTool {
                     .uri(URI.create("https://api.tavily.com/search"))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                     .timeout(Duration.ofSeconds(30))
                     .build();
 
@@ -74,7 +76,7 @@ public class WebSearchTool {
                 return "搜索请求失败，HTTP状态码: " + response.statusCode();
             }
 
-            JsonNode root = MAPPER.readTree(response.body());
+            JsonNode root = objectMapper.readTree(response.body());
             StringBuilder sb = new StringBuilder();
 
             // 摘要

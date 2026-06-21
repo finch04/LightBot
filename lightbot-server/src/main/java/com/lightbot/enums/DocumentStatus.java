@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum DocumentStatus {
+public enum DocumentStatus implements EnumDisplay {
 
     UPLOADING("uploading", "上传中"),
     UPLOADED("uploaded", "已上传"),

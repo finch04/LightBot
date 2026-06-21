@@ -42,9 +42,9 @@ import java.util.Map;
 public class MimoChatClient {
 
     private static final String DEFAULT_BASE_URL = "https://api.xiaomimimo.com/v1";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     private final MinioUtil minioUtil;
+    private final ObjectMapper objectMapper;
+    private final ToolEventGenerator toolEventGenerator;
 
     /**
      * 是否应使用 MiMo 直连（联网搜索或含视频附件）
@@ -72,7 +72,7 @@ public class MimoChatClient {
             try {
                 Map<String, Object> body = buildRequestBody(provider, config, messages, currentAttachments, true);
                 try {
-                    log.info("[MimoChat] 请求体: {}", MAPPER.writeValueAsString(body));
+                    log.info("[MimoChat] 请求体: {}", objectMapper.writeValueAsString(body));
                 } catch (Exception ignored) {}
                 RestClient client = buildClient(provider);
                 client.post()
@@ -128,7 +128,7 @@ public class MimoChatClient {
 
     private void parseStreamChunk(String data, reactor.core.publisher.FluxSink<String> sink) {
         try {
-            JsonNode root = MAPPER.readTree(data);
+            JsonNode root = objectMapper.readTree(data);
             if (root.has("error") && !root.get("error").isNull()) {
                 JsonNode err = root.get("error");
                 String msg = err.has("message") ? err.get("message").asText() : err.toString();
@@ -163,7 +163,7 @@ public class MimoChatClient {
         }
         String reasoning = node.asText("");
         if (!reasoning.isBlank()) {
-            sink.next("[STATUS]" + ToolEventGenerator.reasoningEvent(reasoning));
+            sink.next("[STATUS]" + toolEventGenerator.reasoningEvent(reasoning));
         }
     }
 

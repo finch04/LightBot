@@ -9,6 +9,7 @@ import com.lightbot.dto.ToolRequest;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Tool;
 import com.lightbot.enums.CommonStatus;
+import com.lightbot.constant.ToolResultPrefixes;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ToolType;
 import org.springframework.util.StringUtils;
@@ -49,17 +50,19 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         implements ToolService {
 
     private final ApplicationContext applicationContext;
+    private final com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer;
 
     @Autowired
     @Lazy
     private AgentService agentService;
 
-    public ToolServiceImpl(ApplicationContext applicationContext) {
+    public ToolServiceImpl(ApplicationContext applicationContext, com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer) {
         this.applicationContext = applicationContext;
+        this.toolArgsSanitizer = toolArgsSanitizer;
     }
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_TOOL, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_TOOL, key = "#id", unless = "#result == null")
     public Tool getById(Serializable id) {
         return super.getById(id);
     }
@@ -357,13 +360,13 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                     new org.springframework.ai.chat.model.ToolContext(Map.of(
                             "agentId", agentId,
                             "requestId", "test-" + System.nanoTime()));
-            String callArgs = com.lightbot.util.ToolArgsSanitizer.forTestCall(args != null ? args : "{}");
+            String callArgs = toolArgsSanitizer.forTestCall(args != null ? args : "{}");
             String result = callback.call(callArgs, testContext);
             log.info("[ToolService] 工具测试完成: name={}, resultLength={}", toolName, result.length());
             return result;
         } catch (Exception e) {
             log.error("[ToolService] 工具测试失败: name={}, error={}", toolName, e.getMessage(), e);
-            return "工具执行失败: " + e.getMessage();
+            return ToolResultPrefixes.FAILURE + ": " + e.getMessage();
         }
     }
 

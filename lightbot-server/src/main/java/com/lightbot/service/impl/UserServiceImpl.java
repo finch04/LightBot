@@ -44,12 +44,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Set<String> VALID_FRAMES = Set.of("lightning", "flame", "stars");
     private static final List<String> ALLOWED_AVATAR_EXTS = List.of("jpg", "jpeg", "png", "gif", "webp", "bmp");
 
     private final UserMapper userMapper;
     private final MinioUtil minioUtil;
+    private final ObjectMapper objectMapper;
 
     @Override
     public UserDTO register(RegisterRequest request) {
@@ -182,7 +182,7 @@ public class UserServiceImpl implements UserService {
 
         if (configChanged) {
             try {
-                user.setConfig(MAPPER.writeValueAsString(configMap));
+                user.setConfig(objectMapper.writeValueAsString(configMap));
             } catch (Exception e) {
                 throw new BizException(ErrorCode.INTERNAL_ERROR);
             }
@@ -265,7 +265,7 @@ public class UserServiceImpl implements UserService {
     private Map<String, Object> parseConfigMap(String config) {
         if (config == null || config.isBlank()) return new HashMap<>();
         try {
-            return MAPPER.readValue(config, new TypeReference<>() {});
+            return objectMapper.readValue(config, new TypeReference<>() {});
         } catch (Exception e) {
             return new HashMap<>();
         }

@@ -48,8 +48,7 @@ public class McpClientServiceImpl implements McpClientService {
 
     private final McpServerService mcpServerService;
     private final RedisUtil redisUtil;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /** Redis 缓存 key 前缀 */
     private static final String MCP_TOOLS_CACHE_KEY = "lightbot:mcp:tools:";
@@ -412,7 +411,7 @@ public class McpClientServiceImpl implements McpClientService {
             return Map.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(headersJson, new TypeReference<>() {});
+            return objectMapper.readValue(headersJson, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("[MCP] 解析headers失败: {}", e.getMessage());
             return Map.of();
@@ -427,7 +426,7 @@ public class McpClientServiceImpl implements McpClientService {
             return Set.of();
         }
         try {
-            List<String> list = OBJECT_MAPPER.readValue(disabledToolsJson, new TypeReference<>() {});
+            List<String> list = objectMapper.readValue(disabledToolsJson, new TypeReference<>() {});
             return Set.copyOf(list);
         } catch (Exception e) {
             log.warn("[MCP] 解析disabled_tools失败: {}", e.getMessage());
@@ -456,7 +455,7 @@ public class McpClientServiceImpl implements McpClientService {
             return Map.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("[MCP] 解析JSON失败: {}", e.getMessage());
             return Map.of();
@@ -475,14 +474,14 @@ public class McpClientServiceImpl implements McpClientService {
             map.put("inputSchema", tool.inputSchema());
             toolMaps.add(map);
         }
-        return OBJECT_MAPPER.writeValueAsString(toolMaps);
+        return objectMapper.writeValueAsString(toolMaps);
     }
 
     /**
      * 从 JSON 解析工具列表
      */
     private List<McpSchema.Tool> parseToolsFromJson(String json) throws Exception {
-        List<Map<String, Object>> toolMaps = OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+        List<Map<String, Object>> toolMaps = objectMapper.readValue(json, new TypeReference<>() {});
         List<McpSchema.Tool> tools = new ArrayList<>();
         for (Map<String, Object> map : toolMaps) {
             String name = (String) map.get("name");
@@ -490,7 +489,7 @@ public class McpClientServiceImpl implements McpClientService {
             Object inputSchemaObj = map.get("inputSchema");
             McpSchema.JsonSchema inputSchema = null;
             if (inputSchemaObj != null) {
-                inputSchema = OBJECT_MAPPER.convertValue(inputSchemaObj, McpSchema.JsonSchema.class);
+                inputSchema = objectMapper.convertValue(inputSchemaObj, McpSchema.JsonSchema.class);
             }
             // 使用完整构造函数（MCP SDK 2025版本）
             tools.add(new McpSchema.Tool(

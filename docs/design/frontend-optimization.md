@@ -473,60 +473,354 @@ export const useModelProviderStore = defineStore('modelProvider', {
 
 ---
 
-## 三、枚举/常量后端化方案
+## 三、枚举主题色统一方案
 
-### 3.1 当前问题
+### 3.1 问题现状
 
-以下枚举在前端硬编码，且存在不一致：
+项目中不同枚举有各自的主题色（Ant Design Tag 颜色），但颜色映射散落在各前端页面，且存在不一致。
 
-| 枚举 | 硬编码位置 | 问题 |
-|------|-----------|------|
-| 工具类型 | bindingTheme.js、WorkflowEdit.vue、ToolManage.vue | 三处定义不一致（bindingTheme 有 `knowledge/custom/api`，WorkflowEdit 有 `http/script`） |
-| Agent 类型 | AgentManage.vue、AgentDetail.vue | 两处独立定义 |
-| 实验状态 | Eval.vue、TaskCenter.vue、Observability.vue | 三处独立定义，颜色不同 |
-| 日志级别 | LogMonitor.vue | 硬编码 `INFO/WARN/ERROR/DEBUG` |
-| 实体类型 | StandaloneGraph.vue | 硬编码 `['人物', '组织', ...]` |
-| 图标列表 | Landing.vue、SettingsView.vue | 两处完全相同的映射表 |
+#### 3.1.1 典型案例：TaskCenter
 
-### 3.2 改进方案
-
-**方案一：后端枚举接口（推荐）**
-
-后端已有 `EnumController`，可扩展返回所有枚举。前端通过 API 获取，缓存到 store。
-
+后端 `TaskType` 枚举：
 ```java
-// EnumController 已有 toEnumVOList 方法，扩展支持更多枚举
-@GetMapping("/api/enums/tool-types")
-public Result<List<EnumVO>> getToolTypes() {
-    return Result.ok(ToolTypeEnum.toVOList());
+public enum TaskType {
+    DOCUMENT_UPLOAD("document_upload", "文档上传", "documentUploadExecutor"),
+    DOCUMENT_INGEST("document_ingest", "文档入库", "documentIngestExecutor"),
+    DOCUMENT_OCR("document_ocr", "文档OCR", "documentOcrExecutor"),
+    EXPERIMENT_RUN("experiment_run", "实验执行", "experimentRunExecutor"),
+    BENCHMARK_GENERATE("benchmark_generate", "基准生成", "benchmarkGenerateExecutor"),
+    BENCHMARK_IMPORT("benchmark_import", "基准导入", "benchmarkImportExecutor"),
+    RAG_EVALUATION("rag_evaluation", "RAG评估", "ragEvaluationExecutor"),
+    GRAPH_EXTRACTION("graph_extraction", "图谱抽取", "graphExtractionExecutor"),
+    QA_PAIR_GENERATE("qa_pair_generate", "问答对生成", "qaPairGenerateExecutor");
 }
 ```
 
-前端缓存：
+前端 `TaskCenter.vue` 硬编码颜色：
+```javascript
+const typeColor = {
+  '文档上传': 'blue',      // 用中文 desc 当 key，脆弱
+  '文档入库': 'green',
+  '文档OCR': 'orange',
+  '实验执行': 'cyan',
+  '基准生成': 'purple',
+  '基准导入': 'volcano',
+  'RAG评估': 'magenta',
+  '图谱抽取': 'geekblue',
+  '问答对生成': 'gold',
+}
+
+const statusMap = {
+  pending: '等待中',
+  running: '执行中',
+  success: '已完成',
+  failed: '失败',
+  cancelled: '已取消',
+}
+```
+
+**问题**：
+1. `TaskType` 的 `@JsonValue` 在 `getDesc()` 上，序列化返回中文，前端用中文当 key 做映射——后端改 desc 文案就崩
+2. `EnumController` **没有暴露 TaskType 和 TaskStatus**
+3. `statusMap` / `statusBadge` 与后端 `TaskStatus` 枚举的 desc 重复维护
+4. 类型颜色只在 TaskCenter 定义，其他页面如果需要展示任务类型颜色得重新写一份
+
+#### 3.1.2 全局散落的颜色映射
+
+| 页面 | 映射对象 | 硬编码位置 |
+|------|---------|-----------|
+| TaskCenter.vue | 任务类型 → Tag 颜色 | `typeColor` 对象（9 项） |
+| TaskCenter.vue | 任务状态 → 中文标签 + Badge 状态 | `statusMap` + `statusBadge`（5 项） |
+| Eval.vue | 实验状态 → Tag 颜色 + 中文标签 | `statusColor` + `statusLabel`（5 项） |
+| DashboardView.vue | 任务状态 → 颜色 | 独立映射 |
+| Observability.vue | 状态 → 标签 | 独立映射 |
+| KnowledgeDetail.vue | 文档状态 → 颜色 + 标签 | `statusText` + `statusColor` + `docStatusColor` |
+| LogMonitor.vue | 日志级别 | 硬编码 `[{ value: 'INFO', label: 'INFO' }]` |
+| bindingTheme.js | 工具类型 → 标签 | `TOOL_TYPE_LABEL_MAP`（5 项） |
+| WorkflowEdit.vue | 工具类型 → 标签 | `getToolTypeLabel`（4 项，与 bindingTheme 不一致） |
+| ToolManage.vue | 工具类型 → 标签 + 颜色 | `toolTypeLabels` + `typeColors` |
+
+### 3.2 设计思路
+
+**核心原则**：颜色是枚举的展示属性，跟随枚举值走，不应由前端单独维护。
+
+**不做的事**：
+- 不在 Java 枚举实体上加 `color` 字段（枚举是业务概念，颜色是 UI 概念，不应耦合）
+- 不搞动态主题配置系统（过度设计）
+
+**做的事**：
+- `EnumController` 的 `EnumVO` 扩展为 `code + label + color` 三元组
+- 颜色定义在 Controller 层（靠近枚举定义，一处维护）
+- 前端通过 Pinia store 缓存，页面直接消费，不再自己写映射
+
+### 3.3 后端改造
+
+#### 3.3.1 EnumVO 扩展
+
+```java
+public static class EnumVO {
+    private String value;   // code: "document_upload"
+    private String label;   // 中文: "文档上传"
+    private String color;   // Ant Design Tag 颜色: "blue"
+
+    public EnumVO(String value, String label, String color) {
+        this.value = value;
+        this.label = label;
+        this.color = color;
+    }
+    // getter/setter
+}
+```
+
+#### 3.3.2 EnumController 扩展
+
+```java
+@Operation(summary = "获取任务类型枚举")
+@GetMapping("/task-types")
+public Result<List<EnumVO>> getTaskTypes() {
+    return Result.ok(List.of(
+        new EnumVO("document_upload",    "文档上传",  "blue"),
+        new EnumVO("document_ingest",    "文档入库",  "green"),
+        new EnumVO("document_ocr",       "文档OCR",   "orange"),
+        new EnumVO("experiment_run",     "实验执行",  "cyan"),
+        new EnumVO("benchmark_generate", "基准生成",  "purple"),
+        new EnumVO("benchmark_import",   "基准导入",  "volcano"),
+        new EnumVO("rag_evaluation",     "RAG评估",   "magenta"),
+        new EnumVO("graph_extraction",   "图谱抽取",  "geekblue"),
+        new EnumVO("qa_pair_generate",   "问答对生成", "gold")
+    ));
+}
+
+@Operation(summary = "获取任务状态枚举")
+@GetMapping("/task-statuses")
+public Result<List<EnumVO>> getTaskStatuses() {
+    return Result.ok(List.of(
+        new EnumVO("pending",   "等待中",  "processing"),  // Badge status
+        new EnumVO("running",   "执行中",  "processing"),
+        new EnumVO("success",   "已完成",  "success"),
+        new EnumVO("failed",    "失败",    "error"),
+        new EnumVO("cancelled", "已取消",  "default")
+    ));
+}
+
+@Operation(summary = "获取文档状态枚举")
+@GetMapping("/document-statuses")
+public Result<List<EnumVO>> getDocumentStatuses() {
+    return Result.ok(List.of(
+        new EnumVO("pending",    "待处理", "default"),
+        new EnumVO("processing", "处理中", "processing"),
+        new EnumVO("completed",  "已完成", "success"),
+        new EnumVO("failed",     "失败",   "error")
+    ));
+}
+```
+
+**注意**：颜色值区分两种语义——
+- Tag 颜色：`blue` / `green` / `orange` / `cyan` / `purple` / `volcano` / `magenta` / `geekblue` / `gold`（用于 `<a-tag :color>`)
+- Badge 状态：`processing` / `success` / `error` / `default` / `warning`（用于 `<a-badge :status>`）
+
+两种语义不同，需要分别返回或在 VO 中加一个 `badgeStatus` 字段。简单起见，可以统一用 `color` 字段存 Tag 颜色，Badge 状态由前端根据 `value` 映射（因为 Badge 状态只有 5 种固定值，不会扩展）。
+
+#### 3.3.3 已有枚举接口改造
+
+当前 `toEnumVOList` 用反射取 `code`/`desc` 字段，需改为显式传入颜色：
+
+```java
+// 方案：每个枚举接口独立构建 EnumVO 列表，不再用通用反射方法
+// 优点：颜色可控，不需要在枚举实体上加 UI 属性
+// 缺点：每新增一个枚举值需要同步修改 EnumController
+
+@Operation(summary = "获取工具类型枚举")
+@GetMapping("/tool-types")
+public Result<List<EnumVO>> getToolTypes() {
+    return Result.ok(List.of(
+        new EnumVO("builtin",   "内置",    "blue"),
+        new EnumVO("knowledge", "知识库",  "green"),
+        new EnumVO("custom",    "自定义",  "orange"),
+        new EnumVO("api",       "API调用", "cyan"),
+        new EnumVO("mcp",       "MCP协议", "purple"),
+        new EnumVO("http",      "HTTP",    "geekblue"),
+        new EnumVO("script",    "脚本",    "gold")
+    ));
+}
+```
+
+### 3.4 前端改造
+
+#### 3.4.1 枚举 Store
+
 ```javascript
 // stores/enum.js
+import { defineStore } from 'pinia'
+import { getEnumList } from '@/api/enum'
+
 export const useEnumStore = defineStore('enum', {
-  state: () => ({ toolTypes: [], agentTypes: [], ... }),
+  state: () => ({
+    // 各枚举列表：[{ value, label, color }]
+    taskTypes: [],
+    taskStatuses: [],
+    documentStatuses: [],
+    toolTypes: [],
+    modelProviderTypes: [],
+    agentStatuses: [],
+    modelTypes: [],
+    loaded: false
+  }),
+
+  getters: {
+    // 通用查找：根据枚举类型和 value 返回完整对象
+    find: (state) => (enumKey, value) => {
+      return state[enumKey]?.find(item => item.value === value)
+    },
+
+    // 快捷 getter：获取颜色
+    taskTypeColor: (state) => (value) => {
+      return state.taskTypes.find(t => t.value === value)?.color ?? 'default'
+    },
+
+    taskStatusLabel: (state) => (value) => {
+      return state.taskStatuses.find(t => t.value === value)?.label ?? value
+    },
+
+    toolTypeLabel: (state) => (value) => {
+      return state.toolTypes.find(t => t.value === value)?.label ?? value
+    }
+  },
+
   actions: {
-    async ensureLoaded() { /* 批量加载 */ }
+    async ensureLoaded() {
+      if (this.loaded) return
+      const [taskTypes, taskStatuses, documentStatuses, toolTypes,
+             modelProviderTypes, agentStatuses, modelTypes] = await Promise.all([
+        getEnumList('task-types'),
+        getEnumList('task-statuses'),
+        getEnumList('document-statuses'),
+        getEnumList('tool-types'),
+        getEnumList('model-provider-types'),
+        getEnumList('agent-statuses'),
+        getEnumList('model-types')
+      ])
+      this.taskTypes = taskTypes
+      this.taskStatuses = taskStatuses
+      this.documentStatuses = documentStatuses
+      this.toolTypes = toolTypes
+      this.modelProviderTypes = modelProviderTypes
+      this.agentStatuses = agentStatuses
+      this.modelTypes = modelTypes
+      this.loaded = true
+    }
   }
 })
 ```
 
-**方案二：统一常量文件（轻量）**
+#### 3.4.2 TaskCenter 改造对比
 
-对于不需要后端动态管理的枚举（如日志级别、实体类型），统一到 `utils/constants.js`。
+**改造前**（前端硬编码）：
+```javascript
+// TaskCenter.vue
+const typeColor = {
+  '文档上传': 'blue',
+  '文档入库': 'green',
+  // ... 9 项
+}
+const statusMap = {
+  pending: '等待中',
+  running: '执行中',
+  // ... 5 项
+}
+// 模板中
+<a-tag :color="typeColor[record.type] || 'default'">{{ record.type }}</a-tag>
+<a-badge :status="statusBadge[record.status]" :text="statusMap[record.status]" />
+```
 
-### 3.3 优先级
+**改造后**（消费 store）：
+```javascript
+// TaskCenter.vue
+import { useEnumStore } from '@/stores/enum'
+const enumStore = useEnumStore()
+onMounted(() => enumStore.ensureLoaded())
 
-| 枚举 | 方案 | 理由 |
+// 模板中
+<a-tag :color="enumStore.taskTypeColor(record.typeCode)">{{ record.typeLabel }}</a-tag>
+<a-badge :status="enumStore.taskStatusBadge(record.status)" :text="enumStore.taskStatusLabel(record.status)" />
+```
+
+前端不再维护任何颜色/标签映射，全部从 store 获取。
+
+#### 3.4.3 通用枚举渲染组件
+
+```vue
+<!-- components/EnumTag.vue -->
+<template>
+  <a-tag :color="item?.color ?? 'default'">{{ item?.label ?? value }}</a-tag>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+import { useEnumStore } from '@/stores/enum'
+
+const props = defineProps({
+  enumKey: { type: String, required: true },  // 'taskTypes' | 'toolTypes' | ...
+  value:   { type: String, required: true }
+})
+
+const enumStore = useEnumStore()
+const item = computed(() => enumStore.find(props.enumKey, props.value))
+</script>
+```
+
+使用：
+```vue
+<EnumTag enum-key="taskTypes" :value="record.typeCode" />
+<EnumTag enum-key="toolTypes" :value="tool.type" />
+```
+
+### 3.5 遗留问题处理
+
+#### 3.5.1 TaskType 的 @JsonValue 问题
+
+当前 `TaskType` 的 `@JsonValue` 在 `getDesc()` 上，序列化返回中文（"文档上传"）。这导致前端用中文当 key，后端改 desc 文案就崩。
+
+**建议**：`@JsonValue` 改到 `getCode()` 上，序列化返回 code（"document_upload"）。前端统一用 code 做 key。
+
+```java
+// TaskType.java — 修改
+@JsonValue
+public String getCode() {   // 原来是 getDesc()
+    return code;
+}
+```
+
+**影响范围**：需要检查前端所有依赖 `record.type === '文档上传'` 的地方改为 `record.type === 'document_upload'`。由于 TaskType 序列化值变更，这是一次**不兼容变更**，需要前后端同步发布。
+
+#### 3.5.2 TaskStatus 同理
+
+`TaskStatus` 的 `@JsonValue` 已经在 `getCode()` 上（返回 "pending"/"running" 等），这是正确的，无需修改。
+
+#### 3.5.3 不走后端的枚举
+
+以下枚举不需要后端接口，统一到前端常量文件：
+
+| 枚举 | 位置 | 理由 |
 |------|------|------|
-| 工具类型 | 后端接口 | 可能随 Tool 类型扩展而变化 |
-| Agent 类型 | 后端接口 | 可能随 Agent 能力扩展而变化 |
-| 实验状态 | 统一常量文件 | 相对稳定，前端展示用 |
-| 日志级别 | 统一常量文件 | 固定不变 |
-| 实体类型 | 后端接口 | 可能随知识图谱能力扩展而变化 |
-| 图标列表 | 统一常量文件 | 固定不变，纯前端展示 |
+| 日志级别 | `utils/constants.js` | 固定不变（INFO/WARN/ERROR/DEBUG） |
+| 图标列表 | `utils/iconMap.js` | 纯前端展示，不涉及业务 |
+| 实体类型 | `utils/constants.js` | 稳定，但可后续改为后端接口 |
+
+### 3.6 工作量估算
+
+| 改进项 | 预估工时 | 依赖 |
+|--------|---------|------|
+| EnumVO 扩展（code + label + color） | 0.5 天 | 无 |
+| EnumController 补充 task-types / task-statuses / document-statuses / tool-types 等接口 | 0.5 天 | EnumVO |
+| 前端 stores/enum.js + api/enum.js | 0.5 天 | 后端接口 |
+| EnumTag 通用组件 | 0.5 小时 | stores/enum.js |
+| TaskCenter.vue 改造（删除硬编码映射，改用 store） | 0.5 天 | stores/enum.js |
+| Eval.vue / Observability.vue / KnowledgeDetail.vue 改造 | 1 天 | stores/enum.js |
+| bindingTheme.js / WorkflowEdit.vue / ToolManage.vue 工具类型统一 | 0.5 天 | stores/enum.js |
+| TaskType @JsonValue 改为 getCode() + 前端适配 | 0.5 天 | 需前后端同步 |
+
+**总计：约 4 人天**
 
 ---
 
@@ -563,30 +857,33 @@ export const useEnumStore = defineStore('enum', {
 | 序号 | 优化项 | 预估工时 | 优先级 | 依赖 |
 |------|--------|---------|--------|------|
 | 1 | 提取 `utils/format.js` (formatTime, formatDuration, formatJson) | 0.5 天 | P0 | 无 |
-| 2 | 统一 `getToolTypeLabel` 到 `bindingTheme.js` | 0.5 天 | P0 | 无 |
-| 3 | 提取 `utils/statusMap.js` 状态映射 | 0.5 天 | P0 | 无 |
-| 4 | 提取 `BaseButton.vue` 全局按钮组件 | 1 天 | P1 | 无 |
-| 5 | 提取 `PageLayout.vue` 页面骨架组件 | 1 天 | P1 | 无 |
-| 6 | 提取 `EntityCard.vue` + `EntityCardGrid.vue` | 1.5 天 | P1 | PageLayout |
-| 7 | 提取 `useEntityList` 组合式函数 | 1 天 | P1 | 无 |
-| 8 | 提取 `useEntityCrud` 组合式函数 | 1.5 天 | P1 | useEntityList |
-| 9 | 提取 `DetailModal.vue` + `FormDialog.vue` | 1 天 | P2 | 无 |
-| 10 | 补充 CSS 变量并批量替换硬编码颜色 | 2 天 | P2 | 无 |
-| 11 | 创建 `stores/modelProvider.js` 等共享 store | 1 天 | P2 | 无 |
-| 12 | 将 `task.js` 改造为标准 Pinia store | 0.5 天 | P2 | 无 |
-| 13 | 提取 `useSSE` 组合式函数 | 1 天 | P2 | 无 |
-| 14 | 后端枚举接口扩展 + 前端枚举 store | 1 天 | P2 | EnumController |
-| 15 | WorkflowEdit.vue 样式迁移至子组件 | 3 天 | P3 | 其他组件提取完成 |
-| 16 | Chat.vue 流式逻辑重构 | 2 天 | P3 | useSSE 完成 |
-| 17 | 清理死代码 | 0.5 天 | P3 | 无 |
+| 2 | 后端 EnumVO 扩展（code+label+color）+ EnumController 补充 task-types/task-statuses/document-statuses/tool-types 接口 | 1 天 | P0 | 无 |
+| 3 | 前端 `stores/enum.js` + `api/enum.js` + `EnumTag.vue` 通用组件 | 0.5 天 | P0 | #2 |
+| 4 | TaskCenter.vue 改造（删除硬编码 typeColor/statusMap/statusBadge，改用 enumStore） | 0.5 天 | P0 | #3 |
+| 5 | 提取 `BaseButton.vue` 全局按钮组件 | 1 天 | P1 | 无 |
+| 6 | 提取 `PageLayout.vue` 页面骨架组件 | 1 天 | P1 | 无 |
+| 7 | 提取 `EntityCard.vue` + `EntityCardGrid.vue` | 1.5 天 | P1 | #6 |
+| 8 | 提取 `useEntityList` 组合式函数 | 1 天 | P1 | 无 |
+| 9 | 提取 `useEntityCrud` 组合式函数 | 1.5 天 | P1 | #8 |
+| 10 | Eval.vue / Observability.vue / KnowledgeDetail.vue 枚举改造（删除硬编码映射，改用 enumStore） | 1 天 | P1 | #3 |
+| 11 | bindingTheme.js / WorkflowEdit.vue / ToolManage.vue 工具类型统一（删除重复定义） | 0.5 天 | P1 | #3 |
+| 12 | TaskType @JsonValue 改为 getCode() + 前端适配（不兼容变更，需前后端同步） | 0.5 天 | P1 | #3 |
+| 13 | 提取 `DetailModal.vue` + `FormDialog.vue` | 1 天 | P2 | 无 |
+| 14 | 补充 CSS 变量并批量替换硬编码颜色 | 2 天 | P2 | 无 |
+| 15 | 创建 `stores/modelProvider.js` 等共享 store | 1 天 | P2 | 无 |
+| 16 | 将 `task.js` 改造为标准 Pinia store | 0.5 天 | P2 | 无 |
+| 17 | 提取 `useSSE` 组合式函数 | 1 天 | P2 | 无 |
+| 18 | WorkflowEdit.vue 样式迁移至子组件 | 3 天 | P3 | 其他组件提取完成 |
+| 19 | Chat.vue 流式逻辑重构 | 2 天 | P3 | #17 |
+| 20 | 清理死代码 | 0.5 天 | P3 | 无 |
 
-**总预估：约 18 人天**
+**总预估：约 22 人天**（其中枚举统一约 4 人天）
 
 **实施节奏**：
-- P0（1.5 天）：立即执行，无风险，收益立竿见影
-- P1（5 天）：收益最大的批量优化，消除约 5000 行重复代码
-- P2（5.5 天）：架构级改进，提升可维护性
-- P3（5.5 天）：大型文件深度重构，风险较高，建议在 P0-P2 完成后逐步推进
+- P0（2.5 天）：format 工具函数 + 枚举主题色统一（消除 TaskCenter 等页面的硬编码映射）
+- P1（6 天）：组件抽取 + 枚举全面改造 + @JsonValue 修正
+- P2（5.5 天）：架构级改进（CSS 变量、共享 store、SSE 封装）
+- P3（5.5 天）：大型文件深度重构，风险较高
 
 ---
 

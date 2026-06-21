@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
 @Schema(description = "对话会话表")
 public class ChatSession {
 
+    /** 默认会话标题 */
+    public static final String DEFAULT_TITLE = "新对话";
+
     @TableId(type = IdType.ASSIGN_ID)
     @Schema(description = "主键ID")
     @JsonSerialize(using = ToStringSerializer.class)

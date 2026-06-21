@@ -33,10 +33,10 @@ import java.util.List;
 public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         implements SubAgentService {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_SUBAGENT, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_SUBAGENT, key = "#id", unless = "#result == null")
     public SubAgent getById(Serializable id) {
         return super.getById(id);
     }

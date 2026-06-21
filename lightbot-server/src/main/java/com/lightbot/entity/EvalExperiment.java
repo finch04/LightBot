@@ -125,4 +125,8 @@ public class EvalExperiment {
     @TableField(exist = false)
     @Schema(description = "评估器版本列表")
     private List<String> evaluatorVersionList;
+
+    @TableField(exist = false)
+    @Schema(description = "评估器ID列表")
+    private List<String> evaluatorIdList;
 }

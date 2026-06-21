@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -36,9 +37,10 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class DashScopeModelHandler implements ModelProviderHandler {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /** 兼容模式标识：baseUrl 中包含此字符串时使用 OpenAI SDK */
     private static final String COMPATIBLE_MODE_MARKER = "compatible-mode";
@@ -254,7 +256,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
             return;
         }
         try {
-            Map<String, String> headers = OBJECT_MAPPER.readValue(headersJson, new TypeReference<>() {});
+            Map<String, String> headers = objectMapper.readValue(headersJson, new TypeReference<>() {});
             headers.forEach(builder::defaultHeader);
         } catch (Exception e) {
             log.warn("[DashScopeHandler] 解析额外请求头失败: {}", e.getMessage());

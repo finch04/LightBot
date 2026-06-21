@@ -29,7 +29,7 @@ import java.io.Serializable;
 public class PromptServiceImpl extends ServiceImpl<PromptMapper, Prompt> implements PromptService {
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_PROMPT, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_PROMPT, key = "#id", unless = "#result == null")
     public Prompt getById(Serializable id) {
         return super.getById(id);
     }

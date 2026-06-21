@@ -13,6 +13,7 @@ import com.lightbot.enums.ErrorCode;
 import org.springframework.util.StringUtils;
 import com.lightbot.mapper.AgentMapper;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.ProviderResolver;
 import com.lightbot.entity.McpServer;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.service.AgentService;
@@ -67,6 +68,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final McpServerService mcpServerService;
     private final SystemConfigService systemConfigService;
     private final AgentVersionService agentVersionService;
+    private final ProviderResolver providerResolver;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
             你是一个AI助手提示词生成专家。根据用户提供的Agent名称和描述，生成一段专业的系统提示词。
@@ -86,7 +88,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             """;
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_AGENT, key = "#id")
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT, key = "#id", unless = "#result == null")
     public Agent getById(Serializable id) {
         return super.getById(id);
     }
@@ -253,7 +255,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         messages.add(new UserMessage(userMessage));
 
         // 3. 调用AI生成
-        Long providerId = resolveProviderId();
+        Long providerId = providerResolver.resolve();
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         String result;
         try {
@@ -288,7 +290,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         messages.add(new UserMessage(userMessage));
 
         // 3. 调用AI生成
-        Long providerId = resolveProviderId();
+        Long providerId = providerResolver.resolve();
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         String json;
         try {
@@ -576,24 +578,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         // 3. 设置当前Agent为默认
         agent.setIsDefault(true);
         updateById(agent);
-    }
-
-    /**
-     * 解析providerId（优先使用系统默认配置，否则使用第一个可用的）
-     */
-    private Long resolveProviderId() {
-        // 1. 优先使用系统默认AI配置
-        var defaultConfig = systemConfigService.getDefaultAiConfig();
-        if (defaultConfig.getProviderId() != null) {
-            return defaultConfig.getProviderId();
-        }
-
-        // 2. 否则使用第一个可用的提供商
-        List<Long> providerIds = modelFactory.getAvailableProviderIds();
-        if (providerIds.isEmpty()) {
-            throw new BizException(ErrorCode.AI_NO_PROVIDER);
-        }
-        return providerIds.get(0);
     }
 
     @Override

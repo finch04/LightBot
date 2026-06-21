@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum SessionStatus {
+public enum SessionStatus implements EnumDisplay {
 
     ACTIVE("active", "活跃"),
     ARCHIVED("archived", "已归档");

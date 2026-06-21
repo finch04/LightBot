@@ -1,8 +1,6 @@
 package com.lightbot.service.chat;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Skill;
@@ -18,6 +16,7 @@ import com.lightbot.service.McpClientService;
 import com.lightbot.service.SkillService;
 import com.lightbot.service.ToolService;
 import com.lightbot.subagent.DelegateSubAgentTool;
+import com.lightbot.util.JsonIdParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -53,8 +52,6 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private final ModelProviderService modelProviderService;
     private final DelegateSubAgentTool delegateSubAgentTool;
     private final SkillService skillService;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -135,7 +132,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                     if (skill == null || skill.getStatus() != CommonStatus.ACTIVE) {
                         continue;
                     }
-                    mergedToolIds.addAll(parseIds(skill.getToolIds()));
+                    mergedToolIds.addAll(JsonIdParser.parseIds(skill.getToolIds()));
                 }
                 log.info("[Chat] 懒激活 Skill 依赖展开: activated={}, expanded={}", activatedSlugs, allSlugs);
             }
@@ -174,7 +171,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                     if (skill == null || skill.getStatus() != CommonStatus.ACTIVE) {
                         continue;
                     }
-                    mergedMcpIds.addAll(parseIds(skill.getMcpServerIds()));
+                    mergedMcpIds.addAll(JsonIdParser.parseIds(skill.getMcpServerIds()));
                 }
             }
 
@@ -253,26 +250,4 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         return visited;
     }
 
-    /** 解析 JSONB 数组字段（字符串 ID） */
-    private List<Long> parseIds(String json) {
-        if (json == null || json.isBlank()) {
-            return List.of();
-        }
-        try {
-            List<Object> raw = OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
-            List<Long> ids = new ArrayList<>();
-            for (Object item : raw) {
-                if (item == null) continue;
-                String text = item.toString().trim();
-                if (text.isBlank()) continue;
-                try {
-                    ids.add(Long.parseLong(text));
-                } catch (NumberFormatException ignored) {
-                }
-            }
-            return ids;
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
 }

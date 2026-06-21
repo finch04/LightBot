@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -32,9 +33,10 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class MimoModelHandler implements ModelProviderHandler {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /** 小米 MiMo 开放平台默认 base_url */
     private static final String DEFAULT_BASE_URL = "https://api.xiaomimimo.com/v1";
@@ -215,7 +217,7 @@ public class MimoModelHandler implements ModelProviderHandler {
             return;
         }
         try {
-            Map<String, String> headers = OBJECT_MAPPER.readValue(headersJson, new TypeReference<>() {});
+            Map<String, String> headers = objectMapper.readValue(headersJson, new TypeReference<>() {});
             headers.forEach(builder::defaultHeader);
         } catch (Exception e) {
             log.warn("[MimoHandler] 解析额外请求头失败: {}", e.getMessage());

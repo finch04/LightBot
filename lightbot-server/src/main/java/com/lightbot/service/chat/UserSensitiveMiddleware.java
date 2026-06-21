@@ -11,7 +11,6 @@ import reactor.core.publisher.Flux;
 import java.util.Map;
 
 import static com.lightbot.service.chat.ToolEventGenerator.STATUS_PREFIX;
-import static com.lightbot.service.chat.ToolEventGenerator.sensitiveBlockEvent;
 
 /**
  * 用户输入敏感词拦截（在保存用户消息、调用模型/工作流之前）
@@ -22,8 +21,8 @@ import static com.lightbot.service.chat.ToolEventGenerator.sensitiveBlockEvent;
 public class UserSensitiveMiddleware implements ChatMiddleware {
 
     private final MessageMiddleware messageMiddleware;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final ToolEventGenerator toolEventGenerator;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -41,12 +40,12 @@ public class UserSensitiveMiddleware implements ChatMiddleware {
             ctx.getFullReply().append(tip);
             // 保存 metadata 标记为 sensitiveBlock，便于历史消息回显
             try {
-                String metadata = OBJECT_MAPPER.writeValueAsString(Map.of("sensitiveBlock", "user_input"));
+                String metadata = objectMapper.writeValueAsString(Map.of("sensitiveBlock", "user_input"));
                 messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT, tip, metadata, 0);
             } catch (Exception e) {
                 messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT, tip);
             }
-            return Flux.just(STATUS_PREFIX + sensitiveBlockEvent("user_input", tip));
+            return Flux.just(STATUS_PREFIX + toolEventGenerator.sensitiveBlockEvent("user_input", tip));
         }
         return next.proceed(ctx);
     }

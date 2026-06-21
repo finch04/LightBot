@@ -2,6 +2,7 @@ package com.lightbot.service.chat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.model.ProviderResolver;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
@@ -33,8 +34,8 @@ public class InitMiddleware implements ChatMiddleware {
     private final AgentService agentService;
     private final AgentVersionService agentVersionService;
     private final ModelFactory modelFactory;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final ProviderResolver providerResolver;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -46,20 +47,20 @@ public class InitMiddleware implements ChatMiddleware {
         bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId());
         long t1 = System.currentTimeMillis();
         log.info("[Chat][Trace] 会话解析: {}ms, sessionId={}", t1 - t0, sessionId);
-        ctx.getSpans().add(buildSpan("s1", null, "session_resolve", t0, t1 - t0, "OK", Map.of("sessionId", sessionId)));
+        ctx.getSpans().add(LlmTraceSpan.of("s1", null, "session_resolve", t0, t1 - t0, "OK", Map.of("sessionId", sessionId)));
 
         // 2. 加载Agent配置
         Agent agent = loadAgent(ctx.getRequest().getAgentId());
         ctx.setAgent(agent);
         long t2 = System.currentTimeMillis();
         log.info("[Chat][Trace] Agent加载: {}ms, agentId={}", t2 - t1, agent != null ? agent.getId() : null);
-        ctx.getSpans().add(buildSpan("s2", "s1", "agent_load", t1, t2 - t1, "OK",
+        ctx.getSpans().add(LlmTraceSpan.of("s2", "s1", "agent_load", t1, t2 - t1, "OK",
                 Map.of("agentId", agent != null ? agent.getId() : null, "agentName", agent != null ? agent.getName() : null)));
 
         // 3. 解析 config（支持指定版本 / 草稿 / 默认线上）
         Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest());
         ctx.setConfigMap(configMap);
-        ctx.setProviderId(getProviderId(configMap));
+        ctx.setProviderId(providerResolver.resolveFromConfig(configMap));
 
         ctx.setStartTime(t0);
         return next.proceed(ctx);
@@ -78,7 +79,7 @@ public class InitMiddleware implements ChatMiddleware {
 
         Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest());
         ctx.setConfigMap(configMap);
-        ctx.setProviderId(getProviderId(configMap));
+        ctx.setProviderId(providerResolver.resolveFromConfig(configMap));
     }
 
     /**
@@ -173,7 +174,7 @@ public class InitMiddleware implements ChatMiddleware {
         }
         if (published.get("recommendedQuestions") != null) {
             try {
-                agent.setRecommendedQuestions(OBJECT_MAPPER.writeValueAsString(published.get("recommendedQuestions")));
+                agent.setRecommendedQuestions(objectMapper.writeValueAsString(published.get("recommendedQuestions")));
             } catch (Exception ignored) {
                 // 保持 agent 表原值
             }
@@ -204,38 +205,11 @@ public class InitMiddleware implements ChatMiddleware {
             return Map.of();
         }
         try {
-            return OBJECT_MAPPER.readValue(config, new TypeReference<>() {});
+            return objectMapper.readValue(config, new TypeReference<>() {});
         } catch (Exception e) {
             log.warn("[Chat] 解析Agent config失败: {}", e.getMessage());
             return Map.of();
         }
-    }
-
-    /**
-     * 从config Map中获取providerId
-     */
-    public Long getProviderId(Map<String, Object> configMap) {
-        Object providerId = configMap.get(ConfigKeys.Agent.PROVIDER_ID);
-        if (providerId != null) {
-            return providerId instanceof Number ? ((Number) providerId).longValue() : Long.parseLong(providerId.toString());
-        }
-        var providers = modelFactory.getAvailableProviderIds();
-        if (providers.isEmpty()) {
-            throw new IllegalArgumentException("请先在「模型提供商管理」中配置至少一个模型提供商");
-        }
-        log.info("[Chat] Agent未配置providerId，使用默认提供商: id={}", providers.get(0));
-        return providers.get(0);
-    }
-
-    /**
-     * 获取默认providerId（兜底方案）
-     */
-    public Long getDefaultProviderId() {
-        var providers = modelFactory.getAvailableProviderIds();
-        if (providers.isEmpty()) {
-            throw new IllegalStateException("没有可用的模型提供商，请先在模型提供商管理页面配置");
-        }
-        return providers.get(0);
     }
 
     /**
@@ -265,17 +239,4 @@ public class InitMiddleware implements ChatMiddleware {
         }
     }
 
-    private LlmTraceSpan buildSpan(String spanId, String parentSpanId, String name,
-                                    long startTime, long durationMs, String status,
-                                    Map<String, Object> attributes) {
-        LlmTraceSpan span = new LlmTraceSpan();
-        span.setSpanId(spanId);
-        span.setParentSpanId(parentSpanId);
-        span.setName(name);
-        span.setStartTime(startTime);
-        span.setDurationMs(durationMs);
-        span.setStatus(status);
-        span.setAttributes(attributes != null ? attributes : Map.of());
-        return span;
-    }
 }

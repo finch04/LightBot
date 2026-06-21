@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum McpTransportType {
+public enum McpTransportType implements EnumDisplay {
 
     SSE("sse", "SSE (Server-Sent Events)"),
     STDIO("stdio", "stdio (标准输入输出)"),

@@ -22,6 +22,7 @@ import com.lightbot.enums.ContentType;
 import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.ProviderResolver;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.ToolService;
@@ -59,9 +60,9 @@ public class MessageMiddleware implements ChatMiddleware {
     private final ChatSessionService chatSessionService;
     private final ModelFactory modelFactory;
     private final InitMiddleware initMiddleware;
+    private final ProviderResolver providerResolver;
     private final MinioUtil minioUtil;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /** 平台统一回复约束（追加到所有 Agent 系统提示词后） */
     private static final String PLATFORM_REPLY_CONSTRAINTS = """
@@ -206,7 +207,7 @@ public class MessageMiddleware implements ChatMiddleware {
             return;
         }
         try {
-            String metadata = OBJECT_MAPPER.writeValueAsString(Map.of("attachments", attachments));
+            String metadata = objectMapper.writeValueAsString(Map.of("attachments", attachments));
             saveMessage(sessionId, MessageRole.USER, content, metadata, 0);
         } catch (Exception e) {
             saveMessage(sessionId, MessageRole.USER, content);
@@ -407,7 +408,7 @@ public class MessageMiddleware implements ChatMiddleware {
         List<Message> recentMessages = history.subList(history.size() - keepRecent, history.size());
 
         try {
-            Long providerId = initMiddleware.getProviderId(configMap);
+            Long providerId = providerResolver.resolveFromConfig(configMap);
             ChatModel chatModel = modelFactory.getChatModel(providerId);
 
             // 从配置读取工具结果预览 Token 上限，默认 500
@@ -524,12 +525,12 @@ public class MessageMiddleware implements ChatMiddleware {
             return List.of();
         }
         try {
-            Map<String, Object> meta = OBJECT_MAPPER.readValue(metadata, new TypeReference<>() {});
+            Map<String, Object> meta = objectMapper.readValue(metadata, new TypeReference<>() {});
             Object raw = meta.get("attachments");
             if (raw instanceof List<?> list) {
                 List<ChatAttachmentDTO> result = new ArrayList<>();
                 for (Object item : list) {
-                    result.add(OBJECT_MAPPER.convertValue(item, ChatAttachmentDTO.class));
+                    result.add(objectMapper.convertValue(item, ChatAttachmentDTO.class));
                 }
                 return result;
             }

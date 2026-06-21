@@ -14,7 +14,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum AuthType {
+public enum AuthType implements EnumDisplay {
 
     NONE("none", "无认证"),
     API_KEY("api_key", "API Key"),

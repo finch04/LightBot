@@ -1,14 +1,12 @@
 package com.lightbot.controller;
 
 import com.lightbot.common.Result;
-import com.lightbot.enums.AgentStatus;
-import com.lightbot.enums.ModelProviderType;
-import com.lightbot.enums.ModelType;
-import com.lightbot.enums.ToolType;
+import com.lightbot.enums.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -50,28 +48,9 @@ public class EnumController {
     /**
      * 枚举转 VO 列表
      */
-    private List<EnumVO> toEnumVOList(Enum<?>[] enums) {
-        return java.util.Arrays.stream(enums)
-                .map(e -> {
-                    EnumVO vo = new EnumVO();
-                    // 获取 code 字段（如果存在）
-                    try {
-                        var codeField = e.getClass().getDeclaredField("code");
-                        codeField.setAccessible(true);
-                        vo.setValue(codeField.get(e).toString());
-                    } catch (Exception ignored) {
-                        vo.setValue(e.name().toLowerCase());
-                    }
-                    // 获取 desc 字段（如果存在）
-                    try {
-                        var descField = e.getClass().getDeclaredField("desc");
-                        descField.setAccessible(true);
-                        vo.setLabel(descField.get(e).toString());
-                    } catch (Exception ignored) {
-                        vo.setLabel(e.name());
-                    }
-                    return vo;
-                })
+    private List<EnumVO> toEnumVOList(EnumDisplay[] enums) {
+        return Arrays.stream(enums)
+                .map(e -> new EnumVO(e.getCode(), e.getDesc()))
                 .collect(Collectors.toList());
     }
 
@@ -81,6 +60,13 @@ public class EnumController {
     public static class EnumVO {
         private String value;
         private String label;
+
+        public EnumVO() {}
+
+        public EnumVO(String value, String label) {
+            this.value = value;
+            this.label = label;
+        }
 
         public String getValue() { return value; }
         public void setValue(String value) { this.value = value; }

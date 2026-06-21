@@ -15,7 +15,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum KnowledgeRole {
+public enum KnowledgeRole implements EnumDisplay {
 
     /** 创建者：完全权限，可删除知识库、管理所有成员 */
     CREATOR("creator", "创建者"),

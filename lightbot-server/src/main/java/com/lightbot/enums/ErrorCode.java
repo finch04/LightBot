@@ -41,7 +41,7 @@ public enum ErrorCode {
     AI_GENERATE_FAILED(30002, "AI生成失败，请检查模型KEY配置", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // ========== 会话模块 ==========
-    SESSION_NOT_FOUND(30001, "会话不存在", HttpStatus.BAD_REQUEST),
+    SESSION_NOT_FOUND(30010, "会话不存在", HttpStatus.BAD_REQUEST),
 
     // ========== 模型提供商模块 ==========
     MODEL_PROVIDER_NOT_FOUND(40001, "模型提供商不存在", HttpStatus.BAD_REQUEST),
