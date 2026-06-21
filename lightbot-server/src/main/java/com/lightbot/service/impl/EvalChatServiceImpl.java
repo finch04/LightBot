@@ -7,6 +7,8 @@ import com.lightbot.dto.EvalScoreResult;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.EvalChatService;
+import com.lightbot.service.LlmCallStatsService;
+import com.lightbot.service.TokenBudgetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -34,6 +36,8 @@ import java.util.regex.Pattern;
 public class EvalChatServiceImpl implements EvalChatService {
 
     private final ModelFactory modelFactory;
+    private final TokenBudgetService tokenBudgetService;
+    private final LlmCallStatsService llmCallStatsService;
     private final ObjectMapper objectMapper;
 
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{\\{(\\w+)}}");
@@ -52,13 +56,27 @@ public class EvalChatServiceImpl implements EvalChatService {
         // 2. 替换模板变量
         String renderedPrompt = replaceVariables(promptTemplate, variables);
 
-        // 3. 获取ChatModel并调用
+        // 3. 预估 Token 并检查预算
+        int estimatedTokens = estimateTokens(renderedPrompt);
+        tokenBudgetService.checkBudget(0L, estimatedTokens);
+
+        // 4. 获取ChatModel并调用
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         ChatOptions options = modelFactory.buildChatOptions(providerId, config);
         UserMessage userMessage = new UserMessage(renderedPrompt);
         Prompt chatPrompt = new Prompt(userMessage, options);
-        ChatResponse response = chatModel.call(chatPrompt);
-        return response.getResult().getOutput().getText();
+
+        long startTime = System.currentTimeMillis();
+        try {
+            ChatResponse response = chatModel.call(chatPrompt);
+            long latency = System.currentTimeMillis() - startTime;
+            // 记录调用统计
+            recordCallStats(response, latency);
+            return response.getResult().getOutput().getText();
+        } catch (Exception e) {
+            llmCallStatsService.recordFailure(0L, System.currentTimeMillis() - startTime);
+            throw e;
+        }
     }
 
     @Override
@@ -95,16 +113,27 @@ public class EvalChatServiceImpl implements EvalChatService {
         // 2. 替换模板变量并追加系统指令
         String renderedPrompt = replaceVariables(promptTemplate, variables) + EVALUATOR_SYSTEM_PROMPT;
 
-        // 3. 获取ChatModel并调用
+        // 3. 预估 Token 并检查预算
+        int estimatedTokens = estimateTokens(renderedPrompt);
+        tokenBudgetService.checkBudget(0L, estimatedTokens);
+
+        // 4. 获取ChatModel并调用
         ChatModel chatModel = modelFactory.getChatModel(providerId);
         ChatOptions options = modelFactory.buildChatOptions(providerId, config);
         UserMessage userMessage = new UserMessage(renderedPrompt);
         Prompt chatPrompt = new Prompt(userMessage, options);
-        ChatResponse response = chatModel.call(chatPrompt);
-        String content = response.getResult().getOutput().getText();
 
-        // 4. 解析返回的JSON
-        return parseScoreResult(content);
+        long startTime = System.currentTimeMillis();
+        try {
+            ChatResponse response = chatModel.call(chatPrompt);
+            long latency = System.currentTimeMillis() - startTime;
+            recordCallStats(response, latency);
+            String content = response.getResult().getOutput().getText();
+            return parseScoreResult(content);
+        } catch (Exception e) {
+            llmCallStatsService.recordFailure(0L, System.currentTimeMillis() - startTime);
+            throw e;
+        }
     }
 
     @Override
@@ -169,6 +198,37 @@ public class EvalChatServiceImpl implements EvalChatService {
             return trimmed.substring(start, end + 1);
         }
         return trimmed;
+    }
+
+    /**
+     * 粗估 Token 数（中文约 1.5 token/字，英文约 0.75 token/word）
+     */
+    private int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) return 0;
+        // 简单估算：字符数 * 1.2
+        return (int) (text.length() * 1.2);
+    }
+
+    /**
+     * 从 ChatResponse 中提取 usage 并记录统计
+     */
+    private void recordCallStats(ChatResponse response, long latencyMs) {
+        try {
+            if (response != null && response.getMetadata() != null) {
+                var usage = response.getMetadata().getUsage();
+                if (usage != null) {
+                    int promptTokens = (int) usage.getPromptTokens();
+                    int completionTokens = (int) usage.getCompletionTokens();
+                    tokenBudgetService.recordUsage(0L, promptTokens, completionTokens);
+                    llmCallStatsService.recordSuccess(0L, promptTokens, completionTokens, latencyMs);
+                    return;
+                }
+            }
+            // 无法提取 usage 时，记录调用成功但 token 为 0
+            llmCallStatsService.recordSuccess(0L, 0, 0, latencyMs);
+        } catch (Exception e) {
+            log.debug("[EvalChatService] 记录调用统计失败: {}", e.getMessage());
+        }
     }
 
     /**

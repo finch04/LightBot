@@ -21,6 +21,7 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.TaskService;
 import com.lightbot.util.MilvusUtil;
 import com.lightbot.util.Neo4jUtil;
+import com.lightbot.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -57,6 +58,7 @@ public class GraphExtractionExecutor implements TaskExecutor {
     private final DocumentService documentService;
     private final ChunkService chunkService;
     private final TaskService taskService;
+    private final RedisUtil redisUtil;
     private final KnowledgeGraphMapper knowledgeGraphMapper;
     private final GraphDocumentMapper graphDocumentMapper;
     private final ObjectMapper objectMapper;
@@ -272,8 +274,7 @@ public class GraphExtractionExecutor implements TaskExecutor {
 
         for (List<Chunk> batch : batches) {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                Task latest = taskService.getById(task.getId());
-                if (latest != null && latest.getCancelRequested() == 1) {
+                if (redisUtil.hasCancelSignal(task.getId())) {
                     throw new CompletionException(new RuntimeException("任务已被用户取消"));
                 }
 

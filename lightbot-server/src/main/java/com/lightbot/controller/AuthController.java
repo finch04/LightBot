@@ -2,6 +2,8 @@ package com.lightbot.controller;
 
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChangePasswordRequest;
+import com.lightbot.dto.InitAdminRequest;
+import com.lightbot.dto.InitStatusVO;
 import com.lightbot.dto.LoginRequest;
 import com.lightbot.dto.ProfileUpdateRequest;
 import com.lightbot.dto.RegisterRequest;
@@ -90,5 +92,21 @@ public class AuthController {
     @PostMapping("/avatar")
     public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
         return Result.ok(userService.uploadAvatar(file));
+    }
+
+    @Operation(summary = "检查系统初始化状态")
+    @GetMapping("/init-status")
+    public Result<InitStatusVO> getInitStatus() {
+        return Result.ok(new InitStatusVO(userService.hasAnyUser()));
+    }
+
+    @Operation(summary = "初始化管理员账号（仅系统无用户时可用）")
+    @PostMapping("/init-admin")
+    public Result<Map<String, Object>> initAdmin(@Valid @RequestBody InitAdminRequest request) {
+        UserDTO user = userService.initAdmin(request.getUsername(), request.getPassword(), request.getNickname());
+        Map<String, Object> data = new HashMap<>();
+        data.put("token", cn.dev33.satoken.stp.StpUtil.getTokenValue());
+        data.put("user", user);
+        return Result.ok(data);
     }
 }

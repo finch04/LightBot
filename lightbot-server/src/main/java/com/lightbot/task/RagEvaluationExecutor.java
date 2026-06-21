@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Task;
 import com.lightbot.service.EvalRagResultService;
 import com.lightbot.service.TaskService;
+import com.lightbot.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ public class RagEvaluationExecutor implements TaskExecutor {
 
     private final EvalRagResultService resultService;
     private final TaskService taskService;
+    private final RedisUtil redisUtil;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -64,8 +66,7 @@ public class RagEvaluationExecutor implements TaskExecutor {
     }
 
     private void checkCancelled(Long taskId) {
-        Task latest = taskService.getById(taskId);
-        if (latest != null && latest.getCancelRequested() == 1) {
+        if (redisUtil.hasCancelSignal(taskId)) {
             throw new RuntimeException("任务已被用户取消");
         }
     }

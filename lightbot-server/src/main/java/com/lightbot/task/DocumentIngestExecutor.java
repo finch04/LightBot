@@ -35,9 +35,8 @@ public class DocumentIngestExecutor implements TaskExecutor {
         log.info("[文档入库执行器] 开始, taskId={}, documentId={}", task.getId(), documentId);
 
         documentService.processDocumentWithProgress(documentId, embeddingJson, (progress, message) -> {
-            // 1. 检查取消请求
-            Task latest = taskService.getById(task.getId());
-            if (latest != null && latest.getCancelRequested() == 1) {
+            // 1. 检查取消请求（Redis信号，O(1)）
+            if (redisUtil.hasCancelSignal(task.getId())) {
                 log.info("[文档入库执行器] 收到取消请求, taskId={}", task.getId());
                 throw new RuntimeException("任务已被用户取消");
             }

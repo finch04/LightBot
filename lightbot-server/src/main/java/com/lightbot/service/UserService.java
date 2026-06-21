@@ -123,4 +123,21 @@ public interface UserService {
      * @param userId 用户ID
      */
     void adminDeleteUser(Long userId);
+
+    /**
+     * 检查系统中是否存在任何用户（用于判断是否需要初始化）
+     *
+     * @return true=已有用户，false=无用户（需要初始化）
+     */
+    boolean hasAnyUser();
+
+    /**
+     * 初始化管理员账号（仅系统无用户时允许调用）
+     *
+     * @param username 用户名
+     * @param password 密码
+     * @param nickname 昵称
+     * @return 创建的管理员信息
+     */
+    UserDTO initAdmin(String username, String password, String nickname);
 }

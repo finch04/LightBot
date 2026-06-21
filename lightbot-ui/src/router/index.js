@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getInitStatus } from '../api/auth'
 
 const routes = [
   {
@@ -17,6 +18,12 @@ const routes = [
     path: '/register',
     name: 'Register',
     component: () => import('../views/Register.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/init',
+    name: 'InitAdmin',
+    component: () => import('../views/InitAdmin.vue'),
     meta: { public: true },
   },
   {
@@ -203,7 +210,34 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
+// 初始化状态缓存，避免每次路由切换都请求
+let initCheckDone = false
+let systemInitialized = false
+
+router.beforeEach(async (to, from, next) => {
+  // 1. 检查系统是否已初始化（仅首次检查）
+  if (!initCheckDone) {
+    try {
+      const res = await getInitStatus()
+      systemInitialized = res.data?.initialized === true
+    } catch {
+      // 接口异常时放行，避免阻塞用户
+      systemInitialized = true
+    }
+    initCheckDone = true
+  }
+
+  // 2. 未初始化时，强制跳转到初始化页面（除非已在初始化页面）
+  if (!systemInitialized && to.path !== '/init') {
+    return next('/init')
+  }
+
+  // 3. 已初始化时，不允许再访问初始化页面
+  if (systemInitialized && to.path === '/init') {
+    return next('/login')
+  }
+
+  // 4. 原有认证逻辑
   if (!to.meta.public && !localStorage.getItem('token')) {
     next('/login')
   } else if (to.meta.requiresAdmin && localStorage.getItem('role') !== 'admin') {

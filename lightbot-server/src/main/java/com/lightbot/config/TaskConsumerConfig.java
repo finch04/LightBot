@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,6 +51,9 @@ public class TaskConsumerConfig {
     private ExecutorService executorService;
     private final AtomicBoolean running = new AtomicBoolean(true);
 
+    /** 正在执行的任务线程映射，用于取消时中断 */
+    private final ConcurrentHashMap<Long, Thread> runningTasks = new ConcurrentHashMap<>();
+
     @PostConstruct
     public void start() {
         // 启动前清理孤儿任务，防止重启后任务永久卡死
@@ -70,6 +74,19 @@ public class TaskConsumerConfig {
             executorService.shutdownNow();
         }
         log.info("[任务消费者] 已停止");
+    }
+
+    /**
+     * 中断正在执行的任务线程（配合取消信号，实现快速取消）
+     *
+     * @param taskId 任务ID
+     */
+    public void interruptTask(Long taskId) {
+        Thread t = runningTasks.get(taskId);
+        if (t != null) {
+            t.interrupt();
+            log.info("[任务消费者] 已中断任务线程, taskId={}", taskId);
+        }
     }
 
     /**
@@ -164,6 +181,8 @@ public class TaskConsumerConfig {
                     continue;
                 }
 
+                // 记录执行线程（用于取消时中断）
+                runningTasks.put(taskId, Thread.currentThread());
                 try {
                     String result = executor.execute(task);
                     taskService.markSuccess(taskId, result);
@@ -175,6 +194,9 @@ public class TaskConsumerConfig {
                     } else {
                         taskService.markFailed(taskId, error);
                     }
+                } finally {
+                    runningTasks.remove(taskId);
+                    redisUtil.clearCancelSignal(taskId);
                 }
 
             } catch (IllegalStateException e) {

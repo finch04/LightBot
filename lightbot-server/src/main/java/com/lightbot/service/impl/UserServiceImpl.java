@@ -346,4 +346,40 @@ public class UserServiceImpl implements UserService {
         userMapper.deleteById(userId);
         log.info("[Admin] 删除用户: userId={}, operatorId={}", userId, currentUserId);
     }
+
+    @Override
+    public boolean hasAnyUser() {
+        return userMapper.selectCount(null) > 0;
+    }
+
+    @Override
+    public UserDTO initAdmin(String username, String password, String nickname) {
+        // 1. 系统级校验：仅无用户时允许初始化
+        if (hasAnyUser()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "系统已初始化，不能重复创建管理员");
+        }
+
+        // 2. 用户名唯一校验
+        long count = userMapper.selectCount(
+                new LambdaQueryWrapper<User>().eq(User::getUsername, username));
+        if (count > 0) {
+            throw new BizException(ErrorCode.USERNAME_EXISTS);
+        }
+
+        // 3. 创建管理员账号
+        User admin = new User();
+        admin.setUsername(username);
+        admin.setPassword(cn.dev33.satoken.secure.BCrypt.hashpw(password, cn.dev33.satoken.secure.BCrypt.gensalt()));
+        admin.setNickname(nickname != null && !nickname.isBlank() ? nickname : username);
+        admin.setEmail("");
+        admin.setRole(UserRole.ADMIN);
+        admin.setStatus(UserStatus.ACTIVE);
+        userMapper.insert(admin);
+
+        // 4. 自动登录
+        StpUtil.login(admin.getId());
+
+        log.info("[AdminUser] 管理员初始化成功: id={}, username={}", admin.getId(), username);
+        return UserDTO.from(admin);
+    }
 }

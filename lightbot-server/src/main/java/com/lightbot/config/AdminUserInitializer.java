@@ -13,8 +13,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 启动时自动创建管理员用户
- * <p>检测数据库中是否存在 admin 角色用户，不存在则自动创建默认管理员（admin/admin123）</p>
+ * 启动时检查管理员用户状态
+ * <p>检测数据库中是否存在用户，不存在时打印提示引导用户通过初始化页面创建管理员</p>
  *
  * @author finch
  * @since 2026-05-29
@@ -29,28 +29,9 @@ public class AdminUserInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        // 1. 已有 ADMIN 角色用户则跳过
-        long adminCount = userMapper.selectCount(
-                new LambdaQueryWrapper<User>().eq(User::getRole, UserRole.ADMIN));
-        if (adminCount > 0) {
-            return;
+        long userCount = userMapper.selectCount(null);
+        if (userCount == 0) {
+            log.info("[AdminUser] 系统未初始化，无用户数据。请访问前端初始化页面创建管理员账号");
         }
-        // 2. 用户名 admin 已占用则跳过，避免 uk_user_username 冲突导致应用启动失败
-        long adminUsernameCount = userMapper.selectCount(
-                new LambdaQueryWrapper<User>().eq(User::getUsername, "admin"));
-        if (adminUsernameCount > 0) {
-            log.warn("[AdminUser] 用户名 admin 已存在但无 ADMIN 角色用户，跳过默认管理员创建");
-            return;
-        }
-        // 3. 创建默认管理员
-        User admin = new User();
-        admin.setUsername("admin");
-        admin.setPassword(cn.dev33.satoken.secure.BCrypt.hashpw("admin123", cn.dev33.satoken.secure.BCrypt.gensalt()));
-        admin.setNickname("管理员");
-        admin.setEmail("");
-        admin.setRole(UserRole.ADMIN);
-        admin.setStatus(UserStatus.ACTIVE);
-        userMapper.insert(admin);
-        log.info("[AdminUser] 创建默认管理员: id={}, username=admin", admin.getId());
     }
 }

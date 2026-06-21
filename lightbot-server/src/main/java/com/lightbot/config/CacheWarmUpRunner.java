@@ -2,7 +2,9 @@ package com.lightbot.config;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lightbot.entity.*;
+import com.lightbot.enums.ExperimentStatus;
 import com.lightbot.mapper.*;
+import com.lightbot.util.BloomFilterHelper;
 import com.lightbot.util.ModelCacheUtil;
 import com.lightbot.util.ModelProviderCacheUtil;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,10 @@ public class CacheWarmUpRunner implements ApplicationRunner {
     private final SubAgentMapper subAgentMapper;
     private final SkillMapper skillMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final EvalDatasetMapper evalDatasetMapper;
+    private final EvalEvaluatorMapper evalEvaluatorMapper;
+    private final EvalExperimentMapper evalExperimentMapper;
+    private final BloomFilterHelper bloomFilterHelper;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -51,6 +57,8 @@ public class CacheWarmUpRunner implements ApplicationRunner {
         warmUpModels();
         // 3. 预热 Spring Cache 管理的业务缓存
         warmUpSpringCaches();
+        // 4. 初始化布隆过滤器（防穿透）
+        initBloomFilters();
         log.info("[CacheWarmUp] 缓存预热完成");
     }
 
@@ -113,6 +121,37 @@ public class CacheWarmUpRunner implements ApplicationRunner {
         warmUpCache(RedisCacheConfig.CACHE_SYSTEM_CONFIG,
                 () -> systemConfigMapper.selectList(null),
                 SystemConfig::getConfigKey);
+        // 评测体系缓存预热
+        warmUpCache(RedisCacheConfig.CACHE_EVAL_DATASET,
+                () -> evalDatasetMapper.selectList(new LambdaQueryWrapper<EvalDataset>().eq(EvalDataset::getDeleted, 0)),
+                d -> d.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_EVAL_EVALUATOR,
+                () -> evalEvaluatorMapper.selectList(new LambdaQueryWrapper<EvalEvaluator>().eq(EvalEvaluator::getDeleted, 0)),
+                e -> e.getId().toString());
+        warmUpCache(RedisCacheConfig.CACHE_EVAL_EXPERIMENT,
+                () -> evalExperimentMapper.selectList(
+                        new LambdaQueryWrapper<EvalExperiment>().eq(EvalExperiment::getDeleted, 0)),
+                e -> e.getId().toString());
+    }
+
+    /**
+     * 初始化布隆过滤器，加载各业务域的实体 ID
+     */
+    private void initBloomFilters() {
+        try {
+            bloomFilterHelper.init(RedisCacheConfig.CACHE_AGENT,
+                    agentMapper.selectList(new LambdaQueryWrapper<Agent>().eq(Agent::getDeleted, 0))
+                            .stream().map(Agent::getId).toList());
+            bloomFilterHelper.init(RedisCacheConfig.CACHE_KNOWLEDGE,
+                    knowledgeMapper.selectList(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getDeleted, 0))
+                            .stream().map(Knowledge::getId).toList());
+            bloomFilterHelper.init(RedisCacheConfig.CACHE_TOOL,
+                    toolMapper.selectList(new LambdaQueryWrapper<Tool>().eq(Tool::getDeleted, 0))
+                            .stream().map(Tool::getId).toList());
+            log.info("[CacheWarmUp] 布隆过滤器初始化完成");
+        } catch (Exception e) {
+            log.warn("[CacheWarmUp] 布隆过滤器初始化失败: {}", e.getMessage());
+        }
     }
 
     @FunctionalInterface

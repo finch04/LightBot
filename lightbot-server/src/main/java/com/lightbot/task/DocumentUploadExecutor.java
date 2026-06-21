@@ -11,6 +11,7 @@ import com.lightbot.service.TaskService;
 import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
+import com.lightbot.util.RedisUtil;
 import com.lightbot.util.TikaUtil;
 import com.lightbot.entity.Task;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
     private final TikaUtil tikaUtil;
     private final OcrUtil ocrUtil;
     private final DocumentSecurityScanUtil documentSecurityScanUtil;
+    private final RedisUtil redisUtil;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -192,8 +194,7 @@ public class DocumentUploadExecutor implements TaskExecutor {
     }
 
     private void checkCancelled(Long taskId) {
-        Task latest = taskService.getById(taskId);
-        if (latest != null && latest.getCancelRequested() == 1) {
+        if (redisUtil.hasCancelSignal(taskId)) {
             throw new RuntimeException("任务已被用户取消");
         }
     }

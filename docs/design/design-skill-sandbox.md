@@ -3,6 +3,7 @@
 > 日期：2026-06-18
 > 参考：Yuxi Skill 系统 + Yuxi Sandbox 模块
 > 目标：为 LightBot 设计完整的 Skill 管理体系与沙箱文件系统
+> 最后更新：2026-06-21 — 补充实现状态追踪
 
 ---
 
@@ -10,29 +11,30 @@
 
 ### 1.1 Skill 模块核心需求
 
-| 需求 | 说明 | 优先级 |
-|------|------|--------|
-| Skill 文件化存储 | Skill 内容从 DB 迁移到 MinIO，支持 SKILL.md + 附属文件 | P0 |
-| ZIP 上传安装 | 用户上传 ZIP 包即可安装 Skill，包含 SKILL.md 和附属资源 | P0 |
-| SKILL.md frontmatter 解析 | 声明式管理 Skill 的元数据和依赖关系 | P0 |
-| Agent 绑定 Skill | Agent 编排页可选择绑定 Skill，已有能力需保留 | P0（已有） |
-| Skill 懒激活 | Agent 运行时按需读取 SKILL.md 并激活依赖，而非全量注入 | P1 |
-| Skill 依赖声明 | Skill 可声明对 Tool、MCP Server、其他 Skill 的依赖 | P1 |
-| Skill 依赖闭包展开 | A→B→C 传递依赖自动展开，含循环检测 | P1 |
-| 导出 ZIP | 将 Skill 导出为 ZIP 包便于分享 | P2 |
-| Skill 版本管理 | 支持版本号 + 内容快照，内置 Skill 更新可检测变更 | P2 |
-| 权限隔离 | 全局/用户两级共享范围（部门级后续扩展） | P2 |
+| 需求 | 说明 | 优先级 | 实现状态 |
+|------|------|--------|---------|
+| Skill 文件化存储 | Skill 内容从 DB 迁移到 MinIO，支持 SKILL.md + 附属文件 | P0 | ✅ 已实现 |
+| ZIP 上传安装 | 用户上传 ZIP 包即可安装 Skill，包含 SKILL.md 和附属资源 | P0 | ✅ 已实现（两阶段） |
+| SKILL.md frontmatter 解析 | 声明式管理 Skill 的元数据和依赖关系 | P0 | ✅ 已实现 |
+| Agent 绑定 Skill | Agent 编排页可选择绑定 Skill，已有能力需保留 | P0（已有） | ✅ 已实现 |
+| Skill 懒激活 | Agent 运行时按需读取 SKILL.md 并激活依赖，而非全量注入 | P1 | ✅ 已实现 |
+| Skill 依赖声明 | Skill 可声明对 Tool、MCP Server、其他 Skill 的依赖 | P1 | ✅ 已实现 |
+| Skill 依赖闭包展开 | A→B→C 传递依赖自动展开，含循环检测 | P1 | ✅ 已实现 |
+| 导出 ZIP | 将 Skill 导出为 ZIP 包便于分享 | P2 | ✅ 已实现 |
+| 远程安装 | 从 GitHub/ModelScope/skills.sh 安装 Skill | P1 | ✅ 已实现（超出设计） |
+| Skill 版本管理 | 支持版本号 + 内容快照，内置 Skill 更新可检测变更 | P2 | ⚠️ 部分实现（版本号+content_hash） |
+| 权限隔离 | 全局/用户两级共享范围（部门级后续扩展） | P2 | ⚠️ 部分实现（scope 字段已有） |
 
 ### 1.2 Sandbox 模块核心需求
 
-| 需求 | 说明 | 优先级 |
-|------|------|--------|
-| 会话级工作区 | 每个对话有独立的文件读写空间（MinIO prefix 隔离） | P1 |
-| Skill 只读文件系统 | Agent 只能读取已绑定 Skill 的文件，不可写入 | P1 |
-| 路径安全校验 | 防止 `..` 路径遍历攻击，读写白名单控制 | P1 |
-| 用户级共享工作区 | 同一用户的跨对话共享文件空间 | P2 |
-| 文件操作 Agent 工具 | read_file / write_file / list_files 等沙箱工具 | P2 |
-| 容器沙箱（命令执行） | Docker/K8s 容器内执行代码，完全隔离 | P3 |
+| 需求 | 说明 | 优先级 | 实现状态 |
+|------|------|--------|---------|
+| 会话级工作区 | 每个对话有独立的文件读写空间（MinIO prefix 隔离） | P1 | ⚠️ 基础设施就绪，工具未实现 |
+| Skill 只读文件系统 | Agent 只能读取已绑定 Skill 的文件，不可写入 | P1 | ✅ 已实现（SandboxPathValidator） |
+| 路径安全校验 | 防止 `..` 路径遍历攻击，读写白名单控制 | P1 | ✅ 已实现 |
+| 用户级共享工作区 | 同一用户的跨对话共享文件空间 | P2 | ❌ 未实现 |
+| 文件操作 Agent 工具 | read_file / write_file / list_files 等沙箱工具 | P2 | ❌ 未实现 |
+| 容器沙箱（命令执行） | Docker/K8s 容器内执行代码，完全隔离 | P3 | ❌ 未实现（远期规划） |
 
 ### 1.3 为什么 Skill 和 Sandbox 应一起做
 
@@ -94,8 +96,7 @@
 │ 阶段一：暂存草稿       │
 │ MinIO skill_drafts/  │
 │   {draftId}/         │
-│     metadata.json    │
-│     skill-content/   │
+│     SKILL.md + 文件   │
 │ DB: 无记录            │
 │ TTL: 1 小时自动清理    │
 └──────────┬───────────┘
@@ -110,6 +111,8 @@
 └──────────────────────┘
 ```
 
+**实现差异**：设计文档描述草稿目录含 `metadata.json`，实际实现中 `stageDraft()` 直接解析 SKILL.md frontmatter 返回预览，不生成独立的 metadata.json 文件。
+
 ---
 
 ## 三、架构方案
@@ -120,34 +123,39 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                         前端层                                    │
 │  SkillManage.vue    AgentDetail.vue    Chat.vue                  │
-│  (Skill CRUD)       (Skill 绑定)       (沙箱文件操作)             │
+│  (Skill CRUD)       (Skill 绑定)       (skill_active 事件展示)    │
+│  SkillImportModal   SkillRemoteInstallModal                      │
+│  (ZIP 导入弹窗)     (远程安装弹窗)                                │
 └────────────┬──────────────┬──────────────────┬──────────────────┘
              │              │                  │
              ▼              ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Controller 层                              │
-│  SkillController         AgentController     SandboxController   │
-│  (CRUD + ZIP 导入导出)    (绑定管理)           (文件操作 API)      │
-└────────────┬──────────────┬──────────────────┬──────────────────┘
-             │              │                  │
-             ▼              ▼                  ▼
+│  SkillController         AgentController                         │
+│  (CRUD + ZIP 导入导出     (绑定管理)                              │
+│   + 远程安装 API)                                                │
+└────────────┬──────────────┬──────────────────────────────────────┘
+             │              │
+             ▼              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Service 层                                │
 │                                                                 │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐  │
-│  │ SkillService     │  │ AgentService     │  │ SandboxService │  │
-│  │ (CRUD + 导入导出) │  │ (绑定管理)       │  │ (文件操作)      │  │
-│  └────────┬────────┘  └────────┬────────┘  └───────┬────────┘  │
-│           │                    │                    │           │
-│           ▼                    ▼                    ▼           │
+│  ┌─────────────────┐  ┌─────────────────┐                      │
+│  │ SkillServiceImpl │  │ AgentServiceImpl │                      │
+│  │ (CRUD + 导入导出  │  │ (绑定管理)       │                      │
+│  │  + 远程安装提交)  │  │                  │                      │
+│  └────────┬────────┘  └────────┬────────┘                      │
+│           │                    │                                │
+│           ▼                    ▼                                │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                 SkillStorageService                        │  │
-│  │  (MinIO skills/ 读写、frontmatter 解析、ZIP 解压)          │  │
-│  └────────────────────────┬─────────────────────────────────┘  │
-│                           │                                     │
+│  │  SkillStorageService  │  GitHubSkillService               │  │
+│  │  (MinIO 读写/frontmatter │  (GitHub/ModelScope/skills.sh  │  │
+│  │   解析/ZIP 导入导出)     │   远程 Skill 安装)              │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                 SandboxPathValidator                       │  │
-│  │  (路径标准化、遍历攻击防护、读写白名单)                      │  │
+│  │  SkillActivationStore          SandboxPathValidator       │  │
+│  │  (Redis 激活状态持久化)          (路径安全校验)              │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
@@ -167,9 +175,8 @@
 │                      存储层                                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
 │  │ PostgreSQL    │  │ MinIO        │  │ Redis                │  │
-│  │ skill 表      │  │ skills/      │  │ 激活状态缓存          │  │
-│  │ agent.config  │  │ skill_drafts/│  │ Caffeine 本地缓存     │  │
-│  │               │  │ threads/     │  │                      │  │
+│  │ skill 表      │  │ skills/      │  │ skill:activated:{sid}│  │
+│  │ agent.config  │  │ skill_drafts/│  │ 激活状态（24h TTL）   │  │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -178,25 +185,25 @@
 
 ```
 {bucket}/
-├── skills/                              ← Skill 根目录（全局）
+├── skills/                              ← Skill 根目录（全局，只读）
 │   ├── {slug}/
 │   │   ├── SKILL.md                     ← 必需：frontmatter + 指令正文
 │   │   ├── references/                  ← 可选：模板、示例文件
 │   │   └── scripts/                     ← 可选：附属脚本
 │   └── ...
-├── skill_drafts/                        ← 导入草稿（TTL 1 小时）
+├── skill_drafts/                        ← 导入草稿（临时）
 │   └── {draftId}/
-│       ├── metadata.json
-│       └── skill-content/
-├── threads/                             ← 会话级目录
-│   ├── {sessionId}/
-│   │   ├── workspace/                   ← 会话工作区（读写）
-│   │   │   ├── input/                   ← 用户上传文件
-│   │   │   └── output/                  ← Agent 生成产物
-│   │   └── skills/                      ← 会话级 Skill 副本（只读，可选）
-│   └── shared/
-│       └── {userId}/
-│           └── workspace/               ← 用户级共享工作区（读写）
+│       └── {slug}/
+│           └── SKILL.md + 附属文件
+└── threads/                             ← 会话级目录（Level 3，基础设施就绪）
+    ├── {sessionId}/
+    │   ├── workspace/                   ← 会话工作区（读写）
+    │   │   ├── input/                   ← 用户上传文件
+    │   │   └── output/                  ← Agent 生成产物
+    │   └── skills/                      ← 会话级 Skill 副本（只读，可选）
+    └── shared/
+        └── {userId}/
+            └── workspace/               ← 用户级共享工作区（读写）
 ```
 
 ### 3.3 SKILL.md 格式
@@ -229,25 +236,49 @@ skill_dependencies: []
 - `slug` 必须匹配 `^[a-z0-9]+(-[a-z0-9]+)*$`
 - 解析失败时降级：整个文件作为 promptTemplate，依赖从 DB 读取
 
-### 3.4 数据模型变更
+### 3.4 数据模型
 
-#### 3.4.1 Skill 表新增字段
+#### 3.4.1 Skill 表结构
 
 ```sql
-ALTER TABLE skill ADD COLUMN object_prefix VARCHAR(256);
--- MinIO 路径前缀: "skills/{slug}/"
-
-ALTER TABLE skill ADD COLUMN version VARCHAR(64) DEFAULT '1.0.0';
--- 语义版本号
-
-ALTER TABLE skill ADD COLUMN skill_dependencies JSONB DEFAULT '[]';
--- 依赖其他 Skill 的 slug 列表: ["other-skill", "another-skill"]
-
-ALTER TABLE skill ADD COLUMN source_type VARCHAR(20) DEFAULT 'builtin';
--- 来源类型: builtin / upload / remote
+CREATE TABLE skill (
+    id                  BIGINT          NOT NULL,
+    user_id             BIGINT,
+    name                VARCHAR(128)    NOT NULL,
+    display_name        VARCHAR(128),
+    description         TEXT,
+    prompt_template     TEXT,
+    scope               VARCHAR(20)     NOT NULL DEFAULT 'global',
+    status              VARCHAR(20)     NOT NULL DEFAULT 'enabled',
+    is_builtin          SMALLINT        NOT NULL DEFAULT 0,
+    -- 沙箱相关字段（Level 1 新增）
+    slug                VARCHAR(128),
+    object_prefix       VARCHAR(256),
+    version             VARCHAR(64)     DEFAULT '1.0.0',
+    skill_dependencies  JSONB           DEFAULT '[]',
+    source_type         VARCHAR(20)     DEFAULT 'builtin',
+    content_hash        VARCHAR(128),
+    tool_ids            JSONB           DEFAULT '[]',
+    mcp_server_ids      JSONB           DEFAULT '[]',
+    -- 通用字段
+    create_time         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted             SMALLINT        NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX uk_skill_slug ON skill(slug);
+CREATE INDEX idx_skill_source_type ON skill(source_type);
+CREATE INDEX idx_skill_is_builtin ON skill(is_builtin);
+CREATE INDEX idx_skill_scope ON skill(scope);
 ```
 
-#### 3.4.2 字段对照（Yuxi → LightBot）
+#### 3.4.2 Redis 结构（SkillActivationStore）
+
+- **Key**: `skill:activated:{sessionId}`
+- **Value**: JSON 数组 `["deep-research", "knowledge-grounded-qa"]`
+- **TTL**: 24 小时（与会话一致）
+
+#### 3.4.3 字段对照（Yuxi → LightBot）
 
 | Yuxi 字段 | LightBot 字段 | 说明 |
 |-----------|--------------|------|
@@ -274,10 +305,12 @@ ALTER TABLE skill ADD COLUMN source_type VARCHAR(20) DEFAULT 'builtin';
     ▼
 SkillPrepMiddleware.prepare(ctx)
     │
-    ├── 1. 读取 Agent 绑定的 Skill 列表
-    ├── 2. 注入 Skill 摘要到 System Prompt
-    │      "可用技能：\n- deep-research: 多轮检索 (调用 read_skill 查看全文)"
-    ├── 3. 构建 read_skill 工具并注册
+    ├── 1. 从 Redis 加载已激活的 Skill slug 集合
+    ├── 2. 读取 Agent 绑定的 Skill 列表
+    ├── 3. 注入 Skill 摘要到 System Prompt
+    │      "以下技能已绑定到当前 Agent，使用 read_skill 工具读取完整指令后生效：
+    │       - deep-research: 多轮检索 + 结构化整理"
+    ├── 4. 构建 read_skill / list_skill_files 工具并注册
     │
     ▼
 Agent 第一轮对话（模型只看到摘要，无 Skill 依赖工具）
@@ -285,10 +318,12 @@ Agent 第一轮对话（模型只看到摘要，无 Skill 依赖工具）
     ▼
 Agent 决定使用 deep-research → 调用 read_skill("deep-research")
     │
-    ├── SkillStorageService.getSkillMarkdown("deep-research")
-    │   → MinIO getObject → Caffeine 缓存
-    ├── 返回 SKILL.md 全文给 Agent
-    ├── SkillActivationListener 标记 activated
+    ├── ReadSkillTool.execute()
+    │   ├── 校验 slug 存在且启用
+    │   ├── SkillStorageService.getSkillMarkdown("deep-research")
+    │   │   → MinIO getObject
+    │   └── 返回 SKILL.md 全文给 Agent
+    ├── SkillActivationStore.activate(sessionId, "deep-research")
     │   → Redis SET skill:activated:{sessionId} = ["deep-research"]
     │
     ▼
@@ -298,8 +333,9 @@ Agent 第二轮对话
 ToolPrepMiddleware.prepare(ctx)
     │
     ├── 读取 activatedSkills
-    ├── 展开 skill_dependencies（DFS + 循环检测）
-    ├── 合并 tool_dependencies / mcp_dependencies
+    ├── expandSkillClosure(activatedSlugs, depMap) -- DFS + 循环检测
+    ├── 合并 toolIds / mcpServerIds 到 mergedToolIds / mergedMcpIds
+    ├── toolService.resolveToolCallbacksByIds() → ToolCallback 列表
     ├── 注入到 ToolCallingChatOptions
     │
     ▼
@@ -324,14 +360,14 @@ Agent 获得 web_search 等依赖工具，执行深度研究
 
 #### 3.6.1 工具清单
 
-| 工具名 | 类型 | 权限 | 说明 |
-|--------|------|------|------|
-| `read_skill` | Skill 专用 | 只读 | 读取 SKILL.md，触发懒激活 |
-| `list_skill_files` | Skill 专用 | 只读 | 列出 Skill 目录下的文件 |
-| `read_file` | 通用沙箱 | 读 | 读取工作区文件 |
-| `write_file` | 通用沙箱 | 写 | 写入工作区文件 |
-| `list_files` | 通用沙箱 | 读 | 列出工作区目录 |
-| `upload_file` | 通用沙箱 | 写 | 上传文件到工作区 |
+| 工具名 | 类型 | 权限 | 实现状态 | 说明 |
+|--------|------|------|---------|------|
+| `read_skill` | Skill 专用 | 只读 | ✅ 已实现 | 读取 SKILL.md，触发懒激活 |
+| `list_skill_files` | Skill 专用 | 只读 | ✅ 已实现 | 列出 Skill 目录下的文件 |
+| `read_file` | 通用沙箱 | 读 | ❌ 未实现 | 读取工作区文件 |
+| `write_file` | 通用沙箱 | 写 | ❌ 未实现 | 写入工作区文件 |
+| `list_files` | 通用沙箱 | 读 | ❌ 未实现 | 列出工作区目录 |
+| `upload_file` | 通用沙箱 | 写 | ❌ 未实现 | 上传文件到工作区 |
 
 #### 3.6.2 路径安全设计
 
@@ -340,12 +376,16 @@ public final class SandboxPathValidator {
 
     private static final List<String> READABLE_ROOTS = List.of("skills/", "threads/");
     private static final List<String> WRITABLE_ROOTS = List.of("threads/"); // skills 只读
+    private static final List<String> DRAFT_ROOTS = List.of("skill_drafts/");
 
     /** 标准化路径 + 安全校验 */
     public static String normalize(String path) {
         String normalized = path.replace("\\", "/");
-        if (normalized.contains("..")) {
-            throw new SecurityException("path traversal not allowed: " + path);
+        // 逐段检查拒绝 ..
+        for (String segment : normalized.split("/")) {
+            if ("..".equals(segment)) {
+                throw new BizException(ErrorCode.SANDBOX_PATH_VIOLATION);
+            }
         }
         while (normalized.startsWith("/")) {
             normalized = normalized.substring(1);
@@ -354,27 +394,23 @@ public final class SandboxPathValidator {
     }
 
     /** 校验读权限 */
-    public static void checkReadable(String path) {
-        String p = normalize(path);
-        if (READABLE_ROOTS.stream().noneMatch(p::startsWith)) {
-            throw new SecurityException("read not allowed: " + path);
-        }
-    }
+    public static void checkReadable(String path) { ... }
 
     /** 校验写权限 */
-    public static void checkWritable(String path) {
-        String p = normalize(path);
-        if (WRITABLE_ROOTS.stream().noneMatch(p::startsWith)) {
-            throw new SecurityException("write not allowed: " + path);
-        }
-    }
+    public static void checkWritable(String path) { ... }
+
+    /** 校验草稿权限 */
+    public static void checkDraft(String path) { ... }
 }
 ```
+
+**实现差异**：设计文档使用原生 `SecurityException`，实际代码使用 `BizException(ErrorCode.SANDBOX_PATH_VIOLATION)`，与项目统一异常体系一致。
 
 ### 3.7 Skill 依赖闭包展开
 
 ```java
 /**
+ * ToolPrepMiddleware.expandSkillClosure()
  * DFS 展开 Skill 依赖闭包，含循环检测
  *
  * @param selectedSlugs Agent 绑定的 Skill slug 集合
@@ -398,233 +434,125 @@ public Set<String> expandSkillClosure(Set<String> selectedSlugs,
 }
 ```
 
-**校验规则**：
-- 不允许自依赖（`slug ∈ skill_dependencies`）
-- 不允许循环依赖（A→B→A，DFS 天然处理）
-- 依赖的 Skill 必须存在且 enabled
-- 依赖的 Skill 必须在用户可见范围内
+**实现说明**：设计文档描述为独立的 `SkillDependencyResolver` 类，实际实现内联在 `ToolPrepMiddleware` 中。
 
 ---
 
 ## 四、涉及文件与组件
 
-### 4.1 后端新增文件
+### 4.1 后端文件（已实现）
 
 | 文件 | 层级 | 说明 |
 |------|------|------|
-| `util/SandboxPathValidator.java` | 基础 | 路径安全校验工具 |
+| `util/SandboxPathValidator.java` | 基础 | 路径安全校验工具（读写白名单 + 路径遍历防护） |
 | `service/sandbox/SkillStorageService.java` | Service | MinIO Skill 文件读写、frontmatter 解析、ZIP 导入导出 |
+| `service/sandbox/GitHubSkillService.java` | Service | 远程 Skill 安装（GitHub API + ModelScope + npx skills find） |
+| `service/sandbox/SkillActivationStore.java` | Service | Redis 存储每个会话已激活的 Skill slug 集合 |
 | `model/SkillMetadata.java` | Model | SKILL.md frontmatter 解析后的结构化数据 |
-| `tool/builtin/ReadSkillTool.java` | Tool | `@SystemTool` 读取 SKILL.md，触发懒激活 |
-| `tool/builtin/ListSkillFilesTool.java` | Tool | `@SystemTool` 列出 Skill 目录文件 |
-| `tool/sandbox/ReadFileTool.java` | Tool | `@SystemTool` 读取工作区文件 |
-| `tool/sandbox/WriteFileTool.java` | Tool | `@SystemTool` 写入工作区文件 |
-| `tool/sandbox/ListFilesTool.java` | Tool | `@SystemTool` 列出工作区目录 |
+| `tool/builtin/ReadSkillTool.java` | Tool | `read_skill` 内置工具：读取 SKILL.md，触发懒激活 |
+| `tool/builtin/ListSkillFilesTool.java` | Tool | `list_skill_files` 内置工具：列出 Skill 目录文件 |
+| `service/impl/SkillServiceImpl.java` | Service | Skill CRUD + ZIP 导入导出 + 远程安装提交 |
+| `controller/SkillController.java` | Controller | REST API：ZIP 导入/导出、远程安装 |
+| `service/chat/SkillPrepMiddleware.java` | Middleware | 注入 Skill 摘要到 System Prompt，构建 read_skill 工具 |
+| `service/chat/ToolPrepMiddleware.java` | Middleware | 读取已激活 Skill，展开依赖闭包，合并 Tool/MCP |
+| `service/chat/ChatContext.java` | Model | 新增 activatedSkills、skillSystemAppendix、skillExtraToolIds |
+| `skill/BuiltInSkillRegistrar.java` | Init | 内置 Skill 启动注册器，同步 SKILL.md 到 MinIO |
+| `skill/BuiltInSkillDefinitions.java` | Init | 内置 Skill 定义清单 |
+| `util/MinioUtil.java` | Util | 底层 MinIO 操作（uploadString, listObjects, copyObject 等） |
+| `enums/ErrorCode.java` | Enum | 沙箱相关错误码：SANDBOX_PATH_VIOLATION, SKILL_FILE_NOT_FOUND 等 |
 
-### 4.2 后端修改文件
+### 4.2 后端未实现文件
 
-| 文件 | 修改内容 |
-|------|---------|
-| `entity/Skill.java` | 新增 `objectPrefix`、`version`、`skillDependencies`、`sourceType` 字段 |
-| `service/impl/SkillServiceImpl.java` | 新增 ZIP 导入、导出、依赖校验方法 |
-| `controller/SkillController.java` | 新增 ZIP 导入/导出 API |
-| `service/chat/SkillPrepMiddleware.java` | 改造：注入 Skill 摘要 + read_skill 工具（替代全量 prompt 注入） |
-| `service/chat/ToolPrepMiddleware.java` | 改造：读取 activatedSkills，展开依赖，按需合并 Tool/MCP |
-| `service/chat/ChatContext.java` | 新增 `activatedSkills` 字段 |
-| `util/MinioUtil.java` | 新增 `listObjects`、`copyObject`、`exists`、`statObject` 方法 |
-| `skill/BuiltInSkillRegistrar.java` | 改造：同步 Skill 内容到 MinIO（替代 DB promptTemplate） |
-| `skill/BuiltInSkillDefinitions.java` | 改造：定义从 SKILL.md 文件读取（替代硬编码字符串） |
+| 文件 | 说明 | 前置依赖 |
+|------|------|---------|
+| `tool/sandbox/ReadFileTool.java` | 读取工作区文件 | Level 3 |
+| `tool/sandbox/WriteFileTool.java` | 写入工作区文件 | Level 3 |
+| `tool/sandbox/ListFilesTool.java` | 列出工作区目录 | Level 3 |
+| `controller/SandboxController.java` | 文件操作 API | Level 3 |
+| `service/SandboxService.java` | 文件操作 Service 层 | Level 3 |
 
-### 4.3 前端修改文件
+### 4.3 前端文件
 
-| 文件 | 修改内容 |
-|------|---------|
-| `views/SkillManage.vue` | 新增 ZIP 上传按钮、sourceType 筛选、版本号显示 |
-| `views/AgentDetail.vue` | Skill 绑定 Tab 增加依赖关系展示 |
-| `views/Chat.vue` | 沙箱文件操作结果展示（read_file / write_file 的 SSE 事件） |
-| `components/SkillImportModal.vue` | 新建：ZIP 导入弹窗（拖拽上传 + 草稿预览 + 确认安装） |
-
-### 4.4 SQL 变更
-
-```sql
--- 2026-06-18-001.sql
--- Skill 表扩展：文件化存储 + 依赖声明 + 来源类型
-
-ALTER TABLE skill ADD COLUMN object_prefix VARCHAR(256);
-ALTER TABLE skill ADD COLUMN version VARCHAR(64) DEFAULT '1.0.0';
-ALTER TABLE skill ADD COLUMN skill_dependencies JSONB DEFAULT '[]';
-ALTER TABLE skill ADD COLUMN source_type VARCHAR(20) DEFAULT 'builtin';
-
-COMMENT ON COLUMN skill.object_prefix IS 'MinIO 路径前缀，如 skills/{slug}/';
-COMMENT ON COLUMN skill.version IS '语义版本号';
-COMMENT ON COLUMN skill.skill_dependencies IS '依赖其他 Skill 的 slug 列表';
-COMMENT ON COLUMN skill.source_type IS '来源类型: builtin/upload/remote';
-
-CREATE INDEX idx_skill_source_type ON skill(source_type);
-```
+| 文件 | 说明 |
+|------|------|
+| `views/SkillManage.vue` | Skill 管理页：CRUD、ZIP 导入、远程安装、导出 ZIP |
+| `components/SkillImportModal.vue` | ZIP 导入弹窗：拖拽上传 + 草稿预览 + 确认安装 |
+| `components/SkillRemoteInstallModal.vue` | 远程安装弹窗：仓库拉取 + 全局搜索 + 预览确认 |
+| `views/AgentDetail.vue` | Agent 编排页 Skill 绑定 Tab |
+| `views/Chat.vue` | 对话页展示 skill_active 事件 |
+| `components/AgentCapabilityPanel.vue` | 对话中展示已启用 Skill 列表 |
+| `api/skill.js` | Skill API 封装（12 个接口） |
 
 ---
 
-## 五、核心难点
+## 五、SkillController API 端点
 
-### 5.1 懒激活的状态管理
+| 端点 | 方法 | 说明 | 实现状态 |
+|------|------|------|---------|
+| `/api/skills` | GET | 获取 Skill 列表 | ✅ |
+| `/api/skills/{id}` | GET | 获取 Skill 详情 | ✅ |
+| `/api/skills` | POST | 创建 Skill | ✅ |
+| `/api/skills/{id}` | PUT | 更新 Skill | ✅ |
+| `/api/skills/{id}` | DELETE | 删除 Skill | ✅ |
+| `/api/skills/{id}/enabled` | PUT | 启用/禁用 Skill | ✅ |
+| `/api/skills/import/preview` | POST | ZIP 导入阶段一：暂存草稿返回预览 | ✅ |
+| `/api/skills/import/commit` | POST | ZIP 导入阶段二：确认提交 | ✅ |
+| `/api/skills/{id}/export` | GET | 导出 Skill 为 ZIP | ✅ |
+| `/api/skills/remote/list` | POST | 列出远程仓库中的 Skill | ✅ |
+| `/api/skills/remote/search` | POST | 全局搜索远程 Skill | ✅ |
+| `/api/skills/remote/prepare` | POST | 远程安装准备（下载并暂存草稿） | ✅ |
+| `/api/skills/remote/commit` | POST | 远程安装确认（提交草稿） | ✅ |
+
+---
+
+## 六、核心难点
+
+### 6.1 懒激活的状态管理
 
 **难点**：LightBot 的 `ChatContext` 是请求级对象，不跨轮次持久化。懒激活需要记住"哪些 Skill 已被激活"。
 
-**方案**：Redis 存储激活状态
+**方案**：Redis 存储激活状态（SkillActivationStore）
 
-```java
-// Key:   skill:activated:{sessionId}
-// Value: JSON Set<String> activatedSlugs
-// TTL:   24h（与会话一致）
-
-@Component
-@RequiredArgsConstructor
-public class SkillActivationStore {
-    private final RedisUtil redisUtil;
-    private static final String PREFIX = "skill:activated:";
-    private static final Duration TTL = Duration.ofHours(24);
-
-    public Set<String> getActivated(Long sessionId) {
-        String json = redisUtil.get(PREFIX + sessionId);
-        return json != null ? JsonUtils.parseSet(json, String.class) : new LinkedHashSet<>();
-    }
-
-    public void activate(Long sessionId, String slug) {
-        Set<String> slugs = getActivated(sessionId);
-        slugs.add(slug);
-        redisUtil.set(PREFIX + sessionId, JsonUtils.toJson(slugs), TTL);
-    }
-}
-```
-
-### 5.2 MinIO 与 DB 一致性
+### 6.2 MinIO 与 DB 一致性
 
 **难点**：ZIP 导入时，MinIO 上传成功但 DB 事务回滚，导致孤儿对象。
 
-**方案**：两阶段提交（对齐 Yuxi）
+**方案**：两阶段提交（草稿→确认），删除时先标记 DB 再异步清理 MinIO。
 
-1. **阶段一**：解压到 `skill_drafts/{draftId}/`，解析 frontmatter，返回预览
-2. **阶段二**：用户确认后，原子执行：
-   - MinIO：`skill_drafts/{draftId}/` → `skills/{slug}/`
-   - DB：INSERT skill 记录
-   - DB 失败则异步清理 MinIO 对象
+### 6.3 SKILL.md Frontmatter 解析
 
-删除时：先标记 DB `status=DELETED` → 异步删除 MinIO prefix → 物理删除 DB 记录。
+**难点**：YAML 中可能包含特殊字符，解析失败不能阻断 Skill 加载。
 
-### 5.3 SKILL.md Frontmatter 解析
+**方案**：正则提取 + SnakeYAML 解析 + 降级兜底（整个文件作为 promptTemplate）。
 
-**难点**：YAML 中可能包含特殊字符（多行字符串、引号、冒号），解析失败不能阻断 Skill 加载。
-
-**方案**：正则提取 + SnakeYAML 解析 + 降级兜底
-
-```java
-public SkillMetadata parseSkillMarkdown(String content) {
-    // 1. 正则提取 frontmatter
-    Matcher m = Pattern.compile("^---\\n(.*?)\\n---\\n(.*)$", Pattern.DOTALL)
-                        .matcher(content);
-    if (!m.find()) {
-        // 无 frontmatter，整个内容作为 promptTemplate
-        return SkillMetadata.builder().promptTemplate(content).build();
-    }
-
-    String yamlStr = m.group(1);
-    String body = m.group(2);
-
-    // 2. SnakeYAML 安全解析
-    Yaml yaml = new Yaml(new SafeConstructor());
-    Map<String, Object> data = yaml.load(yamlStr);
-
-    // 3. 构建元数据
-    return SkillMetadata.builder()
-        .slug((String) data.get("slug"))
-        .name((String) data.get("name"))
-        .description((String) data.get("description"))
-        .toolDependencies(getStringList(data, "tool_dependencies"))
-        .mcpDependencies(getStringList(data, "mcp_dependencies"))
-        .skillDependencies(getStringList(data, "skill_dependencies"))
-        .promptTemplate(body)
-        .build();
-}
-```
-
-### 5.4 Spring AI 动态 Tool 注册
+### 6.4 Spring AI 动态 Tool 注册
 
 **难点**：Spring AI 的 `FunctionCallback` 通常在启动时注册。懒激活需要运行时动态添加 Tool。
 
-**方案**（LightBot 已有基础）：
+**方案**：`ToolPrepMiddleware` 每次请求时重新构建 `ToolCallingChatOptions`，合并已激活 Skill 的依赖 Tool。
 
-`ToolPrepMiddleware` 每次请求时重新构建 `ToolCallingChatOptions`。改造点：
-
-```java
-// ToolPrepMiddleware.prepare() 中增加：
-Set<String> activated = skillActivationStore.getActivated(sessionId);
-if (activated != null && !activated.isEmpty()) {
-    // 展开依赖闭包
-    Map<String, List<String>> depMap = skillService.buildDependencyMap(activated);
-    Set<String> allSlugs = SkillDependencyResolver.expandSkillClosure(activated, depMap);
-
-    // 合并依赖的 Tool
-    for (String slug : allSlugs) {
-        Skill skill = skillService.getBySlug(slug);
-        if (skill != null && skill.getToolIds() != null) {
-            List<Long> depToolIds = JsonUtils.parseLongList(skill.getToolIds());
-            mergedToolIds.addAll(depToolIds);
-        }
-        // 合并依赖的 MCP Server
-        if (skill != null && skill.getMcpServerIds() != null) {
-            List<Long> depMcpIds = JsonUtils.parseLongList(skill.getMcpServerIds());
-            mergedMcpServerIds.addAll(depMcpIds);
-        }
-    }
-}
-```
-
-### 5.5 ZIP 导入的 Slug 冲突处理
+### 6.5 ZIP 导入的 Slug 冲突处理
 
 **难点**：用户上传的 ZIP 中 SKILL.md 定义的 slug 可能已存在。
 
-**方案**（对齐 Yuxi）：
-- 冲突时自动追加后缀：`deep-research` → `deep-research-v2` → `deep-research-v3`
-- 导入预览阶段展示 slug 映射，允许用户修改
-- 内置 Skill 的 slug 不允许被上传覆盖
-
-### 5.6 多实例 Skill 内容缓存
-
-**难点**：每请求读 MinIO 有网络延迟，高频访问场景下需要缓存。
-
-**方案**：Caffeine 本地缓存 + content_hash 失效
-
-```java
-@Cacheable(value = "skill-content", key = "#slug + ':' + #contentHash")
-public String getSkillMarkdown(String slug, String contentHash) {
-    String path = "skills/" + slug + "/SKILL.md";
-    byte[] bytes = minioUtil.downloadBytes(path);
-    return new String(bytes, StandardCharsets.UTF_8);
-}
-```
-
-- 缓存 key = `slug:contentHash`
-- Skill 更新时 contentHash 变化，自动失效
-- 缓存容量：100 个 Skill，单个最大 50KB
+**方案**：冲突时自动追加后缀（`deep-research` → `deep-research-v2`），导入预览阶段展示 slug 映射，允许用户修改。
 
 ---
 
-## 六、特点
+## 七、特点
 
-### 6.1 与 Yuxi 的对齐点
+### 7.1 与 Yuxi 的对齐点
 
-| 能力 | Yuxi 实现 | LightBot 对齐方案 |
-|------|----------|------------------|
-| 双层存储 | 文件系统 + DB | MinIO + DB |
-| SKILL.md 格式 | pyyaml 解析 frontmatter | SnakeYAML 解析 frontmatter |
-| 懒激活 | `read_file` 路径匹配 → State | `read_skill` 工具 → Redis |
-| 依赖闭包展开 | DFS + 循环检测 | 同（Java 实现） |
-| 两阶段导入 | 草稿目录 + TTL | `skill_drafts/` prefix + TTL |
-| Skill 只读后端 | `SelectedSkillsReadonlyBackend` | MinIO prefix + `checkReadable` |
-| 内置 Skill 启动同步 | `init_builtin_skills()` + content_hash | `BuiltInSkillRegistrar` + content_hash |
+| 能力 | Yuxi 实现 | LightBot 实现 | 状态 |
+|------|----------|--------------|------|
+| 双层存储 | 文件系统 + DB | MinIO + DB | ✅ 一致 |
+| SKILL.md 格式 | pyyaml 解析 frontmatter | SnakeYAML 解析 frontmatter | ✅ 一致 |
+| 懒激活 | `read_file` 路径匹配 → State | `read_skill` 工具 → Redis | ✅ 一致 |
+| 依赖闭包展开 | DFS + 循环检测 | 同（Java 实现） | ✅ 一致 |
+| 两阶段导入 | 草稿目录 + TTL | `skill_drafts/` prefix + TTL | ✅ 一致 |
+| 内置 Skill 启动同步 | `init_builtin_skills()` + content_hash | `BuiltInSkillRegistrar` + content_hash | ✅ 一致 |
 
-### 6.2 与 Yuxi 的差异点
+### 7.2 与 Yuxi 的差异点
 
 | 维度 | Yuxi | LightBot | 理由 |
 |------|------|----------|------|
@@ -633,426 +561,105 @@ public String getSkillMarkdown(String slug, String contentHash) {
 | 激活状态 | LangGraph State | Redis | Java 生态更自然，支持跨实例 |
 | 沙箱执行 | 容器沙箱（agent-sandbox） | Level 1-2 先行，Level 3 按需 | 降低初期复杂度 |
 | 权限模型 | global/department/user 三级 | global/user 两级 | 暂无多部门需求 |
-| 远程安装 | npx skills CLI | GitHub API 下载 ZIP | 避免引入 Node.js 运行时 |
+| 远程安装 | npx skills CLI | GitHub API + ModelScope + npx skills find | 超出设计，三种来源 |
 
-### 6.3 分级实施路线
+### 7.3 代码实现超出设计文档的部分
 
-| 阶段 | 周期 | 产出 | 前置依赖 |
+| 实现点 | 说明 |
+|--------|------|
+| **GitHubSkillService** | 设计文档提到"远程安装：GitHub API 下载 ZIP"，实际支持 GitHub 仓库递归扫描、ModelScope git clone、npx skills find 全局搜索三种来源 |
+| **ModelScope 支持** | 设计文档未提及，代码中实现了 `listModelScopeSkills()` 和 `prepareModelScopeInstall()` |
+| **AgentCapabilityPanel** | 前端对话中展示已启用 Skill 的组件，设计文档未详细描述 |
+| **SkillRemoteInstallModal** | 远程安装弹窗（仓库拉取 + 全局搜索），设计文档未详细描述 |
+
+### 7.4 设计文档描述但未实现的部分
+
+| 设计点 | 当前状态 | 说明 |
+|--------|---------|------|
+| 会话工作区工具（read_file/write_file/list_files） | ❌ 未实现 | SandboxPathValidator 已支持 `threads/` 路径校验，但 Tool 类未创建 |
+| 用户级共享工作区 | ❌ 未实现 | 路径规范已设计，代码未实现 |
+| Caffeine 本地缓存 | ❌ 未实现 | SkillStorageService 直接读 MinIO，无本地缓存层 |
+| SkillDependencyResolver 独立类 | 内联在 ToolPrepMiddleware | expandSkillClosure() 直接在中间件内实现 |
+| SandboxController / SandboxService | ❌ 未实现 | 文件操作 API 端点未实现 |
+| metadata.json 草稿文件 | ❌ 未实现 | stageDraft() 直接解析 SKILL.md，不生成独立文件 |
+| tool_dependencies 自动绑定 | ❌ 未实现 | 导入时 toolIds 设为 "[]"，未自动关联 |
+
+### 7.5 分级实施路线
+
+| 阶段 | 周期 | 产出 | 实现状态 |
 |------|------|------|---------|
-| **Level 1** | 2 周 | MinioUtil 扩展 + SkillStorageService + SKILL.md 解析 + Skill 内容迁移 + ZIP 导入导出 | 无 |
-| **Level 2** | 1 周 | read_skill 懒激活 + 激活状态 Redis 存储 + 依赖闭包展开 + SandboxPathValidator | Level 1 |
-| **Level 3** | 1 周 | 会话工作区（read_file / write_file / list_files）+ 用户共享工作区 | Level 2 |
-| **Level 4** | 4-6 周 | 容器沙箱（Docker/K8s）+ 命令执行 + Sandbox Provisioner 服务 | Level 3 + 基础设施 |
-
-**建议**：Level 1 + Level 2 + Level 3 共 4 周，覆盖 Skill 文件化、懒激活、会话工作区三大场景。Level 4 按业务需求（是否需要代码执行能力）决定是否实施。
+| **Level 1** | 2 周 | MinioUtil 扩展 + SkillStorageService + SKILL.md 解析 + Skill 内容迁移 + ZIP 导入导出 | ✅ 已完成 |
+| **Level 2** | 1 周 | read_skill 懒激活 + 激活状态 Redis 存储 + 依赖闭包展开 + SandboxPathValidator | ✅ 已完成 |
+| **Level 3** | 1 周 | 会话工作区（read_file / write_file / list_files）+ 用户共享工作区 | ❌ 未开始 |
+| **Level 4** | 4-6 周 | 容器沙箱（Docker/K8s）+ 命令执行 + Sandbox Provisioner 服务 | ❌ 未开始（远期） |
 
 ---
 
-## 七、前端交互设计
+## 八、前端交互设计
 
-### 7.1 Skill 管理页改造
+### 8.1 Skill 管理页
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Skill 管理                                    [ZIP导入] [新建] │
-│                                                             │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
-│  │ 全部     │ │ 内置    │ │ 上传    │ │ 远程    │          │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │ 🔵 deep-research              内置  v1.0.0            │ │
-│  │    多轮检索 + 结构化整理                                │ │
-│  │    依赖: web_search                     [编辑] [导出]   │ │
-│  ├───────────────────────────────────────────────────────┤ │
-│  │ 🟢 my-custom-skill            上传  v1.0.0            │ │
-│  │    自定义分析技能                                       │ │
-│  │    依赖: (无)                       [编辑] [导出] [删除] │ │
-│  └───────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+- 展示全局 Skill 列表，显示 slug、version、sourceType（builtin/upload/remote）标签
+- 顶部操作栏：搜索、刷新、新增 Skill、ZIP 导入、远程安装
+- 每个 Skill 卡片支持：查看详情、启用/禁用、导出 ZIP、删除
+- 内置 Skill 不可编辑/删除
 
-### 7.2 ZIP 导入弹窗
+### 8.2 ZIP 导入流程（SkillImportModal）
 
-```
-┌─────────────────────────────────────────────┐
-│  导入 Skill                         [×]     │
-│                                             │
-│  ┌───────────────────────────────────────┐  │
-│  │                                       │  │
-│  │     拖拽 ZIP 文件到此处，或 点击上传     │  │
-│  │                                       │  │
-│  └───────────────────────────────────────┘  │
-│                                             │
-│  解析结果预览：                              │
-│  ┌───────────────────────────────────────┐  │
-│  │ Slug:    my-analysis-skill            │  │
-│  │ 名称:    数据分析技能                   │  │
-│  │ 描述:    多维度数据分析与可视化          │  │
-│  │ 依赖:    web_search, calculator       │  │
-│  │ 文件:    SKILL.md + 3 个附属文件        │  │
-│  └───────────────────────────────────────┘  │
-│                                             │
-│              [取消]    [确认导入]             │
-└─────────────────────────────────────────────┘
-```
+两步骤流程：
+1. **上传**：拖拽 ZIP 文件（限制 10MB），调用 `/api/skills/import/preview`
+2. **预览确认**：展示 slug（可修改）、名称、描述、版本、依赖工具、依赖 Skill、文件列表。确认后调用 `/api/skills/import/commit`
 
-### 7.3 Agent 编排页 Skill 绑定改造
+### 8.3 远程安装流程（SkillRemoteInstallModal）
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Agent 编排 > Skill 配置                                     │
-│                                                             │
-│  已绑定 2/10 个 Skill                                        │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │ 🔵 deep-research    v1.0.0    依赖: web_search        │ │
-│  │    [×]                                                  │ │
-│  ├───────────────────────────────────────────────────────┤ │
-│  │ 🟢 my-skill         v1.0.0    依赖: (无)              │ │
-│  │    [×]                                                  │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  + 添加 Skill                                                │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │ 可选 Skill（按依赖自动展开）：                           │ │
-│  │   web_search → 因 deep-research 依赖自动注入            │ │
-│  └───────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+两个 Tab：
+1. **按仓库拉取**：输入 `owner/repo` 或 GitHub URL，调用 `/api/skills/remote/list` 获取 SKILL.md 列表，多选后 prepare + commit
+2. **全局搜索发现**：输入关键字，调用 `/api/skills/remote/search`（npx skills find），选择后走相同 prepare + commit 流程
+3. 支持 ModelScope 单个 Skill 地址（自动识别，单选）
+
+### 8.4 Agent 编排页 Skill 绑定
+
+- Skill Tab 展示已绑定 Skill 列表（最多 10 个）
+- 从全局 Skill 库中选择绑定
+- 发布版本时绑定关系写入版本快照
+
+### 8.5 对话中的 Skill 展示
+
+- Chat.vue 监听 SSE 事件流，识别 `skill_active` 类型事件
+- 通过 `AgentCapabilityPanel` 组件展示"已启用 N 个 Skill"，可展开查看每个 Skill 的 displayName、slug、是否内置
 
 ---
 
-## 八、关键问题 Q&A
+## 九、关键问题 Q&A
 
 ### Q1：不做容器沙箱，能正常使用 Skill 相关功能吗？
 
-**能。** 容器沙箱（Level 3）和 Skill 核心功能是完全独立的两件事。
+**能。** 容器沙箱（Level 4）和 Skill 核心功能是完全独立的两件事。
 
 | 功能层级 | 是否需要容器沙箱 | 说明 |
 |---------|:---:|------|
-| Skill 文件存储（MinIO） | 否 | 纯 MinIO 对象读写，不需要容器 |
+| Skill 文件存储（MinIO） | 否 | 纯 MinIO 对象读写 |
 | SKILL.md frontmatter 解析 | 否 | 纯 Java 字符串解析 |
 | ZIP 导入/导出 | 否 | MinIO + ZIP 流处理 |
 | Agent 绑定 Skill | 否 | DB 字段读写 |
 | Skill 懒激活（read_skill） | 否 | MinIO getObject + Redis 状态 |
 | Skill 依赖闭包展开 | 否 | 纯内存计算 |
+| 远程安装（GitHub/ModelScope） | 否 | HTTP API + MinIO |
 | **会话工作区文件读写** | 否 | MinIO prefix 隔离即可 |
-| **代码执行（Python/Shell）** | **是** | 需要容器隔离，防止恶意代码 |
-
-**结论**：把 MinIO 当"文件沙箱"完全够用。Level 1（Skill 文件化）+ Level 2（懒激活）+ Level 3（会话工作区）全部基于 MinIO，不依赖容器。只有需要让 Agent 执行代码（Python 脚本、Shell 命令）时才需要容器沙箱，那是 Level 4 的事。
-
----
+| **代码执行（Python/Shell）** | **是** | 需要容器隔离 |
 
 ### Q2：除了 Skill，还有什么会用到文件沙箱？
 
 | 场景 | 当前实现 | 是否需要沙箱 | 说明 |
 |------|---------|:---:|------|
-| **Skill 文件** | DB `prompt_template` 字段 | 否（迁移到 MinIO） | 本次改造重点 |
+| **Skill 文件** | MinIO `skills/{slug}/` | 否 | 已迁移到 MinIO |
 | **聊天附件** | MinIO `chat/{agentId}/{sessionId}/{attachmentId}` | 否 | 已有，无需改动 |
 | **知识库文档** | MinIO `knowledge/{knowledgeId}/documents/` | 否 | 已有，无需改动 |
-| **工作流脚本节点** | JVM 内 Nashorn 引擎直接执行 | **建议隔离** | 见下文分析 |
+| **工作流脚本节点** | JVM 内 Nashorn 引擎直接执行 | **建议隔离** | 风险：脚本可访问 JVM 内所有类 |
 | **Agent 代码执行** | 无（未实现） | **是** | 需要容器沙箱 |
-
-**关于工作流脚本节点（ScriptNodeProcessor）**：
-
-当前实现在 `ScriptNodeProcessor.java` 中，使用 `javax.script.ScriptEngine`（Nashorn）在 **JVM 进程内直接执行** JavaScript，没有任何隔离：
-
-```java
-// 当前实现：直接在 JVM 内执行，无沙箱
-ScriptEngine engine = new ScriptEngineManager().getEngineByName("javascript");
-engine.eval(script, bindings);
-```
-
-**风险**：
-- 脚本可以访问 JVM 内所有类和资源
-- 恶意脚本可以读写宿主机文件系统
-- 无限循环会阻塞 JVM 线程
-
-**改进方向**（与 Sandbox 模块独立，可单独优化）：
-- **短期**：Nashorn 沙箱化 — 限制可访问的 Java 类（`ClassFilter`）、设置脚本执行超时、限制内存
-- **中期**：将脚本发送到容器沙箱执行（Level 4 实施后）
-- **长期**：支持 Python 等更多语言，统一走容器沙箱
-
-**结论**：脚本节点的隔离是独立议题，不影响 Skill 模块实施。但建议在 Level 4 容器沙箱就绪后，将脚本节点也迁移到沙箱执行。
-
----
-
-### Q3：不做工作区，能正常使用 Skill 功能吗？
-
-**能。** 工作区和 Skill 是两个完全独立的功能域。
-
-| 功能 | 依赖工作区？ | 说明 |
-|------|:---:|------|
-| Skill 文件存储（MinIO skills/） | 否 | Skill 有自己的 MinIO prefix |
-| SKILL.md 解析 | 否 | 纯字符串处理 |
-| Agent 绑定 Skill | 否 | DB 字段 |
-| 懒激活（read_skill） | 否 | 读取 `skills/{slug}/SKILL.md` |
-| 依赖工具注入 | 否 | `ToolPrepMiddleware` 合并 |
-| **Agent 对话中读写文件** | **是** | 需要 `threads/{sessionId}/workspace/` |
-
-**工作区解决的问题**是：Agent 在对话过程中需要读写文件（如"帮我分析这个 CSV 并生成报告"），这与 Skill 本身无关。
-
-**建议实施顺序**：
-1. **Level 1**：Skill 文件化（MinIO skills/）— 必做
-2. **Level 2**：懒激活 — 必做
-3. **Level 3**：会话工作区 — 可选，按需实施
-
-即使永远不做工作区，Skill 的文件存储、懒激活、依赖管理、ZIP 导入导出等功能都能完整运行。
-
----
-
-### Q4：Sandbox 文件工具跟本系统自己的工具是两回事吗？
-
-**是同一套注册机制，但职责不同。**
-
-| 维度 | 系统工具（现有） | Sandbox 文件工具（新增） |
-|------|--------------|-------------------|
-| 注册方式 | `@SystemTool` 注解 → `ToolRegistrar` | 同 |
-| 注册时机 | 应用启动时 | 同（但 read_skill 的内容是动态的） |
-| 工具类型 | `type=builtin` 或 `type=knowledge` | `type=builtin`（read_skill / read_file 等） |
-| 执行内容 | 调用外部 API / 数据库查询 | 调用 MinIO 读写 |
-| 数据来源 | 外部服务 | MinIO 对象存储 |
-| 与 Skill 的关系 | Skill 通过 `tool_ids` 引用系统工具 | Sandbox 工具是 Skill 激活的触发器 |
-
-**关键区别**：
-
-```
-系统工具（如 web_search）：  Skill 声明依赖 → 懒激活后注入 → Agent 调用
-Sandbox 工具（如 read_skill）：Agent 调用 → 触发 Skill 激活 → 注入依赖的系统工具
-```
-
-**交互流程**：
-
-```
-Agent 看到 Skill 摘要: "deep-research: 多轮检索 (调用 read_skill 查看全文)"
-    │
-    ▼
-Agent 调用 read_skill("deep-research")     ← Sandbox 工具（读 MinIO）
-    │
-    ▼
-返回 SKILL.md 全文 + 标记激活
-    │
-    ▼
-下一轮请求，ToolPrepMiddleware 注入 web_search  ← 系统工具（外部 API）
-    │
-    ▼
-Agent 使用 web_search 执行深度研究
-```
-
-**结论**：Sandbox 文件工具和系统工具共享 `@SystemTool` + `ToolRegistrar` 注册体系，但它们在 Skill 生命周期中扮演不同角色 — Sandbox 工具是"钥匙"（触发激活），系统工具是"能力"（被激活后可用）。
-
----
-
----
-
-## 九、Skill 代码执行能力分析（Yuxi 深度调研）
-
-### 9.1 Yuxi Skill 如何绑定代码
-
-Yuxi 的 Skill **不是"代码即 Skill"**，而是 **"SKILL.md 指令 + 附属脚本"** 的组合模式：
-
-```
-skills/mysql-reporter/
-├── SKILL.md                    ← 核心：YAML frontmatter + 指令正文
-└── scripts/
-    ├── list_tables.py          ← 辅助脚本：列出数据库表
-    ├── describe_table.py       ← 辅助脚本：查看表结构
-    └── query.py                ← 辅助脚本：执行 SQL 查询
-```
-
-**SKILL.md 中不直接写代码**，而是写"操作流程"告诉 LLM 如何使用这些脚本：
-
-```markdown
-## 操作流程
-1. 理解用户的指令，明确报表的需求和目标
-2. 通过 terminal 进入技能目录：`cd /home/gem/skills/mysql-reporter`
-3. 使用 `uv run scripts/list_tables.py` 查看可用表
-4. 用 `uv run scripts/describe_table.py --table 表名` 查看表结构
-5. 生成正确且高效的只读 SQL，通过 `uv run scripts/query.py --sql "SQL语句" --timeout 60` 执行查询
-```
-
-**关键洞察**：Skill 的"代码执行"实际上是 **LLM 自主决定调用 `terminal` 工具来运行脚本**，而非 Skill 引擎自动执行代码。SKILL.md 本质上是一份"使用说明书"，教 LLM 怎么用附属脚本完成任务。
-
-### 9.2 执行链路
-
-```
-用户: "帮我查一下最近7天的销售报表"
-    │
-    ▼
-Agent (LLM) 读取 mysql-reporter 的 SKILL.md（已激活）
-    │
-    ▼
-LLM 决定执行: cd /home/gem/skills/mysql-reporter && uv run scripts/list_tables.py
-    │
-    ▼
-terminal 工具 → ProvisionerSandboxBackend.execute(command)
-    │
-    ▼
-远程沙箱容器（Docker）执行命令，返回结果
-    │
-    ▼
-LLM 解析结果，生成 SQL，调用 uv run scripts/query.py --sql "SELECT ..."
-    │
-    ▼
-循环直到报表完成
-```
-
-**沙箱容器的关键能力**：
-- 预装 `uv`（Python 包管理器），脚本用 PEP 723 内联声明依赖（`# /// script\ndependencies = ["pymysql>=1.1.0"]`）
-- 文件系统隔离：`/home/gem/skills/`（只读）、`/home/gem/user-data/workspace/`（读写）
-- 环境变量注入：用户配置的 `MYSQL_HOST` 等通过 `agent_envs` 表注入沙箱
-- 命令执行超时：默认 180s，输出截断 262KB
-
-### 9.3 Java 实现复杂度评估
-
-#### 方案 A：轻量级 — LLM 驱动 + MinIO 文件系统（推荐先行）
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Agent 运行时                            │
-│                                                          │
-│  LLM 读取 SKILL.md → 决定执行脚本 → 调用 execute_tool     │
-│                                                          │
-│  execute_tool(command)                                    │
-│      │                                                   │
-│      ▼                                                   │
-│  ┌─────────────────────────────────────────────┐         │
-│  │  方案 A: MinIO 虚拟文件系统（无代码执行）      │         │
-│  │  - read_file → MinIO getObject              │         │
-│  │  - write_file → MinIO putObject             │         │
-│  │  - execute → ❌ 不支持                       │         │
-│  └─────────────────────────────────────────────┘         │
-│                                                          │
-│  ┌─────────────────────────────────────────────┐         │
-│  │  方案 B: 宿主机 ProcessBuilder（有限隔离）    │         │
-│  │  - execute → ProcessBuilder(command)        │         │
-│  │  - 风险: 无容器隔离，可访问宿主机资源          │         │
-│  └─────────────────────────────────────────────┘         │
-│                                                          │
-│  ┌─────────────────────────────────────────────┐         │
-│  │  方案 C: Docker 容器沙箱（完全隔离）          │         │
-│  │  - execute → Docker API exec                │         │
-│  │  - 文件挂载: skills/ 只读, workspace/ 读写    │         │
-│  │  - 环境变量注入                              │         │
-│  └─────────────────────────────────────────────┘         │
-└──────────────────────────────────────────────────────────┘
-```
-
-| 方案 | 隔离级别 | 实现复杂度 | 适用场景 |
-|------|---------|-----------|---------|
-| **A: MinIO 文件系统** | 无代码执行 | 低（2周） | Skill 文件管理、懒激活、依赖管理 |
-| **B: 宿主机 ProcessBuilder** | 进程级 | 中（1周） | 内部可信环境快速验证 |
-| **C: Docker 容器沙箱** | 容器级 | 高（4-6周） | 生产环境、多租户、不可信代码 |
-
-#### 方案 C 的关键实现点（对标 Yuxi）
-
-| 组件 | Yuxi 实现 | Java 对标 | 复杂度 |
-|------|----------|----------|--------|
-| 沙箱 Provisioner 服务 | 独立微服务（HTTP API） | 需新建 SpringBoot 服务或用 Docker Java API | 高 |
-| 沙箱生命周期管理 | `ProvisionerSandboxProvider`（按 uid+threadId 缓存） | 需实现：创建→keepalive→销毁 | 中 |
-| 文件挂载 | Provisioner 配置 volume mount | Docker Java API 的 `HostConfig.binds` | 中 |
-| 命令执行 | `shell.exec_command()` HTTP API | Docker `exec_create` + `exec_start` | 中 |
-| 文件读写 | Sandbox file API（HTTP） | Docker `copy_to` / `copy_from` 或共享 volume | 中 |
-| 环境变量注入 | 创建沙箱时传入 | Docker `Env` 配置 | 低 |
-| 路径安全 | `_normalize_path()` + 读写白名单 | `SandboxPathValidator`（已有设计） | 低 |
-| Python 运行时 | 预装 `uv` 的 Docker 镜像 | 需构建自定义镜像：`FROM python:3.12 + uv` | 低 |
-| 超时/输出截断 | `sandbox_exec_timeout_seconds` | `Process.waitFor(timeout)` 或 Docker exec 超时 | 低 |
-
-#### 核心难点
-
-**1. 沙箱 Provisioner 是一个独立服务**
-
-Yuxi 的沙箱不是"在后端进程里开个 Docker"，而是一个独立的 **沙箱调度服务**（类似 E2B、Modal）。它负责：
-- 容器池管理（预热、复用、回收）
-- 按 uid+threadId 路由到对应容器
-- 容器健康检查和 keepalive
-- 文件 API 和命令执行 API
-
-这意味着 LightBot 要么：
-- **自建**：写一个 `lightbot-sandbox` 微服务（工作量大）
-- **集成第三方**：用 E2B、Modal、Fly.io Machines 等沙箱服务（成本问题）
-- **简化版**：直接用 Docker Java API 在本机管理容器（适合单机部署，不适合集群）
-
-**2. SKILL.md 中的路径是硬编码的**
-
-```markdown
-2. 通过 terminal 进入技能目录：`cd /home/gem/skills/mysql-reporter`
-3. 使用 `uv run scripts/list_tables.py` 查看可用表
-```
-
-路径 `/home/gem/skills/` 是 Yuxi 沙箱的固定挂载点。LightBot 如果要兼容远程安装的 Skill（来自 skills.sh 社区），需要保持相同路径结构，否则 SKILL.md 中的指令会失效。
-
-**3. Python 依赖管理**
-
-Yuxi 用 `uv run` + PEP 723 内联依赖（`# /// script`），沙箱容器预装了 `uv`。LightBot 需要：
-- 构建包含 `uv` 的 Docker 基础镜像
-- 或者用 `pip install` + `requirements.txt` 的传统方式（更慢但更通用）
-
-### 9.4 推荐实施路径
-
-```
-Phase 1 (当前): Skill 文件化 + 懒激活 + MinIO 虚拟文件系统
-    ↓
-Phase 2: 会话工作区 (read_file / write_file / list_files)
-    ↓
-Phase 3: 宿主机 ProcessBuilder 验证（内部可信 Skill，如 deep-research）
-    ↓
-Phase 4: Docker 容器沙箱（生产级隔离，支持社区 Skill 的代码执行）
-```
-
-**Phase 3 的具体实现**（轻量级，适合快速验证）：
-
-```java
-/**
- * 宿主机命令执行器（Phase 3 过渡方案）
- * 注意：仅限内部可信 Skill，不支持用户上传的不可信代码
- */
-@Component
-public class HostCommandExecutor {
-
-    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(180);
-
-    public CommandResult execute(String command, Path workDir, Map<String, String> env) {
-        ProcessBuilder pb = new ProcessBuilder("bash", "-c", command);
-        pb.directory(workDir.toFile());
-        pb.environment().putAll(env);
-        pb.redirectErrorStream(true);
-
-        try {
-            Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            boolean finished = process.waitFor(DEFAULT_TIMEOUT);
-            if (!finished) {
-                process.destroyForcibly();
-                return new CommandResult("执行超时", 1, true);
-            }
-            return new CommandResult(output, process.exitCode(), false);
-        } catch (Exception e) {
-            return new CommandResult("执行失败: " + e.getMessage(), 1, false);
-        }
-    }
-}
-```
-
-**Phase 4 的关键决策点**：
-- 是否需要自建 Provisioner 服务，还是集成 E2B 等第三方
-- 容器镜像策略：预构建 vs 动态构建
-- 容器池大小和回收策略
-
-### 9.5 结论
-
-| 问题 | 回答 |
-|------|------|
-| Yuxi Skill 能绑定 Python 代码吗？ | **能**，通过 `scripts/` 目录 + SKILL.md 指令告诉 LLM 用 terminal 执行 |
-| 代码跑在文件沙箱里吗？ | **不是文件沙箱**，是 **Docker 容器沙箱**（远程 Provisioner 服务） |
-| Java 实现复杂吗？ | **Skill 文件化本身不复杂**（Level 1-3，4周）；**容器沙箱很复杂**（Level 4，4-6周+独立服务） |
-| 能不能先不做容器沙箱？ | **完全可以**。Skill 的文件管理、懒激活、依赖管理、ZIP 导入导出都不需要容器沙箱 |
-| 社区 Skill 兼容性？ | 如果要兼容 skills.sh 社区的 Skill（含 Python 脚本），最终需要容器沙箱。但可以渐进实施 |
 
 ---
 
 *文档生成时间: 2026-06-18*
 *基于 Yuxi Skill 系统 + Sandbox 模块分析，结合 LightBot 现有架构设计*
-*最后更新: 2026-06-18 — 新增第九章：Skill 代码执行能力分析*
+*最后更新: 2026-06-21 — 补充实现状态追踪、API 端点清单、已实现/未实现差异分析*

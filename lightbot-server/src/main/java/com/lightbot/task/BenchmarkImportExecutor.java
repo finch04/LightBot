@@ -6,6 +6,7 @@ import com.lightbot.entity.EvalRagBenchmark;
 import com.lightbot.entity.Task;
 import com.lightbot.service.EvalRagBenchmarkService;
 import com.lightbot.service.TaskService;
+import com.lightbot.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ public class BenchmarkImportExecutor implements TaskExecutor {
 
     private final EvalRagBenchmarkService benchmarkService;
     private final TaskService taskService;
+    private final RedisUtil redisUtil;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -65,8 +67,7 @@ public class BenchmarkImportExecutor implements TaskExecutor {
     }
 
     private void checkCancelled(Long taskId) {
-        Task latest = taskService.getById(taskId);
-        if (latest != null && latest.getCancelRequested() == 1) {
+        if (redisUtil.hasCancelSignal(taskId)) {
             throw new RuntimeException("任务已被用户取消");
         }
     }

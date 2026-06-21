@@ -4,18 +4,27 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.dto.EvalDatasetExampleVO;
 import com.lightbot.entity.EvalDataset;
+import com.lightbot.entity.EvalDatasetItem;
+import com.lightbot.entity.EvalDatasetVersion;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.enums.EvalDatasetVersionStatus;
 import com.lightbot.mapper.EvalDatasetMapper;
+import com.lightbot.mapper.EvalDatasetVersionMapper;
 import com.lightbot.service.EvalDatasetItemService;
 import com.lightbot.service.EvalDatasetService;
 import com.lightbot.util.EvalDatasetExampleTemplates;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -31,8 +40,17 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
         implements EvalDatasetService {
 
     private final EvalDatasetItemService datasetItemService;
+    private final EvalDatasetVersionMapper datasetVersionMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_DATASET, key = "#id")
+    public EvalDataset getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_DATASET, allEntries = true)
     public EvalDataset create(String name, String description, String columnsConfig, Long userId) {
         // 1. 校验名称唯一性
         long count = count(new LambdaQueryWrapper<EvalDataset>().eq(EvalDataset::getName, name));
@@ -50,6 +68,7 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_DATASET, allEntries = true)
     public void update(Long id, String name, String description, String columnsConfig) {
         EvalDataset dataset = getById(id);
         if (dataset == null) {
@@ -72,6 +91,7 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_DATASET, allEntries = true)
     public void deleteById(Long id) {
         if (getById(id) == null) {
             throw new BizException(ErrorCode.EVAL_DATASET_NOT_FOUND);
@@ -115,6 +135,23 @@ public class EvalDatasetServiceImpl extends ServiceImpl<EvalDatasetMapper, EvalD
 
         // 4. 批量创建示例数据项
         datasetItemService.batchCreate(dataset.getId(), data.dataContents());
+
+        // 5. 自动创建 v1.0 版本（快照当前条目ID）
+        List<EvalDatasetItem> items = datasetItemService.listAllByDatasetId(dataset.getId());
+        List<Long> itemIds = items.stream().map(EvalDatasetItem::getId).toList();
+        String datasetItemsJson;
+        try {
+            datasetItemsJson = objectMapper.writeValueAsString(itemIds);
+        } catch (Exception e) {
+            datasetItemsJson = "[]";
+        }
+        EvalDatasetVersion dv = new EvalDatasetVersion();
+        dv.setDatasetId(dataset.getId());
+        dv.setVersion("v1.0");
+        dv.setDataCount(items.size());
+        dv.setStatus(EvalDatasetVersionStatus.DRAFT);
+        dv.setDatasetItems(datasetItemsJson);
+        datasetVersionMapper.insert(dv);
 
         return dataset;
     }

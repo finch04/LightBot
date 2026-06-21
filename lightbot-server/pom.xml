@@ -161,6 +161,13 @@
             <artifactId>jsoup</artifactId>
             <version>1.18.1</version>
         </dependency>
+
+        <!-- Guava (BloomFilter for cache penetration prevention) -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.4.0-jre</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Task;
 import com.lightbot.service.EvalExperimentService;
-import com.lightbot.service.TaskService;
+import com.lightbot.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 public class ExperimentRunExecutor implements TaskExecutor {
 
     private final EvalExperimentService evalExperimentService;
-    private final TaskService taskService;
+    private final RedisUtil redisUtil;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -35,8 +35,7 @@ public class ExperimentRunExecutor implements TaskExecutor {
     }
 
     private void checkCancelled(Long taskId) {
-        Task latest = taskService.getById(taskId);
-        if (latest != null && latest.getCancelRequested() == 1) {
+        if (redisUtil.hasCancelSignal(taskId)) {
             throw new RuntimeException("任务已被用户取消");
         }
     }

@@ -46,3 +46,11 @@ export function uploadAvatar(file) {
 export function changePassword(data) {
   return request.put('/auth/password', data)
 }
+
+export function getInitStatus() {
+  return request.get('/auth/init-status')
+}
+
+export function initAdmin(data) {
+  return request.post('/auth/init-admin', data)
+}

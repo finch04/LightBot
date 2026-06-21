@@ -43,6 +43,9 @@ public class RedisCacheConfig {
     public static final String CACHE_AGENT_BINDING = "agentBinding";
     public static final String CACHE_PROMPT = "prompt";
     public static final String CACHE_SYSTEM_CONFIG = "systemConfig";
+    public static final String CACHE_EVAL_DATASET = "evalDataset";
+    public static final String CACHE_EVAL_EVALUATOR = "evalEvaluator";
+    public static final String CACHE_EVAL_EXPERIMENT = "evalExperiment";
 
     /** 统一缓存前缀 */
     private static final String KEY_PREFIX = "lightbot";
@@ -65,16 +68,19 @@ public class RedisCacheConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
-        Map<String, RedisCacheConfiguration> configMap = Map.of(
-                CACHE_AGENT,        defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_KNOWLEDGE,    defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_TOOL,         defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_MCP_SERVER,   defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_SUBAGENT,     defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_SKILL,        defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_AGENT_BINDING, defaultConfig.entryTtl(Duration.ofMinutes(10)),
-                CACHE_PROMPT,       defaultConfig.entryTtl(Duration.ofMinutes(30)),
-                CACHE_SYSTEM_CONFIG, defaultConfig.entryTtl(Duration.ofHours(1))
+        Map<String, RedisCacheConfiguration> configMap = Map.ofEntries(
+                Map.entry(CACHE_AGENT,         defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_KNOWLEDGE,     defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_TOOL,          defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_MCP_SERVER,    defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_SUBAGENT,      defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_SKILL,         defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_AGENT_BINDING, defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_PROMPT,        defaultConfig.entryTtl(Duration.ofMinutes(30))),
+                Map.entry(CACHE_SYSTEM_CONFIG, defaultConfig.entryTtl(Duration.ofHours(1))),
+                Map.entry(CACHE_EVAL_DATASET,  defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_EVAL_EVALUATOR,defaultConfig.entryTtl(Duration.ofMinutes(10))),
+                Map.entry(CACHE_EVAL_EXPERIMENT,defaultConfig.entryTtl(Duration.ofMinutes(5)))
         );
 
         return RedisCacheManager.builder(factory)

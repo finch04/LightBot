@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.dto.EvalExperimentCreateRequest;
 import com.lightbot.entity.*;
 import com.lightbot.enums.ErrorCode;
@@ -16,8 +17,11 @@ import com.lightbot.mapper.EvalExperimentMapper;
 import com.lightbot.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -44,9 +48,17 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     private final EvalEvaluatorService evaluatorService;
     private final EvalExperimentResultService experimentResultService;
     private final EvalChatService evalChatService;
+    private final com.lightbot.util.RedisUtil redisUtil;
     private final ObjectMapper objectMapper;
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, key = "#id")
+    public EvalExperiment getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, allEntries = true)
     public EvalExperiment create(String name, String description, Long datasetId, Long datasetVersionId,
                                   String datasetVersion, String evaluationObjectConfig, String evaluatorConfig, Long userId) {
         // 0. 参数校验
@@ -79,6 +91,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, allEntries = true)
     public void stop(Long id, Long userId) {
         EvalExperiment experiment = getById(id);
         if (experiment == null) {
@@ -94,6 +107,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, allEntries = true)
     public void deleteById(Long id, Long userId) {
         EvalExperiment experiment = getById(id);
         if (experiment == null) {
@@ -106,6 +120,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, allEntries = true)
     public EvalExperiment update(Long id, EvalExperimentCreateRequest request) {
         EvalExperiment experiment = getById(id);
         if (experiment == null) {
@@ -130,6 +145,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EXPERIMENT, allEntries = true)
     public EvalExperiment restart(Long id, Long userId) {
         EvalExperiment experiment = getById(id);
         if (experiment == null) {
@@ -223,9 +239,8 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
 
             // 5. 遍历数据项执行评测
             for (EvalDatasetItem item : items) {
-                // 5.1 检查取消请求
-                Task latest = taskService.getById(task.getId());
-                if (latest != null && latest.getCancelRequested() == 1) {
+                // 5.1 检查取消请求（Redis信号，O(1)快速检测）
+                if (redisUtil.hasCancelSignal(task.getId())) {
                     experiment.setStatus(ExperimentStatus.STOPPED);
                     updateById(experiment);
                     return;

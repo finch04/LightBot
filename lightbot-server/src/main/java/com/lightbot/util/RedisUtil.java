@@ -21,6 +21,7 @@ public class RedisUtil {
     private final StringRedisTemplate stringRedisTemplate;
 
     private static final String TASK_QUEUE_KEY = "lightbot:task:queue";
+    private static final String CANCEL_SIGNAL_PREFIX = "lightbot:task:cancel:";
 
     // ==================== 任务队列 ====================
 
@@ -46,6 +47,37 @@ public class RedisUtil {
     public long getQueueSize() {
         Long size = stringRedisTemplate.opsForList().size(TASK_QUEUE_KEY);
         return size != null ? size : 0;
+    }
+
+    // ==================== 任务取消信号 ====================
+
+    /**
+     * 设置任务取消信号（Redis key，比DB标记更快检测）
+     *
+     * @param taskId 任务ID
+     */
+    public void setCancelSignal(Long taskId) {
+        stringRedisTemplate.opsForValue().set(CANCEL_SIGNAL_PREFIX + taskId, "1", 1, TimeUnit.HOURS);
+        log.debug("[Redis] 设置取消信号, taskId={}", taskId);
+    }
+
+    /**
+     * 检查任务是否有取消信号
+     *
+     * @param taskId 任务ID
+     * @return true=已请求取消
+     */
+    public boolean hasCancelSignal(Long taskId) {
+        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(CANCEL_SIGNAL_PREFIX + taskId));
+    }
+
+    /**
+     * 清除任务取消信号
+     *
+     * @param taskId 任务ID
+     */
+    public void clearCancelSignal(Long taskId) {
+        stringRedisTemplate.delete(CANCEL_SIGNAL_PREFIX + taskId);
     }
 
     // ==================== 通用缓存 ====================

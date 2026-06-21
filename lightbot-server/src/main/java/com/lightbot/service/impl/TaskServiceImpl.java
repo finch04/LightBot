@@ -38,6 +38,8 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     private final RedisUtil redisUtil;
     /** 延迟获取，避免与 TaskEventController 循环依赖 */
     private final ObjectProvider<TaskEventController> taskEventProvider;
+    /** 延迟获取，避免与 TaskConsumerConfig 循环依赖 */
+    private final ObjectProvider<com.lightbot.config.TaskConsumerConfig> taskConsumerProvider;
 
     @Override
     public Task createTask(TaskType type, String name, Long userId, Long refId, String payload) {
@@ -124,12 +126,23 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
 
     @Override
     public boolean requestCancel(Long taskId) {
+        // 1. DB标记
         boolean update = lambdaUpdate()
                 .eq(Task::getId, taskId)
                 .in(Task::getStatus, TaskStatus.PENDING, TaskStatus.RUNNING)
                 .set(Task::getCancelRequested, 1)
                 .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
+        if (update) {
+            // 2. Redis信号（executor可O(1)快速检测，无需查DB）
+            redisUtil.setCancelSignal(taskId);
+            // 3. 中断执行线程（打断阻塞的LLM调用等IO操作）
+            try {
+                taskConsumerProvider.getObject().interruptTask(taskId);
+            } catch (Exception e) {
+                log.debug("[任务] 中断线程失败(可能已结束), taskId={}", taskId);
+            }
+        }
         return update;
     }
 

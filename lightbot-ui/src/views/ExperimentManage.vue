@@ -182,38 +182,33 @@
 
       <!-- Step 4: 配置评估器 -->
       <div v-show="currentStep === 3">
-        <a-form :model="createForm" :label-col="{ span: 5 }">
-          <a-form-item label="评估器" required>
-            <a-select
-              v-model:value="createForm.evaluatorId"
-              placeholder="选择评估器"
-              style="width: 100%"
-              @change="onEvaluatorChange"
-            >
-              <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">
-                {{ e.name }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="评估器版本" required>
-            <a-select
-              v-model:value="createForm.evaluatorVersion"
-              placeholder="选择版本"
-              style="width: 100%"
-            >
-              <a-select-option v-for="v in evaluatorVersions" :key="v.version" :value="v.version">
-                {{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="参数映射">
-            <a-textarea
-              v-model:value="createForm.evaluatorParamMapping"
-              :rows="3"
-              placeholder='评估器变量映射，JSON 格式：{"actual_output":"output","expected_output":"reference"}'
-            />
-          </a-form-item>
-        </a-form>
+        <div v-for="(ev, idx) in createForm.evaluators" :key="idx" class="evaluator-config-block">
+          <div class="evaluator-config-header">
+            <span class="evaluator-config-title">评估器 {{ idx + 1 }}</span>
+            <a-tooltip v-if="createForm.evaluators.length > 1" title="移除">
+              <DeleteOutlined class="evaluator-remove-btn" @click="removeCreateEvaluator(idx)" />
+            </a-tooltip>
+          </div>
+          <a-form :model="ev" :label-col="{ span: 5 }">
+            <a-form-item label="评估器" required>
+              <a-select v-model:value="ev.evaluatorId" placeholder="选择评估器" style="width: 100%" @change="(id) => onCreateEvaluatorChange(idx, id)">
+                <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">{{ e.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="评估器版本" required>
+              <a-select v-model:value="ev.evaluatorVersion" placeholder="选择版本" style="width: 100%">
+                <a-select-option v-for="v in ev.versions" :key="v.version" :value="v.version">{{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="参数映射">
+              <a-textarea v-model:value="ev.evaluatorParamMapping" :rows="2" placeholder='JSON: {"actual_output":"output","expected_output":"reference"}' />
+            </a-form-item>
+          </a-form>
+        </div>
+        <a-button v-if="createForm.evaluators.length < 5" type="dashed" size="small" block @click="addCreateEvaluator" style="margin-top: 4px;">
+          <PlusOutlined /> 添加评估器
+        </a-button>
+        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: #a1a1aa; text-align: center;">最多添加5个评估器</div>
       </div>
 
       <!-- 底部按钮 -->
@@ -262,7 +257,6 @@ const datasetVersions = ref([])
 const promptList = ref([])
 const promptVersions = ref([])
 const evaluatorList = ref([])
-const evaluatorVersions = ref([])
 
 const createForm = reactive({
   name: '',
@@ -272,9 +266,7 @@ const createForm = reactive({
   promptKey: '',
   promptVersion: '',
   variableMapping: '',
-  evaluatorId: null,
-  evaluatorVersion: '',
-  evaluatorParamMapping: '',
+  evaluators: [{ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] }],
 })
 
 const columns = [
@@ -336,12 +328,21 @@ async function onPromptChange(key) {
   } catch { promptVersions.value = [] }
 }
 
-async function onEvaluatorChange(id) {
-  createForm.evaluatorVersion = ''
+async function onCreateEvaluatorChange(idx, id) {
+  createForm.evaluators[idx].evaluatorVersion = ''
   try {
     const res = await getEvaluatorVersions(id)
-    evaluatorVersions.value = res.data || []
-  } catch { evaluatorVersions.value = [] }
+    createForm.evaluators[idx].versions = res.data || []
+  } catch { createForm.evaluators[idx].versions = [] }
+}
+
+function addCreateEvaluator() {
+  if (createForm.evaluators.length >= 5) return message.warning('每个实验最多添加5个评估器')
+  createForm.evaluators.push({ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] })
+}
+
+function removeCreateEvaluator(idx) {
+  createForm.evaluators.splice(idx, 1)
 }
 
 function openCreateDialog() {
@@ -350,11 +351,10 @@ function openCreateDialog() {
     name: '', description: '',
     datasetId: null, datasetVersion: '',
     promptKey: '', promptVersion: '', variableMapping: '',
-    evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '',
+    evaluators: [{ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] }],
   })
   datasetVersions.value = []
   promptVersions.value = []
-  evaluatorVersions.value = []
   createDialogVisible.value = true
 }
 
@@ -366,7 +366,11 @@ function nextStep() {
 }
 
 async function handleCreate() {
-  if (!createForm.evaluatorId || !createForm.evaluatorVersion) return message.warning('请选择评估器和版本')
+  if (createForm.evaluators.length === 0) return message.warning('请至少添加一个评估器')
+  for (let i = 0; i < createForm.evaluators.length; i++) {
+    const ev = createForm.evaluators[i]
+    if (!ev.evaluatorId || !ev.evaluatorVersion) return message.warning(`请选择评估器 ${i + 1} 的评估器和版本`)
+  }
   submitting.value = true
   try {
     let variableMap = []
@@ -376,22 +380,11 @@ async function handleCreate() {
         variableMap = Object.entries(parsed).map(([promptVariable, datasetColumn]) => ({ promptVariable, datasetColumn }))
       } catch { return message.warning('变量映射 JSON 格式不正确') }
     }
-    let evaluatorParamMap = []
-    if (createForm.evaluatorParamMapping.trim()) {
-      try {
-        const parsed = JSON.parse(createForm.evaluatorParamMapping)
-        evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
-      } catch { return message.warning('参数映射 JSON 格式不正确') }
-    }
 
     // 查找 datasetVersionId
     const dsVersion = datasetVersions.value.find(v => v.version === createForm.datasetVersion)
     if (!dsVersion) return message.warning('评测集版本无效，请重新选择')
     const datasetVersionId = dsVersion.id
-
-    // 查找 evaluatorVersionId
-    const evVersion = evaluatorVersions.value.find(v => v.version === createForm.evaluatorVersion)
-    const evaluatorVersionId = evVersion?.id || null
 
     const evaluationObjectConfig = JSON.stringify({
       type: 'prompt',
@@ -401,10 +394,21 @@ async function handleCreate() {
         variableMap,
       },
     })
-    const evaluatorConfig = JSON.stringify([{
-      evaluatorVersionId: evaluatorVersionId ? String(evaluatorVersionId) : '',
-      variableMap: evaluatorParamMap,
-    }])
+    const evaluatorConfigArr = createForm.evaluators.map(ev => {
+      let evaluatorParamMap = []
+      if (ev.evaluatorParamMapping?.trim()) {
+        try {
+          const parsed = JSON.parse(ev.evaluatorParamMapping)
+          evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
+        } catch { throw new Error('评估器参数映射 JSON 格式不正确') }
+      }
+      const evVersion = ev.versions?.find(v => v.version === ev.evaluatorVersion)
+      return {
+        evaluatorVersionId: evVersion?.id ? String(evVersion.id) : '',
+        variableMap: evaluatorParamMap,
+      }
+    })
+    const evaluatorConfig = JSON.stringify(evaluatorConfigArr)
 
     await createExperiment({
       name: createForm.name,
@@ -590,4 +594,9 @@ function formatTime(t) {
   margin-top: 24px;
 }
 .dialog-footer-right { display: flex; gap: 8px; }
+.evaluator-config-block { border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.evaluator-config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.evaluator-config-title { font-size: 13px; font-weight: 600; color: #171717; }
+.evaluator-remove-btn { color: #a1a1aa; cursor: pointer; font-size: 14px; }
+.evaluator-remove-btn:hover { color: #ef4444; }
 </style>

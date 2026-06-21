@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.dto.EvalEvaluatorExampleVO;
 import com.lightbot.entity.EvalEvaluator;
 import com.lightbot.enums.ErrorCode;
@@ -12,9 +13,13 @@ import com.lightbot.service.EvalEvaluatorService;
 import com.lightbot.service.EvalEvaluatorVersionService;
 import com.lightbot.util.EvalEvaluatorExampleTemplates;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.io.Serializable;
 
 import java.util.List;
 
@@ -36,6 +41,13 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_EVAL_EVALUATOR, key = "#id")
+    public EvalEvaluator getById(Serializable id) {
+        return super.getById(id);
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EVALUATOR, allEntries = true)
     public EvalEvaluator create(String name, String description, String tags, Long userId) {
         // 1. 校验名称唯一性
         long count = count(new LambdaQueryWrapper<EvalEvaluator>().eq(EvalEvaluator::getName, name));
@@ -53,6 +65,7 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EVALUATOR, allEntries = true)
     public void update(Long id, String name, String description, String tags) {
         EvalEvaluator evaluator = getById(id);
         if (evaluator == null) {
@@ -75,6 +88,7 @@ public class EvalEvaluatorServiceImpl extends ServiceImpl<EvalEvaluatorMapper, E
     }
 
     @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_EVAL_EVALUATOR, allEntries = true)
     public void deleteById(Long id) {
         if (getById(id) == null) {
             throw new BizException(ErrorCode.EVAL_EVALUATOR_NOT_FOUND);
