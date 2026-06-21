@@ -7,6 +7,8 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.impl.EmbeddingServiceImpl;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.QaPairService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.util.RagParamResolver;
 import com.lightbot.util.TextNormalizeUtil;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.annotation.SystemTool;
@@ -39,7 +41,9 @@ import java.util.concurrent.Executors;
  */
 @Slf4j
 @Component("queryKnowledgeTool")
-@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", type = "knowledge", tags = {"知识库"})
+@SystemTool(displayName = "知识库检索", description = "搜索智能体绑定的知识库，获取与问题相关的文档内容", type = "knowledge", tags = {"知识库"},
+        outputExample = "{\"total\":2,\"qa_answer\":null,\"results\":[{\"result_type\":\"chunk\",\"content\":\"文档内容片段...\",\"score\":0.85,\"document_id\":1234567890,\"document_name\":\"产品说明书\",\"knowledge_id\":9876543210},{\"result_type\":\"qa_pair\",\"content\":\"问答对回答\",\"score\":0.72,\"question\":\"如何配置系统？\",\"answer\":\"请参考配置指南\",\"knowledge_id\":9876543210}]}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"total\":{\"type\":\"integer\",\"description\":\"匹配结果总数\"},\"qa_answer\":{\"type\":\"string\",\"description\":\"QA优先命中时直接返回的答案（无命中时为null）\"},\"results\":{\"type\":\"array\",\"description\":\"检索结果列表\",\"items\":{\"type\":\"object\",\"properties\":{\"result_type\":{\"type\":\"string\",\"description\":\"结果类型：chunk=文档片段，qa_pair=问答对\"},\"content\":{\"type\":\"string\",\"description\":\"匹配内容文本\"},\"score\":{\"type\":\"number\",\"description\":\"相似度得分（0-1）\"},\"document_id\":{\"type\":\"integer\",\"description\":\"文档ID（仅chunk类型）\"},\"document_name\":{\"type\":\"string\",\"description\":\"文档名（仅chunk类型）\"},\"question\":{\"type\":\"string\",\"description\":\"问题（仅qa_pair类型）\"},\"answer\":{\"type\":\"string\",\"description\":\"标准答案（仅qa_pair类型）\"},\"knowledge_id\":{\"type\":\"integer\",\"description\":\"所属知识库ID\"}}}}}}")
 @RequiredArgsConstructor
 public class QueryKnowledgeTool {
 
@@ -48,6 +52,8 @@ public class QueryKnowledgeTool {
     private final EmbeddingServiceImpl embeddingService;
     private final QaPairService qaPairService;
     private final EmbeddingModel embeddingModel;
+    private final RagParamResolver ragParamResolver;
+    private final ObjectMapper objectMapper;
 
     private static final ExecutorService SEARCH_EXECUTOR = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "tool-kb-search");
@@ -193,7 +199,7 @@ public class QueryKnowledgeTool {
                 }
             }
 
-            // 4.1 QA 优先命中：直接返回标准答案
+            // 4.1 QA 优先命中：返回 JSON（含 qa_answer）
             if (qaPriorityHit != null) {
                 String qaAnswer = (String) qaPriorityHit.get("answer");
                 String qaQuestion = (String) qaPriorityHit.get("question");
@@ -203,7 +209,11 @@ public class QueryKnowledgeTool {
                     SEARCH_RESULTS_MAP.put(requestId, List.of(qaPriorityHit));
                 }
                 log.info("[Tool:query_knowledge] QA优先返回: question={}, score={}", qaQuestion, qaScore);
-                return qaAnswer;
+                Map<String, Object> output = new java.util.LinkedHashMap<>();
+                output.put("total", 1);
+                output.put("qa_answer", qaAnswer);
+                output.put("results", List.of());
+                return objectMapper.writeValueAsString(output);
             }
 
             // 4.2 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
@@ -219,19 +229,29 @@ public class QueryKnowledgeTool {
                 return "未在知识库中找到与问题相关的内容。";
             }
 
-            // 5. 格式化返回（供大模型理解）
-            StringBuilder sb = new StringBuilder();
-            sb.append(String.format("在知识库中找到 %d 条相关内容：\n\n", allResults.size()));
-            for (int i = 0; i < allResults.size(); i++) {
-                Map<String, Object> row = allResults.get(i);
-                String content = TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")));
-                String resultType = (String) row.get("result_type");
-                String label = RagResultType.QA_PAIR.equals(resultType) ? "问答对" : String.valueOf(row.get("document_name"));
-                sb.append(String.format("【%d. %s】\n%s\n\n", i + 1, label, content));
-            }
+            // 5. 构建 JSON 返回
+            Map<String, Object> output = new java.util.LinkedHashMap<>();
+            output.put("total", allResults.size());
+            output.put("qa_answer", null);
+            output.put("results", allResults.stream().map(row -> {
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("result_type", row.get("result_type"));
+                item.put("content", TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content"))));
+                item.put("score", row.get("score"));
+                if (RagResultType.CHUNK.equals(row.get("result_type"))) {
+                    item.put("document_id", row.get("document_id"));
+                    item.put("document_name", row.get("document_name"));
+                }
+                if (RagResultType.QA_PAIR.equals(row.get("result_type"))) {
+                    item.put("question", row.get("question"));
+                    item.put("answer", row.get("answer"));
+                }
+                item.put("knowledge_id", row.get("knowledge_id"));
+                return item;
+            }).toList());
 
             log.info("[Tool:query_knowledge] 检索完成: agentId={}, results={}", finalAgentId, allResults.size());
-            return sb.toString();
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             log.error("[Tool:query_knowledge] 检索异常: agentId={}, error={}", finalAgentId, e.getMessage(), e);
             return "知识库检索过程中发生错误：" + e.getMessage();
@@ -264,27 +284,13 @@ public class QueryKnowledgeTool {
     }
 
     private int resolveTopK(Knowledge knowledge) {
-        Map<String, Object> qp = parseQueryParams(knowledge);
-        if (qp.get("final_top_k") instanceof Number n) return n.intValue();
-        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
-            try {
-                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-                if (node.has("ragTopK")) return node.get("ragTopK").asInt(5);
-            } catch (Exception ignored) {}
-        }
-        return 5;
+        return ragParamResolver.resolveTopK(null, parseQueryParams(knowledge),
+                knowledge.getConfig(), RagParamResolver.DEFAULT_TOP_K);
     }
 
     private double resolveThreshold(Knowledge knowledge) {
-        Map<String, Object> qp = parseQueryParams(knowledge);
-        if (qp.get("similarity_threshold") instanceof Number n) return n.doubleValue();
-        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
-            try {
-                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-                if (node.has("ragThreshold")) return node.get("ragThreshold").asDouble(0.5);
-            } catch (Exception ignored) {}
-        }
-        return 0.5;
+        return ragParamResolver.resolveThreshold(null, parseQueryParams(knowledge),
+                knowledge.getConfig(), RagParamResolver.DEFAULT_THRESHOLD);
     }
 
     private boolean resolveQaEnabled(Knowledge knowledge) {
@@ -296,25 +302,13 @@ public class QueryKnowledgeTool {
     private int resolveQaTopK(Knowledge knowledge) {
         Map<String, Object> qp = parseQueryParams(knowledge);
         if (qp.get("qa_top_k") instanceof Number n) return n.intValue();
-        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
-            try {
-                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-                if (node.has("qaTopK")) return node.get("qaTopK").asInt(3);
-            } catch (Exception ignored) {}
-        }
-        return 3;
+        return ragParamResolver.resolveTopK(null, null, knowledge.getConfig(), 3);
     }
 
     private double resolveQaThreshold(Knowledge knowledge) {
         Map<String, Object> qp = parseQueryParams(knowledge);
         if (qp.get("qa_threshold") instanceof Number n) return n.doubleValue();
-        if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
-            try {
-                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
-                if (node.has("qaThreshold")) return node.get("qaThreshold").asDouble(0.85);
-            } catch (Exception ignored) {}
-        }
-        return 0.85;
+        return ragParamResolver.resolveThreshold(null, null, knowledge.getConfig(), 0.85);
     }
 
     private boolean resolveQaPriority(Knowledge knowledge) {
@@ -322,7 +316,7 @@ public class QueryKnowledgeTool {
         if (qp.get("qa_priority") instanceof Boolean b) return b;
         if (knowledge.getConfig() != null && !knowledge.getConfig().isBlank()) {
             try {
-                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(knowledge.getConfig());
+                var node = objectMapper.readTree(knowledge.getConfig());
                 if (node.has("qaPriority")) return node.get("qaPriority").asBoolean(true);
             } catch (Exception ignored) {}
         }
@@ -336,8 +330,7 @@ public class QueryKnowledgeTool {
             return Map.of();
         }
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(knowledge.getQueryParams(), Map.class);
+            return objectMapper.readValue(knowledge.getQueryParams(), Map.class);
         } catch (Exception e) {
             return Map.of();
         }
@@ -362,8 +355,7 @@ public class QueryKnowledgeTool {
         if (knowledge.getQueryParams() != null && !knowledge.getQueryParams().isBlank()
                 && !"{}".equals(knowledge.getQueryParams())) {
             try {
-                params.putAll(new com.fasterxml.jackson.databind.ObjectMapper()
-                        .readValue(knowledge.getQueryParams(), Map.class));
+                params.putAll(objectMapper.readValue(knowledge.getQueryParams(), Map.class));
             } catch (Exception ignored) {
             }
         }

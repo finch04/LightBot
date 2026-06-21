@@ -42,7 +42,7 @@
         </div>
         <!-- 结果详情展开 -->
         <div v-if="evt.type === 'tool_result' && expandedResults.has(ti)" class="result-detail">
-          <pre>{{ evt.result }}</pre>
+          <ToolCallRenderer :event="evt" />
         </div>
       </div>
     </div>
@@ -52,6 +52,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { CheckCircleOutlined, LoadingOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import ToolCallRenderer from './ToolCallRenderer.vue'
 
 const props = defineProps({
   toolEvents: { type: Array, default: () => [] },

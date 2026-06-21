@@ -182,8 +182,14 @@
         </div>
 
         <div class="detail-section">
-          <div class="detail-label">输出结果</div>
-          <pre class="detail-pre">{{ toolDetailRecord.toolOutput || '-' }}</pre>
+          <div class="detail-label">
+            输出结果
+            <button class="btn-copy" @click="copyToolOutput">
+              <CheckOutlined v-if="toolOutputCopied" style="color: #52c41a" />
+              <CopyOutlined v-else />
+            </button>
+          </div>
+          <pre class="detail-pre detail-pre-json">{{ formatJson(toolDetailRecord.toolOutput) }}</pre>
         </div>
       </template>
     </a-modal>
@@ -491,6 +497,7 @@ const toolLoading = ref(false)
 const toolRecords = ref([])
 const toolDetailVisible = ref(false)
 const toolDetailRecord = ref(null)
+const toolOutputCopied = ref(false)
 
 const toolFilter = reactive({
   toolName: '',
@@ -835,6 +842,16 @@ function handleToolTableChange(pag) {
 function openToolDetail(record) {
   toolDetailRecord.value = record
   toolDetailVisible.value = true
+}
+
+function copyToolOutput() {
+  const text = toolDetailRecord.value?.toolOutput || ''
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    toolOutputCopied.value = true
+    message.success('已复制')
+    setTimeout(() => { toolOutputCopied.value = false }, 1500)
+  }).catch(() => message.error('复制失败'))
 }
 
 function handleBatchDelete() {
@@ -1338,6 +1355,21 @@ onMounted(() => {
   color: #888;
   margin-bottom: 6px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-copy {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  color: #999;
+  font-size: 13px;
+  &:hover { color: #333; }
 }
 .detail-pre {
   background: #f5f5f5;
@@ -1350,5 +1382,10 @@ onMounted(() => {
   max-height: 400px;
   overflow: auto;
   margin: 0;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.detail-pre-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
 }
 </style>

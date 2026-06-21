@@ -147,8 +147,25 @@
             <JsonInput v-model="form.inputSchema" :rows="4" placeholder='JSON Schema，如：{"type":"object","properties":{...}}' />
             <div class="form-hint">定义工具的输入参数（JSON Schema 格式），供 Agent 理解参数含义</div>
           </a-form-item>
-          <a-form-item label="输出Schema">
-            <JsonInput v-model="form.outputSchema" :rows="3" placeholder="输出参数 JSON Schema（可选）" />
+          <a-form-item>
+            <template #label>
+              输出Schema
+              <a-tooltip placement="topLeft">
+                <template #title>定义工具返回的 JSON 结构（JSON Schema 格式）。填写后详情页会展示字段说明表，帮助用户理解工具输出。</template>
+                <QuestionCircleOutlined class="field-help-icon" />
+              </a-tooltip>
+            </template>
+            <JsonInput v-model="form.outputSchema" :rows="3" placeholder='JSON Schema，如：{"type":"object","properties":{"total":{"type":"integer","description":"结果总数"}}}' />
+          </a-form-item>
+          <a-form-item>
+            <template #label>
+              输出示例
+              <a-tooltip placement="topLeft">
+                <template #title>工具返回的示例 JSON，用于在详情页展示工具的实际输出样例，帮助用户理解返回内容。</template>
+                <QuestionCircleOutlined class="field-help-icon" />
+              </a-tooltip>
+            </template>
+            <JsonInput v-model="form.outputExample" :rows="4" placeholder='示例 JSON，如：{"total":2,"results":[...]}' />
           </a-form-item>
           <a-form-item label="认证配置">
             <JsonInput v-model="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
@@ -170,11 +187,7 @@
     </a-modal>
 
     <!-- 测试工具弹窗 -->
-    <a-modal v-model:open="testDialogVisible" title="测试工具" :width="680" :footer="null" :maskClosable="false">
-      <div class="test-tool-info">
-        <span class="test-tool-name">{{ testToolName }}</span>
-        <span class="test-tool-desc">{{ testToolDesc }}</span>
-      </div>
+    <a-modal v-model:open="testDialogVisible" :title="testToolName || '测试工具'" :width="680" :footer="null" :maskClosable="false">
       <!-- 参数说明 -->
       <div v-if="testToolParams.length > 0" class="test-params-section">
         <div class="test-params-title">参数说明</div>
@@ -220,7 +233,7 @@
       <a-divider v-if="testResult !== null" />
       <div v-if="testResult !== null" class="test-result">
         <div class="test-result-label">执行结果</div>
-        <pre class="test-result-content">{{ testResult }}</pre>
+        <pre class="test-result-content" :class="{ 'is-json': isJsonResult(testResult) }">{{ formatTestResult(testResult) }}</pre>
       </div>
     </a-modal>
 
@@ -293,6 +306,29 @@
           </table>
           <div v-if="parseToolParams(detailTool.inputSchema).length === 0" class="detail-empty">无可解析的参数</div>
         </div>
+
+        <!-- 返回示例 -->
+        <div class="detail-section" v-if="hasOutputExample(detailTool)">
+          <div class="detail-section-header"><FileTextOutlined /> 返回示例</div>
+          <!-- 字段说明表 -->
+          <table v-if="parseOutputSchema(detailTool).length > 0" class="detail-params-table">
+            <thead>
+              <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="f in parseOutputSchema(detailTool)" :key="f.name">
+                <td><code>{{ f.name }}</code></td>
+                <td>{{ f.type }}</td>
+                <td>{{ f.desc }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <!-- JSON 示例 -->
+          <div v-if="formatOutputExample(detailTool)" class="detail-output-example">
+            <div class="detail-output-example-title">示例 JSON</div>
+            <pre class="detail-output-json">{{ formatOutputExample(detailTool) }}</pre>
+          </div>
+        </div>
       </div>
 
       <div class="dialog-footer">
@@ -313,7 +349,7 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool, setToolEnabled } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -340,7 +376,7 @@ const submitting = ref(false)
 const form = reactive({
   id: null, name: '', displayName: '', description: '',
   toolType: 'custom', endpointUrl: '', authType: 'none',
-  inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
+  inputSchema: '{}', outputSchema: '{}', outputExample: '{}', authConfig: '{}', config: '{}',
   tags: [],
 })
 
@@ -398,6 +434,67 @@ function generateToolExample(inputSchema) {
   }
 }
 
+function parseToolConfig(tool) {
+  if (!tool?.config) return {}
+  try {
+    return typeof tool.config === 'string' ? JSON.parse(tool.config) : tool.config
+  } catch {
+    return {}
+  }
+}
+
+function hasOutputExample(tool) {
+  const config = parseToolConfig(tool)
+  return !!config.outputExample || (tool?.outputSchema && tool.outputSchema !== '{}')
+}
+
+function parseOutputSchema(tool) {
+  if (!tool?.outputSchema || tool.outputSchema === '{}') return []
+  try {
+    const schema = typeof tool.outputSchema === 'string' ? JSON.parse(tool.outputSchema) : tool.outputSchema
+    const properties = schema.properties || {}
+    return Object.entries(properties).map(([name, prop]) => ({
+      name,
+      type: prop.type || 'string',
+      desc: prop.description || '',
+    }))
+  } catch {
+    return []
+  }
+}
+
+function formatOutputExample(tool) {
+  const config = parseToolConfig(tool)
+  if (!config.outputExample) return ''
+  try {
+    const parsed = JSON.parse(config.outputExample)
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return config.outputExample
+  }
+}
+
+function isJsonResult(result) {
+  if (!result || typeof result !== 'string') return false
+  try {
+    const parsed = JSON.parse(result)
+    return typeof parsed === 'object' && parsed !== null
+  } catch {
+    return false
+  }
+}
+
+function formatTestResult(result) {
+  if (!result || typeof result !== 'string') return result
+  try {
+    const parsed = JSON.parse(result)
+    if (typeof parsed === 'object' && parsed !== null) {
+      return JSON.stringify(parsed, null, 2)
+    }
+  } catch {}
+  return result
+}
+
 async function loadData() {
   loading.value = true
   try {
@@ -447,17 +544,19 @@ watch(allTags, (v) => { tagSuggestions.value = v })
 
 function openDialog(row) {
   if (row) {
+    const config = parseToolConfig(row)
     Object.assign(form, {
       ...row,
       toolType: row.toolType?.code || row.toolType || 'custom',
       authType: row.authType?.code || row.authType || 'none',
       tags: parseTags(row.tags),
+      outputExample: config.outputExample ? JSON.stringify(JSON.parse(config.outputExample), null, 2) : '{}',
     })
   } else {
     Object.assign(form, {
       id: null, name: '', displayName: '', description: '',
       toolType: 'custom', endpointUrl: '', authType: 'none',
-      inputSchema: '{}', outputSchema: '{}', authConfig: '{}', config: '{}',
+      inputSchema: '{}', outputSchema: '{}', outputExample: '{}', authConfig: '{}', config: '{}',
       tags: [],
     })
   }
@@ -468,7 +567,19 @@ async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入工具标识')
   submitting.value = true
   try {
-    const data = { ...form, tags: JSON.stringify(form.tags || []) }
+    // 将 outputExample 合并到 config
+    let configObj = {}
+    try { configObj = JSON.parse(form.config || '{}') } catch {}
+    if (form.outputExample && form.outputExample !== '{}') {
+      configObj.outputExample = form.outputExample
+    } else {
+      delete configObj.outputExample
+    }
+    const data = {
+      ...form,
+      tags: JSON.stringify(form.tags || []),
+      config: JSON.stringify(configObj),
+    }
     if (form.id) {
       await updateTool(data)
       message.success('更新成功')
@@ -819,6 +930,13 @@ defineExpose({ openDialog, search, refresh })
   margin-top: 4px;
   line-height: 1.4;
 }
+.field-help-icon {
+  margin-left: 4px;
+  color: #a1a1aa;
+  font-size: 14px;
+  cursor: help;
+  &:hover { color: #666; }
+}
 .param-required {
   color: #ef4444;
   font-size: 12px;
@@ -872,20 +990,6 @@ defineExpose({ openDialog, search, refresh })
   cursor: not-allowed;
 }
 
-.test-tool-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.test-tool-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #171717;
-}
-.test-tool-desc {
-  font-size: 13px;
-  color: #71717a;
-}
 .test-params-section {
   margin-top: 16px;
   margin-bottom: 16px;
@@ -988,6 +1092,11 @@ defineExpose({ openDialog, search, refresh })
   word-break: break-all;
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.test-result-content.is-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-color: #333;
 }
 
 /* 工具类型徽章 */
@@ -1100,6 +1209,28 @@ defineExpose({ openDialog, search, refresh })
   border-radius: 4px;
   font-size: 12px;
   color: #0070f3;
+}
+.detail-output-example {
+  margin-top: 12px;
+}
+.detail-output-example-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #52525b;
+  margin-bottom: 6px;
+}
+.detail-output-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  overflow-x: auto;
+  margin: 0;
+  max-height: 360px;
+  overflow-y: auto;
 }
 .dialog-footer-left {
   display: flex;

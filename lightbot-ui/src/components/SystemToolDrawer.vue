@@ -95,21 +95,34 @@
         <div class="detail-label">参数示例</div>
         <pre class="example-json">{{ exampleJson }}</pre>
       </div>
+      <div v-if="hasOutputExample" class="detail-section">
+        <div class="detail-label">返回示例</div>
+        <table v-if="outputSchemaFields.length > 0" class="schema-table output-fields-table">
+          <thead>
+            <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="f in outputSchemaFields" :key="f.name">
+              <td class="prop-name">{{ f.name }}</td>
+              <td class="prop-type">{{ f.type }}</td>
+              <td class="prop-desc">{{ f.desc }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="formattedOutputExample" class="output-example-title">示例 JSON</div>
+        <pre v-if="formattedOutputExample" class="example-json output-example-json">{{ formattedOutputExample }}</pre>
+      </div>
     </div>
   </a-modal>
 
   <!-- 测试工具弹窗 -->
   <a-modal
     v-model:open="testDialogVisible"
-    title="测试工具"
+    :title="testTool?.displayName || testTool?.name || '测试工具'"
     :width="680"
     :footer="null"
     :maskClosable="false"
   >
-    <div class="test-tool-info">
-      <span class="test-tool-name">{{ testTool?.displayName || testTool?.name }}</span>
-      <span class="test-tool-desc">{{ testTool?.description || '暂无描述' }}</span>
-    </div>
     <!-- 参数说明 -->
     <div v-if="testToolParams.length > 0" class="test-params-section">
       <div class="test-params-title">参数说明</div>
@@ -154,7 +167,7 @@
     <a-divider v-if="testResult !== null" />
     <div v-if="testResult !== null" class="test-result">
       <div class="test-result-label">执行结果</div>
-      <pre class="test-result-content">{{ testResult }}</pre>
+      <pre class="test-result-content" :class="{ 'is-json': isJsonResult(testResult) }">{{ formatTestResult(testResult) }}</pre>
     </div>
   </a-modal>
 
@@ -337,6 +350,67 @@ const exampleJson = computed(() => {
   }
   return JSON.stringify(example, null, 2)
 })
+
+function parseToolConfig(tool) {
+  if (!tool?.config) return {}
+  try {
+    return typeof tool.config === 'string' ? JSON.parse(tool.config) : tool.config
+  } catch {
+    return {}
+  }
+}
+
+const hasOutputExample = computed(() => {
+  const config = parseToolConfig(currentTool.value)
+  return !!config.outputExample || (currentTool.value?.outputSchema && currentTool.value.outputSchema !== '{}')
+})
+
+const outputSchemaFields = computed(() => {
+  if (!currentTool.value?.outputSchema || currentTool.value.outputSchema === '{}') return []
+  try {
+    const schema = typeof currentTool.value.outputSchema === 'string'
+      ? JSON.parse(currentTool.value.outputSchema) : currentTool.value.outputSchema
+    const properties = schema.properties || {}
+    return Object.entries(properties).map(([name, prop]) => ({
+      name,
+      type: prop.type || 'string',
+      desc: prop.description || '',
+    }))
+  } catch {
+    return []
+  }
+})
+
+const formattedOutputExample = computed(() => {
+  const config = parseToolConfig(currentTool.value)
+  if (!config.outputExample) return ''
+  try {
+    return JSON.stringify(JSON.parse(config.outputExample), null, 2)
+  } catch {
+    return config.outputExample
+  }
+})
+
+function isJsonResult(result) {
+  if (!result || typeof result !== 'string') return false
+  try {
+    const parsed = JSON.parse(result)
+    return typeof parsed === 'object' && parsed !== null
+  } catch {
+    return false
+  }
+}
+
+function formatTestResult(result) {
+  if (!result || typeof result !== 'string') return result
+  try {
+    const parsed = JSON.parse(result)
+    if (typeof parsed === 'object' && parsed !== null) {
+      return JSON.stringify(parsed, null, 2)
+    }
+  } catch {}
+  return result
+}
 
 const testToolParams = computed(() => {
   if (!testTool.value?.inputSchema) {
@@ -599,6 +673,11 @@ watch(drawerVisible, (visible) => {
 }
 
 /* 详情弹窗样式 */
+.tool-detail-modal {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
 .tool-detail-modal .detail-section {
   margin-bottom: 20px;
 }
@@ -666,22 +745,24 @@ watch(drawerVisible, (visible) => {
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
+.output-fields-table {
+  margin-bottom: 12px;
+}
+.output-example-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #71717a;
+  margin: 12px 0 6px;
+}
+.output-example-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-color: #333;
+  max-height: 360px;
+  overflow-y: auto;
+}
 
 /* 测试工具弹窗样式 */
-.test-tool-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.test-tool-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #171717;
-}
-.test-tool-desc {
-  font-size: 13px;
-  color: #71717a;
-}
 .test-params-section {
   margin-top: 16px;
   margin-bottom: 16px;
@@ -835,6 +916,11 @@ watch(drawerVisible, (visible) => {
   word-break: break-all;
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.test-result-content.is-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-color: #333;
 }
 
 /* 帮助弹窗样式 */

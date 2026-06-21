@@ -66,10 +66,11 @@ public class ToolRegistrar {
                 String name = toolAnnotation.name();
                 String description = toolAnnotation.description();
                 String inputSchema = generateInputSchema(method);
+                String outputSchema = resolveOutputSchema(method, clazz);
                 String displayName = resolveDisplayName(clazz, method, name);
                 ToolType toolType = resolveToolType(clazz, method);
                 String tagsJson = resolveTagsJson(clazz, method);
-                String config = "{\"exampleParams\": " + generateExampleParams(method) + "}";
+                String config = buildConfig(method, clazz);
 
                 Tool existing = toolService.getOne(
                         new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Tool>()
@@ -83,7 +84,7 @@ public class ToolRegistrar {
                     tool.setDescription(description);
                     tool.setToolType(toolType);
                     tool.setInputSchema(inputSchema);
-                    tool.setOutputSchema("{}");
+                    tool.setOutputSchema(outputSchema);
                     tool.setConfig(config);
                     tool.setTags(tagsJson);
                     tool.setStatus(CommonStatus.ACTIVE);
@@ -101,12 +102,21 @@ public class ToolRegistrar {
                         existing.setInputSchema(inputSchema);
                         changed = true;
                     }
+                    String existingOutputSchema = existing.getOutputSchema() != null ? existing.getOutputSchema() : "{}";
+                    if (!outputSchema.equals("{}") && !outputSchema.equals(existingOutputSchema)) {
+                        existing.setOutputSchema(outputSchema);
+                        changed = true;
+                    }
                     if (!tagsJson.equals(existing.getTags() != null ? existing.getTags() : "[]")) {
                         existing.setTags(tagsJson);
                         changed = true;
                     }
                     if (existing.getToolType() != toolType) {
                         existing.setToolType(toolType);
+                        changed = true;
+                    }
+                    if (!config.equals(existing.getConfig() != null ? existing.getConfig() : "{}")) {
+                        existing.setConfig(config);
                         changed = true;
                     }
                     if (changed) {
@@ -278,6 +288,50 @@ public class ToolRegistrar {
             log.warn("[ToolRegistrar] 生成示例参数失败: method={}, error={}", method.getName(), e.getMessage());
             return "{}";
         }
+    }
+
+    /**
+     * 构建 config JSON：exampleParams + outputExample
+     */
+    private String buildConfig(Method method, Class<?> clazz) {
+        try {
+            var configNode = objectMapper.createObjectNode();
+            configNode.set("exampleParams", objectMapper.readTree(generateExampleParams(method)));
+
+            SystemTool methodTool = method.getAnnotation(SystemTool.class);
+            SystemTool classTool = clazz.getAnnotation(SystemTool.class);
+
+            // outputExample: 方法级别 > 类级别
+            String outputExample = null;
+            if (methodTool != null && !methodTool.outputExample().isEmpty()) {
+                outputExample = methodTool.outputExample();
+            } else if (classTool != null && !classTool.outputExample().isEmpty()) {
+                outputExample = classTool.outputExample();
+            }
+            if (outputExample != null) {
+                configNode.put("outputExample", outputExample);
+            }
+
+            return objectMapper.writeValueAsString(configNode);
+        } catch (Exception e) {
+            log.warn("[ToolRegistrar] 构建 config 失败: method={}, error={}", method.getName(), e.getMessage());
+            return "{\"exampleParams\": {}}";
+        }
+    }
+
+    /**
+     * 解析输出 Schema：方法级别 > 类级别
+     */
+    private String resolveOutputSchema(Method method, Class<?> clazz) {
+        SystemTool methodTool = method.getAnnotation(SystemTool.class);
+        if (methodTool != null && !methodTool.outputSchema().isEmpty()) {
+            return methodTool.outputSchema();
+        }
+        SystemTool classTool = clazz.getAnnotation(SystemTool.class);
+        if (classTool != null && !classTool.outputSchema().isEmpty()) {
+            return classTool.outputSchema();
+        }
+        return "{}";
     }
 
     private String resolveJsonType(Class<?> type) {

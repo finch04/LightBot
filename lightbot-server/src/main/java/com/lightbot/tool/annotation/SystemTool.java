@@ -44,4 +44,15 @@ public @interface SystemTool {
      * <p>如 {"知识库", "交互", "计算", "搜索", "图片", "数据库"}</p>
      */
     String[] tags() default {};
+
+    /**
+     * 输出示例 JSON（用于前端展示工具返回结构）
+     */
+    String outputExample() default "";
+
+    /**
+     * 输出参数 JSON Schema（定义工具返回的结构）
+     * <p>如 {"type":"object","properties":{"total":{"type":"integer","description":"结果总数"}}}</p>
+     */
+    String outputSchema() default "";
 }

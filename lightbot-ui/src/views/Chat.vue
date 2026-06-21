@@ -31,7 +31,11 @@
       </div>
 
       <!-- 虚拟滚动消息列表 -->
+      <div v-if="loadingHistory" class="history-loading">
+        <LoadingOutlined spin class="history-loading-icon" />
+      </div>
       <div
+        v-else
         class="virtual-list-container"
         :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative' }"
       >
@@ -71,7 +75,7 @@
                 </div>
                 <!-- 深度思考面板 -->
                 <div v-if="messages[virtualRow.index]?._reasoningContent && !messages[virtualRow.index]._sensitiveBlock" class="reasoning-panel">
-                  <div class="reasoning-header" @click="messages[virtualRow.index]._reasoningExpanded = !messages[virtualRow.index]._reasoningExpanded">
+                  <div class="reasoning-header" @click="toggleReasoningExpand(virtualRow.index)">
                     <BulbOutlined class="reasoning-icon" />
                     <span class="reasoning-title">深度思考</span>
                     <LoadingOutlined v-if="messages[virtualRow.index]._streaming && !messages[virtualRow.index]._reasoningDone" class="reasoning-spinner" />
@@ -258,6 +262,10 @@
     <!-- 输入区 -->
     <div class="chat-input-wrapper">
       <div class="chat-input-shell">
+        <!-- 切换会话加载遮罩 -->
+        <div v-if="switchingSession" class="toolbar-loading-mask">
+          <LoadingOutlined spin class="toolbar-loading-icon" />
+        </div>
         <div class="chat-input-toolbar">
           <!-- Agent 列表为空时显示气泡引导 -->
           <a-popover v-if="agents.length === 0" trigger="click" placement="topLeft">
@@ -482,6 +490,10 @@ let sendStartTime = 0
 const hasStreamContent = ref(false)
 /** 以原始内容展示的消息索引集合 */
 const rawModeMessages = ref(new Set())
+/** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
+let loadHistoryRequestId = 0
+/** 切换会话时 agent/版本加载中 */
+const switchingSession = ref(false)
 
 // ===== 虚拟滚动 =====
 const isNearBottom = ref(true)
@@ -519,6 +531,45 @@ function scrollToBottom() {
   if (!el) return
   nextTick(() => {
     el.scrollTop = el.scrollHeight
+  })
+}
+
+/** 强制滚动到底部（切换会话后使用，不检查 isNearBottom）
+ *  多次延迟滚动，确保工具面板、参考文献等延迟渲染内容撑开后仍能定位到底部
+ */
+function forceScrollToBottom() {
+  const el = messagesRef.value
+  if (!el) return
+  const doScroll = () => { el.scrollTop = el.scrollHeight }
+  nextTick(() => {
+    doScroll()
+    requestAnimationFrame(doScroll)
+    setTimeout(doScroll, 100)
+    setTimeout(doScroll, 300)
+    setTimeout(doScroll, 600)
+  })
+}
+
+/**
+ * 展开/折叠内容后，将展开的区域滚动到可视区域内
+ * @param {number} msgIndex - 消息在列表中的索引
+ * @param {HTMLElement} [expandEl] - 展开的元素（可选，用于定位）
+ */
+function scrollAfterExpand(msgIndex, expandEl) {
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      const container = messagesRef.value
+      if (!container) return
+      // 优先用展开元素定位，否则用消息元素
+      const target = expandEl || container.querySelector(`[data-index="${msgIndex}"]`)
+      if (!target) return
+      const containerRect = container.getBoundingClientRect()
+      const targetRect = target.getBoundingClientRect()
+      // 目标元素底部超出可视区域，滚动使其可见
+      if (targetRect.bottom > containerRect.bottom) {
+        container.scrollTop += targetRect.bottom - containerRect.bottom + 16
+      }
+    })
   })
 }
 
@@ -751,6 +802,16 @@ function toggleReference(msg, index) {
     newMap.set(key, true)
   }
   expandedRefsMap.value = newMap
+  scrollAfterExpand(msgIndex)
+}
+
+function toggleReasoningExpand(index) {
+  const msg = messages.value[index]
+  if (!msg) return
+  msg._reasoningExpanded = !msg._reasoningExpanded
+  if (msg._reasoningExpanded) {
+    scrollAfterExpand(index)
+  }
 }
 
 function parseAttachmentsFromMetadata(metadata) {
@@ -858,12 +919,18 @@ async function loadHistory() {
     selectedAgentId.value = null
     currentAgent.value = null
     lastReplyElapsed.value = null
+    switchingSession.value = false
     return
   }
+  // 竞态保护：递增请求 ID
+  const reqId = ++loadHistoryRequestId
   // 切换对话时先清空旧内容，避免旧消息在加载期间残留
   messages.value = []
   lastReplyElapsed.value = null
+  input.value = ''
+  pendingAttachments.value = []
   loadingHistory.value = true
+  switchingSession.value = true
   messagePage.value = 1
   try {
     // 并行加载消息（第1页）和会话详情
@@ -871,10 +938,14 @@ async function loadHistory() {
       getSessionMessages(sessionId.value, { pageNum: 1, pageSize: 10 }),
       getSession(sessionId.value),
     ])
+    // 请求已过期，丢弃结果
+    if (reqId !== loadHistoryRequestId) return
+
     const records = msgRes.data?.records || []
     // API 按创建时间倒序返回，前端正序显示（旧→新）
     const parsed = records.reverse().map(m => parseMessage(m))
     await enrichMessagesAttachments(parsed)
+    if (reqId !== loadHistoryRequestId) return
     messages.value = parsed
     hasMoreMessages.value = records.length === 10
 
@@ -884,14 +955,20 @@ async function loadHistory() {
       selectedAgentId.value = session.agentId
       // 先加载版本列表（会设置 selectedConfigVersion），再加载 agent 详情
       await loadAgentConfigVersions(session.agentId)
+      if (reqId !== loadHistoryRequestId) return
       await loadCurrentAgent(session.agentId)
+      if (reqId !== loadHistoryRequestId) return
     }
     isNearBottom.value = true
-    scrollToBottom()
+    forceScrollToBottom()
   } catch (e) {
+    if (reqId !== loadHistoryRequestId) return
     messages.value = []
   } finally {
-    loadingHistory.value = false
+    if (reqId === loadHistoryRequestId) {
+      loadingHistory.value = false
+      switchingSession.value = false
+    }
   }
 }
 
@@ -1623,6 +1700,16 @@ watch(sessionId, (newVal, oldVal) => {
 }
 
 /* 虚拟滚动容器 */
+.history-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 0;
+}
+.history-loading-icon {
+  font-size: 24px;
+  color: #a1a1aa;
+}
 .virtual-list-container {
   width: 100%;
   max-width: 800px;
@@ -1916,6 +2003,7 @@ watch(sessionId, (newVal, oldVal) => {
   background: #fff;
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
+  position: relative;
 }
 .chat-input-shell:focus-within {
   border-color: #0070f3;
@@ -1928,6 +2016,21 @@ watch(sessionId, (newVal, oldVal) => {
   padding: 8px 12px;
   background: #fafafa;
   border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+.toolbar-loading-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: inherit;
+}
+.toolbar-loading-icon {
+  font-size: 16px;
+  color: #0070f3;
 }
 .chat-toolbar-agent-name {
   flex: 1;

@@ -88,8 +88,14 @@
         </div>
 
         <div class="detail-section">
-          <div class="detail-label">输出结果</div>
-          <pre class="detail-pre">{{ detailRecord.toolOutput || '-' }}</pre>
+          <div class="detail-label">
+            输出结果
+            <button class="btn-copy" @click="copyOutput">
+              <CheckOutlined v-if="copied" style="color: #52c41a" />
+              <CopyOutlined v-else />
+            </button>
+          </div>
+          <pre class="detail-pre detail-pre-json">{{ formatJson(detailRecord.toolOutput) }}</pre>
         </div>
       </template>
     </a-modal>
@@ -98,13 +104,15 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ToolOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { ToolOutlined, SearchOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { getToolCalls } from '../api/toolCall'
 
 const loading = ref(false)
 const records = ref([])
 const detailVisible = ref(false)
 const detailRecord = ref(null)
+const copied = ref(false)
 
 const filter = reactive({
   toolName: '',
@@ -196,6 +204,16 @@ function formatJson(jsonStr) {
   }
 }
 
+function copyOutput() {
+  const text = detailRecord.value?.toolOutput || ''
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    copied.value = true
+    message.success('已复制')
+    setTimeout(() => { copied.value = false }, 1500)
+  }).catch(() => message.error('复制失败'))
+}
+
 onMounted(() => {
   loadData(1)
 })
@@ -239,6 +257,21 @@ onMounted(() => {
   color: #888;
   margin-bottom: 6px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-copy {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  color: #999;
+  font-size: 13px;
+  &:hover { color: #333; }
 }
 .detail-pre {
   background: #f5f5f5;
@@ -251,5 +284,10 @@ onMounted(() => {
   max-height: 400px;
   overflow: auto;
   margin: 0;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+.detail-pre-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
 }
 </style>
