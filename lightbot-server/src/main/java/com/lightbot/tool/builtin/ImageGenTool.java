@@ -18,6 +18,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -110,7 +111,12 @@ public class ImageGenTool {
             // 4. 返回访问 URL
             String presignedUrl = minioUtil.getPresignedUrl(filePath);
             log.info("[Tool:image_generation] 图片生成完成: path={}", filePath);
-            return presignedUrl;
+
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("image_url", presignedUrl);
+            output.put("prompt", prompt);
+            output.put("file_path", filePath);
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             log.error("[Tool:image_generation] 生成异常: prompt={}, error={}", prompt, e.getMessage());
             return "图片生成过程中发生错误: " + e.getMessage();

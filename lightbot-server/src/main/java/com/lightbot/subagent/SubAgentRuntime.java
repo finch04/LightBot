@@ -125,7 +125,7 @@ public class SubAgentRuntime {
                 String result;
                 ToolCallback cb = toolMap.get(tc.name());
                 if (cb == null) {
-                    result = ToolResultPrefixes.NOT_FOUND + ": " + tc.name();
+                    result = ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + tc.name());
                 } else {
                     try {
                         result = cb.call(tc.arguments() != null ? tc.arguments() : "{}",
@@ -136,7 +136,7 @@ public class SubAgentRuntime {
                     } catch (Exception e) {
                         log.warn("[SubAgent] 工具执行异常: subAgent={}, tool={}, error={}",
                                 subAgent.getName(), tc.name(), e.getMessage());
-                        result = ToolResultPrefixes.FAILURE + ": " + e.getMessage();
+                        result = ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
                     }
                 }
                 toolResponses.add(new ToolResponseMessage.ToolResponse(tc.id(), tc.name(), result));

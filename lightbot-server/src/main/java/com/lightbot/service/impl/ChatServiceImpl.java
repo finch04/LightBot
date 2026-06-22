@@ -42,8 +42,10 @@ import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,6 +70,7 @@ public class ChatServiceImpl implements ChatService {
     private final KnowledgeService knowledgeService;
     private final EmbeddingModel embeddingModel;
     private final TaskExecutor taskExecutor;
+    private final ToolCallService toolCallService;
 
     // 中间件
     private final InitMiddleware initMiddleware;
@@ -95,6 +98,7 @@ public class ChatServiceImpl implements ChatService {
     public String chat(ChatRequest request) {
         // 1. 初始化上下文
         ChatContext ctx = ChatContext.of(request);
+        ctx.setRequestId(String.valueOf(System.nanoTime()));
         initMiddleware.init(ctx);
         Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
         SensitiveWordFilter.FilterResult userCheck = SensitiveWordFilter.checkUserInput(
@@ -110,14 +114,138 @@ public class ChatServiceImpl implements ChatService {
         log.info("[Chat] 用户消息: sessionId={}, agentId={}, message={}", ctx.getSessionId(),
                 agentId, request.getMessage());
 
-        // 2. 调用模型获取回复（带重试）
+        // 2. 调用模型获取回复（带工具调用循环）
+        String reply = processChatWithToolCalls(ctx);
+
+        log.info("[Chat] AI回复: sessionId={}, length={}", ctx.getSessionId(), reply != null ? reply.length() : 0);
+
+        // 3. 构建metadata并持久化AI回复
+        String metadataStr = buildChatMetadata(ctx);
+        int totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
+        Long messageId = messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
+                reply, metadataStr, totalTokens);
+
+        // 3.1 批量写入工具调用记录
+        if (!ctx.getPendingToolCalls().isEmpty()) {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            for (ToolCall tc : ctx.getPendingToolCalls()) {
+                tc.setMessageId(messageId);
+                if (tc.getCreatedAt() == null) {
+                    tc.setCreatedAt(now);
+                }
+            }
+            toolCallService.saveBatch(ctx.getPendingToolCalls());
+        }
+
+        // 4. 异步生成标题
+        taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
+
+        return reply;
+    }
+
+    /**
+     * 非流式对话：处理带工具调用的多轮对话
+     */
+    private String processChatWithToolCalls(ChatContext ctx) {
+        int maxSteps = resolveMaxExecutionSteps(ctx.getConfigMap());
         int retryTimes = resolveModelRetryTimes(ctx.getConfigMap());
-        ChatResponse response = null;
+        StringBuilder fullReply = ctx.getFullReply();
+        List<Map<String, Object>> toolEventsList = ctx.getToolEventsList();
+        String requestId = ctx.getRequestId();
+        Map<String, ToolCallback> toolCallbackMap = ctx.getToolCallbackMap();
+        Agent agent = ctx.getAgent();
+
+        for (int depth = 0; depth < maxSteps; depth++) {
+            ChatResponse response = callModelWithRetry(ctx, retryTimes);
+            if (response == null) {
+                return fullReply.toString();
+            }
+
+            accumulateStreamUsage(response, ctx.getInputTokenHolder(), ctx.getOutputTokenHolder());
+            Generation gen = response.getResult();
+            AssistantMessage assistantMsg = (gen != null) ? gen.getOutput() : null;
+
+            // 检查reasoningContent
+            if (gen != null && gen.getOutput() != null && gen.getOutput().getMetadata() != null) {
+                Object reasoningObj = gen.getOutput().getMetadata().get("reasoningContent");
+                if (reasoningObj != null && !reasoningObj.toString().isBlank()) {
+                    ctx.getReasoningContent().append(reasoningObj.toString());
+                }
+            }
+
+            // 无工具调用 → 直接返回结果
+            if (assistantMsg == null || !assistantMsg.hasToolCalls()) {
+                String text = (assistantMsg != null) ? assistantMsg.getText() : "";
+                String stripped = stripThinkingTags(text);
+                String filtered = SensitiveWordFilter.filterAiOutput(
+                        stripped, ctx.getConfigMap(), agent.getId(), ctx.getSessionId()).text();
+                fullReply.append(filtered);
+                return fullReply.toString();
+            }
+
+            // 有工具调用 → 执行工具并继续循环
+            ctx.getMessages().add(assistantMsg);
+            List<AssistantMessage.ToolCall> toolCalls = assistantMsg.getToolCalls();
+
+            List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> toolResponses = new ArrayList<>();
+            int toolContentOffset = fullReply.length();
+
+            // 目前非流式只处理第一个工具调用（简化处理）
+            AssistantMessage.ToolCall firstTool = toolCalls.get(0);
+            String toolName = firstTool.name();
+            String toolArgs = firstTool.arguments();
+            ctx.getToolCallCountHolder()[0]++;
+
+            String safeArgs = toolArgs != null ? toolArgs : "";
+
+            // 记录工具调用开始
+            toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args",
+                    safeArgs, "contentOffset", toolContentOffset));
+
+            // 执行工具
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), requestId);
+
+            // 暂存工具调用记录
+            ToolCall toolCallLog = new ToolCall();
+            toolCallLog.setToolName(toolName);
+            toolCallLog.setToolInput(safeArgs);
+            toolCallLog.setToolOutput(toolResult);
+            toolCallLog.setStatus(ToolResultPrefixes.isError(toolResult) ? "error" : "success");
+            toolCallLog.setErrorMessage(ToolResultPrefixes.isError(toolResult) ? toolResult : null);
+            ctx.getPendingToolCalls().add(toolCallLog);
+
+            // 记录知识库检索结果
+            if ("query_knowledge".equals(toolName)) {
+                List<Map<String, Object>> kbResults = QueryKnowledgeTool.getSearchResults(requestId);
+                if (!kbResults.isEmpty()) {
+                    ctx.getRagMetadataHolder()[0] = buildRagMetadataJson(kbResults);
+                }
+            }
+
+            // 记录工具结果
+            String truncated = toolResult.length() > 2000 ? toolResult.substring(0, 2000) + "..." : toolResult;
+            toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result",
+                    truncated, "contentOffset", toolContentOffset));
+
+            toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                    firstTool.id(), toolName, toolResult));
+
+            ctx.getMessages().add(org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                    .responses(toolResponses)
+                    .build());
+        }
+
+        return fullReply.toString();
+    }
+
+    /**
+     * 带重试的模型调用
+     */
+    private ChatResponse callModelWithRetry(ChatContext ctx, int retryTimes) {
         Exception lastException = null;
         for (int attempt = 0; attempt <= retryTimes; attempt++) {
             try {
-                response = ctx.getChatModel().call(new Prompt(ctx.getMessages(), ctx.getToolOptions()));
-                break;
+                return ctx.getChatModel().call(new Prompt(ctx.getMessages(), ctx.getToolOptions()));
             } catch (Exception e) {
                 lastException = e;
                 if (attempt < retryTimes) {
@@ -127,22 +255,101 @@ public class ChatServiceImpl implements ChatService {
                 }
             }
         }
-        if (response == null) {
-            throw lastException != null ? new RuntimeException("模型调用失败，已重试" + retryTimes + "次", lastException)
-                    : new RuntimeException("模型调用失败");
+        if (lastException != null) {
+            log.error("[Chat] 模型调用最终失败: {}", lastException.getMessage());
         }
-        String reply = response.getResult().getOutput().getText();
-        reply = SensitiveWordFilter.filterAiOutput(reply, ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
+        return null;
+    }
 
-        log.info("[Chat] AI回复: sessionId={}, length={}", ctx.getSessionId(), reply != null ? reply.length() : 0);
+    /**
+     * 构建知识库检索结果的metadata JSON
+     */
+    private String buildRagMetadataJson(List<Map<String, Object>> kbResults) {
+        try {
+            Map<String, Object> metadataMap = new LinkedHashMap<>();
+            List<RagReferenceVO> refs = kbResults.stream().map(row -> {
+                RagReferenceVO vo = new RagReferenceVO();
+                String resultType = (String) row.get("result_type");
+                if (RagResultType.QA_PAIR.equals(resultType)) {
+                    vo.setSourceType(RagResultType.QA_PAIR);
+                    vo.setDocumentName("问答对");
+                    Object qaPairId = row.get("id");
+                    vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                    String q = (String) row.get("question");
+                    String a = (String) row.get("answer");
+                    vo.setContentPreview("问题：" + q + "\n答案：" + a);
+                } else {
+                    vo.setSourceType(RagResultType.CHUNK);
+                    vo.setDocumentName((String) row.get("document_name"));
+                    String content = (String) row.get("content");
+                    vo.setContentPreview(content != null && content.length() > 200
+                            ? content.substring(0, 200) + "..." : content);
+                }
+                Object score = row.get("score");
+                vo.setScore(score != null ? ((Number) score).doubleValue() : null);
+                Object knowledgeId = row.get("knowledge_id");
+                vo.setKnowledgeId(knowledgeId != null ? ((Number) knowledgeId).longValue() : null);
+                Object documentId = row.get("document_id");
+                vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
+                Object chunkId = row.get("chunk_id");
+                vo.setChunkId(chunkId != null ? ((Number) chunkId).longValue() : null);
+                return vo;
+            }).toList();
+            metadataMap.put("ragReferences", refs);
+            return objectMapper.writeValueAsString(metadataMap);
+        } catch (Exception e) {
+            log.warn("[Chat] 构建RAG metadata失败: {}", e.getMessage());
+            return null;
+        }
+    }
 
-        // 3. 持久化AI回复（用户消息已在 messageMiddleware.prepare 中保存）
-        messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT, reply);
+    /**
+     * 构建非流式对话的metadata
+     */
+    private String buildChatMetadata(ChatContext ctx) {
+        try {
+            Map<String, Object> meta = new LinkedHashMap<>();
 
-        // 4. 异步生成标题
-        taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
+            // 1. 添加RAG检索结果
+            String ragMeta = ctx.getRagMetadataHolder()[0];
+            if (ragMeta != null && !ragMeta.isBlank()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> existing = objectMapper.readValue(ragMeta, Map.class);
+                meta.putAll(existing);
+            }
 
-        return reply;
+            // 2. 添加工具事件
+            List<Map<String, Object>> toolEventsList = ctx.getToolEventsList();
+            if (!toolEventsList.isEmpty()) {
+                meta.put("toolEvents", toolEventsList);
+                // 计算toolBlockOffsets
+                List<Integer> offsets = toolEventsList.stream()
+                        .map(e -> e.get("contentOffset"))
+                        .filter(Objects::nonNull)
+                        .map(o -> ((Number) o).intValue())
+                        .distinct()
+                        .sorted()
+                        .toList();
+                if (!offsets.isEmpty()) {
+                    meta.put("toolBlockOffsets", offsets);
+                }
+            }
+
+            // 3. 添加reasoningContent
+            if (ctx.getReasoningContent().length() > 0) {
+                meta.put("reasoningContent", ctx.getReasoningContent().toString());
+            }
+
+            // 4. 添加requestId
+            if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
+                meta.put("requestId", ctx.getRequestId());
+            }
+
+            return meta.isEmpty() ? null : objectMapper.writeValueAsString(meta);
+        } catch (Exception e) {
+            log.warn("[Chat] 构建chat metadata失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     @Override
@@ -315,10 +522,10 @@ public class ChatServiceImpl implements ChatService {
                                         result = cb.call(safeTcArgs, new ToolContext(Map.of("agentId", agent.getId(), "requestId", requestId)));
                                     } catch (Exception e) {
                                         log.error("[Chat] 工具执行异常: name={}, error={}", tcName, e.getMessage(), e);
-                                        result = ToolResultPrefixes.FAILURE + ": " + e.getMessage();
+                                        result = ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
                                     }
                                 } else {
-                                    result = ToolResultPrefixes.NOT_FOUND + ": " + tcName;
+                                    result = ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + tcName);
                                 }
                                 long tEnd = System.currentTimeMillis();
                                 log.info("[Chat][Trace] 工具执行结果: name={}, 耗时={}ms, resultLength={}", tcName, tEnd - tStart, result.length());
@@ -373,10 +580,10 @@ public class ChatServiceImpl implements ChatService {
                                         "requestId", requestId)));
                             } catch (Exception e) {
                                 log.error("[Chat] 工具执行异常: name={}, error={}", toolName, e.getMessage(), e);
-                                toolResult = ToolResultPrefixes.FAILURE + ": " + e.getMessage();
+                                toolResult = ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
                             }
                         } else {
-                            toolResult = ToolResultPrefixes.NOT_FOUND + ": " + toolName;
+                            toolResult = ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + toolName);
                             log.warn("[Chat][Trace] 工具不存在: name={}, 可用工具={}", toolName, toolCallbackMap.keySet());
                         }
                         long tToolEnd = System.currentTimeMillis();
@@ -396,8 +603,8 @@ public class ChatServiceImpl implements ChatService {
                         toolCallLog.setToolName(toolName);
                         toolCallLog.setToolInput(safeArgs);
                         toolCallLog.setToolOutput(toolResult);
-                        toolCallLog.setStatus(toolResult.startsWith(ToolResultPrefixes.FAILURE) || toolResult.startsWith(ToolResultPrefixes.NOT_FOUND) ? "error" : "success");
-                        toolCallLog.setErrorMessage(toolResult.startsWith(ToolResultPrefixes.FAILURE) ? toolResult : null);
+                        toolCallLog.setStatus(ToolResultPrefixes.isError(toolResult) ? "error" : "success");
+                        toolCallLog.setErrorMessage(ToolResultPrefixes.isError(toolResult) ? toolResult : null);
                         ctx.getPendingToolCalls().add(toolCallLog);
 
                         List<String> emittedEvents = ToolEventEmitter.drain();
@@ -690,8 +897,8 @@ public class ChatServiceImpl implements ChatService {
             toolCallLog.setToolName(toolName);
             toolCallLog.setToolInput(callArgs);
             toolCallLog.setToolOutput(toolResult);
-            toolCallLog.setStatus(toolResult.startsWith(ToolResultPrefixes.FAILURE) || toolResult.startsWith(ToolResultPrefixes.NOT_FOUND) ? "error" : "success");
-            toolCallLog.setErrorMessage(toolResult.startsWith(ToolResultPrefixes.FAILURE) ? toolResult : null);
+            toolCallLog.setStatus(ToolResultPrefixes.isError(toolResult) ? "error" : "success");
+            toolCallLog.setErrorMessage(ToolResultPrefixes.isError(toolResult) ? toolResult : null);
             ctx.getPendingToolCalls().add(toolCallLog);
 
             List<String> emittedEvents = ToolEventEmitter.drain();
@@ -737,11 +944,11 @@ public class ChatServiceImpl implements ChatService {
                         "requestId", requestId)));
             } catch (Exception e) {
                 log.error("[Chat] 工具执行异常: name={}, error={}", toolName, e.getMessage(), e);
-                return ToolResultPrefixes.FAILURE + ": " + e.getMessage();
+                return ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
             }
         }
         log.warn("[Chat][Trace] 工具不存在: name={}, 可用工具={}", toolName, toolCallbackMap.keySet());
-        return ToolResultPrefixes.NOT_FOUND + ": " + toolName;
+        return ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + toolName);
     }
 
     private Flux<String> buildToolMetadataFlux(List<Map<String, Object>> kbResultsRef,

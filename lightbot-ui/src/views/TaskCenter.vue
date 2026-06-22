@@ -18,7 +18,7 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <button class="btn-outline" @click="loadTasks" :disabled="loading">
+        <button class="btn-outline" @click="handleRefresh" :disabled="loading">
           <ReloadOutlined :spin="loading" />
           刷新
         </button>
@@ -42,10 +42,10 @@
       </span>
     </div>
 
+    <a-spin :spinning="loading">
     <a-table
       :columns="columns"
       :data-source="tasks"
-      :loading="loading"
       :pagination="pagination"
       @change="handleTableChange"
       row-key="id"
@@ -102,6 +102,7 @@
         </template>
       </template>
     </a-table>
+    </a-spin>
 
     <!-- 任务详情抽屉 -->
     <a-drawer
@@ -230,6 +231,16 @@ async function loadTasks(silent = false) {
     // interceptor handled
   } finally {
     if (!silent) loading.value = false
+  }
+}
+
+function handleRefresh() {
+  if (searchText.value) {
+    searchText.value = ''
+    // watcher 会自动触发 loadTasks
+  } else {
+    pagination.current = 1
+    loadTasks()
   }
 }
 
@@ -417,9 +428,13 @@ onUnmounted(() => {
   font-size: 14px;
   transition: border-color 0.2s;
 }
-.btn-outline:hover {
+.btn-outline:hover:not(:disabled) {
   border-color: #0070f3;
   color: #0070f3;
+}
+.btn-outline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .task-name-link {
   color: #1677ff;

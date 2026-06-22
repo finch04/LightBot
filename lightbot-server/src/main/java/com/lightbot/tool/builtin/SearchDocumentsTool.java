@@ -77,7 +77,7 @@ public class SearchDocumentsTool {
             Knowledge knowledge = knowledgeService.getById(knowledgeId);
             if (knowledge == null) continue;
 
-            List<Document> documents = documentService.listByKnowledgeId(knowledgeId);
+            List<Document> documents = documentService.listByKnowledgeIdInternal(knowledgeId);
             for (Document doc : documents) {
                 if (doc.getName() != null && doc.getName().toLowerCase().contains(lowerKeyword)) {
                     matchedDocs.add(new MatchedDoc(doc.getId(), doc.getName(), knowledge.getName()));

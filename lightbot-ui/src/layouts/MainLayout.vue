@@ -105,7 +105,7 @@
 
       <!-- 用户信息 -->
       <div class="sidebar-footer">
-        <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown">
+        <a-dropdown v-model:open="userDropdownOpen" :trigger="['click']" :getPopupContainer="getPopupContainer" overlayClassName="sidebar-user-dropdown" :overlayStyle="{ width: '160px' }">
           <div class="user-info">
             <AvatarFrame :frame="userStore.user?.avatarFrame" :size="28">
               <div class="user-avatar">
@@ -129,19 +129,29 @@
           </div>
           <template #overlay>
             <a-menu @click="handleCommand">
-              <a-menu-item key="profile">个人信息</a-menu-item>
+              <a-menu-item key="user-info" class="menu-user-info" @click="router.push('/app/profile')">
+                <div class="user-info-display">
+                  <div class="user-info-name">{{ userStore.user?.username || userStore.user?.nickname || '用户' }}</div>
+                  <div class="user-info-meta">
+                    <span class="user-info-id">ID: {{ userStore.user?.id }}</span>
+                    <span class="user-info-role">{{ userRoleText }}</span>
+                  </div>
+                </div>
+              </a-menu-item>
+              <a-menu-divider />
               <a-menu-item key="tasks">
                 <div class="menu-item-with-badge">
-                  <span>任务中心</span>
+                  <span class="menu-item-content"><CheckSquareOutlined /><span>任务中心</span></span>
                   <a-badge v-if="taskBadgeCount" :count="taskBadgeCount" :number-style="{ fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }" />
                 </div>
               </a-menu-item>
-              <a-menu-item v-if="userStore.user?.role === 'admin'" key="settings">系统管理</a-menu-item>
-              <a-menu-item v-if="userStore.user?.role === 'admin'" key="model-providers">模型管理</a-menu-item>
-              <a-menu-item key="logs">日志</a-menu-item>
+              <a-menu-item key="sessions"><span class="menu-item-content"><MessageOutlined /><span>会话管理</span></span></a-menu-item>
+              <a-menu-item v-if="userStore.user?.role === 'admin'" key="settings"><span class="menu-item-content"><SettingOutlined /><span>系统管理</span></span></a-menu-item>
+              <a-menu-item v-if="userStore.user?.role === 'admin'" key="model-providers"><span class="menu-item-content"><ApiOutlined /><span>模型管理</span></span></a-menu-item>
+              <a-menu-item key="logs"><span class="menu-item-content"><FileTextOutlined /><span>日志</span></span></a-menu-item>
               <a-menu-divider />
-              <a-menu-item key="about">关于</a-menu-item>
-              <a-menu-item key="logout">退出登录</a-menu-item>
+              <a-menu-item key="about"><span class="menu-item-content"><InfoCircleOutlined /><span>关于</span></span></a-menu-item>
+              <a-menu-item key="logout"><span class="menu-item-content"><LogoutOutlined /><span>退出登录</span></span></a-menu-item>
             </a-menu>
           </template>
         </a-dropdown>
@@ -175,6 +185,12 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   ExperimentOutlined,
+  CheckSquareOutlined,
+  MessageOutlined,
+  SettingOutlined,
+  ApiOutlined,
+  InfoCircleOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { taskCounts, updateTaskCounts } from '../stores/task'
@@ -186,6 +202,13 @@ import LevelTag from '../components/LevelTag.vue'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+
+const userRoleText = computed(() => {
+  const role = userStore.user?.role
+  if (role === 'admin') return '管理员'
+  if (role === 'user') return '普通用户'
+  return '未知角色'
+})
 
 const sessions = ref([])
 const currentSessionId = ref(null)
@@ -337,10 +360,10 @@ function handleCommand({ key }) {
   if (key === 'logout') {
     userStore.logout()
     router.push('/login')
-  } else if (key === 'profile') {
-    router.push('/app/profile')
   } else if (key === 'tasks') {
     router.push('/app/tasks')
+  } else if (key === 'sessions') {
+    router.push('/app/sessions')
   } else if (key === 'settings') {
     router.push('/app/settings')
   } else if (key === 'model-providers') {
@@ -744,6 +767,11 @@ watch(() => route.path, (path) => {
   justify-content: space-between;
   width: 100%;
 }
+.menu-item-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 :deep(.menu-danger) {
   color: #ee0000 !important;
 }
@@ -751,7 +779,28 @@ watch(() => route.path, (path) => {
   background: #f7d4d6 !important;
 }
 :global(.sidebar-user-dropdown .ant-dropdown-menu) {
-  min-width: 160px;
+  min-width: auto;
+}
+.menu-user-info {
+  cursor: default !important;
+}
+.menu-user-info:hover {
+  background: transparent !important;
+}
+.user-info-display {
+  padding: 2px 0;
+}
+.user-info-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  margin-bottom: 4px;
+}
+.user-info-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: #a1a1aa;
 }
 
 /* 收起/展开按钮 */

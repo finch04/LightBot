@@ -1,5 +1,6 @@
 package com.lightbot.tool.builtin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.service.AgentService;
@@ -15,6 +16,8 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +37,7 @@ public class KnowledgeTools {
     private final AgentService agentService;
     private final KnowledgeService knowledgeService;
     private final DocumentService documentService;
+    private final ObjectMapper objectMapper;
 
     @SystemTool(displayName = "列出知识库")
     @Tool(name = "list_knowledge_bases",
@@ -52,24 +56,29 @@ public class KnowledgeTools {
         }
 
         ToolEventEmitter.emit("正在获取知识库列表...");
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("当前智能体绑定的知识库（共 %d 个）：\n\n", knowledgeIds.size()));
 
-        for (int i = 0; i < knowledgeIds.size(); i++) {
-            Knowledge kb = knowledgeService.getById(knowledgeIds.get(i));
+        List<Map<String, Object>> kbList = new ArrayList<>();
+        for (Long kbId : knowledgeIds) {
+            Knowledge kb = knowledgeService.getById(kbId);
             if (kb == null) continue;
-            sb.append(String.format("%d. %s\n", i + 1, kb.getName()));
-            if (kb.getDescription() != null && !kb.getDescription().isBlank()) {
-                sb.append("   描述：").append(kb.getDescription()).append("\n");
-            }
-            sb.append(String.format("   文档数：%d，分块数：%d，Token数：%d\n",
-                    kb.getDocumentCount() != null ? kb.getDocumentCount() : 0,
-                    kb.getChunkCount() != null ? kb.getChunkCount() : 0,
-                    kb.getTotalTokens() != null ? kb.getTotalTokens() : 0));
-            sb.append("\n");
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", kb.getId());
+            item.put("name", kb.getName());
+            item.put("description", kb.getDescription());
+            item.put("document_count", kb.getDocumentCount() != null ? kb.getDocumentCount() : 0);
+            item.put("chunk_count", kb.getChunkCount() != null ? kb.getChunkCount() : 0);
+            item.put("total_tokens", kb.getTotalTokens() != null ? kb.getTotalTokens() : 0);
+            kbList.add(item);
         }
 
-        return sb.toString();
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("knowledge_bases", kbList);
+        output.put("total", kbList.size());
+        try {
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            return "序列化失败: " + e.getMessage();
+        }
     }
 
     @SystemTool(displayName = "获取知识库思维导图")
@@ -103,7 +112,15 @@ public class KnowledgeTools {
             return "知识库「" + kb.getName() + "」尚未生成思维导图。请先在知识库管理页面生成思维导图。";
         }
 
-        return "知识库「" + kb.getName() + "」的思维导图：\n" + mindmap.toString();
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("knowledge_id", kbId);
+        output.put("knowledge_name", kb.getName());
+        output.put("mindmap", mindmap);
+        try {
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            return "序列化失败: " + e.getMessage();
+        }
     }
 
     @SystemTool(displayName = "查看知识库文档原文")
@@ -144,7 +161,11 @@ public class KnowledgeTools {
                 content = content.substring(0, maxLen) + "\n\n...（内容过长，仅显示前 " + maxLen + " 字符）";
             }
 
-            return "文档「" + doc.getName() + "」原文内容：\n\n" + content;
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("document_id", docId);
+            output.put("document_name", doc.getName());
+            output.put("content", content);
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             log.warn("[Tool:open_kb_document] 读取文档失败: documentId={}, error={}", docId, e.getMessage());
             return "读取文档失败: " + e.getMessage();

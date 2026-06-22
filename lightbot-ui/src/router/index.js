@@ -191,6 +191,11 @@ const routes = [
         component: () => import('../views/TaskCenter.vue'),
       },
       {
+        path: 'sessions',
+        name: 'Sessions',
+        component: () => import('../views/SessionManage.vue'),
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../views/SettingsView.vue'),

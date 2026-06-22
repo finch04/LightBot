@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.ChatSession;
 
+import java.util.List;
+
 /**
  * 对话会话服务接口
  *
@@ -28,6 +30,23 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @return 分页结果
      */
     Page<ChatSession> listMySessions(int pageNum, int pageSize);
+
+    /**
+     * 分页查询当前用户的会话列表（支持关键词搜索）
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页数量
+     * @param keyword  标题模糊搜索关键词（可为null）
+     * @return 分页结果
+     */
+    Page<ChatSession> listMySessions(int pageNum, int pageSize, String keyword);
+
+    /**
+     * 批量删除会话（物理删除，包含所有消息）
+     *
+     * @param ids 会话ID列表
+     */
+    void deleteSessions(List<Long> ids);
 
     /**
      * 获取会话标题（轻量查询，跳过缓存）

@@ -1,5 +1,6 @@
 package com.lightbot.tool.builtin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.service.SkillService;
 import com.lightbot.service.sandbox.SkillActivationStore;
 import com.lightbot.service.sandbox.SkillStorageService;
@@ -11,6 +12,9 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 内置工具 — 读取技能
@@ -29,6 +33,7 @@ public class ReadSkillTool {
     private final SkillStorageService skillStorageService;
     private final SkillService skillService;
     private final SkillActivationStore skillActivationStore;
+    private final ObjectMapper objectMapper;
 
     @Tool(name = "read_skill",
           description = "读取指定技能的完整指令内容（SKILL.md）。传入技能的 slug 标识，返回该技能的完整提示词和使用说明。调用此工具会自动激活该技能及其依赖。")
@@ -58,17 +63,27 @@ public class ReadSkillTool {
         }
 
         // 4. 标记激活
+        boolean activated = false;
         try {
             Long sessionId = resolveSessionId(toolContext);
             if (sessionId != null) {
                 skillActivationStore.activate(sessionId, slug.trim());
+                activated = true;
                 log.info("[Tool:read_skill] 技能已激活: slug={}, sessionId={}", slug, sessionId);
             }
         } catch (Exception e) {
             log.warn("[Tool:read_skill] 激活状态保存失败: {}", e.getMessage());
         }
 
-        return content;
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("slug", slug.trim());
+        output.put("content", content);
+        output.put("activated", activated);
+        try {
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            return content;
+        }
     }
 
     private Long resolveSessionId(ToolContext context) {

@@ -366,7 +366,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
             return result;
         } catch (Exception e) {
             log.error("[ToolService] 工具测试失败: name={}, error={}", toolName, e.getMessage(), e);
-            return ToolResultPrefixes.FAILURE + ": " + e.getMessage();
+            return ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
         }
     }
 

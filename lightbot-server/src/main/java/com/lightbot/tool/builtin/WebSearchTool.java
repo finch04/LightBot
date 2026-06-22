@@ -17,6 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -77,30 +78,30 @@ public class WebSearchTool {
             }
 
             JsonNode root = objectMapper.readTree(response.body());
-            StringBuilder sb = new StringBuilder();
 
-            // 摘要
+            // 1. 构建 JSON 返回
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("query", query);
+
             JsonNode answer = root.get("answer");
-            if (answer != null && !answer.isNull() && !answer.asText().isBlank()) {
-                sb.append("摘要：").append(answer.asText()).append("\n\n");
-            }
+            output.put("answer", (answer != null && !answer.isNull() && !answer.asText().isBlank())
+                    ? answer.asText() : null);
 
-            // 搜索结果
             JsonNode results = root.get("results");
-            if (results != null && results.isArray() && !results.isEmpty()) {
-                sb.append("搜索结果：\n");
-                for (int i = 0; i < results.size(); i++) {
-                    JsonNode item = results.get(i);
-                    String title = item.has("title") ? item.get("title").asText() : "无标题";
-                    String url = item.has("url") ? item.get("url").asText() : "";
-                    String content = item.has("content") ? item.get("content").asText() : "";
-                    sb.append(String.format("%d. %s\n   %s\n   %s\n\n", i + 1, title, url, content));
+            List<Map<String, Object>> items = new ArrayList<>();
+            if (results != null && results.isArray()) {
+                for (JsonNode item : results) {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("title", item.has("title") ? item.get("title").asText() : "无标题");
+                    entry.put("url", item.has("url") ? item.get("url").asText() : "");
+                    entry.put("content", item.has("content") ? item.get("content").asText() : "");
+                    items.add(entry);
                 }
-            } else {
-                sb.append("未找到相关结果。");
             }
+            output.put("results", items);
+            output.put("total", items.size());
 
-            return sb.toString();
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             log.error("[Tool:web_search] 搜索异常: query={}, error={}", query, e.getMessage());
             return "搜索过程中发生错误: " + e.getMessage();

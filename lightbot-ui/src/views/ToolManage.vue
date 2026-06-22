@@ -96,6 +96,7 @@
 
     <!-- 新增/编辑弹窗 -->
     <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑工具' : '新增工具'" :width="640" :footer="null" :maskClosable="false">
+      <div class="dialog-scroll-body">
       <a-form :model="form" :label-col="{ span: 5 }">
         <a-form-item label="工具标识" required>
           <a-input v-model:value="form.name" placeholder="如：http_request（英文，唯一标识）（不超过30字）" :maxlength="30" show-count :disabled="form.toolType === 'builtin'" />
@@ -119,23 +120,32 @@
         </a-form-item>
         <a-form-item label="工具类型" required>
           <a-select v-model:value="form.toolType" style="width: 100%" :disabled="form.id && form.toolType === 'builtin'">
-            <a-select-option value="builtin" disabled>内置（系统自动管理）</a-select-option>
             <a-select-option value="custom">自定义</a-select-option>
             <a-select-option value="api">API调用</a-select-option>
             <a-select-option value="mcp">MCP协议</a-select-option>
           </a-select>
           <div v-if="form.id && form.toolType === 'builtin'" class="param-hint">内置工具类型不可修改</div>
         </a-form-item>
-        <!-- 高级选项折叠区 -->
-        <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
-          <span>高级选项</span>
-          <RightOutlined :class="['toggle-icon', { expanded: showAdvanced }]" />
-        </div>
-        <template v-if="showAdvanced">
-          <a-form-item label="端点地址">
-            <a-input v-model:value="form.endpointUrl" placeholder="API 端点 URL（API 类型必填）" />
+        <!-- API 类型专属字段 -->
+        <template v-if="form.toolType === 'api'">
+          <a-form-item required>
+            <template #label>
+              端点地址
+              <a-tooltip placement="topLeft">
+                <template #title>工具被调用时请求的目标 URL，如 https://api.example.com/search</template>
+                <QuestionCircleOutlined class="field-help-icon" />
+              </a-tooltip>
+            </template>
+            <a-input v-model:value="form.endpointUrl" placeholder="API 端点 URL" />
           </a-form-item>
-          <a-form-item label="认证类型">
+          <a-form-item>
+            <template #label>
+              认证类型
+              <a-tooltip placement="topLeft">
+                <template #title>请求端点时携带的认证方式，选择"无认证"则不附加任何凭证</template>
+                <QuestionCircleOutlined class="field-help-icon" />
+              </a-tooltip>
+            </template>
             <a-select v-model:value="form.authType" style="width: 100%">
               <a-select-option value="none">无认证</a-select-option>
               <a-select-option value="api_key">API Key</a-select-option>
@@ -143,15 +153,69 @@
               <a-select-option value="bearer">Bearer Token</a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item label="输入Schema">
+          <a-form-item v-if="form.authType && form.authType !== 'none'">
+            <template #label>
+              认证配置
+              <a-tooltip placement="topLeft" overlayClassName="field-tooltip-wide">
+                <template #title>
+                  <div>认证所需的凭证信息，JSON 格式。</div>
+                  <div class="tooltip-example-title">API Key 示例：</div>
+                  <pre class="tooltip-example">{"apiKey": "sk-xxx"}</pre>
+                  <div class="tooltip-example-title">Bearer Token 示例：</div>
+                  <pre class="tooltip-example">{"token": "eyJhbGci..."}</pre>
+                </template>
+                <QuestionCircleOutlined class="field-help-icon" />
+              </a-tooltip>
+            </template>
+            <JsonInput v-model="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
+          </a-form-item>
+        </template>
+        <!-- 高级选项折叠区 -->
+        <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
+          <span>高级选项</span>
+          <RightOutlined :class="['toggle-icon', { expanded: showAdvanced }]" />
+        </div>
+        <template v-if="showAdvanced">
+          <a-form-item>
+            <template #label>
+              输入Schema
+              <a-tooltip placement="topLeft" overlayClassName="field-tooltip-wide">
+                <template #title>
+                  <div>定义工具的输入参数（JSON Schema 格式），供 Agent 理解参数含义。</div>
+                  <div class="tooltip-example-title">示例：</div>
+                  <pre class="tooltip-example">{
+  "type": "object",
+  "properties": {
+    "keyword": {"type": "string", "description": "搜索关键词"},
+    "limit": {"type": "integer", "description": "返回数量上限"}
+  },
+  "required": ["keyword"]
+}</pre>
+                </template>
+                <QuestionCircleOutlined class="field-help-icon" />
+              </a-tooltip>
+            </template>
             <JsonInput v-model="form.inputSchema" :rows="4" placeholder='JSON Schema，如：{"type":"object","properties":{...}}' />
-            <div class="form-hint">定义工具的输入参数（JSON Schema 格式），供 Agent 理解参数含义</div>
           </a-form-item>
           <a-form-item>
             <template #label>
               输出Schema
-              <a-tooltip placement="topLeft">
-                <template #title>定义工具返回的 JSON 结构（JSON Schema 格式）。填写后详情页会展示字段说明表，帮助用户理解工具输出。</template>
+              <a-tooltip placement="topLeft" overlayClassName="field-tooltip-wide">
+                <template #title>
+                  <div>定义工具返回的 JSON 结构（JSON Schema 格式）。填写后详情页会展示字段说明表，帮助用户理解工具输出。</div>
+                  <div class="tooltip-example-title">示例：</div>
+                  <pre class="tooltip-example">{
+  "type": "object",
+  "properties": {
+    "total": {"type": "integer", "description": "结果总数"},
+    "items": {
+      "type": "array",
+      "description": "结果列表",
+      "items": {"type": "object", "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}}
+    }
+  }
+}</pre>
+                </template>
                 <QuestionCircleOutlined class="field-help-icon" />
               </a-tooltip>
             </template>
@@ -160,21 +224,29 @@
           <a-form-item>
             <template #label>
               输出示例
-              <a-tooltip placement="topLeft">
-                <template #title>工具返回的示例 JSON，用于在详情页展示工具的实际输出样例，帮助用户理解返回内容。</template>
+              <a-tooltip placement="topLeft" overlayClassName="field-tooltip-wide">
+                <template #title>
+                  <div>工具返回的示例 JSON，用于在详情页展示工具的实际输出样例，帮助用户理解返回内容。</div>
+                  <div class="tooltip-example-title">示例：</div>
+                  <pre class="tooltip-example">{
+  "total": 2,
+  "items": [
+    {"id": 1, "name": "文档A"},
+    {"id": 2, "name": "文档B"}
+  ]
+}</pre>
+                </template>
                 <QuestionCircleOutlined class="field-help-icon" />
               </a-tooltip>
             </template>
             <JsonInput v-model="form.outputExample" :rows="4" placeholder='示例 JSON，如：{"total":2,"results":[...]}' />
-          </a-form-item>
-          <a-form-item label="认证配置">
-            <JsonInput v-model="form.authConfig" :rows="2" placeholder='JSON 格式，如：{"apiKey":"xxx"}' />
           </a-form-item>
           <a-form-item label="扩展配置">
             <JsonInput v-model="form.config" :rows="2" placeholder="JSON 格式的扩展配置（可选）" />
           </a-form-item>
         </template>
       </a-form>
+      </div>
       <div class="dialog-footer">
         <div></div>
         <div class="dialog-footer-right">
@@ -188,6 +260,8 @@
 
     <!-- 测试工具弹窗 -->
     <a-modal v-model:open="testDialogVisible" :title="testToolName || '测试工具'" :width="680" :footer="null" :maskClosable="false">
+      <a-spin :spinning="testLoading" tip="执行中...">
+      <div class="dialog-scroll-body">
       <!-- 参数说明 -->
       <div v-if="testToolParams.length > 0" class="test-params-section">
         <div class="test-params-title">参数说明</div>
@@ -221,6 +295,16 @@
         spellcheck="false"
         placeholder='{"key": "value"}'
       />
+      <!-- 执行结果 -->
+      <template v-if="testResult !== null">
+        <a-divider />
+        <div class="test-result">
+          <div class="test-result-label">执行结果</div>
+          <pre class="test-result-content" :class="{ 'is-json': isJsonResult(testResult) }">{{ formatTestResult(testResult) }}</pre>
+        </div>
+      </template>
+      </div>
+      </a-spin>
       <div class="dialog-footer">
         <div></div>
         <div class="dialog-footer-right">
@@ -229,11 +313,6 @@
             {{ testLoading ? '执行中...' : '执行测试' }}
           </button>
         </div>
-      </div>
-      <a-divider v-if="testResult !== null" />
-      <div v-if="testResult !== null" class="test-result">
-        <div class="test-result-label">执行结果</div>
-        <pre class="test-result-content" :class="{ 'is-json': isJsonResult(testResult) }">{{ formatTestResult(testResult) }}</pre>
       </div>
     </a-modal>
 
@@ -246,89 +325,117 @@
       :maskClosable="false"
     >
       <div class="detail-section-container" v-if="detailTool">
-        <!-- 基本信息 -->
-        <div class="detail-section">
-          <div class="detail-section-header"><FileTextOutlined /> 基本信息</div>
-          <div class="detail-info-grid">
-            <div class="detail-info-item">
-              <span class="detail-info-label">工具标识</span>
-              <code class="detail-info-value detail-info-code">{{ detailTool.name }}</code>
-            </div>
-            <div class="detail-info-item">
-              <span class="detail-info-label">显示名称</span>
-              <span class="detail-info-value">{{ detailTool.displayName || '-' }}</span>
-            </div>
-            <div class="detail-info-item">
-              <span class="detail-info-label">工具类型</span>
-              <span class="detail-info-value">
-                <span class="tag" :style="{ background: typeColors[detailTool.toolType?.code || detailTool.toolType] + '15', color: typeColors[detailTool.toolType?.code || detailTool.toolType] }">
-                  {{ toolTypeLabels[detailTool.toolType?.code || detailTool.toolType] || detailTool.toolType }}
+        <div class="raw-toggle-bar">
+          <button class="btn-text raw-toggle" @click="rawMode = !rawMode">
+            <SwapOutlined /> {{ rawMode ? '格式化' : '原始格式' }}
+          </button>
+        </div>
+        <!-- 格式化视图 -->
+        <template v-if="!rawMode">
+          <!-- 基本信息 -->
+          <div class="detail-section">
+            <div class="detail-section-header"><FileTextOutlined /> 基本信息</div>
+            <div class="detail-info-grid">
+              <div class="detail-info-item">
+                <span class="detail-info-label">工具标识</span>
+                <code class="detail-info-value detail-info-code">{{ detailTool.name }}</code>
+              </div>
+              <div class="detail-info-item">
+                <span class="detail-info-label">显示名称</span>
+                <span class="detail-info-value">{{ detailTool.displayName || '-' }}</span>
+              </div>
+              <div class="detail-info-item">
+                <span class="detail-info-label">工具类型</span>
+                <span class="detail-info-value">
+                  <span class="tag" :style="{ background: typeColors[detailTool.toolType?.code || detailTool.toolType] + '15', color: typeColors[detailTool.toolType?.code || detailTool.toolType] }">
+                    {{ toolTypeLabels[detailTool.toolType?.code || detailTool.toolType] || detailTool.toolType }}
+                  </span>
                 </span>
-              </span>
+              </div>
+              <div class="detail-info-item" v-if="detailTool.endpointUrl">
+                <span class="detail-info-label">端点地址</span>
+                <span class="detail-info-value">{{ detailTool.endpointUrl }}</span>
+              </div>
             </div>
-            <div class="detail-info-item" v-if="detailTool.endpointUrl">
-              <span class="detail-info-label">端点地址</span>
-              <span class="detail-info-value">{{ detailTool.endpointUrl }}</span>
+          </div>
+
+          <!-- 描述 -->
+          <div class="detail-section" v-if="detailTool.description">
+            <div class="detail-section-header"><FileTextOutlined /> 描述</div>
+            <div class="detail-desc">{{ detailTool.description }}</div>
+          </div>
+
+          <!-- 标签 -->
+          <div class="detail-section">
+            <div class="detail-section-header"><TagsOutlined /> 标签</div>
+            <div class="detail-tags">
+              <a-tag v-for="tag in parseTags(detailTool.tags)" :key="tag" color="blue">{{ tag }}</a-tag>
+              <span v-if="parseTags(detailTool.tags).length === 0" class="detail-empty">暂无标签</span>
             </div>
           </div>
-        </div>
 
-        <!-- 描述 -->
-        <div class="detail-section" v-if="detailTool.description">
-          <div class="detail-section-header"><FileTextOutlined /> 描述</div>
-          <div class="detail-desc">{{ detailTool.description }}</div>
-        </div>
-
-        <!-- 标签 -->
-        <div class="detail-section">
-          <div class="detail-section-header"><TagsOutlined /> 标签</div>
-          <div class="detail-tags">
-            <a-tag v-for="tag in parseTags(detailTool.tags)" :key="tag" color="blue">{{ tag }}</a-tag>
-            <span v-if="parseTags(detailTool.tags).length === 0" class="detail-empty">暂无标签</span>
+          <!-- 参数说明 -->
+          <div class="detail-section" v-if="detailTool.inputSchema && detailTool.inputSchema !== '{}'">
+            <div class="detail-section-header"><UnorderedListOutlined /> 参数说明</div>
+            <table class="detail-params-table">
+              <thead>
+                <tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in parseToolParams(detailTool.inputSchema)" :key="p.name">
+                  <td><code>{{ p.name }}</code></td>
+                  <td>{{ p.type }}</td>
+                  <td><span v-if="p.required" class="param-required">是</span><span v-else class="param-optional">否</span></td>
+                  <td>{{ p.desc }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="parseToolParams(detailTool.inputSchema).length === 0" class="detail-empty">无可解析的参数</div>
           </div>
-        </div>
 
-        <!-- 参数说明 -->
-        <div class="detail-section" v-if="detailTool.inputSchema && detailTool.inputSchema !== '{}'">
-          <div class="detail-section-header"><UnorderedListOutlined /> 参数说明</div>
-          <table class="detail-params-table">
-            <thead>
-              <tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="p in parseToolParams(detailTool.inputSchema)" :key="p.name">
-                <td><code>{{ p.name }}</code></td>
-                <td>{{ p.type }}</td>
-                <td><span v-if="p.required" class="param-required">是</span><span v-else class="param-optional">否</span></td>
-                <td>{{ p.desc }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="parseToolParams(detailTool.inputSchema).length === 0" class="detail-empty">无可解析的参数</div>
-        </div>
-
-        <!-- 返回示例 -->
-        <div class="detail-section" v-if="hasOutputExample(detailTool)">
-          <div class="detail-section-header"><FileTextOutlined /> 返回示例</div>
-          <!-- 字段说明表 -->
-          <table v-if="parseOutputSchema(detailTool).length > 0" class="detail-params-table">
-            <thead>
-              <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="f in parseOutputSchema(detailTool)" :key="f.name">
-                <td><code>{{ f.name }}</code></td>
-                <td>{{ f.type }}</td>
-                <td>{{ f.desc }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <!-- JSON 示例 -->
-          <div v-if="formatOutputExample(detailTool)" class="detail-output-example">
-            <div class="detail-output-example-title">示例 JSON</div>
-            <pre class="detail-output-json">{{ formatOutputExample(detailTool) }}</pre>
+          <!-- 返回示例 -->
+          <div class="detail-section" v-if="hasOutputExample(detailTool)">
+            <div class="detail-section-header"><FileTextOutlined /> 返回示例</div>
+            <!-- 字段说明表 -->
+            <table v-if="parseOutputSchema(detailTool).length > 0" class="detail-params-table">
+              <thead>
+                <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in parseOutputSchema(detailTool)" :key="f.name">
+                  <td><code>{{ f.name }}</code></td>
+                  <td>{{ f.type }}</td>
+                  <td>{{ f.desc }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <!-- JSON 示例 -->
+            <div v-if="formatOutputExample(detailTool)" class="detail-output-example">
+              <div class="detail-output-example-title">示例 JSON</div>
+              <pre class="detail-output-json">{{ formatOutputExample(detailTool) }}</pre>
+            </div>
           </div>
-        </div>
+        </template>
+
+        <!-- 原始格式视图 -->
+        <template v-else>
+          <div class="detail-section">
+            <div class="detail-section-header"><CodeOutlined /> inputSchema</div>
+            <pre class="detail-raw-json">{{ formatJsonRaw(detailTool.inputSchema) }}</pre>
+          </div>
+          <div class="detail-section">
+            <div class="detail-section-header"><CodeOutlined /> outputSchema</div>
+            <pre class="detail-raw-json">{{ formatJsonRaw(detailTool.outputSchema) }}</pre>
+          </div>
+          <div class="detail-section">
+            <div class="detail-section-header"><CodeOutlined /> outputExample</div>
+            <pre class="detail-raw-json">{{ formatJsonRaw(detailTool.outputExample) }}</pre>
+          </div>
+          <div class="detail-section">
+            <div class="detail-section-header"><CodeOutlined /> config</div>
+            <pre class="detail-raw-json">{{ formatJsonRaw(detailTool.config) }}</pre>
+          </div>
+        </template>
       </div>
 
       <div class="dialog-footer">
@@ -349,7 +456,7 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined, SwapOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool, setToolEnabled } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -392,6 +499,7 @@ const testArgsRef = ref(null)
 const showAdvanced = ref(false)
 const detailVisible = ref(false)
 const detailTool = ref(null)
+const rawMode = ref(false)
 
 /**
  * 从 JSON Schema 中解析工具参数列表
@@ -444,8 +552,7 @@ function parseToolConfig(tool) {
 }
 
 function hasOutputExample(tool) {
-  const config = parseToolConfig(tool)
-  return !!config.outputExample || (tool?.outputSchema && tool.outputSchema !== '{}')
+  return (tool?.outputExample && tool.outputExample !== '{}') || (tool?.outputSchema && tool.outputSchema !== '{}')
 }
 
 function parseOutputSchema(tool) {
@@ -464,13 +571,13 @@ function parseOutputSchema(tool) {
 }
 
 function formatOutputExample(tool) {
-  const config = parseToolConfig(tool)
-  if (!config.outputExample) return ''
+  const raw = tool?.outputExample
+  if (!raw || raw === '{}') return ''
   try {
-    const parsed = JSON.parse(config.outputExample)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
     return JSON.stringify(parsed, null, 2)
   } catch {
-    return config.outputExample
+    return raw
   }
 }
 
@@ -493,6 +600,16 @@ function formatTestResult(result) {
     }
   } catch {}
   return result
+}
+
+function formatJsonRaw(val) {
+  if (!val || val === '{}') return '{}'
+  try {
+    const parsed = typeof val === 'string' ? JSON.parse(val) : val
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return val
+  }
 }
 
 async function loadData() {
@@ -545,12 +662,22 @@ watch(allTags, (v) => { tagSuggestions.value = v })
 function openDialog(row) {
   if (row) {
     const config = parseToolConfig(row)
+    let outputExampleStr = '{}'
+    if (row.outputExample && row.outputExample !== '{}') {
+      try {
+        const parsed = typeof row.outputExample === 'string' ? JSON.parse(row.outputExample) : row.outputExample
+        outputExampleStr = JSON.stringify(parsed, null, 2)
+      } catch {
+        outputExampleStr = row.outputExample
+      }
+    }
     Object.assign(form, {
       ...row,
       toolType: row.toolType?.code || row.toolType || 'custom',
       authType: row.authType?.code || row.authType || 'none',
       tags: parseTags(row.tags),
-      outputExample: config.outputExample ? JSON.stringify(JSON.parse(config.outputExample), null, 2) : '{}',
+      outputExample: outputExampleStr,
+      config: JSON.stringify(config),
     })
   } else {
     Object.assign(form, {
@@ -565,20 +692,12 @@ function openDialog(row) {
 
 async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入工具标识')
+  if (form.toolType === 'api' && !form.endpointUrl?.trim()) return message.warning('API 类型必须填写端点地址')
   submitting.value = true
   try {
-    // 将 outputExample 合并到 config
-    let configObj = {}
-    try { configObj = JSON.parse(form.config || '{}') } catch {}
-    if (form.outputExample && form.outputExample !== '{}') {
-      configObj.outputExample = form.outputExample
-    } else {
-      delete configObj.outputExample
-    }
     const data = {
       ...form,
       tags: JSON.stringify(form.tags || []),
-      config: JSON.stringify(configObj),
     }
     if (form.id) {
       await updateTool(data)
@@ -937,6 +1056,30 @@ defineExpose({ openDialog, search, refresh })
   cursor: help;
   &:hover { color: #666; }
 }
+.dialog-scroll-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.tooltip-example-title {
+  margin-top: 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.tooltip-example {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+:deep(.field-tooltip-wide) {
+  max-width: 420px;
+}
 .param-required {
   color: #ef4444;
   font-size: 12px;
@@ -1125,6 +1268,38 @@ defineExpose({ openDialog, search, refresh })
 .detail-section-container {
   max-height: 60vh;
   overflow-y: auto;
+  padding-right: 8px;
+}
+.raw-toggle-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.raw-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #0070f3;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.raw-toggle:hover {
+  background: #f0f5ff;
+}
+.detail-raw-json {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
 }
 .detail-section {
   margin-bottom: 20px;

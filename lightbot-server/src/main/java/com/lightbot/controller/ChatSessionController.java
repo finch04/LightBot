@@ -38,8 +38,9 @@ public class ChatSessionController {
     @GetMapping
     public Result<Page<ChatSession>> list(
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        return Result.ok(chatSessionService.listMySessions(pageNum, pageSize));
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword) {
+        return Result.ok(chatSessionService.listMySessions(pageNum, pageSize, keyword));
     }
 
     @Operation(summary = "获取会话详情")
@@ -81,6 +82,13 @@ public class ChatSessionController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         chatSessionService.deleteSession(id);
+        return Result.ok();
+    }
+
+    @Operation(summary = "批量删除会话（物理删除，包含所有消息）")
+    @DeleteMapping("/batch")
+    public Result<Void> deleteBatch(@RequestBody List<Long> ids) {
+        chatSessionService.deleteSessions(ids);
         return Result.ok();
     }
 

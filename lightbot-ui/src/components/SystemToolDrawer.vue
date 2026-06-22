@@ -59,59 +59,84 @@
     :footer="null"
   >
     <div class="tool-detail-modal">
-      <div class="detail-section">
-        <div class="detail-label">工具标识</div>
-        <div class="detail-value">{{ currentTool?.name }}</div>
+      <div class="raw-toggle-bar">
+        <button class="btn-text raw-toggle" @click="rawMode = !rawMode">
+          <SwapOutlined /> {{ rawMode ? '格式化' : '原始格式' }}
+        </button>
       </div>
-      <div class="detail-section">
-        <div class="detail-label">工具描述</div>
-        <div class="detail-value">{{ currentTool?.description || '暂无描述' }}</div>
-      </div>
-      <div class="detail-section">
-        <div class="detail-label">参数定义</div>
-        <div v-if="parsedSchema.length > 0" class="schema-table-wrap">
-          <table class="schema-table">
+      <template v-if="!rawMode">
+        <div class="detail-section">
+          <div class="detail-label">工具标识</div>
+          <div class="detail-value">{{ currentTool?.name }}</div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label">工具描述</div>
+          <div class="detail-value">{{ currentTool?.description || '暂无描述' }}</div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label">参数定义</div>
+          <div v-if="parsedSchema.length > 0" class="schema-table-wrap">
+            <table class="schema-table">
+              <thead>
+                <tr>
+                  <th>参数名</th>
+                  <th>类型</th>
+                  <th>描述</th>
+                  <th>必填</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="prop in parsedSchema" :key="prop.name">
+                  <td class="prop-name">{{ prop.name }}</td>
+                  <td class="prop-type">{{ prop.type }}</td>
+                  <td class="prop-desc">{{ prop.description || '-' }}</td>
+                  <td class="prop-required">{{ prop.required ? '是' : '否' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="schema-empty">无参数（可直接调用）</div>
+        </div>
+        <div v-if="parsedSchema.length > 0" class="detail-section">
+          <div class="detail-label">参数示例</div>
+          <pre class="example-json">{{ exampleJson }}</pre>
+        </div>
+        <div v-if="hasOutputExample" class="detail-section">
+          <div class="detail-label">返回示例</div>
+          <table v-if="outputSchemaFields.length > 0" class="schema-table output-fields-table">
             <thead>
-              <tr>
-                <th>参数名</th>
-                <th>类型</th>
-                <th>描述</th>
-                <th>必填</th>
-              </tr>
+              <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
             </thead>
             <tbody>
-              <tr v-for="prop in parsedSchema" :key="prop.name">
-                <td class="prop-name">{{ prop.name }}</td>
-                <td class="prop-type">{{ prop.type }}</td>
-                <td class="prop-desc">{{ prop.description || '-' }}</td>
-                <td class="prop-required">{{ prop.required ? '是' : '否' }}</td>
+              <tr v-for="f in outputSchemaFields" :key="f.name">
+                <td class="prop-name">{{ f.name }}</td>
+                <td class="prop-type">{{ f.type }}</td>
+                <td class="prop-desc">{{ f.desc }}</td>
               </tr>
             </tbody>
           </table>
+          <div v-if="formattedOutputExample" class="output-example-title">示例 JSON</div>
+          <pre v-if="formattedOutputExample" class="example-json output-example-json">{{ formattedOutputExample }}</pre>
         </div>
-        <div v-else class="schema-empty">无参数（可直接调用）</div>
-      </div>
-      <div v-if="parsedSchema.length > 0" class="detail-section">
-        <div class="detail-label">参数示例</div>
-        <pre class="example-json">{{ exampleJson }}</pre>
-      </div>
-      <div v-if="hasOutputExample" class="detail-section">
-        <div class="detail-label">返回示例</div>
-        <table v-if="outputSchemaFields.length > 0" class="schema-table output-fields-table">
-          <thead>
-            <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="f in outputSchemaFields" :key="f.name">
-              <td class="prop-name">{{ f.name }}</td>
-              <td class="prop-type">{{ f.type }}</td>
-              <td class="prop-desc">{{ f.desc }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="formattedOutputExample" class="output-example-title">示例 JSON</div>
-        <pre v-if="formattedOutputExample" class="example-json output-example-json">{{ formattedOutputExample }}</pre>
-      </div>
+      </template>
+      <template v-else>
+        <div class="detail-section">
+          <div class="detail-label"><CodeOutlined /> inputSchema</div>
+          <pre class="example-json">{{ formatJsonRaw(currentTool?.inputSchema) }}</pre>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label"><CodeOutlined /> outputSchema</div>
+          <pre class="example-json">{{ formatJsonRaw(currentTool?.outputSchema) }}</pre>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label"><CodeOutlined /> outputExample</div>
+          <pre class="example-json">{{ formatJsonRaw(currentTool?.outputExample) }}</pre>
+        </div>
+        <div class="detail-section">
+          <div class="detail-label"><CodeOutlined /> config</div>
+          <pre class="example-json">{{ formatJsonRaw(currentTool?.config) }}</pre>
+        </div>
+      </template>
     </div>
   </a-modal>
 
@@ -281,7 +306,7 @@ public class PgSqlTool {
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { SettingOutlined, QuestionCircleOutlined, PlayCircleOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import { SettingOutlined, QuestionCircleOutlined, PlayCircleOutlined, EyeOutlined, SwapOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getTools, testTool as testToolApi, getToolExampleParams } from '../api/tool'
 
@@ -298,6 +323,7 @@ const detailVisible = ref(false)
 const currentTool = ref(null)
 const currentExampleParams = ref({}) // 详情弹窗的示例参数
 const helpVisible = ref(false)
+const rawMode = ref(false)
 
 // 测试工具相关
 const testDialogVisible = ref(false)
@@ -361,8 +387,7 @@ function parseToolConfig(tool) {
 }
 
 const hasOutputExample = computed(() => {
-  const config = parseToolConfig(currentTool.value)
-  return !!config.outputExample || (currentTool.value?.outputSchema && currentTool.value.outputSchema !== '{}')
+  return (currentTool.value?.outputExample && currentTool.value.outputExample !== '{}') || (currentTool.value?.outputSchema && currentTool.value.outputSchema !== '{}')
 })
 
 const outputSchemaFields = computed(() => {
@@ -382,12 +407,13 @@ const outputSchemaFields = computed(() => {
 })
 
 const formattedOutputExample = computed(() => {
-  const config = parseToolConfig(currentTool.value)
-  if (!config.outputExample) return ''
+  const raw = currentTool.value?.outputExample
+  if (!raw || raw === '{}') return ''
   try {
-    return JSON.stringify(JSON.parse(config.outputExample), null, 2)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return JSON.stringify(parsed, null, 2)
   } catch {
-    return config.outputExample
+    return raw
   }
 })
 
@@ -410,6 +436,16 @@ function formatTestResult(result) {
     }
   } catch {}
   return result
+}
+
+function formatJsonRaw(val) {
+  if (!val || val === '{}') return '{}'
+  try {
+    const parsed = typeof val === 'string' ? JSON.parse(val) : val
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return val
+  }
 }
 
 const testToolParams = computed(() => {
@@ -1015,5 +1051,26 @@ watch(drawerVisible, (visible) => {
 }
 .help-table td {
   color: #52525b;
+}
+
+.raw-toggle-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.raw-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #0070f3;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.raw-toggle:hover {
+  background: #f0f5ff;
 }
 </style>

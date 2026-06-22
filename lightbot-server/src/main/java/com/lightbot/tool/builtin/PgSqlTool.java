@@ -1,5 +1,6 @@
 package com.lightbot.tool.builtin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,9 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class PgSqlTool {
 
     private final DataSource dataSource;
+    private final ObjectMapper objectMapper;
 
     private static final int MAX_ROWS = 50;
     private static final int MAX_CONTENT_LENGTH = 10000;
@@ -55,7 +59,11 @@ public class PgSqlTool {
                 tables.add(rs.getString("tablename"));
             }
             if (tables.isEmpty()) return "数据库中没有表";
-            return "数据库表列表（共 " + tables.size() + " 张表）：\n" + String.join("\n", tables);
+
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("tables", tables);
+            output.put("total", tables.size());
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             log.error("[Tool:pg_list_tables] 查询异常: {}", e.getMessage());
             return "查询失败: " + e.getMessage();
@@ -75,8 +83,8 @@ public class PgSqlTool {
             return "非法表名: " + tableName;
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("表结构: ").append(tableName).append("\n\n");
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("table_name", tableName);
 
         // 字段信息
         try (Connection conn = dataSource.getConnection();
@@ -91,17 +99,17 @@ public class PgSqlTool {
                              "ON pgd.objoid = st.relid AND pgd.objsubid = c.ordinal_position " +
                              "WHERE c.table_schema = 'public' AND c.table_name = '" + tableName + "' " +
                              "ORDER BY c.ordinal_position")) {
-            sb.append("字段：\n");
-            sb.append(String.format("%-25s %-20s %-8s %-20s %s\n", "名称", "类型", "可空", "默认值", "注释"));
-            sb.append("-".repeat(90)).append("\n");
+            List<Map<String, Object>> columns = new ArrayList<>();
             while (rs.next()) {
-                sb.append(String.format("%-25s %-20s %-8s %-20s %s\n",
-                        rs.getString("column_name"),
-                        rs.getString("data_type"),
-                        "YES".equals(rs.getString("is_nullable")) ? "Y" : "N",
-                        rs.getString("column_default") != null ? rs.getString("column_default") : "-",
-                        rs.getString("column_comment") != null ? rs.getString("column_comment") : "-"));
+                Map<String, Object> col = new LinkedHashMap<>();
+                col.put("column_name", rs.getString("column_name"));
+                col.put("data_type", rs.getString("data_type"));
+                col.put("is_nullable", "YES".equals(rs.getString("is_nullable")));
+                col.put("column_default", rs.getString("column_default"));
+                col.put("column_comment", rs.getString("column_comment"));
+                columns.add(col);
             }
+            output.put("columns", columns);
         } catch (Exception e) {
             return "查询字段信息失败: " + e.getMessage();
         }
@@ -111,19 +119,23 @@ public class PgSqlTool {
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(
                      "SELECT indexname, indexdef FROM pg_indexes WHERE tablename = '" + tableName + "'")) {
-            List<String> indexes = new ArrayList<>();
+            List<Map<String, Object>> indexes = new ArrayList<>();
             while (rs.next()) {
-                indexes.add(rs.getString("indexname") + ": " + rs.getString("indexdef"));
+                Map<String, Object> idx = new LinkedHashMap<>();
+                idx.put("index_name", rs.getString("indexname"));
+                idx.put("index_def", rs.getString("indexdef"));
+                indexes.add(idx);
             }
-            if (!indexes.isEmpty()) {
-                sb.append("\n索引：\n");
-                indexes.forEach(idx -> sb.append("  ").append(idx).append("\n"));
-            }
+            output.put("indexes", indexes);
         } catch (Exception e) {
-            sb.append("\n查询索引信息失败: ").append(e.getMessage());
+            output.put("indexes", List.of());
         }
 
-        return sb.toString();
+        try {
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            return "序列化失败: " + e.getMessage();
+        }
     }
 
     @SystemTool(displayName = "执行SQL查询")
@@ -171,46 +183,35 @@ public class PgSqlTool {
             boolean hasMore = rs.next();
             rs.close();
 
-            if (rows.isEmpty()) return "查询结果为空（" + elapsed + "ms）";
-
-            // 格式化为文本表格
-            int[] widths = new int[colCount];
-            for (int i = 0; i < colCount; i++) {
-                widths[i] = headers.get(i).length();
-                for (String[] row : rows) {
-                    widths[i] = Math.min(Math.max(widths[i], row[i].length()), 40);
-                }
+            if (rows.isEmpty()) {
+                Map<String, Object> emptyOutput = new LinkedHashMap<>();
+                emptyOutput.put("sql", sql);
+                emptyOutput.put("columns", headers);
+                emptyOutput.put("rows", List.of());
+                emptyOutput.put("total_rows", 0);
+                emptyOutput.put("has_more", false);
+                emptyOutput.put("elapsed_ms", elapsed);
+                return objectMapper.writeValueAsString(emptyOutput);
             }
 
-            StringBuilder sb = new StringBuilder();
-            // 表头
-            for (int i = 0; i < colCount; i++) {
-                if (i > 0) sb.append(" | ");
-                sb.append(String.format("%-" + widths[i] + "s", headers.get(i)));
-            }
-            sb.append("\n");
-            for (int w : widths) sb.append("-".repeat(w)).append("---");
-            sb.append("\n");
-
-            // 数据行
+            // 构建 JSON 返回
+            List<List<String>> rowList = new ArrayList<>();
             for (String[] row : rows) {
-                for (int i = 0; i < colCount; i++) {
-                    if (i > 0) sb.append(" | ");
-                    String val = row[i].length() > 40 ? row[i].substring(0, 37) + "..." : row[i];
-                    sb.append(String.format("%-" + widths[i] + "s", val));
+                List<String> rowItems = new ArrayList<>();
+                for (String val : row) {
+                    rowItems.add(val.length() > 200 ? val.substring(0, 197) + "..." : val);
                 }
-                sb.append("\n");
+                rowList.add(rowItems);
             }
 
-            sb.append(String.format("\n共 %d 行", totalRows));
-            if (hasMore) sb.append("（仅显示前 ").append(MAX_ROWS).append(" 行）");
-            sb.append("，耗时 ").append(elapsed).append("ms");
-
-            String result = sb.toString();
-            if (result.length() > MAX_CONTENT_LENGTH) {
-                result = result.substring(0, MAX_CONTENT_LENGTH) + "\n...（结果过长已截断）";
-            }
-            return result;
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("sql", sql);
+            output.put("columns", headers);
+            output.put("rows", rowList);
+            output.put("total_rows", totalRows);
+            output.put("has_more", hasMore);
+            output.put("elapsed_ms", elapsed);
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             log.error("[Tool:pg_query] 查询异常: sql={}, error={}", sql, e.getMessage());
             String msg = e.getMessage();

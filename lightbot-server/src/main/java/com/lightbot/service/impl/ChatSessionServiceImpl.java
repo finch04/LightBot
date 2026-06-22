@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 对话会话服务实现类
@@ -244,5 +245,39 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         session.setAgentId(agentId);
         updateById(session);
         evictSessionCache(sessionId);
+    }
+
+    @Override
+    public Page<ChatSession> listMySessions(int pageNum, int pageSize, String keyword) {
+        long userId = StpUtil.getLoginIdAsLong();
+        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<ChatSession>()
+                .eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
+                .like(keyword != null && !keyword.isBlank(), ChatSession::getTitle, keyword)
+                .orderByDesc(ChatSession::getPinned)
+                .orderByDesc(ChatSession::getLastMessageAt);
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+    }
+
+    @Override
+    public void deleteSessions(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        // 1. 批量物理删除消息
+        for (Long id : ids) {
+            messageService.deleteBySessionId(id);
+        }
+        // 2. 批量物理删除调用链记录
+        for (Long id : ids) {
+            llmTraceService.deleteBySessionId(id);
+        }
+        // 3. 批量物理删除会话
+        removeByIds(ids);
+        // 4. 清除缓存
+        for (Long id : ids) {
+            evictSessionCache(id);
+        }
+        evictListCache(StpUtil.getLoginIdAsLong());
     }
 }

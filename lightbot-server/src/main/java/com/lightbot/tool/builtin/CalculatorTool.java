@@ -1,11 +1,16 @@
 package com.lightbot.tool.builtin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 内置工具 — 数学计算器
@@ -17,7 +22,10 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component("calculatorTool")
 @SystemTool(displayName = "数学计算器", description = "执行基本数学运算，包括加减乘除", tags = {"计算"})
+@RequiredArgsConstructor
 public class CalculatorTool {
+
+    private final ObjectMapper objectMapper;
 
     @Tool(name = "calculator",
           description = "执行基本数学运算，包括加减乘除。当用户需要精确数学计算时调用此工具。")
@@ -44,6 +52,26 @@ public class CalculatorTool {
         String formatted = result == Math.floor(result) && !Double.isInfinite(result)
                 ? String.valueOf((long) result)
                 : String.format("%.6g", result);
-        return formatted;
+
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("expression", a + " " + operationSymbol(operation) + " " + b);
+        output.put("operation", operation.toLowerCase());
+        output.put("operands", new double[]{a, b});
+        output.put("result", formatted);
+        try {
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            return formatted;
+        }
+    }
+
+    private String operationSymbol(String operation) {
+        return switch (operation.toLowerCase()) {
+            case "add" -> "+";
+            case "subtract" -> "-";
+            case "multiply" -> "×";
+            case "divide" -> "÷";
+            default -> operation;
+        };
     }
 }

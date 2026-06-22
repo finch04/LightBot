@@ -235,32 +235,41 @@ public class TraceMiddleware implements ChatMiddleware {
                 return;
             }
 
-            // 2. 获取前4条消息
+            // 2. 获取前2条消息（减少 token 数，加快生成速度）
             List<Message> messages = messageMapper.selectList(
                     new LambdaQueryWrapper<Message>()
                             .eq(Message::getSessionId, sessionId)
                             .orderByAsc(Message::getCreateTime)
-                            .last("LIMIT 4"));
+                            .last("LIMIT 2"));
             if (messages.size() < 2) {
                 return;
             }
 
-            // 3. 拼接对话文本
+            // 3. 拼接对话文本（每条消息最多100字，避免过长）
             StringBuilder conversationText = new StringBuilder();
             for (Message msg : messages) {
                 String role = msg.getRole() == MessageRole.USER ? "用户" : "助手";
-                conversationText.append(role).append("：").append(msg.getContent()).append("\n");
+                String content = msg.getContent();
+                if (content != null && content.length() > 100) {
+                    content = content.substring(0, 100) + "...";
+                }
+                conversationText.append(role).append("：").append(content).append("\n");
             }
 
-            // 4. 统一使用系统默认模型（速度快，不占用对话模型资源）
+            // 4. 使用最便宜的模型 + 限制输出 token（50 tokens 足够生成标题）
             Long providerId = providerResolver.resolve();
             Map<String, Object> titleConfig = new HashMap<>();
+            // ensureModelIdInConfig 会自动设置为最便宜的模型（如 qwen-turbo、gpt-4o-mini）
             modelFactory.ensureModelIdInConfig(providerId, titleConfig);
+            // 限制输出 token，加快生成速度
+            titleConfig.put("maxTokens", 50);
+            // 降低 temperature，提高确定性
+            titleConfig.put("temperature", 0.3);
             ChatOptions options = modelFactory.buildChatOptions(providerId, titleConfig);
 
             List<org.springframework.ai.chat.messages.Message> promptMessages = new ArrayList<>();
-            promptMessages.add(new SystemMessage("你是一个标题生成助手，只输出标题，不要任何其他内容。"));
-            promptMessages.add(new UserMessage("请根据以下对话内容生成一个简短的标题（不超过20个字，不要加引号）：\n" + conversationText));
+            promptMessages.add(new SystemMessage("生成标题，只输出标题，不超过20字。"));
+            promptMessages.add(new UserMessage("对话：\n" + conversationText));
 
             ChatResponse response = com.lightbot.util.LlmTraceContext.callWithoutTrace(() ->
                     modelFactory.getChatModel(providerId).call(new Prompt(promptMessages, options)));

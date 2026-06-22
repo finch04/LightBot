@@ -1,14 +1,19 @@
 package com.lightbot.tool.builtin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 内置工具 — 向用户提问
@@ -21,7 +26,10 @@ import java.util.List;
 @Slf4j
 @Component("askUserTool")
 @SystemTool(displayName = "向用户提问", description = "向用户提问并等待回答，用于确认信息或请求补充说明", tags = {"交互"})
+@RequiredArgsConstructor
 public class AskUserTool {
+
+    private final ObjectMapper objectMapper;
 
     @Tool(name = "ask_user",
           description = "向用户提问并等待回答。当需要确认信息、请求补充说明、让用户选择选项时调用此工具。调用后会暂停执行，等待用户回复后继续。")
@@ -34,20 +42,26 @@ public class AskUserTool {
 
         ToolEventEmitter.emit("等待用户回答...");
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("【提问】").append(question).append("\n");
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("question", question);
 
-        if (options != null && !options.isBlank()) {
+        boolean hasOptions = options != null && !options.isBlank();
+        if (hasOptions) {
             String[] optionList = options.split(",");
-            sb.append("选项：\n");
-            for (int i = 0; i < optionList.length; i++) {
-                sb.append(String.format("  %d. %s\n", i + 1, optionList[i].trim()));
+            List<String> optionItems = new ArrayList<>();
+            for (String opt : optionList) {
+                optionItems.add(opt.trim());
             }
-            sb.append("\n请用户选择或输入回答。");
+            output.put("options", optionItems);
         } else {
-            sb.append("请用户输入回答。");
+            output.put("options", List.of());
         }
+        output.put("is_open_ended", !hasOptions);
 
-        return sb.toString();
+        try {
+            return objectMapper.writeValueAsString(output);
+        } catch (Exception e) {
+            return "【提问】" + question;
+        }
     }
 }

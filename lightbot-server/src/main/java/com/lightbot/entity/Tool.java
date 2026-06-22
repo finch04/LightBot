@@ -62,6 +62,10 @@ public class Tool {
     @Schema(description = "输出参数Schema")
     private String outputSchema;
 
+    @TableField(value = "output_example", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "输出示例JSON")
+    private String outputExample;
+
     @TableField(value = "config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "扩展配置")
     private String config;

@@ -1,5 +1,6 @@
 package com.lightbot.tool.builtin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.service.sandbox.SkillStorageService;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
@@ -9,7 +10,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 内置工具 — 列出技能文件
@@ -25,6 +28,7 @@ import java.util.List;
 public class ListSkillFilesTool {
 
     private final SkillStorageService skillStorageService;
+    private final ObjectMapper objectMapper;
 
     @Tool(name = "list_skill_files",
           description = "列出指定技能目录下的所有文件。传入技能的 slug 标识，返回该技能目录下的文件列表。")
@@ -52,12 +56,12 @@ public class ListSkillFilesTool {
             if (objects.isEmpty()) {
                 return "技能目录为空";
             }
-            StringBuilder sb = new StringBuilder();
-            sb.append("技能 ").append(normalizedSlug).append(" 的文件列表：\n");
-            for (String obj : objects) {
-                sb.append("- ").append(obj).append("\n");
-            }
-            return sb.toString();
+
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("slug", normalizedSlug);
+            output.put("files", objects);
+            output.put("total", objects.size());
+            return objectMapper.writeValueAsString(output);
         } catch (Exception e) {
             return "错误：列举文件失败 - " + e.getMessage();
         }

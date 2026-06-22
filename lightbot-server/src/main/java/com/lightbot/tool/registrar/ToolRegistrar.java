@@ -70,7 +70,8 @@ public class ToolRegistrar {
                 String displayName = resolveDisplayName(clazz, method, name);
                 ToolType toolType = resolveToolType(clazz, method);
                 String tagsJson = resolveTagsJson(clazz, method);
-                String config = buildConfig(method, clazz);
+                String config = buildConfig(method);
+                String outputExample = resolveOutputExample(method, clazz);
 
                 Tool existing = toolService.getOne(
                         new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Tool>()
@@ -85,6 +86,7 @@ public class ToolRegistrar {
                     tool.setToolType(toolType);
                     tool.setInputSchema(inputSchema);
                     tool.setOutputSchema(outputSchema);
+                    tool.setOutputExample(outputExample);
                     tool.setConfig(config);
                     tool.setTags(tagsJson);
                     tool.setStatus(CommonStatus.ACTIVE);
@@ -105,6 +107,11 @@ public class ToolRegistrar {
                     String existingOutputSchema = existing.getOutputSchema() != null ? existing.getOutputSchema() : "{}";
                     if (!outputSchema.equals("{}") && !outputSchema.equals(existingOutputSchema)) {
                         existing.setOutputSchema(outputSchema);
+                        changed = true;
+                    }
+                    String existingOutputExample = existing.getOutputExample() != null ? existing.getOutputExample() : "{}";
+                    if (!outputExample.equals("{}") && !outputExample.equals(existingOutputExample)) {
+                        existing.setOutputExample(outputExample);
                         changed = true;
                     }
                     if (!tagsJson.equals(existing.getTags() != null ? existing.getTags() : "[]")) {
@@ -291,28 +298,11 @@ public class ToolRegistrar {
     }
 
     /**
-     * 构建 config JSON：exampleParams + outputExample
+     * 构建 config JSON：仅 exampleParams
      */
-    private String buildConfig(Method method, Class<?> clazz) {
+    private String buildConfig(Method method) {
         try {
-            var configNode = objectMapper.createObjectNode();
-            configNode.set("exampleParams", objectMapper.readTree(generateExampleParams(method)));
-
-            SystemTool methodTool = method.getAnnotation(SystemTool.class);
-            SystemTool classTool = clazz.getAnnotation(SystemTool.class);
-
-            // outputExample: 方法级别 > 类级别
-            String outputExample = null;
-            if (methodTool != null && !methodTool.outputExample().isEmpty()) {
-                outputExample = methodTool.outputExample();
-            } else if (classTool != null && !classTool.outputExample().isEmpty()) {
-                outputExample = classTool.outputExample();
-            }
-            if (outputExample != null) {
-                configNode.put("outputExample", outputExample);
-            }
-
-            return objectMapper.writeValueAsString(configNode);
+            return "{\"exampleParams\": " + generateExampleParams(method) + "}";
         } catch (Exception e) {
             log.warn("[ToolRegistrar] 构建 config 失败: method={}, error={}", method.getName(), e.getMessage());
             return "{\"exampleParams\": {}}";
@@ -330,6 +320,21 @@ public class ToolRegistrar {
         SystemTool classTool = clazz.getAnnotation(SystemTool.class);
         if (classTool != null && !classTool.outputSchema().isEmpty()) {
             return classTool.outputSchema();
+        }
+        return "{}";
+    }
+
+    /**
+     * 解析输出示例：方法级别 > 类级别
+     */
+    private String resolveOutputExample(Method method, Class<?> clazz) {
+        SystemTool methodTool = method.getAnnotation(SystemTool.class);
+        if (methodTool != null && !methodTool.outputExample().isEmpty()) {
+            return methodTool.outputExample();
+        }
+        SystemTool classTool = clazz.getAnnotation(SystemTool.class);
+        if (classTool != null && !classTool.outputExample().isEmpty()) {
+            return classTool.outputExample();
         }
         return "{}";
     }

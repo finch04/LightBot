@@ -507,6 +507,11 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     public List<Document> listByKnowledgeId(Long knowledgeId) {
         // 权限校验：需要成员权限
         permissionHelper.checkMember(knowledgeId);
+        return listByKnowledgeIdInternal(knowledgeId);
+    }
+
+    @Override
+    public List<Document> listByKnowledgeIdInternal(Long knowledgeId) {
         return list(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
                 .eq(Document::getDeleted, 0)

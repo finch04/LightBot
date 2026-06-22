@@ -93,6 +93,14 @@ public interface DocumentService extends IService<Document> {
     List<Document> listByKnowledgeId(Long knowledgeId);
 
     /**
+     * 查询知识库下的文档列表（无权限校验，供工具内部调用）
+     *
+     * @param knowledgeId 知识库ID
+     * @return 文档列表
+     */
+    List<Document> listByKnowledgeIdInternal(Long knowledgeId);
+
+    /**
      * 分页查询知识库下的文档列表（支持名称搜索）
      *
      * @param knowledgeId 知识库ID

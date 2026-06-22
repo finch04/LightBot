@@ -103,7 +103,7 @@
                 <!-- 有工具事件：按 offset 位置插入工具块 -->
                 <template v-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0 && getToolBlockOffsets(messages[virtualRow.index]).length > 0">
                   <template v-for="(segment, si) in splitContentByOffsets(messages[virtualRow.index])" :key="si">
-                    <div v-if="segment.type === 'text'" class="message-content"><pre v-if="rawModeMessages.has(virtualRow.index)" class="raw-content">{{ segment.text }}</pre><MarkdownPreview v-else :content="segment.text" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                    <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!messages[virtualRow.index]._streaming" /></div>
                     <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
                       <AgentCapabilityPanel
                         v-if="getCapabilityEventsForOffset(messages[virtualRow.index], segment.offset).length > 0"
@@ -122,7 +122,7 @@
                 </template>
                 <!-- 有工具事件但 offset 尚未到达 -->
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0">
-                  <div v-if="messages[virtualRow.index].content" class="message-content"><pre v-if="rawModeMessages.has(virtualRow.index)" class="raw-content">{{ messages[virtualRow.index].content }}</pre><MarkdownPreview v-else :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                  <div v-if="messages[virtualRow.index].content" class="message-content"><MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" /></div>
                   <div class="tool-block-inline">
                     <AgentCapabilityPanel
                       v-if="getInlineCapabilityEvents(messages[virtualRow.index]).length > 0"
@@ -141,8 +141,7 @@
                 <!-- 无工具事件：正常渲染 -->
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock">
                   <div v-if="messages[virtualRow.index].content && messages[virtualRow.index].content !== '[附件]'" class="message-content">
-                    <pre v-if="rawModeMessages.has(virtualRow.index)" class="raw-content">{{ messages[virtualRow.index].content }}</pre>
-                    <MarkdownPreview v-else :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
+                    <MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
                   </div>
                 </template>
                 <!-- 操作按钮 -->
@@ -190,11 +189,23 @@
                       <NumberOutlined v-else />
                     </button>
                   </a-tooltip>
-                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant'" :title="rawModeMessages.has(virtualRow.index) ? '以 Markdown 展示' : '以原始内容展示'">
+                  <a-tooltip
+                    v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._id"
+                    :title="messages[virtualRow.index]._msgIdCopied ? '已复制' : '复制 Message ID'"
+                  >
+                    <button
+                      class="btn-copy btn-action-text"
+                      :class="{ copied: messages[virtualRow.index]._msgIdCopied }"
+                      @click="copyMessageId(messages[virtualRow.index])"
+                    >
+                      <CheckOutlined v-if="messages[virtualRow.index]._msgIdCopied" />
+                      <TagOutlined v-else />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant'" title="查看原始内容">
                     <button
                       class="btn-copy"
-                      :class="{ active: rawModeMessages.has(virtualRow.index) }"
-                      @click="toggleRawMode(virtualRow.index)"
+                      @click="openRawModal(virtualRow.index)"
                     >
                       <EyeOutlined />
                     </button>
@@ -425,14 +436,25 @@
       v-model:open="attachmentPreviewOpen"
       :attachment="attachmentPreviewAtt"
     />
+
+    <!-- 原始内容弹窗 -->
+    <a-modal
+      v-model:open="rawModal.visible"
+      :title="rawModal.title"
+      :footer="null"
+      width="680px"
+      :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }"
+    >
+      <pre class="raw-modal-content">{{ rawModal.content }}</pre>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
 import {
@@ -488,8 +510,8 @@ const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
 const hasStreamContent = ref(false)
-/** 以原始内容展示的消息索引集合 */
-const rawModeMessages = ref(new Set())
+/** 原始内容弹窗状态 */
+const rawModal = reactive({ visible: false, content: '', title: '' })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
 let loadHistoryRequestId = 0
 /** 切换会话时 agent/版本加载中 */
@@ -506,7 +528,17 @@ const virtualizer = useVirtualizer({
     if (!msg) return 80
     if (msg.role === 'user') return 60
     const len = msg.content?.length || 0
-    return Math.max(80, Math.min(600, Math.ceil(len / 40) * 22 + 60))
+    let size = Math.max(80, Math.min(600, Math.ceil(len / 40) * 22 + 60))
+    // 工具事件额外占高：每个 tool_call/tool_result 约 32px，tool_status 约 24px
+    const toolCount = (msg._toolEvents || []).filter(e => e.type === 'tool_call' || e.type === 'tool_result').length
+    const statusCount = (msg._toolEvents || []).filter(e => e.type === 'tool_status').length
+    if (toolCount > 0 || statusCount > 0) {
+      size += 60 + toolCount * 32 + statusCount * 24
+    }
+    // 参考文献额外占高
+    const refCount = getMsgRagRefs(msg).length
+    if (refCount > 0) size += 40 + refCount * 36
+    return Math.min(size, 2000)
   },
   overscan: 5,
 })
@@ -869,24 +901,53 @@ function parseMessage(m) {
   let sensitiveBlock = null
   let attachments = []
   let requestId = null
-  if (m.metadata) {
+
+  // 解析metadata（处理JSON字符串嵌套）
+  let metadata = m.metadata
+  if (metadata && typeof metadata === 'string') {
     try {
-      const metadata = typeof m.metadata === 'string' ? safeJsonParse(m.metadata) : m.metadata
-      if (metadata?.toolEvents) toolEvents = metadata.toolEvents
-      if (metadata?.workflowEvents) workflowEvents = metadata.workflowEvents
-      if (metadata?.toolBlockOffsets) toolBlockOffsets = metadata.toolBlockOffsets
-      if (metadata?.reasoningContent) reasoningContent = metadata.reasoningContent
-      if (metadata?.sensitiveBlock) sensitiveBlock = metadata.sensitiveBlock
-      if (metadata?.requestId) requestId = metadata.requestId
-      attachments = parseAttachmentsFromMetadata(metadata)
-    } catch {}
+      // 使用原生JSON.parse解析（metadata中没有Long ID精度问题）
+      metadata = JSON.parse(metadata)
+
+      // 如果解析后仍是字符串（双重转义），再解析一次
+      if (typeof metadata === 'string') {
+        metadata = JSON.parse(metadata)
+      }
+    } catch (e) {
+      console.error('[parseMessage] metadata解析失败:', e, metadata?.substring?.(0, 200))
+      metadata = null
+    }
   }
+
+  // 提取字段
+  if (metadata) {
+    if (metadata.toolEvents) toolEvents = metadata.toolEvents
+    if (metadata.workflowEvents) workflowEvents = metadata.workflowEvents
+    if (metadata.toolBlockOffsets) {
+      toolBlockOffsets = metadata.toolBlockOffsets.map(o => Number(o))
+    }
+    if (metadata.reasoningContent) reasoningContent = metadata.reasoningContent
+    if (metadata.sensitiveBlock) sensitiveBlock = metadata.sensitiveBlock
+    if (metadata.requestId) requestId = metadata.requestId
+    attachments = parseAttachmentsFromMetadata(metadata)
+  }
+
+  // 规范化 toolEvents 中的 contentOffset 为数字类型
+  if (toolEvents.length > 0) {
+    toolEvents = toolEvents.map(e => ({
+      ...e,
+      contentOffset: e.contentOffset != null ? Number(e.contentOffset) : e.contentOffset
+    }))
+  }
+
   const roleRaw = m.role?.code || m.role
   const role = roleRaw != null ? String(roleRaw).toLowerCase() : ''
+
   return {
     role,
     content: m.content,
     metadata: m.metadata,
+    _id: m.id,
     _attachments: attachments,
     _toolEvents: toolEvents,
     _workflowEvents: workflowEvents,
@@ -1418,14 +1479,21 @@ function copyRequestId(msg) {
   })
 }
 
-function toggleRawMode(index) {
-  const s = new Set(rawModeMessages.value)
-  if (s.has(index)) {
-    s.delete(index)
-  } else {
-    s.add(index)
-  }
-  rawModeMessages.value = s
+function copyMessageId(msg) {
+  if (!msg._id) return
+  navigator.clipboard.writeText(String(msg._id)).then(() => {
+    msg._msgIdCopied = true
+    message.success('Message ID 已复制')
+    setTimeout(() => { msg._msgIdCopied = false }, 2000)
+  })
+}
+
+function openRawModal(index) {
+  const msg = messages.value[index]
+  if (!msg) return
+  rawModal.content = msg.content || ''
+  rawModal.title = msg.role === 'assistant' ? '助手回复原文' : '消息原文'
+  rawModal.visible = true
 }
 
 function stopGenerating() {
@@ -1438,7 +1506,8 @@ function stopGenerating() {
 function registerToolBlockOffset(msg, offset) {
   if (offset == null || offset < 0) return
   if (!msg._toolBlockOffsets) msg._toolBlockOffsets = []
-  if (!msg._toolBlockOffsets.includes(offset)) {
+  // 使用宽松相等检查是否已存在
+  if (!msg._toolBlockOffsets.some(o => o == offset)) {
     msg._toolBlockOffsets.push(offset)
     msg._toolBlockOffsets.sort((a, b) => a - b)
   }
@@ -1455,7 +1524,8 @@ function getTopCapabilityEvents(msg) {
 }
 
 function getCapabilityEventsForOffset(msg, offset) {
-  return getCapabilityEvents(msg).filter(e => e.type !== 'skill_active' && e.contentOffset === offset)
+  // 使用宽松相等，兼容数字和字符串类型的 offset
+  return getCapabilityEvents(msg).filter(e => e.type !== 'skill_active' && e.contentOffset == offset)
 }
 
 function getInlineCapabilityEvents(msg) {
@@ -1481,17 +1551,19 @@ function getToolBlockOffsets(msg) {
 
 function getToolEventsForOffset(msg, offset) {
   const events = msg._toolEvents || []
-  const matched = events.filter(e => e.contentOffset === offset)
+  // 使用宽松相等，兼容数字和字符串类型的 offset
+  const matched = events.filter(e => e.contentOffset == offset)
   if (matched.length > 0) return matched
   const offsets = getToolBlockOffsets(msg)
-  if (offsets.length === 1 && offsets[0] === offset) {
+  if (offsets.length === 1 && offsets[0] == offset) {
     return events.filter(e => e.contentOffset == null)
   }
   return matched
 }
 
 function isToolBlockDone(msg, offset) {
-  if (msg._toolBlocksDone?.includes(offset)) return true
+  // 兼容数字和字符串类型的 offset 比较
+  if (msg._toolBlocksDone?.some(o => o == offset)) return true
   if (!msg._streaming) return true
   const atOffset = getToolEventsForOffset(msg, offset)
   return atOffset.some(e => e.type === 'tool_result' || e.type === 'subagent_result')
@@ -1500,7 +1572,8 @@ function isToolBlockDone(msg, offset) {
 function markToolBlockDone(msg, offset) {
   if (offset == null || offset < 0) return
   if (!msg._toolBlocksDone) msg._toolBlocksDone = []
-  if (!msg._toolBlocksDone.includes(offset)) {
+  // 使用宽松相等检查是否已存在
+  if (!msg._toolBlocksDone.some(o => o == offset)) {
     msg._toolBlocksDone.push(offset)
   }
 }
@@ -1900,17 +1973,17 @@ watch(sessionId, (newVal, oldVal) => {
   background: #e8f4ff;
 }
 
-/* 原始内容展示 */
-.raw-content {
+/* 原始内容弹窗 */
+.raw-modal-content {
   margin: 0;
   padding: 0;
   background: none;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: inherit;
-  font-size: 15px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
   line-height: 1.7;
-  color: #171717;
+  color: #1e293b;
 }
 
 /* Markdown 渲染 */
