@@ -40,8 +40,8 @@ public class SubAgentRequest {
     @Schema(description = "系统提示词")
     private String systemPrompt;
 
-    @Schema(description = "工具名称列表")
-    private List<String> tools;
+    @Schema(description = "绑定工具ID列表")
+    private List<String> toolIds;
 
     @Schema(description = "可选的模型ID")
     private Long modelId;

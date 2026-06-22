@@ -98,22 +98,33 @@ public class MessageMiddleware implements ChatMiddleware {
             ## 输出格式要求（必须严格遵守，这是最重要的规则）
             你必须使用标准 Markdown 格式输出，严禁输出纯文本段落。
 
+            ### 标题格式（必须严格遵守）
+            - `#` 后面**必须有空格**：`# 标题`，严禁写成 `#标题`
+            - 标题必须**独占一行**，前后各空一行（与正文/表格/列表之间用空行隔开）
+            - 标题后面**禁止直接跟表格管道符 `|`**，必须先换行再写表格
+            - ✅ 正确示例：
+              ```
+              ### 检测对象
+
+              | 项目 | 内容 |
+              |------|------|
+              | 值1  | 值2  |
+              ```
+            - ❌ 错误示例：`###检测对象| 项目| 内容|`（标题和表格粘在一起）
+
             ### 列表格式（必须使用）
             当回答包含多个要点、步骤、特征时，必须使用列表：
             - 无序列表用 `- ` 开头（注意短横线后有空格）
             - 有序列表用 `1. ` `2. ` `3. ` 开头
             - 每个列表项单独一行，不要合并到同一段落
 
-            ### 标题格式
-            - 一级标题：`# 标题`
-            - 二级标题：`## 标题`
-            - 三级标题：`### 标题`
-
             ### 表格格式
-            当涉及对比、参数、多维信息时使用表格：
-            | 列1 | 列2 | 列3 |
-            |-----|-----|-----|
-            | 值1 | 值2 | 值3 |
+            - 当涉及对比、参数、多维信息时使用 Markdown 表格
+            - 表格前后必须各空一行，与其他内容隔开
+            - 表格格式示例：
+              | 列1 | 列2 | 列3 |
+              |-----|-----|-----|
+              | 值1 | 值2 | 值3 |
 
             ### 其他格式
             - 重点内容使用 `**加粗**` 标记
@@ -128,7 +139,8 @@ public class MessageMiddleware implements ChatMiddleware {
         if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
             deleteLastAssistantMessage(ctx.getSessionId());
         } else {
-            saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
+            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
+            ctx.setUserMessageId(userMsgId);
         }
 
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
@@ -201,16 +213,15 @@ public class MessageMiddleware implements ChatMiddleware {
         throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "消息不能为空");
     }
 
-    private void saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments) {
+    private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments) {
         if (attachments == null || attachments.isEmpty()) {
-            saveMessage(sessionId, MessageRole.USER, content);
-            return;
+            return saveMessage(sessionId, MessageRole.USER, content);
         }
         try {
             String metadata = objectMapper.writeValueAsString(Map.of("attachments", attachments));
-            saveMessage(sessionId, MessageRole.USER, content, metadata, 0);
+            return saveMessage(sessionId, MessageRole.USER, content, metadata, 0);
         } catch (Exception e) {
-            saveMessage(sessionId, MessageRole.USER, content);
+            return saveMessage(sessionId, MessageRole.USER, content);
         }
     }
 
@@ -363,8 +374,10 @@ public class MessageMiddleware implements ChatMiddleware {
 
                 **输出格式要求（必须严格遵守）**：
                 - 使用 Markdown 格式输出，合理使用标题、列表、表格等结构化排版
+                - 标题 `#` 后必须有空格，标题必须独占一行，前后各空一行
+                - 标题后面禁止直接跟表格管道符 `|`，必须先换行再写表格
                 - 当回答包含多个要点时，必须使用有序列表（1. 2. 3.）或无序列表（- ）
-                - 当回答涉及对比、参数、多维信息时，使用 Markdown 表格
+                - 当回答涉及对比、参数、多维信息时，使用 Markdown 表格，表格前后各空一行
                 - 每个要点单独一行，不要将多个要点合并到同一段落
                 - 重点内容使用 **加粗** 标记
                 - 确保标题层级清晰：一级标题用 #，二级用 ##，三级用 ###

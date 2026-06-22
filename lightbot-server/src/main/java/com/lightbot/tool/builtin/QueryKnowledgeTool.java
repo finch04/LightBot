@@ -82,6 +82,10 @@ public class QueryKnowledgeTool {
             return "无法确定当前智能体，知识库检索已跳过。请从对话页选择 Agent 后重试。";
         }
 
+        if (question == null || question.isBlank()) {
+            return "搜索问题不能为空，请提供具体的搜索内容。";
+        }
+
         // 1. 获取Agent绑定的知识库ID列表
         List<Long> knowledgeIds = agentService.getKnowledgeIds(finalAgentId);
         log.info("[Tool:query_knowledge] Agent绑定知识库: agentId={}, knowledgeIds={}", finalAgentId, knowledgeIds);

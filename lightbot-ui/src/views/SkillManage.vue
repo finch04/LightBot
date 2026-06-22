@@ -153,12 +153,18 @@
             <a-select-option v-for="t in toolList" :key="t.id" :value="String(t.id)" :label="t.displayName || t.name">
               <EntitySelectOption type="tool" :name="t.displayName || t.name" :tag="getToolTypeLabel(t.toolType)" :desc="t.description" />
             </a-select-option>
+            <a-select-option v-for="s in staleToolOptions" :key="s.value" :value="s.value" :label="s.label" disabled>
+              <span style="color: #ef4444;">{{ s.label }}</span>
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="依赖 MCP Server">
           <a-select v-model:value="form.mcpServerIds" mode="multiple" placeholder="选择该 Skill 启用时附带的 MCP Server" style="width: 100%" option-label-prop="label">
             <a-select-option v-for="m in mcpList" :key="m.id" :value="String(m.id)" :label="m.name">
               <EntitySelectOption type="mcp" :name="m.name" :tag="({ npx: 'NPX', uvx: 'UVX', sse: 'SSE' })[m.installType?.code || m.installType] || m.installType?.code || m.installType || ''" :desc="m.description" />
+            </a-select-option>
+            <a-select-option v-for="s in staleMcpOptions" :key="s.value" :value="s.value" :label="s.label" disabled>
+              <span style="color: #ef4444;">{{ s.label }}</span>
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -253,6 +259,8 @@ const toolOptions = ref([])
 const mcpOptions = ref([])
 const toolList = ref([])
 const mcpList = ref([])
+const staleToolOptions = ref([])
+const staleMcpOptions = ref([])
 const dialogVisible = ref(false)
 const guideVisible = ref(false)
 const importModalVisible = ref(false)
@@ -313,15 +321,33 @@ function formatIdLabels(raw, options) {
   const ids = parseIdArray(raw)
   if (!ids.length) return ''
   const labelMap = Object.fromEntries((options || []).map(o => [String(o.value), o.label]))
-  return ids.map(id => labelMap[id] || id).join('、')
+  return ids.map(id => labelMap[id] || `[已删除]`).join('、')
 }
 
 function openDialog(row) {
+  staleToolOptions.value = []
+  staleMcpOptions.value = []
+
   if (row) {
+    const selectedToolIds = parseIdArray(row.toolIds)
+    const selectedMcpIds = parseIdArray(row.mcpServerIds)
+
+    // 检测悬空工具引用
+    const existingToolIds = new Set(toolList.value.map(t => String(t.id)))
+    selectedToolIds.filter(id => !existingToolIds.has(id)).forEach(id => {
+      staleToolOptions.value.push({ value: id, label: `[已删除] ${id}` })
+    })
+
+    // 检测悬空MCP引用
+    const existingMcpIds = new Set(mcpList.value.map(m => String(m.id)))
+    selectedMcpIds.filter(id => !existingMcpIds.has(id)).forEach(id => {
+      staleMcpOptions.value.push({ value: id, label: `[已删除] ${id}` })
+    })
+
     Object.assign(form, {
       ...row,
-      toolIds: parseIdArray(row.toolIds),
-      mcpServerIds: parseIdArray(row.mcpServerIds),
+      toolIds: selectedToolIds,
+      mcpServerIds: selectedMcpIds,
       skillDependencies: parseIdArray(row.skillDependencies),
       config: row.config || '{}',
     })
@@ -350,6 +376,31 @@ async function handleSubmit() {
   if (!form.name?.trim()) return message.warning('请输入 Skill 名称')
   if (!form.slug?.trim()) return message.warning('请填写 slug（英文-小写-短横线）')
   if (!form.promptTemplate?.trim()) return message.warning('请填写提示词模板')
+
+  // 检查是否有悬空引用
+  const existingToolIds = new Set(toolList.value.map(t => String(t.id)))
+  const existingMcpIds = new Set(mcpList.value.map(m => String(m.id)))
+  const staleToolCount = (form.toolIds || []).filter(id => !existingToolIds.has(id)).length
+  const staleMcpCount = (form.mcpServerIds || []).filter(id => !existingMcpIds.has(id)).length
+  const total = staleToolCount + staleMcpCount
+
+  if (total > 0) {
+    const parts = []
+    if (staleToolCount > 0) parts.push(`${staleToolCount} 个工具`)
+    if (staleMcpCount > 0) parts.push(`${staleMcpCount} 个MCP服务`)
+    Modal.confirm({
+      title: '存在已删除的引用',
+      content: `${parts.join('、')}已被删除，保存时将自动移除。是否继续？`,
+      okText: '继续保存',
+      cancelText: '取消',
+      onOk: () => doSubmit(),
+    })
+  } else {
+    doSubmit()
+  }
+}
+
+async function doSubmit() {
   submitting.value = true
   try {
     const data = {

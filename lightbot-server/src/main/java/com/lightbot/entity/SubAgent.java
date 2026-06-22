@@ -42,9 +42,9 @@ public class SubAgent {
     @Schema(description = "系统提示词")
     private String systemPrompt;
 
-    @TableField(value = "tools", typeHandler = com.lightbot.handler.JsonbTypeHandler.class)
-    @Schema(description = "工具名称列表")
-    private String tools;
+    @TableField(value = "tool_ids", typeHandler = com.lightbot.handler.JsonbTypeHandler.class)
+    @Schema(description = "绑定工具ID列表（JSON数组）")
+    private String toolIds;
 
     @TableField("model_id")
     @Schema(description = "可选的模型覆盖")

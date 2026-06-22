@@ -423,7 +423,7 @@ function openFile() {
     background: #f8fafc;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    max-height: 60vh;
+    max-height: 55vh;
     overflow-y: auto;
   }
 
@@ -446,12 +446,12 @@ function openFile() {
 
   .okd-iframe {
     width: 100%;
-    min-height: 500px;
+    min-height: 450px;
     border: none;
   }
 
   .okd-text-preview {
-    max-height: 55vh;
+    max-height: 50vh;
     overflow-y: auto;
 
     pre {

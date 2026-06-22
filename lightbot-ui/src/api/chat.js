@@ -102,8 +102,13 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
   for (const line of lines) {
     if (line.startsWith('data:')) {
       let content = line.substring(5)
-      if (content === '[DONE]') {
-        onDone?.()
+      if (content.startsWith('[DONE]')) {
+        const jsonStr = content.substring(6).trim()
+        if (jsonStr) {
+          try { onDone?.(JSON.parse(jsonStr)) } catch { onDone?.() }
+        } else {
+          onDone?.()
+        }
         continue
       }
       if (content) {

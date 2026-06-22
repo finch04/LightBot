@@ -1,8 +1,11 @@
 package com.lightbot.subagent;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.SubAgent;
+import com.lightbot.entity.Tool;
 import com.lightbot.mapper.SubAgentMapper;
+import com.lightbot.mapper.ToolMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -25,6 +28,7 @@ import java.util.Map;
 public class BuiltInSubAgentRegistrar implements ApplicationRunner {
 
     private final SubAgentMapper subAgentMapper;
+    private final ToolMapper toolMapper;
     private final ObjectMapper objectMapper;
 
     /**
@@ -97,23 +101,42 @@ public class BuiltInSubAgentRegistrar implements ApplicationRunner {
                 subAgent.setDisplayName((String) data.get("displayName"));
                 subAgent.setDescription((String) data.get("description"));
                 subAgent.setSystemPrompt((String) data.get("systemPrompt"));
-                subAgent.setTools(toJson((List<String>) data.get("tools")));
+                subAgent.setToolIds(resolveToolIds((List<String>) data.get("tools")));
                 subAgent.setEnabled(1);
                 subAgent.setIsBuiltin(1);
                 subAgentMapper.insert(subAgent);
                 log.info("[BuiltInSubAgentRegistrar] 注册内置 SubAgent: name={}", name);
             } else {
-                // 已存在，更新 display_name、description、system_prompt、tools（保持代码定义同步）
-                existing.setDisplayName((String) data.get("displayName"));
-                existing.setDescription((String) data.get("description"));
-                existing.setSystemPrompt((String) data.get("systemPrompt"));
-                existing.setTools(toJson((List<String>) data.get("tools")));
-                subAgentMapper.updateById(existing);
-                log.info("[BuiltInSubAgentRegistrar] 更新内置 SubAgent: name={}", name);
+                // 已存在，字段级对比，有变化才更新
+                String newDisplayName = (String) data.get("displayName");
+                String newDescription = (String) data.get("description");
+                String newSystemPrompt = (String) data.get("systemPrompt");
+                String newToolIds = resolveToolIds((List<String>) data.get("tools"));
+
+                boolean changed = !strEquals(existing.getDisplayName(), newDisplayName)
+                        || !strEquals(existing.getDescription(), newDescription)
+                        || !strEquals(existing.getSystemPrompt(), newSystemPrompt)
+                        || !strEquals(existing.getToolIds(), newToolIds);
+
+                if (changed) {
+                    existing.setDisplayName(newDisplayName);
+                    existing.setDescription(newDescription);
+                    existing.setSystemPrompt(newSystemPrompt);
+                    existing.setToolIds(newToolIds);
+                    subAgentMapper.updateById(existing);
+                    log.info("[BuiltInSubAgentRegistrar] 更新内置 SubAgent: name={}", name);
+                } else {
+                    log.debug("[BuiltInSubAgentRegistrar] 内置 SubAgent 无变化，跳过: name={}", name);
+                }
             }
         }
 
         log.info("[BuiltInSubAgentRegistrar] 内置 SubAgent 注册完成: 共 {} 个", DEFAULT_SUBAGENTS.size());
+    }
+
+    private boolean strEquals(String a, String b) {
+        if (a == null) return b == null;
+        return a.equals(b);
     }
 
     private String toJson(List<String> list) {
@@ -125,5 +148,23 @@ public class BuiltInSubAgentRegistrar implements ApplicationRunner {
         } catch (Exception e) {
             return "[]";
         }
+    }
+
+    /**
+     * 将工具名称列表解析为工具ID列表的JSON字符串
+     *
+     * @param toolNames 工具名称列表
+     * @return 工具ID的JSON数组字符串
+     */
+    private String resolveToolIds(List<String> toolNames) {
+        if (toolNames == null || toolNames.isEmpty()) {
+            return "[]";
+        }
+        List<String> ids = toolMapper.selectList(
+                        new LambdaQueryWrapper<Tool>().in(Tool::getName, toolNames))
+                .stream()
+                .map(t -> String.valueOf(t.getId()))
+                .toList();
+        return toJson(ids);
     }
 }

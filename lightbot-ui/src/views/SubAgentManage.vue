@@ -40,8 +40,8 @@
         </a-tooltip>
         <p v-else class="card-desc">暂无描述</p>
         <div class="card-meta">
-          <span class="card-tools" v-if="formatTools(s.tools)">
-            <ToolOutlined /> {{ formatTools(s.tools) }}
+          <span class="card-tools" v-if="formatToolIds(s.toolIds)">
+            <ToolOutlined /> {{ formatToolIds(s.toolIds) }}
           </span>
           <span class="card-tools" v-else>
             <ToolOutlined /> 无工具
@@ -83,10 +83,10 @@
         </a-form-item>
         <a-form-item label="绑定工具">
           <a-select
-            v-model:value="form.tools"
+            v-model:value="form.toolIds"
             mode="multiple"
             placeholder="选择工具（可选）"
-            :options="toolOptions"
+            :options="allToolOptions"
             allow-clear
             option-label-prop="label"
           >
@@ -180,7 +180,7 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">绑定工具</span>
-          <span class="detail-value">{{ formatTools(currentDetail?.tools) || '无' }}</span>
+          <span class="detail-value">{{ formatToolIds(currentDetail?.toolIds) || '无' }}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">模型配置</span>
@@ -249,7 +249,7 @@ const form = reactive({
   displayName: '',
   description: '',
   systemPrompt: '',
-  tools: [],
+  toolIds: [],
   modelId: null,
   enabled: true
 })
@@ -268,14 +268,18 @@ const detailVisible = ref(false)
 const currentDetail = ref(null)
 
 const toolList = ref([])
+const staleToolOptions = ref([])
+
 const toolOptions = computed(() => {
   return toolList.value.map(t => ({
-    value: t.name,
+    value: String(t.id),
     label: t.displayName || t.name,
     toolType: getToolTypeLabel(t.toolType),
     description: t.description,
   }))
 })
+
+const allToolOptions = computed(() => [...toolOptions.value, ...staleToolOptions.value])
 
 onMounted(() => {
   loadList()
@@ -326,23 +330,42 @@ function refresh() {
 function openDialog() {
   editingId.value = null
   inheritModel.value = true
-  Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', tools: [], modelId: null, enabled: true })
+  staleToolOptions.value = []
+  Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', toolIds: [], modelId: null, enabled: true })
   dialogVisible.value = true
 }
 
 function openEditDialog(record) {
   editingId.value = record.id
   inheritModel.value = !record.modelId
+  staleToolOptions.value = []
+
+  // 解析已绑定的工具ID
+  const selectedIds = parseIdArray(record.toolIds)
+
+  // 检测悬空引用（JSON中有但工具列表中不存在的ID）
+  const existingIds = new Set(toolList.value.map(t => String(t.id)))
+  selectedIds.filter(id => !existingIds.has(id)).forEach(id => {
+    staleToolOptions.value.push({ value: id, label: `[已删除] ${id}`, disabled: true })
+  })
+
   Object.assign(form, {
     name: record.name,
     displayName: record.displayName,
     description: record.description,
     systemPrompt: record.systemPrompt,
-    tools: JSON.parse(record.tools || '[]'),
+    toolIds: selectedIds,
     modelId: record.modelId ? String(record.modelId) : null,
     enabled: record.enabled === 1
   })
   dialogVisible.value = true
+}
+
+/** 解析JSON数组为字符串列表，兼容数组和JSON字符串输入 */
+function parseIdArray(json) {
+  if (!json) return []
+  if (Array.isArray(json)) return json.map(String)
+  try { return JSON.parse(json).map(String) } catch { return [] }
 }
 
 async function handleSave() {
@@ -350,13 +373,32 @@ async function handleSave() {
     message.warning('请填写必填字段')
     return
   }
+
+  // 检查是否有悬空工具引用
+  const existingIds = new Set(toolList.value.map(t => String(t.id)))
+  const staleCount = form.toolIds.filter(id => !existingIds.has(id)).length
+
+  if (staleCount > 0) {
+    Modal.confirm({
+      title: '存在已删除的工具',
+      content: `${staleCount} 个工具已被删除，保存时将自动移除。是否继续？`,
+      okText: '继续保存',
+      cancelText: '取消',
+      onOk: () => doSave(),
+    })
+  } else {
+    doSave()
+  }
+}
+
+async function doSave() {
   try {
     const data = {
       name: form.name,
       displayName: form.displayName,
       description: form.description,
       systemPrompt: form.systemPrompt,
-      tools: form.tools,
+      toolIds: form.toolIds,
       modelId: inheritModel.value ? null : (form.modelId || null),
       enabled: form.enabled
     }
@@ -411,12 +453,15 @@ function openDetail(record) {
   detailVisible.value = true
 }
 
-function formatTools(toolsJson) {
-  if (!toolsJson) return ''
+function formatToolIds(toolIdsJson) {
+  if (!toolIdsJson) return ''
   try {
-    const tools = JSON.parse(toolsJson)
-    if (!tools.length) return ''
-    return tools.join(', ')
+    const ids = JSON.parse(toolIdsJson)
+    if (!ids.length) return ''
+    return ids.map(id => {
+      const tool = toolList.value.find(t => String(t.id) === String(id))
+      return tool ? (tool.displayName || tool.name) : '[已删除]'
+    }).join('、')
   } catch {
     return ''
   }

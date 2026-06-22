@@ -9,14 +9,12 @@ import com.lightbot.entity.Agent;
 import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.LlmTrace;
 import com.lightbot.entity.Message;
-import com.lightbot.entity.ToolCall;
 import com.lightbot.enums.MessageRole;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.model.ProviderResolver;
 import com.lightbot.service.*;
 import com.lightbot.util.LlmTraceMessageSerializer;
-import com.lightbot.util.SensitiveWordFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -35,8 +33,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Trace 中间件：记录调用链、持久化AI回复、异步生成标题
- * <p>作为最外层中间件，通过包裹下游 Flux 的 doOnComplete/doOnError 实现后置处理。</p>
+ * Trace 中间件：记录调用链、异步生成标题
+ * <p>作为最外层中间件，通过包裹下游 Flux 的 doOnComplete/doOnError 实现后置处理。
+ * AI 回复持久化已移至 ChatServiceImpl.buildDoneEvent（[DONE] 之前执行）。</p>
  *
  * @author finch
  * @since 2026-05-23
@@ -48,51 +47,28 @@ public class TraceMiddleware implements ChatMiddleware {
 
     private final TaskExecutor taskExecutor;
     private final LlmTraceService llmTraceService;
-    private final MessageMiddleware messageMiddleware;
     private final ProviderResolver providerResolver;
     private final ModelFactory modelFactory;
     private final AgentService agentService;
     private final ChatSessionService chatSessionService;
     private final MessageMapper messageMapper;
-    private final ToolCallService toolCallService;
     private final ObjectMapper objectMapper;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
         return next.proceed(ctx)
                 .doOnComplete(() -> {
+                    // 消息持久化已在 ChatServiceImpl.buildDoneEvent 中完成（[DONE] 之前），
+                    // 此处仅做 Trace 记录等后置清理。
                     long tEnd = System.currentTimeMillis();
-                    long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
 
-                    // 1. 持久化AI回复（合并 reasoningContent 到 metadata）
-                    Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
-                    String replyToSave = SensitiveWordFilter.filterAiOutput(
-                            ctx.getFullReply().toString(), ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
-                    String metadataStr = buildPersistMetadata(ctx);
-                    Long messageId = messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
-                            replyToSave, metadataStr, (int) totalTokens);
-
-                    // 1.1 批量写入工具调用记录（关联 assistant 消息ID）
-                    if (!ctx.getPendingToolCalls().isEmpty()) {
-                        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                        for (ToolCall tc : ctx.getPendingToolCalls()) {
-                            tc.setMessageId(messageId);
-                            if (tc.getCreatedAt() == null) {
-                                tc.setCreatedAt(now);
-                            }
-                        }
-                        toolCallService.saveBatch(ctx.getPendingToolCalls());
-                    }
-                    ctx.getFullReply().setLength(0);
-                    ctx.getFullReply().append(replyToSave);
-
-                    // 2. 异步生成标题
+                    // 1. 异步生成标题
                     taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
 
-                    // 3. 记录本轮用户输入（含附件，便于 Trace 排查）
+                    // 2. 记录本轮用户输入（含附件，便于 Trace 排查）
                     recordUserInputSpan(ctx);
 
-                    // 4. 记录发送给 LLM 的完整消息（系统提示词、历史、用户图文等，不截断）
+                    // 3. 记录发送给 LLM 的完整消息
                     ChatRequest chatRequest = ctx.getRequest();
                     if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
                         boolean lastUserHasAttachments = chatRequest != null && chatRequest.getAttachments() != null
@@ -111,14 +87,14 @@ public class TraceMiddleware implements ChatMiddleware {
                                 ctx.getStartTime(), 0, "OK", llmInputAttrs));
                     }
 
-                    // 5. 追加AI思考内容到spans
+                    // 4. 追加AI思考内容到spans
                     if (ctx.getReasoningContent().length() > 0) {
                         ctx.getSpans().add(LlmTraceSpan.of("reasoning", null, "ai_reasoning",
                                 ctx.getStartTime(), tEnd - ctx.getStartTime(), "OK",
                                 Map.of("content", ctx.getReasoningContent().toString())));
                     }
 
-                    // 6. 构建Trace并异步写库
+                    // 5. 构建Trace并异步写库
                     persistTrace(ctx, "completed", tEnd - ctx.getStartTime(), null);
                 })
                 .doOnError(e -> {

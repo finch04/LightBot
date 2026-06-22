@@ -220,4 +220,29 @@ public class ToolEventGenerator {
             return "{\"type\":\"sensitive_block\",\"scope\":\"" + scope + "\",\"message\":\"\"}";
         }
     }
+
+    /**
+     * 生成带消息ID的 [DONE] 事件
+     * <p>格式：[DONE]{"userMessageId":"...","assistantMessageId":"..."}</p>
+     *
+     * @param userMessageId      用户消息ID
+     * @param assistantMessageId AI回复消息ID
+     */
+    public String doneWithMetadata(Long userMessageId, Long assistantMessageId) {
+        try {
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            if (userMessageId != null) {
+                meta.put("userMessageId", userMessageId.toString());
+            }
+            if (assistantMessageId != null) {
+                meta.put("assistantMessageId", assistantMessageId.toString());
+            }
+            if (meta.isEmpty()) {
+                return DONE_PREFIX;
+            }
+            return DONE_PREFIX + objectMapper.writeValueAsString(meta);
+        } catch (Exception e) {
+            return DONE_PREFIX;
+        }
+    }
 }

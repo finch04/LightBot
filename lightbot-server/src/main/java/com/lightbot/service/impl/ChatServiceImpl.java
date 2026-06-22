@@ -39,6 +39,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.util.ArrayList;
@@ -366,7 +367,75 @@ public class ChatServiceImpl implements ChatService {
 
         return Flux.just(REQUEST_ID_PREFIX + ctx.getRequestId())
                 .concatWith(ChatMiddlewareChain.of(middlewares, core).proceed(ctx))
-                .concatWith(Flux.just(DONE_PREFIX));
+                .concatWith(Mono.fromCallable(() -> buildDoneEvent(ctx)));
+    }
+
+    /**
+     * 构建 [DONE] 事件：先持久化 AI 回复，再返回带消息ID的完成标记
+     * <p>此方法在 Mono.fromCallable 中执行（Flux 最后一个元素），此时流式内容已全部累加。
+     * Trace 记录、标题生成等后置操作仍由 TraceMiddleware.doOnComplete 处理。</p>
+     */
+    private String buildDoneEvent(ChatContext ctx) {
+        try {
+            long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
+            Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
+
+            // 1. 持久化 AI 回复
+            String replyToSave = SensitiveWordFilter.filterAiOutput(
+                    ctx.getFullReply().toString(), ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
+            String metadataStr = buildPersistMetadata(ctx);
+            Long assistantMessageId = messageMiddleware.saveMessage(
+                    ctx.getSessionId(), MessageRole.ASSISTANT,
+                    replyToSave, metadataStr, (int) totalTokens);
+
+            // 1.1 批量写入工具调用记录
+            if (!ctx.getPendingToolCalls().isEmpty()) {
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                for (ToolCall tc : ctx.getPendingToolCalls()) {
+                    tc.setMessageId(assistantMessageId);
+                    if (tc.getCreatedAt() == null) {
+                        tc.setCreatedAt(now);
+                    }
+                }
+                toolCallService.saveBatch(ctx.getPendingToolCalls());
+            }
+            ctx.getFullReply().setLength(0);
+            ctx.getFullReply().append(replyToSave);
+
+            // 2. 返回带消息ID的 [DONE] 事件
+            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId);
+        } catch (Exception e) {
+            log.error("[Chat] 构建[DONE]事件异常: {}", e.getMessage(), e);
+            return DONE_PREFIX;
+        }
+    }
+
+    /**
+     * 构建持久化 metadata：合并 ragMetadata + reasoningContent + sensitiveBlock + requestId
+     */
+    private String buildPersistMetadata(ChatContext ctx) {
+        try {
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            String ragMeta = ctx.getRagMetadataHolder()[0];
+            if (ragMeta != null && !ragMeta.isBlank()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> existing = objectMapper.readValue(ragMeta, Map.class);
+                meta.putAll(existing);
+            }
+            if (ctx.getReasoningContent().length() > 0) {
+                meta.put("reasoningContent", ctx.getReasoningContent().toString());
+            }
+            if (ctx.getSensitiveStreamState() != null && ctx.getSensitiveStreamState().isBlocked()) {
+                meta.put("sensitiveBlock", "ai_output");
+            }
+            if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
+                meta.put("requestId", ctx.getRequestId());
+            }
+            return meta.isEmpty() ? null : objectMapper.writeValueAsString(meta);
+        } catch (Exception e) {
+            log.warn("[Chat] 构建持久化metadata失败: {}", e.getMessage());
+            return ctx.getRagMetadataHolder()[0];
+        }
     }
 
     /**

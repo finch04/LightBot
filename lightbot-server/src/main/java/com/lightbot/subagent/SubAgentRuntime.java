@@ -65,11 +65,12 @@ public class SubAgentRuntime {
         log.info("[SubAgent] 委派开始: name={}, taskLen={}",
                 subAgent.getName(), taskDescription != null ? taskDescription.length() : 0);
 
-        // 1. 解析子 Agent 的工具集合（按 name 反查 tool 表）
-        List<String> toolNames = parseToolNames(subAgent.getTools());
-        List<ToolCallback> toolCallbacks = toolNames.isEmpty()
+        // 1. 解析子 Agent 的工具集合（按 ID 查 tool 表）
+        List<String> toolIdStrings = parseToolIds(subAgent.getToolIds());
+        List<Long> toolIds = toolIdStrings.stream().map(Long::parseLong).toList();
+        List<ToolCallback> toolCallbacks = toolIds.isEmpty()
                 ? List.of()
-                : toolService.resolveToolCallbacks(toolNames);
+                : toolService.resolveToolCallbacksByIds(toolIds);
         Map<String, ToolCallback> toolMap = new HashMap<>();
         for (ToolCallback cb : toolCallbacks) {
             toolMap.put(cb.getToolDefinition().name(), cb);
@@ -149,15 +150,15 @@ public class SubAgentRuntime {
         return reply.isBlank() ? "（SubAgent " + subAgent.getName() + " 未返回有效内容）" : reply;
     }
 
-    /** 解析 SubAgent.tools JSON 数组 */
-    private List<String> parseToolNames(String json) {
+    /** 解析 SubAgent.toolIds JSON 数组 */
+    private List<String> parseToolIds(String json) {
         if (json == null || json.isBlank()) {
             return List.of();
         }
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
-            log.warn("[SubAgent] 解析 tools JSON 失败: {}", e.getMessage());
+            log.warn("[SubAgent] 解析 toolIds JSON 失败: {}", e.getMessage());
             return List.of();
         }
     }

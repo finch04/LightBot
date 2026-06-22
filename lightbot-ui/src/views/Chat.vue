@@ -1427,7 +1427,7 @@ async function runChatStream({ message, attachments, regenerate }) {
           applyToolMetadata(assistantMsg, safeJsonParse(metadataStr))
         },
         // onDone: 完成
-        onDone: () => {
+        onDone: (meta) => {
           if (assistantMsg) {
             if (!assistantMsg._toolBlockOffsets?.length) {
               assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
@@ -1435,6 +1435,10 @@ async function runChatStream({ message, attachments, regenerate }) {
             assistantMsg._streaming = false
             assistantMsg._toolsDone = true
             assistantMsg._toolExpanded = false
+            // 后端 [DONE] 事件携带消息ID，直接赋值（无需刷新）
+            if (meta?.assistantMessageId) {
+              assistantMsg._id = meta.assistantMessageId
+            }
           }
           loading.value = false
           streaming.value = false

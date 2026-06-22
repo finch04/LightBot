@@ -35,6 +35,8 @@ public class ToolRequest {
 
     private String outputSchema;
 
+    private String outputExample;
+
     private String config;
 
     private String endpointUrl;

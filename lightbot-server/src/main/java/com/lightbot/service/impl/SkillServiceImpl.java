@@ -13,7 +13,9 @@ import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.SkillMapper;
 import com.lightbot.model.SkillMetadata;
+import com.lightbot.service.McpServerService;
 import com.lightbot.service.SkillService;
+import com.lightbot.service.ToolService;
 import com.lightbot.service.sandbox.SkillStorageService;
 import com.lightbot.config.RedisCacheConfig;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +33,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -55,6 +59,8 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
 
     private final ObjectMapper objectMapper;
     private final SkillStorageService skillStorageService;
+    private final ToolService toolService;
+    private final McpServerService mcpServerService;
 
     @Override
     @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "#id", unless = "#result == null")
@@ -155,6 +161,9 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         skill.setDisplayName(request.getDisplayName());
         skill.setDescription(request.getDescription());
         skill.setConfig(request.getConfig());
+        // 清理悬空工具/MCP引用
+        request.setToolIds(cleanStaleToolIds(request.getToolIds()));
+        request.setMcpServerIds(cleanStaleMcpIds(request.getMcpServerIds()));
         skill.setToolIds(toJsonArray(request.getToolIds()));
         skill.setMcpServerIds(toJsonArray(request.getMcpServerIds()));
         skill.setModelId(request.getModelId());
@@ -465,5 +474,39 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         } catch (Exception e) {
             return String.valueOf(input.hashCode());
         }
+    }
+
+    /**
+     * 清理悬空工具ID：过滤掉已被删除的工具
+     *
+     * @param ids 工具ID列表
+     * @return 过滤后仍存在的工具ID列表
+     */
+    private List<String> cleanStaleToolIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ids;
+        }
+        List<Long> longIds = ids.stream().map(Long::parseLong).toList();
+        Set<String> existing = toolService.listByIds(longIds).stream()
+                .map(t -> String.valueOf(t.getId()))
+                .collect(Collectors.toSet());
+        return ids.stream().filter(existing::contains).toList();
+    }
+
+    /**
+     * 清理悬空MCP服务ID：过滤掉已被删除的MCP服务
+     *
+     * @param ids MCP服务ID列表
+     * @return 过滤后仍存在的MCP服务ID列表
+     */
+    private List<String> cleanStaleMcpIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ids;
+        }
+        List<Long> longIds = ids.stream().map(Long::parseLong).toList();
+        Set<String> existing = mcpServerService.listByIds(longIds).stream()
+                .map(m -> String.valueOf(m.getId()))
+                .collect(Collectors.toSet());
+        return ids.stream().filter(existing::contains).toList();
     }
 }

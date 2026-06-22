@@ -18,8 +18,12 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import com.lightbot.service.ToolService;
+
 import java.io.Serializable;
+import java.util.stream.Collectors;
 import java.util.List;
+import java.util.Set;
 
 /**
  * SubAgent 服务实现
@@ -34,6 +38,7 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         implements SubAgentService {
 
     private final ObjectMapper objectMapper;
+    private final ToolService toolService;
 
     @Override
     @Cacheable(value = RedisCacheConfig.CACHE_SUBAGENT, key = "#id", unless = "#result == null")
@@ -61,7 +66,7 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         subAgent.setDisplayName(request.getDisplayName());
         subAgent.setDescription(request.getDescription());
         subAgent.setSystemPrompt(request.getSystemPrompt());
-        subAgent.setTools(toJson(request.getTools()));
+        subAgent.setToolIds(toJson(request.getToolIds()));
         subAgent.setModelId(request.getModelId());
         subAgent.setEnabled(request.getEnabled() != null ? (request.getEnabled() ? 1 : 0) : 1);
         subAgent.setIsBuiltin(0);
@@ -87,12 +92,13 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
                 throw new BizException(ErrorCode.SUBAGENT_NAME_EXISTS);
             }
         }
-        // 4. 更新字段
+        // 4. 清理悬空工具引用后更新字段
+        request.setToolIds(cleanStaleToolIds(request.getToolIds()));
         subAgent.setName(request.getName());
         subAgent.setDisplayName(request.getDisplayName());
         subAgent.setDescription(request.getDescription());
         subAgent.setSystemPrompt(request.getSystemPrompt());
-        subAgent.setTools(toJson(request.getTools()));
+        subAgent.setToolIds(toJson(request.getToolIds()));
         subAgent.setModelId(request.getModelId());
         if (request.getEnabled() != null) {
             subAgent.setEnabled(request.getEnabled() ? 1 : 0);
@@ -159,5 +165,22 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         } catch (Exception e) {
             return "[]";
         }
+    }
+
+    /**
+     * 清理悬空工具ID：过滤掉已被删除的工具
+     *
+     * @param toolIds 工具ID列表
+     * @return 过滤后仍存在的工具ID列表
+     */
+    private List<String> cleanStaleToolIds(List<String> toolIds) {
+        if (toolIds == null || toolIds.isEmpty()) {
+            return toolIds;
+        }
+        List<Long> ids = toolIds.stream().map(Long::parseLong).toList();
+        Set<String> existing = toolService.listByIds(ids).stream()
+                .map(t -> String.valueOf(t.getId()))
+                .collect(Collectors.toSet());
+        return toolIds.stream().filter(existing::contains).toList();
     }
 }

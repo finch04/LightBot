@@ -62,6 +62,10 @@ public class ChatContext {
     private ToolCallingChatOptions toolOptions;
     private Map<String, ToolCallback> toolCallbackMap;
 
+    // ===== 消息ID =====
+    /** 用户消息ID（MessageMiddleware 保存后写入） */
+    private Long userMessageId;
+
     // ===== 流式累加器 =====
     private String requestId;
     private StringBuilder fullReply;

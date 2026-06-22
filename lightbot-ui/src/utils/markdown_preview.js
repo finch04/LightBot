@@ -61,6 +61,10 @@ export function normalizeMarkdown(text) {
   s = s.replace(/^(#{1,6})([^\s#\n])/gm, '$1 $2')
   s = s.replace(/^(#{1,6})\s*(\d+\.)/gm, '$1 $2')
 
+  // 2.1 标题紧跟表格管道符：###标题| col1 | col2 → ### 标题\n| col1 | col2
+  //     marked GFM 表格解析器优先级高于 ATX 标题，会导致整行被当成表头
+  s = s.replace(/^(#{1,6}\s+[^\n|]+)\|/gm, '$1\n|')
+
   // 有序列表项：行首「1.**」→「1. **」（GFM 要求 . 后有空格）
   s = s.replace(/^(\d+\.)(\*\*)/gm, '$1 $2')
   // 中文小结里「亮点1.**」「如下1.**」等缺换行
