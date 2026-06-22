@@ -1,7 +1,7 @@
 <template>
   <div class="list-kb-result">
     <div v-if="isPlainText" class="lkb-plain">
-      <pre>{{ rawResult }}</pre>
+      <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
       <!-- header -->
@@ -43,7 +43,8 @@ const props = defineProps({ event: { type: Object, required: true } })
 const detailVisible = ref(false)
 const rawResult = computed(() => props.event.result || '')
 const data = computed(() => { try { return JSON.parse(rawResult.value) } catch { return null } })
-const isPlainText = computed(() => !data.value)
+const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
+const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 const formattedResult = computed(() => data.value ? JSON.stringify(data.value, null, 2) : rawResult.value)
 
 function formatNumber(n) {

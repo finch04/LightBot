@@ -1,7 +1,7 @@
 <template>
   <div class="calculator-result">
     <div v-if="isPlainText" class="calc-plain">
-      <pre>{{ rawResult }}</pre>
+      <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
       <div class="calc-expression">{{ data.expression }}</div>
@@ -27,7 +27,8 @@ const data = computed(() => {
   }
 })
 
-const isPlainText = computed(() => !data.value)
+const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
+const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 </script>
 
 <style lang="less" scoped>

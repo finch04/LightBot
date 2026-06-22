@@ -1,7 +1,7 @@
 <template>
   <div class="pg-query-result">
     <div v-if="isPlainText" class="pqr-plain">
-      <pre>{{ rawResult }}</pre>
+      <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
       <!-- SQL 代码块 -->
@@ -54,7 +54,8 @@ const data = computed(() => {
   }
 })
 
-const isPlainText = computed(() => !data.value)
+const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
+const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 </script>
 
 <style lang="less" scoped>

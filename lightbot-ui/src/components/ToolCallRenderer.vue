@@ -48,6 +48,7 @@ const FallbackRenderer = defineComponent({
 })
 
 const renderer = computed(() => {
-  return TOOL_RENDERERS[props.event.toolName] || FallbackRenderer
+  const r = TOOL_RENDERERS[props.event.toolName]
+  return r || FallbackRenderer
 })
 </script>

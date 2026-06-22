@@ -39,7 +39,9 @@ public class KnowledgeTools {
     private final DocumentService documentService;
     private final ObjectMapper objectMapper;
 
-    @SystemTool(displayName = "列出知识库")
+    @SystemTool(displayName = "列出知识库",
+            outputExample = "{\"total\":2,\"knowledge_bases\":[{\"id\":1234567890,\"name\":\"产品文档库\",\"description\":\"产品相关文档\",\"document_count\":15,\"chunk_count\":320,\"total_tokens\":128000},{\"id\":1234567891,\"name\":\"FAQ库\",\"description\":\"常见问题\",\"document_count\":5,\"chunk_count\":80,\"total_tokens\":32000}]}",
+            outputSchema = "{\"type\":\"object\",\"properties\":{\"total\":{\"type\":\"integer\",\"description\":\"知识库总数\"},\"knowledge_bases\":{\"type\":\"array\",\"description\":\"知识库列表\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\",\"description\":\"知识库ID\"},\"name\":{\"type\":\"string\",\"description\":\"知识库名称\"},\"description\":{\"type\":\"string\",\"description\":\"知识库描述\"},\"document_count\":{\"type\":\"integer\",\"description\":\"文档数量\"},\"chunk_count\":{\"type\":\"integer\",\"description\":\"文档片段数量\"},\"total_tokens\":{\"type\":\"integer\",\"description\":\"总Token数\"}}}}}}")
     @Tool(name = "list_knowledge_bases",
           description = "列出当前智能体绑定的所有知识库。当用户询问有哪些知识库、知识库列表时调用此工具。")
     public String listKnowledgeBases(ToolContext context) {
@@ -81,7 +83,9 @@ public class KnowledgeTools {
         }
     }
 
-    @SystemTool(displayName = "获取知识库思维导图")
+    @SystemTool(displayName = "获取知识库思维导图",
+            outputExample = "{\"knowledge_id\":1234567890,\"knowledge_name\":\"产品文档库\",\"mindmap\":{\"name\":\"产品文档库\",\"children\":[{\"name\":\"安装部署\",\"children\":[{\"name\":\"环境要求\"},{\"name\":\"安装步骤\"},{\"name\":\"配置说明\"}]},{\"name\":\"功能说明\",\"children\":[{\"name\":\"用户管理\"},{\"name\":\"权限配置\"}]}]}}",
+            outputSchema = "{\"type\":\"object\",\"properties\":{\"knowledge_id\":{\"type\":\"integer\",\"description\":\"知识库ID\"},\"knowledge_name\":{\"type\":\"string\",\"description\":\"知识库名称\"},\"mindmap\":{\"type\":\"object\",\"description\":\"思维导图树形结构\",\"properties\":{\"name\":{\"type\":\"string\",\"description\":\"节点名称\"},\"children\":{\"type\":\"array\",\"description\":\"子节点列表\",\"items\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"description\":\"子节点名称\"},\"children\":{\"type\":\"array\",\"description\":\"嵌套子节点\",\"items\":{\"type\":\"object\"}}}}}}}}}")
     @Tool(name = "get_mindmap",
           description = "获取指定知识库的思维导图。当用户想了解知识库的知识结构、目录概览时调用此工具。")
     public String getMindmap(
@@ -123,7 +127,9 @@ public class KnowledgeTools {
         }
     }
 
-    @SystemTool(displayName = "查看知识库文档原文")
+    @SystemTool(displayName = "查看知识库文档原文",
+            outputExample = "{\"document_id\":1234567890,\"document_name\":\"产品说明书.pdf\",\"content\":\"# 产品简介\\n\\n本产品是...\\n\\n## 功能特性\\n\\n1. 支持多模型...\"}",
+            outputSchema = "{\"type\":\"object\",\"properties\":{\"document_id\":{\"type\":\"integer\",\"description\":\"文档ID\"},\"document_name\":{\"type\":\"string\",\"description\":\"文档文件名\"},\"content\":{\"type\":\"string\",\"description\":\"文档原文内容（超过8000字符时截断）\"}}}")
     @Tool(name = "open_kb_document",
           description = "打开知识库中的指定文档，查看文档原文内容。当用户想查看某个文档的详细内容时调用此工具。")
     public String openKbDocument(

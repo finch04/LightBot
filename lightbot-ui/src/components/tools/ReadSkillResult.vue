@@ -1,7 +1,7 @@
 <template>
   <div class="read-skill-result">
     <div v-if="isPlainText" class="rs-plain">
-      <pre>{{ rawResult }}</pre>
+      <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
       <div class="rs-header">
@@ -34,7 +34,8 @@ const data = computed(() => {
   }
 })
 
-const isPlainText = computed(() => !data.value)
+const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
+const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 </script>
 
 <style lang="less" scoped>

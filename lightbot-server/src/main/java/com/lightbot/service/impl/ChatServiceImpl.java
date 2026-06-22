@@ -222,10 +222,10 @@ public class ChatServiceImpl implements ChatService {
                 }
             }
 
-            // 记录工具结果
-            String truncated = toolResult.length() > 2000 ? toolResult.substring(0, 2000) + "..." : toolResult;
+            // 记录工具结果（JSON结果不截断，纯文本限制2000字符）
+            String sseResult = truncateForSse(toolResult);
             toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result",
-                    truncated, "contentOffset", toolContentOffset));
+                    sseResult, "contentOffset", toolContentOffset));
 
             toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                     firstTool.id(), toolName, toolResult));
@@ -848,7 +848,7 @@ public class ChatServiceImpl implements ChatService {
                     }
 
                     toolEventsList.add(Map.of("type", "tool_result", "toolName", tcName, "result",
-                            result.length() > 2000 ? result.substring(0, 2000) + "..." : result,
+                            truncateForSse(result),
                             "contentOffset", toolContentOffset));
                     return result;
                 }, RAG_EXECUTOR));
@@ -909,7 +909,7 @@ public class ChatServiceImpl implements ChatService {
             }
 
             toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result",
-                    toolResult.length() > 2000 ? toolResult.substring(0, 2000) + "..." : toolResult,
+                    truncateForSse(toolResult),
                     "contentOffset", toolContentOffset));
             toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                     firstTool.id(), toolName, toolResult));
@@ -1247,7 +1247,7 @@ public class ChatServiceImpl implements ChatService {
 
     private void appendToolCallResult(List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
                                     String toolName, String args, String result, int contentOffset) {
-        String truncated = result != null && result.length() > 2000 ? result.substring(0, 2000) + "..." : (result != null ? result : "");
+        String truncated = truncateForSse(result);
         if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
             Map<String, String> parsed = parseSubagentArgs(args);
             String subName = parsed.get("subagentName");
@@ -1263,6 +1263,16 @@ public class ChatServiceImpl implements ChatService {
             return;
         }
         toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result", truncated, "contentOffset", contentOffset));
+    }
+
+    /**
+     * SSE 推送时截断工具结果：JSON 结果不截断（前端需解析），纯文本限制 2000 字符
+     */
+    private String truncateForSse(String result) {
+        if (result == null) return "";
+        // JSON 结果保持完整，避免截断导致解析失败
+        if (result.startsWith("{") || result.startsWith("[")) return result;
+        return result.length() > 2000 ? result.substring(0, 2000) + "..." : result;
     }
 
     private Map<String, String> parseSubagentArgs(String args) {

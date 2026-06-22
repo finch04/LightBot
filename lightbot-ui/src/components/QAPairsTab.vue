@@ -42,6 +42,7 @@
       size="small"
       row-key="id"
       :row-selection="{ selectedRowKeys, onChange: onSelectChange }"
+      :custom-row="(record) => ({ onClick: () => handleViewDetail(record), style: { cursor: 'pointer' } })"
       @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
@@ -67,7 +68,7 @@
         <template v-if="column.key === 'action'">
           <a-space>
             <a-tooltip v-if="record.status === '待向量化' || record.status === '失败'" title="向量化">
-              <a-button type="text" size="small" @click="handleVectorize(record)" :disabled="vectorizing">
+              <a-button type="text" size="small" @click.stop="handleVectorize(record)" :disabled="vectorizing">
                 <template #icon><ApiOutlined /></template>
               </a-button>
             </a-tooltip>
@@ -76,7 +77,7 @@
                 <template #icon><EyeOutlined /></template>
               </a-button>
             </a-tooltip>
-            <a-popconfirm title="确定删除？" @confirm="handleDelete(record.id)">
+            <a-popconfirm title="确定删除？" @confirm="handleDelete(record.id)" @click.stop>
               <a-tooltip title="删除">
                 <a-button type="text" size="small" danger>
                   <template #icon><DeleteOutlined /></template>

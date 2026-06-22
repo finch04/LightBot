@@ -2613,17 +2613,17 @@ watch(sessionId, (newVal, oldVal) => {
 .rag-references {
   margin-top: 12px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--main-25, #f0f5ff);
   border-radius: 8px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--main-200, #bfdbfe);
 }
 .rag-header {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  font-weight: 500;
-  color: #52525b;
+  font-weight: 600;
+  color: var(--main-700, #1d4ed8);
   margin-bottom: 8px;
 }
 .rag-list {
@@ -2634,7 +2634,8 @@ watch(sessionId, (newVal, oldVal) => {
 .rag-item {
   background: #fff;
   border-radius: 6px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--main-200, #bfdbfe);
+  border-left: 3px solid var(--main-400, #60a5fa);
   overflow: hidden;
 }
 .rag-item-header {
@@ -2646,11 +2647,11 @@ watch(sessionId, (newVal, oldVal) => {
   transition: background 0.15s;
 }
 .rag-item-header:hover {
-  background: #f4f4f5;
+  background: var(--main-50, #eff6ff);
 }
 .rag-item-header .anticon {
   font-size: 10px;
-  color: #71717a;
+  color: var(--main-400, #60a5fa);
   transition: transform 0.2s;
 }
 .rag-item-header .anticon.expanded {
@@ -2659,7 +2660,7 @@ watch(sessionId, (newVal, oldVal) => {
 .rag-doc-name {
   flex: 1;
   font-size: 13px;
-  color: #3f3f46;
+  color: var(--gray-700);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2670,25 +2671,29 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .rag-score {
   font-size: 12px;
-  color: #10b981;
-  font-weight: 500;
+  color: var(--main-600, #2563eb);
+  font-weight: 600;
+  background: var(--main-50, #eff6ff);
+  border: 1px solid var(--main-200, #bfdbfe);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 .rag-nav-btn {
   font-size: 12px;
-  color: #6366f1;
+  color: var(--main-500, #3b82f6);
   margin-left: 4px;
   cursor: pointer;
   transition: color 0.2s;
 }
 .rag-nav-btn:hover {
-  color: #4f46e5;
+  color: var(--main-600, #2563eb);
 }
 .rag-item-content {
   padding: 12px;
-  background: #f9fafb;
-  border-top: 1px solid #e4e4e7;
+  background: var(--gray-25, #fafafa);
+  border-top: 1px solid var(--main-100, #dbeafe);
   font-size: 12px;
-  color: #71717a;
+  color: var(--gray-600);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;

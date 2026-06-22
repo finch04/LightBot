@@ -1,7 +1,7 @@
 <template>
   <div class="image-gen-result">
     <div v-if="isPlainText" class="ig-plain">
-      <pre>{{ rawResult }}</pre>
+      <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
       <div class="ig-image-wrap">
@@ -33,7 +33,8 @@ const data = computed(() => {
   }
 })
 
-const isPlainText = computed(() => !data.value)
+const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
+const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 
 function openPreview() {
   if (data.value?.image_url) {

@@ -1,7 +1,7 @@
 <template>
   <div class="pg-describe-table">
     <div v-if="isPlainText" class="pdt-plain">
-      <pre>{{ rawResult }}</pre>
+      <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
       <!-- 表名 -->
@@ -65,7 +65,8 @@ const data = computed(() => {
   }
 })
 
-const isPlainText = computed(() => !data.value)
+const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
+const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 </script>
 
 <style lang="less" scoped>
