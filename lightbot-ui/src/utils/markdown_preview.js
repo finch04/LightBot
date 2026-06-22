@@ -57,6 +57,13 @@ export function normalizeMarkdown(text) {
   s = s.replace(/([：:；;。！？])(#{1,6})/g, '$1\n\n$2')
   s = s.replace(/([。；;！？])(-\s)/g, '$1\n$2')
 
+  // 1.1 通用规则：非空行直接紧跟 ATX 标题时，补一个空行（确保标题前有空行）
+  s = s.replace(/([^\n])(\n)(#{1,6}\s)/g, (match, prevChar, nl, heading) => {
+    // 前面已经是空行则跳过
+    if (prevChar === '\n') return match
+    return prevChar + '\n\n' + heading
+  })
+
   // 2. ATX 标题：##标题 -> ## 标题；###1. -> ### 1.
   s = s.replace(/^(#{1,6})([^\s#\n])/gm, '$1 $2')
   s = s.replace(/^(#{1,6})\s*(\d+\.)/gm, '$1 $2')

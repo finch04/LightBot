@@ -35,10 +35,10 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     let doneFired = false
-    const fireDone = () => {
+    const fireDone = (meta) => {
       if (!doneFired) {
         doneFired = true
-        onDone?.()
+        onDone?.(meta)
       }
     }
 

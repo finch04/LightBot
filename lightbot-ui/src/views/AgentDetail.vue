@@ -2633,10 +2633,11 @@ async function loadAgent() {
     } else {
       bindingCatalogsLoaded.value = true
     }
-    refreshFormBaseline()
   } catch (e) {
     bindingCatalogsLoaded.value = false
     // interceptor已处理错误提示
+  } finally {
+    refreshFormBaseline()
   }
 }
 
@@ -3270,9 +3271,9 @@ async function handleSave(options = {}) {
     // 7. 更新 Skill 绑定
     await updateAgentSkills(agentId, Array.from(selectedSkillIds.value))
 
+    await loadAgent()
     saving.value = false
     message.success('暂存成功')
-    await loadAgent()
     return true
   } catch (e) {
     // interceptor已处理错误提示

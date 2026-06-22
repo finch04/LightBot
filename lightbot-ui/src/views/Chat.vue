@@ -255,7 +255,6 @@
       <!-- 加载中（等待第一个 chunk） -->
       <div v-if="loading && !streaming" class="message assistant">
         <div class="message-body">
-          <div class="message-meta">回复</div>
           <div class="message-content status-content">
             <div class="status-loading">
               <span class="status-spinner"></span>
@@ -267,7 +266,6 @@
       <!-- 流式输出中但尚未创建助手消息时显示加载动画（避免与消息列表中的助手气泡重复） -->
       <div v-if="loading && streaming && !hasStreamContent && !hasStreamingAssistantMessage" class="message assistant">
         <div class="message-body">
-          <div class="message-meta">回复</div>
           <div class="message-content status-content">
             <div class="status-loading">
               <span class="status-spinner"></span>

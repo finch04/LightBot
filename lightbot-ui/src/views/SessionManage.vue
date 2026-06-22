@@ -90,14 +90,33 @@
           <a-descriptions-item label="创建时间">{{ formatTime(detailSession.createTime) }}</a-descriptions-item>
         </a-descriptions>
 
-        <div class="detail-messages-title">消息记录</div>
+        <div class="detail-messages-header">
+          <span class="detail-messages-title">消息记录</span>
+          <a-popconfirm
+            v-if="selectedMsgKeys.length > 0"
+            :title="`确认删除选中的 ${selectedMsgKeys.length} 条消息？`"
+            ok-text="确认删除"
+            cancel-text="取消"
+            ok-type="danger"
+            @confirm="handleBatchDeleteMessages"
+          >
+            <button class="btn-msg-delete">
+              <DeleteOutlined /> 删除 ({{ selectedMsgKeys.length }})
+            </button>
+          </a-popconfirm>
+        </div>
         <a-spin :spinning="messagesLoading">
           <div v-if="detailMessages.length === 0 && !messagesLoading" class="detail-messages-empty">暂无消息</div>
           <div v-else class="detail-messages-list">
-            <div v-for="(msg, i) in detailMessages" :key="i" class="detail-msg" :class="msg.role">
-              <div class="detail-msg-role">{{ roleLabels[msg.role] || msg.role }}</div>
-              <div class="detail-msg-content">{{ msg.content }}</div>
-            </div>
+            <a-checkbox-group v-model:value="selectedMsgKeys" class="msg-checkbox-group">
+              <div v-for="(msg, i) in detailMessages" :key="msg.id || i" class="detail-msg" :class="msg.role">
+                <a-checkbox :value="msg.id" class="msg-checkbox" />
+                <div class="msg-body">
+                  <div class="detail-msg-role">{{ roleLabels[msg.role] || msg.role }}</div>
+                  <div class="detail-msg-content">{{ msg.content }}</div>
+                </div>
+              </div>
+            </a-checkbox-group>
             <div v-if="hasMoreMessages" class="detail-load-more">
               <a-button size="small" :loading="loadingOlder" @click="loadOlderMessages">
                 加载更早的消息
@@ -115,7 +134,7 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getSessions, getSessionMessages, deleteSessionsBatch } from '../api/chatSession'
+import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage } from '../api/chatSession'
 
 const router = useRouter()
 
@@ -131,6 +150,9 @@ const messagesLoading = ref(false)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 let detailPageNum = 1
+
+// 消息批量选择
+const selectedMsgKeys = ref([])
 
 const pagination = reactive({
   current: 1,
@@ -211,6 +233,7 @@ function openDetail(record) {
   detailMessages.value = []
   detailPageNum = 1
   hasMoreMessages.value = false
+  selectedMsgKeys.value = []
   detailVisible.value = true
   loadMessages()
 }
@@ -242,6 +265,25 @@ async function loadOlderMessages() {
     detailPageNum--
   } finally {
     loadingOlder.value = false
+  }
+}
+
+async function handleBatchDeleteMessages() {
+  const count = selectedMsgKeys.value.length
+  if (count === 0) return
+  try {
+    await Promise.all(
+      selectedMsgKeys.value.map(id => deleteMessage(detailSession.value.id, id).catch(() => null))
+    )
+    message.success(`已删除 ${count} 条消息`)
+    selectedMsgKeys.value = []
+    // 刷新消息列表
+    detailPageNum = 1
+    await loadMessages()
+    // 刷新会话列表（消息数/token 可能变化）
+    loadData()
+  } catch {
+    // interceptor handled
   }
 }
 
@@ -347,13 +389,35 @@ onMounted(() => {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 12px;
 }
+.detail-messages-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
 .detail-messages-title {
   font-size: 14px;
   font-weight: 600;
   color: #171717;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #f0f0f0;
+}
+.btn-msg-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: transparent;
+  color: #dc2626;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-msg-delete:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
 }
 .detail-messages-empty {
   text-align: center;
@@ -366,10 +430,27 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
 }
+.msg-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
 .detail-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
   background: #f5f5f5;
+}
+.detail-msg .msg-checkbox {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.detail-msg .msg-body {
+  flex: 1;
+  min-width: 0;
 }
 .detail-msg.user {
   background: #eff6ff;
