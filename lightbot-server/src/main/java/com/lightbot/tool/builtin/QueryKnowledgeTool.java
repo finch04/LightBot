@@ -139,7 +139,7 @@ public class QueryKnowledgeTool {
                                             row.put("content", qa.getAnswer());
                                             row.put("answer", qa.getAnswer());
                                             row.put("score", qa.getScore());
-                                            row.put("knowledge_id", knowledgeId);
+                                            row.put("knowledge_id", knowledgeId.toString());
                                             row.put("document_name", "问答对");
                                             row.put("result_type", RagResultType.QA_PAIR);
                                             return row;
@@ -239,14 +239,16 @@ public class QueryKnowledgeTool {
                 item.put("content", TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content"))));
                 item.put("score", row.get("score"));
                 if (RagResultType.CHUNK.equals(row.get("result_type"))) {
-                    item.put("document_id", row.get("document_id"));
+                    Object docIdRaw = row.get("document_id");
+                    item.put("document_id", docIdRaw != null ? docIdRaw.toString() : null);
                     item.put("document_name", row.get("document_name"));
                 }
                 if (RagResultType.QA_PAIR.equals(row.get("result_type"))) {
                     item.put("question", row.get("question"));
                     item.put("answer", row.get("answer"));
                 }
-                item.put("knowledge_id", row.get("knowledge_id"));
+                Object kbIdRaw = row.get("knowledge_id");
+                item.put("knowledge_id", kbIdRaw != null ? kbIdRaw.toString() : null);
                 return item;
             }).toList());
 

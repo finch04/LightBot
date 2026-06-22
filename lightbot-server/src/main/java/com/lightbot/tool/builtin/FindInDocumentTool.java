@@ -138,7 +138,7 @@ public class FindInDocumentTool {
 
                 // 构建该文档的匹配结果
                 Map<String, Object> docResult = new LinkedHashMap<>();
-                docResult.put("document_id", doc.getId());
+                docResult.put("document_id", doc.getId().toString());
                 docResult.put("document_name", doc.getName());
                 docResult.put("match_count", matchIndices.size());
 
@@ -251,7 +251,7 @@ public class FindInDocumentTool {
 
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("mode", "open");
-        output.put("document_id", docId);
+        output.put("document_id", docId.toString());
         output.put("document_name", doc.getName());
         output.put("total_lines", totalLines);
         output.put("start_line", startLine + 1);

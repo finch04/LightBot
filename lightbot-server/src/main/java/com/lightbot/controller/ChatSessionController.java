@@ -98,4 +98,11 @@ public class ChatSessionController {
         chatSessionService.togglePin(id);
         return Result.ok();
     }
+
+    @Operation(summary = "删除单条消息")
+    @DeleteMapping("/{sessionId}/messages/{messageId}")
+    public Result<Void> deleteMessage(@PathVariable Long sessionId, @PathVariable Long messageId) {
+        messageService.deleteMessage(messageId, sessionId);
+        return Result.ok();
+    }
 }

@@ -45,7 +45,7 @@ public class ToolEventGenerator {
      */
     public String toolResultEvent(String toolName, String result, int contentOffset) {
         try {
-            String truncated = result.length() > 2000 ? result.substring(0, 2000) + "..." : result;
+            String truncated = truncateForSse(result);
             return objectMapper.writeValueAsString(Map.of(
                     "type", "tool_result",
                     "toolName", toolName,
@@ -54,6 +54,15 @@ public class ToolEventGenerator {
         } catch (Exception e) {
             return "{\"type\":\"tool_result\",\"toolName\":\"" + toolName + "\",\"contentOffset\":" + contentOffset + "}";
         }
+    }
+
+    /**
+     * SSE 推送时截断工具结果：JSON 结果不截断（前端需解析），纯文本限制 2000 字符
+     */
+    private String truncateForSse(String result) {
+        if (result == null) return "";
+        if (result.startsWith("{") || result.startsWith("[")) return result;
+        return result.length() > 2000 ? result.substring(0, 2000) + "..." : result;
     }
 
     /**

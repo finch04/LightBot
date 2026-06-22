@@ -39,6 +39,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -203,7 +204,7 @@ public class ChatServiceImpl implements ChatService {
                     safeArgs, "contentOffset", toolContentOffset));
 
             // 执行工具
-            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), requestId);
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), requestId, null);
 
             // 暂存工具调用记录
             ToolCall toolCallLog = new ToolCall();
@@ -370,13 +371,23 @@ public class ChatServiceImpl implements ChatService {
 
     /**
      * 流式核心：递归工具调用循环
+     * <p>创建 Sinks.Many 用于工具执行期间的实时状态推送。
+     * 工具内部通过 {@code ToolEventEmitter.emit()} 写入 Sink，
+     * 此处订阅 Sink 将 tool_status 事件实时发送给前端。</p>
      */
     private Flux<String> streamCore(ChatContext ctx) {
         ctx.setStartTime(System.currentTimeMillis());
         Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
         ctx.setSensitiveStreamState(new SensitiveWordFilter.StreamState(
                 ctx.getConfigMap(), agentId, ctx.getSessionId()));
-        return processToolCallsRecursively(ctx, 0, System.currentTimeMillis());
+
+        Sinks.Many<String> eventSink = Sinks.many().multicast().onBackpressureBuffer();
+        Flux<String> toolStatusFlux = eventSink.asFlux()
+                .map(msg -> STATUS_PREFIX + toolEventGenerator.toolStatusEvent(msg, 0));
+
+        return toolStatusFlux.mergeWith(
+                processToolCallsRecursively(ctx, 0, System.currentTimeMillis(), eventSink)
+                        .doFinally(signal -> eventSink.tryEmitComplete()));
     }
 
     /**
@@ -385,9 +396,11 @@ public class ChatServiceImpl implements ChatService {
      * @param ctx          管道上下文
      * @param depth        递归深度（防止无限循环）
      * @param llmCallStart 本轮LLM调用开始时间
+     * @param eventSink    工具状态事件实时推送通道
      * @return Flux<String> 流式输出片段
      */
-    private Flux<String> processToolCallsRecursively(ChatContext ctx, int depth, long llmCallStart) {
+    private Flux<String> processToolCallsRecursively(ChatContext ctx, int depth, long llmCallStart,
+                                                      Sinks.Many<String> eventSink) {
         int maxSteps = resolveMaxExecutionSteps(ctx.getConfigMap());
         if (depth >= maxSteps) {
             log.warn("[Chat][Trace] 工具调用递归深度达到上限({})，停止循环", depth);
@@ -411,7 +424,7 @@ public class ChatServiceImpl implements ChatService {
         StringBuilder reasoningContent = ctx.getReasoningContent();
 
         if (!isStreamOutputEnabled(configMap)) {
-            return processBlockingRound(ctx, depth, llmCallStart);
+            return processBlockingRound(ctx, depth, llmCallStart, eventSink);
         }
 
         // MiMo 直连：联网搜索 / 视频等多模态
@@ -513,19 +526,21 @@ public class ChatServiceImpl implements ChatService {
                             toolCallCountHolder[0]++;
                             final String tcName = tc.name();
                             final String safeTcArgs = toolArgsSanitizer.forChatCall(tcArgs);
+                            final Sinks.Many<String> sink = eventSink;
                             futures.add(CompletableFuture.supplyAsync(() -> {
                                 long tStart = System.currentTimeMillis();
+                                // 绑定 Sink 到当前 worker 线程，使 emit() 实时推送
+                                if (sink != null) {
+                                    ToolEventEmitter.setupSink(sink);
+                                }
                                 String result;
-                                ToolCallback cb = toolCallbackMap.get(tcName);
-                                if (cb != null) {
-                                    try {
-                                        result = cb.call(safeTcArgs, new ToolContext(Map.of("agentId", agent.getId(), "requestId", requestId)));
-                                    } catch (Exception e) {
-                                        log.error("[Chat] 工具执行异常: name={}, error={}", tcName, e.getMessage(), e);
-                                        result = ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
+                                try {
+                                    result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs,
+                                            agent.getId(), requestId, sink);
+                                } finally {
+                                    if (sink != null) {
+                                        ToolEventEmitter.teardownSink();
                                     }
-                                } else {
-                                    result = ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + tcName);
                                 }
                                 long tEnd = System.currentTimeMillis();
                                 log.info("[Chat][Trace] 工具执行结果: name={}, 耗时={}ms, resultLength={}", tcName, tEnd - tStart, result.length());
@@ -571,20 +586,14 @@ public class ChatServiceImpl implements ChatService {
                         appendToolCallStart(ctx, toolEventsList, statusFluxes, toolName, safeArgs, toolContentOffset);
 
                         long tToolStart = System.currentTimeMillis();
+                        // 流式模式：绑定 Sink 使工具内部 emit() 实时推送给前端
+                        ToolEventEmitter.setupSink(eventSink);
                         String toolResult;
-                        ToolCallback callback = toolCallbackMap.get(toolName);
-                        if (callback != null) {
-                            try {
-                                toolResult = callback.call(callArgs, new ToolContext(Map.of(
-                                        "agentId", agent.getId(),
-                                        "requestId", requestId)));
-                            } catch (Exception e) {
-                                log.error("[Chat] 工具执行异常: name={}, error={}", toolName, e.getMessage(), e);
-                                toolResult = ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());
-                            }
-                        } else {
-                            toolResult = ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + toolName);
-                            log.warn("[Chat][Trace] 工具不存在: name={}, 可用工具={}", toolName, toolCallbackMap.keySet());
+                        try {
+                            toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs,
+                                    agent.getId(), requestId, eventSink);
+                        } finally {
+                            ToolEventEmitter.teardownSink();
                         }
                         long tToolEnd = System.currentTimeMillis();
                         log.info("[Chat][Trace] 工具执行结果: name={}, 耗时={}ms, resultLength={}", toolName, tToolEnd - tToolStart, toolResult.length());
@@ -606,13 +615,6 @@ public class ChatServiceImpl implements ChatService {
                         toolCallLog.setStatus(ToolResultPrefixes.isError(toolResult) ? "error" : "success");
                         toolCallLog.setErrorMessage(ToolResultPrefixes.isError(toolResult) ? toolResult : null);
                         ctx.getPendingToolCalls().add(toolCallLog);
-
-                        List<String> emittedEvents = ToolEventEmitter.drain();
-                        for (String event : emittedEvents) {
-                            toolEventsList.add(Map.of("type", "tool_status", "message", event,
-                                    "contentOffset", toolContentOffset));
-                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolStatusEvent(event, toolContentOffset)));
-                        }
 
                         appendToolCallResult(toolEventsList, statusFluxes, toolName, safeArgs, toolResult, toolContentOffset);
                         toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
@@ -691,14 +693,15 @@ public class ChatServiceImpl implements ChatService {
                             .concatWith(Flux.concat(toolResultEvents))
                             .concatWith(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCompleteEvent(resultContentOffset)))
                             .concatWith(afterTool);
-                    return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart));
+                    return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart, eventSink));
                 });
     }
 
     /**
      * 非流式 LLM 轮次：call() 获取完整回复后一次性输出
      */
-    private Flux<String> processBlockingRound(ChatContext ctx, int depth, long llmCallStart) {
+    private Flux<String> processBlockingRound(ChatContext ctx, int depth, long llmCallStart,
+                                               Sinks.Many<String> eventSink) {
         int maxSteps = resolveMaxExecutionSteps(ctx.getConfigMap());
         if (depth >= maxSteps) {
             log.warn("[Chat][Trace] 工具调用递归深度达到上限({})，停止循环", depth);
@@ -825,7 +828,7 @@ public class ChatServiceImpl implements ChatService {
                 final String safeTcArgs = toolArgsSanitizer.forChatCall(tcArgs);
                 futures.add(CompletableFuture.supplyAsync(() -> {
                     long tStart = System.currentTimeMillis();
-                    String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), requestId);
+                    String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), requestId, null);
                     long tEnd = System.currentTimeMillis();
                     spans.add(LlmTraceSpan.of("tool_" + toolCallCountHolder[0], llmSpanId, "tool_execute",
                             tStart, tEnd - tStart, "OK",
@@ -879,7 +882,7 @@ public class ChatServiceImpl implements ChatService {
             statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, safeArgs, toolContentOffset)));
 
             long tToolStart = System.currentTimeMillis();
-            String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), requestId);
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), requestId, null);
             long tToolEnd = System.currentTimeMillis();
             spans.add(LlmTraceSpan.of("tool_" + toolCallCountHolder[0], llmSpanId, "tool_execute",
                     tToolStart, tToolEnd - tToolStart, "OK",
@@ -931,17 +934,28 @@ public class ChatServiceImpl implements ChatService {
                 .concatWith(Flux.concat(toolResultEvents))
                 .concatWith(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCompleteEvent(resultContentOffset)))
                 .concatWith(afterTool);
-        return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, System.currentTimeMillis()));
+        return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, System.currentTimeMillis(), eventSink));
     }
 
     private String executeToolCallback(Map<String, ToolCallback> toolCallbackMap, String toolName,
-                                       String callArgs, Long agentId, String requestId) {
+                                       String callArgs, Long agentId, String requestId,
+                                       Sinks.Many<String> eventSink) {
         ToolCallback callback = toolCallbackMap.get(toolName);
         if (callback != null) {
             try {
-                return callback.call(callArgs, new ToolContext(Map.of(
-                        "agentId", agentId,
-                        "requestId", requestId)));
+                // 流式模式：绑定 Sink 使工具内部的 emit() 实时推送给前端
+                if (eventSink != null) {
+                    ToolEventEmitter.setupSink(eventSink);
+                }
+                try {
+                    return callback.call(callArgs, new ToolContext(Map.of(
+                            "agentId", agentId,
+                            "requestId", requestId)));
+                } finally {
+                    if (eventSink != null) {
+                        ToolEventEmitter.teardownSink();
+                    }
+                }
             } catch (Exception e) {
                 log.error("[Chat] 工具执行异常: name={}, error={}", toolName, e.getMessage(), e);
                 return ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());

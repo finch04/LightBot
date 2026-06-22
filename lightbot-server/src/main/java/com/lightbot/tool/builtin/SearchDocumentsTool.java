@@ -94,7 +94,7 @@ public class SearchDocumentsTool {
         List<Map<String, Object>> docList = new ArrayList<>();
         for (MatchedDoc md : matchedDocs) {
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("document_id", md.id);
+            item.put("document_id", md.id.toString());
             item.put("document_name", md.name);
             item.put("knowledge_name", md.knowledgeName);
             docList.add(item);

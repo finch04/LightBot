@@ -39,4 +39,11 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
     public void deleteBySessionId(Long sessionId) {
         remove(new LambdaQueryWrapper<Message>().eq(Message::getSessionId, sessionId));
     }
+
+    @Override
+    public void deleteMessage(Long messageId, Long sessionId) {
+        remove(new LambdaQueryWrapper<Message>()
+                .eq(Message::getId, messageId)
+                .eq(Message::getSessionId, sessionId));
+    }
 }

@@ -39,3 +39,7 @@ export function togglePinSession(id) {
 export function deleteSessionsBatch(ids) {
   return request.delete('/chat/sessions/batch', { data: ids })
 }
+
+export function deleteMessage(sessionId, messageId) {
+  return request.delete(`/chat/sessions/${sessionId}/messages/${messageId}`)
+}

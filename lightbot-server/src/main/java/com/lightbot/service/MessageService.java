@@ -38,4 +38,12 @@ public interface MessageService extends IService<Message> {
      * @param sessionId 会话ID
      */
     void deleteBySessionId(Long sessionId);
+
+    /**
+     * 删除单条消息（物理删除）
+     *
+     * @param messageId 消息ID
+     * @param sessionId 会话ID（用于校验归属）
+     */
+    void deleteMessage(Long messageId, Long sessionId);
 }

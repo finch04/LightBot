@@ -17,9 +17,9 @@
         <FileTextOutlined class="okd-header-icon" />
         <span class="okd-header-title">{{ data.document_name }}</span>
         <span class="okd-header-info">共 {{ totalChars }} 字</span>
-        <button class="okd-detail-btn" @click="detailVisible = true">
+        <button class="okd-detail-btn" @click="openModal">
           <EyeOutlined />
-          <span>查看完整内容</span>
+          <span>查看详情</span>
         </button>
       </div>
 
@@ -27,43 +27,106 @@
       <div class="okd-content">
         <div class="okd-preview-text">{{ previewText }}</div>
         <div v-if="isTruncated" class="okd-more-hint">
-          内容已截断，点击"查看完整内容"查看全部
+          内容已截断，点击"查看详情"查看全部
         </div>
       </div>
     </template>
 
-    <!-- 完整内容弹窗 -->
+    <!-- 详情弹窗（带 2 个 tab） -->
     <a-modal
       v-model:open="detailVisible"
       :title="data?.document_name || '文档内容'"
       :footer="null"
       width="780px"
-      :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }"
+      :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '0' }"
       :maskClosable="false"
     >
       <div class="okd-modal-body">
-        <div class="okd-modal-meta">
-          <FileTextOutlined />
-          <span>共 {{ totalChars }} 字</span>
+        <!-- Tab 切换 -->
+        <div class="okd-modal-tabs">
+          <button
+            class="okd-modal-tab"
+            :class="{ active: activeTab === 'chunks' }"
+            @click="activeTab = 'chunks'"
+          >
+            <FileTextOutlined />
+            <span>分块内容</span>
+          </button>
+          <button
+            class="okd-modal-tab"
+            :class="{ active: activeTab === 'preview' }"
+            @click="activeTab = 'preview'"
+          >
+            <EyeOutlined />
+            <span>源文件预览</span>
+          </button>
         </div>
-        <div class="okd-modal-content">{{ formattedContent }}</div>
+
+        <!-- Tab 1: 分块内容 -->
+        <div v-if="activeTab === 'chunks'" class="okd-modal-tab-content">
+          <div class="okd-modal-meta">
+            <FileTextOutlined />
+            <span>共 {{ totalChars }} 字</span>
+          </div>
+          <div class="okd-modal-text">{{ formattedContent }}</div>
+        </div>
+
+        <!-- Tab 2: 源文件预览 -->
+        <div v-if="activeTab === 'preview'" class="okd-modal-tab-content">
+          <div v-if="filePreview.loading" class="okd-preview-loading">
+            <a-spin size="small" />
+            <span>加载源文件中...</span>
+          </div>
+          <div v-else-if="filePreview.error" class="okd-preview-error">
+            <span>{{ filePreview.error }}</span>
+          </div>
+          <div v-else-if="filePreview.url">
+            <iframe
+              v-if="isPreviewableIframe"
+              :src="filePreview.url"
+              class="okd-iframe"
+              frameborder="0"
+            ></iframe>
+            <div v-else-if="isPreviewableText" class="okd-text-preview">
+              <pre>{{ filePreview.textContent }}</pre>
+            </div>
+            <div v-else class="okd-unsupported">
+              <FileOutlined style="font-size:32px;color:#d4d4d8;" />
+              <p style="margin:8px 0 0;font-size:13px;color:#a1a1aa;">
+                .{{ filePreview.fileType }} 格式不支持在线预览
+              </p>
+              <button class="okd-download-btn" @click="openFile">
+                <DownloadOutlined /> 下载文件
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { FileTextOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import { ref, computed, watch } from 'vue'
+import { FileTextOutlined, EyeOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { getDocumentDownloadUrl } from '../../api/knowledge'
 
 const PREVIEW_MAX_CHARS = 300
 
 const props = defineProps({ event: { type: Object, required: true } })
 
 const detailVisible = ref(false)
-
-// 调试开关（开发时设为true）
+const activeTab = ref('chunks')
 const showDebug = ref(false)
+
+const filePreview = ref({
+  url: '',
+  fileName: '',
+  fileType: '',
+  loading: false,
+  error: '',
+  textContent: ''
+})
 
 // 获取原始结果（支持字符串或对象）
 const rawResult = computed(() => {
@@ -74,61 +137,107 @@ const rawResult = computed(() => {
 
 // 解析JSON数据（支持双重转义）
 const data = computed(() => {
-  try { 
+  try {
     let jsonStr = rawResult.value
-    
-    // 第一次解析
     let parsed = JSON.parse(jsonStr)
-    
-    // 如果解析后仍是字符串（双重转义），再解析一次
     if (typeof parsed === 'string') {
       parsed = JSON.parse(parsed)
     }
-    
-    // 确保解析成功且是对象，且有content字段
     if (parsed && typeof parsed === 'object' && parsed.content !== undefined) {
       return parsed
     }
     return null
-  } catch (e) { 
+  } catch (e) {
     console.error('[OpenKbDocumentResult] JSON解析失败:', e, rawResult.value?.substring?.(0, 100))
-    return null 
+    return null
   }
 })
 
-// 判断是否纯文本（解析失败或不是预期格式）
 const isPlainText = computed(() => !data.value)
-
-// 纯文本时显示的内容
 const displayText = computed(() => {
   if (typeof data.value === 'string') return data.value
   return rawResult.value
 })
 
-// 完整内容（处理转义的换行符和制表符）
 const fullContent = computed(() => {
   if (!data.value?.content) return ''
-  // 处理可能的转义字符
   let content = data.value.content
   if (typeof content === 'string') {
-    // 处理 \\n 或 \n 转义为真实换行
     content = content
-      .replace(/\\n/g, '\n')  // \\n -> \n
-      .replace(/\\t/g, '\t')  // \\t -> \t
-      .replace(/\\\\/g, '\\')  // \\\\ -> \
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\\\/g, '\\')
   }
   return content
 })
 
 const totalChars = computed(() => fullContent.value.length)
 const isTruncated = computed(() => fullContent.value.length > PREVIEW_MAX_CHARS)
-
 const previewText = computed(() => {
   if (!isTruncated.value) return fullContent.value
   return fullContent.value.slice(0, PREVIEW_MAX_CHARS) + '...'
 })
-
 const formattedContent = computed(() => fullContent.value)
+
+// 源文件预览类型判断
+const isPreviewableIframe = computed(() => {
+  const t = filePreview.value.fileType?.toLowerCase()
+  return ['pdf', 'html', 'htm'].includes(t)
+})
+
+const isPreviewableText = computed(() => {
+  const t = filePreview.value.fileType?.toLowerCase()
+  return ['md', 'markdown', 'txt', 'csv', 'json', 'xml', 'log'].includes(t)
+})
+
+// 打开弹窗时重置 tab
+function openModal() {
+  activeTab.value = 'chunks'
+  detailVisible.value = true
+}
+
+// 切换到源文件预览 tab 时加载
+watch(activeTab, (tab) => {
+  if (tab === 'preview' && !filePreview.value.url && !filePreview.value.loading) {
+    loadFilePreview()
+  }
+})
+
+async function loadFilePreview() {
+  // document_id 可能是 BigInt，转为字符串避免精度丢失
+  const docId = data.value?.document_id != null ? String(data.value.document_id) : null
+  if (!docId) {
+    filePreview.value.error = '无法获取文档ID'
+    return
+  }
+  filePreview.value.loading = true
+  filePreview.value.error = ''
+  try {
+    const res = await getDocumentDownloadUrl(docId)
+    const vo = res.data || res
+    filePreview.value.url = vo.url || ''
+    filePreview.value.fileName = vo.fileName || data.value.document_name || ''
+    filePreview.value.fileType = vo.fileType || ''
+
+    // 文本类文件直接 fetch 内容
+    if (isPreviewableText.value && filePreview.value.url) {
+      try {
+        const resp = await fetch(filePreview.value.url)
+        filePreview.value.textContent = await resp.text()
+      } catch {
+        filePreview.value.textContent = fullContent.value
+      }
+    }
+  } catch (e) {
+    filePreview.value.error = '加载源文件失败: ' + (e.message || '未知错误')
+  } finally {
+    filePreview.value.loading = false
+  }
+}
+
+function openFile() {
+  if (filePreview.value.url) window.open(filePreview.value.url, '_blank')
+}
 </script>
 
 <style lang="less" scoped>
@@ -150,7 +259,7 @@ const formattedContent = computed(() => fullContent.value)
       color: #92400e;
       font-family: monospace;
     }
-    
+
     pre {
       margin: 0;
       padding: 10px 12px;
@@ -242,7 +351,7 @@ const formattedContent = computed(() => fullContent.value)
     .okd-more-hint {
       margin-top: 10px;
       font-size: 12px;
-      color: #2563eb;
+      color: #6b7280;
       text-align: center;
       padding: 8px 0;
       border-top: 1px dashed #bfdbfe;
@@ -250,8 +359,46 @@ const formattedContent = computed(() => fullContent.value)
   }
 }
 
-// 弹窗样式
+// ============ 弹窗样式 ============
 .okd-modal-body {
+  .okd-modal-tabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+
+    .okd-modal-tab {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+
+      &:hover {
+        color: #2563eb;
+        background: rgba(59, 130, 246, 0.04);
+      }
+
+      &.active {
+        color: #2563eb;
+        border-bottom-color: #3b82f6;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .okd-modal-tab-content {
+    padding: 16px 20px;
+  }
+
   .okd-modal-meta {
     display: flex;
     align-items: center;
@@ -266,7 +413,7 @@ const formattedContent = computed(() => fullContent.value)
     border: 1px solid #bfdbfe;
   }
 
-  .okd-modal-content {
+  .okd-modal-text {
     font-size: 14px;
     line-height: 1.9;
     color: #1f2937;
@@ -278,7 +425,74 @@ const formattedContent = computed(() => fullContent.value)
     border-radius: 8px;
     max-height: 60vh;
     overflow-y: auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  .okd-preview-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px;
+    color: #9ca3af;
+    font-size: 13px;
+  }
+
+  .okd-preview-error {
+    padding: 20px;
+    text-align: center;
+    color: #ef4444;
+    font-size: 13px;
+  }
+
+  .okd-iframe {
+    width: 100%;
+    min-height: 500px;
+    border: none;
+  }
+
+  .okd-text-preview {
+    max-height: 55vh;
+    overflow-y: auto;
+
+    pre {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #374151;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+  }
+
+  .okd-unsupported {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    gap: 4px;
+  }
+
+  .okd-download-btn {
+    appearance: none;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    background: #fff;
+    color: #2563eb;
+    font-size: 12px;
+    padding: 6px 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    margin-top: 8px;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #dbeafe;
+    }
   }
 }
 </style>

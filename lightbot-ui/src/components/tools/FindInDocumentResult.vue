@@ -33,20 +33,17 @@
         <div class="fid-header">
           <FileSearchOutlined class="fid-header-icon" />
           <span>文档搜索 — {{ data.total_matches }} 处匹配，{{ data.documents.length }} 个文档</span>
-          <button class="fid-detail-btn" @click="detailVisible = true">
+          <button class="fid-detail-btn fid-detail-btn-right" @click="detailVisible = true">
             <EyeOutlined />
             <span>查看详情</span>
           </button>
         </div>
         <div class="fid-summary">
-          <div v-for="(doc, di) in data.documents?.slice(0, 2)" :key="di" class="fid-doc-card">
-            <div class="fid-doc-name">{{ doc.document_name }}</div>
-            <div class="fid-doc-meta">
+          <div v-for="(doc, di) in data.documents" :key="di" class="fid-doc-card">
+            <div class="fid-doc-row">
+              <span class="fid-doc-name">{{ doc.document_name }}</span>
               <span class="fid-match-tag">{{ doc.match_count }} 处匹配</span>
             </div>
-          </div>
-          <div v-if="(data.documents?.length || 0) > 2" class="fid-more-hint">
-            还有 {{ data.documents.length - 2 }} 个文档，点击"查看详情"查看全部
           </div>
         </div>
       </template>
@@ -110,11 +107,11 @@
               
               <div class="fid-doc-matches">
                 <div 
-                  v-for="(match, mi) in doc.matches?.slice(0, 5)" 
+                  v-for="(match, mi) in doc.matches"
                   :key="mi" 
                   class="fid-match-item"
                 >
-                  <span class="fid-match-line">第 {{ match.line_num }} 行</span>
+                  <span class="fid-match-line">匹配 #{{ mi + 1 }} · 第 {{ match.line_num }} 行</span>
                   <div class="fid-match-context">
                     <div 
                       v-for="(ctx, ci) in match.context_lines" 
@@ -126,9 +123,6 @@
                       <span class="ctx-line-text">{{ ctx.text || ' ' }}</span>
                     </div>
                   </div>
-                </div>
-                <div v-if="doc.matches?.length > 5" class="fid-more-matches">
-                  还有 {{ doc.matches.length - 5 }} 处匹配...
                 </div>
               </div>
             </div>
@@ -205,31 +199,35 @@ function isHighlighted(lineNum) {
     .fid-header-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fid-header-info { color: #4ade80; font-weight: 400; white-space: nowrap; }
     .fid-detail-btn {
-      margin-left: 8px;
       appearance: none;
       border: 1px solid #86efac;
       border-radius: 6px;
       background: #fff;
       color: #16a34a;
-      font-size: 12px; 
-      padding: 6px 12px; 
-      cursor: pointer; 
+      font-size: 12px;
+      padding: 6px 12px;
+      cursor: pointer;
       white-space: nowrap;
       display: inline-flex;
       align-items: center;
       gap: 6px;
       font-weight: 500;
       transition: all 0.2s ease;
-      
-      &:hover { 
-        background: #dcfce7; 
+      flex-shrink: 0;
+
+      &:hover {
+        background: #dcfce7;
         transform: translateY(-1px);
         box-shadow: 0 2px 6px rgba(22, 163, 74, 0.15);
       }
-      
+
       &:active {
         transform: translateY(0);
       }
+    }
+
+    .fid-detail-btn-right {
+      margin-left: auto;
     }
   }
 
@@ -252,16 +250,16 @@ function isHighlighted(lineNum) {
   .fid-doc-card {
     padding: 6px 8px; border: 1px solid #bbf7d0;
     border-radius: 6px; background: #fff;
+    .fid-doc-row {
+      display: flex; align-items: center; gap: 8px;
+    }
     .fid-doc-name {
-      font-size: 12px; font-weight: 500; color: var(--gray-700);
+      flex: 1; font-size: 12px; font-weight: 500; color: #374151;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .fid-doc-meta {
-      margin-top: 2px;
-      .fid-match-tag {
-        font-size: 11px; color: #166534; background: #dcfce7;
-        border-radius: 4px; padding: 0 5px;
-      }
+    .fid-match-tag {
+      font-size: 11px; color: #166534; background: #dcfce7;
+      border-radius: 4px; padding: 0 6px; white-space: nowrap; flex-shrink: 0;
     }
   }
 

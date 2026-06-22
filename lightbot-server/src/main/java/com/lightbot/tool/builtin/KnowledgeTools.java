@@ -117,7 +117,7 @@ public class KnowledgeTools {
         }
 
         Map<String, Object> output = new LinkedHashMap<>();
-        output.put("knowledge_id", kbId);
+        output.put("knowledge_id", kbId.toString());
         output.put("knowledge_name", kb.getName());
         output.put("mindmap", mindmap);
         try {
@@ -168,7 +168,7 @@ public class KnowledgeTools {
             }
 
             Map<String, Object> output = new LinkedHashMap<>();
-            output.put("document_id", docId);
+            output.put("document_id", docId.toString());
             output.put("document_name", doc.getName());
             output.put("content", content);
             return objectMapper.writeValueAsString(output);

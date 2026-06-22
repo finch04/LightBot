@@ -24,7 +24,7 @@
       </div>
 
       <!-- 加载更早的消息 -->
-      <div v-if="hasMoreMessages && !streaming" class="load-more-area">
+      <div v-if="hasMoreMessages && !streaming && initialLoadDone" class="load-more-area">
         <a-button size="small" :loading="loadingOlder" @click="loadOlderMessages">
           加载更早的消息
         </a-button>
@@ -208,6 +208,14 @@
                       @click="openRawModal(virtualRow.index)"
                     >
                       <EyeOutlined />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip title="删除">
+                    <button
+                      class="btn-copy btn-delete"
+                      @click="handleDeleteMessage(virtualRow.index)"
+                    >
+                      <DeleteOutlined />
                     </button>
                   </a-tooltip>
                 </div>
@@ -454,8 +462,8 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
 import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
 import {
   buildUploadHint,
@@ -466,7 +474,7 @@ import {
   validatePendingAttachmentMix,
 } from '../utils/chatAttachment'
 import { captureVideoThumbnail, enrichVideoThumbnails } from '../utils/videoThumbnail'
-import { getSessionMessages, getSession, createSession, getSessionTitle } from '../api/chatSession'
+import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi } from '../api/chatSession'
 import { getAgents, getAgentDetail, getAgentChatCapabilities, listAgentVersions } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
@@ -495,6 +503,7 @@ const loadingHistory = ref(false)
 const messagePage = ref(1)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
+const initialLoadDone = ref(false)
 const currentAgent = ref(null)
 const chatCapabilities = ref({})
 const pendingAttachments = ref([])
@@ -987,6 +996,7 @@ async function loadHistory() {
   const reqId = ++loadHistoryRequestId
   // 切换对话时先清空旧内容，避免旧消息在加载期间残留
   messages.value = []
+  initialLoadDone.value = false
   lastReplyElapsed.value = null
   input.value = ''
   pendingAttachments.value = []
@@ -1026,6 +1036,7 @@ async function loadHistory() {
     if (reqId !== loadHistoryRequestId) return
     messages.value = []
   } finally {
+    initialLoadDone.value = true
     if (reqId === loadHistoryRequestId) {
       loadingHistory.value = false
       switchingSession.value = false
@@ -1494,6 +1505,32 @@ function openRawModal(index) {
   rawModal.content = msg.content || ''
   rawModal.title = msg.role === 'assistant' ? '助手回复原文' : '消息原文'
   rawModal.visible = true
+}
+
+function handleDeleteMessage(index) {
+  const msg = messages.value[index]
+  if (!msg) return
+  const label = msg.role === 'assistant' ? 'AI 回复' : '用户消息'
+  Modal.confirm({
+    title: `删除${label}`,
+    content: `确定要删除这条${label}吗？删除后不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      // 有 _id 说明是已持久化的消息，需要调后端删除
+      if (msg._id && sessionId.value) {
+        try {
+          await deleteMessageApi(sessionId.value, msg._id)
+        } catch {
+          // 业务错误已由拦截器提示
+          return
+        }
+      }
+      messages.value.splice(index, 1)
+      message.success('已删除')
+    },
+  })
 }
 
 function stopGenerating() {
@@ -1967,6 +2004,9 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-copy.copied {
   color: #16a34a;
   opacity: 1;
+}
+.btn-delete:hover {
+  color: #ef4444;
 }
 .btn-copy.active {
   color: #0070f3;

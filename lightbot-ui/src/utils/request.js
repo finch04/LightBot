@@ -4,13 +4,54 @@ import router from '../router'
 
 /**
  * 将 JSON 字符串中的 Long 类型数字转为字符串，防止前端精度丢失
- * 匹配规则：连续 16 位及以上的整数（雪花算法 ID 长度为 18-19 位）
- * 同时处理对象属性值（冒号后）和数组元素（逗号/方括号后）
+ * 只转换字符串外部的数字，跳过字符串值内部的内容（避免破坏嵌套 JSON）
  */
 function convertLongToString(data) {
   if (typeof data !== 'string') return data
-  // 匹配 JSON 值中的大数字：冒号后、逗号后、左方括号后
-  return data.replace(/(?<=:\s*|,\s*|\[\s*)(-?\d{16,})(?=\s*[,\]}])/g, '"$1"')
+  let result = ''
+  let i = 0
+  let inString = false
+  while (i < data.length) {
+    const ch = data[i]
+    if (inString) {
+      if (ch === '\\') {
+        result += data[i] + data[i + 1]
+        i += 2
+        continue
+      }
+      if (ch === '"') {
+        inString = false
+        result += ch
+        i++
+        continue
+      }
+      result += ch
+      i++
+      continue
+    }
+    // 非字符串区域：检测连续数字（16位及以上）
+    if (ch >= '0' && ch <= '9' || (ch === '-' && i + 1 < data.length && data[i + 1] >= '0' && data[i + 1] <= '9')) {
+      let num = ch
+      let j = i + 1
+      while (j < data.length && data[j] >= '0' && data[j] <= '9') {
+        num += data[j]
+        j++
+      }
+      if (num.replace('-', '').length >= 16) {
+        result += '"' + num + '"'
+      } else {
+        result += num
+      }
+      i = j
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+    }
+    result += ch
+    i++
+  }
+  return result
 }
 
 const request = axios.create({
