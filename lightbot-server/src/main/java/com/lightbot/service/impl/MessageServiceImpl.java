@@ -3,11 +3,17 @@ package com.lightbot.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.Message;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.service.MessageService;
+import com.lightbot.util.MinioUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -16,9 +22,14 @@ import java.util.List;
  * @author finch
  * @since 2026-05-19
  */
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
         implements MessageService {
+
+    private final MinioUtil minioUtil;
+    private final ObjectMapper objectMapper;
 
     @Override
     public Page<Message> listBySessionIdPage(Long sessionId, int pageNum, int pageSize) {
@@ -37,13 +48,83 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
 
     @Override
     public void deleteBySessionId(Long sessionId) {
+        // 1. 加载会话下所有消息，清理关联的 MinIO 资源
+        List<Message> messages = listBySessionId(sessionId);
+        cleanupMinioResources(messages);
+        // 2. 删除消息
         remove(new LambdaQueryWrapper<Message>().eq(Message::getSessionId, sessionId));
     }
 
     @Override
     public void deleteMessage(Long messageId, Long sessionId) {
+        // 1. 加载消息，清理关联的 MinIO 资源
+        Message message = getOne(new LambdaQueryWrapper<Message>()
+                .eq(Message::getId, messageId)
+                .eq(Message::getSessionId, sessionId));
+        if (message != null) {
+            cleanupMinioResources(List.of(message));
+        }
+        // 2. 删除消息
         remove(new LambdaQueryWrapper<Message>()
                 .eq(Message::getId, messageId)
                 .eq(Message::getSessionId, sessionId));
+    }
+
+    /**
+     * 清理消息关联的 MinIO 资源（如 AI 生图生成的图片）
+     */
+    private void cleanupMinioResources(List<Message> messages) {
+        for (Message msg : messages) {
+            List<String> filePaths = extractImageFilePaths(msg.getMetadata());
+            for (String path : filePaths) {
+                try {
+                    minioUtil.delete(path);
+                    log.info("[Message] 清理MinIO资源: path={}", path);
+                } catch (Exception e) {
+                    log.warn("[Message] 清理MinIO资源失败: path={}, error={}", path, e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * 从消息 metadata 中提取 image_generation 工具生成的图片 file_path 列表
+     */
+    private List<String> extractImageFilePaths(String metadata) {
+        List<String> paths = new ArrayList<>();
+        if (metadata == null || metadata.isBlank()) {
+            return paths;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(metadata);
+            JsonNode toolEvents = root.get("toolEvents");
+            if (toolEvents == null || !toolEvents.isArray()) {
+                return paths;
+            }
+            for (JsonNode event : toolEvents) {
+                if (!"tool_result".equals(event.path("type").asText())) {
+                    continue;
+                }
+                if (!"image_generation".equals(event.path("toolName").asText())) {
+                    continue;
+                }
+                String result = event.path("result").asText(null);
+                if (result == null || result.isBlank()) {
+                    continue;
+                }
+                try {
+                    JsonNode resultNode = objectMapper.readTree(result);
+                    String filePath = resultNode.path("file_path").asText(null);
+                    if (filePath != null && !filePath.isBlank()) {
+                        paths.add(filePath);
+                    }
+                } catch (Exception ignored) {
+                    // result 不是合法 JSON，跳过
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Message] 解析metadata失败: {}", e.getMessage());
+        }
+        return paths;
     }
 }

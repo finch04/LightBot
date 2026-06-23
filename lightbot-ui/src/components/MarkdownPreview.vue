@@ -1,10 +1,12 @@
 <template>
-  <div class="markdown-preview" v-html="renderedHtml"></div>
+  <div class="markdown-preview" ref="containerRef" v-html="renderedHtml" @click="onContainerClick"></div>
+  <ChatMediaPreview v-model:open="previewOpen" :src="previewSrc" media-type="image" />
 </template>
 
 <script setup>
-import { watch, shallowRef } from 'vue'
+import { watch, shallowRef, ref, onBeforeUnmount } from 'vue'
 import { renderMarkdown } from '@/utils/markdown_preview'
+import ChatMediaPreview from '@/components/ChatMediaPreview.vue'
 import 'katex/dist/katex.min.css'
 
 const props = defineProps({
@@ -14,6 +16,20 @@ const props = defineProps({
 })
 
 const renderedHtml = shallowRef('')
+const containerRef = ref(null)
+
+// ── 图片预览 ──
+const previewOpen = ref(false)
+const previewSrc = ref('')
+
+function onContainerClick(e) {
+  const img = e.target.closest('img')
+  if (!img || !containerRef.value?.contains(img)) return
+  if (img.src) {
+    previewSrc.value = img.src
+    previewOpen.value = true
+  }
+}
 
 watch(
   () => [props.content, props.finalized],
@@ -130,6 +146,19 @@ watch(
 
   tbody tr:hover { background-color: var(--gray-25); }
 
-  img { max-width: 100%; height: auto; }
+  img {
+    display: block;
+    max-width: 360px;
+    max-height: 260px;
+    height: auto;
+    border-radius: 6px;
+    cursor: pointer;
+    object-fit: contain;
+    transition: transform 0.2s;
+    margin: 0.5rem auto;
+  }
+  img:hover {
+    transform: scale(1.02);
+  }
 }
 </style>

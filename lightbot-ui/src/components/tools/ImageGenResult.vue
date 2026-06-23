@@ -1,23 +1,40 @@
 <template>
-  <div class="image-gen-result">
-    <div v-if="isPlainText" class="ig-plain">
-      <pre>{{ displayText }}</pre>
+  <div>
+    <!-- 错误/纯文本 -->
+    <div v-if="isPlainText" style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6;"
+      :style="isError
+        ? 'background:#fef2f2;border:1px solid #fca5a5;color:#991b1b'
+        : 'background:#fafafa;border:1px solid #e5e7eb;color:#374151'">
+      <CloseCircleOutlined v-if="isError" style="color:#ef4444;font-size:14px;margin-top:1px;flex-shrink:0;" />
+      <InfoCircleOutlined v-else style="color:#6b7280;font-size:14px;margin-top:1px;flex-shrink:0;" />
+      <pre style="margin:0;white-space:pre-wrap;word-break:break-word;">{{ displayText }}</pre>
     </div>
+
     <template v-else>
-      <div class="ig-image-wrap">
-        <img :src="data.image_url" alt="生成图片" class="ig-image" @click="openPreview" />
+      <!-- 图片 -->
+      <div style="text-align:center;padding:8px;">
+        <img :src="data.image_url" alt="生成图片"
+          style="max-width:360px;max-height:260px;border-radius:8px;cursor:pointer;transition:transform 0.2s;object-fit:contain;"
+          @click="previewOpen = true"
+          onmouseover="this.style.transform='scale(1.02)'"
+          onmouseout="this.style.transform='scale(1)'" />
       </div>
-      <div class="ig-meta">
-        <PictureOutlined class="ig-icon" />
-        <span class="ig-prompt">{{ data.prompt }}</span>
+
+      <!-- Prompt 信息 -->
+      <div style="display:flex;align-items:flex-start;gap:6px;padding:8px 12px;background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;font-size:12px;color:#1e40af;margin-top:6px;">
+        <PictureOutlined style="color:#2563eb;font-size:13px;margin-top:1px;flex-shrink:0;" />
+        <span style="flex:1;line-height:1.5;">{{ data.prompt }}</span>
       </div>
+
+      <ChatMediaPreview v-model:open="previewOpen" :src="data.image_url" media-type="image" />
     </template>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { PictureOutlined } from '@ant-design/icons-vue'
+import { ref, computed } from 'vue'
+import { PictureOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
+import ChatMediaPreview from '@/components/ChatMediaPreview.vue'
 
 const props = defineProps({
   event: { type: Object, required: true }
@@ -36,36 +53,11 @@ const data = computed(() => {
 const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
 const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 
-function openPreview() {
-  if (data.value?.image_url) {
-    window.open(data.value.image_url, '_blank')
-  }
-}
+const isError = computed(() => {
+  if (!isPlainText.value) return false
+  const text = displayText.value || ''
+  return text.includes('失败') || text.includes('错误') || text.includes('异常') || text.includes('未配置')
+})
+
+const previewOpen = ref(false)
 </script>
-
-<style lang="less" scoped>
-.image-gen-result {
-  .ig-plain pre {
-    margin: 0; padding: 8px 10px; background: var(--gray-25);
-    border-radius: 6px; font-size: 12px; line-height: 1.5;
-    color: var(--gray-700); white-space: pre-wrap; word-break: break-word;
-  }
-
-  .ig-image-wrap {
-    text-align: center; padding: 8px;
-    .ig-image {
-      max-width: 100%; max-height: 400px; border-radius: 8px;
-      cursor: pointer; transition: transform 0.2s;
-      &:hover { transform: scale(1.02); }
-    }
-  }
-
-  .ig-meta {
-    display: flex; align-items: flex-start; gap: 6px;
-    padding: 6px 10px; background: var(--gray-25);
-    border-radius: 6px; font-size: 12px; color: var(--gray-600);
-    .ig-icon { color: var(--main-600); font-size: 13px; margin-top: 1px; flex-shrink: 0; }
-    .ig-prompt { flex: 1; line-height: 1.5; }
-  }
-}
-</style>

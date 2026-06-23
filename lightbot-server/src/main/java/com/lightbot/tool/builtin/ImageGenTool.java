@@ -2,6 +2,7 @@ package com.lightbot.tool.builtin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
 import com.lightbot.util.MinioUtil;
@@ -63,13 +64,15 @@ public class ImageGenTool {
         try {
             // 1. 调用 SiliconFlow API 生成图片
             Map<String, Object> body = Map.of(
-                    "model", "Qwen/Qwen-Image",
+                    "model", "Tongyi-MAI/Z-Image-Turbo",
                     "prompt", prompt,
                     "negative_prompt", negativePrompt != null ? negativePrompt : "",
+                    "image_size", "1024x1024",
                     "num_inference_steps", 20,
                     "guidance_scale", 7.5,
                     "batch_size", 1);
 
+            ToolEventEmitter.emit("正在调用 AI 模型生成图片...");
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.siliconflow.cn/v1/images/generations"))
                     .header("Content-Type", "application/json")
@@ -94,6 +97,8 @@ public class ImageGenTool {
             String imageUrl = data.get(0).get("url").asText();
 
             // 2. 下载图片
+            ToolEventEmitter.emit("图片生成完成，正在下载图片...");
+
             HttpRequest downloadRequest = HttpRequest.newBuilder()
                     .uri(URI.create(imageUrl))
                     .GET()
@@ -106,13 +111,16 @@ public class ImageGenTool {
             }
 
             // 3. 上传到 MinIO
+            ToolEventEmitter.emit("正在保存到对象存储...");
+
             String filePath = "generated/images/" + UUID.randomUUID().toString().replace("-", "") + ".jpg";
             minioUtil.upload(new ByteArrayInputStream(imageResponse.body()), filePath,
                     imageResponse.body().length, "image/jpeg");
 
-            // 4. 返回访问 URL
-            String presignedUrl = minioUtil.getPresignedUrl(filePath);
+            // 4. 返回永久访问 URL（需 Bucket 开启公开读权限）
+            String presignedUrl = minioUtil.getPublicUrl(filePath);
             log.info("[Tool:image_generation] 图片生成完成: path={}", filePath);
+            ToolEventEmitter.emit("图片已生成并保存");
 
             Map<String, Object> output = new LinkedHashMap<>();
             output.put("image_url", presignedUrl);
