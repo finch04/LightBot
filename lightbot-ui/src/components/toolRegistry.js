@@ -37,7 +37,7 @@ import ListSkillFilesResult from './tools/ListSkillFilesResult.vue'
 
 // 工具渲染组件映射
 export const TOOL_RENDERERS = {
-  // 知识库
+  // 知识库，
   query_knowledge: QueryKnowledgeResult,
   find_in_document: FindInDocumentResult,
   search_documents: SearchDocumentsResult,

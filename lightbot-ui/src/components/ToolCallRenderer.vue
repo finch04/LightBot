@@ -1,6 +1,6 @@
 <template>
   <ErrorToolResult v-if="isError" :event="event" :message="errorMessage" />
-  <component v-else :is="renderer" :event="event" />
+  <component v-else :is="renderer" :event="event" :messageIndex="messageIndex" />
 </template>
 
 <script setup>
@@ -10,7 +10,8 @@ import BaseToolCall from './tools/BaseToolCall.vue'
 import ErrorToolResult from './tools/ErrorToolResult.vue'
 
 const props = defineProps({
-  event: { type: Object, required: true }
+  event: { type: Object, required: true },
+  messageIndex: { type: Number, default: -1 }
 })
 
 // 错误检测：JSON 中含 _error:true

@@ -28,7 +28,7 @@ public class CacheProtectiveService {
     private final StringRedisTemplate stringRedisTemplate;
 
     /** 基础 TTL（秒） */
-    private static final long BASE_TTL_SECONDS = 30 * 60;
+    private static final long BASE_TTL_SECONDS = 2 * 60 * 60;
     /** 随机偏移范围（秒）：0 ~ 5 分钟 */
     private static final long RANDOM_OFFSET_SECONDS = 300;
     /** 分布式锁超时（秒） */

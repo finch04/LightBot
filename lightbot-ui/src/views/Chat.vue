@@ -118,6 +118,8 @@
                         :tool-events="getPureToolEvents(getToolEventsForOffset(messages[virtualRow.index], segment.offset))"
                         :is-done="isToolBlockDone(messages[virtualRow.index], segment.offset)"
                         :default-expanded="true"
+                        :message-index="virtualRow.index"
+                        @heightChange="onCapabilityHeightChange"
                       />
                     </div>
                   </template>
@@ -138,6 +140,8 @@
                       :tool-events="getPureToolEvents(messages[virtualRow.index]._toolEvents)"
                       :is-done="messages[virtualRow.index]._toolsDone"
                       :default-expanded="true"
+                      :message-index="virtualRow.index"
+                      @heightChange="onCapabilityHeightChange"
                     />
                   </div>
                 </template>
@@ -456,14 +460,52 @@
     >
       <pre class="raw-modal-content">{{ rawModal.content }}</pre>
     </a-modal>
+
+    <!-- Ask User 弹窗 -->
+    <a-modal
+      v-model:open="askUserModal.visible"
+      title="AI 向您提问"
+      :footer="null"
+      :maskClosable="false"
+      width="520px"
+    >
+      <div style="padding:8px 0;">
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px;background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;font-size:14px;line-height:1.7;color:#1e40af;margin-bottom:16px;">
+          <QuestionCircleOutlined style="color:#2563eb;font-size:18px;margin-top:2px;flex-shrink:0;" />
+          <span style="font-weight:500;">{{ askUserModal.question }}</span>
+        </div>
+        <div v-if="askUserModal.options.length > 0" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+          <button v-for="(opt, i) in askUserModal.options" :key="i" @click="submitAskUserResponse(opt)"
+            style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border:1px solid #d4d4d8;border-radius:10px;font-size:14px;color:#171717;cursor:pointer;transition:all 0.15s;text-align:left;width:100%;"
+            onmouseover="this.style.borderColor='#0070f3';this.style.background='#f0f7ff'"
+            onmouseout="this.style.borderColor='#d4d4d8';this.style.background='#fff'">
+            <span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;background:#3b82f6;color:#fff;border-radius:50%;font-size:12px;font-weight:600;flex-shrink:0;">{{ i + 1 }}</span>
+            <span style="flex:1;line-height:1.5;">{{ opt }}</span>
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <a-textarea
+            v-model:value="askUserModal.freeText"
+            :placeholder="askUserModal.options.length > 0 ? '或者输入自定义回答...' : '请输入您的回答...'"
+            :auto-size="{ minRows: 2, maxRows: 4 }"
+            @keydown.enter.ctrl="submitAskUserResponse(askUserModal.freeText)"
+            style="flex:1;"
+          />
+          <a-button type="primary" :disabled="!askUserModal.freeText.trim()" @click="submitAskUserResponse(askUserModal.freeText)">
+            发送
+          </a-button>
+        </div>
+        <div style="text-align:right;margin-top:6px;font-size:11px;color:#a1a1aa;">Ctrl+Enter 发送</div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
 import {
@@ -522,6 +564,8 @@ let sendStartTime = 0
 const hasStreamContent = ref(false)
 /** 原始内容弹窗状态 */
 const rawModal = reactive({ visible: false, content: '', title: '' })
+/** Ask User 弹窗状态 */
+const askUserModal = reactive({ visible: false, question: '', options: [], isOpenEnded: false, messageIndex: -1, freeText: '' })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
 let loadHistoryRequestId = 0
 /** 切换会话时 agent/版本加载中 */
@@ -569,8 +613,65 @@ function handleScroll() {
 
 function onCapabilityHeightChange(evt) {
   const rowEl = evt?.target?.closest?.('[data-index]')
-  if (rowEl) virtualizer.value.measureElement(rowEl)
+  if (!rowEl) return
+  const container = messagesRef.value
+  if (!container) return
+  const scrollTopBefore = container.scrollTop
+  const rowTopBefore = rowEl.getBoundingClientRect().top
+  virtualizer.value.measureElement(rowEl)
+  const rowTopAfter = rowEl.getBoundingClientRect().top
+  container.scrollTop = scrollTopBefore + (rowTopAfter - rowTopBefore)
 }
+
+// ===== Ask User 弹窗 =====
+function findAskUserEvent(msg) {
+  if (!msg?._toolEvents?.length) return null
+  for (let i = msg._toolEvents.length - 1; i >= 0; i--) {
+    const evt = msg._toolEvents[i]
+    if (evt.type === 'tool_result' && evt.toolName === 'ask_user') {
+      try {
+        const parsed = JSON.parse(evt.result)
+        if (parsed && typeof parsed === 'object' && parsed.question) return parsed
+      } catch { /* ignore */ }
+    }
+  }
+  return null
+}
+
+function isAskUserUnanswered(msgIndex) {
+  const msg = messages.value[msgIndex]
+  if (!msg || msg.role !== 'assistant') return false
+  if (!findAskUserEvent(msg)) return false
+  for (let i = msgIndex + 1; i < messages.value.length; i++) {
+    if (messages.value[i].role === 'user') return false
+  }
+  return true
+}
+
+function showAskUserModal(msgIndex) {
+  const msg = messages.value[msgIndex]
+  const askData = findAskUserEvent(msg)
+  if (!askData) return
+  askUserModal.question = askData.question
+  askUserModal.options = askData.options || []
+  askUserModal.isOpenEnded = askData.is_open_ended === true
+  askUserModal.messageIndex = msgIndex
+  askUserModal.freeText = ''
+  askUserModal.visible = true
+}
+
+async function submitAskUserResponse(answer) {
+  if (!answer?.trim() || loading.value) return
+  askUserModal.visible = false
+  const text = answer.trim()
+  messages.value.push({ role: 'user', content: text, _attachments: [] })
+  isNearBottom.value = true
+  scrollToBottom()
+  await runChatStream({ message: text, attachments: [], regenerate: false })
+}
+
+provide('showAskUserModal', showAskUserModal)
+provide('isAskUserUnanswered', isAskUserUnanswered)
 
 function scrollToBottom() {
   if (!isNearBottom.value) return
@@ -856,9 +957,17 @@ function toggleReasoningExpand(index) {
   const msg = messages.value[index]
   if (!msg) return
   msg._reasoningExpanded = !msg._reasoningExpanded
-  if (msg._reasoningExpanded) {
-    scrollAfterExpand(index)
-  }
+  nextTick(() => {
+    const container = messagesRef.value
+    if (!container) return
+    const rowEl = container.querySelector(`[data-index="${index}"]`)
+    if (!rowEl) return
+    const scrollTopBefore = container.scrollTop
+    const rowTopBefore = rowEl.getBoundingClientRect().top
+    virtualizer.value.measureElement(rowEl)
+    const rowTopAfter = rowEl.getBoundingClientRect().top
+    container.scrollTop = scrollTopBefore + (rowTopAfter - rowTopBefore)
+  })
 }
 
 function parseAttachmentsFromMetadata(metadata) {
@@ -1038,6 +1147,15 @@ async function loadHistory() {
     }
     isNearBottom.value = true
     forceScrollToBottom()
+    // 历史消息中自动弹出未回答的 ask_user 弹窗
+    nextTick(() => {
+      for (let i = messages.value.length - 1; i >= 0; i--) {
+        if (messages.value[i].role === 'assistant' && isAskUserUnanswered(i)) {
+          showAskUserModal(i)
+          break
+        }
+      }
+    })
   } catch (e) {
     if (reqId !== loadHistoryRequestId) return
     messages.value = []
@@ -1454,6 +1572,13 @@ async function runChatStream({ message, attachments, regenerate }) {
           abortController.value = null
           // 轮询等待标题生成完成
           pollSessionTitle(sid)
+          // 流式结束后自动弹出 ask_user 弹窗
+          nextTick(() => {
+            const lastIdx = messages.value.length - 1
+            if (lastIdx >= 0 && messages.value[lastIdx].role === 'assistant' && isAskUserUnanswered(lastIdx)) {
+              showAskUserModal(lastIdx)
+            }
+          })
         },
       },
       abortController.value?.signal

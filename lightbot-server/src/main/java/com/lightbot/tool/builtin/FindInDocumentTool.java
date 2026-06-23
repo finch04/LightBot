@@ -170,7 +170,16 @@ public class FindInDocumentTool {
         }
 
         if (totalMatches == 0) {
-            return "未在文档中找到与「" + query + "」匹配的内容。";
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("mode", "search");
+            empty.put("query", query);
+            empty.put("total_matches", 0);
+            empty.put("documents", List.of());
+            try {
+                return objectMapper.writeValueAsString(empty);
+            } catch (Exception e) {
+                return "{\"total_matches\":0,\"documents\":[]}";
+            }
         }
 
         // 构建 JSON 返回

@@ -62,25 +62,25 @@ public class RedisCacheConfig {
         GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(om);
 
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(30))
+                .entryTtl(Duration.ofHours(1))
                 .computePrefixWith(cacheName -> KEY_PREFIX + ":" + cacheName + ":")
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
         Map<String, RedisCacheConfiguration> configMap = Map.ofEntries(
-                Map.entry(CACHE_AGENT,         defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_KNOWLEDGE,     defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_TOOL,          defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_MCP_SERVER,    defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_SUBAGENT,      defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_SKILL,         defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_AGENT_BINDING, defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_PROMPT,        defaultConfig.entryTtl(Duration.ofMinutes(30))),
-                Map.entry(CACHE_SYSTEM_CONFIG, defaultConfig.entryTtl(Duration.ofHours(1))),
-                Map.entry(CACHE_EVAL_DATASET,  defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_EVAL_EVALUATOR,defaultConfig.entryTtl(Duration.ofMinutes(10))),
-                Map.entry(CACHE_EVAL_EXPERIMENT,defaultConfig.entryTtl(Duration.ofMinutes(5)))
+                Map.entry(CACHE_AGENT,         defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_KNOWLEDGE,     defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_TOOL,          defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_MCP_SERVER,    defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_SUBAGENT,      defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_SKILL,         defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_AGENT_BINDING, defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_PROMPT,        defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_SYSTEM_CONFIG, defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_EVAL_DATASET,  defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_EVAL_EVALUATOR,defaultConfig.entryTtl(Duration.ofHours(2))),
+                Map.entry(CACHE_EVAL_EXPERIMENT,defaultConfig.entryTtl(Duration.ofMinutes(30)))
         );
 
         return RedisCacheManager.builder(factory)

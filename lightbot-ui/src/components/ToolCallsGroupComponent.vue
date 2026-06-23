@@ -1,6 +1,6 @@
 <template>
   <div v-if="toolEvents && toolEvents.length > 0" class="tool-calls-group">
-    <button type="button" class="tool-calls-summary" :class="{ 'is-expanded': isExpanded }" @click="isExpanded = !isExpanded">
+    <button type="button" class="tool-calls-summary" :class="{ 'is-expanded': isExpanded }" @click="toggleExpand($event)">
       <span class="summary-icon">
         <CheckCircleOutlined v-if="isDone" class="icon-success" />
         <LoadingOutlined v-else class="icon-spinning" />
@@ -43,7 +43,7 @@
         </div>
         <!-- 结果详情展开 -->
         <div v-if="evt.type === 'tool_result' && expandedResults.has(ti)" class="result-detail">
-          <ToolCallRenderer :event="evt" />
+          <ToolCallRenderer :event="evt" :messageIndex="messageIndex" />
         </div>
       </div>
     </div>
@@ -51,17 +51,25 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { CheckCircleOutlined, LoadingOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import ToolCallRenderer from './ToolCallRenderer.vue'
 
 const props = defineProps({
   toolEvents: { type: Array, default: () => [] },
   isDone: { type: Boolean, default: true },
-  defaultExpanded: { type: Boolean, default: true }
+  defaultExpanded: { type: Boolean, default: true },
+  messageIndex: { type: Number, default: -1 }
 })
 
+const emit = defineEmits(['heightChange'])
+
 const isExpanded = ref(props.defaultExpanded)
+
+function toggleExpand(event) {
+  isExpanded.value = !isExpanded.value
+  nextTick(() => emit('heightChange', event))
+}
 const expandedResults = ref(new Set())
 const manualToggled = ref(new Set())
 

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -30,6 +31,7 @@ public class ModelProviderCacheUtil {
     /** Redis key前缀 */
     private static final String CACHE_PREFIX = "lightbot:model_provider:";
     private static final String ALL_PROVIDERS_KEY = CACHE_PREFIX + "all";
+    private static final Duration CACHE_TTL = Duration.ofHours(2);
 
     /**
      * 获取所有模型提供商
@@ -74,7 +76,7 @@ public class ModelProviderCacheUtil {
     public void cacheProvider(ModelProvider provider) {
         try {
             String json = objectMapper.writeValueAsString(provider);
-            stringRedisTemplate.opsForValue().set(CACHE_PREFIX + provider.getId(), json);
+            stringRedisTemplate.opsForValue().set(CACHE_PREFIX + provider.getId(), json, CACHE_TTL);
             log.debug("[Cache] 缓存提供商: id={}", provider.getId());
         } catch (Exception e) {
             log.warn("[Cache] 缓存提供商失败: id={}, error={}", provider.getId(), e.getMessage());
@@ -89,11 +91,11 @@ public class ModelProviderCacheUtil {
     public void cacheAllProviders(List<ModelProvider> providers) {
         try {
             String json = objectMapper.writeValueAsString(providers);
-            stringRedisTemplate.opsForValue().set(ALL_PROVIDERS_KEY, json);
+            stringRedisTemplate.opsForValue().set(ALL_PROVIDERS_KEY, json, CACHE_TTL);
             // 同时缓存每个提供商到单独的key
             for (ModelProvider provider : providers) {
                 stringRedisTemplate.opsForValue().set(CACHE_PREFIX + provider.getId(),
-                        objectMapper.writeValueAsString(provider));
+                        objectMapper.writeValueAsString(provider), CACHE_TTL);
             }
             log.info("[Cache] 缓存所有提供商: count={}", providers.size());
         } catch (Exception e) {

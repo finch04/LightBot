@@ -87,7 +87,14 @@ public class SearchDocumentsTool {
 
         if (matchedDocs.isEmpty()) {
             log.info("[Tool:search_documents] 未找到匹配: keyword={}, knowledgeIds={}", keyword, knowledgeIds);
-            return "未在知识库中找到文件名包含「" + keyword + "」的文档。";
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("total", 0);
+            empty.put("documents", List.of());
+            try {
+                return objectMapper.writeValueAsString(empty);
+            } catch (Exception e) {
+                return "{\"total\":0,\"documents\":[]}";
+            }
         }
 
         // 3. 构建 JSON 返回

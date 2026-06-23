@@ -57,6 +57,17 @@ export function normalizeMarkdown(text) {
   s = s.replace(/([：:；;。！？])(#{1,6})/g, '$1\n\n$2')
   s = s.replace(/([。；;！？])(-\s)/g, '$1\n$2')
 
+  // 1.2 非行首的 ATX 标题：非换行、非#、非空白符紧跟 ## → 拆行 + 补空行
+  //     marked 要求 ## 必须在行首（前有 \n），否则渲染为纯文本
+  //     排除 # 和空白避免误伤已正确格式的标题（如 "# ## 标题"）
+  s = s.replace(/([^\n# \t])(#{1,6}\s)/g, '$1\n\n$2')
+
+  // 1.3 行内 ATX 标题缺空格：中文/英文后紧跟 ##标题 → 先补空格再拆行
+  //     规则 68 的 ^ 只匹配行首，无法处理行内的 ##标题
+  s = s.replace(/([^ \t\n#])(#{1,6})([^\s#])/g, '$1$2 $3')
+  //     补空格后可能产生新的非行首标题，再执行一次拆行
+  s = s.replace(/([^\n# \t])(#{1,6}\s)/g, '$1\n\n$2')
+
   // 1.1 通用规则：非空行直接紧跟 ATX 标题时，补一个空行（确保标题前有空行）
   s = s.replace(/([^\n])(\n)(#{1,6}\s)/g, (match, prevChar, nl, heading) => {
     // 前面已经是空行则跳过
@@ -85,6 +96,50 @@ export function normalizeMarkdown(text) {
   s = s.replace(/([\u4e00-\u9fff\d\)])(-\s+(?!\d))/g, '$1\n$2')
   s = s.replace(/([\u4e00-\u9fff\d\)])(-\*\*)/g, '$1\n$2')
   s = s.replace(/^-\*\*/gm, '- **')
+
+  // 3.1 无序列表嵌套推断：上一项以 ：或 : 结尾 → 后续同级列表项缩进为子列表
+  //     AI 常输出「- 项目经验：\n- 子项A\n- 子项B」，实际需要「- 项目经验：\n  - 子项A\n  - 子项B」才能渲染嵌套
+  {
+    const lines = s.split('\n')
+    const out = []
+    let parentIndent = -1 // 当前父项的基准缩进
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const listMatch = line.match(/^([ \t]*)- /)
+      if (listMatch) {
+        const curIndent = listMatch[1].length
+        if (parentIndent >= 0 && curIndent > parentIndent) {
+          // 比父项更深 → 已经是子项，无需额外缩进
+          if (/[：:]\s*$/.test(line.trimEnd())) {
+            parentIndent = curIndent // 子父项，更新基准
+          }
+          out.push(line)
+          continue
+        }
+        if (parentIndent >= 0 && curIndent === parentIndent) {
+          // 与父项同级：以 ：结尾 → 新父项（兄弟父）；否则 → 子项
+          if (/[：:]\s*$/.test(line.trimEnd())) {
+            parentIndent = curIndent
+          } else {
+            out.push('  ' + line)
+            continue
+          }
+        } else {
+          // 比父项更浅 或 无父项 → 以 ：结尾则成为新父项
+          if (/[：:]\s*$/.test(line.trimEnd())) {
+            parentIndent = curIndent
+          } else {
+            parentIndent = -1
+          }
+        }
+      } else {
+        parentIndent = -1
+      }
+      out.push(line)
+    }
+    s = out.join('\n')
+  }
+
   s = s.replace(/(\*\*[^*\n]+\*\*)(-\s)/g, '$1\n$2')
   s = s.replace(/(\d+\.[\u4e00-\u9fff]+)(-\s)/g, '$1\n$2')
 
@@ -95,7 +150,10 @@ export function normalizeMarkdown(text) {
   // 5. 行首「1.**」再处理一次（上面插入换行后可能出现新的行首）
   s = s.replace(/^(\d+\.)(\*\*)/gm, '$1 $2')
 
-  // 6. 有序列表粘连：1.XXX2.XXX → 分行（数字.内容 紧跟 数字.内容）
+  // 6. 有序列表缺空格：1.文字 → 1. 文字（GFM 要求 . 后有空格）
+  s = s.replace(/(\d+\.)([^\s\d*.])/gm, '$1 $2')
+
+  // 6.1 有序列表粘连：1.XXX2.XXX → 分行（数字.内容 紧跟 数字.内容）
   s = s.replace(/(\d+\.\s*\S[^\n]*?)(?=\d+\.\s*\S)/g, '$1\n')
 
   // 7. 标题后紧跟非空行内容（非标题、非空行、非列表、非表格）→ 插入空行

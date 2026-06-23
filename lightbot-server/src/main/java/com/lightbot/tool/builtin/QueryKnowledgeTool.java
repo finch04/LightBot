@@ -230,7 +230,11 @@ public class QueryKnowledgeTool {
             if (allResults.isEmpty()) {
                 log.warn("[Tool:query_knowledge] 未找到结果: agentId={}, knowledgeIds={}, question={}",
                         finalAgentId, knowledgeIds, question);
-                return "未在知识库中找到与问题相关的内容。";
+                Map<String, Object> empty = new java.util.LinkedHashMap<>();
+                empty.put("total", 0);
+                empty.put("qa_answer", null);
+                empty.put("results", List.of());
+                return objectMapper.writeValueAsString(empty);
             }
 
             // 5. 构建 JSON 返回

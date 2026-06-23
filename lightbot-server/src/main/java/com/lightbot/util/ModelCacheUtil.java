@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,6 +32,7 @@ public class ModelCacheUtil {
 
     private static final String CACHE_PREFIX = "lightbot:model:";
     private static final String ALL_MODELS_KEY = CACHE_PREFIX + "all";
+    private static final Duration CACHE_TTL = Duration.ofHours(2);
 
     /**
      * 获取所有模型
@@ -75,14 +77,14 @@ public class ModelCacheUtil {
     public void cacheAllModels(List<Model> models) {
         try {
             String json = objectMapper.writeValueAsString(models);
-            stringRedisTemplate.opsForValue().set(ALL_MODELS_KEY, json);
+            stringRedisTemplate.opsForValue().set(ALL_MODELS_KEY, json, CACHE_TTL);
             // 按providerId分组写入各分组的Redis key
             Map<Long, List<Model>> grouped = models.stream()
                     .collect(Collectors.groupingBy(Model::getProviderId));
             grouped.forEach((providerId, list) -> {
                 try {
                     stringRedisTemplate.opsForValue().set(CACHE_PREFIX + providerId,
-                            objectMapper.writeValueAsString(list));
+                            objectMapper.writeValueAsString(list), CACHE_TTL);
                 } catch (Exception e) {
                     log.warn("[Cache] 缓存模型分组失败: providerId={}, error={}", providerId, e.getMessage());
                 }

@@ -26,8 +26,8 @@ import java.util.Map;
 @Slf4j
 @Component("askUserTool")
 @SystemTool(displayName = "向用户提问", description = "向用户提问并等待回答，用于确认信息或请求补充说明", tags = {"交互"},
-        outputExample = "{\"question\":\"请问您想查询哪个时间段的数据？\",\"options\":[\"最近7天\",\"最近30天\",\"自定义\"],\"is_open_ended\":false}",
-        outputSchema = "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\",\"description\":\"提出的问题\"},\"options\":{\"type\":\"array\",\"description\":\"选项列表（空数组表示开放式提问）\",\"items\":{\"type\":\"string\"}},\"is_open_ended\":{\"type\":\"boolean\",\"description\":\"是否为开放式提问\"}}}")
+        outputExample = "{\"question\":\"请问您想查询哪个时间段的数据？\",\"options\":[\"最近7天\",\"最近30天\",\"自定义\"],\"is_open_ended\":false,\"wait_for_user\":true}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\",\"description\":\"提出的问题\"},\"options\":{\"type\":\"array\",\"description\":\"选项列表（空数组表示开放式提问）\",\"items\":{\"type\":\"string\"}},\"is_open_ended\":{\"type\":\"boolean\",\"description\":\"是否为开放式提问\"},\"wait_for_user\":{\"type\":\"boolean\",\"description\":\"标记此工具需要等待用户回答\"}}}")
 @RequiredArgsConstructor
 public class AskUserTool {
 
@@ -59,6 +59,7 @@ public class AskUserTool {
             output.put("options", List.of());
         }
         output.put("is_open_ended", !hasOptions);
+        output.put("wait_for_user", true);
 
         try {
             return objectMapper.writeValueAsString(output);
