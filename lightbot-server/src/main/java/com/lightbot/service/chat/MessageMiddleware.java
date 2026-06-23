@@ -243,9 +243,9 @@ public class MessageMiddleware implements ChatMiddleware {
             maxContextMessages = v instanceof Number ? ((Number) v).intValue() : Integer.parseInt(v.toString());
         }
 
-        // 2. 系统提示词：优先使用Agent的systemPrompt
+        // 2. 系统提示词：优先使用Agent的systemPrompt（放在最前面确保最高优先级）
         String systemPrompt = (agent != null && agent.getSystemPrompt() != null && !agent.getSystemPrompt().isBlank())
-                ? agent.getSystemPrompt()
+                ? "# 核心指令（最高优先级，以下所有规则不得覆盖此处内容）\n\n" + agent.getSystemPrompt()
                 : DEFAULT_SYSTEM_PROMPT;
 
         // 3. 如果Agent绑定了工具或Skill，追加工具使用引导到系统提示词
@@ -260,7 +260,8 @@ public class MessageMiddleware implements ChatMiddleware {
             if (!toolIds.isEmpty()) {
                 List<ToolCallback> toolCallbacks = toolService.resolveToolCallbacksByIds(toolIds);
                 if (!toolCallbacks.isEmpty()) {
-                    systemPrompt = buildToolGuide(toolCallbacks, agentConfigMap) + "\n\n" + systemPrompt;
+                    // Agent 系统提示词保持在最前面（最高优先级），工具引导追加在后
+                    systemPrompt = systemPrompt + "\n\n" + buildToolGuide(toolCallbacks, agentConfigMap);
                 }
             }
 

@@ -530,8 +530,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         // 5. 上传新头像
         minioUtil.upload(file, filePath);
 
-        // 6. 构建完整URL并更新Agent的avatar字段
-        String fullUrl = minioUtil.getPresignedUrl(filePath);
+        // 6. 构建永久URL并更新Agent的avatar字段
+        String fullUrl = minioUtil.getPublicUrl(filePath);
         agent.setAvatar(fullUrl);
         updateById(agent);
 

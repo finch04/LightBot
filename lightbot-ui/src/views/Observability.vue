@@ -57,6 +57,7 @@
         :style="{ width: '360px' }"
       />
       <a-button type="primary" @click="loadTraces(1)"><SearchOutlined /> 查询</a-button>
+      <a-button @click="handleRefresh"><ReloadOutlined /> 刷新</a-button>
       <a-button danger :disabled="selectedRowKeys.length === 0" @click="handleBatchDelete"><DeleteOutlined /> 批量删除</a-button>
     </div>
 
@@ -75,6 +76,7 @@
         style="width: 380px"
       />
       <a-button type="primary" @click="loadToolCalls(1)"><SearchOutlined /> 查询</a-button>
+      <a-button @click="handleToolRefresh"><ReloadOutlined /> 刷新</a-button>
       <a-button danger :disabled="selectedToolRowKeys.length === 0" @click="handleBatchDeleteTool"><DeleteOutlined /> 批量删除</a-button>
     </div>
 
@@ -210,7 +212,6 @@
             <button class="btn-copy btn-copy-inline" @click="copyToClipboard(detailTrace.requestId, 'trace_rid')">
               <CheckOutlined v-if="copiedKey === 'trace_rid'" style="color: #52c41a" />
               <CopyOutlined v-else />
-              {{ copiedKey === 'trace_rid' ? '已复制' : '复制' }}
             </button>
           </div>
           <div class="info-row">
@@ -234,6 +235,12 @@
           <div class="info-row">
             <span class="info-label">耗时</span>
             <span class="info-value">{{ formatDuration(detailTrace.totalDurationMs) }}</span>
+            <template v-if="detailTrace.sessionId">
+              <span class="info-label" style="margin-left: 16px;">会话</span>
+              <a-button type="link" size="small" @click="goToChat(detailTrace.sessionId)" style="padding: 0; height: auto;">
+                跳转到对话 →
+              </a-button>
+            </template>
           </div>
           <div class="info-row">
             <span class="info-label">状态</span>
@@ -251,12 +258,6 @@
                 {{ copiedKey === 'error' ? '已复制' : '复制' }}
               </button>
             </div>
-          </div>
-          <div v-if="detailTrace.sessionId" class="info-row" style="grid-column: 1 / -1;">
-            <span class="info-label">会话</span>
-            <a-button type="link" size="small" @click="goToChat(detailTrace.sessionId)" style="padding: 0; height: auto;">
-              跳转到对话 →
-            </a-button>
           </div>
         </div>
 
@@ -304,6 +305,18 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- 请求配置与工具定义 -->
+        <div v-if="traceModelInput.requestConfig || traceModelInput.requestTools.length" class="request-detail-actions">
+          <a-button v-if="traceModelInput.requestConfig" size="small" @click="configModalVisible = true">
+            <template #icon><SettingOutlined /></template>
+            请求配置
+          </a-button>
+          <a-button v-if="traceModelInput.requestTools.length" size="small" @click="toolsModalVisible = true">
+            <template #icon><ToolOutlined /></template>
+            工具定义（{{ traceModelInput.toolCount }}）
+          </a-button>
         </div>
 
         <!-- AI完整回复 -->
@@ -443,6 +456,31 @@
         </div>
       </template>
     </a-drawer>
+
+    <!-- 请求配置弹窗 -->
+    <a-modal v-model:open="configModalVisible" title="请求配置" :width="600" :footer="null" :maskClosable="false">
+      <div class="modal-scroll-body">
+        <div class="config-grid">
+          <div v-for="(value, key) in traceModelInput.requestConfig" :key="key" class="config-item">
+            <span class="config-key">{{ key }}</span>
+            <span class="config-val">{{ formatConfigValue(value) }}</span>
+          </div>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 工具定义弹窗 -->
+    <a-modal v-model:open="toolsModalVisible" title="工具定义" :width="700" :footer="null" :maskClosable="false">
+      <div class="modal-scroll-body">
+        <div v-for="(tool, ti) in traceModelInput.requestTools" :key="ti" class="tool-def-item">
+          <div class="tool-def-header">
+            <a-tag color="blue">{{ tool.name }}</a-tag>
+            <span class="tool-def-desc">{{ tool.description }}</span>
+          </div>
+          <pre v-if="tool.inputSchema" class="mi-pre" style="margin-top: 6px; max-height: 150px;">{{ formatJson(tool.inputSchema) }}</pre>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -457,6 +495,8 @@ import {
   CopyOutlined,
   CheckOutlined,
   DeleteOutlined,
+  ReloadOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
@@ -476,6 +516,8 @@ const detailVisible = ref(false)
 const detailTrace = ref(null)
 const expandedSpans = ref(new Set())
 const copiedKey = ref(null)
+const configModalVisible = ref(false)
+const toolsModalVisible = ref(false)
 let copyTimer = null
 
 function copyToClipboard(text, key) {
@@ -573,14 +615,19 @@ const traceModelInput = computed(() => {
   const userAttachments = traceAttachments(userAttrs)
   const llmMessages = traceLlmMessages(llmAttrs)
   const systemPrompt = llmAttrs.systemPrompt || llmMessages.find(m => m.role === 'system')?.content || ''
+  const requestConfig = llmAttrs.config || null
+  const requestTools = llmAttrs.tools || []
   return {
     hasData: !!(userAttrs.content || userAttachments.length || userAttrs.bizParams
-      || systemPrompt || llmMessages.length),
+      || systemPrompt || llmMessages.length || requestConfig || requestTools.length),
     userContent: userAttrs.content || '',
     userAttachments,
     bizParams: userAttrs.bizParams || null,
     systemPrompt,
     llmMessages,
+    requestConfig,
+    requestTools,
+    toolCount: llmAttrs.toolCount ?? requestTools.length,
   }
 })
 
@@ -668,7 +715,7 @@ function spanNameLabel(name) {
 }
 
 function traceHiddenAttrKeys(k) {
-  return ['replyPreview', 'content', 'toolNames', 'attachments', 'messages', 'messageCount', 'systemPrompt', 'bizParams'].includes(k)
+  return ['replyPreview', 'content', 'toolNames', 'attachments', 'messages', 'messageCount', 'systemPrompt', 'bizParams', 'config', 'tools', 'toolCount'].includes(k)
 }
 
 function roleLabel(role) {
@@ -767,6 +814,24 @@ function onTabChange() {
   }
 }
 
+function handleRefresh() {
+  filter.requestId = ''
+  filter.sessionId = null
+  filter.status = undefined
+  filter.timeRange = null
+  selectedRowKeys.value = []
+  loadTraces(1)
+  loadOverview()
+}
+
+function handleToolRefresh() {
+  toolFilter.toolName = ''
+  toolFilter.status = undefined
+  toolFilter.timeRange = null
+  selectedToolRowKeys.value = []
+  loadToolCalls(1)
+}
+
 function handleTableChange(pag) {
   loadTraces(pag.current)
 }
@@ -782,6 +847,8 @@ async function openDetail(record) {
   }
   detailVisible.value = true
   expandedSpans.value = new Set()
+  configModalVisible.value = false
+  toolsModalVisible.value = false
   try {
     const res = await getTraceDetail(record.id)
     detailTrace.value = res.data
@@ -911,6 +978,12 @@ function formatJson(jsonStr) {
   } catch {
     return jsonStr
   }
+}
+
+function formatConfigValue(value) {
+  if (value === null || value === undefined) return '-'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
 }
 
 onMounted(() => {
@@ -1259,6 +1332,67 @@ onMounted(() => {
   word-break: break-all;
 }
 
+/* 请求配置与工具定义按钮 */
+.request-detail-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+/* 弹窗滚动区域 */
+.modal-scroll-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 请求配置 */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.config-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.config-key {
+  font-size: 12px;
+  color: #64748b;
+  min-width: 80px;
+  font-weight: 500;
+}
+.config-val {
+  font-size: 12px;
+  color: #1e293b;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  word-break: break-all;
+}
+
+/* 工具定义 */
+.tool-def-item {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.tool-def-item:last-child { margin-bottom: 0; }
+.tool-def-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-def-desc {
+  font-size: 12px;
+  color: #64748b;
+}
+
 /* AI回复内容 */
 .trace-llm-msg {
   margin-bottom: 10px;
@@ -1371,6 +1505,7 @@ onMounted(() => {
   font-size: 13px;
   &:hover { color: #333; }
 }
+
 .detail-pre {
   background: #f5f5f5;
   border-radius: 6px;

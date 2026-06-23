@@ -68,7 +68,7 @@ public class TraceMiddleware implements ChatMiddleware {
                     // 2. 记录本轮用户输入（含附件，便于 Trace 排查）
                     recordUserInputSpan(ctx);
 
-                    // 3. 记录发送给 LLM 的完整消息
+                    // 3. 记录发送给 LLM 的完整请求（messages + config + tools）
                     ChatRequest chatRequest = ctx.getRequest();
                     if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
                         boolean lastUserHasAttachments = chatRequest != null && chatRequest.getAttachments() != null
@@ -83,6 +83,27 @@ public class TraceMiddleware implements ChatMiddleware {
                                 .map(org.springframework.ai.chat.messages.SystemMessage.class::cast)
                                 .findFirst()
                                 .ifPresent(sm -> llmInputAttrs.put("systemPrompt", sm.getText()));
+
+                        // 请求配置（model、temperature、topP、maxTokens 等）
+                        if (ctx.getConfigMap() != null && !ctx.getConfigMap().isEmpty()) {
+                            llmInputAttrs.put("config", new java.util.LinkedHashMap<>(ctx.getConfigMap()));
+                        }
+
+                        // 工具定义（name、description、inputSchema）
+                        if (ctx.getToolCallbackMap() != null && !ctx.getToolCallbackMap().isEmpty()) {
+                            List<Map<String, Object>> toolDefs = ctx.getToolCallbackMap().values().stream()
+                                    .map(cb -> {
+                                        Map<String, Object> td = new java.util.LinkedHashMap<>();
+                                        td.put("name", cb.getToolDefinition().name());
+                                        td.put("description", cb.getToolDefinition().description());
+                                        td.put("inputSchema", cb.getToolDefinition().inputSchema());
+                                        return td;
+                                    })
+                                    .toList();
+                            llmInputAttrs.put("toolCount", toolDefs.size());
+                            llmInputAttrs.put("tools", toolDefs);
+                        }
+
                         ctx.getSpans().add(LlmTraceSpan.of("llm_input", null, "messages_to_llm",
                                 ctx.getStartTime(), 0, "OK", llmInputAttrs));
                     }

@@ -247,8 +247,8 @@ public class UserServiceImpl implements UserService {
         // 5. 上传新头像
         minioUtil.upload(file, filePath);
 
-        // 6. 构建完整URL并更新用户avatar字段
-        String fullUrl = minioUtil.getPresignedUrl(filePath);
+        // 6. 构建永久URL并更新用户avatar字段
+        String fullUrl = minioUtil.getPublicUrl(filePath);
         user.setAvatar(fullUrl);
         userMapper.updateById(user);
 
