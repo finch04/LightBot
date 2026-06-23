@@ -1,172 +1,162 @@
-import { marked } from 'marked'
-import { markedHighlight } from 'marked-highlight'
-import hljs from 'highlight.js'
+import MarkdownIt from 'markdown-it'
+import markdownItKatex from '@vscode/markdown-it-katex'
+import taskLists from 'markdown-it-task-lists'
+import DOMPurify from 'dompurify'
+import { createHighlighter } from 'shiki'
 
-let configured = false
+const markdownKatexPlugin = markdownItKatex.default || markdownItKatex
 
-function ensureConfigured() {
-  if (configured) return
-  configured = true
+// ── Shiki 异步初始化 ──────────────────────────────────────────────
 
-  marked.use(
-    markedHighlight({
-      langPrefix: 'hljs language-',
-      highlight(code, lang) {
-        if (lang && hljs.getLanguage(lang)) {
-          return hljs.highlight(code, { language: lang }).value
+let highlighterPromise
+const getHighlighter = () => {
+  if (!highlighterPromise) {
+    highlighterPromise = createHighlighter({
+      themes: ['github-light', 'github-dark'],
+      langs: ['plaintext']
+    }).catch((error) => {
+      highlighterPromise = undefined
+      throw error
+    })
+  }
+  return highlighterPromise
+}
+
+const normalizeCodeLanguage = (lang) => {
+  if (!lang) return ''
+  const map = {
+    js: 'javascript', ts: 'typescript', py: 'python',
+    rb: 'ruby', cs: 'csharp', kt: 'kotlin',
+    sh: 'bash', shell: 'bash', zsh: 'bash',
+    yml: 'yaml', md: 'markdown', tex: 'latex',
+    dockerfile: 'docker', 'c++': 'cpp', 'c#': 'csharp',
+  }
+  return map[lang.toLowerCase()] || lang.toLowerCase()
+}
+
+const CODE_FENCE_RE = /(^|\n) {0,3}(```|~~~)/
+const CODE_FENCE_LANGUAGE_RE = /(^|\n) {0,3}(```+|~~~+)[ \t]*([^\s:,`]*)/g
+
+const hasCodeFence = (content) => CODE_FENCE_RE.test(content)
+
+const collectCodeFenceLanguages = (content) => {
+  const languages = new Set()
+  for (const match of String(content || '').matchAll(CODE_FENCE_LANGUAGE_RE)) {
+    const language = normalizeCodeLanguage(match[3])
+    if (language) languages.add(language)
+  }
+  return [...languages]
+}
+
+const ensureLanguages = async (highlighter, languages) => {
+  const loaded = new Set(highlighter.getLoadedLanguages())
+  await Promise.all(
+    languages
+      .filter((language) => !loaded.has(language))
+      .map((language) => {
+        try {
+          return highlighter.loadLanguage(language).catch(() => null)
+        } catch {
+          return null
         }
-        return hljs.highlightAuto(code).value
-      },
-    }),
-    {
-      renderer: {
-        link({ href, title, tokens }) {
-          const text = this.parser.parseInline(tokens)
-          const titleAttr = title ? ` title="${title}"` : ''
-          return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
-        },
-      },
-      breaks: true,
-      gfm: true,
-    }
+      })
   )
 }
 
+// ── markdown-it 渲染器工厂（带缓存）─────────────────────────────────
+
+const rendererCache = new Map()
+
+const createRenderer = ({ themeName, highlighter }) =>
+  new MarkdownIt({
+    html: true,
+    breaks: true,
+    linkify: true,
+    typographer: true,
+    highlight: highlighter
+      ? (code, lang) => {
+          const language = normalizeCodeLanguage(lang)
+          const loadedLanguages = highlighter.getLoadedLanguages()
+          const targetLanguage = loadedLanguages.includes(language) ? language : 'plaintext'
+          return highlighter.codeToHtml(code, { lang: targetLanguage, theme: themeName })
+        }
+      : undefined
+  })
+    .use(markdownKatexPlugin, { throwOnError: false, errorColor: '#cc0000', trust: false })
+    .use(taskLists, { enabled: false, label: false, labelAfter: false })
+
+const getRenderer = async (theme, needsHighlight) => {
+  const cacheKey = needsHighlight ? theme : 'plain'
+  const cached = rendererCache.get(cacheKey)
+  if (cached) return cached
+
+  const rendererPromise = needsHighlight
+    ? getHighlighter().then((highlighter) => createRenderer({ themeName: theme, highlighter }))
+    : Promise.resolve(createRenderer({ themeName: theme }))
+  rendererCache.set(cacheKey, rendererPromise)
+  return rendererPromise
+}
+
+// ── HTML 缓存（LRU 100 条）──────────────────────────────────────────
+
+const renderedHtmlCache = new Map()
+const MAX_RENDER_CACHE_SIZE = 100
+
+const getCachedHtml = (cacheKey) => renderedHtmlCache.get(cacheKey)
+const setCachedHtml = (cacheKey, html) => {
+  if (renderedHtmlCache.size >= MAX_RENDER_CACHE_SIZE) {
+    renderedHtmlCache.delete(renderedHtmlCache.keys().next().value)
+  }
+  renderedHtmlCache.set(cacheKey, html)
+}
+
+// ── normalizeMarkdown（精简版：仅处理后端转义问题）──────────────────
+
 /**
- * 规范化 LLM 常见 Markdown 写法（尤其中文模型省略空格/换行的情况）
+ * 规范化 LLM 常见 Markdown 写法（尤其中文模型省略空格/换行的情况）。
+ * markdown-it 配置 breaks/html/linkify/typographer 后，大部分问题由引擎自动处理，
+ * 此处仅修复引擎无法处理的边界情况。
  */
 export function normalizeMarkdown(text) {
   if (!text) return ''
 
   let s = text.replace(/\r\n/g, '\n')
 
-  // 表格行被挤在一行：用 || 连接下一格/下一行（模型常见输出；允许 || 与 ** 之间有空格）
+  // 表格行被挤在一行：用 || 连接下一格/下一行（模型常见输出）
   s = s.replace(/\|\|\s*(?=\s*\*\*)/g, '|\n|')
   s = s.replace(/\|\|\s*(?=\s*-{2,})/g, '|\n|')
 
-  // 无序列表「-文字」缺空格
+  // 无序列表「-文字」缺空格（markdown-it 需要 - 后有空格）
   s = s.replace(/^(-)([^\s-])/gm, '$1 $2')
 
-  // 0. 常见「粘连」：--- 与标题、列表、粗体挤在同一行（模型极易这样输出）
+  // ATX 标题缺空格：##标题 → ## 标题（markdown-it 需要 # 后有空格）
+  s = s.replace(/^(#{1,6})([^\s#\n])/gm, '$1 $2')
+
+  // 非行首标题：中文/标点后紧跟 ## → 拆行 + 补空行
+  s = s.replace(/([：:；;。！？])(#{1,6})/g, '$1\n\n$2')
+  s = s.replace(/([^ \t\n#])(#{1,6})([^\s#])/g, '$1$2 $3')
+  s = s.replace(/([^\n# \t])(#{1,6}\s)/g, '$1\n\n$2')
+
+  // 有序列表缺空格：1.文字 → 1. 文字
+  s = s.replace(/^(\d+\.)([^\s\d*.])/gm, '$1 $2')
+  // 有序列表缺空格：1.** → 1. **
+  s = s.replace(/^(\d+\.)(\*\*)/gm, '$1 $2')
+
+  // 列表项挤在同一行：「xxx- **」或「xxx - 」→ 拆行（AI 常见输出）
+  s = s.replace(/([^\s])(- \*\*)/g, '$1\n$2')
+  s = s.replace(/([^\s])(- [^\s-*])/g, '$1\n$2')
+
+  // 分隔线与标题/粗体粘连在同一行
   s = s.replace(/(---)(#{1,6})/g, '$1\n\n$2')
   s = s.replace(/(---)(\*\*)/g, '$1\n\n$2')
   s = s.replace(/(---)(-\s)/g, '$1\n\n$2')
   s = s.replace(/(---)(\d+\.)/g, '$1\n\n$2')
 
-  // 1. 先补换行（后续标题规则依赖行首匹配）
-  s = s.replace(/([：:；;。！？])(#{1,6})/g, '$1\n\n$2')
-  s = s.replace(/([。；;！？])(-\s)/g, '$1\n$2')
-
-  // 1.2 非行首的 ATX 标题：非换行、非#、非空白符紧跟 ## → 拆行 + 补空行
-  //     marked 要求 ## 必须在行首（前有 \n），否则渲染为纯文本
-  //     排除 # 和空白避免误伤已正确格式的标题（如 "# ## 标题"）
-  s = s.replace(/([^\n# \t])(#{1,6}\s)/g, '$1\n\n$2')
-
-  // 1.3 行内 ATX 标题缺空格：中文/英文后紧跟 ##标题 → 先补空格再拆行
-  //     规则 68 的 ^ 只匹配行首，无法处理行内的 ##标题
-  s = s.replace(/([^ \t\n#])(#{1,6})([^\s#])/g, '$1$2 $3')
-  //     补空格后可能产生新的非行首标题，再执行一次拆行
-  s = s.replace(/([^\n# \t])(#{1,6}\s)/g, '$1\n\n$2')
-
-  // 1.1 通用规则：非空行直接紧跟 ATX 标题时，补一个空行（确保标题前有空行）
-  s = s.replace(/([^\n])(\n)(#{1,6}\s)/g, (match, prevChar, nl, heading) => {
-    // 前面已经是空行则跳过
-    if (prevChar === '\n') return match
-    return prevChar + '\n\n' + heading
-  })
-
-  // 2. ATX 标题：##标题 -> ## 标题；###1. -> ### 1.
-  s = s.replace(/^(#{1,6})([^\s#\n])/gm, '$1 $2')
-  s = s.replace(/^(#{1,6})\s*(\d+\.)/gm, '$1 $2')
-
-  // 2.1 标题紧跟表格管道符：###标题| col1 | col2 → ### 标题\n| col1 | col2
-  //     marked GFM 表格解析器优先级高于 ATX 标题，会导致整行被当成表头
-  s = s.replace(/^(#{1,6}\s+[^\n|]+)\|/gm, '$1\n|')
-
-  // 有序列表项：行首「1.**」→「1. **」（GFM 要求 . 后有空格）
-  s = s.replace(/^(\d+\.)(\*\*)/gm, '$1 $2')
-  // 中文小结里「亮点1.**」「如下1.**」等缺换行
-  s = s.replace(/(亮点|要点|包括|如下|清单|步骤)(\d+\.\*\*)/g, '$1\n$2')
-  // 中文/中文标点 + 「数字.**」→ 换行（避免拉丁字母如 com3.** 被拆开）
-  s = s.replace(/([\u4e00-\u9fff：:；,，。！？、])(\d+\.\*\*)/g, '$1\n$2')
-  // 域名/英文后直接跟「1-9.**」列表（如 qq.com3.**）
-  s = s.replace(/([a-zA-Z])([1-9]\.\*\*)/g, '$1\n$2')
-
-  // 3. 标题/正文与列表项粘在一起
-  s = s.replace(/([\u4e00-\u9fff\d\)])(-\s+(?!\d))/g, '$1\n$2')
-  s = s.replace(/([\u4e00-\u9fff\d\)])(-\*\*)/g, '$1\n$2')
-  s = s.replace(/^-\*\*/gm, '- **')
-
-  // 3.1 无序列表嵌套推断：上一项以 ：或 : 结尾 → 后续同级列表项缩进为子列表
-  //     AI 常输出「- 项目经验：\n- 子项A\n- 子项B」，实际需要「- 项目经验：\n  - 子项A\n  - 子项B」才能渲染嵌套
-  {
-    const lines = s.split('\n')
-    const out = []
-    let parentIndent = -1 // 当前父项的基准缩进
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      const listMatch = line.match(/^([ \t]*)- /)
-      if (listMatch) {
-        const curIndent = listMatch[1].length
-        if (parentIndent >= 0 && curIndent > parentIndent) {
-          // 比父项更深 → 已经是子项，无需额外缩进
-          if (/[：:]\s*$/.test(line.trimEnd())) {
-            parentIndent = curIndent // 子父项，更新基准
-          }
-          out.push(line)
-          continue
-        }
-        if (parentIndent >= 0 && curIndent === parentIndent) {
-          // 与父项同级：以 ：结尾 → 新父项（兄弟父）；否则 → 子项
-          if (/[：:]\s*$/.test(line.trimEnd())) {
-            parentIndent = curIndent
-          } else {
-            out.push('  ' + line)
-            continue
-          }
-        } else {
-          // 比父项更浅 或 无父项 → 以 ：结尾则成为新父项
-          if (/[：:]\s*$/.test(line.trimEnd())) {
-            parentIndent = curIndent
-          } else {
-            parentIndent = -1
-          }
-        }
-      } else {
-        parentIndent = -1
-      }
-      out.push(line)
-    }
-    s = out.join('\n')
-  }
-
-  s = s.replace(/(\*\*[^*\n]+\*\*)(-\s)/g, '$1\n$2')
-  s = s.replace(/(\d+\.[\u4e00-\u9fff]+)(-\s)/g, '$1\n$2')
-
-  // 4. 分隔线（--- 单独成行才是 hr）
-  s = s.replace(/([^\n-\s])---([^\n-])/g, '$1\n\n---\n\n$2')
-  s = s.replace(/^---([^\n-])/gm, '---\n\n$1')
-
-  // 5. 行首「1.**」再处理一次（上面插入换行后可能出现新的行首）
-  s = s.replace(/^(\d+\.)(\*\*)/gm, '$1 $2')
-
-  // 6. 有序列表缺空格：1.文字 → 1. 文字（GFM 要求 . 后有空格）
-  s = s.replace(/(\d+\.)([^\s\d*.])/gm, '$1 $2')
-
-  // 6.1 有序列表粘连：1.XXX2.XXX → 分行（数字.内容 紧跟 数字.内容）
-  s = s.replace(/(\d+\.\s*\S[^\n]*?)(?=\d+\.\s*\S)/g, '$1\n')
-
-  // 7. 标题后紧跟非空行内容（非标题、非空行、非列表、非表格）→ 插入空行
-  s = s.replace(/^(#{1,6}\s+[^\n]+)(\n(?!\n|#|-|\||\*\*|```|\d+\.).+)/gm, '$1\n$2')
-
   return s
 }
 
-/**
- * 拆 GFM 表格行单元格（去掉首尾可选的 |）
- * @param {string} line
- * @returns {string[]}
- */
+// ── 表格流式补丁 ──────────────────────────────────────────────────
+
 function splitTableCellsForTable(line) {
   let s = String(line).trim()
   if (!s.includes('|')) return []
@@ -202,7 +192,7 @@ function formatTableRow(cells) {
 }
 
 /**
- * 流式阶段补全未闭合的 GFM 表格（补分隔行、统一列数），便于 marked 解析出 <table>
+ * 流式阶段补全未闭合的 GFM 表格（补分隔行、统一列数），便于 markdown-it 解析出 <table>
  */
 function patchStreamingTables(text) {
   if (!text || !text.includes('|')) return text
@@ -241,10 +231,7 @@ function patchStreamingTables(text) {
       const t = L.trim()
       if (t.startsWith('```')) break
       if (t === '' && block.length > 0) break
-      if (t === '' && block.length === 0) {
-        j++
-        break
-      }
+      if (t === '' && block.length === 0) { j++; break }
       if (t === '') break
       if (!isTableDataLine(L)) break
       block.push(L)
@@ -263,9 +250,7 @@ function patchStreamingTables(text) {
     })
 
     let n = 2
-    parsed.forEach((p) => {
-      n = Math.max(n, p.cells.length)
-    })
+    parsed.forEach((p) => { n = Math.max(n, p.cells.length) })
 
     const rows = []
     for (let k = 0; k < parsed.length; k++) {
@@ -297,6 +282,8 @@ function patchStreamingTables(text) {
   return out.join('\n')
 }
 
+// ── 流式 Markdown 补丁 ──────────────────────────────────────────
+
 function patchStreamingMarkdown(text) {
   let processed = text
   const backtickCount = (processed.match(/```/g) || []).length
@@ -310,14 +297,16 @@ function patchStreamingMarkdown(text) {
   return processed
 }
 
+// ── 渲染入口 ──────────────────────────────────────────────────────
+
 /**
- * 渲染 Markdown 为 HTML
+ * 渲染 Markdown 为 HTML（异步，支持 Shiki 语言按需加载）
  * @param {string} text 原始文本
- * @param {{ streaming?: boolean }} options streaming=true 时补全未闭合标记；false 时做终态完整渲染
+ * @param {{ streaming?: boolean, theme?: string }} options
+ * @returns {Promise<string>}
  */
-export function renderMarkdown(text, { streaming = false } = {}) {
+export async function renderMarkdown(text, { streaming = false, theme = 'github-light' } = {}) {
   if (!text) return ''
-  ensureConfigured()
 
   let processed = normalizeMarkdown(text)
   processed = patchStreamingTables(processed)
@@ -325,5 +314,52 @@ export function renderMarkdown(text, { streaming = false } = {}) {
     processed = patchStreamingMarkdown(processed)
   }
 
-  return marked.parse(processed)
+  const themeName = theme === 'github-dark' ? 'github-dark' : 'github-light'
+  const needsHighlight = hasCodeFence(processed)
+  const cacheKey = `${needsHighlight ? themeName : 'plain'} ${processed}`
+
+  const cachedHtml = getCachedHtml(cacheKey)
+  if (cachedHtml !== undefined) return cachedHtml
+
+  if (needsHighlight) {
+    const highlighter = await getHighlighter()
+    await ensureLanguages(highlighter, collectCodeFenceLanguages(processed))
+  }
+
+  const md = await getRenderer(themeName, needsHighlight)
+  const rawHtml = md.render(processed)
+
+  const html = DOMPurify.sanitize(rawHtml, {
+    ADD_TAGS: ['input'],
+    ADD_ATTR: ['class', 'style', 'target', 'rel', 'type', 'checked', 'disabled']
+  })
+
+  setCachedHtml(cacheKey, html)
+  return html
+}
+
+// ── 同步渲染（供 computed 等同步场景使用，无 Shiki 高亮）────────────
+
+const syncRenderer = new MarkdownIt({
+  html: true,
+  breaks: true,
+  linkify: true,
+  typographer: true
+})
+  .use(markdownKatexPlugin, { throwOnError: false, errorColor: '#cc0000', trust: false })
+  .use(taskLists, { enabled: false, label: false, labelAfter: false })
+
+/**
+ * 同步渲染 Markdown 为 HTML（无 Shiki 高亮，使用内置高亮）
+ * 适用于 computed 等同步场景，如文件预览、文档编辑器等。
+ * @param {string} text 原始文本
+ * @returns {string}
+ */
+export function renderMarkdownSync(text) {
+  if (!text) return ''
+  const rawHtml = syncRenderer.render(text)
+  return DOMPurify.sanitize(rawHtml, {
+    ADD_TAGS: ['input'],
+    ADD_ATTR: ['class', 'style', 'target', 'rel', 'type', 'checked', 'disabled']
+  })
 }

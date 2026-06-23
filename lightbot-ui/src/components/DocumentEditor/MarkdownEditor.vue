@@ -11,7 +11,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as monaco from 'monaco-editor'
-import { marked } from 'marked'
+import { renderMarkdownSync } from '@/utils/markdown_preview'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -26,7 +26,7 @@ const containerRef = ref(null)
 let editor = null
 
 const previewHtml = computed(() => {
-  return marked.parse(props.modelValue || '', { breaks: true })
+  return renderMarkdownSync(props.modelValue || '')
 })
 
 onMounted(() => {

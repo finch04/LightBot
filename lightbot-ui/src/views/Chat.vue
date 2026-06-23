@@ -661,7 +661,7 @@ function showAskUserModal(msgIndex) {
 }
 
 async function submitAskUserResponse(answer) {
-  if (!answer?.trim() || loading.value) return
+  if (!answer?.trim()) return
   askUserModal.visible = false
   const text = answer.trim()
   messages.value.push({ role: 'user', content: text, _attachments: [] })

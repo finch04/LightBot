@@ -896,7 +896,7 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
-import { marked } from 'marked'
+import { renderMarkdownSync } from '@/utils/markdown_preview'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
@@ -1845,7 +1845,7 @@ const hasSourcePreview = computed(() => {
 // Markdown渲染
 const renderedMarkdown = computed(() => {
   if (!previewContent.value) return ''
-  return marked(previewContent.value)
+  return renderMarkdownSync(previewContent.value)
 })
 
 function statusText(s) {

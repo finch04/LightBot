@@ -17,6 +17,7 @@ import com.lightbot.enums.ModelProviderType;
 import com.lightbot.model.MimoChatClient;
 import com.lightbot.subagent.DelegateSubAgentTool;
 import com.lightbot.tool.ToolEventEmitter;
+import com.lightbot.tool.builtin.AskUserTool;
 import com.lightbot.tool.builtin.QueryKnowledgeTool;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.dto.LlmTraceSpan;
@@ -235,6 +236,14 @@ public class ChatServiceImpl implements ChatService {
             ctx.getMessages().add(org.springframework.ai.chat.messages.ToolResponseMessage.builder()
                     .responses(toolResponses)
                     .build());
+
+            // ask_user 工具执行后中断循环，等待用户回复
+            boolean hasAskUser = toolResponses.stream()
+                    .anyMatch(r -> AskUserTool.TOOL_NAME.equals(r.name()));
+            if (hasAskUser) {
+                log.info("[Chat][Trace] ask_user 工具调用，中断工具循环，等待用户回复");
+                break;
+            }
         }
 
         return fullReply.toString();
@@ -762,6 +771,15 @@ public class ChatServiceImpl implements ChatService {
                             .concatWith(Flux.concat(toolResultEvents))
                             .concatWith(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCompleteEvent(resultContentOffset)))
                             .concatWith(afterTool);
+
+                    // ask_user 工具执行后中断循环，等待用户回复
+                    boolean hasAskUser = toolResponses.stream()
+                            .anyMatch(r -> AskUserTool.TOOL_NAME.equals(r.name()));
+                    if (hasAskUser) {
+                        log.info("[Chat][Trace] ask_user 工具调用，中断工具循环，等待用户回复");
+                        return toolEventFlux;
+                    }
+
                     return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart, eventSink));
                 });
     }

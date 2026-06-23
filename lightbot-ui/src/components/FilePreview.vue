@@ -60,7 +60,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { marked } from 'marked'
+import { renderMarkdownSync } from '@/utils/markdown_preview'
 import { FileOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -118,7 +118,7 @@ const officePreviewUrl = computed(() => {
 // Markdown 渲染
 const renderedMarkdown = computed(() => {
   if (!props.content) return ''
-  return marked(props.content)
+  return renderMarkdownSync(props.content)
 })
 
 // 下载文件

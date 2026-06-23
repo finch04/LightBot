@@ -53,7 +53,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { marked } from 'marked'
+import { renderMarkdownSync } from '@/utils/markdown_preview'
 import ChatMediaPreview from './ChatMediaPreview.vue'
 import FilePreview from './FilePreview.vue'
 import { getFileExtension } from '../utils/chatAttachment'
@@ -100,7 +100,7 @@ const isMarkdown = computed(() => ['md', 'markdown'].includes(fileExtension.valu
 
 const renderedMarkdown = computed(() => {
   if (!textContent.value || !isMarkdown.value) return ''
-  return marked(textContent.value)
+  return renderMarkdownSync(textContent.value)
 })
 
 const hasSourcePreview = computed(() => {

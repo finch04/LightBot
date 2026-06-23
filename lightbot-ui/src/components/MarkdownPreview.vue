@@ -5,6 +5,7 @@
 <script setup>
 import { watch, shallowRef } from 'vue'
 import { renderMarkdown } from '@/utils/markdown_preview'
+import 'katex/dist/katex.min.css'
 
 const props = defineProps({
   content: { type: String, default: '' },
@@ -16,8 +17,17 @@ const renderedHtml = shallowRef('')
 
 watch(
   () => [props.content, props.finalized],
-  ([val, finalized]) => {
-    renderedHtml.value = renderMarkdown(val, { streaming: !finalized })
+  async ([val, finalized], _, onCleanup) => {
+    let expired = false
+    onCleanup(() => { expired = true })
+
+    if (!val) {
+      renderedHtml.value = ''
+      return
+    }
+
+    const html = await renderMarkdown(val, { streaming: !finalized })
+    if (!expired) renderedHtml.value = html
   },
   { immediate: true }
 )
