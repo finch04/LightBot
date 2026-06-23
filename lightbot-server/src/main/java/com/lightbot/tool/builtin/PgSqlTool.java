@@ -47,7 +47,7 @@ public class PgSqlTool {
 
     @SystemTool(displayName = "列出数据库表",
             outputExample = "{\"tables\":[\"agent\",\"knowledge\",\"document\",\"chunk\",\"embedding\"],\"total\":5}",
-            outputSchema = "{\"type\":\"object\",\"properties\":{\"tables\":{\"type\":\"array\",\"description\":\"表名列表\",\"items\":{\"type\":\"string\"}},\"total\":{\"type\":\"integer\",\"description\":\"表总数\"}}}}")
+            outputSchema = "{\"type\":\"object\",\"properties\":{\"tables\":{\"type\":\"array\",\"description\":\"表名列表\",\"items\":{\"type\":\"string\"}},\"total\":{\"type\":\"integer\",\"description\":\"表总数\"}}}")
     @Tool(name = "pg_list_tables",
           description = "列出数据库中所有表名。当用户想了解数据库有哪些表时调用此工具。")
     public String listTables() {
@@ -74,7 +74,7 @@ public class PgSqlTool {
 
     @SystemTool(displayName = "查看表结构",
             outputExample = "{\"table_name\":\"agent\",\"columns\":[{\"column_name\":\"id\",\"data_type\":\"bigint\",\"is_nullable\":false,\"column_default\":null,\"column_comment\":\"主键ID\"},{\"column_name\":\"name\",\"data_type\":\"character varying\",\"is_nullable\":false,\"column_default\":null,\"column_comment\":\"Agent名称\"}],\"indexes\":[{\"index_name\":\"idx_agent_status\",\"index_def\":\"CREATE INDEX idx_agent_status ON agent USING btree (status)\"}]}",
-            outputSchema = "{\"type\":\"object\",\"properties\":{\"table_name\":{\"type\":\"string\",\"description\":\"表名\"},\"columns\":{\"type\":\"array\",\"description\":\"字段列表\",\"items\":{\"type\":\"object\",\"properties\":{\"column_name\":{\"type\":\"string\",\"description\":\"字段名\"},\"data_type\":{\"type\":\"string\",\"description\":\"数据类型\"},\"is_nullable\":{\"type\":\"boolean\",\"description\":\"是否可空\"},\"column_default\":{\"type\":\"string\",\"description\":\"默认值\"},\"column_comment\":{\"type\":\"string\",\"description\":\"字段注释\"}}}},\"indexes\":{\"type\":\"array\",\"description\":\"索引列表\",\"items\":{\"type\":\"object\",\"properties\":{\"index_name\":{\"type\":\"string\",\"description\":\"索引名\"},\"index_def\":{\"type\":\"string\",\"description\":\"索引定义SQL\"}}}}}}}")
+            outputSchema = "{\"type\":\"object\",\"properties\":{\"table_name\":{\"type\":\"string\",\"description\":\"表名\"},\"columns\":{\"type\":\"array\",\"description\":\"字段列表\",\"items\":{\"type\":\"object\",\"properties\":{\"column_name\":{\"type\":\"string\",\"description\":\"字段名\"},\"data_type\":{\"type\":\"string\",\"description\":\"数据类型\"},\"is_nullable\":{\"type\":\"boolean\",\"description\":\"是否可空\"},\"column_default\":{\"type\":\"string\",\"description\":\"默认值\"},\"column_comment\":{\"type\":\"string\",\"description\":\"字段注释\"}}}},\"indexes\":{\"type\":\"array\",\"description\":\"索引列表\",\"items\":{\"type\":\"object\",\"properties\":{\"index_name\":{\"type\":\"string\",\"description\":\"索引名\"},\"index_def\":{\"type\":\"string\",\"description\":\"索引定义SQL\"}}}}}}")
     @Tool(name = "pg_describe_table",
           description = "查看指定表的结构，包括字段名、类型、是否可空、默认值、注释和索引信息。")
     public String describeTable(
@@ -144,7 +144,7 @@ public class PgSqlTool {
 
     @SystemTool(displayName = "执行SQL查询",
             outputExample = "{\"sql\":\"SELECT id, name FROM agent LIMIT 2\",\"columns\":[\"id\",\"name\"],\"rows\":[[\"2056961707612393473\",\"测试Agent\"],[\"2056961707612393474\",\"生产Agent\"]],\"total_rows\":2,\"has_more\":false,\"elapsed_ms\":12}",
-            outputSchema = "{\"type\":\"object\",\"properties\":{\"sql\":{\"type\":\"string\",\"description\":\"执行的SQL语句\"},\"columns\":{\"type\":\"array\",\"description\":\"列名列表\",\"items\":{\"type\":\"string\"}},\"rows\":{\"type\":\"array\",\"description\":\"数据行（二维数组）\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"total_rows\":{\"type\":\"integer\",\"description\":\"返回行数\"},\"has_more\":{\"type\":\"boolean\",\"description\":\"是否还有更多行\"},\"elapsed_ms\":{\"type\":\"integer\",\"description\":\"查询耗时（毫秒）\"}}}}")
+            outputSchema = "{\"type\":\"object\",\"properties\":{\"sql\":{\"type\":\"string\",\"description\":\"执行的SQL语句\"},\"columns\":{\"type\":\"array\",\"description\":\"列名列表\",\"items\":{\"type\":\"string\"}},\"rows\":{\"type\":\"array\",\"description\":\"数据行（二维数组）\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"total_rows\":{\"type\":\"integer\",\"description\":\"返回行数\"},\"has_more\":{\"type\":\"boolean\",\"description\":\"是否还有更多行\"},\"elapsed_ms\":{\"type\":\"integer\",\"description\":\"查询耗时（毫秒）\"}}}")
     @Tool(name = "pg_query",
           description = "执行只读 SQL 查询（仅允许 SELECT）。当用户需要查询数据库中的数据时调用此工具。")
     public String query(

@@ -397,12 +397,14 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
-  padding: 8px 0;
+  padding: 10px 24px;
   border-bottom: 1px solid #f0f0f0;
   position: sticky;
-  top: 0;
+  top: -24px;
   background: #fff;
   z-index: 1;
+  margin-left: -24px;
+  margin-right: -24px;
 }
 .detail-messages-title {
   font-size: 14px;

@@ -3202,10 +3202,11 @@ async function handleSave(options = {}) {
     return false
   }
 
-  // 4.1 校验 Skill 依赖工具是否已绑定
+  // 4.1 校验 Skill 依赖工具是否已绑定（知识库类型工具默认绑定，跳过）
   const skillDepWarnings = []
   const toolIdSet = selectedToolIds.value
-  const toolNameMap = new Map(toolList.value.map(t => [String(t.id), t.displayName || t.name]))
+  const toolMetaMap = new Map(toolList.value.map(t => [String(t.id), { name: t.displayName || t.name, type: t.toolType?.code || t.toolType }]))
+  const knowledgeToolIds = new Set([...toolMetaMap].filter(([, v]) => v.type === 'knowledge').map(([k]) => k))
   for (const sid of selectedSkillIds.value) {
     const skill = skillList.value.find(s => String(s.id) === String(sid))
     const depToolIds = Array.isArray(skill.toolIds) ? skill.toolIds
@@ -3213,9 +3214,9 @@ async function handleSave(options = {}) {
     if (!depToolIds.length) continue
     const missing = depToolIds
       .map(tid => String(tid))
-      .filter(tid => !toolIdSet.has(tid))
+      .filter(tid => !toolIdSet.has(tid) && !knowledgeToolIds.has(tid))
     if (missing.length) {
-      const names = missing.map(tid => toolNameMap.get(tid) || tid).join('、')
+      const names = missing.map(tid => toolMetaMap.get(tid)?.name || tid).join('、')
       skillDepWarnings.push(`「${skill.displayName || skill.name}」依赖 ${names}`)
     }
   }

@@ -26,7 +26,7 @@ function ensureConfigured() {
           return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
         },
       },
-      breaks: false,
+      breaks: true,
       gfm: true,
     }
   )
@@ -94,6 +94,12 @@ export function normalizeMarkdown(text) {
 
   // 5. 行首「1.**」再处理一次（上面插入换行后可能出现新的行首）
   s = s.replace(/^(\d+\.)(\*\*)/gm, '$1 $2')
+
+  // 6. 有序列表粘连：1.XXX2.XXX → 分行（数字.内容 紧跟 数字.内容）
+  s = s.replace(/(\d+\.\s*\S[^\n]*?)(?=\d+\.\s*\S)/g, '$1\n')
+
+  // 7. 标题后紧跟非空行内容（非标题、非空行、非列表、非表格）→ 插入空行
+  s = s.replace(/^(#{1,6}\s+[^\n]+)(\n(?!\n|#|-|\||\*\*|```|\d+\.).+)/gm, '$1\n$2')
 
   return s
 }

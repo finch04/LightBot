@@ -38,6 +38,9 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
+        <button class="btn-outline" @click="handleRefresh">
+          <ReloadOutlined /> 刷新
+        </button>
         <button v-if="activeTab === 'skills'" class="btn-skill-action" style="background: #7c3aed" @click="skillRef?.openImportModal()">
           <UploadOutlined /> ZIP 导入
         </button>
@@ -60,7 +63,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { PlusOutlined, SearchOutlined, UploadOutlined, CloudDownloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, SearchOutlined, UploadOutlined, CloudDownloadOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import McpManage from './McpManage.vue'
 import SkillManage from './SkillManage.vue'
 import ToolManage from './ToolManage.vue'
@@ -91,6 +94,16 @@ function handleAdd() {
     : activeTab.value === 'tools' ? toolRef.value
     : subAgentRef.value
   target?.openDialog()
+}
+
+function handleRefresh() {
+  searchText.value = ''
+  toolTypeFilter.value = ''
+  const target = activeTab.value === 'mcp' ? mcpRef.value
+    : activeTab.value === 'skills' ? skillRef.value
+    : activeTab.value === 'tools' ? toolRef.value
+    : subAgentRef.value
+  target?.refresh()
 }
 
 function handleSearch() {
@@ -168,6 +181,22 @@ watch(activeTab, () => {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+}
+.btn-outline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+.btn-outline:hover {
+  border-color: #0070f3;
+  color: #0070f3;
 }
 .btn-primary {
   display: flex;

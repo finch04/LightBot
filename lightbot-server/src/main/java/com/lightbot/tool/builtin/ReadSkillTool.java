@@ -29,7 +29,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @SystemTool(displayName = "读取技能", description = "读取技能的完整指令内容（SKILL.md）", tags = {"技能"},
         outputExample = "{\"slug\":\"deep-research\",\"displayName\":\"深度研究\",\"content\":\"# 深度研究\\n\\n你是一个深度研究助手...\",\"activated\":true}",
-        outputSchema = "{\"type\":\"object\",\"properties\":{\"slug\":{\"type\":\"string\",\"description\":\"技能slug标识\"},\"displayName\":{\"type\":\"string\",\"description\":\"技能显示名称\"},\"content\":{\"type\":\"string\",\"description\":\"SKILL.md完整内容\"},\"activated\":{\"type\":\"boolean\",\"description\":\"是否已激活成功\"}}}}")
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"slug\":{\"type\":\"string\",\"description\":\"技能slug标识\"},\"displayName\":{\"type\":\"string\",\"description\":\"技能显示名称\"},\"content\":{\"type\":\"string\",\"description\":\"SKILL.md完整内容\"},\"activated\":{\"type\":\"boolean\",\"description\":\"是否已激活成功\"}}}")
 public class ReadSkillTool {
 
     private final SkillStorageService skillStorageService;
