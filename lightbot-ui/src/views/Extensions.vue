@@ -20,11 +20,11 @@
           v-if="activeTab === 'tools'"
           v-model:value="toolTypeFilter"
           placeholder="工具类型"
-          allow-clear
           style="width: 120px"
         >
-          <a-select-option value="">全部</a-select-option>
+          <a-select-option value="all">全部</a-select-option>
           <a-select-option value="builtin">内置</a-select-option>
+          <a-select-option value="knowledge">知识库</a-select-option>
           <a-select-option value="custom">自定义</a-select-option>
           <a-select-option value="api">API调用</a-select-option>
           <a-select-option value="mcp">MCP协议</a-select-option>
@@ -72,7 +72,7 @@ import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 
 const activeTab = ref('mcp')
 const searchText = ref('')
-const toolTypeFilter = ref('')
+const toolTypeFilter = ref('all')
 const mcpRef = ref(null)
 const skillRef = ref(null)
 const toolRef = ref(null)
@@ -98,7 +98,7 @@ function handleAdd() {
 
 function handleRefresh() {
   searchText.value = ''
-  toolTypeFilter.value = ''
+  toolTypeFilter.value = 'all'
   const target = activeTab.value === 'mcp' ? mcpRef.value
     : activeTab.value === 'skills' ? skillRef.value
     : activeTab.value === 'tools' ? toolRef.value
@@ -113,7 +113,8 @@ function handleSearch() {
     : subAgentRef.value
   // 传递搜索文本和工具类型（仅工具Tab）
   if (activeTab.value === 'tools') {
-    target?.search(searchText.value, toolTypeFilter.value)
+    const type = toolTypeFilter.value === 'all' ? undefined : toolTypeFilter.value
+    target?.search(searchText.value, type)
   } else {
     target?.search(searchText.value)
   }
@@ -129,7 +130,7 @@ watch(toolTypeFilter, () => {
 // 切换Tab时清空搜索并刷新数据
 watch(activeTab, () => {
   searchText.value = ''
-  toolTypeFilter.value = ''
+  toolTypeFilter.value = 'all'
   // 触发对应组件的数据刷新
   const target = activeTab.value === 'mcp' ? mcpRef.value
     : activeTab.value === 'skills' ? skillRef.value

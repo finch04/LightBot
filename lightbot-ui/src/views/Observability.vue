@@ -199,10 +199,17 @@
     <!-- Trace 详情抽屉 -->
     <a-drawer
       v-model:open="detailVisible"
-      title="Trace 详情"
       :width="860"
       placement="right"
     >
+      <template #title>
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;padding-right:40px;">
+          <span>Trace 详情</span>
+          <a-button v-if="detailTrace?.sessionId" size="small" @click="goToChat(detailTrace.sessionId)">
+            跳转到对话 →
+          </a-button>
+        </div>
+      </template>
       <template v-if="detailTrace">
         <!-- 基本信息 -->
         <div class="detail-info">
@@ -241,9 +248,6 @@
             <a-tag :color="detailTrace.status === 'completed' ? 'success' : 'error'">
               {{ detailTrace.status === 'completed' ? '成功' : '失败' }}
             </a-tag>
-            <a-button v-if="detailTrace.sessionId" size="small" style="margin-left: auto;" @click="goToChat(detailTrace.sessionId)">
-              跳转到对话 →
-            </a-button>
           </div>
           <div v-if="detailTrace.errorMessage" class="info-row error-row">
             <span class="info-label">错误</span>

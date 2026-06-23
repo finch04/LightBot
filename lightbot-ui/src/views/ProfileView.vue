@@ -125,7 +125,7 @@
           v-for="opt in levelOptions"
           :key="opt.value"
           class="level-option"
-          :class="{ active: selectedLevel === opt.value, 'level-5-option': opt.value === 5 }"
+          :class="{ active: selectedLevel === opt.value, 'level-5-option': opt.value === 5, 'level-6-option': opt.value === 6 }"
           @click="selectedLevel = opt.value"
         >
           <LevelTag v-if="opt.value > 0" :level="opt.value" />
@@ -175,6 +175,7 @@ const levelOptions = [
   { value: 3, label: 'Lv3' },
   { value: 4, label: 'Lv4' },
   { value: 5, label: 'Lv5' },
+  { value: 6, label: 'Lv6' },
 ]
 
 const initialLetter = computed(() => {
@@ -547,7 +548,8 @@ onMounted(loadProfile)
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
   background: rgba(0, 112, 243, 0.02);
 }
-.level-5-option:hover:not(.active) {
+.level-5-option:hover:not(.active),
+.level-6-option:hover:not(.active) {
   border-color: #e4e4e7;
   transform: none;
   box-shadow: none;

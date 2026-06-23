@@ -37,7 +37,7 @@ public class AskUserTool {
 
     @Tool(name = "ask_user",
           description = "向用户提问并等待回答。当需要确认信息、请求补充说明、让用户选择选项时调用此工具。" +
-                "必须提供至少3个有意义的选项供用户选择（用逗号分隔）。" +
+                "选项用逗号分隔，最多5个（超出自动截断）。留空则为开放式提问，用户自由输入回答。" +
                 "调用此工具后系统会自动停止执行，等待用户回复后继续。" +
                 "重要：调用此工具后不要再调用其他工具，也不要输出任何内容，系统会自动处理。")
     public String askUser(
@@ -59,17 +59,10 @@ public class AskUserTool {
             for (String opt : optionList) {
                 optionItems.add(opt.trim());
             }
-            // 选项不足 3 个时返回错误，让 AI 重新生成
-            if (optionItems.size() < 3) {
-                log.warn("[Tool:ask_user] 选项不足3个: {}", optionItems);
-                Map<String, Object> error = new LinkedHashMap<>();
-                error.put("_error", true);
-                error.put("message", "选项数量不足，请提供至少3个有意义的选项供用户选择");
-                try {
-                    return objectMapper.writeValueAsString(error);
-                } catch (Exception e) {
-                    return "{\"_error\":true,\"message\":\"选项数量不足\"}";
-                }
+            // 选项最多 5 个，超出截断
+            if (optionItems.size() > 5) {
+                log.info("[Tool:ask_user] 选项超过5个，截断: {} -> 5", optionItems.size());
+                optionItems = new ArrayList<>(optionItems.subList(0, 5));
             }
             output.put("options", optionItems);
         } else {

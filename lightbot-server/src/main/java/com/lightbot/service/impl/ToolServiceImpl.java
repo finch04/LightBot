@@ -190,6 +190,10 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         if (tool == null) {
             throw new BizException(ErrorCode.TOOL_NOT_FOUND);
         }
+        // 知识库工具不可禁用（由注册器自动管理）
+        if (tool.getToolType() == ToolType.KNOWLEDGE) {
+            throw new BizException(ErrorCode.TOOL_NOT_EDITABLE);
+        }
         tool.setStatus(enabled ? CommonStatus.ACTIVE : CommonStatus.DISABLED);
         updateById(tool);
     }

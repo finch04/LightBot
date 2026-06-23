@@ -64,7 +64,7 @@
               <button class="btn-icon" @click.prevent><MoreOutlined /></button>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item @click="handleToggleEnabled(t)">
+                  <a-menu-item v-if="(t.toolType?.code || t.toolType) !== 'knowledge'" @click="handleToggleEnabled(t)">
                     <CheckCircleOutlined v-if="!isDisabled(t)" style="color: #16a34a; margin-right: 6px" />
                     <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
                     {{ isDisabled(t) ? '启用' : '禁用' }}
