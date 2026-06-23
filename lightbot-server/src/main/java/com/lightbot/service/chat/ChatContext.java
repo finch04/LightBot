@@ -34,6 +34,13 @@ public class ChatContext {
     private Map<String, Object> configMap;
     private Long providerId;
 
+    // ===== 版本快照绑定 ID（configVersion 或已发布版本快照中的绑定，优先级高于 agent 表当前值） =====
+    private List<Long> versionToolIds;
+    private List<Long> versionKnowledgeIds;
+    private List<Long> versionMcpServerIds;
+    private List<Long> versionSubAgentIds;
+    private List<Long> versionSkillIds;
+
     // ===== MessageMiddleware 构建 =====
     private List<org.springframework.ai.chat.messages.Message> messages;
 

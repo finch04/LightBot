@@ -30,7 +30,9 @@ import java.util.Map;
  */
 @Slf4j
 @Component("webSearchTool")
-@SystemTool(displayName = "联网搜索", description = "联网搜索互联网获取最新信息", tags = {"搜索"})
+@SystemTool(displayName = "联网搜索", description = "联网搜索互联网获取最新信息", tags = {"搜索"},
+        outputExample = "{\"query\":\"今天天气\",\"answer\":\"今天北京晴，气温25-32℃\",\"results\":[{\"title\":\"北京今日天气预报\",\"url\":\"https://weather.com.cn/...\",\"content\":\"今天白天晴间多云...\"}],\"total\":1}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"搜索关键词\"},\"answer\":{\"type\":\"string\",\"description\":\"AI总结的答案摘要（可能为null）\"},\"results\":{\"type\":\"array\",\"description\":\"搜索结果列表\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"网页标题\"},\"url\":{\"type\":\"string\",\"description\":\"网页链接\"},\"content\":{\"type\":\"string\",\"description\":\"网页摘要内容\"}}}},\"total\":{\"type\":\"integer\",\"description\":\"结果总数\"}}}}")
 @RequiredArgsConstructor
 public class WebSearchTool {
 

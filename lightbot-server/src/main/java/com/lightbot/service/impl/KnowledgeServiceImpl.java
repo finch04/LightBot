@@ -267,6 +267,20 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
         // 权限校验：需要成员权限
         checkMember(knowledgeId);
+        return parseMindmapData(knowledge);
+    }
+
+    @Override
+    public Object getMindmapForTool(Long knowledgeId) {
+        Knowledge knowledge = getById(knowledgeId);
+        if (knowledge == null) {
+            return null;
+        }
+        // 工具调用：权限已由工具层（Agent绑定关系）校验，此处不再重复校验
+        return parseMindmapData(knowledge);
+    }
+
+    private Object parseMindmapData(Knowledge knowledge) {
         String data = knowledge.getMindmapData();
         if (data == null || data.isBlank()) {
             return null;

@@ -251,7 +251,10 @@ public class MessageMiddleware implements ChatMiddleware {
         // 3. 如果Agent绑定了工具或Skill，追加工具使用引导到系统提示词
         if (agent != null) {
             // 3.1 工具引导：合并 Agent 自身绑定的工具 + Skill 引入的额外工具
-            List<Long> toolIds = new java.util.ArrayList<>(agentService.getToolIds(agent.getId()));
+            // 优先使用版本快照中的绑定 ID，避免暂存/发布混淆
+            List<Long> baseToolIds = ctx != null && ctx.getVersionToolIds() != null
+                    ? ctx.getVersionToolIds() : agentService.getToolIds(agent.getId());
+            List<Long> toolIds = new java.util.ArrayList<>(baseToolIds);
             if (ctx != null && ctx.getSkillExtraToolIds() != null) {
                 for (Long id : ctx.getSkillExtraToolIds()) {
                     if (id != null && !toolIds.contains(id)) toolIds.add(id);
@@ -348,6 +351,8 @@ public class MessageMiddleware implements ChatMiddleware {
         for (ToolCallback cb : toolCallbacks) {
             sb.append("- **").append(cb.getToolDefinition().name()).append("**: ")
               .append(cb.getToolDefinition().description()).append("\n");
+            // 输出参数 schema，避免 AI 猜测参数名
+            appendParamSchema(sb, cb.getToolDefinition().inputSchema());
         }
 
         boolean asyncEnabled = agentConfigMap != null && Boolean.TRUE.equals(agentConfigMap.get("asyncToolCalls"));
@@ -384,6 +389,42 @@ public class MessageMiddleware implements ChatMiddleware {
                 - 确保标题层级清晰：一级标题用 #，二级用 ##，三级用 ###
                 """);
         return sb.toString();
+    }
+
+    /**
+     * 解析工具 inputSchema 并输出参数列表到引导文本
+     */
+    private void appendParamSchema(StringBuilder sb, String inputSchema) {
+        if (inputSchema == null || inputSchema.isBlank()) {
+            return;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(inputSchema);
+            com.fasterxml.jackson.databind.JsonNode props = root.get("properties");
+            if (props == null || props.isEmpty()) {
+                return;
+            }
+            java.util.Set<String> required = new java.util.HashSet<>();
+            com.fasterxml.jackson.databind.JsonNode reqNode = root.get("required");
+            if (reqNode != null && reqNode.isArray()) {
+                reqNode.forEach(n -> required.add(n.asText()));
+            }
+            sb.append("  参数：\n");
+            props.fields().forEachRemaining(entry -> {
+                String name = entry.getKey();
+                com.fasterxml.jackson.databind.JsonNode prop = entry.getValue();
+                String type = prop.has("type") ? prop.get("type").asText() : "string";
+                String desc = prop.has("description") ? prop.get("description").asText() : "";
+                String reqMark = required.contains(name) ? "（必填）" : "（选填）";
+                sb.append("  - `").append(name).append("` (").append(type).append(")").append(reqMark);
+                if (!desc.isBlank()) {
+                    sb.append(" — ").append(desc);
+                }
+                sb.append("\n");
+            });
+        } catch (Exception ignored) {
+            // schema 解析失败不影响工具引导生成
+        }
     }
 
     /**

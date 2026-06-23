@@ -6,7 +6,8 @@
         <LoadingOutlined v-else class="icon-spinning" />
       </span>
       <span class="summary-content">
-        <span class="summary-title">调用了 {{ uniqueToolNames.length }} 个工具</span>
+        <span class="summary-title" v-if="uniqueToolNames.length > 0">调用了 {{ uniqueToolNames.length }} 个工具</span>
+        <span class="summary-title" v-else>正在调用工具...</span>
         <span class="summary-separator" v-if="uniqueToolNames.length > 1">·</span>
         <span class="summary-meta" v-if="uniqueToolNames.length > 1">{{ uniqueToolNames.join(' · ') }}</span>
       </span>

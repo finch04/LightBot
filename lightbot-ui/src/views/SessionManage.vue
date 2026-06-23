@@ -92,18 +92,9 @@
 
         <div class="detail-messages-header">
           <span class="detail-messages-title">消息记录</span>
-          <a-popconfirm
-            v-if="selectedMsgKeys.length > 0"
-            :title="`确认删除选中的 ${selectedMsgKeys.length} 条消息？`"
-            ok-text="确认删除"
-            cancel-text="取消"
-            ok-type="danger"
-            @confirm="handleBatchDeleteMessages"
-          >
-            <button class="btn-msg-delete">
-              <DeleteOutlined /> 删除 ({{ selectedMsgKeys.length }})
-            </button>
-          </a-popconfirm>
+          <button v-if="selectedMsgKeys.length > 0" class="btn-msg-delete" @click="confirmDeleteMessages">
+            <DeleteOutlined /> 删除 ({{ selectedMsgKeys.length }})
+          </button>
         </div>
         <a-spin :spinning="messagesLoading">
           <div v-if="detailMessages.length === 0 && !messagesLoading" class="detail-messages-empty">暂无消息</div>
@@ -287,6 +278,18 @@ async function handleBatchDeleteMessages() {
   }
 }
 
+function confirmDeleteMessages() {
+  const count = selectedMsgKeys.value.length
+  Modal.confirm({
+    title: '确认删除',
+    content: `确认删除选中的 ${count} 条消息？删除后不可恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: handleBatchDeleteMessages,
+  })
+}
+
 function goToChat(record) {
   router.push(`/app/chat/${record.id}`)
 }
@@ -394,8 +397,12 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
-  padding-bottom: 6px;
+  padding: 8px 0;
   border-bottom: 1px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
 }
 .detail-messages-title {
   font-size: 14px;

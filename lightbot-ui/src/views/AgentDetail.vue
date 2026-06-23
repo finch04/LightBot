@@ -1,5 +1,13 @@
 ﻿<template>
-  <div class="page">
+  <div class="page" :class="{ 'page--loading': pageLoading || saving || publishing }">
+    <!-- 加载遮罩 -->
+    <div v-if="pageLoading" class="sync-overlay">
+      <div class="sync-overlay-content">
+        <a-spin size="large" />
+        <p class="sync-overlay-text">加载中...</p>
+      </div>
+    </div>
+
     <div class="page-header">
       <div class="page-header-left">
         <div class="page-header-titles">
@@ -1679,6 +1687,7 @@ const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
 
+const pageLoading = ref(false)
 const avatarInputRef = ref(null)
 
 const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5, skill: 10 }
@@ -3193,6 +3202,38 @@ async function handleSave(options = {}) {
     return false
   }
 
+  // 4.1 校验 Skill 依赖工具是否已绑定
+  const skillDepWarnings = []
+  const toolIdSet = selectedToolIds.value
+  const toolNameMap = new Map(toolList.value.map(t => [String(t.id), t.displayName || t.name]))
+  for (const sid of selectedSkillIds.value) {
+    const skill = skillList.value.find(s => String(s.id) === String(sid))
+    const depToolIds = Array.isArray(skill.toolIds) ? skill.toolIds
+      : typeof skill.toolIds === 'string' && skill.toolIds ? JSON.parse(skill.toolIds) : []
+    if (!depToolIds.length) continue
+    const missing = depToolIds
+      .map(tid => String(tid))
+      .filter(tid => !toolIdSet.has(tid))
+    if (missing.length) {
+      const names = missing.map(tid => toolNameMap.get(tid) || tid).join('、')
+      skillDepWarnings.push(`「${skill.displayName || skill.name}」依赖 ${names}`)
+    }
+  }
+  if (skillDepWarnings.length) {
+    const confirmed = await new Promise(resolve => {
+      Modal.confirm({
+        title: 'Skill 依赖工具未绑定',
+        content: h('div', { style: 'white-space: pre-line' },
+          skillDepWarnings.join('\n') + '\n\n未绑定的工具将无法在对话中使用，是否继续？'),
+        okText: '继续保存',
+        cancelText: '取消',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      })
+    })
+    if (!confirmed) return false
+  }
+
   const serializedVars = serializePromptVariables()
   const keys = serializedVars.map(v => v.key)
   if (keys.length !== new Set(keys).size) {
@@ -3620,11 +3661,16 @@ function startChat() {
 }
 
 onMounted(async () => {
-  if (agentId) {
-    await loadAgent()
-  } else {
-    await Promise.all([loadToolTypes(), loadToolList()])
-    bindingCatalogsLoaded.value = true
+  pageLoading.value = true
+  try {
+    if (agentId) {
+      await loadAgent()
+    } else {
+      await Promise.all([loadToolTypes(), loadToolList()])
+      bindingCatalogsLoaded.value = true
+    }
+  } finally {
+    pageLoading.value = false
   }
 })
 
@@ -3637,6 +3683,9 @@ onMounted(async () => {
   height: 100vh;
   overflow-y: auto;
   background: #fafafa;
+}
+.page--loading {
+  overflow: hidden;
 }
 .page-header {
   display: flex;

@@ -235,18 +235,15 @@
           <div class="info-row">
             <span class="info-label">耗时</span>
             <span class="info-value">{{ formatDuration(detailTrace.totalDurationMs) }}</span>
-            <template v-if="detailTrace.sessionId">
-              <span class="info-label" style="margin-left: 16px;">会话</span>
-              <a-button type="link" size="small" @click="goToChat(detailTrace.sessionId)" style="padding: 0; height: auto;">
-                跳转到对话 →
-              </a-button>
-            </template>
           </div>
           <div class="info-row">
             <span class="info-label">状态</span>
             <a-tag :color="detailTrace.status === 'completed' ? 'success' : 'error'">
               {{ detailTrace.status === 'completed' ? '成功' : '失败' }}
             </a-tag>
+            <a-button v-if="detailTrace.sessionId" size="small" style="margin-left: auto;" @click="goToChat(detailTrace.sessionId)">
+              跳转到对话 →
+            </a-button>
           </div>
           <div v-if="detailTrace.errorMessage" class="info-row error-row">
             <span class="info-label">错误</span>
@@ -266,7 +263,13 @@
           <h4>用户提问与模型输入</h4>
 
           <div v-if="traceModelInput.userContent || traceModelInput.userAttachments.length || traceModelInput.bizParams" class="mi-block">
-            <div class="mi-block-title">本轮用户输入</div>
+            <div class="mi-block-title-row">
+              <span class="mi-block-title">本轮用户输入</span>
+              <button v-if="traceModelInput.userContent" class="btn-copy-sm" @click="copyToClipboard(traceModelInput.userContent, 'mi_user')">
+                <CheckOutlined v-if="copiedKey === 'mi_user'" style="color: #52c41a" />
+                <CopyOutlined v-else />
+              </button>
+            </div>
             <div v-if="traceModelInput.userContent" class="mi-pre-wrap">{{ traceModelInput.userContent }}</div>
             <div v-if="traceModelInput.bizParams && Object.keys(traceModelInput.bizParams).length" class="mi-sub">
               <span class="mi-sub-label">入参变量 biz_params</span>
@@ -282,15 +285,31 @@
           </div>
 
           <div v-if="traceModelInput.systemPrompt" class="mi-block">
-            <div class="mi-block-title">系统提示词（含工具引导等）</div>
+            <div class="mi-block-title-row">
+              <span class="mi-block-title">系统提示词（含工具引导等）</span>
+              <button class="btn-copy-sm" @click="copyToClipboard(traceModelInput.systemPrompt, 'mi_sys')">
+                <CheckOutlined v-if="copiedKey === 'mi_sys'" style="color: #52c41a" />
+                <CopyOutlined v-else />
+              </button>
+            </div>
             <pre class="mi-pre">{{ traceModelInput.systemPrompt }}</pre>
           </div>
 
           <div v-if="traceModelInput.llmMessages.length" class="mi-block">
-            <div class="mi-block-title">发送给模型的消息（{{ traceModelInput.llmMessages.length }} 条）</div>
+            <div class="mi-block-title-row">
+              <span class="mi-block-title">发送给模型的消息（{{ traceModelInput.llmMessages.length }} 条）</span>
+              <button class="btn-copy-sm" @click="copyAllLlmMessages()">
+                <CheckOutlined v-if="copiedKey === 'mi_msgs'" style="color: #52c41a" />
+                <CopyOutlined v-else />
+              </button>
+            </div>
             <div v-for="(m, mi) in traceModelInput.llmMessages" :key="'lm-' + mi" class="mi-msg">
               <div class="mi-msg-head">
                 <a-tag size="small" :color="roleTagColor(m.role)">{{ roleLabel(m.role) }}</a-tag>
+                <button v-if="m.content" class="btn-copy-sm" @click="copyToClipboard(m.content, 'mi_msg_' + mi)">
+                  <CheckOutlined v-if="copiedKey === 'mi_msg_' + mi" style="color: #52c41a" />
+                  <CopyOutlined v-else />
+                </button>
               </div>
               <pre v-if="m.content" class="mi-pre">{{ m.content }}</pre>
               <div v-else class="mi-empty-text">（无文本内容）</div>
@@ -321,14 +340,7 @@
 
         <!-- AI完整回复 -->
         <div v-if="detailTrace.replyContent" class="reply-section">
-          <div class="reply-header">
-            <h4>AI回复内容</h4>
-            <button class="btn-copy" @click="copyToClipboard(detailTrace.replyContent, 'reply')">
-              <CheckOutlined v-if="copiedKey === 'reply'" style="color: #52c41a" />
-              <CopyOutlined v-else />
-              {{ copiedKey === 'reply' ? '已复制' : '复制' }}
-            </button>
-          </div>
+          <h4>AI回复内容</h4>
           <div class="reply-content-box">{{ detailTrace.replyContent }}</div>
         </div>
 
@@ -525,6 +537,16 @@ function copyToClipboard(text, key) {
   copiedKey.value = key
   clearTimeout(copyTimer)
   copyTimer = setTimeout(() => { copiedKey.value = null }, 2000)
+}
+
+function copyAllLlmMessages() {
+  const msgs = traceModelInput.value.llmMessages || []
+  const text = msgs.map(m => {
+    const role = roleLabel(m.role)
+    const content = m.content || '（无文本内容）'
+    return `[${role}]\n${content}`
+  }).join('\n\n---\n\n')
+  copyToClipboard(text, 'mi_msgs')
 }
 
 const filter = reactive({
@@ -1267,6 +1289,12 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: #334155;
+  margin-bottom: 0;
+}
+.mi-block-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
 .mi-pre-wrap {
@@ -1309,6 +1337,9 @@ onMounted(() => {
   border-bottom: none;
 }
 .mi-msg-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 6px;
 }
 .mi-empty-text {
@@ -1417,13 +1448,7 @@ onMounted(() => {
 }
 
 .reply-section { margin-bottom: 20px; }
-.reply-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.reply-header h4 { font-size: 15px; font-weight: 600; margin: 0; }
+.reply-section h4 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
 .btn-copy {
   display: inline-flex;
   align-items: center;

@@ -75,7 +75,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     }
 
     @Override
-    @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "'slug:' + #slug")
+    @Cacheable(value = RedisCacheConfig.CACHE_SKILL, key = "'slug:' + #slug", unless = "#result == null")
     public Skill getBySlug(String slug) {
         if (!StringUtils.hasText(slug)) {
             return null;

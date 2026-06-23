@@ -24,7 +24,9 @@ import java.util.Map;
 @Slf4j
 @Component("listSkillFilesTool")
 @RequiredArgsConstructor
-@SystemTool(displayName = "列出技能文件", description = "列出技能目录下的所有文件", tags = {"技能"})
+@SystemTool(displayName = "列出技能文件", description = "列出技能目录下的所有文件", tags = {"技能"},
+        outputExample = "{\"slug\":\"deep-research\",\"files\":[\"SKILL.md\",\"README.md\",\"config.json\"],\"total\":3}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"slug\":{\"type\":\"string\",\"description\":\"技能slug标识\"},\"files\":{\"type\":\"array\",\"description\":\"文件名列表\",\"items\":{\"type\":\"string\"}},\"total\":{\"type\":\"integer\",\"description\":\"文件总数\"}}}}")
 public class ListSkillFilesTool {
 
     private final SkillStorageService skillStorageService;

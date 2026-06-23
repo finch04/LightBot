@@ -4,11 +4,13 @@
       <pre>{{ displayText }}</pre>
     </div>
     <template v-else>
+      <!-- header -->
       <div class="lsf-header">
         <FolderOpenOutlined class="lsf-icon" />
         <span class="lsf-slug">{{ data.slug }}</span>
         <span class="lsf-count">{{ data.total }} 个文件</span>
       </div>
+      <!-- 文件列表 -->
       <div class="lsf-files">
         <div v-for="(file, i) in data.files" :key="i" class="lsf-file">
           <FileTextOutlined class="lsf-file-icon" />
@@ -43,6 +45,12 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
 
 <style lang="less" scoped>
 .list-skill-files-result {
+  border: 1px solid #c4b5fd;
+  border-left: 3px solid #8b5cf6;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f5f3ff;
+
   .lsf-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
     border-radius: 6px; font-size: 12px; line-height: 1.5;
@@ -51,22 +59,26 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
 
   .lsf-header {
     display: flex; align-items: center; gap: 6px;
-    padding: 8px 10px; background: var(--gray-25);
-    border-radius: 6px; font-size: 12px; color: var(--gray-700);
-    margin-bottom: 8px;
-    .lsf-icon { color: var(--main-600); font-size: 13px; }
-    .lsf-slug { font-weight: 600; font-family: monospace; }
-    .lsf-count { color: var(--gray-500); margin-left: auto; }
+    padding: 8px 10px; border-bottom: 1px solid #c4b5fd;
+    background: #ede9fe; font-size: 12px; font-weight: 600; color: #5b21b6;
+    .lsf-icon { color: #7c3aed; font-size: 14px; }
+    .lsf-slug { font-family: monospace; }
+    .lsf-count {
+      margin-left: auto; font-size: 11px; color: #6d28d9;
+      background: #ede9fe; border: 1px solid #c4b5fd;
+      border-radius: 4px; padding: 0 6px;
+    }
   }
 
-  .lsf-files { display: flex; flex-direction: column; gap: 2px; }
+  .lsf-files { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
 
   .lsf-file {
     display: flex; align-items: center; gap: 6px;
-    padding: 4px 10px; font-size: 12px;
-    border-radius: 4px;
-    &:hover { background: var(--gray-25); }
-    .lsf-file-icon { color: var(--gray-400); font-size: 12px; }
+    padding: 5px 8px; font-size: 12px;
+    border: 1px solid #ddd6fe; border-radius: 6px;
+    background: #fff;
+    &:hover { border-color: #c4b5fd; }
+    .lsf-file-icon { color: #7c3aed; font-size: 12px; }
     .lsf-file-name { color: var(--gray-700); font-family: monospace; }
   }
 }

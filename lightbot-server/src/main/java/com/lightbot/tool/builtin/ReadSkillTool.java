@@ -1,6 +1,7 @@
 package com.lightbot.tool.builtin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.entity.Skill;
 import com.lightbot.service.SkillService;
 import com.lightbot.service.sandbox.SkillActivationStore;
 import com.lightbot.service.sandbox.SkillStorageService;
@@ -18,8 +19,7 @@ import java.util.Map;
 
 /**
  * 内置工具 — 读取技能
- * <p>读取指定 Skill 的 SKILL.md 全文，触发懒激活。
- * 调用后该 Skill 的依赖工具将在下一轮对话中自动注入。</p>
+ * <p>读取指定 Skill 的 SKILL.md 全文，触发懒激活。</p>
  *
  * @author finch
  * @since 2026-06-18
@@ -27,7 +27,9 @@ import java.util.Map;
 @Slf4j
 @Component("readSkillTool")
 @RequiredArgsConstructor
-@SystemTool(displayName = "读取技能", description = "读取技能的完整指令内容（SKILL.md）", tags = {"技能"})
+@SystemTool(displayName = "读取技能", description = "读取技能的完整指令内容（SKILL.md）", tags = {"技能"},
+        outputExample = "{\"slug\":\"deep-research\",\"displayName\":\"深度研究\",\"content\":\"# 深度研究\\n\\n你是一个深度研究助手...\",\"activated\":true}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"slug\":{\"type\":\"string\",\"description\":\"技能slug标识\"},\"displayName\":{\"type\":\"string\",\"description\":\"技能显示名称\"},\"content\":{\"type\":\"string\",\"description\":\"SKILL.md完整内容\"},\"activated\":{\"type\":\"boolean\",\"description\":\"是否已激活成功\"}}}}")
 public class ReadSkillTool {
 
     private final SkillStorageService skillStorageService;
@@ -49,7 +51,12 @@ public class ReadSkillTool {
         }
 
         // 2. 校验 Skill 是否存在且启用
-        var skill = skillService.getBySlug(slug.trim());
+        String normalizedSlug = slug.trim();
+        var skill = skillService.getBySlug(normalizedSlug);
+        // AI 可能将连字符误传为下划线，尝试容错
+        if (skill == null && normalizedSlug.contains("_")) {
+            skill = skillService.getBySlug(normalizedSlug.replace("_", "-"));
+        }
         if (skill == null) {
             return "错误：未找到技能 " + slug;
         }
@@ -77,6 +84,7 @@ public class ReadSkillTool {
 
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("slug", slug.trim());
+        output.put("displayName", skill.getDisplayName() != null ? skill.getDisplayName() : skill.getName());
         output.put("content", content);
         output.put("activated", activated);
         try {
@@ -105,4 +113,5 @@ public class ReadSkillTool {
         }
         return null;
     }
+
 }

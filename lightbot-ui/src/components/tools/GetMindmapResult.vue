@@ -8,42 +8,69 @@
       <div class="gm-header">
         <BranchesOutlined class="gm-header-icon" />
         <span>思维导图 — {{ data.knowledge_name }}</span>
-        <button class="gm-detail-btn" @click="detailVisible = true">查看详情</button>
       </div>
-      <!-- 思维导图预览 -->
+      <!-- 思维导图（SVG） -->
       <div class="gm-content">
-        <pre class="gm-preview">{{ previewText }}</pre>
+        <svg ref="svgRef" class="gm-svg"></svg>
       </div>
     </template>
-
-    <a-modal v-model:open="detailVisible" :title="'思维导图 — ' + (data?.knowledge_name || '')" :footer="null" width="700px"
-      :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }">
-      <pre class="gm-detail-content">{{ fullText }}</pre>
-    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { BranchesOutlined } from '@ant-design/icons-vue'
+import { Transformer } from 'markmap-lib'
+import { Markmap } from 'markmap-view'
 
 const props = defineProps({ event: { type: Object, required: true } })
 
-const detailVisible = ref(false)
+const svgRef = ref(null)
+
 const rawResult = computed(() => props.event.result || '')
 const data = computed(() => { try { return JSON.parse(rawResult.value) } catch { return null } })
 const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
 const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 
-const fullText = computed(() => {
-  if (!data.value?.mindmap) return ''
-  const mm = data.value.mindmap
-  return typeof mm === 'string' ? mm : JSON.stringify(mm, null, 2)
+/** 递归 JSON → Markdown */
+function jsonToMarkdown(node, level) {
+  const prefix = '#'.repeat(Math.min(level + 1, 6))
+  let md = `${prefix} ${node.content || node.name || ''}\n`
+  if (node.children) {
+    for (const child of node.children) {
+      md += jsonToMarkdown(child, level + 1)
+    }
+  }
+  return md
+}
+
+/** Markdown → markmap root */
+function toMarkmapRoot(mindmap) {
+  if (!mindmap) return null
+  const md = typeof mindmap === 'string' ? mindmap : jsonToMarkdown(mindmap, 0)
+  const transformer = new Transformer()
+  const { root } = transformer.transform(md)
+  return root
+}
+
+/** 渲染 markmap 到指定 SVG */
+function renderToSvg(svgEl, root) {
+  if (!svgEl || !root) return
+  svgEl.innerHTML = ''
+  Markmap.create(svgEl, { maxWidth: 300 }, root)
+}
+
+function renderMindmap() {
+  const root = toMarkmapRoot(data.value?.mindmap)
+  nextTick(() => renderToSvg(svgRef.value, root))
+}
+
+onMounted(() => {
+  if (!isPlainText.value) renderMindmap()
 })
 
-const previewText = computed(() => {
-  const t = fullText.value
-  return t.length > 500 ? t.substring(0, 500) + '\n...' : t
+watch(() => data.value, () => {
+  if (!isPlainText.value) nextTick(renderMindmap)
 })
 </script>
 
@@ -66,28 +93,17 @@ const previewText = computed(() => {
     padding: 8px 10px; border-bottom: 1px solid #fdba74;
     background: #ffedd5; font-size: 12px; font-weight: 600; color: #9a3412;
     .gm-header-icon { color: #ea580c; font-size: 14px; }
-    .gm-detail-btn {
-      margin-left: auto; appearance: none; border: 1px solid #fdba74;
-      border-radius: 4px; background: #fff; color: #ea580c;
-      font-size: 11px; padding: 2px 8px; cursor: pointer;
-      &:hover { background: #ffedd5; }
-    }
   }
 
   .gm-content {
     padding: 8px 10px;
-    .gm-preview {
-      margin: 0; font-size: 12px; line-height: 1.6;
-      color: var(--gray-700); white-space: pre-wrap; word-break: break-word;
-      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    }
+    overflow: auto;
+    max-height: 300px;
   }
 }
 
-.gm-detail-content {
-  margin: 0; padding: 0;
-  font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
-  font-size: 12px; line-height: 1.6; color: #1e293b;
-  white-space: pre-wrap; word-break: break-word;
+.gm-svg {
+  width: 100%;
+  min-height: 200px;
 }
 </style>

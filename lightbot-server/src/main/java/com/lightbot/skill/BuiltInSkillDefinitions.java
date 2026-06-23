@@ -31,13 +31,13 @@ public final class BuiltInSkillDefinitions {
     private static final List<Definition> DEFS = List.of(
             new Definition(
                     "deep-research",
-                    "deep_research",
+                    "deep-research",
                     "深度研究",
                     "对话题进行多轮联网检索 + 结构化整理，适合调研报告、行业分析等需要事实证据的问题。",
                     List.of("web_search"),
                     List.of(),
                     """
-                    ### 技能：深度研究（deep_research）
+                    ### 技能：深度研究（deep-research）
                     **触发条件**：用户问题需要外部最新信息、行业调研、对比分析、事实核查时启用本技能。
 
                     **执行流程**：
@@ -52,13 +52,13 @@ public final class BuiltInSkillDefinitions {
             ),
             new Definition(
                     "knowledge-grounded-qa",
-                    "knowledge_grounded_qa",
+                    "knowledge-grounded-qa",
                     "知识库严谨问答",
                     "强制基于已绑定的知识库回答问题，适合企业内部文档、产品手册等场景，杜绝凭空发挥。",
                     List.of("query_knowledge"),
                     List.of(),
                     """
-                    ### 技能：知识库严谨问答（knowledge_grounded_qa）
+                    ### 技能：知识库严谨问答（knowledge-grounded-qa）
                     **触发条件**：用户问题涉及绑定知识库可能覆盖的内容（产品/制度/规范/操作手册等）时启用本技能。
 
                     **执行流程**：
@@ -71,13 +71,13 @@ public final class BuiltInSkillDefinitions {
             ),
             new Definition(
                     "calculator-precise",
-                    "calculator_precise",
+                    "calculator-precise",
                     "精确数值计算",
                     "遇到加减乘除等数值运算时强制调用计算器工具，避免大模型口算偏差。",
                     List.of("calculator"),
                     List.of(),
                     """
-                    ### 技能：精确数值计算（calculator_precise）
+                    ### 技能：精确数值计算（calculator-precise）
                     **触发条件**：用户问题包含数学运算（含金额、单位换算、比例、增长率等）时启用本技能。
 
                     **执行规则**：
@@ -89,13 +89,13 @@ public final class BuiltInSkillDefinitions {
             ),
             new Definition(
                     "image-create",
-                    "image_create",
+                    "image-create",
                     "图片创作",
                     "面向需要生成插画、海报、示意图等场景，给出符合大模型审美的英文提示词并调用图像生成工具。",
                     List.of("image_generation"),
                     List.of(),
                     """
-                    ### 技能：图片创作（image_create）
+                    ### 技能：图片创作（image-create）
                     **触发条件**：用户明确要求「画 / 生成 / 设计 一张图、海报、插画、示意图」等图像产物时启用本技能。
 
                     **执行流程**：
@@ -108,13 +108,13 @@ public final class BuiltInSkillDefinitions {
             ),
             new Definition(
                     "db-introspect",
-                    "db_introspect",
+                    "db-introspect",
                     "数据库探查",
                     "面向开发/数据分析场景，安全地查询 PostgreSQL 元信息与样本数据，禁止任何写操作。",
                     List.of("pg_list_tables", "pg_describe_table", "pg_query"),
                     List.of(),
                     """
-                    ### 技能：数据库探查（db_introspect）
+                    ### 技能：数据库探查（db-introspect）
                     **触发条件**：用户问题需要查询数据库结构或样例数据时启用本技能。
 
                     **安全约束**：

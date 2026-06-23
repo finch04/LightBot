@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -57,8 +58,8 @@ public class InitMiddleware implements ChatMiddleware {
         ctx.getSpans().add(LlmTraceSpan.of("s2", "s1", "agent_load", t1, t2 - t1, "OK",
                 Map.of("agentId", agent != null ? agent.getId() : null, "agentName", agent != null ? agent.getName() : null)));
 
-        // 3. 解析 config（支持指定版本 / 草稿 / 默认线上）
-        Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest());
+        // 3. 解析 config（支持指定版本 / 草稿 / 默认线上），同时提取版本绑定 ID
+        Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest(), ctx);
         ctx.setConfigMap(configMap);
         ctx.setProviderId(providerResolver.resolveFromConfig(configMap));
 
@@ -77,7 +78,7 @@ public class InitMiddleware implements ChatMiddleware {
         Agent agent = loadAgent(ctx.getRequest().getAgentId());
         ctx.setAgent(agent);
 
-        Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest());
+        Map<String, Object> configMap = resolveRuntimeConfigMap(agent, ctx.getRequest(), ctx);
         ctx.setConfigMap(configMap);
         ctx.setProviderId(providerResolver.resolveFromConfig(configMap));
     }
@@ -86,15 +87,34 @@ public class InitMiddleware implements ChatMiddleware {
      * 对话运行时配置：支持 configVersion；未指定时已发布版本用 agent_version 快照，否则用 agent 表当前值。
      */
     public Map<String, Object> resolveRuntimeConfigMap(Agent agent) {
-        return resolveRuntimeConfigMap(agent, null);
+        return resolveRuntimeConfigMap(agent, null, null);
     }
 
     public Map<String, Object> resolveRuntimeConfigMap(Agent agent, com.lightbot.dto.ChatRequest request) {
+        return resolveRuntimeConfigMap(agent, request, null);
+    }
+
+    /**
+     * 解析运行时配置，同时从版本快照中提取绑定 ID 存入 ChatContext（单次加载，避免重复查询）
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> resolveRuntimeConfigMap(Agent agent, com.lightbot.dto.ChatRequest request, ChatContext ctx) {
         if (agent == null) {
             return Map.of();
         }
         if (request != null && request.getConfigVersion() != null) {
-            return agentVersionService.resolveRuntimeForChat(agent, request.getConfigVersion());
+            // 显式指定版本：单次加载 payload，同时提取 config 和绑定 ID（避免双重查询）
+            Map<String, Object> payload = agentVersionService.loadVersionPayload(agent.getId(), request.getConfigVersion());
+            if (payload != null && ctx != null) {
+                applyVersionBindingIds(ctx, payload);
+            }
+            if (payload != null) {
+                Object cfg = payload.get("config");
+                if (cfg instanceof Map<?, ?> cfgMap) {
+                    return new java.util.HashMap<>((Map<String, Object>) cfgMap);
+                }
+            }
+            return parseConfig(agent.getConfig());
         }
         Map<String, Object> configMap = parseConfig(agent.getConfig());
         Map<String, Object> draftConfig = parseConfig(agent.getConfig());
@@ -103,9 +123,12 @@ public class InitMiddleware implements ChatMiddleware {
             Map<String, Object> published = agentVersionService.loadPublishedRuntimeConfig(agent.getId());
             if (published != null) {
                 applyPublishedChatFields(agent, published);
+                // 从已发布快照中提取绑定 ID
+                if (ctx != null) {
+                    applyVersionBindingIds(ctx, published);
+                }
                 Object cfg = published.get("config");
                 if (cfg instanceof Map<?, ?> cfgMap) {
-                    @SuppressWarnings("unchecked")
                     Map<String, Object> merged = new java.util.HashMap<>((Map<String, Object>) cfgMap);
                     configMap = merged;
                 }
@@ -210,6 +233,39 @@ public class InitMiddleware implements ChatMiddleware {
             log.warn("[Chat] 解析Agent config失败: {}", e.getMessage());
             return Map.of();
         }
+    }
+
+    /**
+     * 从版本快照 payload 中提取绑定 ID 存入 ChatContext（单次调用，无额外 DB 查询）
+     */
+    private void applyVersionBindingIds(ChatContext ctx, Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return;
+        }
+        ctx.setVersionToolIds(parseLongList(payload.get("toolIds")));
+        ctx.setVersionKnowledgeIds(parseLongList(payload.get("knowledgeIds")));
+        ctx.setVersionMcpServerIds(parseLongList(payload.get("mcpServerIds")));
+        ctx.setVersionSubAgentIds(parseLongList(payload.get("subAgentIds")));
+        ctx.setVersionSkillIds(parseLongList(payload.get("skillIds")));
+    }
+
+    /** 将 List<Number/String> 统一转为 List<Long>，空则返回 null */
+    private List<Long> parseLongList(Object raw) {
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return null;
+        }
+        List<Long> ids = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Number n) {
+                ids.add(n.longValue());
+            } else if (item != null && !String.valueOf(item).isBlank()) {
+                try {
+                    ids.add(Long.parseLong(String.valueOf(item).trim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return ids.isEmpty() ? null : ids;
     }
 
     /**

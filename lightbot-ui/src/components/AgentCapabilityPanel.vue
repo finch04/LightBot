@@ -3,7 +3,7 @@
     <template v-for="(evt, i) in events" :key="i">
       <!-- Skill 启用 -->
       <div v-if="evt.type === 'skill_active'" class="cap-block cap-skill">
-        <button type="button" class="cap-header" @click="toggle(i)">
+        <button type="button" class="cap-header" @click="toggle(i, $event)">
           <ThunderboltOutlined class="cap-icon" />
           <span class="cap-title">已启用 {{ (evt.skills || []).length }} 个 Skill</span>
           <LoadingOutlined v-if="!isDone" class="cap-spinner" />
@@ -20,7 +20,7 @@
 
       <!-- SubAgent 委派 -->
       <div v-else-if="evt.type === 'subagent_call'" class="cap-block cap-subagent">
-        <button type="button" class="cap-header" @click="toggle(i)">
+        <button type="button" class="cap-header" @click="toggle(i, $event)">
           <RobotOutlined class="cap-icon" />
           <span class="cap-title">委派 SubAgent：<strong>{{ evt.displayName || evt.subagentName }}</strong></span>
           <LoadingOutlined v-if="!isDone && !hasSubagentResult(i)" class="cap-spinner" />
@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { ThunderboltOutlined, RobotOutlined, LoadingOutlined, RightOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -51,18 +51,25 @@ const props = defineProps({
   defaultExpanded: { type: Boolean, default: true },
 })
 
-const expanded = ref(new Set())
+const emit = defineEmits(['heightChange'])
 
-function toggle(i) {
+const expanded = ref(new Set())
+const userToggled = new Set()
+
+function toggle(i, event) {
+  userToggled.add(i)
   const s = new Set(expanded.value)
   if (s.has(i)) s.delete(i)
   else s.add(i)
   expanded.value = s
+  nextTick(() => emit('heightChange', event))
 }
 
 function syncExpanded() {
   if (!props.defaultExpanded) return
-  expanded.value = new Set(props.events.map((_, i) => i))
+  const s = new Set(expanded.value)
+  props.events.forEach((_, i) => { if (!userToggled.has(i)) s.add(i) })
+  expanded.value = s
 }
 
 watch(() => props.events, syncExpanded, { immediate: true, deep: true })

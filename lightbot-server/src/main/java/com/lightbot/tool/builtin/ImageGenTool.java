@@ -31,7 +31,9 @@ import java.util.UUID;
  */
 @Slf4j
 @Component("imageGenTool")
-@SystemTool(displayName = "AI图片生成", description = "根据文字描述生成图片", tags = {"图片"})
+@SystemTool(displayName = "AI图片生成", description = "根据文字描述生成图片", tags = {"图片"},
+        outputExample = "{\"image_url\":\"https://minio.example.com/generated/images/abc123.jpg?...\",\"prompt\":\"a beautiful sunset over the ocean\",\"file_path\":\"generated/images/abc123.jpg\"}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"image_url\":{\"type\":\"string\",\"description\":\"图片访问URL（预签名链接）\"},\"prompt\":{\"type\":\"string\",\"description\":\"原始描述词\"},\"file_path\":{\"type\":\"string\",\"description\":\"MinIO存储路径\"}}}}")
 @RequiredArgsConstructor
 public class ImageGenTool {
 

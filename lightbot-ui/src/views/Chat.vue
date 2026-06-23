@@ -89,6 +89,7 @@
                     :events="getTopCapabilityEvents(messages[virtualRow.index])"
                     :is-done="!messages[virtualRow.index]._streaming || messages[virtualRow.index]._toolsDone"
                     :default-expanded="true"
+                    @heightChange="onCapabilityHeightChange"
                   />
                 </div>
                 <!-- 工作流节点执行 -->
@@ -110,6 +111,7 @@
                         :events="getCapabilityEventsForOffset(messages[virtualRow.index], segment.offset)"
                         :is-done="isToolBlockDone(messages[virtualRow.index], segment.offset)"
                         :default-expanded="true"
+                        @heightChange="onCapabilityHeightChange"
                       />
                       <ToolCallsGroupComponent
                         v-if="getPureToolEvents(getToolEventsForOffset(messages[virtualRow.index], segment.offset)).length > 0"
@@ -129,6 +131,7 @@
                       :events="getInlineCapabilityEvents(messages[virtualRow.index])"
                       :is-done="messages[virtualRow.index]._toolsDone"
                       :default-expanded="true"
+                      @heightChange="onCapabilityHeightChange"
                     />
                     <ToolCallsGroupComponent
                       v-if="getPureToolEvents(messages[virtualRow.index]._toolEvents).length > 0"
@@ -562,6 +565,11 @@ function handleScroll() {
   if (!el) return
   const threshold = 150
   isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+}
+
+function onCapabilityHeightChange(evt) {
+  const rowEl = evt?.target?.closest?.('[data-index]')
+  if (rowEl) virtualizer.value.measureElement(rowEl)
 }
 
 function scrollToBottom() {

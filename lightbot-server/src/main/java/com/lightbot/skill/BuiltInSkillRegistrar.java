@@ -92,11 +92,13 @@ public class BuiltInSkillRegistrar implements ApplicationRunner {
             return;
         }
 
-        // 已存在：仅当内容 hash 变化或必要字段缺失时更新
+        // 已存在：仅当内容 hash 变化、必要字段缺失或 MinIO 文件丢失时更新
+        boolean minioFileMissing = !skillStorageService.skillMarkdownExists(slug);
         boolean needsUpdate = !contentHash.equals(existing.getContentHash())
                 || existing.getIsBuiltin() == null
                 || !toolIdsJson.equals(existing.getToolIds())
-                || existing.getObjectPrefix() == null;
+                || existing.getObjectPrefix() == null
+                || minioFileMissing;
         if (!needsUpdate) {
             return;
         }

@@ -21,7 +21,9 @@ import java.util.Map;
  */
 @Slf4j
 @Component("calculatorTool")
-@SystemTool(displayName = "数学计算器", description = "执行基本数学运算，包括加减乘除", tags = {"计算"})
+@SystemTool(displayName = "数学计算器", description = "执行基本数学运算，包括加减乘除", tags = {"计算"},
+        outputExample = "{\"expression\":\"10 + 5\",\"operation\":\"add\",\"operands\":[10.0,5.0],\"result\":\"15\"}",
+        outputSchema = "{\"type\":\"object\",\"properties\":{\"expression\":{\"type\":\"string\",\"description\":\"数学表达式\"},\"operation\":{\"type\":\"string\",\"description\":\"运算类型：add/subtract/multiply/divide\"},\"operands\":{\"type\":\"array\",\"description\":\"操作数\",\"items\":{\"type\":\"number\"}},\"result\":{\"type\":\"string\",\"description\":\"计算结果\"}}}}")
 @RequiredArgsConstructor
 public class CalculatorTool {
 

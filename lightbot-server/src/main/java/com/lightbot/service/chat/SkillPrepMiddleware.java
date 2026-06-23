@@ -67,7 +67,9 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             return;
         }
 
-        List<Long> skillIds = agentService.getSkillIds(agent.getId());
+        // 优先使用版本快照中的 Skill 绑定 ID，避免暂存/发布混淆
+        List<Long> skillIds = ctx.getVersionSkillIds() != null
+                ? ctx.getVersionSkillIds() : agentService.getSkillIds(agent.getId());
         if (skillIds.isEmpty()) {
             ctx.setSkillSystemAppendix("");
             ctx.setSkillExtraToolIds(List.of());
@@ -160,9 +162,7 @@ public class SkillPrepMiddleware implements ChatMiddleware {
         }
 
         ctx.setSkillSystemAppendix(summary.toString());
-        // 懒激活模式：不预设 extraToolIds / extraMcpServerIds，由 ToolPrepMiddleware 按需注入
-        ctx.setSkillExtraToolIds(List.of());
-        ctx.setSkillExtraMcpServerIds(List.of());
+
         ctx.setActiveSkillNames(activeNames);
         ctx.setActiveSkillDetails(activeDetails);
         ctx.setToolNameToSkillDetail(toolNameToSkill);

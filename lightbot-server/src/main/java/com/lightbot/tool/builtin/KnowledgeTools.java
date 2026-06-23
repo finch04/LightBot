@@ -111,7 +111,7 @@ public class KnowledgeTools {
         }
 
         ToolEventEmitter.emit("正在获取知识库「" + kb.getName() + "」的思维导图...");
-        Object mindmap = knowledgeService.getMindmap(kbId);
+        Object mindmap = knowledgeService.getMindmapForTool(kbId);
         if (mindmap == null) {
             return "知识库「" + kb.getName() + "」尚未生成思维导图。请先在知识库管理页面生成思维导图。";
         }

@@ -91,6 +91,15 @@ public interface KnowledgeService extends IService<Knowledge> {
     Object getMindmap(Long knowledgeId);
 
     /**
+     * 获取已有思维导图数据（工具调用专用，跳过用户权限校验）
+     * <p>工具层已通过 Agent 绑定关系校验权限，此处不再重复校验</p>
+     *
+     * @param knowledgeId 知识库ID
+     * @return 思维导图JSON对象，未生成返回null
+     */
+    Object getMindmapForTool(Long knowledgeId);
+
+    /**
      * 获取知识库默认入库配置
      *
      * @param knowledgeId 知识库ID

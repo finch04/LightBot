@@ -652,6 +652,30 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     }
 
     @Override
+    public Map<String, Object> loadVersionPayload(Long agentId, Integer configVersion) {
+        if (configVersion == null) {
+            return null;
+        }
+        AgentVersion row;
+        if (configVersion == 0) {
+            row = getDraftRow(agentId);
+        } else {
+            row = requirePublishedRow(agentId, configVersion);
+        }
+        if (row == null || row.getConfig() == null || row.getConfig().isBlank()) {
+            return null;
+        }
+        Map<String, Object> snap = parseJsonMap(row.getConfig());
+        if (KIND_CHAT.equals(snap.get("kind"))) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = snap.get("payload") instanceof Map
+                    ? (Map<String, Object>) snap.get("payload") : snap;
+            return payload;
+        }
+        return null;
+    }
+
+    @Override
     public WorkflowDefinition loadWorkflowDefinition(Long agentId, boolean useDraft) {
         Agent agent = requireAgent(agentId);
         migrateLegacyIfNeeded(agent);

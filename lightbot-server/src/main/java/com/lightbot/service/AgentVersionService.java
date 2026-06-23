@@ -54,6 +54,15 @@ public interface AgentVersionService {
      */
     Map<String, Object> loadPublishedRuntimeConfig(Long agentId);
 
+    /**
+     * 加载指定版本的完整 payload（含绑定 ID），供对话运行时提取工具/知识库等绑定关系
+     *
+     * @param agentId Agent ID
+     * @param configVersion 0=草稿，&gt;0=指定发布版本
+     * @return payload Map（含 toolIds/knowledgeIds 等），无数据返回 null
+     */
+    Map<String, Object> loadVersionPayload(Long agentId, Integer configVersion);
+
     WorkflowDefinition loadWorkflowDefinition(Long agentId, boolean useDraft);
 
     /**

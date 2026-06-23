@@ -117,7 +117,10 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             List<ToolCallback> allCallbacks = new java.util.ArrayList<>();
 
             // 1. 加载内置/自定义工具（合并：Agent 自身绑定 + Skill 引入的额外工具）
-            java.util.LinkedHashSet<Long> mergedToolIds = new java.util.LinkedHashSet<>(agentService.getToolIds(agent.getId()));
+            // 优先使用版本快照中的绑定 ID，避免暂存/发布混淆
+            List<Long> baseToolIds = ctx != null && ctx.getVersionToolIds() != null
+                    ? ctx.getVersionToolIds() : agentService.getToolIds(agent.getId());
+            java.util.LinkedHashSet<Long> mergedToolIds = new java.util.LinkedHashSet<>(baseToolIds);
             if (ctx != null && ctx.getSkillExtraToolIds() != null) {
                 mergedToolIds.addAll(ctx.getSkillExtraToolIds());
             }
@@ -142,7 +145,8 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             }
 
             // 1.1 知识库工具自动注入：当 Agent 绑定了知识库时，自动加载 type=knowledge 的工具
-            List<Long> knowledgeIds = agentService.getKnowledgeIds(agent.getId());
+            List<Long> knowledgeIds = ctx != null && ctx.getVersionKnowledgeIds() != null
+                    ? ctx.getVersionKnowledgeIds() : agentService.getKnowledgeIds(agent.getId());
             if (!knowledgeIds.isEmpty()) {
                 List<Tool> knowledgeTools = toolService.list(
                         new LambdaQueryWrapper<Tool>()
@@ -157,7 +161,9 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             }
 
             // 2. 加载 MCP Server 工具（运行时获取，不落库；同样合并 Agent + Skill 来源）
-            java.util.LinkedHashSet<Long> mergedMcpIds = new java.util.LinkedHashSet<>(agentService.getMcpServerIds(agent.getId()));
+            List<Long> baseMcpIds = ctx != null && ctx.getVersionMcpServerIds() != null
+                    ? ctx.getVersionMcpServerIds() : agentService.getMcpServerIds(agent.getId());
+            java.util.LinkedHashSet<Long> mergedMcpIds = new java.util.LinkedHashSet<>(baseMcpIds);
             if (ctx != null && ctx.getSkillExtraMcpServerIds() != null) {
                 mergedMcpIds.addAll(ctx.getSkillExtraMcpServerIds());
             }
@@ -184,8 +190,10 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             }
 
             // 3. SubAgent 委派工具：当 Agent 绑定了至少 1 个 SubAgent 时，注入 delegate_to_subagent 工具
-            List<Long> subAgentIds = ctx != null && ctx.getBoundSubAgentIds() != null
-                    ? ctx.getBoundSubAgentIds() : agentService.getSubAgentIds(agent.getId());
+            List<Long> subAgentIds = ctx != null && ctx.getVersionSubAgentIds() != null
+                    ? ctx.getVersionSubAgentIds()
+                    : (ctx != null && ctx.getBoundSubAgentIds() != null
+                            ? ctx.getBoundSubAgentIds() : agentService.getSubAgentIds(agent.getId()));
             if (subAgentIds != null && !subAgentIds.isEmpty()) {
                 if (ctx != null) ctx.setBoundSubAgentIds(subAgentIds);
                 ToolCallback delegateCb = delegateSubAgentTool.buildCallback(subAgentIds);
