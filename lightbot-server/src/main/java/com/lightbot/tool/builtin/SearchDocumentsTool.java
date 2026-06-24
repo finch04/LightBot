@@ -69,17 +69,23 @@ public class SearchDocumentsTool {
 
         ToolEventEmitter.emit("正在搜索文件名包含「" + keyword + "」的文档...");
 
-        // 2. 遍历知识库，按文件名模糊匹配
+        // 2. 批量查询知识库和文档，按文件名模糊匹配
         String lowerKeyword = keyword.toLowerCase();
         List<MatchedDoc> matchedDocs = new ArrayList<>();
 
-        for (Long knowledgeId : knowledgeIds) {
-            Knowledge knowledge = knowledgeService.getById(knowledgeId);
-            if (knowledge == null) continue;
+        // 批量查询知识库（1 次 SQL）
+        Map<Long, Knowledge> knowledgeMap = knowledgeService.listByIds(knowledgeIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Knowledge::getId, k -> k));
+        if (knowledgeMap.isEmpty()) {
+            return "{\"total\":0,\"documents\":[]}";
+        }
 
-            List<Document> documents = documentService.listByKnowledgeIdInternal(knowledgeId);
-            for (Document doc : documents) {
-                if (doc.getName() != null && doc.getName().toLowerCase().contains(lowerKeyword)) {
+        // 批量查询所有绑定知识库的文档（1 次 SQL）
+        List<Document> allDocuments = documentService.listByKnowledgeIds(new ArrayList<>(knowledgeMap.keySet()));
+        for (Document doc : allDocuments) {
+            if (doc.getName() != null && doc.getName().toLowerCase().contains(lowerKeyword)) {
+                Knowledge knowledge = knowledgeMap.get(doc.getKnowledgeId());
+                if (knowledge != null) {
                     matchedDocs.add(new MatchedDoc(doc.getId(), doc.getName(), knowledge.getName()));
                 }
             }

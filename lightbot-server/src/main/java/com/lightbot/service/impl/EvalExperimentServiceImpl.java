@@ -240,6 +240,18 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
             List<Map<String, Object>> evaluatorConfigs = objectMapper.readValue(
                     experiment.getEvaluatorConfig(), new TypeReference<>() {});
 
+            // 4.1 预加载所有评估器版本和评估器信息，避免循环内 N+1
+            List<Long> evVersionIds = evaluatorConfigs.stream()
+                    .map(cfg -> Long.parseLong(cfg.get("evaluatorVersionId").toString()))
+                    .toList();
+            Map<Long, EvalEvaluatorVersion> evVersionMap = evaluatorVersionService.listByIds(evVersionIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(EvalEvaluatorVersion::getId, v -> v));
+            List<Long> evIds = evVersionMap.values().stream()
+                    .map(EvalEvaluatorVersion::getEvaluatorId).distinct().toList();
+            Map<Long, EvalEvaluator> evMap = evIds.isEmpty() ? Map.of()
+                    : evaluatorService.listByIds(evIds).stream()
+                            .collect(java.util.stream.Collectors.toMap(EvalEvaluator::getId, e -> e));
+
             int total = items.size();
             int completed = 0;
 
@@ -261,13 +273,13 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                 // 5.4 遍历评估器打分
                 for (Map<String, Object> evalConfig : evaluatorConfigs) {
                     Long evaluatorVersionId = Long.parseLong(evalConfig.get("evaluatorVersionId").toString());
-                    EvalEvaluatorVersion evaluatorVersion = evaluatorVersionService.getById(evaluatorVersionId);
+                    EvalEvaluatorVersion evaluatorVersion = evVersionMap.get(evaluatorVersionId);
                     if (evaluatorVersion == null) {
                         continue;
                     }
 
                     // 获取评估器名称
-                    EvalEvaluator evaluator = evaluatorService.getById(evaluatorVersion.getEvaluatorId());
+                    EvalEvaluator evaluator = evMap.get(evaluatorVersion.getEvaluatorId());
                     String evaluatorName = evaluator != null ? evaluator.getName() : "评估器#" + evaluatorVersion.getEvaluatorId();
 
                     // 构建评估器变量
@@ -405,15 +417,33 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
         try {
             List<Map<String, Object>> evaluatorConfigs = objectMapper.readValue(
                     experiment.getEvaluatorConfig(), new TypeReference<>() {});
+
+            // 批量查询评估器版本，避免 N+1
+            List<Long> evVersionIds = evaluatorConfigs.stream()
+                    .map(cfg -> Long.parseLong(cfg.get("evaluatorVersionId").toString()))
+                    .toList();
+            Map<Long, EvalEvaluatorVersion> evVersionMap = evaluatorVersionService.listByIds(evVersionIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(EvalEvaluatorVersion::getId, v -> v));
+
+            // 批量查询评估器，避免 N+1
+            List<Long> evaluatorIds = evVersionMap.values().stream()
+                    .map(EvalEvaluatorVersion::getEvaluatorId)
+                    .distinct()
+                    .toList();
+            Map<Long, EvalEvaluator> evaluatorMap = evaluatorIds.isEmpty()
+                    ? Map.of()
+                    : evaluatorService.listByIds(evaluatorIds).stream()
+                            .collect(java.util.stream.Collectors.toMap(EvalEvaluator::getId, e -> e));
+
             List<String> nameList = new ArrayList<>();
             List<String> versionList = new ArrayList<>();
             List<String> idList = new ArrayList<>();
             for (Map<String, Object> cfg : evaluatorConfigs) {
                 Long evaluatorVersionId = Long.parseLong(cfg.get("evaluatorVersionId").toString());
-                EvalEvaluatorVersion evVersion = evaluatorVersionService.getById(evaluatorVersionId);
+                EvalEvaluatorVersion evVersion = evVersionMap.get(evaluatorVersionId);
                 if (evVersion != null) {
                     versionList.add(String.valueOf(evVersion.getVersion()));
-                    EvalEvaluator evaluator = evaluatorService.getById(evVersion.getEvaluatorId());
+                    EvalEvaluator evaluator = evaluatorMap.get(evVersion.getEvaluatorId());
                     if (evaluator != null) {
                         nameList.add(evaluator.getName());
                         idList.add(String.valueOf(evaluator.getId()));

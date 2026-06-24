@@ -579,15 +579,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
 
-        // 2. 清除该用户其他Agent的默认标记
+        // 2. 清除该用户其他Agent的默认标记（1 条 SQL）
         long userId = agent.getUserId();
-        List<Agent> currentDefaults = list(new LambdaQueryWrapper<Agent>()
+        lambdaUpdate()
                 .eq(Agent::getUserId, userId)
-                .eq(Agent::getIsDefault, true));
-        for (Agent defaultAgent : currentDefaults) {
-            defaultAgent.setIsDefault(false);
-            updateById(defaultAgent);
-        }
+                .eq(Agent::getIsDefault, true)
+                .set(Agent::getIsDefault, false)
+                .update();
 
         // 3. 设置当前Agent为默认
         agent.setIsDefault(true);

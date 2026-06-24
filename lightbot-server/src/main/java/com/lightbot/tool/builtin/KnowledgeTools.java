@@ -59,9 +59,13 @@ public class KnowledgeTools {
 
         ToolEventEmitter.emit("正在获取知识库列表...");
 
+        // 批量查询知识库（1 次 SQL）
+        Map<Long, Knowledge> knowledgeMap = knowledgeService.listByIds(knowledgeIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Knowledge::getId, k -> k));
+
         List<Map<String, Object>> kbList = new ArrayList<>();
         for (Long kbId : knowledgeIds) {
-            Knowledge kb = knowledgeService.getById(kbId);
+            Knowledge kb = knowledgeMap.get(kbId);
             if (kb == null) continue;
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", kb.getId());

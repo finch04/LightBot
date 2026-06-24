@@ -288,14 +288,23 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 throw new BizException(ErrorCode.DOCUMENT_CHUNKS_TOO_SHORT);
             }
 
-            // 3. 保存分块到数据库，状态为 CHUNKED
+            // 3. 批量保存分块到数据库，状态为 CHUNKED
             progressCallback.accept(30, "正在保存分块...");
             long totalTokens = 0;
+            List<Chunk> chunkEntities = new ArrayList<>();
             for (int i = 0; i < chunks.size(); i++) {
                 String chunkContent = TextNormalizeUtil.normalizeChunkContent(chunks.get(i));
-                chunkService.saveChunk(doc.getId(), doc.getKnowledgeId(), i, chunkContent, ChunkStatus.CHUNKED);
+                Chunk chunk = new Chunk();
+                chunk.setDocumentId(doc.getId());
+                chunk.setKnowledgeId(doc.getKnowledgeId());
+                chunk.setChunkIndex(i);
+                chunk.setContent(chunkContent);
+                chunk.setTokenCount(com.lightbot.model.chunking.TokenUtil.countTokens(chunkContent));
+                chunk.setStatus(ChunkStatus.CHUNKED);
+                chunkEntities.add(chunk);
                 totalTokens += estimateTokens(chunkContent);
             }
+            chunkService.saveBatch(chunkEntities);
 
             // 4. 更新文档状态为向量化中
             doc.setStatus(DocumentStatus.PROCESSING);
@@ -359,12 +368,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 vectors = embedBatch(texts);
             } catch (Exception e) {
                 log.error("[向量化] 批量Embedding失败, batchStart={}", batchStart, e);
-                // 批量失败时标记该批次所有chunk为失败
-                for (Chunk chunk : batch) {
-                    chunk.setStatus(ChunkStatus.FAILED);
-                    chunkService.updateById(chunk);
-                    failed++;
-                }
+                // 批量失败时标记该批次所有chunk为失败（1 条 SQL）
+                batch.forEach(c -> c.setStatus(ChunkStatus.FAILED));
+                chunkService.updateBatchById(batch);
+                failed += batch.size();
                 continue;
             }
 
@@ -516,6 +523,17 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     public List<Document> listByKnowledgeIdInternal(Long knowledgeId) {
         return list(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKnowledgeId, knowledgeId)
+                .eq(Document::getDeleted, 0)
+                .orderByDesc(Document::getCreateTime));
+    }
+
+    @Override
+    public List<Document> listByKnowledgeIds(List<Long> knowledgeIds) {
+        if (knowledgeIds == null || knowledgeIds.isEmpty()) {
+            return List.of();
+        }
+        return list(new LambdaQueryWrapper<Document>()
+                .in(Document::getKnowledgeId, knowledgeIds)
                 .eq(Document::getDeleted, 0)
                 .orderByDesc(Document::getCreateTime));
     }
