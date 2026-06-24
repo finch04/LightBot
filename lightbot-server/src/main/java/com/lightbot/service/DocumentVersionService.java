@@ -45,4 +45,11 @@ public interface DocumentVersionService {
      * @param versionId  版本记录ID
      */
     void rollback(Long documentId, Long versionId);
+
+    /**
+     * 删除文档的所有版本记录及 MinIO 文件
+     *
+     * @param documentId 文档ID
+     */
+    void deleteByDocumentId(Long documentId);
 }

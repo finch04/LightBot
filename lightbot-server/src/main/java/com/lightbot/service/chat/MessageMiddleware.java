@@ -20,6 +20,7 @@ import com.lightbot.entity.Agent;
 import com.lightbot.entity.Message;
 import com.lightbot.enums.ContentType;
 import com.lightbot.enums.MessageRole;
+import com.lightbot.enums.MessageType;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.model.ProviderResolver;
@@ -109,8 +110,13 @@ public class MessageMiddleware implements ChatMiddleware {
         if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
             deleteLastAssistantMessage(ctx.getSessionId());
         } else {
-            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
+            // 检测 ask_user 父消息（在保存前执行，因为保存后当前消息变成最后一条）
+            Long askUserParentId = detectAskUserParentId(ctx.getSessionId());
+            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), askUserParentId);
             ctx.setUserMessageId(userMsgId);
+            if (askUserParentId != null) {
+                ctx.setUserMessageParentId(askUserParentId);
+            }
         }
 
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
@@ -126,7 +132,7 @@ public class MessageMiddleware implements ChatMiddleware {
     public void prepare(ChatContext ctx) {
         validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
         String userText = resolveUserText(ctx.getRequest());
-        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments());
+        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), null);
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
                 ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap(), ctx);
         ctx.setMessages(messages);
@@ -183,16 +189,54 @@ public class MessageMiddleware implements ChatMiddleware {
         throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "消息不能为空");
     }
 
-    private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments) {
+    private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments, Long parentId) {
+        // 检测是否有图片附件 → messageType 为 MULTIMODAL_IMAGE
+        boolean hasImage = attachments != null && attachments.stream()
+                .anyMatch(att -> "image".equals(att.getType()));
+        MessageType messageType = hasImage ? MessageType.MULTIMODAL_IMAGE : MessageType.TEXT;
+
         if (attachments == null || attachments.isEmpty()) {
-            return saveMessage(sessionId, MessageRole.USER, content);
+            return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId);
         }
         try {
             String metadata = objectMapper.writeValueAsString(Map.of("attachments", attachments));
-            return saveMessage(sessionId, MessageRole.USER, content, metadata, 0);
+            return saveMessage(sessionId, MessageRole.USER, content, metadata, 0, messageType, parentId);
         } catch (Exception e) {
-            return saveMessage(sessionId, MessageRole.USER, content);
+            return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId);
         }
+    }
+
+    /**
+     * 检测 ask_user 父消息：查找会话中最后一条助手消息，
+     * 如果其 metadata 包含 ask_user 工具调用事件，则返回该消息ID作为 parentId
+     *
+     * @return 父消息ID，无则返回 null
+     */
+    private Long detectAskUserParentId(Long sessionId) {
+        Message lastAssistant = messageMapper.selectOne(
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getSessionId, sessionId)
+                        .eq(Message::getRole, MessageRole.ASSISTANT)
+                        .orderByDesc(Message::getCreateTime)
+                        .last("LIMIT 1"));
+        if (lastAssistant == null || lastAssistant.getMetadata() == null) {
+            return null;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> meta = objectMapper.readValue(lastAssistant.getMetadata(), Map.class);
+            Object toolEvents = meta.get("toolEvents");
+            if (toolEvents instanceof List<?> events) {
+                boolean hasAskUser = events.stream()
+                        .filter(e -> e instanceof Map)
+                        .anyMatch(e -> "ask_user".equals(((Map<?, ?>) e).get("toolName")));
+                if (hasAskUser) {
+                    return lastAssistant.getId();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     /**
@@ -483,13 +527,25 @@ public class MessageMiddleware implements ChatMiddleware {
      * @return 消息ID
      */
     public Long saveMessage(Long sessionId, MessageRole role, String content, String metadata, int tokenCount) {
+        return saveMessage(sessionId, role, content, metadata, tokenCount, MessageType.TEXT, null);
+    }
+
+    /**
+     * 持久化消息（含 messageType 和 parentId）
+     *
+     * @return 消息ID
+     */
+    public Long saveMessage(Long sessionId, MessageRole role, String content, String metadata,
+                            int tokenCount, MessageType messageType, Long parentId) {
         Message msg = new Message();
         msg.setSessionId(sessionId);
         msg.setRole(role);
         msg.setContent(content);
         msg.setContentType(ContentType.TEXT);
+        msg.setMessageType(messageType != null ? messageType : MessageType.TEXT);
         msg.setTokenCount(tokenCount);
         msg.setMetadata(metadata);
+        msg.setParentId(parentId);
         messageMapper.insert(msg);
         chatSessionService.updateStats(sessionId, tokenCount);
         return msg.getId();
@@ -501,7 +557,7 @@ public class MessageMiddleware implements ChatMiddleware {
      * @return 消息ID
      */
     public Long saveMessage(Long sessionId, MessageRole role, String content) {
-        return saveMessage(sessionId, role, content, null, 0);
+        return saveMessage(sessionId, role, content, null, 0, MessageType.TEXT, null);
     }
 
     /**

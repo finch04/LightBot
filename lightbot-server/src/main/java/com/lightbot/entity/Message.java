@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.ContentType;
 import com.lightbot.enums.MessageRole;
+import com.lightbot.enums.MessageType;
 import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -45,13 +46,9 @@ public class Message {
     @Schema(description = "内容类型")
     private ContentType contentType;
 
-    @TableField(value = "tool_calls", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
-    @Schema(description = "工具调用列表")
-    private String toolCalls;
-
-    @TableField("tool_call_id")
-    @Schema(description = "工具调用ID")
-    private String toolCallId;
+    @TableField("message_type")
+    @Schema(description = "消息类型")
+    private MessageType messageType;
 
     @TableField("token_count")
     @Schema(description = "Token数量")

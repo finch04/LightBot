@@ -1089,6 +1089,8 @@ function parseMessage(m) {
     content: m.content,
     metadata: m.metadata,
     _id: m.id,
+    _parentId: m.parentId || null,
+    _messageType: m.messageType?.code || m.messageType || 'text',
     _attachments: attachments,
     _toolEvents: toolEvents,
     _workflowEvents: workflowEvents,

@@ -26,6 +26,7 @@ import com.lightbot.entity.Task;
 import com.lightbot.enums.TaskType;
 import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
+import com.lightbot.service.DocumentVersionService;
 import com.lightbot.util.ContentDuplicateDetectionUtil;
 import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
@@ -99,6 +100,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final DocumentSecurityScanUtil documentSecurityScanUtil;
     private final ContentDuplicateDetectionUtil contentDuplicateDetectionUtil;
     private final KnowledgeMemberService permissionHelper;
+    private final ObjectProvider<DocumentVersionService> documentVersionServiceProvider;
 
     @Override
     public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled) {
@@ -540,22 +542,75 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         }
         // 权限校验：需要DEVELOPER及以上权限
         permissionHelper.checkPermission(doc.getKnowledgeId(), KnowledgeRole.DEVELOPER);
-        // 1. 删除MinIO中的文件
-        try {
-            minioUtil.delete(doc.getFilePath());
-        } catch (Exception e) {
-            log.warn("[文档删除] MinIO文件删除失败, filePath={}, error={}", doc.getFilePath(), e.getMessage());
-        }
-        // 2. 删除文档关联的向量
+
+        // 1. 删除 MinIO 中的原始文件
+        safeDeleteMinio(doc.getFilePath(), "原始文件");
+
+        // 2. 删除 MinIO 中的解析后 Markdown 文件
+        safeDeleteMinio(doc.getMarkdownPath(), "Markdown文件");
+
+        // 3. 删除 MinIO 中 DOCX 提取的图片（knowledge/{kid}/images/ 下关联文件）
+        deleteDocxImages(doc.getKnowledgeId(), doc.getName());
+
+        // 4. 删除文档版本快照（MinIO + DB）
+        documentVersionServiceProvider.getObject().deleteByDocumentId(documentId);
+
+        // 5. 删除文档关联的向量
         embeddingService.deleteByDocumentId(documentId);
-        // 3. 删除文档关联的分片
+
+        // 6. 删除文档关联的分片
         chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
-        // 4. 逻辑删除文档记录
+
+        // 7. 逻辑删除文档记录
         removeById(documentId);
-        // 5. 递减知识库统计
+
+        // 8. 递减知识库统计
         int chunkCount = doc.getChunkCount() != null ? doc.getChunkCount() : 0;
         long tokenCount = doc.getTokenCount() != null ? doc.getTokenCount() : 0;
         knowledgeServiceProvider.getObject().updateStats(doc.getKnowledgeId(), -1, -chunkCount, -tokenCount);
+    }
+
+    /**
+     * 安全删除 MinIO 文件（异常不阻断主流程）
+     */
+    private void safeDeleteMinio(String path, String label) {
+        if (path == null || path.isBlank()) {
+            return;
+        }
+        try {
+            minioUtil.delete(path);
+        } catch (Exception e) {
+            log.warn("[文档删除] MinIO{}删除失败, path={}, error={}", label, path, e.getMessage());
+        }
+    }
+
+    /**
+     * 删除 DOCX 提取的图片：遍历 knowledge/{kid}/images/ 下文件，
+     * 匹配文档名前缀（图片命名格式：{uuid}_{原始文件名}）
+     */
+    private void deleteDocxImages(Long knowledgeId, String docName) {
+        if (docName == null) {
+            return;
+        }
+        // 只处理可能包含图片的文档类型
+        String lower = docName.toLowerCase();
+        if (!lower.endsWith(".docx") && !lower.endsWith(".doc")) {
+            return;
+        }
+        String prefix = "knowledge/" + knowledgeId + "/images/";
+        try {
+            java.util.List<String> objects = minioUtil.listObjects(prefix);
+            // 图片文件名格式：{uuid}_{原始文件名}，匹配包含文档基础名的图片
+            String baseName = lower.contains(".") ? lower.substring(0, lower.lastIndexOf('.')) : lower;
+            for (String obj : objects) {
+                String fileName = obj.contains("/") ? obj.substring(obj.lastIndexOf('/') + 1) : obj;
+                if (fileName.toLowerCase().contains(baseName)) {
+                    safeDeleteMinio(obj, "DOCX图片");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[文档删除] 列举DOCX图片失败, knowledgeId={}, error={}", knowledgeId, e.getMessage());
+        }
     }
 
     @Override

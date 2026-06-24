@@ -127,6 +127,7 @@ public class ChatServiceImpl implements ChatService {
         int totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
         Long messageId = messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
                 reply, metadataStr, totalTokens);
+        ctx.setAssistantMessageId(messageId);
 
         // 3.1 批量写入工具调用记录
         if (!ctx.getPendingToolCalls().isEmpty()) {
@@ -407,6 +408,7 @@ public class ChatServiceImpl implements ChatService {
             Long assistantMessageId = messageMiddleware.saveMessage(
                     ctx.getSessionId(), MessageRole.ASSISTANT,
                     replyToSave, metadataStr, (int) totalTokens);
+            ctx.setAssistantMessageId(assistantMessageId);
 
             // 1.1 批量写入工具调用记录
             if (!ctx.getPendingToolCalls().isEmpty()) {

@@ -259,7 +259,11 @@ public class UserServiceImpl implements UserService {
     private void deleteOldAvatar(String avatar) {
         if (avatar == null || avatar.isEmpty()) return;
         String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
-        minioUtil.delete(path);
+        try {
+            minioUtil.delete(path);
+        } catch (Exception e) {
+            log.warn("[用户] 删除头像失败: path={}, error={}", path, e.getMessage());
+        }
     }
 
     private Map<String, Object> parseConfigMap(String config) {
@@ -342,6 +346,9 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new BizException(ErrorCode.USER_NOT_FOUND);
         }
+
+        // 删除 MinIO 中的头像文件
+        deleteOldAvatar(user.getAvatar());
 
         userMapper.deleteById(userId);
         log.info("[Admin] 删除用户: userId={}, operatorId={}", userId, currentUserId);

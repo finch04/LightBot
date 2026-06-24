@@ -74,6 +74,10 @@ public class ChatContext {
     // ===== 消息ID =====
     /** 用户消息ID（MessageMiddleware 保存后写入） */
     private Long userMessageId;
+    /** 助手消息ID（buildDoneEvent 保存后写入） */
+    private Long assistantMessageId;
+    /** 用户消息的父消息ID（ask_user 触发时指向触发该问题的助手消息） */
+    private Long userMessageParentId;
 
     // ===== 流式累加器 =====
     private String requestId;

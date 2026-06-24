@@ -307,9 +307,22 @@
                 <CopyOutlined v-else />
               </button>
             </div>
-            <div v-for="(m, mi) in traceModelInput.llmMessages" :key="'lm-' + mi" class="mi-msg">
+            <!-- ask_user 关联提示 -->
+            <div v-if="traceModelInput.currentUserParentId" class="ask-user-banner">
+              <span class="ask-user-icon">Q</span>
+              <span>此消息是回复 ask_user 工具的提问，关联父消息 ID: {{ traceModelInput.currentUserParentId }}</span>
+            </div>
+            <div v-for="(m, mi) in traceModelInput.llmMessages" :key="'lm-' + mi"
+              class="mi-msg"
+              :class="{
+                'ask-user-trigger': m._askUserRole === 'trigger',
+                'ask-user-response': m._askUserRole === 'response',
+              }"
+            >
               <div class="mi-msg-head">
                 <a-tag size="small" :color="roleTagColor(m.role)">{{ roleLabel(m.role) }}</a-tag>
+                <span v-if="m._askUserRole === 'trigger'" class="ask-user-badge trigger-badge">ask_user 触发</span>
+                <span v-if="m._askUserRole === 'response'" class="ask-user-badge response-badge">ask_user 回复</span>
                 <button v-if="m.content" class="btn-copy-sm" @click="copyToClipboard(m.content, 'mi_msg_' + mi)">
                   <CheckOutlined v-if="copiedKey === 'mi_msg_' + mi" style="color: #52c41a" />
                   <CopyOutlined v-else />
@@ -643,6 +656,15 @@ const traceModelInput = computed(() => {
   const systemPrompt = llmAttrs.systemPrompt || llmMessages.find(m => m.role === 'system')?.content || ''
   const requestConfig = llmAttrs.config || null
   const requestTools = llmAttrs.tools || []
+
+  // 提取 ask_user 父子关联
+  const askUserLinks = spans
+    .filter(s => s.name === 'ask_user_link' && s.attributes)
+    .map(s => ({
+      parentMessageId: s.attributes.parentMessageId,
+      childMessageId: s.attributes.childMessageId,
+    }))
+
   return {
     hasData: !!(userAttrs.content || userAttachments.length || userAttrs.bizParams
       || systemPrompt || llmMessages.length || requestConfig || requestTools.length),
@@ -650,10 +672,13 @@ const traceModelInput = computed(() => {
     userAttachments,
     bizParams: userAttrs.bizParams || null,
     systemPrompt,
-    llmMessages,
+    llmMessages: annotateAskUserRoles(llmMessages, userAttrs),
     requestConfig,
     requestTools,
     toolCount: llmAttrs.toolCount ?? requestTools.length,
+    askUserLinks,
+    currentUserMessageId: userAttrs.messageId || null,
+    currentUserParentId: userAttrs.parentMessageId || null,
   }
 })
 
@@ -736,6 +761,7 @@ function spanNameLabel(name) {
     rag_search: 'RAG检索',
     ai_reasoning: 'AI思考',
     ai_reply: 'AI回复',
+    ask_user_link: 'ask_user 关联',
   }
   return map[name] || name
 }
@@ -773,12 +799,42 @@ function traceLlmMessages(attrs) {
   return attrs.messages
 }
 
+/**
+ * 标注 ask_user 触发/回复角色：
+ * - trigger: 包含 ask_user 工具调用的 assistant 消息
+ * - response: 当前用户消息（有 parentMessageId 时的最后一条 user 消息）
+ */
+function annotateAskUserRoles(messages, userAttrs) {
+  if (!messages || !messages.length) return messages
+  const hasAskUserResponse = !!userAttrs?.parentMessageId
+  if (!hasAskUserResponse) return messages
+
+  return messages.map((m, i) => {
+    const annotated = { ...m }
+    // 检测是否为 ask_user 触发消息（assistant 消息的 toolEvents 中有 ask_user）
+    // 注意：llmMessages 是发给模型的精简格式，不含 toolEvents
+    // 通过位置推断：最后一条 user 消息之前的 assistant 消息中，最近的一条
+    if (m.role === 'assistant') {
+      // 检查下一条消息是否是 user（即当前用户回复）
+      const nextMsg = messages[i + 1]
+      if (nextMsg && nextMsg.role === 'user' && i === messages.length - 2) {
+        annotated._askUserRole = 'trigger'
+      }
+    }
+    if (m.role === 'user' && i === messages.length - 1) {
+      annotated._askUserRole = 'response'
+    }
+    return annotated
+  })
+}
+
 function spanTypeClass(name) {
   if (name === 'llm_call') return 'llm'
   if (name === 'tool_execute') return 'tool'
   if (name === 'rag_search') return 'rag'
   if (name === 'ai_reasoning') return 'reasoning'
   if (name === 'ai_reply') return 'reply'
+  if (name === 'ask_user_link') return 'askuser'
   return 'other'
 }
 
@@ -1151,6 +1207,7 @@ onMounted(() => {
 .wf-bar-rag { background: linear-gradient(90deg, #52c41a, #73d13d); }
 .wf-bar-reasoning { background: linear-gradient(90deg, #722ed1, #9254de); }
 .wf-bar-reply { background: linear-gradient(90deg, #13c2c2, #36cfc9); }
+.wf-bar-askuser { background: linear-gradient(90deg, #fa8c16, #ffa940); }
 .wf-bar-other { background: linear-gradient(90deg, #bfbfbf, #d9d9d9); }
 .wf-duration {
   width: 70px;
@@ -1339,6 +1396,10 @@ onMounted(() => {
   margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
+}
+.mi-msg.ask-user-trigger,
+.mi-msg.ask-user-response {
+  border-bottom-color: transparent;
 }
 .mi-msg-head {
   display: flex;
@@ -1551,5 +1612,59 @@ onMounted(() => {
 .detail-pre-json {
   background: #1e1e1e;
   color: #d4d4d4;
+}
+
+/* ask_user 父子消息关联 */
+.ask-user-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #d46b08;
+}
+.ask-user-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #fa8c16;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.ask-user-trigger {
+  border-left: 3px solid #fa8c16;
+  padding-left: 12px;
+  background: #fffbe6;
+  border-radius: 0 6px 6px 0;
+}
+.ask-user-response {
+  border-left: 3px solid #13c2c2;
+  padding-left: 12px;
+  margin-left: 16px;
+  background: #e6fffb;
+  border-radius: 0 6px 6px 0;
+}
+.ask-user-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.trigger-badge {
+  background: #fff1b8;
+  color: #d46b08;
+}
+.response-badge {
+  background: #b5f5ec;
+  color: #006d75;
 }
 </style>

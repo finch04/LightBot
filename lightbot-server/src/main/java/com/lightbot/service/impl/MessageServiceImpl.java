@@ -71,12 +71,15 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
     }
 
     /**
-     * 清理消息关联的 MinIO 资源（如 AI 生图生成的图片）
+     * 清理消息关联的 MinIO 资源
+     * <p>包含两类：AI 生图生成的图片、用户上传的附件</p>
      */
     private void cleanupMinioResources(List<Message> messages) {
         for (Message msg : messages) {
-            List<String> filePaths = extractImageFilePaths(msg.getMetadata());
-            for (String path : filePaths) {
+            List<String> paths = new ArrayList<>();
+            paths.addAll(extractImageFilePaths(msg.getMetadata()));
+            paths.addAll(extractAttachmentObjectKeys(msg.getMetadata()));
+            for (String path : paths) {
                 try {
                     minioUtil.delete(path);
                     log.info("[Message] 清理MinIO资源: path={}", path);
@@ -126,5 +129,31 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
             log.warn("[Message] 解析metadata失败: {}", e.getMessage());
         }
         return paths;
+    }
+
+    /**
+     * 从消息 metadata 中提取用户上传附件的 MinIO objectKey 列表
+     */
+    private List<String> extractAttachmentObjectKeys(String metadata) {
+        List<String> keys = new ArrayList<>();
+        if (metadata == null || metadata.isBlank()) {
+            return keys;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(metadata);
+            JsonNode attachments = root.get("attachments");
+            if (attachments == null || !attachments.isArray()) {
+                return keys;
+            }
+            for (JsonNode att : attachments) {
+                String objectKey = att.path("objectKey").asText(null);
+                if (objectKey != null && !objectKey.isBlank()) {
+                    keys.add(objectKey);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Message] 解析附件metadata失败: {}", e.getMessage());
+        }
+        return keys;
     }
 }

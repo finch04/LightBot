@@ -234,6 +234,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         if (agent == null) {
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
+        // 删除 MinIO 中的头像文件
+        deleteOldAvatar(agent.getAvatar());
         removeById(id);
     }
 
@@ -546,7 +548,11 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         if (avatar == null || avatar.isEmpty()) return;
         // 兼容旧数据（相对路径）和新数据（完整URL）
         String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
-        minioUtil.delete(path);
+        try {
+            minioUtil.delete(path);
+        } catch (Exception e) {
+            log.warn("[Agent] 删除头像失败: path={}, error={}", path, e.getMessage());
+        }
     }
 
     @Override

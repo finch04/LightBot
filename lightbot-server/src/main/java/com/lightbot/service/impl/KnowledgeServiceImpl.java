@@ -167,10 +167,20 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
 
-        // 3. 逻辑删除知识库
+        // 3. 级联删除所有子文档（含 MinIO 文件、向量、分片、版本快照）
+        List<Document> documents = documentService.listByKnowledgeIdInternal(id);
+        for (Document doc : documents) {
+            try {
+                documentService.deleteDocument(doc.getId());
+            } catch (Exception e) {
+                log.warn("[知识库删除] 级联删除文档失败: documentId={}, error={}", doc.getId(), e.getMessage());
+            }
+        }
+
+        // 4. 逻辑删除知识库
         removeById(id);
 
-        // 4. 同时删除所有成员关系
+        // 5. 同时删除所有成员关系
         knowledgeMemberService.removeByKnowledgeId(id);
     }
 

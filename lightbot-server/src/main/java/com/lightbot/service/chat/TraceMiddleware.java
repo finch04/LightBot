@@ -68,6 +68,9 @@ public class TraceMiddleware implements ChatMiddleware {
                     // 2. 记录本轮用户输入（含附件，便于 Trace 排查）
                     recordUserInputSpan(ctx);
 
+                    // 2.1 记录 ask_user 父子关联
+                    annotateAskUserLink(ctx);
+
                     // 3. 记录发送给 LLM 的完整请求（messages + config + tools）
                     ChatRequest chatRequest = ctx.getRequest();
                     if (ctx.getMessages() != null && !ctx.getMessages().isEmpty()) {
@@ -126,6 +129,21 @@ public class TraceMiddleware implements ChatMiddleware {
     }
 
     /**
+     * 记录 ask_user 父子消息关联：当前用户消息是对 ask_user 工具的回复
+     */
+    private void annotateAskUserLink(ChatContext ctx) {
+        if (ctx.getUserMessageParentId() == null) {
+            return;
+        }
+        Map<String, Object> attrs = new java.util.LinkedHashMap<>();
+        attrs.put("childMessageId", ctx.getUserMessageId());
+        attrs.put("parentMessageId", ctx.getUserMessageParentId());
+        attrs.put("linkType", "ask_user_response");
+        ctx.getSpans().add(LlmTraceSpan.of("ask_user_link", null, "ask_user_link",
+                ctx.getStartTime(), 0, "OK", attrs));
+    }
+
+    /**
      * 记录本轮用户问题与附件
      */
     private void recordUserInputSpan(ChatContext ctx) {
@@ -134,6 +152,12 @@ public class TraceMiddleware implements ChatMiddleware {
             return;
         }
         Map<String, Object> attrs = new java.util.LinkedHashMap<>();
+        if (ctx.getUserMessageId() != null) {
+            attrs.put("messageId", ctx.getUserMessageId().toString());
+        }
+        if (ctx.getUserMessageParentId() != null) {
+            attrs.put("parentMessageId", ctx.getUserMessageParentId().toString());
+        }
         String text = request.getMessage();
         if (text != null && !text.isBlank()) {
             attrs.put("content", text);
