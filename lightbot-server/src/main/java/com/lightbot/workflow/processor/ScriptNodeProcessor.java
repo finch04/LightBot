@@ -15,6 +15,8 @@ import javax.script.ScriptEngineManager;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,6 +29,14 @@ import java.util.regex.Pattern;
 public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements NodeProcessor {
 
     private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^}]+)}}");
+
+    /** 脚本执行超时（秒） */
+    private static final int SCRIPT_TIMEOUT_SECONDS = 5;
+
+    /** 危险的 Java 包/类访问模式 */
+    private static final Pattern DANGEROUS_ACCESS = Pattern.compile(
+            "\\b(Java\\.type|Java\\.extend|importClass|importPackage|Packages\\.|java\\.lang\\.Runtime|java\\.lang\\.ProcessBuilder|java\\.io\\.|java\\.net\\.|java\\.nio\\.file\\.|javax\\.script\\.ScriptEngineManager)\\b",
+            Pattern.CASE_INSENSITIVE);
 
     private final ObjectMapper objectMapper;
 
@@ -50,6 +60,12 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
         }
         if (!"javascript".equalsIgnoreCase(language) && !language.isBlank()) {
             log.warn("[ScriptNodeProcessor] 暂仅支持 javascript，当前: {}", language);
+        }
+
+        // 安全校验：检测危险的 Java 访问
+        String securityError = checkScriptSecurity(script);
+        if (securityError != null) {
+            throw new IllegalArgumentException(securityError);
         }
 
         Object rawResult = runJavaScript(script, params);
@@ -101,18 +117,37 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
             throw new IllegalStateException("未找到 JavaScript 引擎，请确认运行环境支持脚本执行");
         }
         try {
-            Bindings bindings = engine.createBindings();
-            bindings.put("params", params);
-            engine.eval(script, bindings);
-            // 优先通过 eval 调用 main(params)，避免 Nashorn invokeFunction 作用域问题
-            Object mainFn = bindings.get("main");
-            if (mainFn != null) {
-                return engine.eval("main(params)", bindings);
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    Bindings bindings = engine.createBindings();
+                    bindings.put("params", params);
+                    engine.eval(script, bindings);
+                    Object mainFn = bindings.get("main");
+                    if (mainFn != null) {
+                        return engine.eval("main(params)", bindings);
+                    }
+                    return bindings.get("result");
+                } catch (Exception e) {
+                    throw new RuntimeException("脚本执行失败: " + e.getMessage(), e);
+                }
+            }).orTimeout(SCRIPT_TIMEOUT_SECONDS, TimeUnit.SECONDS).join();
+        } catch (java.util.concurrent.CompletionException e) {
+            if (e.getCause() instanceof java.util.concurrent.TimeoutException) {
+                throw new IllegalArgumentException("脚本执行超时（" + SCRIPT_TIMEOUT_SECONDS + "秒），请检查是否存在死循环");
             }
-            return bindings.get("result");
-        } catch (Exception e) {
-            throw new IllegalArgumentException("脚本执行失败: " + e.getMessage(), e);
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            throw new IllegalArgumentException(cause.getMessage(), cause);
         }
+    }
+
+    /**
+     * 脚本安全校验：检测危险的 Java 访问
+     */
+    private String checkScriptSecurity(String script) {
+        if (DANGEROUS_ACCESS.matcher(script).find()) {
+            return "脚本中包含不允许的 Java 访问（禁止访问文件系统、网络、进程等系统资源）";
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

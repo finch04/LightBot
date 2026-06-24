@@ -186,7 +186,19 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                 .eq(status != null && !status.isBlank(), EvalExperiment::getStatus, status)
                 .orderByDesc(EvalExperiment::getCreateTime);
         Page<EvalExperiment> result = baseMapper.selectPage(page, wrapper);
-        result.getRecords().forEach(this::enrichExperiment);
+
+        // 批量预加载数据集，避免 enrichExperiment 内 N+1
+        List<Long> datasetIds = result.getRecords().stream()
+                .map(EvalExperiment::getDatasetId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, EvalDataset> datasetMap = datasetIds.isEmpty()
+                ? Map.of()
+                : datasetService.listByIds(datasetIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(EvalDataset::getId, d -> d));
+
+        result.getRecords().forEach(exp -> enrichExperiment(exp, datasetMap));
         return result;
     }
 
@@ -254,6 +266,8 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
 
             int total = items.size();
             int completed = 0;
+            // 进度更新间隔：每 10% 或至少每 5 条更新一次
+            int progressInterval = Math.max(1, Math.min(total / 10, 5));
 
             // 5. 遍历数据项执行评测
             for (EvalDatasetItem item : items) {
@@ -270,7 +284,8 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                 // 5.3 调用被测Prompt获取实际输出
                 String actualOutput = getPromptResult(promptVersion, dataContent, variableMap, promptVersion.getModelConfig());
 
-                // 5.4 遍历评估器打分
+                // 5.4 遍历评估器打分，收集结果后批量保存
+                List<EvalExperimentResult> batchResults = new ArrayList<>();
                 for (Map<String, Object> evalConfig : evaluatorConfigs) {
                     Long evaluatorVersionId = Long.parseLong(evalConfig.get("evaluatorVersionId").toString());
                     EvalEvaluatorVersion evaluatorVersion = evVersionMap.get(evaluatorVersionId);
@@ -287,7 +302,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                     var scoreResult = evalChatService.callEvaluator(
                             evaluatorVersion.getModelConfig(), evaluatorVersion.getPrompt(), evalVariables);
 
-                    // 5.5 保存结果
+                    // 收集结果
                     EvalExperimentResult result = new EvalExperimentResult();
                     result.setExperimentId(experimentId);
                     result.setInput(dataContent.has("input") ? dataContent.get("input").asText() : dataContent.toString());
@@ -298,15 +313,21 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
                     result.setEvaluatorVersionId(evaluatorVersionId);
                     result.setEvaluatorName(evaluatorName);
                     result.setEvaluationTime(LocalDateTime.now());
-                    experimentResultService.save(result);
+                    batchResults.add(result);
+                }
+                // 批量保存当前数据项的所有评估结果（1 条 SQL）
+                if (!batchResults.isEmpty()) {
+                    experimentResultService.saveBatch(batchResults);
                 }
 
-                // 5.6 更新进度
+                // 5.6 间隔更新进度（减少 UPDATE 次数）
                 completed++;
-                int progress = (int) ((completed * 100.0) / total);
-                experiment.setProgress(progress);
-                updateById(experiment);
-                taskService.updateProgress(task.getId(), progress, "评测进度: " + completed + "/" + total);
+                if (completed % progressInterval == 0 || completed == total) {
+                    int progress = (int) ((completed * 100.0) / total);
+                    experiment.setProgress(progress);
+                    updateById(experiment);
+                    taskService.updateProgress(task.getId(), progress, "评测进度: " + completed + "/" + total);
+                }
             }
 
             // 6. 完成
@@ -396,9 +417,18 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
      * 填充实验的展示字段（数据集名称、Prompt信息、评估器信息）
      */
     private void enrichExperiment(EvalExperiment experiment) {
+        enrichExperiment(experiment, null);
+    }
+
+    /**
+     * 填充实验的展示字段（支持预加载数据集 Map，避免 N+1）
+     */
+    private void enrichExperiment(EvalExperiment experiment, Map<Long, EvalDataset> datasetMap) {
         // 1. 数据集名称
         if (experiment.getDatasetId() != null) {
-            EvalDataset dataset = datasetService.getById(experiment.getDatasetId());
+            EvalDataset dataset = datasetMap != null
+                    ? datasetMap.get(experiment.getDatasetId())
+                    : datasetService.getById(experiment.getDatasetId());
             if (dataset != null) {
                 experiment.setDatasetName(dataset.getName());
             }

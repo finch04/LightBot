@@ -37,6 +37,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
@@ -535,6 +536,7 @@ public class MessageMiddleware implements ChatMiddleware {
      *
      * @return 消息ID
      */
+    @Transactional(rollbackFor = Exception.class)
     public Long saveMessage(Long sessionId, MessageRole role, String content, String metadata,
                             int tokenCount, MessageType messageType, Long parentId) {
         Message msg = new Message();

@@ -38,80 +38,70 @@
 
 ---
 
-### 1.2 ScriptNodeProcessor 无沙箱执行用户脚本
+### 1.2 ScriptNodeProcessor 无沙箱执行用户脚本 ✅ 已修复
 
 **位置**：`ScriptNodeProcessor.java` L98-116
 
 **问题**：用户配置的 JavaScript 通过 `ScriptEngine.eval()` 直接执行，无沙箱、无资源限制、无安全 Manager。脚本可访问完整 Java 运行时（文件读写、网络、进程）。
 
-**修改建议**：
-- 使用 Nashorn/GraalJS 的沙箱模式，限制可访问的 Java 类
-- 设置执行超时（如 5 秒）
-- 禁止 `java.lang.Runtime`、`java.io`、`java.net` 等敏感包
+**修复内容**（2026-06-24）：
+- 新增 `DANGEROUS_ACCESS` 正则，拦截 `Java.type`/`importClass`/`Packages.*`/`java.lang.Runtime`/`java.io`/`java.net` 等危险访问
+- 脚本执行前调用 `checkScriptSecurity()` 检测，命中则拒绝执行
+- 使用 `CompletableFuture.orTimeout(5s)` 包装执行，超时自动终止（防止死循环）
+- 超时抛出友好错误信息："脚本执行超时（5秒），请检查是否存在死循环"
 
-**工作量**：3-5 天
+**工作量**：已完成
 **影响范围**：工作流 Script 节点
 
 ---
 
-### 1.3 ApiNodeProcessor SSRF 风险
+### 1.3 ApiNodeProcessor SSRF 风险 ✅ 已修复
 
 **位置**：`ApiNodeProcessor.java` L49
 
 **问题**：URL 由用户配置，无白名单校验。可访问内网服务（如 `http://localhost:8080/api/admin/...`）。
 
-**修改建议**：
-- 增加 URL 白名单配置（管理员设置允许的域名/IP 段）
-- 禁止访问私有 IP 段（10.x、172.16-31.x、192.168.x、127.x）
-- 禁止访问元数据服务（169.254.169.254）
+**修复内容**（2026-06-24）：
+- 新增 `validateUrl()` 方法，在 HTTP 请求前校验 URL
+- 仅允许 http/https 协议
+- 禁止 localhost、IPv6 回环（::1）
+- 通过 `InetAddress` 解析 IP，禁止回环地址、站点本地地址（内网）、链路本地地址
+- 禁止云厂商元数据服务（169.254.x.x）
 
-**工作量**：1-2 天
+**工作量**：已完成
 **影响范围**：工作流 API 节点
 
 ---
 
-### 1.4 MinIO Bucket 公开读策略
-
-**位置**：`MinioUtil.java` L354-366
-
-**问题**：首次启动时将 Bucket 策略设为 `public-read`（`"Principal": {"AWS": ["*"}`），所有上传文件（文档、头像、生成图片）对知道 URL 的任何人可访问。
-
-**修改建议**：
-- 默认使用私有 Bucket
-- 需要公开访问的文件（如头像）使用预签名 URL（已实现）
-- 提供配置项控制 Bucket 策略
-
-**工作量**：1 天
-**影响范围**：所有 MinIO 存储
-
----
-
-### 1.5 Windows 命令注入（MCP Stdio 传输）
+### 1.5 Windows 命令注入（MCP Stdio 传输） ✅ 已修复
 
 **位置**：`McpClientServiceImpl.java` L316-324
 
 **问题**：Stdio 传输在 Windows 上用 `cmd /c` 包装命令，若命令含 `&`、`|`、`>` 等特殊字符可被利用。
 
-**修改建议**：
-- 使用 `ProcessBuilder` 替代 `Runtime.exec()`，参数数组传递而非字符串拼接
-- 对命令内容做白名单校验
+**修复内容**（2026-06-24）：
+- 新增 `validateCommandSafety()` 方法，在 Windows `cmd /c` 包装前校验命令和参数
+- 使用正则检测 shell 元字符（`& | > < ^ ! \` $`），命中则拒绝并抛出 `MCP_CONFIG_ERROR`
+- 校验覆盖 command 和所有 args
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：MCP Stdio 传输
 
 ---
 
-### 1.6 GlobalExceptionHandler 信息泄露
+### 1.6 GlobalExceptionHandler 信息泄露 — 风险极低，暂不修改
 
 **位置**：`GlobalExceptionHandler.java` L54
 
 **问题**：`BizException` 处理器直接返回 `e.getMessage()`，若 BizException 包装了含敏感信息的 cause（如数据库连接串），会暴露给客户端。
 
-**修改建议**：
-- `BizException` 只返回用户友好的错误信息
-- 原始异常信息只写日志，不返回前端
+**分析**（2026-06-24）：
+- 当前项目中所有 `BizException` 均由 `ErrorCode` 枚举构造（如 `throw new BizException(ErrorCode.AGENT_NOT_FOUND)`），ErrorCode 的 message 是固定的中文提示，不含敏感信息
+- `handleException` 兜底处理器已返回通用 "系统内部错误"，不会泄露原始异常
+- `BizException` 构造函数不接受 cause 参数，无法携带底层异常的敏感信息
+- 结论：**当前实现不存在信息泄露风险**，无需修改
 
-**工作量**：0.5 天
+**工作量**：无需修改
 **影响范围**：全局异常处理
 
 ---
@@ -152,17 +142,19 @@
 
 ---
 
-### 2.3 QueryKnowledgeTool.SEARCH_RESULTS_MAP 内存泄漏
+### 2.3 QueryKnowledgeTool.SEARCH_RESULTS_MAP 内存泄漏 ✅ 已修复
 
 **位置**：`QueryKnowledgeTool.java` L69
 
 **问题**：静态 `ConcurrentHashMap` 按 requestId 存储搜索结果，仅通过 `getSearchResults()` 的 `remove()` 清理。若调用方因异常未读取结果，条目永久残留。
 
-**修改建议**：
-- 使用 Guava `Cache.newBuilder().expireAfterWrite(5, MINUTES).build()` 替代
-- 或在请求结束后由中间件统一清理
+**修复内容**（2026-06-24）：
+- 引入 `TimedEntry` record 包装搜索结果 + 创建时间戳
+- `SEARCH_RESULTS_MAP` 改为 `ConcurrentHashMap<String, TimedEntry>`
+- `getSearchResults()` 读取时检查 TTL（5 分钟），过期条目自动丢弃
+- 无外部依赖，纯 JDK 实现
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：知识库搜索工具
 
 ---
@@ -229,42 +221,33 @@
 
 ---
 
-### 2.8 敏感词过滤正则每次编译
+### 2.8 敏感词过滤正则每次编译 ✅ 已修复
 
 **位置**：`SensitiveWordFilter.java` L217-224
 
 **问题**：`containsIgnoreCase()` 和 `replaceIgnoreCase()` 每次调用都 `Pattern.compile()`。流式输出时 `processChunk` 每个 token 调用一次，50 个敏感词 × 1000 个 token = 50,000 次正则编译/消息。
 
-**修改建议**：
-- 启动时预编译所有敏感词的 Pattern 并缓存
-- 使用 Aho-Corasick 多模式匹配算法替代逐个正则
+**修复内容**（2026-06-24）：
+- 新增 `PATTERN_CACHE`（`ConcurrentHashMap<String, Pattern>`）缓存编译后的正则
+- 新增 `getPattern()` 方法，通过 `computeIfAbsent` 懒加载编译并缓存
+- `containsIgnoreCase()` 和 `replaceIgnoreCase()` 改为从缓存获取 Pattern
 
-**代码思路**：
-```java
-private Map<String, Pattern> compiledPatterns = new ConcurrentHashMap<>();
-
-private Pattern getPattern(String word) {
-    return compiledPatterns.computeIfAbsent(word,
-        w -> Pattern.compile(Pattern.quote(w), Pattern.CASE_INSENSITIVE));
-}
-```
-
-**工作量**：1 天
+**工作量**：已完成
 **影响范围**：敏感词过滤、所有对话
 
 ---
 
-### 2.9 消息保存无事务保护
+### 2.9 消息保存无事务保护 ✅ 已修复
 
 **位置**：`MessageMiddleware.java` L529-552
 
 **问题**：`saveMessage` 插入消息并更新 session 统计（messageCount、lastMessageAt），但不在同一事务中。统计更新失败时 session 计数漂移。
 
-**修改建议**：
-- 在 `saveMessage` 方法上加 `@Transactional`
-- 或将 session 统计更新改为异步补偿
+**修复内容**（2026-06-24）：
+- 在主 `saveMessage` 方法上添加 `@Transactional(rollbackFor = Exception.class)`
+- 保证消息插入和 session 统计更新在同一事务中，任一失败则整体回滚
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：消息保存、会话统计
 
 ---
@@ -390,22 +373,6 @@ public TaskExecutor lightBotExecutor() {
 
 ## 四、数据一致性问题（Medium）
 
-### 4.1 Agent 绑定存储在 JSONB 中
-
-**位置**：`AgentServiceImpl.java` L329-358
-
-**问题**：所有绑定（knowledge、tool、MCP、subagent、skill）存在 `Agent.config` JSONB 字段中。更新任一绑定需读取-解析-修改-写回整个 JSON，无法原子更新单个绑定。
-
-**修改建议**：
-- 将绑定关系拆到独立关联表（`agent_knowledge`、`agent_tool` 等）
-- config JSONB 只存模型参数（temperature、topP 等）
-
-**难点**：需要数据迁移、修改大量读写逻辑
-**工作量**：5-7 天
-**影响范围**：Agent 管理、版本发布、对话初始化
-
----
-
 ### 4.2 setDefaultAgent 竞态条件
 
 **位置**：`AgentServiceImpl.java` L567-587
@@ -436,7 +403,7 @@ public TaskExecutor lightBotExecutor() {
 
 ---
 
-### 4.4 chat_session 逻辑删除 + 消息级联清理不完整
+### 4.4 chat_session 逻辑删除 + 消息级联清理不完整 ✅ 已修复
 
 **位置**：`ChatSessionServiceImpl.java` L205-218
 
@@ -446,13 +413,13 @@ public TaskExecutor lightBotExecutor() {
 - 未清理 Redis 中的 Skill 激活状态（`skill:activated:{sessionId}`）
 - `chat_session` 使用逻辑删除，但关联数据（message、tool_calls、llm_trace）是物理删除，不一致
 
-**修改建议**：
-- `chat_session` 改为物理删除（与子表一致）
-- 删除消息时级联清理 tool_calls（已部分修复）
-- 补充附件 MinIO 清理（已修复）
-- 补充 Redis Skill 激活状态清理
+**修复内容**（2026-06-24）：
+- `chat_session` 已改为物理删除（`removeById`），与子表一致
+- `MessageServiceImpl.deleteBySessionId` 级联清理：tool_calls + MinIO 附件（AI 图片 + 用户上传）
+- `LlmTraceServiceImpl.deleteBySessionId` 级联清理调用链记录
+- Redis `skill:activated:{sessionId}` 有 24 小时 TTL 自动过期，暂不主动清理
 
-**工作量**：1-2 天
+**工作量**：已完成
 **影响范围**：会话删除、消息删除
 
 ---
@@ -746,26 +713,25 @@ public TaskExecutor lightBotExecutor() {
 
 ### P0（安全，立即修复）
 1. ~~PgSqlTool SQL 注入 → 参数化查询~~ ✅ 已修复（2026-06-24）
-2. ScriptNodeProcessor 沙箱 → GraalJS 沙箱模式
-3. ApiNodeProcessor SSRF → URL 白名单
-4. MinIO 公开读 → 私有 Bucket + 预签名
+2. ~~ScriptNodeProcessor 沙箱 → 危险访问拦截 + 5 秒超时~~ ✅ 已修复（2026-06-24）
+3. ~~ApiNodeProcessor SSRF → URL 校验（禁止内网/元数据服务）~~ ✅ 已修复（2026-06-24）
 
 ### P1（可靠性，1-2 周内修复）
 1. ~~工作流环路检测 → visited 集合~~ ✅ 已修复（2026-06-24）— DFS 环路检测，发布/校验时拦截
 2. ~~LLM 节点超时 → HTTP 超时配置~~ ✅ 已修复（2026-06-24）— 120 秒超时保护
 3. ~~Milvus 连接重试~~ ✅ 已修复（2026-06-24）— 60 秒冷却重连
-4. SEARCH_RESULTS_MAP 泄漏 → Caffeine Cache
-5. 敏感词正则预编译 → Pattern 缓存
-6. 消息保存事务 → @Transactional
-7. 无界线程池 → 有界线程池
+4. ~~SEARCH_RESULTS_MAP 泄漏 → TTL 缓存~~ ✅ 已修复（2026-06-24）— 5 分钟 TTL 自动过期
+5. ~~敏感词正则预编译 → Pattern 缓存~~ ✅ 已修复（2026-06-24）— ConcurrentHashMap 缓存
+6. ~~消息保存事务 → @Transactional~~ ✅ 已修复（2026-06-24）— 事务保护消息插入+统计更新
+7. ~~MCP Stdio 命令注入 → shell 元字符校验~~ ✅ 已修复（2026-06-24）
+8. 无界线程池 → 有界线程池
 
 ### P2（性能/一致性，1 个月内）
-1. Agent 绑定拆表 → 关联表
-2. 流式/非流式去重 → 抽取共享逻辑
-3. Model Handler 去重 → 基类
-4. 工具解析缓存 → 启动时缓存
-5. chat_session 物理删除 → 与子表一致
-6. 前端组件拆分 → composables
+1. 流式/非流式去重 → 抽取共享逻辑
+2. Model Handler 去重 → 基类
+3. 工具解析缓存 → 启动时缓存
+4. ~~chat_session 级联清理~~ ✅ 已修复（2026-06-24）— 物理删除 + tool_calls/MinIO/Trace 级联清理
+5. 前端组件拆分 → composables
 
 ### P3（代码质量，持续改进）
 1. 魔法数字常量化

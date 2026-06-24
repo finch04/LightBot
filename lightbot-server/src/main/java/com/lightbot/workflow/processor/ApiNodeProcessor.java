@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -49,6 +50,12 @@ public class ApiNodeProcessor extends AbstractFlowNodeProcessor implements NodeP
         String url = resolveTemplate(stringVal(nodeData.get("url")), context.getVariables());
         if (url.isBlank()) {
             throw new IllegalArgumentException("API 地址不能为空");
+        }
+
+        // SSRF 防护：校验 URL 合法性
+        String ssrfError = validateUrl(url);
+        if (ssrfError != null) {
+            throw new IllegalArgumentException(ssrfError);
         }
         String method = stringVal(nodeData.get("method"));
         if (method.isBlank()) method = "GET";
@@ -133,5 +140,64 @@ public class ApiNodeProcessor extends AbstractFlowNodeProcessor implements NodeP
 
     private String stringVal(Object o) {
         return o == null ? "" : String.valueOf(o).trim();
+    }
+
+    /**
+     * SSRF 防护：校验 URL 是否允许访问
+     */
+    private String validateUrl(String url) {
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException e) {
+            return "URL 格式不合法: " + url;
+        }
+
+        String scheme = uri.getScheme();
+        if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+            return "仅允许 http/https 协议";
+        }
+
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            return "URL 缺少主机名";
+        }
+
+        String lowerHost = host.toLowerCase();
+
+        // 禁止 localhost
+        if ("localhost".equals(lowerHost)) {
+            return "禁止访问 localhost";
+        }
+
+        // 禁止 IPv6 回环
+        if ("[::1]".equals(lowerHost) || "[0:0:0:0:0:0:0:1]".equals(lowerHost)) {
+            return "禁止访问本地回环地址";
+        }
+
+        // 解析 IP 并检查私有地址
+        try {
+            InetAddress addr = InetAddress.getByName(host);
+            if (addr.isLoopbackAddress()) {
+                return "禁止访问回环地址";
+            }
+            if (addr.isSiteLocalAddress()) {
+                return "禁止访问内网地址（10.x/172.16-31.x/192.168.x）";
+            }
+            if (addr.isLinkLocalAddress()) {
+                return "禁止访问链路本地地址";
+            }
+            // 禁止云厂商元数据服务
+            byte[] rawAddr = addr.getAddress();
+            if (rawAddr != null && rawAddr.length == 4
+                    && (rawAddr[0] & 0xFF) == 169 && (rawAddr[1] & 0xFF) == 254) {
+                return "禁止访问元数据服务（169.254.x.x）";
+            }
+        } catch (Exception e) {
+            // DNS 解析失败不阻断，由后续 HTTP 请求处理
+            log.warn("[ApiNodeProcessor] URL DNS 解析失败: {}", e.getMessage());
+        }
+
+        return null;
     }
 }

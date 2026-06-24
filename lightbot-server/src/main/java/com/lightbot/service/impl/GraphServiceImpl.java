@@ -278,36 +278,35 @@ public class GraphServiceImpl implements GraphService {
             return Collections.emptyList();
         }
 
+        // 合并为单条 Cypher 查询（WHERE n.name IN $names），避免 N 次往返
+        String cypher = """
+            MATCH (n:Entity:`%s`)
+            WHERE n.name IN $names AND (n.graph_source = 'merged' OR n.graph_source IS NULL)
+            OPTIONAL MATCH (n)-[r1]-(m1:Entity:`%s`)
+            WHERE r1 IS NOT NULL AND (r1.graph_source = 'merged' OR r1.graph_source IS NULL)
+            WITH n, r1, m1
+            WHERE r1 IS NOT NULL
+            OPTIONAL MATCH (m1)-[r2]-(m2:Entity:`%s`)
+            WHERE m2 <> n AND m2 IS NOT NULL AND (r2.graph_source = 'merged' OR r2.graph_source IS NULL)
+            RETURN n.name AS h1, type(r1) AS r1Type, r1.relation_type AS r1Rel, m1.name AS t1,
+                   m1.name AS h2, type(r2) AS r2Type, r2.relation_type AS r2Rel, m2.name AS t2
+            """.formatted(label, label, label);
+
+        List<org.neo4j.driver.Record> records = neo4jUtil.query(cypher, Map.of("names", entityNames));
         List<String> results = new ArrayList<>();
-        for (String entityName : entityNames) {
-            String cypher = """
-                MATCH (n:Entity:`%s` {name: $name})
-                WHERE n.graph_source = 'merged' OR n.graph_source IS NULL
-                OPTIONAL MATCH (n)-[r1]-(m1:Entity:`%s`)
-                WHERE r1 IS NOT NULL AND (r1.graph_source = 'merged' OR r1.graph_source IS NULL)
-                WITH n, r1, m1
-                WHERE r1 IS NOT NULL
-                OPTIONAL MATCH (m1)-[r2]-(m2:Entity:`%s`)
-                WHERE m2 <> n AND m2 IS NOT NULL AND (r2.graph_source = 'merged' OR r2.graph_source IS NULL)
-                RETURN n.name AS h1, type(r1) AS r1Type, r1.relation_type AS r1Rel, m1.name AS t1,
-                       m1.name AS h2, type(r2) AS r2Type, r2.relation_type AS r2Rel, m2.name AS t2
-                """.formatted(label, label, label);
+        for (org.neo4j.driver.Record record : records) {
+            String r1Rel = record.get("r1Rel").isNull() ? null : record.get("r1Rel").asString();
+            String h1 = record.get("h1").isNull() ? null : record.get("h1").asString();
+            String t1 = record.get("t1").isNull() ? null : record.get("t1").asString();
+            if (r1Rel != null && h1 != null && t1 != null) {
+                results.add("%s %s %s".formatted(h1, r1Rel, t1));
+            }
 
-            List<org.neo4j.driver.Record> records = neo4jUtil.query(cypher, Map.of("name", entityName));
-            for (org.neo4j.driver.Record record : records) {
-                String r1Rel = record.get("r1Rel").isNull() ? null : record.get("r1Rel").asString();
-                String h1 = record.get("h1").isNull() ? null : record.get("h1").asString();
-                String t1 = record.get("t1").isNull() ? null : record.get("t1").asString();
-                if (r1Rel != null && h1 != null && t1 != null) {
-                    results.add("%s %s %s".formatted(h1, r1Rel, t1));
-                }
-
-                String r2Rel = record.get("r2Rel").isNull() ? null : record.get("r2Rel").asString();
-                String h2 = record.get("h2").isNull() ? null : record.get("h2").asString();
-                String t2 = record.get("t2").isNull() ? null : record.get("t2").asString();
-                if (r2Rel != null && h2 != null && t2 != null) {
-                    results.add("%s %s %s".formatted(h2, r2Rel, t2));
-                }
+            String r2Rel = record.get("r2Rel").isNull() ? null : record.get("r2Rel").asString();
+            String h2 = record.get("h2").isNull() ? null : record.get("h2").asString();
+            String t2 = record.get("t2").isNull() ? null : record.get("t2").asString();
+            if (r2Rel != null && h2 != null && t2 != null) {
+                results.add("%s %s %s".formatted(h2, r2Rel, t2));
             }
         }
 

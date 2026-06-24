@@ -61,12 +61,21 @@ public class QueryKnowledgeTool {
         return t;
     });
 
+    /** 搜索结果缓存 TTL（毫秒） */
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000L;
+
     /**
-     * 按请求ID存储的搜索结果（跨线程安全）
+     * 按请求ID存储的搜索结果（跨线程安全，带 TTL 自动过期）
      * <p>工具在 SEARCH_EXECUTOR 线程池执行，无法用 ThreadLocal 传递结果给主线程，
      * 改用 ConcurrentHashMap 以 requestId 为 key 存储</p>
      */
-    private static final ConcurrentHashMap<String, List<Map<String, Object>>> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, TimedEntry> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
+
+    private record TimedEntry(List<Map<String, Object>> data, long createdAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - createdAt > CACHE_TTL_MS;
+        }
+    }
 
     @Tool(name = "query_knowledge",
           description = "搜索当前对话智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。只需传入 question，不要传入 agentId。")
@@ -210,7 +219,7 @@ public class QueryKnowledgeTool {
                 double qaScore = ((Number) qaPriorityHit.get("score")).doubleValue();
                 ToolEventEmitter.emit("命中高匹配问答对（相似度 " + String.format("%.2f", qaScore) + "），直接返回标准答案");
                 if (requestId != null) {
-                    SEARCH_RESULTS_MAP.put(requestId, List.of(qaPriorityHit));
+                    SEARCH_RESULTS_MAP.put(requestId, new TimedEntry(List.of(qaPriorityHit), System.currentTimeMillis()));
                 }
                 log.info("[Tool:query_knowledge] QA优先返回: question={}, score={}", qaQuestion, qaScore);
                 Map<String, Object> output = new java.util.LinkedHashMap<>();
@@ -222,7 +231,7 @@ public class QueryKnowledgeTool {
 
             // 4.2 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
             if (requestId != null) {
-                SEARCH_RESULTS_MAP.put(requestId, allResults);
+                SEARCH_RESULTS_MAP.put(requestId, new TimedEntry(allResults, System.currentTimeMillis()));
             }
 
             ToolEventEmitter.emit("共找到 " + allResults.size() + " 条相关内容");
@@ -355,8 +364,11 @@ public class QueryKnowledgeTool {
      */
     public static List<Map<String, Object>> getSearchResults(String requestId) {
         if (requestId == null) return List.of();
-        List<Map<String, Object>> results = SEARCH_RESULTS_MAP.remove(requestId);
-        return results != null ? results : List.of();
+        TimedEntry entry = SEARCH_RESULTS_MAP.remove(requestId);
+        if (entry == null || entry.isExpired()) {
+            return List.of();
+        }
+        return entry.data();
     }
 
     @SuppressWarnings("unchecked")

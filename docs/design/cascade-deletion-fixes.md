@@ -184,12 +184,20 @@ public void removeByAgentId(Long agentId) {
 # 循环 SQL 优化清单
 
 > 创建时间：2026-06-24
-> 状态：待修复
+> 状态：部分已修复
 
 ## 背景
 
-全量审查后端代码，发现 12 处 for 循环内调用 SQL 的 N+1 问题。
+全量审查后端代码，发现 16 处 for 循环内调用 SQL 的 N+1 问题。
 按影响面和调用频率分为 HIGH / MEDIUM / LOW 三级。
+
+### 已修复标记
+
+| 标记 | 含义 |
+|------|------|
+| **已修复** | 代码已修改，编译通过 |
+| **跳过** | 有技术限制或副作用，无法优化 |
+| 待修复 | 尚未处理 |
 
 ## 优化原则
 
@@ -206,53 +214,82 @@ public void removeByAgentId(Long agentId) {
 
 ### HIGH — 查询频繁或数据量大
 
-#### 1. EvalExperimentServiceImpl.enrichExperiment
+#### 1. EvalExperimentServiceImpl.enrichExperiment — 评估器批量查询 ✅已修复
 
 | 项目 | 内容 |
 |------|------|
-| 位置 | `EvalExperimentServiceImpl.java` L386-436 |
+| 位置 | `EvalExperimentServiceImpl.java` enrichExperiment 方法 |
 | 问题 | `forEach` 遍历评估器配置，每个调 `evaluatorVersionService.getById()` + `evaluatorService.getById()`，一页实验列表 10 条 × 5 评估器 = 140 次查询 |
 | 修复方案 | 提取所有 `evaluatorVersionId` → `evaluatorVersionService.listByIds()` → 提取所有 `evaluatorId` → `evaluatorService.listByIds()` → 构建 Map 查找 |
-| 涉及文件 | `EvalExperimentServiceImpl.java` |
+| 状态 | **已修复** |
 
-#### 2. SearchDocumentsTool.searchDocuments
+#### 1-b. EvalExperimentServiceImpl.enrichExperiment — 数据集 N+1 待修复
+
+| 项目 | 内容 |
+|------|------|
+| 位置 | `EvalExperimentServiceImpl.java` enrichExperiment 方法 `datasetService.getById()` |
+| 问题 | `list` 方法 `forEach(this::enrichExperiment)` 内每个实验单独查 `datasetService.getById(experiment.getDatasetId())`，一页 10 条 = 10 次查询 |
+| 修复方案 | 在 `list` 方法中先收集所有 `datasetId` → `datasetService.listByIds()` → 构建 Map，传入 `enrichExperiment` 使用 |
+| 涉及文件 | `EvalExperimentServiceImpl.java` |
+| 状态 | **已修复** |
+
+#### 2. SearchDocumentsTool.searchDocuments ✅已修复
 
 | 项目 | 内容 |
 |------|------|
 | 位置 | `SearchDocumentsTool.java` L76-86 |
 | 问题 | 遍历 `knowledgeIds`，每个调 `knowledgeService.getById()` + `documentService.listByKnowledgeIdInternal()`，绑定 5 个知识库 = 10 次查询 |
-| 修复方案 | `knowledgeService.listByIds(knowledgeIds)` 一次查全 → `documentService.list(wrapper)` 按 `knowledgeId IN` 一次查全 → 内存匹配 |
-| 涉及文件 | `SearchDocumentsTool.java` |
+| 修复方案 | `knowledgeService.listByIds(knowledgeIds)` 一次查全 → `documentService.listByKnowledgeIds(knowledgeIds)` 一次查全 → 内存匹配 |
+| 状态 | **已修复** |
 
-#### 3. KnowledgeTools.listKnowledgeBases
+#### 3. KnowledgeTools.listKnowledgeBases ✅已修复
 
 | 项目 | 内容 |
 |------|------|
 | 位置 | `KnowledgeTools.java` L63-74 |
 | 问题 | 遍历 `knowledgeIds`，每个调 `knowledgeService.getById()`，绑定 5 个知识库 = 5 次查询 |
 | 修复方案 | `knowledgeService.listByIds(knowledgeIds)` 一次查全 → `Map` 查找 |
-| 涉及文件 | `KnowledgeTools.java` |
+| 状态 | **已修复** |
+
+#### 13. GraphServiceImpl.searchForRag — Neo4j 循环查询 待修复
+
+| 项目 | 内容 |
+|------|------|
+| 位置 | `GraphServiceImpl.java` L282-312 |
+| 问题 | AI 抽取的实体名称列表（3-10 个），每个实体单独执行一条 Cypher 查询（含 2 个 OPTIONAL MATCH 3 跳关系），Agent 对话 RAG 检索高频路径 |
+| 修复方案 | 将多个实体名合并为一条 Cypher：`WHERE n.name IN $names`，一次查询返回所有实体的关系，内存分组处理 |
+| 涉及文件 | `GraphServiceImpl.java` |
+| 状态 | **已修复** |
+
+#### 14. EvalExperimentServiceImpl.executeExperiment — 结果逐条 INSERT 待修复
+
+| 项目 | 内容 |
+|------|------|
+| 位置 | `EvalExperimentServiceImpl.java` executeExperiment 方法 |
+| 问题 | 双重循环：数据项 × 评估器，每次调 `experimentResultService.save(result)` 单条 INSERT + 每个数据项调 `updateById(experiment)` 更新进度。100 条 × 5 评估器 = 500 次 INSERT + 100 次 UPDATE |
+| 修复方案 | 结果收集到 List → 每个数据项结束后 `saveBatch` 批量 INSERT；进度更新改为每 10% 或每 N 条才 UPDATE 一次 |
+| 涉及文件 | `EvalExperimentServiceImpl.java` |
+| 状态 | **已修复** |
 
 ### MEDIUM — 后台任务或中等频率
 
-#### 4. DocumentServiceImpl.processDocumentWithProgress — saveChunk 循环
+#### 4. DocumentServiceImpl.processDocumentWithProgress — saveChunk 循环 ✅已修复
 
 | 项目 | 内容 |
 |------|------|
 | 位置 | `DocumentServiceImpl.java` L294-298 |
 | 问题 | 分块后逐个 `chunkService.saveChunk()` 插入 |
 | 修复方案 | 收集到 List 后 `chunkService.saveBatch(chunks)` 批量插入 |
-| 涉及文件 | `DocumentServiceImpl.java`、`ChunkService` |
-| 风险 | 需确认 `saveChunk` 内部无特殊逻辑（当前仅 `save`） |
+| 状态 | **已修复** |
 
-#### 5. EvalExperimentServiceImpl.executeExperiment — 评估器重复查询
+#### 5. EvalExperimentServiceImpl.executeExperiment — 评估器重复查询 ✅已修复
 
 | 项目 | 内容 |
 |------|------|
-| 位置 | `EvalExperimentServiceImpl.java` L262-268 |
-| 问题 | 外层遍历数据项 × 内层遍历评估器，每个评估器每次调 `evaluatorVersionService.getById()` + `evaluatorService.getById()`，100 数据项 × 3 评估器 = 600 次冗余查询 |
+| 位置 | `EvalExperimentServiceImpl.java` executeExperiment 方法内层循环 |
+| 问题 | 外层遍历数据项 × 内层遍历评估器，每个评估器每次调 `evaluatorVersionService.getById()` + `evaluatorService.getById()` |
 | 修复方案 | 在循环外预加载所有评估器版本和评估器信息到 Map，循环内直接查 Map |
-| 涉及文件 | `EvalExperimentServiceImpl.java` |
+| 状态 | **已修复** |
 
 #### 6. ChatSessionServiceImpl.deleteSessions
 
@@ -272,14 +309,14 @@ public void removeByAgentId(Long agentId) {
 | 修复方案 | 同 #6，**跳过**（有 MinIO 副作用） |
 | 状态 | **跳过**（有 MinIO 副作用） |
 
-#### 8. AgentServiceImpl.setDefaultAgent
+#### 8. AgentServiceImpl.setDefaultAgent ✅已修复
 
 | 项目 | 内容 |
 |------|------|
 | 位置 | `AgentServiceImpl.java` L584-590 |
 | 问题 | 查询当前默认 Agent 列表后逐个 `updateById` 清除默认标记 |
-| 修复方案 | 用 `lambdaUpdate().eq(Agent::getUserId, userId).eq(Agent::getIsDefault, true).set(Agent::getIsDefault, false).update()` 一条 SQL |
-| 涉及文件 | `AgentServiceImpl.java` |
+| 修复方案 | 用 `lambdaUpdate().set(Agent::getIsDefault, false).update()` 一条 SQL |
+| 状态 | **已修复** |
 
 #### 9. GraphExtractionExecutor.execute — GraphDocument 批量更新
 
@@ -287,9 +324,27 @@ public void removeByAgentId(Long agentId) {
 |------|------|
 | 位置 | `GraphExtractionExecutor.java` L118-125 |
 | 问题 | 遍历 `graphDocIds`，每个调 `selectById` + `updateById` |
-| 修复方案 | `graphDocumentMapper.selectBatchByIds(graphDocIds)` 一次查全 → 批量设置状态 → `graphDocumentMapper.updateBatchById(graphDocs)` |
-| 涉及文件 | `GraphExtractionExecutor.java` |
-| 状态 | **跳过** — GraphDocumentMapper 继承 BaseMapper，不支持 `selectBatchByIds` / `updateBatchById` |
+| 修复方案 | `selectBatchByIds` + `updateBatchById` |
+| 状态 | **跳过** — GraphDocumentMapper 继承 BaseMapper，不支持批量方法；N 通常很小 |
+
+#### 15. KnowledgeServiceImpl.deleteById — 循环删除文档
+
+| 项目 | 内容 |
+|------|------|
+| 位置 | `KnowledgeServiceImpl.java` L175-L182 |
+| 问题 | 遍历知识库下所有文档，逐个调 `documentService.deleteDocument(doc.getId())`，每个文档内部多次 SQL（查 chunk/embedding/版本 + 删除） |
+| 修复方案 | 每个文档的删除涉及 MinIO/Neo4j 等外部资源清理，无法纯 SQL 批量化。保持现状 |
+| 状态 | **跳过**（有外部资源副作用） |
+
+#### 16. QaPairServiceImpl.batchVectorize — 循环逐个向量化
+
+| 项目 | 内容 |
+|------|------|
+| 位置 | `QaPairServiceImpl.java` L281-293 |
+| 问题 | 遍历 `qaPairIds`，逐个调 `vectorize(qaPairId)`，每个内部：getById + checkPermission + delete旧向量 + asyncVectorize |
+| 修复方案 | 批量查询所有 QaPair → 统一权限校验 → 批量删除旧向量 → 逐个触发异步向量化（向量化本身是异步的，无法批量化） |
+| 涉及文件 | `QaPairServiceImpl.java` |
+| 状态 | 待修复（部分可优化：批量查询+批量删旧向量） |
 
 ### LOW — 低频操作或收益小
 
@@ -299,17 +354,17 @@ public void removeByAgentId(Long agentId) {
 |------|------|
 | 位置 | `DocumentServiceImpl.java` L174-178 |
 | 问题 | 遍历文件列表逐个调 `uploadDocument()` |
-| 修复方案 | 暂不改动 — 每个文件需独立校验、生成路径、创建任务，难以批量化 |
+| 修复方案 | 每个文件需独立校验、生成路径、创建任务，难以批量化 |
 | 状态 | **跳过** |
 
-#### 11. DocumentServiceImpl.processDocumentWithProgress — 错误路径
+#### 11. DocumentServiceImpl.processDocumentWithProgress — 错误路径 ✅已修复
 
 | 项目 | 内容 |
 |------|------|
 | 位置 | `DocumentServiceImpl.java` L363-367 |
 | 问题 | 批量 Embedding 失败时逐个 `chunkService.updateById(chunk)` 标记失败 |
 | 修复方案 | `chunkService.updateBatchById(batch)` 批量更新 |
-| 涉及文件 | `DocumentServiceImpl.java` |
+| 状态 | **已修复** |
 
 #### 12. AgentVersionServiceImpl.migrateLegacyIfNeeded — 迁移插入
 
@@ -318,23 +373,32 @@ public void removeByAgentId(Long agentId) {
 | 位置 | `AgentVersionServiceImpl.java` L846-877 |
 | 问题 | 遍历历史版本逐个 `agentVersionMapper.insert()` |
 | 修复方案 | 收集到 List 后 `saveBatch(list)` 批量插入 |
-| 涉及文件 | `AgentVersionServiceImpl.java` |
-| 风险 | 低频迁移逻辑，仅执行一次 |
-| 状态 | **跳过** — AgentVersionServiceImpl 未继承 ServiceImpl，无 `saveBatch` 方法 |
+| 状态 | **跳过** — AgentVersionServiceImpl 未继承 ServiceImpl，无 `saveBatch`；低频迁移仅执行一次 |
+
+#### 17. GraphServiceImpl.doExtract — 循环 INSERT/UPDATE GraphDocument
+
+| 项目 | 内容 |
+|------|------|
+| 位置 | `GraphServiceImpl.java` L130-151 |
+| 问题 | 遍历 `targetDocIds`，已有记录调 `updateById`，新记录调 `insert` |
+| 修复方案 | 分为 updateList 和 insertList 后批量操作 |
+| 状态 | **跳过** — 单文档抽取 N=1，多文档不走此分支，收益极小 |
 
 ---
 
 ## 修复优先级
 
-| 优先级 | 项 | 理由 |
-|--------|-----|------|
-| HIGH | #1 enrichExperiment | 列表页每页触发，影响用户体验 |
-| HIGH | #2 SearchDocuments | 工具调用频率高 |
-| HIGH | #3 KnowledgeTools | 工具调用频率高 |
-| MEDIUM | #5 executeExperiment | 后台任务，但查询量大 |
-| MEDIUM | #8 setDefaultAgent | 单条 SQL 替代循环 |
-| MEDIUM | #9 GraphExtractionExecutor | 后台任务 |
-| MEDIUM | #4 saveChunk | 入库流程 |
-| LOW | #11 错误路径 updateById | 仅错误时触发 |
-| LOW | #12 迁移插入 | 一次性迁移 |
-| SKIP | #6, #7, #10 | 有副作用或难以批量化 |
+| 优先级 | 项 | 状态 | 理由 |
+|--------|-----|------|------|
+| HIGH | #1 enrichExperiment 评估器 | ✅已修复 | 列表页每页触发 |
+| HIGH | #1-b enrichExperiment 数据集 | ✅已修复 | 列表页 N+1 |
+| HIGH | #2 SearchDocuments | ✅已修复 | 工具调用频率高 |
+| HIGH | #3 KnowledgeTools | ✅已修复 | 工具调用频率高 |
+| HIGH | #13 searchForRag Neo4j | ✅已修复 | Agent 对话 RAG 高频路径 |
+| HIGH | #14 executeExperiment save | ✅已修复 | 后台任务 SQL 量极大 |
+| MEDIUM | #4 saveChunk | ✅已修复 | 入库流程 |
+| MEDIUM | #5 executeExperiment 评估器查询 | ✅已修复 | 后台任务 |
+| MEDIUM | #8 setDefaultAgent | ✅已修复 | 单条 SQL 替代循环 |
+| MEDIUM | #16 batchVectorize | 待修复 | 批量操作可优化部分 |
+| LOW | #11 错误路径 updateById | ✅已修复 | 仅错误时触发 |
+| SKIP | #6, #7, #9, #10, #12, #15, #17 | 跳过 | 有副作用/技术限制/收益小 |

@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -22,6 +23,9 @@ public final class SensitiveWordFilter {
 
     /** AI 输出命中拦截策略时的提示（展示给用户） */
     public static final String AI_BLOCK_MESSAGE = "【安全提示】回复内容包含敏感信息，已停止输出。";
+
+    /** 敏感词正则缓存：word → 编译后的 Pattern */
+    private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
 
     private SensitiveWordFilter() {
     }
@@ -215,13 +219,17 @@ public final class SensitiveWordFilter {
     }
 
     private static boolean containsIgnoreCase(String text, String word) {
-        return Pattern.compile(Pattern.quote(word), Pattern.CASE_INSENSITIVE).matcher(text).find();
+        return getPattern(word).matcher(text).find();
     }
 
     private static String replaceIgnoreCase(String text, String word, String replacement) {
-        return Pattern.compile(Pattern.quote(word), Pattern.CASE_INSENSITIVE)
-                .matcher(text)
+        return getPattern(word).matcher(text)
                 .replaceAll(java.util.regex.Matcher.quoteReplacement(replacement));
+    }
+
+    private static Pattern getPattern(String word) {
+        return PATTERN_CACHE.computeIfAbsent(word,
+                w -> Pattern.compile(Pattern.quote(w), Pattern.CASE_INSENSITIVE));
     }
 
     public record FilterResult(String text, boolean filtered, boolean blocked, String matchedWord, String scope) {

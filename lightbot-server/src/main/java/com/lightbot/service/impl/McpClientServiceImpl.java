@@ -312,6 +312,9 @@ public class McpClientServiceImpl implements McpClientService {
         List<String> args = resolveArgs(deployConfig);
         Map<String, String> env = resolveEnv(deployConfig);
 
+        // 命令注入防护：校验命令和参数不包含 shell 元字符
+        validateCommandSafety(command, args);
+
         // Windows: ProcessBuilder 不解析 .cmd/.bat，需通过 cmd /c 调用
         if (System.getProperty("os.name").toLowerCase().contains("win")) {
             List<String> fullArgs = new ArrayList<>();
@@ -334,6 +337,24 @@ public class McpClientServiceImpl implements McpClientService {
 
         log.info("[MCP] 创建stdio传输: command={}, args={}", command, args);
         return new StdioClientTransport(params, new JacksonMcpJsonMapper(new com.fasterxml.jackson.databind.ObjectMapper()));
+    }
+
+    /**
+     * 命令注入防护：校验命令和参数不包含 shell 元字符
+     */
+    private void validateCommandSafety(String command, List<String> args) {
+        // Windows shell 元字符：& | > < ^ ! 等可被利用执行任意命令
+        java.util.regex.Pattern shellMeta = java.util.regex.Pattern.compile("[&|><^!`$]");
+        if (shellMeta.matcher(command).find()) {
+            throw new BizException(ErrorCode.MCP_CONFIG_ERROR.getCode(),
+                    "MCP 命令包含非法字符: " + command);
+        }
+        for (String arg : args) {
+            if (shellMeta.matcher(arg).find()) {
+                throw new BizException(ErrorCode.MCP_CONFIG_ERROR.getCode(),
+                        "MCP 命令参数包含非法字符: " + arg);
+            }
+        }
     }
 
     /**
