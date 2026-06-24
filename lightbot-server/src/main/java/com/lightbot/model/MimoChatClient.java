@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 /**
@@ -45,6 +46,9 @@ public class MimoChatClient {
     private final MinioUtil minioUtil;
     private final ObjectMapper objectMapper;
     private final ToolEventGenerator toolEventGenerator;
+
+    /** RestClient 缓存：providerId → RestClient（避免每次请求重建连接） */
+    private final ConcurrentHashMap<Long, RestClient> clientCache = new ConcurrentHashMap<>();
 
     /**
      * 是否应使用 MiMo 直连（联网搜索或含视频附件）
@@ -304,19 +308,28 @@ public class MimoChatClient {
     }
 
     private RestClient buildClient(ModelProvider provider) {
-        String baseUrl = provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()
-                ? provider.getBaseUrl().replaceAll("/+$", "") : DEFAULT_BASE_URL;
-        if (!baseUrl.endsWith("/v1")) {
-            baseUrl = baseUrl + "/v1";
-        }
-        MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
-        headers.add("api-key", provider.getApiKey());
-        String finalBaseUrl = baseUrl;
-        return RestClient.builder()
-                .baseUrl(finalBaseUrl)
-                .defaultHeader("Authorization", "Bearer " + provider.getApiKey())
-                .defaultHeaders(h -> h.addAll(headers))
-                .build();
+        return clientCache.computeIfAbsent(provider.getId(), id -> {
+            String baseUrl = provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()
+                    ? provider.getBaseUrl().replaceAll("/+$", "") : DEFAULT_BASE_URL;
+            if (!baseUrl.endsWith("/v1")) {
+                baseUrl = baseUrl + "/v1";
+            }
+            MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
+            headers.add("api-key", provider.getApiKey());
+            String finalBaseUrl = baseUrl;
+            return RestClient.builder()
+                    .baseUrl(finalBaseUrl)
+                    .defaultHeader("Authorization", "Bearer " + provider.getApiKey())
+                    .defaultHeaders(h -> h.addAll(headers))
+                    .build();
+        });
+    }
+
+    /**
+     * 清除指定 Provider 的 RestClient 缓存（凭证变更时调用）
+     */
+    public void clearClientCache(Long providerId) {
+        clientCache.remove(providerId);
     }
 
     private double toDouble(Object v) {

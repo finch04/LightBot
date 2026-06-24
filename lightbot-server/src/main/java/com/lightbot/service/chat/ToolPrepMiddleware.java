@@ -19,6 +19,8 @@ import com.lightbot.subagent.DelegateSubAgentTool;
 import com.lightbot.util.JsonIdParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
@@ -28,10 +30,14 @@ import reactor.core.publisher.Flux;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 /**
@@ -52,6 +58,15 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private final ModelProviderService modelProviderService;
     private final DelegateSubAgentTool delegateSubAgentTool;
     private final SkillService skillService;
+
+    @Autowired
+    @Qualifier("lightBotExecutor")
+    private Executor lightBotExecutor;
+
+    /** displayName 缓存：toolName → displayName，TTL 5 分钟 */
+    private volatile Map<String, String> displayNameCache;
+    private volatile long displayNameCacheTime;
+    private static final long DISPLAY_NAME_CACHE_TTL_MS = 5 * 60 * 1000L;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -184,11 +199,21 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                 }
             }
 
-            for (Long serverId : mergedMcpIds) {
-                try {
-                    allCallbacks.addAll(mcpClientService.getToolCallbacks(serverId));
-                } catch (Exception e) {
-                    log.warn("[Chat] 加载MCP工具失败: serverId={}, error={}", serverId, e.getMessage());
+            // 并行加载所有 MCP Server 的工具
+            if (!mergedMcpIds.isEmpty()) {
+                List<CompletableFuture<List<ToolCallback>>> futures = mergedMcpIds.stream()
+                        .map(serverId -> CompletableFuture.supplyAsync(() -> {
+                            try {
+                                return mcpClientService.getToolCallbacks(serverId);
+                            } catch (Exception e) {
+                                log.warn("[Chat] 加载MCP工具失败: serverId={}, error={}", serverId, e.getMessage());
+                                return List.<ToolCallback>of();
+                            }
+                        }, lightBotExecutor))
+                        .toList();
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                for (CompletableFuture<List<ToolCallback>> f : futures) {
+                    allCallbacks.addAll(f.join());
                 }
             }
 
@@ -235,7 +260,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     }
 
     /**
-     * 构建 toolName → displayName 映射
+     * 构建 toolName → displayName 映射（带缓存，TTL 5 分钟）
      * <p>从数据库 Tool 表查询所有已注册工具的 displayName，
      * MCP 工具不在 Tool 表中，fallback 到工具名本身</p>
      */
@@ -243,15 +268,37 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         if (toolCallbackMap == null || toolCallbackMap.isEmpty()) {
             return Map.of();
         }
-        Set<String> toolNames = toolCallbackMap.keySet();
+        Map<String, String> allDisplayNames = getDisplayNameCache();
+        // 只返回当前请求需要的工具名
+        Map<String, String> result = new HashMap<>();
+        for (String name : toolCallbackMap.keySet()) {
+            String displayName = allDisplayNames.get(name);
+            if (displayName != null) {
+                result.put(name, displayName);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取 displayName 缓存（TTL 过期自动刷新）
+     */
+    private Map<String, String> getDisplayNameCache() {
+        Map<String, String> cached = displayNameCache;
+        if (cached != null && System.currentTimeMillis() - displayNameCacheTime < DISPLAY_NAME_CACHE_TTL_MS) {
+            return cached;
+        }
+        // 缓存过期，重新查询
         List<Tool> tools = toolService.list(
-                new LambdaQueryWrapper<Tool>().in(Tool::getName, toolNames));
-        Map<String, String> map = new java.util.HashMap<>();
+                new LambdaQueryWrapper<Tool>().eq(Tool::getStatus, CommonStatus.ACTIVE));
+        Map<String, String> map = new HashMap<>();
         for (Tool tool : tools) {
             if (tool.getDisplayName() != null && !tool.getDisplayName().isEmpty()) {
                 map.put(tool.getName(), tool.getDisplayName());
             }
         }
+        displayNameCache = map;
+        displayNameCacheTime = System.currentTimeMillis();
         return map;
     }
 

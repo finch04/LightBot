@@ -254,7 +254,7 @@
 
 ## 三、性能问题（High）
 
-### 3.1 多个无界线程池
+### 3.1 多个无界线程池 ✅ 已修复
 
 **位置**：
 - `ChatServiceImpl.RAG_EXECUTOR` — `newCachedThreadPool()`
@@ -263,110 +263,108 @@
 
 **问题**：无界线程池在高并发下可创建数千线程，导致 OOM 或 CPU 争抢。
 
-**修改建议**：
-- 统一使用有界线程池 + 有界队列 + CallerRunsPolicy
-- 提取为共享的 `TaskExecutor` Bean，集中管理
+**修复内容**（2026-06-24）：
+- 新增 `ThreadPoolConfig` 配置类，定义共享有界线程池 `lightBotExecutor`
+- corePoolSize=8, maxPoolSize=32, queueCapacity=256, CallerRunsPolicy
+- `ChatServiceImpl` 的 `RAG_EXECUTOR` 替换为注入的 `lightBotExecutor`
+- `QueryKnowledgeTool` 的 `SEARCH_EXECUTOR` 替换为注入的 `lightBotExecutor`
+- `DocumentServiceImpl.INGEST_EXECUTOR`（固定3线程）已有界，暂不修改
 
-**代码思路**：
-```java
-@Bean("lightBotExecutor")
-public TaskExecutor lightBotExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(8);
-    executor.setMaxPoolSize(32);
-    executor.setQueueCapacity(256);
-    executor.setRejectedExecutionHandler(new CallerRunsPolicy());
-    return executor;
-}
-```
-
-**工作量**：1 天
+**工作量**：已完成
 **影响范围**：全局线程管理
 
 ---
 
-### 3.2 ToolServiceImpl 每次解析工具都扫描全量 Bean
+### 3.2 ToolServiceImpl 每次解析工具都扫描全量 Bean ✅ 已修复
 
 **位置**：`ToolServiceImpl.java` L288-319
 
 **问题**：`getAllBuiltinToolCallbacks()` 每次调用都扫描所有 Spring Bean（`getBeansWithAnnotation(Component.class)`），用反射找 `@Tool` 方法。每个对话请求都会触发。
 
-**修改建议**：
-- 启动时扫描一次，缓存结果
-- Bean 注册/注销时更新缓存
+**修复内容**（2026-06-24）：
+- `@PostConstruct` 启动时扫描一次，结果缓存到 `cachedBuiltinCallbacks`
+- `getAllBuiltinToolCallbacks()` 优先返回缓存，兜底实时扫描
+- 扫描逻辑提取到 `scanBuiltinToolCallbacks()` 方法
 
-**工作量**：1 天
+**工作量**：已完成
 **影响范围**：工具解析、每次对话
 
 ---
 
-### 3.3 ToolPrepMiddleware 每次查询 Tool 表获取 displayName
+### 3.3 ToolPrepMiddleware 每次查询 Tool 表获取 displayName ✅ 已修复
 
 **位置**：`ToolPrepMiddleware.java` L242-256
 
 **问题**：`buildDisplayNameMap()` 每次对话请求都查 Tool 表。工具显示名很少变更。
 
-**修改建议**：
-- 使用 Caffeine Cache 缓存 displayName 映射
-- Tool 更新时清除缓存
+**修复内容**（2026-06-24）：
+- 新增 `displayNameCache` + 5 分钟 TTL
+- `getDisplayNameCache()` 缓存全量 toolName → displayName 映射
+- `buildDisplayNameMap()` 从缓存中按需过滤，不再每次查库
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：每次对话
 
 ---
 
-### 3.4 MCP 工具加载 N+1 问题
+### 3.4 MCP 工具加载 N+1 问题 ✅ 已修复
 
 **位置**：`ToolPrepMiddleware.java` L187-193
 
 **问题**：每个 MCP Server ID 串行调用 `mcpClientService.getToolCallbacks(serverId)`。5 个 MCP Server = 5 次串行网络调用。
 
-**修改建议**：
-- 使用 `CompletableFuture.allOf()` 并行加载
+**修复内容**（2026-06-24）：
+- 使用 `CompletableFuture.allOf()` + `lightBotExecutor` 并行加载所有 MCP Server 工具
+- 单个 MCP 加载失败不影响其他 Server，返回空列表并 warn 日志
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：对话工具准备
 
 ---
 
-### 3.5 EmbeddingServiceImpl 路由决策每次查库
+### 3.5 EmbeddingServiceImpl 路由决策每次查库 ✅ 已修复
 
 **位置**：`EmbeddingServiceImpl.java`
 
 **问题**：`shouldRouteToMilvus()` 每次 RAG 搜索都查 `knowledgeService.getById()` 判断用 pgvector 还是 Milvus。
 
-**修改建议**：
-- 缓存路由决策（knowledge 的向量存储类型很少变更）
+**修复内容**（2026-06-24）：
+- 新增 `routingCache`（`ConcurrentHashMap<Long, Boolean>`），缓存 knowledgeId → 是否 Milvus 类型
+- 知识库类型创建后不变，缓存永不失效
+- Milvus 可用性（`milvusUtil.isAvailable()`）仍实时检查，不受缓存影响
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：RAG 搜索
 
 ---
 
-### 3.6 MimoChatClient 每次请求创建新 RestClient
+### 3.6 MimoChatClient 每次请求创建新 RestClient ✅ 已修复
 
 **位置**：`MimoChatClient.java` L306-319
 
 **问题**：`buildClient()` 每次 `streamChat()` 创建新 `RestClient`，无法复用连接池。
 
-**修改建议**：
-- 缓存 RestClient 实例（按 provider 配置）
+**修复内容**（2026-06-24）：
+- 新增 `clientCache`（`ConcurrentHashMap<Long, RestClient>`），按 providerId 缓存 RestClient
+- `buildClient()` 使用 `computeIfAbsent` 懒创建
+- 新增 `clearClientCache(providerId)` 方法，Provider 凭证变更时可清除缓存
 
-**工作量**：0.5 天
+**工作量**：已完成
 **影响范围**：Mimo 模型调用
 
 ---
 
-### 3.7 全量导入 Ant Design（前端）
+### 3.7 全量导入 Ant Design（前端）✅ 已修复
 
 **位置**：`main.js` L3
 
 **问题**：`app.use(Antd)` 注册所有组件，无法 tree-shaking，显著增大打包体积。
 
-**修改建议**：
-- 改用按需导入（`unplugin-vue-components` + `unplugin-auto-import`）
+**修复内容**（2026-06-24）：
+- `main.js` 无 `app.use(Antd)` 全量注册
+- `vite.config.js` 已配置 `Components({ resolvers: [AntDesignVueResolver({ importStyle: false })] })` 按需导入
 
-**工作量**：1-2 天
+**工作量**：已完成
 **影响范围**：前端构建产物
 
 ---
@@ -724,14 +722,19 @@ public TaskExecutor lightBotExecutor() {
 5. ~~敏感词正则预编译 → Pattern 缓存~~ ✅ 已修复（2026-06-24）— ConcurrentHashMap 缓存
 6. ~~消息保存事务 → @Transactional~~ ✅ 已修复（2026-06-24）— 事务保护消息插入+统计更新
 7. ~~MCP Stdio 命令注入 → shell 元字符校验~~ ✅ 已修复（2026-06-24）
-8. 无界线程池 → 有界线程池
+8. ~~无界线程池 → 有界线程池~~ ✅ 已修复（2026-06-24）— ThreadPoolConfig 统一有界线程池
 
 ### P2（性能/一致性，1 个月内）
 1. 流式/非流式去重 → 抽取共享逻辑
 2. Model Handler 去重 → 基类
-3. 工具解析缓存 → 启动时缓存
+3. ~~工具解析缓存 → 启动时缓存~~ ✅ 已修复（2026-06-24）— @PostConstruct 缓存
 4. ~~chat_session 级联清理~~ ✅ 已修复（2026-06-24）— 物理删除 + tool_calls/MinIO/Trace 级联清理
 5. 前端组件拆分 → composables
+6. ~~displayName 缓存~~ ✅ 已修复（2026-06-24）— 5 分钟 TTL 缓存
+7. ~~MCP 工具并行加载~~ ✅ 已修复（2026-06-24）— CompletableFuture.allOf()
+8. ~~向量路由缓存~~ ✅ 已修复（2026-06-24）— routingCache 永久缓存
+9. ~~RestClient 缓存~~ ✅ 已修复（2026-06-24）— 按 providerId 缓存
+10. ~~Ant Design 按需导入~~ ✅ 已修复（2026-06-24）— 已配置按需导入
 
 ### P3（代码质量，持续改进）
 1. 魔法数字常量化

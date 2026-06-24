@@ -56,6 +56,9 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     /** Milvus 集合存在性缓存，避免每次检索前 RPC 调用 hasCollection */
     private final ConcurrentHashMap<Long, Boolean> collectionExistsCache = new ConcurrentHashMap<>();
 
+    /** 向量路由缓存：knowledgeId → 是否为 Milvus 类型（知识库类型创建后不变） */
+    private final ConcurrentHashMap<Long, Boolean> routingCache = new ConcurrentHashMap<>();
+
     public EmbeddingServiceImpl(EmbeddingMapper embeddingMapper, MilvusUtil milvusUtil,
                                 DocumentMapper documentMapper, ChunkService chunkService,
                                 @Lazy KnowledgeService knowledgeService, RerankerUtil rerankerUtil,
@@ -367,14 +370,16 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
     }
 
     /**
-     * 判断是否应路由到 Milvus
+     * 判断是否应路由到 Milvus（知识库类型缓存，Milvus 可用性实时检查）
      */
     private boolean shouldRouteToMilvus(Long knowledgeId) {
         if (knowledgeId == null || !milvusUtil.isAvailable()) {
             return false;
         }
-        Knowledge knowledge = knowledgeService.getById(knowledgeId);
-        return knowledge != null && knowledge.getType() == KnowledgeType.MILVUS;
+        return routingCache.computeIfAbsent(knowledgeId, id -> {
+            Knowledge knowledge = knowledgeService.getById(id);
+            return knowledge != null && knowledge.getType() == KnowledgeType.MILVUS;
+        });
     }
 
     /**

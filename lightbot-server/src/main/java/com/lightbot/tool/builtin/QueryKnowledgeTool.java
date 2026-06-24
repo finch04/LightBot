@@ -15,6 +15,8 @@ import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -28,8 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 /**
  * 内置工具 — 知识库检索
@@ -55,18 +56,16 @@ public class QueryKnowledgeTool {
     private final RagParamResolver ragParamResolver;
     private final ObjectMapper objectMapper;
 
-    private static final ExecutorService SEARCH_EXECUTOR = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "tool-kb-search");
-        t.setDaemon(true);
-        return t;
-    });
+    @Autowired
+    @Qualifier("lightBotExecutor")
+    private Executor lightBotExecutor;
 
     /** 搜索结果缓存 TTL（毫秒） */
     private static final long CACHE_TTL_MS = 5 * 60 * 1000L;
 
     /**
      * 按请求ID存储的搜索结果（跨线程安全，带 TTL 自动过期）
-     * <p>工具在 SEARCH_EXECUTOR 线程池执行，无法用 ThreadLocal 传递结果给主线程，
+     * <p>工具在 lightBotExecutor 线程池执行，无法用 ThreadLocal 传递结果给主线程，
      * 改用 ConcurrentHashMap 以 requestId 为 key 存储</p>
      */
     private static final ConcurrentHashMap<String, TimedEntry> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
@@ -137,7 +136,7 @@ public class QueryKnowledgeTool {
                                     log.warn("[Tool:query_knowledge] Chunk检索失败: knowledgeId={}", knowledgeId);
                                     return List.<Map<String, Object>>of();
                                 }
-                            }, SEARCH_EXECUTOR);
+                            }, lightBotExecutor);
 
                             CompletableFuture<List<Map<String, Object>>> qaFuture;
                             if (qaEnabled) {
@@ -161,7 +160,7 @@ public class QueryKnowledgeTool {
                                         log.warn("[Tool:query_knowledge] QA Pair检索失败: knowledgeId={}", knowledgeId);
                                         return List.<Map<String, Object>>of();
                                     }
-                                }, SEARCH_EXECUTOR);
+                                }, lightBotExecutor);
                             } else {
                                 qaFuture = CompletableFuture.completedFuture(List.of());
                             }
@@ -196,7 +195,7 @@ public class QueryKnowledgeTool {
                             log.warn("[Tool:query_knowledge] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage(), e);
                             return List.<Map<String, Object>>of();
                         }
-                    }, SEARCH_EXECUTOR))
+                    }, lightBotExecutor))
                     .toList();
 
             // 4. 合并结果，检查是否有 QA 优先命中

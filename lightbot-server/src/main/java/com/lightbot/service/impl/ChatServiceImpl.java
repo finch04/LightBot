@@ -26,6 +26,8 @@ import com.lightbot.service.*;
 import com.lightbot.service.chat.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -50,8 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 import com.lightbot.service.chat.ToolEventGenerator;
 
@@ -90,12 +91,9 @@ public class ChatServiceImpl implements ChatService {
     private final ToolArgsSanitizer toolArgsSanitizer;
     private final RagParamResolver ragParamResolver;
 
-    /** 并行检索线程池 */
-    private static final ExecutorService RAG_EXECUTOR = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "rag-search");
-        t.setDaemon(true);
-        return t;
-    });
+    @Autowired
+    @Qualifier("lightBotExecutor")
+    private Executor lightBotExecutor;
 
     @Override
     public String chat(ChatRequest request) {
@@ -655,7 +653,7 @@ public class ChatServiceImpl implements ChatService {
 
                                 appendToolCallResult(ctx, toolEventsList, statusFluxes, tcName, tcArgs, result, toolContentOffset);
                                 return result;
-                            }, RAG_EXECUTOR));
+                            }, lightBotExecutor));
                         }
                         for (int i = 0; i < toolCalls.size(); i++) {
                             AssistantMessage.ToolCall tc = toolCalls.get(i);
@@ -966,7 +964,7 @@ public class ChatServiceImpl implements ChatService {
                     resEvt.put("contentOffset", toolContentOffset);
                     toolEventsList.add(resEvt);
                     return result;
-                }, RAG_EXECUTOR));
+                }, lightBotExecutor));
             }
             for (int i = 0; i < toolCalls.size(); i++) {
                 AssistantMessage.ToolCall tc = toolCalls.get(i);
@@ -1294,7 +1292,7 @@ public class ChatServiceImpl implements ChatService {
                             log.warn("[Chat] 知识库检索失败: knowledgeId={}, error={}", knowledgeId, e.getMessage());
                             return List.<Map<String, Object>>of();
                         }
-                    }, RAG_EXECUTOR))
+                    }, lightBotExecutor))
                     .toList();
             futures.forEach(f -> allResults.addAll(f.join()));
             return allResults;

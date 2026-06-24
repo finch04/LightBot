@@ -30,6 +30,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -52,6 +53,9 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     private final ApplicationContext applicationContext;
     private final com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer;
 
+    /** 启动时扫描缓存的内置 ToolCallback 列表 */
+    private volatile List<ToolCallback> cachedBuiltinCallbacks;
+
     @Autowired
     @Lazy
     private AgentService agentService;
@@ -59,6 +63,11 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     public ToolServiceImpl(ApplicationContext applicationContext, com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer) {
         this.applicationContext = applicationContext;
         this.toolArgsSanitizer = toolArgsSanitizer;
+    }
+
+    @PostConstruct
+    private void initBuiltinCache() {
+        cachedBuiltinCallbacks = scanBuiltinToolCallbacks();
     }
 
     @Override
@@ -281,11 +290,21 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     /**
-     * 获取所有内置 @Tool Bean 的 ToolCallback
-     * <p>绕过 MethodToolCallbackProvider，手动用反射构建 ToolCallback，
-     * 避免 CGLIB 代理和 getDeclaredMethods() 导致的注解发现失败</p>
+     * 获取所有内置 @Tool Bean 的 ToolCallback（启动时缓存，避免每次对话扫描全量 Bean）
      */
     private List<ToolCallback> getAllBuiltinToolCallbacks() {
+        List<ToolCallback> cached = cachedBuiltinCallbacks;
+        if (cached != null) {
+            return cached;
+        }
+        // 兜底：缓存未初始化时实时扫描（不应走到这里）
+        return scanBuiltinToolCallbacks();
+    }
+
+    /**
+     * 扫描所有 @Component Bean 中的 @Tool 方法，构建 ToolCallback 列表
+     */
+    private List<ToolCallback> scanBuiltinToolCallbacks() {
         try {
             List<ToolCallback> callbacks = new ArrayList<>();
             Map<String, Object> beans = applicationContext.getBeansWithAnnotation(org.springframework.stereotype.Component.class);

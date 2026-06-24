@@ -161,27 +161,38 @@ public class GitHubSkillService {
             throw new BizException(ErrorCode.BAD_REQUEST, "搜索关键字包含非法字符");
         }
 
+        // Windows 上 ProcessBuilder 不能直接找 npx，需要用 npx.cmd
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("windows");
+        String npxCmd = isWindows ? "npx.cmd" : "npx";
+
         try {
             // 创建隔离临时目录（避免污染全局 npm 环境）
             Path tempHome = Files.createTempDirectory(".skills-find-");
             try {
                 ProcessBuilder pb = new ProcessBuilder(
-                        "npx", "-y", "skills", "find", keyword.trim()
+                        npxCmd, "-y", "skills", "find", keyword.trim()
                 );
                 pb.environment().put("HOME", tempHome.toString());
                 pb.directory(tempHome.toFile());
-                pb.redirectErrorStream(true);
+                // 分离 stderr 以便诊断
+                pb.redirectErrorStream(false);
 
                 Process process = pb.start();
-                String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
                 int exitCode = process.waitFor();
 
+                log.info("[GitHubSkill] {} skills find: keyword={}, exitCode={}, stdout length={}, stderr length={}", npxCmd, keyword, exitCode, stdout.length(), stderr.length());
                 if (exitCode != 0) {
-                    log.warn("[GitHubSkill] npx skills find 失败: keyword={}, exitCode={}, output={}", keyword, exitCode, output);
+                    log.warn("[GitHubSkill] {} skills find 失败: keyword={}, exitCode={}, stdout={}, stderr={}", npxCmd, keyword, exitCode, stdout, stderr);
                     return List.of();
                 }
 
-                return parseSearchOutput(output);
+                List<Map<String, String>> result = parseSearchOutput(stdout);
+                if (result.isEmpty()) {
+                    log.info("[GitHubSkill] 解析结果为空，原始输出前500字符: {}", stdout.substring(0, Math.min(500, stdout.length())));
+                }
+                return result;
             } finally {
                 // 清理临时目录
                 Files.walk(tempHome)
@@ -190,7 +201,11 @@ public class GitHubSkillService {
                         .forEach(File::delete);
             }
         } catch (Exception e) {
-            log.warn("[GitHubSkill] 全局搜索失败: keyword={}, error={}", keyword, e.getMessage());
+            log.warn("[GitHubSkill] 全局搜索失败: keyword={}, error={}", keyword, e.getMessage(), e);
+            // IOException 通常意味着 npx 命令不存在
+            if (e instanceof java.io.IOException) {
+                throw new BizException(ErrorCode.INTERNAL_ERROR, "服务端未安装 npx/Node.js，无法使用全局搜索功能");
+            }
             return List.of();
         }
     }

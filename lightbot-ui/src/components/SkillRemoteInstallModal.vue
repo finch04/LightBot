@@ -266,7 +266,8 @@ async function handleFetchRepo() {
     }
     if (repoSkills.value.length === 0) message.info('该仓库未发现 Skill')
   } catch (e) {
-    // interceptor handles error
+    const msg = e?.response?.data?.message || e?.message || '拉取失败'
+    message.error(msg)
   } finally {
     fetching.value = false
   }
@@ -284,7 +285,8 @@ async function handleSearch() {
     searchDone.value = true
     if (searchResults.value.length === 0) message.info('未搜索到相关 Skill')
   } catch (e) {
-    // interceptor handles error
+    const msg = e?.response?.data?.message || e?.message || '搜索失败'
+    message.error(msg)
   } finally {
     searching.value = false
   }
@@ -396,9 +398,22 @@ function handleCancel() {
 .skill-list {
   max-height: 300px;
   overflow-y: auto;
+  overflow-x: auto;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   padding: 4px;
+  scrollbar-width: thin;
+}
+.skill-list::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.skill-list::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 2px;
+}
+.skill-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 .skill-item {
   display: flex;
