@@ -13,7 +13,7 @@
 
       <!-- 结果表格 -->
       <div v-if="data.rows?.length" style="border:1px solid #93c5fd;border-radius:8px;overflow:hidden;margin-bottom:6px;background:#fff;">
-        <div style="overflow-x:auto;max-height:240px;overflow-y:auto;">
+        <div class="inline-table-scroll" style="overflow-x:auto;max-height:240px;overflow-y:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead>
               <tr>
@@ -27,7 +27,7 @@
                 <td style="text-align:center;padding:6px 8px;border-bottom:1px solid #dbeafe;color:#9ca3af;font-size:10px;">{{ ri + 1 }}</td>
                 <td v-for="(val, vi) in row" :key="vi" :title="String(val ?? '')" style="padding:6px 10px;border-bottom:1px solid #dbeafe;color:#374151;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ val ?? '' }}</td>
                 <td style="text-align:center;padding:6px 8px;border-bottom:1px solid #dbeafe;">
-                  <button @click="openRowDetail(ri)" style="appearance:none;border:none;background:transparent;color:#2563eb;font-size:11px;cursor:pointer;padding:2px 6px;">详情</button>
+                  <button @click="openRowDetail(ri)" style="appearance:none;border:none;background:transparent;color:#2563eb;font-size:11px;cursor:pointer;padding:2px 6px;white-space:nowrap;">详情</button>
                 </td>
               </tr>
             </tbody>
@@ -138,8 +138,12 @@ function openRowDetail(ri) {
 </script>
 
 <style scoped>
-.modal-table-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+.inline-table-scroll::-webkit-scrollbar,
+.modal-table-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+.inline-table-scroll::-webkit-scrollbar-thumb,
 .modal-table-scroll::-webkit-scrollbar-thumb { background: #bfdbfe; border-radius: 4px; }
+.inline-table-scroll::-webkit-scrollbar-thumb:hover,
 .modal-table-scroll::-webkit-scrollbar-thumb:hover { background: #93c5fd; }
+.inline-table-scroll::-webkit-scrollbar-track,
 .modal-table-scroll::-webkit-scrollbar-track { background: transparent; }
 </style>

@@ -80,6 +80,9 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         Map<String, ToolCallback> toolCallbackMap = buildToolCallbackMap(toolOptions);
         ctx.setToolCallbackMap(toolCallbackMap);
 
+        // 4. 构建 displayName 映射（前端展示中文名）
+        ctx.setToolDisplayNameMap(buildDisplayNameMap(toolCallbackMap));
+
         log.info("[Chat] 工具准备完成: providerId={}, 工具数={}, 工具名={}",
                 providerId, toolCallbackMap.size(), toolCallbackMap.keySet());
     }
@@ -229,6 +232,27 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                         cb -> cb.getToolDefinition().name(),
                         cb -> cb,
                         (a, b) -> b));
+    }
+
+    /**
+     * 构建 toolName → displayName 映射
+     * <p>从数据库 Tool 表查询所有已注册工具的 displayName，
+     * MCP 工具不在 Tool 表中，fallback 到工具名本身</p>
+     */
+    private Map<String, String> buildDisplayNameMap(Map<String, ToolCallback> toolCallbackMap) {
+        if (toolCallbackMap == null || toolCallbackMap.isEmpty()) {
+            return Map.of();
+        }
+        Set<String> toolNames = toolCallbackMap.keySet();
+        List<Tool> tools = toolService.list(
+                new LambdaQueryWrapper<Tool>().in(Tool::getName, toolNames));
+        Map<String, String> map = new java.util.HashMap<>();
+        for (Tool tool : tools) {
+            if (tool.getDisplayName() != null && !tool.getDisplayName().isEmpty()) {
+                map.put(tool.getName(), tool.getDisplayName());
+            }
+        }
+        return map;
     }
 
     /**

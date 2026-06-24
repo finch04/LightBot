@@ -453,12 +453,30 @@
     <!-- 原始内容弹窗 -->
     <a-modal
       v-model:open="rawModal.visible"
-      :title="rawModal.title"
       :footer="null"
       width="680px"
       :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }"
     >
+      <template #title>
+        <span>{{ rawModal.title }}</span>
+        <a-tooltip v-if="rawModal.metadata" title="查看 Metadata">
+          <button class="raw-modal-meta-btn" @click="openMetadataModal">
+            <CodeOutlined />
+          </button>
+        </a-tooltip>
+      </template>
       <pre class="raw-modal-content">{{ rawModal.content }}</pre>
+    </a-modal>
+
+    <!-- Metadata 弹窗 -->
+    <a-modal
+      v-model:open="metadataModal.visible"
+      title="Metadata"
+      :footer="null"
+      width="680px"
+      :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }"
+    >
+      <pre class="raw-modal-content">{{ metadataModal.json }}</pre>
     </a-modal>
 
     <!-- Ask User 弹窗 -->
@@ -505,7 +523,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
 import {
@@ -563,7 +581,9 @@ const lastReplyElapsed = ref(null)
 let sendStartTime = 0
 const hasStreamContent = ref(false)
 /** 原始内容弹窗状态 */
-const rawModal = reactive({ visible: false, content: '', title: '' })
+const rawModal = reactive({ visible: false, content: '', title: '', metadata: null })
+/** Metadata 弹窗状态 */
+const metadataModal = reactive({ visible: false, json: '' })
 /** Ask User 弹窗状态 */
 const askUserModal = reactive({ visible: false, question: '', options: [], isOpenEnded: false, messageIndex: -1, freeText: '' })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
@@ -615,12 +635,9 @@ function onCapabilityHeightChange(evt) {
   const rowEl = evt?.target?.closest?.('[data-index]')
   if (!rowEl) return
   const container = messagesRef.value
-  if (!container) return
-  const scrollTopBefore = container.scrollTop
-  const rowTopBefore = rowEl.getBoundingClientRect().top
+  if (container) container.style.overflowAnchor = 'none'
   virtualizer.value.measureElement(rowEl)
-  const rowTopAfter = rowEl.getBoundingClientRect().top
-  container.scrollTop = scrollTopBefore + (rowTopAfter - rowTopBefore)
+  nextTick(() => { if (container) container.style.overflowAnchor = '' })
 }
 
 // ===== Ask User 弹窗 =====
@@ -1638,8 +1655,21 @@ function openRawModal(index) {
   const msg = messages.value[index]
   if (!msg) return
   rawModal.content = msg.content || ''
-  rawModal.title = msg.role === 'assistant' ? '助手回复原文' : '消息原文'
+  rawModal.title = msg.role === 'assistant' ? '原文' : '消息原文'
+  rawModal.metadata = msg.metadata || null
   rawModal.visible = true
+}
+
+function openMetadataModal() {
+  if (!rawModal.metadata) return
+  const raw = rawModal.metadata
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
+    metadataModal.json = JSON.stringify(obj, null, 2)
+  } catch {
+    metadataModal.json = typeof raw === 'string' ? raw : JSON.stringify(raw)
+  }
+  metadataModal.visible = true
 }
 
 function handleDeleteMessage(index) {
@@ -2159,6 +2189,21 @@ watch(sessionId, (newVal, oldVal) => {
   font-size: 13px;
   line-height: 1.7;
   color: #1e293b;
+}
+
+.raw-modal-meta-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--gray-400);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: 8px;
+  border-radius: 4px;
+  vertical-align: middle;
+  transition: all 0.15s;
+  &:hover { color: var(--main-600); background: var(--gray-100); }
 }
 
 /* Markdown 渲染 */

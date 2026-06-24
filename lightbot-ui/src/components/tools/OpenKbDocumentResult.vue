@@ -39,7 +39,6 @@
       :footer="null"
       width="780px"
       :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '0' }"
-      :maskClosable="false"
     >
       <div class="okd-modal-body">
         <!-- Tab 切换 -->

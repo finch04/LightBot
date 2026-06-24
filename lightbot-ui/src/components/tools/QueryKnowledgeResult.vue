@@ -74,7 +74,6 @@
       :footer="null"
       width="680px"
       :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }"
-      :maskClosable="false"
     >
       <div v-if="activeItem">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #dbeafe;">
@@ -119,7 +118,6 @@
       :footer="null"
       width="800px"
       :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }"
-      :maskClosable="false"
     >
       <div>
         <!-- 统计栏 -->

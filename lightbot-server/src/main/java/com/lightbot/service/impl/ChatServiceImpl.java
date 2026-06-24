@@ -202,8 +202,14 @@ public class ChatServiceImpl implements ChatService {
             String safeArgs = toolArgs != null ? toolArgs : "";
 
             // 记录工具调用开始
-            toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args",
-                    safeArgs, "contentOffset", toolContentOffset));
+            String dnSync = getToolDisplayName(ctx, toolName);
+            Map<String, Object> callEvtSync = new java.util.LinkedHashMap<>();
+            callEvtSync.put("type", "tool_call");
+            callEvtSync.put("toolName", toolName);
+            if (dnSync != null) callEvtSync.put("displayName", dnSync);
+            callEvtSync.put("args", safeArgs);
+            callEvtSync.put("contentOffset", toolContentOffset);
+            toolEventsList.add(callEvtSync);
 
             // 执行工具
             String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), requestId, null);
@@ -227,8 +233,13 @@ public class ChatServiceImpl implements ChatService {
 
             // 记录工具结果（JSON结果不截断，纯文本限制2000字符）
             String sseResult = truncateForSse(toolResult);
-            toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result",
-                    sseResult, "contentOffset", toolContentOffset));
+            Map<String, Object> resEvtSync = new java.util.LinkedHashMap<>();
+            resEvtSync.put("type", "tool_result");
+            resEvtSync.put("toolName", toolName);
+            if (dnSync != null) resEvtSync.put("displayName", dnSync);
+            resEvtSync.put("result", sseResult);
+            resEvtSync.put("contentOffset", toolContentOffset);
+            toolEventsList.add(resEvtSync);
 
             toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                     firstTool.id(), toolName, toolResult));
@@ -640,7 +651,7 @@ public class ChatServiceImpl implements ChatService {
                                     ctx.getPendingToolCalls().add(toolCallLog);
                                 }
 
-                                appendToolCallResult(toolEventsList, statusFluxes, tcName, tcArgs, result, toolContentOffset);
+                                appendToolCallResult(ctx, toolEventsList, statusFluxes, tcName, tcArgs, result, toolContentOffset);
                                 return result;
                             }, RAG_EXECUTOR));
                         }
@@ -694,7 +705,7 @@ public class ChatServiceImpl implements ChatService {
                         toolCallLog.setErrorMessage(ToolResultPrefixes.isError(toolResult) ? toolResult : null);
                         ctx.getPendingToolCalls().add(toolCallLog);
 
-                        appendToolCallResult(toolEventsList, statusFluxes, toolName, safeArgs, toolResult, toolContentOffset);
+                        appendToolCallResult(ctx, toolEventsList, statusFluxes, toolName, safeArgs, toolResult, toolContentOffset);
                         toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                                 firstTool.id(), toolName, toolResult));
                     }
@@ -764,7 +775,8 @@ public class ChatServiceImpl implements ChatService {
                     final int resultContentOffset = toolContentOffset;
                     for (org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse tr : toolResponses) {
                         if (!DelegateSubAgentTool.TOOL_NAME.equals(tr.name())) {
-                            toolResultEvents.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolResultEvent(tr.name(), tr.responseData(), resultContentOffset)));
+                            String dn = getToolDisplayName(ctx, tr.name());
+                            toolResultEvents.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolResultEvent(tr.name(), dn, tr.responseData(), resultContentOffset)));
                         }
                     }
                     Flux<String> toolEventFlux = Flux.concat(statusFluxes)
@@ -907,12 +919,19 @@ public class ChatServiceImpl implements ChatService {
                 if (skFlux != null) {
                     statusFluxes.add(skFlux);
                 }
-                toolEventsList.add(Map.of("type", "tool_call", "toolName", tc.name(), "args",
-                        tcArgs, "contentOffset", toolContentOffset));
-                statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(tc.name(), tcArgs, toolContentOffset)));
+                String dn = getToolDisplayName(ctx, tc.name());
+                Map<String, Object> callEvt = new java.util.LinkedHashMap<>();
+                callEvt.put("type", "tool_call");
+                callEvt.put("toolName", tc.name());
+                if (dn != null) callEvt.put("displayName", dn);
+                callEvt.put("args", tcArgs);
+                callEvt.put("contentOffset", toolContentOffset);
+                toolEventsList.add(callEvt);
+                statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(tc.name(), dn, tcArgs, toolContentOffset)));
                 toolCallCountHolder[0]++;
                 final String tcName = tc.name();
                 final String safeTcArgs = toolArgsSanitizer.forChatCall(tcArgs);
+                final String dnFinal = dn;
                 futures.add(CompletableFuture.supplyAsync(() -> {
                     long tStart = System.currentTimeMillis();
                     String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), requestId, null);
@@ -937,9 +956,13 @@ public class ChatServiceImpl implements ChatService {
                         ctx.getPendingToolCalls().add(toolCallLog);
                     }
 
-                    toolEventsList.add(Map.of("type", "tool_result", "toolName", tcName, "result",
-                            truncateForSse(result),
-                            "contentOffset", toolContentOffset));
+                    Map<String, Object> resEvt = new java.util.LinkedHashMap<>();
+                    resEvt.put("type", "tool_result");
+                    resEvt.put("toolName", tcName);
+                    if (dnFinal != null) resEvt.put("displayName", dnFinal);
+                    resEvt.put("result", truncateForSse(result));
+                    resEvt.put("contentOffset", toolContentOffset);
+                    toolEventsList.add(resEvt);
                     return result;
                 }, RAG_EXECUTOR));
             }
@@ -964,9 +987,15 @@ public class ChatServiceImpl implements ChatService {
             if (skillFlux != null) {
                 statusFluxes.add(skillFlux);
             }
-            toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args",
-                    safeArgs, "contentOffset", toolContentOffset));
-            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, safeArgs, toolContentOffset)));
+            String dnSeq = getToolDisplayName(ctx, toolName);
+            Map<String, Object> callEvtSeq = new java.util.LinkedHashMap<>();
+            callEvtSeq.put("type", "tool_call");
+            callEvtSeq.put("toolName", toolName);
+            if (dnSeq != null) callEvtSeq.put("displayName", dnSeq);
+            callEvtSeq.put("args", safeArgs);
+            callEvtSeq.put("contentOffset", toolContentOffset);
+            toolEventsList.add(callEvtSeq);
+            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, dnSeq, safeArgs, toolContentOffset)));
 
             long tToolStart = System.currentTimeMillis();
             String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), requestId, null);
@@ -998,9 +1027,13 @@ public class ChatServiceImpl implements ChatService {
                 statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolStatusEvent(event, toolContentOffset)));
             }
 
-            toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result",
-                    truncateForSse(toolResult),
-                    "contentOffset", toolContentOffset));
+            Map<String, Object> resEvtSeq = new java.util.LinkedHashMap<>();
+            resEvtSeq.put("type", "tool_result");
+            resEvtSeq.put("toolName", toolName);
+            if (dnSeq != null) resEvtSeq.put("displayName", dnSeq);
+            resEvtSeq.put("result", truncateForSse(toolResult));
+            resEvtSeq.put("contentOffset", toolContentOffset);
+            toolEventsList.add(resEvtSeq);
             toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                     firstTool.id(), toolName, toolResult));
         }
@@ -1015,7 +1048,8 @@ public class ChatServiceImpl implements ChatService {
         List<Flux<String>> toolResultEvents = new ArrayList<>();
         final int resultContentOffset = toolContentOffset;
         for (org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse tr : toolResponses) {
-            toolResultEvents.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolResultEvent(tr.name(), tr.responseData(), resultContentOffset)));
+            String dnRes = getToolDisplayName(ctx, tr.name());
+            toolResultEvents.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolResultEvent(tr.name(), dnRes, tr.responseData(), resultContentOffset)));
         }
         Flux<String> toolEventFlux = Flux.concat(statusFluxes)
                 .concatWith(Flux.concat(toolResultEvents))
@@ -1342,11 +1376,18 @@ public class ChatServiceImpl implements ChatService {
             statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentCallEvent(subName, displayName, task, contentOffset)));
             return;
         }
-        toolEventsList.add(Map.of("type", "tool_call", "toolName", toolName, "args", args, "contentOffset", contentOffset));
-        statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, args, contentOffset)));
+        String dn = getToolDisplayName(ctx, toolName);
+        Map<String, Object> callEvt = new java.util.LinkedHashMap<>();
+        callEvt.put("type", "tool_call");
+        callEvt.put("toolName", toolName);
+        if (dn != null) callEvt.put("displayName", dn);
+        callEvt.put("args", args);
+        callEvt.put("contentOffset", contentOffset);
+        toolEventsList.add(callEvt);
+        statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, dn, args, contentOffset)));
     }
 
-    private void appendToolCallResult(List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
+    private void appendToolCallResult(ChatContext ctx, List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
                                     String toolName, String args, String result, int contentOffset) {
         String truncated = truncateForSse(result);
         if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
@@ -1363,7 +1404,19 @@ public class ChatServiceImpl implements ChatService {
             statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentResultEvent(subName, displayName, truncated, contentOffset)));
             return;
         }
-        toolEventsList.add(Map.of("type", "tool_result", "toolName", toolName, "result", truncated, "contentOffset", contentOffset));
+        String dn = getToolDisplayName(ctx, toolName);
+        Map<String, Object> resultEvt = new java.util.LinkedHashMap<>();
+        resultEvt.put("type", "tool_result");
+        resultEvt.put("toolName", toolName);
+        if (dn != null) resultEvt.put("displayName", dn);
+        resultEvt.put("result", truncated);
+        resultEvt.put("contentOffset", contentOffset);
+        toolEventsList.add(resultEvt);
+    }
+
+    private String getToolDisplayName(ChatContext ctx, String toolName) {
+        if (ctx == null || ctx.getToolDisplayNameMap() == null) return null;
+        return ctx.getToolDisplayNameMap().get(toolName);
     }
 
     /**

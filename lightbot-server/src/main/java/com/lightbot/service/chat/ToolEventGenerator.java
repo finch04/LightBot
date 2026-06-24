@@ -27,14 +27,23 @@ public class ToolEventGenerator {
 
     /**
      * 生成工具调用状态事件 JSON
+     *
+     * @param toolName    工具标识
+     * @param displayName 工具显示名称（中文），可为 null
+     * @param args        调用参数
+     * @param contentOffset 内容偏移
      */
-    public String toolCallEvent(String toolName, String args, int contentOffset) {
+    public String toolCallEvent(String toolName, String displayName, String args, int contentOffset) {
         try {
-            return objectMapper.writeValueAsString(Map.of(
-                    "type", "tool_call",
-                    "toolName", toolName,
-                    "args", args != null ? args : "",
-                    "contentOffset", contentOffset));
+            Map<String, Object> evt = new java.util.LinkedHashMap<>();
+            evt.put("type", "tool_call");
+            evt.put("toolName", toolName);
+            if (displayName != null && !displayName.isEmpty()) {
+                evt.put("displayName", displayName);
+            }
+            evt.put("args", args != null ? args : "");
+            evt.put("contentOffset", contentOffset);
+            return objectMapper.writeValueAsString(evt);
         } catch (Exception e) {
             return "{\"type\":\"tool_call\",\"toolName\":\"" + toolName + "\",\"contentOffset\":" + contentOffset + "}";
         }
@@ -42,15 +51,24 @@ public class ToolEventGenerator {
 
     /**
      * 生成工具结果状态事件 JSON
+     *
+     * @param toolName    工具标识
+     * @param displayName 工具显示名称（中文），可为 null
+     * @param result      执行结果
+     * @param contentOffset 内容偏移
      */
-    public String toolResultEvent(String toolName, String result, int contentOffset) {
+    public String toolResultEvent(String toolName, String displayName, String result, int contentOffset) {
         try {
             String truncated = truncateForSse(result);
-            return objectMapper.writeValueAsString(Map.of(
-                    "type", "tool_result",
-                    "toolName", toolName,
-                    "result", truncated,
-                    "contentOffset", contentOffset));
+            Map<String, Object> evt = new java.util.LinkedHashMap<>();
+            evt.put("type", "tool_result");
+            evt.put("toolName", toolName);
+            if (displayName != null && !displayName.isEmpty()) {
+                evt.put("displayName", displayName);
+            }
+            evt.put("result", truncated);
+            evt.put("contentOffset", contentOffset);
+            return objectMapper.writeValueAsString(evt);
         } catch (Exception e) {
             return "{\"type\":\"tool_result\",\"toolName\":\"" + toolName + "\",\"contentOffset\":" + contentOffset + "}";
         }

@@ -68,6 +68,8 @@ public class ChatContext {
     private ChatModel chatModel;
     private ToolCallingChatOptions toolOptions;
     private Map<String, ToolCallback> toolCallbackMap;
+    /** toolName → displayName 映射（前端展示用） */
+    private Map<String, String> toolDisplayNameMap;
 
     // ===== 消息ID =====
     /** 用户消息ID（MessageMiddleware 保存后写入） */
