@@ -33,8 +33,8 @@
 
           <a-spin :spinning="fetching">
             <div v-if="repoSkills.length > 0" class="skill-list">
-              <!-- 单个 ModelScope Skill 展示 -->
-              <template v-if="isModelScope && repoSkills.length === 1">
+              <!-- 单个 Skill 自动选中展示 -->
+              <template v-if="repoSkills.length === 1">
                 <div class="single-skill-card">
                   <div class="single-skill-name">{{ repoSkills[0].name }}</div>
                   <div class="single-skill-meta">{{ repoSkills[0].description || '暂无描述' }}</div>
@@ -119,10 +119,12 @@
           <p style="font-size: 13px; color: #71717a; margin-bottom: 12px">
             以下 {{ previews.length }} 个 Skill 将被安装：
           </p>
-          <div v-for="(preview, idx) in previews" :key="idx" class="preview-card">
+          <div v-for="(preview, idx) in previews" :key="idx" class="preview-card" :class="{ 'preview-installed': committing && idx < commitProgress, 'preview-installing': committing && idx === commitProgress }">
             <div class="preview-header">
               <span class="preview-slug">{{ preview.slug }}</span>
-              <span v-if="preview.version" class="preview-version">v{{ preview.version }}</span>
+              <span v-if="committing && idx < commitProgress" class="preview-status-tag done">已安装</span>
+              <span v-else-if="committing && idx === commitProgress" class="preview-status-tag installing"><a-spin size="small" /> 安装中</span>
+              <span v-else-if="preview.version" class="preview-version">v{{ preview.version }}</span>
             </div>
             <div v-if="preview.description" class="preview-desc">{{ preview.description }}</div>
             <div class="preview-meta">
@@ -141,13 +143,14 @@
       </a-spin>
 
       <div class="browse-footer">
-        <button class="btn-cancel" @click="step = 'browse'">返回</button>
+        <button class="btn-cancel" @click="step = 'browse'" :disabled="committing">返回</button>
         <button
           class="btn-primary-sm"
           :disabled="previews.length === 0 || committing"
           @click="handleCommit"
         >
-          {{ committing ? `安装中 (${commitProgress}/${previews.length})...` : '确认安装' }}
+          <a-spin v-if="committing" size="small" style="margin-right: 6px" />
+          {{ committing ? `安装中 (${commitProgress}/${previews.length})` : '确认安装' }}
         </button>
       </div>
     </div>
@@ -223,7 +226,7 @@ const isModelScope = computed(() => repoSource.value.trim().startsWith(MODELSCOP
 
 const currentSelected = computed(() =>
   activeTab.value === 'repo'
-    ? (isModelScope.value && repoSkills.value.length === 1
+    ? (repoSkills.value.length === 1
         ? [repoSkills.value[0].name]
         : selectedRepoSlugs.value)
     : selectedSearchSlugs.value
@@ -294,7 +297,10 @@ async function handleSearch() {
 
 async function handlePrepare() {
   const slugs = currentSelected.value
-  if (slugs.length === 0) return
+  if (!slugs || slugs.length === 0) {
+    message.warning('请先选择要安装的 Skill')
+    return
+  }
 
   // 全局搜索时需要确定 source（从搜索结果中取 source）
   let source = currentSource.value
@@ -321,7 +327,7 @@ async function handlePrepare() {
     if (previews.value.length > 0) draftId.value = previews.value[0].draftId
   } catch (e) {
     step.value = 'browse'
-    message.error('准备安装失败，请检查仓库地址和所选技能')
+    // axios 拦截器已展示后端错误信息，此处不重复提示
   } finally {
     preparing.value = false
   }
@@ -470,6 +476,31 @@ function handleCancel() {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   margin-bottom: 8px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.preview-installed {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+.preview-installing {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+.preview-status-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.preview-status-tag.done {
+  color: #15803d;
+  background: #dcfce7;
+}
+.preview-status-tag.installing {
+  color: #1d4ed8;
+  background: #dbeafe;
 }
 .preview-header {
   display: flex;

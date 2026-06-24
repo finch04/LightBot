@@ -40,11 +40,6 @@ public class Skill {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long agentId;
 
-    @TableField("tool_id")
-    @Schema(description = "（已废弃）单 Tool ID，仅做兼容；新建 Skill 请使用 toolIds")
-    @JsonSerialize(using = ToStringSerializer.class)
-    private Long toolId;
-
     @TableField(value = "tool_ids", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
     @Schema(description = "依赖的 Tool ID 列表（JSON 字符串数组）")
     private String toolIds;

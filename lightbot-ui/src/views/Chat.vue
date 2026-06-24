@@ -54,7 +54,29 @@
         >
           <div :class="['message', messages[virtualRow.index]?.role]">
             <div class="message-body">
-              <div class="message-content-wrapper" :class="{ 'user-message-stack': messages[virtualRow.index]?.role === 'user' }">
+              <!-- 编辑模式：独立于 message-content-wrapper，占满整行 -->
+              <div v-if="editingMessageId === messages[virtualRow.index]._id" class="edit-message-outer">
+                <button class="btn-copy edit-btn" @click="cancelEdit" title="取消">
+                  <CloseOutlined />
+                </button>
+                <div class="edit-message-box">
+                  <a-textarea
+                    ref="editInputRef"
+                    v-model:value="editContent"
+                    :auto-size="{ minRows: 2, maxRows: 8 }"
+                    @keydown="handleEditKeydown"
+                  />
+                </div>
+                <button
+                  class="btn-copy edit-btn edit-btn-send"
+                  :disabled="!editContent.trim() || loading"
+                  @click="submitEdit"
+                  title="发送"
+                >
+                  <SendOutlined />
+                </button>
+              </div>
+              <div v-else class="message-content-wrapper" :class="{ 'user-message-stack': messages[virtualRow.index]?.role === 'user' }">
                 <!-- 用户附件 -->
                 <div
                   v-if="messages[virtualRow.index]?.role === 'user' && getMsgAttachments(messages[virtualRow.index]).length && !messages[virtualRow.index]._sensitiveBlock"
@@ -215,6 +237,14 @@
                       @click="openRawModal(virtualRow.index)"
                     >
                       <EyeOutlined />
+                    </button>
+                  </a-tooltip>
+                  <a-tooltip
+                    v-if="messages[virtualRow.index].role === 'user' && !loading && isLastUserMessage(virtualRow.index)"
+                    title="编辑"
+                  >
+                    <button class="btn-copy" @click="startEdit(virtualRow.index)">
+                      <EditOutlined />
                     </button>
                   </a-tooltip>
                   <a-tooltip title="删除">
@@ -523,7 +553,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, refreshChatAttachmentPreviews } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
@@ -555,6 +585,11 @@ const messagesRef = ref(null)
 const inputRef = ref(null)
 const skipNextWatch = ref(false)
 const loadingHistory = ref(false)
+
+// 编辑重发状态
+const editingMessageId = ref(null)
+const editContent = ref('')
+const editInputRef = ref(null)
 const messagePage = ref(1)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
@@ -574,6 +609,8 @@ const switchingSession = ref(false)
 
 // ===== 虚拟滚动 =====
 const isNearBottom = ref(true)
+/** 用户主动上划，暂停流式自动滚动 */
+const userScrolledUp = ref(false)
 
 // ===== Composables =====
 const sessionId = computed(() => route.params.sessionId || null)
@@ -650,7 +687,12 @@ function handleScroll() {
   const el = messagesRef.value
   if (!el) return
   const threshold = 150
-  isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+  isNearBottom.value = nearBottom
+  // 流式输出期间：上划暂停自动滚动，回到底部恢复
+  if (streaming.value) {
+    userScrolledUp.value = !nearBottom
+  }
 }
 
 function onCapabilityHeightChange(evt) {
@@ -673,16 +715,29 @@ async function submitAskUserResponse(answer) {
   const text = answer.trim()
   messages.value.push({ role: 'user', content: text, _attachments: [] })
   isNearBottom.value = true
+  userScrolledUp.value = false
   scrollToBottom()
   await runChatStream({ message: text, attachments: [], regenerate: false })
 }
 
 function scrollToBottom() {
-  if (!isNearBottom.value) return
+  if (!isNearBottom.value || userScrolledUp.value) return
   const el = messagesRef.value
   if (!el) return
   nextTick(() => {
     el.scrollTop = el.scrollHeight
+  })
+}
+
+/** 流式输出期间，自动滚动深度思考面板到底部 */
+function scrollReasoningToBottom() {
+  if (userScrolledUp.value) return
+  nextTick(() => {
+    const panels = messagesRef.value?.querySelectorAll('.reasoning-content')
+    if (panels?.length) {
+      const last = panels[panels.length - 1]
+      last.scrollTop = last.scrollHeight
+    }
   })
 }
 
@@ -746,6 +801,15 @@ function handleKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     sendMessage()
+  }
+}
+
+function handleEditKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    submitEdit()
+  } else if (e.key === 'Escape') {
+    cancelEdit()
   }
 }
 
@@ -984,6 +1048,7 @@ async function loadHistory() {
       if (reqId !== loadHistoryRequestId) return
     }
     isNearBottom.value = true
+    userScrolledUp.value = false
     forceScrollToBottom()
     // 历史消息中自动弹出未回答的 ask_user 弹窗
     nextTick(() => {
@@ -1062,6 +1127,7 @@ async function sendMessage() {
   pendingAttachments.value = []
   autoResize()
   isNearBottom.value = true
+  userScrolledUp.value = false
   scrollToBottom()
 
   await runChatStream({
@@ -1081,6 +1147,7 @@ async function regenerateReply(assistantIndex) {
   const userMsg = messages.value[userIdx]
   messages.value.pop()
   isNearBottom.value = true
+  userScrolledUp.value = false
   scrollToBottom()
   await runChatStream({
     message: userMsg.content === '[附件]' ? '' : (userMsg.content || ''),
@@ -1089,7 +1156,63 @@ async function regenerateReply(assistantIndex) {
   })
 }
 
-async function runChatStream({ message, attachments, regenerate }) {
+function isLastUserMessage(index) {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') return i === index
+  }
+  return false
+}
+
+function startEdit(index) {
+  const msg = messages.value[index]
+  if (!msg || loading.value) return
+  editingMessageId.value = msg._id || `local-${index}`
+  editContent.value = msg.content || ''
+  nextTick(() => {
+    const el = editInputRef.value
+    if (el) {
+      const textarea = el.$el ? el.$el : el
+      if (textarea.focus) textarea.focus()
+    }
+  })
+}
+
+function cancelEdit() {
+  editingMessageId.value = null
+  editContent.value = ''
+}
+
+async function submitEdit() {
+  const newText = editContent.value.trim()
+  if (!newText || loading.value) return
+
+  const editIdx = messages.value.findIndex(m => m._id === editingMessageId.value)
+  if (editIdx < 0) return
+
+  const msg = messages.value[editIdx]
+  msg.content = newText
+  editingMessageId.value = null
+  editContent.value = ''
+
+  // 删除本地的最后一条助手消息
+  const lastIdx = messages.value.length - 1
+  if (lastIdx > editIdx && messages.value[lastIdx].role === 'assistant') {
+    messages.value.pop()
+  }
+
+  isNearBottom.value = true
+  userScrolledUp.value = false
+  scrollToBottom()
+
+  await runChatStream({
+    message: newText,
+    attachments: msg._attachments || [],
+    regenerate: true,
+    editMessageId: msg._id || null,
+  })
+}
+
+async function runChatStream({ message, attachments, regenerate, editMessageId: editMsgId }) {
   loading.value = true
   streaming.value = true
   hasStreamContent.value = false
@@ -1126,6 +1249,7 @@ async function runChatStream({ message, attachments, regenerate }) {
       agentId: currentAgentId || undefined,
       configVersion: selectedConfigVersion.value ?? 0,
       regenerate: regenerate || undefined,
+      editMessageId: editMsgId || undefined,
       attachments: attachments?.length ? attachments.map(a => ({
         id: a.id,
         type: a.type,
@@ -1181,6 +1305,7 @@ async function runChatStream({ message, attachments, regenerate }) {
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
             assistantMsg._reasoningDone = true
             scrollToBottom()
+            scrollReasoningToBottom()
             return
           }
           // 敏感词拦截事件：标记消息为拦截状态
@@ -1296,6 +1421,13 @@ async function runChatStream({ message, attachments, regenerate }) {
           abortController.value = null
           // 轮询等待标题生成完成
           pollSessionTitle(sid)
+          // 流式结束后滚动到底部（延迟等待渲染完成）
+          if (isNearBottom.value) {
+            setTimeout(() => {
+              const el = messagesRef.value
+              if (el) el.scrollTop = el.scrollHeight
+            }, 300)
+          }
           // 流式结束后自动弹出 ask_user 弹窗
           nextTick(() => {
             const lastIdx = messages.value.length - 1
@@ -1740,6 +1872,7 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .message.user .message-body {
   text-align: right;
+  width: 100%;
 }
 .message-meta {
   font-size: 12px;
@@ -1846,6 +1979,50 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-copy.active {
   color: #0070f3;
   background: #e8f4ff;
+}
+
+/* 编辑消息 */
+.edit-message-outer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.message.user .edit-message-outer {
+  text-align: left;
+}
+.edit-message-box {
+  flex: 1;
+  min-width: 0;
+  background: #f4f4f5;
+  border-radius: 12px 12px 2px 12px;
+  padding: 10px 16px;
+}
+.edit-message-box :deep(textarea) {
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 0;
+  resize: none;
+}
+.edit-message-box :deep(textarea:focus) {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+.edit-btn {
+  flex-shrink: 0;
+  opacity: 1;
+}
+.edit-btn-send:not(:disabled) {
+  color: #0070f3;
+}
+.edit-btn-send:disabled {
+  color: #c0c0c0;
+  cursor: not-allowed;
 }
 
 /* 原始内容弹窗 */

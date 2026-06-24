@@ -110,6 +110,10 @@ public class MessageMiddleware implements ChatMiddleware {
         String userText = resolveUserText(ctx.getRequest());
         if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
             deleteLastAssistantMessage(ctx.getSessionId());
+            // 编辑重发：更新用户消息内容
+            if (ctx.getRequest().getEditMessageId() != null) {
+                updateUserMessageContent(ctx.getRequest().getEditMessageId(), userText);
+            }
         } else {
             // 检测 ask_user 父消息（在保存前执行，因为保存后当前消息变成最后一条）
             Long askUserParentId = detectAskUserParentId(ctx.getSessionId());
@@ -584,6 +588,17 @@ public class MessageMiddleware implements ChatMiddleware {
                 session.setTotalTokens(Math.max(0L, session.getTotalTokens() - tokens));
             }
             chatSessionService.updateById(session);
+        }
+    }
+
+    /**
+     * 编辑重发：更新用户消息内容
+     */
+    public void updateUserMessageContent(Long messageId, String newContent) {
+        Message msg = messageMapper.selectById(messageId);
+        if (msg != null && msg.getRole() == MessageRole.USER) {
+            msg.setContent(newContent);
+            messageMapper.updateById(msg);
         }
     }
 

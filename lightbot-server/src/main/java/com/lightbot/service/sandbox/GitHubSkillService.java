@@ -130,6 +130,10 @@ public class GitHubSkillService {
         for (String[] file : skillMdFiles) {
             String path = file[0];
             String slug = extractSlugFromPath(path);
+            // SKILL.md 在根目录时 slug 为空，使用仓库名兜底
+            if (slug == null || slug.isBlank()) {
+                slug = repo;
+            }
             try {
                 String content = getFileContent(owner, repo, path, branch);
                 if (content != null) {
@@ -278,11 +282,17 @@ public class GitHubSkillService {
 
             // 3. 扫描所有 SKILL.md，提取目标 Skill
             List<SkillImportPreview> previews = new ArrayList<>();
+            List<String> foundSlugs = new ArrayList<>();
             Files.walk(root)
                     .filter(p -> SKILL_MD.equals(p.getFileName().toString()))
                     .forEach(skillMdPath -> {
                         Path skillDir = skillMdPath.getParent();
-                        String slug = skillDir.getFileName().toString();
+                        // 使用与 listRemoteSkills 一致的 slug 提取逻辑
+                        String relativePath = root.relativize(skillMdPath).toString().replace("\\", "/");
+                        String extractedSlug = extractSlugFromPath(relativePath);
+                        // SKILL.md 在根目录时 slug 为空，使用仓库名兜底
+                        final String slug = (extractedSlug == null || extractedSlug.isBlank()) ? repo : extractedSlug;
+                        foundSlugs.add(slug);
 
                         if (!targetSlugs.contains(slug)) {
                             return;
@@ -329,8 +339,9 @@ public class GitHubSkillService {
 
             if (previews.isEmpty()) {
                 skillStorageService.cleanupDraft(draftId);
+                log.warn("[GitHubSkill] Skill 匹配失败: 请求={}, ZIP中找到={}", skillSlugs, foundSlugs);
                 throw new BizException(ErrorCode.SKILL_IMPORT_FAILED,
-                        "未找到指定的 Skill: " + skillSlugs);
+                        "未找到指定的 Skill: " + skillSlugs + "（ZIP中找到: " + foundSlugs + "）");
             }
 
             log.info("[GitHubSkill] 远程安装准备完成: source={}/{}, draftId={}, skills={}",

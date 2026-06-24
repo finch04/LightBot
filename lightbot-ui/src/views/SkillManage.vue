@@ -87,36 +87,38 @@
 
     <!-- 查看详情弹窗 -->
     <a-modal v-model:open="detailVisible" title="Skill 详情" :width="720" :footer="null" :maskClosable="false">
-      <template v-if="detailRow">
-        <a-descriptions bordered :column="1" size="small">
-          <a-descriptions-item label="显示名称">{{ detailRow.displayName || detailRow.name }}</a-descriptions-item>
-          <a-descriptions-item label="技能名称">{{ detailRow.name }}</a-descriptions-item>
-          <a-descriptions-item label="slug">{{ detailRow.slug || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="版本">{{ detailRow.version || '1.0.0' }}</a-descriptions-item>
-          <a-descriptions-item label="状态">
-            <a-tag :color="detailRow.status === 'disabled' ? 'default' : 'success'">
-              {{ detailRow.status === 'disabled' ? '已禁用' : '已启用' }}
-            </a-tag>
-            <a-tag v-if="detailRow.isBuiltin === 1" color="blue">内置</a-tag>
-          </a-descriptions-item>
-          <a-descriptions-item label="描述">{{ detailRow.description || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="排序">{{ detailRow.sortOrder ?? 0 }}</a-descriptions-item>
-          <a-descriptions-item label="依赖工具">
-            {{ formatIdLabels(detailRow.toolIds, toolOptions) || '无' }}
-          </a-descriptions-item>
-          <a-descriptions-item label="依赖 MCP">
-            {{ formatIdLabels(detailRow.mcpServerIds, mcpOptions) || '无' }}
-          </a-descriptions-item>
-        </a-descriptions>
-        <div class="detail-section">
-          <div class="detail-section-title">提示词模板</div>
-          <pre class="detail-pre">{{ detailRow.promptTemplate || '—' }}</pre>
-        </div>
-        <div v-if="detailRow.config && detailRow.config !== '{}'" class="detail-section">
-          <div class="detail-section-title">扩展配置</div>
-          <pre class="detail-pre">{{ detailRow.config }}</pre>
-        </div>
-      </template>
+      <div class="detail-scroll-body">
+        <template v-if="detailRow">
+          <a-descriptions bordered :column="1" size="small">
+            <a-descriptions-item label="显示名称">{{ detailRow.displayName || detailRow.name }}</a-descriptions-item>
+            <a-descriptions-item label="技能名称">{{ detailRow.name }}</a-descriptions-item>
+            <a-descriptions-item label="slug">{{ detailRow.slug || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="版本">{{ detailRow.version || '1.0.0' }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="detailRow.status === 'disabled' ? 'default' : 'success'">
+                {{ detailRow.status === 'disabled' ? '已禁用' : '已启用' }}
+              </a-tag>
+              <a-tag v-if="detailRow.isBuiltin === 1" color="blue">内置</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="描述">{{ detailRow.description || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="排序">{{ detailRow.sortOrder ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="依赖工具">
+              {{ formatIdLabels(detailRow.toolIds, toolOptions) || '无' }}
+            </a-descriptions-item>
+            <a-descriptions-item label="依赖 MCP">
+              {{ formatIdLabels(detailRow.mcpServerIds, mcpOptions) || '无' }}
+            </a-descriptions-item>
+          </a-descriptions>
+          <div class="detail-section">
+            <div class="detail-section-title">提示词模板</div>
+            <pre class="detail-pre">{{ detailRow.promptTemplate || '—' }}</pre>
+          </div>
+          <div v-if="detailRow.config && detailRow.config !== '{}'" class="detail-section">
+            <div class="detail-section-title">扩展配置</div>
+            <pre class="detail-pre">{{ detailRow.config }}</pre>
+          </div>
+        </template>
+      </div>
       <div class="dialog-footer">
         <div class="dialog-footer-left">
           <button v-if="detailRow && detailRow.isBuiltin !== 1" class="btn-cancel" @click="detailVisible = false; openDialog(detailRow)">
@@ -585,6 +587,29 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 }
 .card-icon--skill {
   background: linear-gradient(135deg, #ec4899, #db2777);
+}
+.detail-scroll-body {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+}
+.detail-scroll-body::-webkit-scrollbar {
+  width: 5px;
+}
+.detail-scroll-body::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+.detail-scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.detail-scroll-body :deep(.ant-descriptions-item-label) {
+  white-space: nowrap;
+}
+.detail-scroll-body :deep(.ant-descriptions-item-content) {
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .detail-section {
   margin-top: 16px;

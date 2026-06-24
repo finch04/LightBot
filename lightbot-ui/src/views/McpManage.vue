@@ -220,24 +220,26 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxx</pre>
 
     <!-- 详情弹窗 -->
     <a-modal v-model:open="detailVisible" title="MCP Server 详情" :width="640" :footer="null" :maskClosable="false">
-      <template v-if="detailRow">
-        <a-descriptions bordered :column="1" size="small">
-          <a-descriptions-item label="名称">{{ detailRow.name }}</a-descriptions-item>
-          <a-descriptions-item label="描述">{{ detailRow.description || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="安装类型">
-            <a-tag :color="installTypeColor(detailRow.installType?.code || detailRow.installType)">
-              {{ getInstallTypeLabel(detailRow.installType?.code || detailRow.installType) }}
-            </a-tag>
-          </a-descriptions-item>
-          <a-descriptions-item label="传输协议">{{ detailRow.transport?.code || detailRow.transport || 'stdio' }}</a-descriptions-item>
-          <a-descriptions-item v-if="detailRow.host" label="服务地址">{{ detailRow.host }}</a-descriptions-item>
-          <a-descriptions-item label="状态">
-            <a-tag :color="isDisabled(detailRow) ? 'default' : 'success'">
-              {{ isDisabled(detailRow) ? '已禁用' : '已启用' }}
-            </a-tag>
-          </a-descriptions-item>
-        </a-descriptions>
-      </template>
+      <div class="detail-scroll-body">
+        <template v-if="detailRow">
+          <a-descriptions bordered :column="1" size="small">
+            <a-descriptions-item label="名称">{{ detailRow.name }}</a-descriptions-item>
+            <a-descriptions-item label="描述">{{ detailRow.description || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="安装类型">
+              <a-tag :color="installTypeColor(detailRow.installType?.code || detailRow.installType)">
+                {{ getInstallTypeLabel(detailRow.installType?.code || detailRow.installType) }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="传输协议">{{ detailRow.transport?.code || detailRow.transport || 'stdio' }}</a-descriptions-item>
+            <a-descriptions-item v-if="detailRow.host" label="服务地址">{{ detailRow.host }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="isDisabled(detailRow) ? 'default' : 'success'">
+                {{ isDisabled(detailRow) ? '已禁用' : '已启用' }}
+              </a-tag>
+            </a-descriptions-item>
+          </a-descriptions>
+        </template>
+      </div>
       <div class="dialog-footer">
         <div class="dialog-footer-left">
           <button v-if="detailRow" class="btn-cancel" @click="detailVisible = false; openDialog(detailRow)">
@@ -1098,6 +1100,29 @@ defineExpose({ openDialog, search, refresh })
   font-size: 14px;
   color: #171717;
 }
+.detail-scroll-body {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+}
+.detail-scroll-body::-webkit-scrollbar {
+  width: 5px;
+}
+.detail-scroll-body::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+.detail-scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.detail-scroll-body :deep(.ant-descriptions-item-label) {
+  white-space: nowrap;
+}
+.detail-scroll-body :deep(.ant-descriptions-item-content) {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
 .schema-table-wrap {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
@@ -1115,11 +1140,14 @@ defineExpose({ openDialog, search, refresh })
   font-weight: 500;
   color: #52525b;
   border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
 }
 .schema-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #f0f0f0;
   color: #171717;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .schema-table tr:last-child td {
   border-bottom: none;

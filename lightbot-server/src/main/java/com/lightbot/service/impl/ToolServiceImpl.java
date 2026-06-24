@@ -30,7 +30,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -63,11 +62,6 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     public ToolServiceImpl(ApplicationContext applicationContext, com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer) {
         this.applicationContext = applicationContext;
         this.toolArgsSanitizer = toolArgsSanitizer;
-    }
-
-    @PostConstruct
-    private void initBuiltinCache() {
-        cachedBuiltinCallbacks = scanBuiltinToolCallbacks();
     }
 
     @Override
@@ -290,15 +284,16 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     }
 
     /**
-     * 获取所有内置 @Tool Bean 的 ToolCallback（启动时缓存，避免每次对话扫描全量 Bean）
+     * 获取所有内置 @Tool Bean 的 ToolCallback（首次调用时扫描并缓存，避免每次对话扫描全量 Bean）
      */
     private List<ToolCallback> getAllBuiltinToolCallbacks() {
         List<ToolCallback> cached = cachedBuiltinCallbacks;
         if (cached != null) {
             return cached;
         }
-        // 兜底：缓存未初始化时实时扫描（不应走到这里）
-        return scanBuiltinToolCallbacks();
+        cached = scanBuiltinToolCallbacks();
+        cachedBuiltinCallbacks = cached;
+        return cached;
     }
 
     /**

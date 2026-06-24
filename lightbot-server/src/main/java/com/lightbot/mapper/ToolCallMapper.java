@@ -23,6 +23,6 @@ public interface ToolCallMapper extends BaseMapper<ToolCall> {
      * @param messageIds 消息ID列表
      * @return 删除行数
      */
-    @Delete("<script>DELETE FROM tool_call WHERE message_id IN <foreach collection='messageIds' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
+    @Delete("<script>DELETE FROM tool_calls WHERE message_id IN <foreach collection='messageIds' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
     int deleteByMessageIds(@Param("messageIds") List<Long> messageIds);
 }

@@ -13,12 +13,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Tag(name = "Skill管理", description = "Skill 的增删改查与 Agent 绑定")
 @RestController
 @RequestMapping("/api/skills")
@@ -120,6 +122,7 @@ public class SkillController {
     @PostMapping("/remote/prepare")
     public Result<List<SkillImportPreview>> prepareRemoteInstall(@RequestBody @Valid RemotePrepareRequest request) {
         String source = request.getSource().trim();
+        log.info("[SkillController] 远程安装准备: source={}, skills={}", source, request.getSkills());
         if (gitHubSkillService.isModelScopeUrl(source)) {
             return Result.ok(gitHubSkillService.prepareModelScopeInstall(source, request.getSkills()));
         }

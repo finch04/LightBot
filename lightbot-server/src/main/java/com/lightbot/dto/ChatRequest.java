@@ -35,4 +35,10 @@ public class ChatRequest {
      * 重新生成：删除上一轮助手回复后，基于最近一条用户消息再次调用模型（不重复落库用户消息）
      */
     private Boolean regenerate;
+
+    /**
+     * 编辑重发：更新指定用户消息内容后，删除助手回复并重新生成
+     * <p>与 regenerate=true 配合使用，此时 message 为编辑后的新内容</p>
+     */
+    private Long editMessageId;
 }

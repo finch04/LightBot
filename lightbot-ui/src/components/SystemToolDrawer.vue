@@ -745,6 +745,11 @@ watch(drawerVisible, (visible) => {
   background: #fafafa;
   font-weight: 500;
   color: #374151;
+  white-space: nowrap;
+}
+.tool-detail-modal .schema-table td {
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .tool-detail-modal .schema-table tr:last-child td {
   border-bottom: none;
@@ -826,11 +831,14 @@ watch(drawerVisible, (visible) => {
   color: #52525b;
   font-weight: 600;
   border-bottom: 1px solid #e5e5e5;
+  white-space: nowrap;
 }
 .test-params-table td {
   padding: 6px 12px;
   border-bottom: 1px solid #f0f0f0;
   color: #171717;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .test-params-table code {
   background: #f5f5f5;
@@ -1048,9 +1056,12 @@ watch(drawerVisible, (visible) => {
   background: #f5f5f5;
   font-weight: 600;
   color: #374151;
+  white-space: nowrap;
 }
 .help-table td {
   color: #52525b;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .raw-toggle-bar {
