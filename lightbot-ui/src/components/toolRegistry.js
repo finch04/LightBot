@@ -19,21 +19,24 @@ import {
   BranchesOutlined,
   FolderOpenOutlined,
 } from '@ant-design/icons-vue'
-import QueryKnowledgeResult from './tools/QueryKnowledgeResult.vue'
-import FindInDocumentResult from './tools/FindInDocumentResult.vue'
-import SearchDocumentsResult from './tools/SearchDocumentsResult.vue'
-import WebSearchResult from './tools/WebSearchResult.vue'
-import CalculatorResult from './tools/CalculatorResult.vue'
-import PgSqlQueryResult from './tools/PgSqlQueryResult.vue'
-import PgSqlListTablesResult from './tools/PgSqlListTablesResult.vue'
-import PgSqlDescribeTableResult from './tools/PgSqlDescribeTableResult.vue'
-import AskUserResult from './tools/AskUserResult.vue'
-import ImageGenResult from './tools/ImageGenResult.vue'
-import ListKnowledgeBasesResult from './tools/ListKnowledgeBasesResult.vue'
-import GetMindmapResult from './tools/GetMindmapResult.vue'
-import OpenKbDocumentResult from './tools/OpenKbDocumentResult.vue'
-import ReadSkillResult from './tools/ReadSkillResult.vue'
-import ListSkillFilesResult from './tools/ListSkillFilesResult.vue'
+import { defineAsyncComponent } from 'vue'
+
+// 工具结果组件懒加载
+const QueryKnowledgeResult = defineAsyncComponent(() => import('./tools/QueryKnowledgeResult.vue'))
+const FindInDocumentResult = defineAsyncComponent(() => import('./tools/FindInDocumentResult.vue'))
+const SearchDocumentsResult = defineAsyncComponent(() => import('./tools/SearchDocumentsResult.vue'))
+const WebSearchResult = defineAsyncComponent(() => import('./tools/WebSearchResult.vue'))
+const CalculatorResult = defineAsyncComponent(() => import('./tools/CalculatorResult.vue'))
+const PgSqlQueryResult = defineAsyncComponent(() => import('./tools/PgSqlQueryResult.vue'))
+const PgSqlListTablesResult = defineAsyncComponent(() => import('./tools/PgSqlListTablesResult.vue'))
+const PgSqlDescribeTableResult = defineAsyncComponent(() => import('./tools/PgSqlDescribeTableResult.vue'))
+const AskUserResult = defineAsyncComponent(() => import('./tools/AskUserResult.vue'))
+const ImageGenResult = defineAsyncComponent(() => import('./tools/ImageGenResult.vue'))
+const ListKnowledgeBasesResult = defineAsyncComponent(() => import('./tools/ListKnowledgeBasesResult.vue'))
+const GetMindmapResult = defineAsyncComponent(() => import('./tools/GetMindmapResult.vue'))
+const OpenKbDocumentResult = defineAsyncComponent(() => import('./tools/OpenKbDocumentResult.vue'))
+const ReadSkillResult = defineAsyncComponent(() => import('./tools/ReadSkillResult.vue'))
+const ListSkillFilesResult = defineAsyncComponent(() => import('./tools/ListSkillFilesResult.vue'))
 
 // 工具渲染组件映射
 export const TOOL_RENDERERS = {

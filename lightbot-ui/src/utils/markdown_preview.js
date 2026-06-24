@@ -6,6 +6,15 @@ import { createHighlighter } from 'shiki'
 
 const markdownKatexPlugin = markdownItKatex.default || markdownItKatex
 
+// 简单字符串哈希，用于缓存 key（避免长字符串作 Map key）
+function hashStr(str) {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+  }
+  return hash.toString(36)
+}
+
 // ── Shiki 异步初始化 ──────────────────────────────────────────────
 
 let highlighterPromise
@@ -316,7 +325,7 @@ export async function renderMarkdown(text, { streaming = false, theme = 'github-
 
   const themeName = theme === 'github-dark' ? 'github-dark' : 'github-light'
   const needsHighlight = hasCodeFence(processed)
-  const cacheKey = `${needsHighlight ? themeName : 'plain'} ${processed}`
+  const cacheKey = `${needsHighlight ? themeName : 'plain'} ${hashStr(processed)}_${processed.length}`
 
   const cachedHtml = getCachedHtml(cacheKey)
   if (cachedHtml !== undefined) return cachedHtml

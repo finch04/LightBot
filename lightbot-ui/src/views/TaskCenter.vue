@@ -157,15 +157,16 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ReloadOutlined, SearchOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTaskList, cancelTask, deleteTask, getTaskTypeCounts } from '../api/task'
-import { taskCounts } from '../stores/task'
+import { useTaskStore } from '../stores/task'
 
+const taskStore = useTaskStore()
 const loading = ref(false)
 const tasks = ref([])
 const searchText = ref('')
 const statusFilter = ref('')
 const typeFilter = ref('')
-const pendingCount = computed(() => taskCounts.pending)
-const runningCount = computed(() => taskCounts.running)
+const pendingCount = computed(() => taskStore.pending)
+const runningCount = computed(() => taskStore.running)
 const typeCounts = ref({})
 
 const detailVisible = ref(false)

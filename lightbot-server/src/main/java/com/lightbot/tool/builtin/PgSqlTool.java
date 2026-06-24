@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
@@ -42,8 +43,18 @@ public class PgSqlTool {
             "^\\s*(SELECT|SHOW|EXPLAIN|WITH)\\s",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern DANGEROUS_KEYWORDS = Pattern.compile(
-            "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE)\\b",
+            "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXEC|EXECUTE|COPY|IMPORT)\\b",
             Pattern.CASE_INSENSITIVE);
+    /** 系统 schema 和危险函数 */
+    private static final Pattern SYSTEM_SCHEMA_PATTERN = Pattern.compile(
+            "\\b(pg_catalog|information_schema|pg_toast|pg_temp)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern DANGEROUS_FUNCTIONS = Pattern.compile(
+            "\\b(pg_sleep|pg_terminate_backend|pg_cancel_backend|lo_import|lo_export|lo_unlink|dblink|pg_read_file|pg_write_file|pg_ls_dir)\\b",
+            Pattern.CASE_INSENSITIVE);
+    /** SQL 注释（可被利用绕过校验） */
+    private static final Pattern SQL_COMMENT_PATTERN = Pattern.compile(
+            "(--[^\\n]*|/\\*[\\s\\S]*?\\*/)");
 
     @SystemTool(displayName = "列出数据库表",
             outputExample = "{\"tables\":[\"agent\",\"knowledge\",\"document\",\"chunk\",\"embedding\"],\"total\":5}",
@@ -90,10 +101,9 @@ public class PgSqlTool {
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("table_name", tableName);
 
-        // 字段信息
+        // 字段信息（参数化查询，防止 SQL 注入）
         try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(
+             PreparedStatement pstmt = conn.prepareStatement(
                      "SELECT c.column_name, c.data_type, c.is_nullable, c.column_default, " +
                              "pgd.description AS column_comment " +
                              "FROM information_schema.columns c " +
@@ -101,8 +111,10 @@ public class PgSqlTool {
                              "ON st.schemaname = c.table_schema AND st.relname = c.table_name " +
                              "LEFT JOIN pg_catalog.pg_description pgd " +
                              "ON pgd.objoid = st.relid AND pgd.objsubid = c.ordinal_position " +
-                             "WHERE c.table_schema = 'public' AND c.table_name = '" + tableName + "' " +
+                             "WHERE c.table_schema = 'public' AND c.table_name = ? " +
                              "ORDER BY c.ordinal_position")) {
+            pstmt.setString(1, tableName);
+            ResultSet rs = pstmt.executeQuery();
             List<Map<String, Object>> columns = new ArrayList<>();
             while (rs.next()) {
                 Map<String, Object> col = new LinkedHashMap<>();
@@ -118,11 +130,12 @@ public class PgSqlTool {
             return "查询字段信息失败: " + e.getMessage();
         }
 
-        // 索引信息
+        // 索引信息（参数化查询）
         try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(
-                     "SELECT indexname, indexdef FROM pg_indexes WHERE tablename = '" + tableName + "'")) {
+             PreparedStatement pstmt = conn.prepareStatement(
+                     "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = ?")) {
+            pstmt.setString(1, tableName);
+            ResultSet rs = pstmt.executeQuery();
             List<Map<String, Object>> indexes = new ArrayList<>();
             while (rs.next()) {
                 Map<String, Object> idx = new LinkedHashMap<>();
@@ -229,7 +242,7 @@ public class PgSqlTool {
     }
 
     /**
-     * SQL 安全校验：仅允许只读查询
+     * SQL 安全校验：仅允许只读查询，拒绝风险 SQL
      */
     private String validateSql(String sql) {
         if (sql == null || sql.isBlank()) return "SQL 不能为空";
@@ -239,6 +252,14 @@ public class PgSqlTool {
         }
         if (DANGEROUS_KEYWORDS.matcher(trimmed).find()) {
             return "SQL 中包含危险关键词（INSERT/UPDATE/DELETE/DROP 等），仅允许只读查询";
+        }
+        // 去除注释后再校验，防止利用注释绕过
+        String noComment = SQL_COMMENT_PATTERN.matcher(trimmed).replaceAll("");
+        if (SYSTEM_SCHEMA_PATTERN.matcher(noComment).find()) {
+            return "禁止访问系统 schema（pg_catalog/information_schema/pg_toast）";
+        }
+        if (DANGEROUS_FUNCTIONS.matcher(noComment).find()) {
+            return "SQL 中包含危险函数（pg_sleep/lo_import 等），已拒绝执行";
         }
         return null;
     }

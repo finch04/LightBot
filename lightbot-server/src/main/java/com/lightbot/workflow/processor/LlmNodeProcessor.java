@@ -1,5 +1,7 @@
 package com.lightbot.workflow.processor;
 
+import com.lightbot.common.BizException;
+import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.NodeType;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.util.LlmTraceContext;
@@ -21,10 +23,13 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -41,6 +46,9 @@ import java.util.stream.Collectors;
 public class LlmNodeProcessor implements NodeProcessor {
 
     private final ModelFactory modelFactory;
+
+    /** LLM 调用超时时间（秒） */
+    private static final int LLM_TIMEOUT_SECONDS = 120;
 
     @Override
     public NodeType getType() {
@@ -232,36 +240,73 @@ public class LlmNodeProcessor implements NodeProcessor {
     }
 
     /**
-     * 同步调用 LLM
+     * 同步调用 LLM（带超时保护）
      */
     private String callSync(ChatModel chatModel, List<Message> messages, ChatOptions chatOptions, int[] tokenUsage) {
-        ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
-                chatModel.call(new Prompt(messages, chatOptions)));
-        accumulateUsage(response, tokenUsage);
-        return response.getResult().getOutput().getText();
+        try {
+            ChatResponse response = CompletableFuture.supplyAsync(() ->
+                            LlmTraceContext.callWithoutTrace(() ->
+                                    chatModel.call(new Prompt(messages, chatOptions))))
+                    .orTimeout(LLM_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                    .join();
+            accumulateUsage(response, tokenUsage);
+            return response.getResult().getOutput().getText();
+        } catch (java.util.concurrent.CompletionException e) {
+            if (e.getCause() instanceof TimeoutException) {
+                log.error("[LlmNodeProcessor] LLM同步调用超时: timeout={}s", LLM_TIMEOUT_SECONDS);
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                        "LLM调用超时（" + LLM_TIMEOUT_SECONDS + "秒），请检查模型服务状态");
+            }
+            throw e;
+        }
     }
 
     /**
-     * 流式调用 LLM，逐 token 回调
+     * 流式调用 LLM，逐 token 回调（带超时保护）
      */
     private String callStream(ChatModel chatModel, List<Message> messages,
                               ChatOptions chatOptions, Consumer<String> onChunk, int[] tokenUsage) {
         StringBuilder full = new StringBuilder();
-        chatModel.stream(new Prompt(messages, chatOptions))
-                .doOnError(e -> log.error("[LlmNodeProcessor] 流式调用异常: {}", e.getMessage(), e))
-                .toStream()
-                .forEach(response -> {
-                    accumulateUsage(response, tokenUsage);
-                    if (response.getResult() == null || response.getResult().getOutput() == null) {
-                        return;
-                    }
-                    String text = response.getResult().getOutput().getText();
-                    if (text != null && !text.isEmpty()) {
-                        full.append(text);
-                        onChunk.accept(text);
-                    }
-                });
+        try {
+            chatModel.stream(new Prompt(messages, chatOptions))
+                    .doOnError(e -> log.error("[LlmNodeProcessor] 流式调用异常: {}", e.getMessage(), e))
+                    .timeout(Duration.ofSeconds(LLM_TIMEOUT_SECONDS))
+                    .toStream()
+                    .forEach(response -> {
+                        accumulateUsage(response, tokenUsage);
+                        if (response.getResult() == null || response.getResult().getOutput() == null) {
+                            return;
+                        }
+                        String text = response.getResult().getOutput().getText();
+                        if (text != null && !text.isEmpty()) {
+                            full.append(text);
+                            onChunk.accept(text);
+                        }
+                    });
+        } catch (Exception e) {
+            if (isTimeoutException(e)) {
+                log.error("[LlmNodeProcessor] LLM流式调用超时: timeout={}s", LLM_TIMEOUT_SECONDS);
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
+                        "LLM调用超时（" + LLM_TIMEOUT_SECONDS + "秒），请检查模型服务状态");
+            }
+            throw e;
+        }
         return full.toString();
+    }
+
+    private boolean isTimeoutException(Throwable e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof TimeoutException || cause instanceof java.util.concurrent.TimeoutException) {
+                return true;
+            }
+            // Reactor timeout 抛出的是 java.util.concurrent.TimeoutException
+            if (cause.getClass().getSimpleName().contains("Timeout")) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     /**

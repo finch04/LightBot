@@ -10,6 +10,7 @@ import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.ModelProviderMapper;
 import com.lightbot.service.ModelProviderService;
+import com.lightbot.service.ModelService;
 import com.lightbot.util.ModelProviderCacheUtil;
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +32,7 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
         implements ModelProviderService {
 
     private final ModelProviderCacheUtil cacheUtil;
+    private final ModelService modelService;
 
     @Override
     public ModelProvider create(ModelProviderRequest request) {
@@ -87,6 +89,12 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
     public void deleteById(Long id) {
         if (!removeById(id)) {
             throw new BizException(ErrorCode.MODEL_PROVIDER_NOT_FOUND);
+        }
+        // 级联删除关联模型
+        try {
+            modelService.deleteByProviderId(id);
+        } catch (Exception e) {
+            log.warn("[ModelProvider] 级联删除模型失败, providerId={}, error={}", id, e.getMessage());
         }
         // 同步缓存
         cacheUtil.evictProvider(id);

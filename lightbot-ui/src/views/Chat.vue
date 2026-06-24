@@ -525,18 +525,10 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
 import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { chatStream, uploadChatAttachment, refreshChatAttachmentPreviews } from '../api/chat'
-import {
-  buildUploadHint,
-  buildFileAcceptTypes,
-  validateChatAttachmentFile,
-  validateAttachmentCount,
-  validateAttachmentMix,
-  validatePendingAttachmentMix,
-} from '../utils/chatAttachment'
-import { captureVideoThumbnail, enrichVideoThumbnails } from '../utils/videoThumbnail'
+import { chatStream, refreshChatAttachmentPreviews } from '../api/chat'
+import { validatePendingAttachmentMix } from '../utils/chatAttachment'
+import { enrichVideoThumbnails } from '../utils/videoThumbnail'
 import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi } from '../api/chatSession'
-import { getAgents, getAgentDetail, getAgentChatCapabilities, listAgentVersions } from '../api/agent'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
@@ -546,6 +538,10 @@ import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
+import { useChatAgents } from '../composables/useChatAgents'
+import { useChatAttachments } from '../composables/useChatAttachments'
+import { useVoiceIO } from '../composables/useVoiceIO'
+import { useAskUser } from '../composables/useAskUser'
 
 const route = useRoute()
 const router = useRouter()
@@ -557,25 +553,12 @@ const streaming = ref(false)
 const messages = ref([])
 const messagesRef = ref(null)
 const inputRef = ref(null)
-const agents = ref([])
-const selectedAgentId = ref(null)
 const skipNextWatch = ref(false)
 const loadingHistory = ref(false)
 const messagePage = ref(1)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 const initialLoadDone = ref(false)
-const currentAgent = ref(null)
-const chatCapabilities = ref({})
-const pendingAttachments = ref([])
-const fileInputRef = ref(null)
-const uploading = ref(false)
-const voiceListening = ref(false)
-const voiceInputBase = ref('')
-let speechRecognition = null
-const attachmentPreviewOpen = ref(false)
-const attachmentPreviewAtt = ref(null)
-const speakingMsgKey = ref(null)
 const currentStatus = ref('')
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
@@ -584,8 +567,6 @@ const hasStreamContent = ref(false)
 const rawModal = reactive({ visible: false, content: '', title: '', metadata: null })
 /** Metadata 弹窗状态 */
 const metadataModal = reactive({ visible: false, json: '' })
-/** Ask User 弹窗状态 */
-const askUserModal = reactive({ visible: false, question: '', options: [], isOpenEnded: false, messageIndex: -1, freeText: '' })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
 let loadHistoryRequestId = 0
 /** 切换会话时 agent/版本加载中 */
@@ -593,6 +574,47 @@ const switchingSession = ref(false)
 
 // ===== 虚拟滚动 =====
 const isNearBottom = ref(true)
+
+// ===== Composables =====
+const sessionId = computed(() => route.params.sessionId || null)
+const pendingAttachments = ref([])
+const fileInputRef = ref(null)
+const uploading = ref(false)
+const attachmentPreviewOpen = ref(false)
+const attachmentPreviewAtt = ref(null)
+const voiceListening = ref(false)
+const speakingMsgKey = ref(null)
+
+// Agent 管理（chatCapabilities 在此 composable 内部创建）
+const {
+  agents, selectedAgentId, currentAgent, chatCapabilities,
+  selectedConfigVersion, configVersionOptions,
+  showFileUploadBtn, showVoiceInputBtn, showTtsBtn,
+  fileAcceptTypes, fileUploadHint,
+  currentWelcomeMessage, currentRecommendedQuestions,
+  handleAgentSelect, loadChatCapabilities, onConfigVersionChange,
+  loadAgentConfigVersions, loadCurrentAgent, loadAgents, agentVersionLabel,
+} = useChatAgents({
+  sessionId, loading, pendingAttachments, voiceListening, stopVoiceInput: () => { voiceListening.value = false },
+})
+
+// 附件管理
+const {
+  getAttThumbUrl, openAttachmentPreview,
+  triggerFileUpload, onFileSelected, removeAttachment,
+} = useChatAttachments({
+  selectedAgentId, sessionId, chatCapabilities, pendingAttachments,
+  fileInputRef, uploading, attachmentPreviewOpen, attachmentPreviewAtt,
+})
+
+// 语音 I/O
+const {
+  toggleVoiceInput, stopVoiceInput,
+  speakMessage, messagePlainText, cleanup: voiceCleanup,
+} = useVoiceIO({
+  input, inputRef, chatCapabilities, autoResize,
+  voiceListening, speakingMsgKey,
+})
 
 const virtualizer = useVirtualizer({
   count: messages.value.length,
@@ -641,41 +663,9 @@ function onCapabilityHeightChange(evt) {
 }
 
 // ===== Ask User 弹窗 =====
-function findAskUserEvent(msg) {
-  if (!msg?._toolEvents?.length) return null
-  for (let i = msg._toolEvents.length - 1; i >= 0; i--) {
-    const evt = msg._toolEvents[i]
-    if (evt.type === 'tool_result' && evt.toolName === 'ask_user') {
-      try {
-        const parsed = JSON.parse(evt.result)
-        if (parsed && typeof parsed === 'object' && parsed.question) return parsed
-      } catch { /* ignore */ }
-    }
-  }
-  return null
-}
-
-function isAskUserUnanswered(msgIndex) {
-  const msg = messages.value[msgIndex]
-  if (!msg || msg.role !== 'assistant') return false
-  if (!findAskUserEvent(msg)) return false
-  for (let i = msgIndex + 1; i < messages.value.length; i++) {
-    if (messages.value[i].role === 'user') return false
-  }
-  return true
-}
-
-function showAskUserModal(msgIndex) {
-  const msg = messages.value[msgIndex]
-  const askData = findAskUserEvent(msg)
-  if (!askData) return
-  askUserModal.question = askData.question
-  askUserModal.options = askData.options || []
-  askUserModal.isOpenEnded = askData.is_open_ended === true
-  askUserModal.messageIndex = msgIndex
-  askUserModal.freeText = ''
-  askUserModal.visible = true
-}
+const {
+  askUserModal, findAskUserEvent, isAskUserUnanswered, showAskUserModal,
+} = useAskUser({ messages })
 
 async function submitAskUserResponse(answer) {
   if (!answer?.trim()) return
@@ -686,9 +676,6 @@ async function submitAskUserResponse(answer) {
   scrollToBottom()
   await runChatStream({ message: text, attachments: [], regenerate: false })
 }
-
-provide('showAskUserModal', showAskUserModal)
-provide('isAskUserUnanswered', isAskUserUnanswered)
 
 function scrollToBottom() {
   if (!isNearBottom.value) return
@@ -746,50 +733,13 @@ const abortController = ref(null)
 const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
-/** 对话配置版本：0=暂存草稿，>0=指定已发布版本号 */
-const selectedConfigVersion = ref(0)
-const configVersionOptions = ref([])
 
-/** 未开多模态但开启文件读取时也应显示附件按钮（仅文档） */
-const showFileUploadBtn = computed(() => {
-  const c = chatCapabilities.value
-  if (!c) return false
-  return Boolean(c.allowFileUpload || c.allowDocumentUpload || c.allowMediaUpload)
-})
-const showVoiceInputBtn = computed(() =>
-  Boolean(chatCapabilities.value?.multimodalEnabled && chatCapabilities.value?.enableAudioInput))
-const showTtsBtn = computed(() => Boolean(chatCapabilities.value?.enableTts))
-const fileAcceptTypes = computed(() => buildFileAcceptTypes(chatCapabilities.value))
-const fileUploadHint = computed(() => buildUploadHint(chatCapabilities.value))
 const canSend = computed(() =>
   !loading.value && (input.value.trim().length > 0 || pendingAttachments.value.length > 0))
 
 const userInitial = computed(() => {
   const name = userStore.user?.username || userStore.user?.nickname || 'U'
   return name[0].toUpperCase()
-})
-
-const sessionId = computed(() => {
-  return route.params.sessionId || null
-})
-
-const currentWelcomeMessage = computed(() => {
-  if (currentAgent.value?.welcomeMessage) {
-    return currentAgent.value.welcomeMessage
-  }
-  return '## 你好，我是 LightBot\n有什么可以帮你的？'
-})
-
-const currentRecommendedQuestions = computed(() => {
-  if (currentAgent.value?.recommendedQuestions) {
-    try {
-      const questions = typeof currentAgent.value.recommendedQuestions === 'string'
-        ? JSON.parse(currentAgent.value.recommendedQuestions)
-        : currentAgent.value.recommendedQuestions
-      return Array.isArray(questions) ? questions : []
-    } catch { return [] }
-  }
-  return []
 })
 
 function handleKeydown(e) {
@@ -807,130 +757,6 @@ function autoResize() {
   }
 }
 
-function handleAgentSelect({ key }) {
-  selectedAgentId.value = key
-  pendingAttachments.value = []
-  loadCurrentAgent(key)
-  loadAgentConfigVersions(key)
-}
-
-function openAttachmentPreview(att) {
-  if (!att) return
-  if (att.type === 'image' || att.type === 'video') {
-    if (!getAttThumbUrl(att) && !att.previewUrl) return
-  } else if (att.type === 'document') {
-    if (!att.parsedText && !att.previewUrl) {
-      message.warning('暂无可预览内容')
-      return
-    }
-  } else {
-    return
-  }
-  attachmentPreviewAtt.value = att
-  attachmentPreviewOpen.value = true
-}
-
-function messagePlainText(content) {
-  if (!content) return ''
-  return content
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/[#*_~>[\]()!]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function speakMessage(msg, index) {
-  if (!showTtsBtn.value) return
-  const text = messagePlainText(msg.content)
-  if (!text) return
-  if (!window.speechSynthesis) {
-    message.warning('当前浏览器不支持语音朗读')
-    return
-  }
-  if (speakingMsgKey.value === index) {
-    window.speechSynthesis.cancel()
-    speakingMsgKey.value = null
-    return
-  }
-  window.speechSynthesis.cancel()
-  const utter = new SpeechSynthesisUtterance(text)
-  utter.lang = 'zh-CN'
-  utter.rate = 1
-  speakingMsgKey.value = index
-  utter.onend = () => { speakingMsgKey.value = null }
-  utter.onerror = () => { speakingMsgKey.value = null }
-  window.speechSynthesis.speak(utter)
-}
-
-async function loadChatCapabilities(agentId, configVersion) {
-  if (!agentId) {
-    chatCapabilities.value = {}
-    return
-  }
-  try {
-    const res = await getAgentChatCapabilities(agentId, configVersion ?? 0)
-    chatCapabilities.value = res.data || {}
-  } catch {
-    chatCapabilities.value = {}
-  }
-  if (!showFileUploadBtn.value) {
-    pendingAttachments.value = []
-  }
-  if (!showVoiceInputBtn.value && voiceListening.value) {
-    stopVoiceInput()
-  }
-}
-
-async function onConfigVersionChange(version) {
-  if (loading.value) return
-  selectedConfigVersion.value = version
-  if (selectedAgentId.value) {
-    await loadChatCapabilities(selectedAgentId.value, version)
-  }
-}
-
-async function loadAgentConfigVersions(agentId) {
-  if (!agentId) {
-    configVersionOptions.value = []
-    selectedConfigVersion.value = 0
-    return
-  }
-  try {
-    const opts = [{
-      value: 0,
-      versionLabel: '暂存草稿',
-      selectLabel: '暂存草稿',
-      badge: 'draft',
-    }]
-    const res = await listAgentVersions(agentId)
-    const versions = res.data || []
-    for (const v of versions) {
-      const num = v.version
-      if (num == null || num <= 0) continue
-      const ver = `v${num}`
-      opts.push({
-        value: num,
-        versionLabel: ver,
-        selectLabel: v.current ? `${ver} · 线上` : ver,
-        badge: v.current ? 'online' : null,
-      })
-    }
-    configVersionOptions.value = opts
-    const currentPublished = versions.find(v => v.current)
-    selectedConfigVersion.value = currentPublished?.version ?? 0
-    await loadChatCapabilities(agentId, selectedConfigVersion.value)
-  } catch {
-    configVersionOptions.value = [{
-      value: 0,
-      versionLabel: '暂存草稿',
-      selectLabel: '暂存草稿',
-      badge: 'draft',
-    }]
-    selectedConfigVersion.value = 0
-    await loadChatCapabilities(agentId, 0)
-  }
-}
 
 /**
  * 从消息metadata中解析RAG引用
@@ -999,13 +825,6 @@ function parseAttachmentsFromMetadata(metadata) {
 
 function getMsgAttachments(msg) {
   return msg._attachments || []
-}
-
-function getAttThumbUrl(att) {
-  if (!att) return ''
-  if (att.type === 'image') return att.thumbnailUrl || att.previewUrl || ''
-  if (att.type === 'video') return att.thumbnailUrl || ''
-  return ''
 }
 
 async function enrichMessagesAttachments(msgs) {
@@ -1224,120 +1043,6 @@ async function loadOlderMessages() {
   }
 }
 
-async function loadCurrentAgent(agentId) {
-  if (!agentId) {
-    currentAgent.value = null
-    chatCapabilities.value = {}
-    return
-  }
-  try {
-    const res = await getAgentDetail(agentId)
-    currentAgent.value = res.data?.agent || null
-    await loadChatCapabilities(agentId, selectedConfigVersion.value)
-  } catch {
-    currentAgent.value = null
-    chatCapabilities.value = {}
-  }
-}
-
-function triggerFileUpload() {
-  fileInputRef.value?.click()
-}
-
-async function onFileSelected(e) {
-  const file = e.target.files?.[0]
-  e.target.value = ''
-  if (!file || !selectedAgentId.value) return
-
-  const countCheck = validateAttachmentCount(pendingAttachments.value.length, chatCapabilities.value)
-  if (!countCheck.ok) {
-    message.warning(countCheck.message)
-    return
-  }
-  const validation = validateChatAttachmentFile(file, chatCapabilities.value)
-  if (!validation.ok) {
-    message.warning(validation.message)
-    return
-  }
-  const mixCheck = validateAttachmentMix(pendingAttachments.value, validation.type)
-  if (!mixCheck.ok) {
-    message.warning(mixCheck.message)
-    return
-  }
-
-  uploading.value = true
-  try {
-    const res = await uploadChatAttachment(selectedAgentId.value, sessionId.value, file)
-    const att = { ...res.data }
-    if (att.type === 'video') {
-      try {
-        att.thumbnailUrl = await captureVideoThumbnail(file, { maxWidth: 112, maxHeight: 72 })
-      } catch {
-        if (att.previewUrl) {
-          try {
-            att.thumbnailUrl = await captureVideoThumbnail(att.previewUrl, { maxWidth: 112, maxHeight: 72 })
-          } catch { /* 跨域等 */ }
-        }
-      }
-    }
-    pendingAttachments.value.push(att)
-  } catch {
-    // 业务/网络错误提示由 request 拦截器统一展示，避免重复 toast
-  } finally {
-    uploading.value = false
-  }
-}
-
-function removeAttachment(index) {
-  pendingAttachments.value.splice(index, 1)
-}
-
-function toggleVoiceInput() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) {
-    message.warning('当前浏览器不支持语音识别，请使用 Chrome/Edge')
-    return
-  }
-  if (voiceListening.value && speechRecognition) {
-    stopVoiceInput()
-    return
-  }
-  voiceInputBase.value = input.value
-  speechRecognition = new SR()
-  speechRecognition.lang = 'zh-CN'
-  speechRecognition.interimResults = true
-  speechRecognition.continuous = true
-  speechRecognition.onstart = () => { voiceListening.value = true }
-  speechRecognition.onend = () => { stopVoiceInput() }
-  speechRecognition.onerror = () => { stopVoiceInput() }
-  speechRecognition.onresult = (event) => {
-    let finalText = ''
-    let interimText = ''
-    for (let i = 0; i < event.results.length; i++) {
-      const part = event.results[i][0].transcript
-      if (event.results[i].isFinal) {
-        finalText += part
-      } else {
-        interimText += part
-      }
-    }
-    const base = voiceInputBase.value
-    const merged = `${base}${base && finalText ? ' ' : ''}${finalText}${interimText}`
-    input.value = merged.trim() ? merged : base
-    autoResize()
-    nextTick(() => inputRef.value?.focus())
-  }
-  speechRecognition.start()
-}
-
-function stopVoiceInput() {
-  voiceListening.value = false
-  try {
-    speechRecognition?.stop()
-  } catch {
-    /* ignore */
-  }
-}
 
 async function sendMessage() {
   const text = input.value.trim()
@@ -1829,42 +1534,6 @@ function goToKnowledge(knowledgeId, documentId) {
 
 // scrollToBottom 已在虚拟滚动区域定义
 
-function agentVersionLabel(a) {
-  const status = a.status?.code || a.status || 'draft'
-  const ver = a.version || 0
-  if (status === 'published' && ver > 0) return `v${ver}`
-  if (status === 'published_editing' && ver > 0) return `v${ver}·编辑中`
-  if (status === 'draft') return '草稿'
-  return ''
-}
-
-async function loadAgents(preferredAgentId) {
-  try {
-    const res = await getAgents({ pageNum: 1, pageSize: 100 })
-    agents.value = res.data.records || []
-
-    // 新对话时选中 Agent：优先 URL 指定，否则默认 Agent
-    if (!sessionId.value) {
-      if (preferredAgentId) {
-        selectedAgentId.value = String(preferredAgentId)
-        await loadAgentConfigVersions(preferredAgentId)
-      } else {
-        const defaultAgent = agents.value.find(a => a.isDefault)
-        if (defaultAgent) {
-          selectedAgentId.value = String(defaultAgent.id)
-        } else if (agents.value.length > 0) {
-          selectedAgentId.value = String(agents.value[0].id)
-        }
-        if (selectedAgentId.value) {
-          await loadAgentConfigVersions(selectedAgentId.value)
-        }
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-}
-
 /** 轮询等待会话标题生成完成（轻量接口，跳过缓存） */
 function pollSessionTitle(sid) {
   if (!sid) return
@@ -1888,8 +1557,7 @@ function pollSessionTitle(sid) {
 }
 
 onUnmounted(() => {
-  window.speechSynthesis?.cancel()
-  stopVoiceInput()
+  voiceCleanup()
 })
 
 onMounted(async () => {

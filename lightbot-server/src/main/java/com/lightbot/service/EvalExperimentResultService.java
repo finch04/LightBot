@@ -33,4 +33,11 @@ public interface EvalExperimentResultService extends IService<EvalExperimentResu
      * @return 分页结果
      */
     Page<EvalExperimentResult> listByExperiment(Long experimentId, Long evaluatorVersionId, int pageNum, int pageSize);
+
+    /**
+     * 删除指定实验的所有结果（级联删除，跳过权限校验）
+     *
+     * @param experimentId 实验ID
+     */
+    void removeByExperimentId(Long experimentId);
 }

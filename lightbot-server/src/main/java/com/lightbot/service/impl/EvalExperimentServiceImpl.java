@@ -116,6 +116,12 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
         if (experiment.getStatus() == ExperimentStatus.RUNNING) {
             throw new BizException(ErrorCode.EVAL_EXPERIMENT_STATUS_INVALID);
         }
+        // 级联删除实验结果
+        try {
+            experimentResultService.removeByExperimentId(id);
+        } catch (Exception e) {
+            log.warn("[评测实验] 级联删除结果失败, experimentId={}, error={}", id, e.getMessage());
+        }
         removeById(id);
     }
 

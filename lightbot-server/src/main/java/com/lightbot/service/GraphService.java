@@ -89,12 +89,27 @@ public interface GraphService {
     void deleteByKnowledgeId(Long knowledgeId);
 
     /**
+     * 删除知识库的全部图谱数据（内部调用，跳过权限校验）
+     *
+     * @param knowledgeId 知识库ID
+     */
+    void deleteByKnowledgeIdInternal(Long knowledgeId);
+
+    /**
      * 删除文档关联的图谱数据
      *
      * @param knowledgeId 知识库ID
      * @param documentId  文档ID
      */
     void deleteByDocumentId(Long knowledgeId, Long documentId);
+
+    /**
+     * 删除文档关联的图谱数据（内部调用，跳过权限校验）
+     *
+     * @param knowledgeId 知识库ID
+     * @param documentId  文档ID
+     */
+    void deleteByDocumentIdInternal(Long knowledgeId, Long documentId);
 
     /**
      * 手动创建节点

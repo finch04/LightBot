@@ -29,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.types.Node;
 import org.neo4j.driver.types.Relationship;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -46,7 +48,6 @@ import java.util.stream.Collectors;
 public class GraphServiceImpl implements GraphService {
 
     private final Neo4jUtil neo4jUtil;
-    private final KnowledgeService knowledgeService;
     private final KnowledgeMemberService permissionHelper;
     private final GraphExtractor graphExtractor;
     private final TaskService taskService;
@@ -55,6 +56,10 @@ public class GraphServiceImpl implements GraphService {
     private final GraphDocumentMapper graphDocumentMapper;
     private final DocumentMapper documentMapper;
     private final ObjectMapper objectMapper;
+
+    @Lazy
+    @Autowired
+    private KnowledgeService knowledgeService;
 
     private void checkNeo4jAvailable() {
         if (!neo4jUtil.isAvailable()) {
@@ -440,6 +445,59 @@ public class GraphServiceImpl implements GraphService {
         }
 
         log.info("[图谱] 已删除文档关联图谱: knowledgeId={}, documentId={}", knowledgeId, documentId);
+    }
+
+    @Override
+    public void deleteByKnowledgeIdInternal(Long knowledgeId) {
+        try {
+            checkNeo4jAvailable();
+            String label = Neo4jUtil.kbLabel(knowledgeId);
+            String cypher = "MATCH (n:Entity:`%s`) DETACH DELETE n".formatted(label);
+            neo4jUtil.run(cypher, Map.of());
+
+            Knowledge knowledge = knowledgeService.getById(knowledgeId);
+            if (knowledge != null) {
+                knowledge.setNodeCount(0);
+                knowledge.setEdgeCount(0);
+                knowledgeService.updateById(knowledge);
+            }
+
+            KnowledgeGraph kg = getKnowledgeGraph(knowledgeId);
+            if (kg != null) {
+                kg.setNodeCount(0);
+                kg.setEdgeCount(0);
+                kg.setStatus(GraphTaskStatus.COMPLETED);
+                kg.setTaskId(null);
+                kg.setErrorMessage(null);
+                knowledgeGraphMapper.updateById(kg);
+                graphDocumentMapper.delete(new LambdaQueryWrapper<GraphDocument>()
+                        .eq(GraphDocument::getGraphId, kg.getId()));
+            }
+            log.info("[图谱] 已清空知识库图谱(内部): knowledgeId={}", knowledgeId);
+        } catch (Exception e) {
+            log.warn("[图谱] 清空知识库图谱失败, knowledgeId={}, error={}", knowledgeId, e.getMessage());
+        }
+    }
+
+    @Override
+    public void deleteByDocumentIdInternal(Long knowledgeId, Long documentId) {
+        try {
+            checkNeo4jAvailable();
+            String label = Neo4jUtil.kbLabel(knowledgeId);
+            String cypher = "MATCH (n:Entity:`%s` {document_id: $docId}) WHERE n.graph_source = 'single_doc' DETACH DELETE n".formatted(label);
+            neo4jUtil.run(cypher, Map.of("docId", String.valueOf(documentId)));
+            updateKnowledgeGraphStats(knowledgeId, label);
+
+            KnowledgeGraph kg = getKnowledgeGraph(knowledgeId);
+            if (kg != null) {
+                graphDocumentMapper.delete(new LambdaQueryWrapper<GraphDocument>()
+                        .eq(GraphDocument::getGraphId, kg.getId())
+                        .eq(GraphDocument::getDocumentId, documentId));
+            }
+            log.info("[图谱] 已删除文档关联图谱(内部): knowledgeId={}, documentId={}", knowledgeId, documentId);
+        } catch (Exception e) {
+            log.warn("[图谱] 删除文档关联图谱失败, knowledgeId={}, documentId={}, error={}", knowledgeId, documentId, e.getMessage());
+        }
     }
 
     // ==================== 手动编辑 ====================

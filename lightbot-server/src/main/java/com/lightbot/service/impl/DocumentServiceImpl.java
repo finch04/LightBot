@@ -561,10 +561,13 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         // 6. 删除文档关联的分片
         chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
 
-        // 7. 逻辑删除文档记录
+        // 7. 删除文档关联的图谱数据（Neo4j + DB）
+        safeDeleteGraph(doc.getKnowledgeId(), documentId);
+
+        // 8. 逻辑删除文档记录
         removeById(documentId);
 
-        // 8. 递减知识库统计
+        // 9. 递减知识库统计
         int chunkCount = doc.getChunkCount() != null ? doc.getChunkCount() : 0;
         long tokenCount = doc.getTokenCount() != null ? doc.getTokenCount() : 0;
         knowledgeServiceProvider.getObject().updateStats(doc.getKnowledgeId(), -1, -chunkCount, -tokenCount);
@@ -581,6 +584,17 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             minioUtil.delete(path);
         } catch (Exception e) {
             log.warn("[文档删除] MinIO{}删除失败, path={}, error={}", label, path, e.getMessage());
+        }
+    }
+
+    /**
+     * 安全删除图谱数据（异常不阻断主流程）
+     */
+    private void safeDeleteGraph(Long knowledgeId, Long documentId) {
+        try {
+            graphServiceProvider.getObject().deleteByDocumentIdInternal(knowledgeId, documentId);
+        } catch (Exception e) {
+            log.warn("[文档删除] 图谱数据删除失败, knowledgeId={}, documentId={}, error={}", knowledgeId, documentId, e.getMessage());
         }
     }
 

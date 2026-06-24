@@ -108,4 +108,11 @@ public interface QaPairService extends IService<QaPair> {
      * @return 检索结果
      */
     List<QaPairSearchResultVO> searchSimilar(Long knowledgeId, float[] queryVector, int topK, double threshold);
+
+    /**
+     * 删除指定知识库的所有问答对（级联删除 embedding，跳过权限校验）
+     *
+     * @param knowledgeId 知识库ID
+     */
+    void deleteByKnowledgeId(Long knowledgeId);
 }

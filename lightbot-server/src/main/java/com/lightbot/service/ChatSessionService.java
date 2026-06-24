@@ -100,4 +100,11 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @param agentId   新 Agent ID
      */
     void updateAgentId(Long sessionId, Long agentId);
+
+    /**
+     * 删除指定 Agent 的所有会话（级联删除消息和轨迹，跳过权限校验）
+     *
+     * @param agentId AgentID
+     */
+    void deleteByAgentId(Long agentId);
 }

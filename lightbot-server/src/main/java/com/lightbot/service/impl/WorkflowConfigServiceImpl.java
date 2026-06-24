@@ -273,6 +273,80 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
                 errors.add("未知节点类型: " + type);
             }
         }
+
+        // 环路检测：DFS 判断有向图中是否存在环
+        String cycleResult = detectCycle(nodes, edges);
+        if (cycleResult != null) {
+            errors.add("工作流存在环路: " + cycleResult);
+        }
+
         return errors;
+    }
+
+    /**
+     * DFS 检测有向图环路
+     * @return null 表示无环，非 null 返回环路描述
+     */
+    @SuppressWarnings("unchecked")
+    private String detectCycle(List<Map<String, Object>> nodes, List<Map<String, Object>> edges) {
+        // 构建邻接表
+        Map<String, List<String>> adj = new HashMap<>();
+        for (Map<String, Object> node : nodes) {
+            String id = node.get("id") != null ? node.get("id").toString() : "";
+            adj.put(id, new ArrayList<>());
+        }
+        for (Map<String, Object> edge : edges) {
+            String src = edge.get("source") != null ? edge.get("source").toString() : "";
+            String tgt = edge.get("target") != null ? edge.get("target").toString() : "";
+            adj.computeIfAbsent(src, k -> new ArrayList<>()).add(tgt);
+        }
+
+        // DFS 状态：0=未访问，1=访问中，2=已完成
+        Map<String, Integer> state = new HashMap<>();
+        Map<String, String> parent = new HashMap<>();
+        for (String nodeId : adj.keySet()) {
+            if (state.getOrDefault(nodeId, 0) == 0) {
+                String cycle = dfsDetectCycle(adj, nodeId, state, parent);
+                if (cycle != null) {
+                    return cycle;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String dfsDetectCycle(Map<String, List<String>> adj, String node,
+                                  Map<String, Integer> state, Map<String, String> parent) {
+        state.put(node, 1); // 标记为访问中
+        List<String> neighbors = adj.getOrDefault(node, List.of());
+        for (String next : neighbors) {
+            Integer nextState = state.getOrDefault(next, 0);
+            if (nextState == 1) {
+                // 找到环，回溯环路路径
+                return buildCyclePath(parent, node, next);
+            }
+            if (nextState == 0) {
+                parent.put(next, node);
+                String cycle = dfsDetectCycle(adj, next, state, parent);
+                if (cycle != null) {
+                    return cycle;
+                }
+            }
+        }
+        state.put(node, 2); // 标记为已完成
+        return null;
+    }
+
+    private String buildCyclePath(Map<String, String> parent, String from, String to) {
+        List<String> path = new ArrayList<>();
+        path.add(to);
+        String cur = from;
+        while (cur != null && !cur.equals(to)) {
+            path.add(cur);
+            cur = parent.get(cur);
+        }
+        path.add(to);
+        java.util.Collections.reverse(path);
+        return String.join(" → ", path);
     }
 }

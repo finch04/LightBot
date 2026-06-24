@@ -1683,6 +1683,7 @@ import {
   removeDeletedIdsFromSet,
 } from '../utils/bindingId'
 import SystemToolDrawer from '../components/SystemToolDrawer.vue'
+import { useBinding } from '../composables/useBinding'
 const route = useRoute()
 const router = useRouter()
 const agentId = route.params.id
@@ -1987,15 +1988,48 @@ function toggleAllCapabilities() {
 }
 
 const modelList = ref([])
-const selectedKnowledgeIds = ref(new Set())
-const knowledgeList = ref([])
-const knowledgeLoading = ref(false)
 /** 绑定资源目录是否已加载（避免 Tab 懒加载导致误判「已删除」） */
 const bindingCatalogsLoaded = ref(false)
-const searchText = ref('')
-const selectedToolIds = ref(new Set())
-const toolList = ref([])
-const toolSearchText = ref('')
+
+// ===== 通用绑定管理 =====
+const knowledge = useBinding({
+  limit: 10, entityLabel: '知识库', loadApi: getKnowledgeList,
+  verb: '绑定',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
+const tools = useBinding({
+  limit: 10, entityLabel: '工具', loadApi: getTools,
+  filterPredicate: t => (t.toolType?.code || t.toolType) !== 'knowledge' && t.status !== 'disabled',
+  verb: '绑定',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
+const mcp = useBinding({
+  limit: 5, entityLabel: 'MCP Server', loadApi: getMcpServers,
+  filterPredicate: s => s.status !== 'disabled',
+  verb: '绑定',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
+const subAgent = useBinding({
+  limit: 5, entityLabel: 'SubAgent', loadApi: getSubAgents,
+  filterPredicate: s => s.status !== 'disabled',
+  verb: '绑定',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
+const skill = useBinding({
+  limit: 10, entityLabel: 'Skill', loadApi: getSkills,
+  filterPredicate: s => s.status !== 'disabled',
+  verb: '启用',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
+
+// 兼容模板中使用的变量名
+const selectedKnowledgeIds = knowledge.selectedIds
+const knowledgeList = knowledge.list
+const knowledgeLoading = knowledge.loading
+const searchText = knowledge.searchText
+const selectedToolIds = tools.selectedIds
+const toolList = tools.list
+const toolSearchText = tools.searchText
 const toolTypeFilter = ref('')
 const toolTypeList = ref([])
 const toolTypeLabels = { builtin: '内置', knowledge: '知识库', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
@@ -2138,22 +2172,22 @@ const bindingTab = ref('tools')
 const agentVersion = ref(0)
 
 // MCP Server 绑定
-const selectedMcpServerIds = ref(new Set())
-const mcpServerList = ref([])
-const mcpSearchText = ref('')
-const mcpLoading = ref(false)
+const selectedMcpServerIds = mcp.selectedIds
+const mcpServerList = mcp.list
+const mcpSearchText = mcp.searchText
+const mcpLoading = mcp.loading
 
 // SubAgent 绑定
-const selectedSubAgentIds = ref(new Set())
-const subAgentList = ref([])
-const subAgentSearchText = ref('')
-const subAgentLoading = ref(false)
+const selectedSubAgentIds = subAgent.selectedIds
+const subAgentList = subAgent.list
+const subAgentSearchText = subAgent.searchText
+const subAgentLoading = subAgent.loading
 
 // Skill 绑定
-const selectedSkillIds = ref(new Set())
-const skillList = ref([])
-const skillSearchText = ref('')
-const skillLoading = ref(false)
+const selectedSkillIds = skill.selectedIds
+const skillList = skill.list
+const skillSearchText = skill.searchText
+const skillLoading = skill.loading
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
@@ -2331,83 +2365,26 @@ async function onModelSelectChange({ providerId, modelId }) {
   }
 }
 
-const selectedKnowledge = computed(() =>
-  resolveBindingItems(selectedKnowledgeIds.value, knowledgeList.value, {
-    entityLabel: '知识库',
-    catalogReady: bindingCatalogsLoaded.value,
-  })
-)
+// 绑定 computed（从 composable 获取）
+const selectedKnowledge = knowledge.selected
+const filteredKnowledgeList = knowledge.filteredList
+const selectedTools = tools.selected
+const selectedMcpServers = mcp.selected
+const filteredMcpServerList = mcp.filteredList
+const selectedSubAgents = subAgent.selected
+const selectedSkills = skill.selected
 
-const filteredKnowledgeList = computed(() => {
-  if (!searchText.value) return knowledgeList.value
-  const keyword = searchText.value.toLowerCase()
-  return knowledgeList.value.filter(k =>
-    k.name?.toLowerCase().includes(keyword) ||
-    k.description?.toLowerCase().includes(keyword)
-  )
-})
-
-const selectedTools = computed(() =>
-  resolveBindingItems(selectedToolIds.value, toolList.value, {
-    entityLabel: '工具',
-    catalogReady: bindingCatalogsLoaded.value,
-  })
-)
-
+// filteredToolList 需要额外处理 toolTypeFilter，单独定义
 const filteredToolList = computed(() => {
-  // 知识库工具由中间件自动注入，不在用户可选列表中展示；已禁用的也不展示
-  let list = toolList.value.filter(t => {
-    const type = t.toolType?.code || t.toolType
-    return type !== 'knowledge' && t.status !== 'disabled'
-  })
+  let list = tools.filteredList.value
   if (toolTypeFilter.value) {
     list = list.filter(t => {
       const type = t.toolType?.code || t.toolType
       return type === toolTypeFilter.value
     })
   }
-  if (!toolSearchText.value) return list
-  const keyword = toolSearchText.value.toLowerCase()
-  return list.filter(t =>
-    t.name?.toLowerCase().includes(keyword) ||
-    t.displayName?.toLowerCase().includes(keyword) ||
-    t.description?.toLowerCase().includes(keyword)
-  )
-})
-
-const selectedMcpServers = computed(() =>
-  resolveBindingItems(selectedMcpServerIds.value, mcpServerList.value, {
-    entityLabel: 'MCP Server',
-    catalogReady: bindingCatalogsLoaded.value,
-  })
-)
-
-const filteredMcpServerList = computed(() => {
-  // 可选列表只展示已启用的，已禁用但已绑定的在已选列表中展示
-  let list = mcpServerList.value.filter(s => s.status !== 'disabled')
-  if (mcpSearchText.value) {
-    const keyword = mcpSearchText.value.toLowerCase()
-    list = list.filter(s =>
-      s.name?.toLowerCase().includes(keyword) ||
-      s.description?.toLowerCase().includes(keyword)
-    )
-  }
   return list
 })
-
-const selectedSubAgents = computed(() =>
-  resolveBindingItems(selectedSubAgentIds.value, subAgentList.value, {
-    entityLabel: 'SubAgent',
-    catalogReady: bindingCatalogsLoaded.value,
-  })
-)
-
-const selectedSkills = computed(() =>
-  resolveBindingItems(selectedSkillIds.value, skillList.value, {
-    entityLabel: 'Skill',
-    catalogReady: bindingCatalogsLoaded.value,
-  })
-)
 
 const deletedBindingCount = computed(() => {
   if (!bindingCatalogsLoaded.value) return 0
@@ -2767,17 +2744,7 @@ onBeforeRouteLeave((_to, _from, next) => {
   confirmLeaveUnsaved(() => next())
 })
 
-async function loadKnowledgeList() {
-  knowledgeLoading.value = true
-  try {
-    const res = await getKnowledgeList({ pageNum: 1, pageSize: 100 })
-    knowledgeList.value = (res.data.records || []).map(k => ({ ...k, id: toBindingId(k.id) }))
-  } catch (e) {
-    // ignore
-  } finally {
-    knowledgeLoading.value = false
-  }
-}
+const loadKnowledgeList = knowledge.load
 
 async function loadToolTypes() {
   try {
@@ -2832,155 +2799,29 @@ async function loadToolList(toolType) {
   }
 }
 
-function toggleKnowledge(k) {
-  if (isVersionPreview.value) return
-  const kid = toBindingId(k.id)
-  const ids = new Set(selectedKnowledgeIds.value)
-  if (ids.has(kid)) {
-    ids.delete(kid)
-  } else {
-    if (ids.size >= BIND_LIMITS.knowledge) {
-      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.knowledge} 个知识库`)
-      return
-    }
-    ids.add(kid)
-  }
-  selectedKnowledgeIds.value = ids
-}
+const toggleKnowledge = knowledge.toggle
+const removeKnowledge = knowledge.remove
+const clearSelectedKnowledge = knowledge.clear
 
-function removeKnowledge(id) {
-  if (isVersionPreview.value) return
-  const ids = new Set(selectedKnowledgeIds.value)
-  ids.delete(toBindingId(id))
-  selectedKnowledgeIds.value = ids
-}
+const toggleTool = tools.toggle
+const removeTool = tools.remove
+const clearSelectedTools = tools.clear
 
-function toggleTool(t) {
-  if (isVersionPreview.value) return
-  const tid = toBindingId(t.id)
-  const ids = new Set(selectedToolIds.value)
-  if (ids.has(tid)) {
-    ids.delete(tid)
-  } else {
-    if (ids.size >= BIND_LIMITS.tool) {
-      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.tool} 个工具`)
-      return
-    }
-    ids.add(tid)
-  }
-  selectedToolIds.value = ids
-}
+const toggleMcpServer = mcp.toggle
+const removeMcpServer = mcp.remove
+const clearSelectedMcpServers = mcp.clear
 
-function removeTool(id) {
-  if (isVersionPreview.value) return
-  const ids = new Set(selectedToolIds.value)
-  ids.delete(toBindingId(id))
-  selectedToolIds.value = ids
-}
+const toggleSubAgent = subAgent.toggle
+const removeSubAgent = subAgent.remove
+const clearSelectedSubAgents = subAgent.clear
 
-function toggleMcpServer(s) {
-  if (isVersionPreview.value) return
-  const sid = toBindingId(s.id)
-  const ids = new Set(selectedMcpServerIds.value)
-  if (ids.has(sid)) {
-    ids.delete(sid)
-  } else {
-    if (ids.size >= BIND_LIMITS.mcp) {
-      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.mcp} 个 MCP Server`)
-      return
-    }
-    ids.add(sid)
-  }
-  selectedMcpServerIds.value = ids
-}
+const toggleSkill = skill.toggle
+const removeSkill = skill.remove
+const clearSelectedSkills = skill.clear
 
-function removeMcpServer(id) {
-  if (isVersionPreview.value) return
-  const ids = new Set(selectedMcpServerIds.value)
-  ids.delete(toBindingId(id))
-  selectedMcpServerIds.value = ids
-}
+const loadSubAgentList = subAgent.load
 
-// SubAgent 操作
-function toggleSubAgent(s) {
-  if (isVersionPreview.value) return
-  const sid = toBindingId(s.id)
-  const ids = new Set(selectedSubAgentIds.value)
-  if (ids.has(sid)) {
-    ids.delete(sid)
-  } else {
-    if (ids.size >= BIND_LIMITS.subAgent) {
-      message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.subAgent} 个 SubAgent`)
-      return
-    }
-    ids.add(sid)
-  }
-  selectedSubAgentIds.value = ids
-}
-
-function removeSubAgent(id) {
-  if (isVersionPreview.value) return
-  const ids = new Set(selectedSubAgentIds.value)
-  ids.delete(toBindingId(id))
-  selectedSubAgentIds.value = ids
-}
-
-function clearSelectedSubAgents() {
-  if (isVersionPreview.value) return
-  selectedSubAgentIds.value = new Set()
-}
-
-function toggleSkill(s) {
-  if (isVersionPreview.value) return
-  const sid = toBindingId(s.id)
-  const ids = new Set(selectedSkillIds.value)
-  if (ids.has(sid)) {
-    ids.delete(sid)
-  } else {
-    if (ids.size >= BIND_LIMITS.skill) {
-      message.warning(`每个 Agent 最多启用 ${BIND_LIMITS.skill} 个 Skill`)
-      return
-    }
-    ids.add(sid)
-  }
-  selectedSkillIds.value = ids
-}
-
-function removeSkill(id) {
-  if (isVersionPreview.value) return
-  const ids = new Set(selectedSkillIds.value)
-  ids.delete(toBindingId(id))
-  selectedSkillIds.value = ids
-}
-
-function clearSelectedSkills() {
-  if (isVersionPreview.value) return
-  selectedSkillIds.value = new Set()
-}
-
-async function loadSubAgentList() {
-  subAgentLoading.value = true
-  try {
-    const res = await getSubAgents({ pageNum: 1, pageSize: 100 })
-    subAgentList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
-  } catch (e) {
-    console.error('[AgentDetail] 加载SubAgent列表失败:', e)
-  } finally {
-    subAgentLoading.value = false
-  }
-}
-
-async function loadSkillList() {
-  skillLoading.value = true
-  try {
-    const res = await getSkills({ pageNum: 1, pageSize: 100 })
-    skillList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
-  } catch (e) {
-    console.error('[AgentDetail] 加载Skill列表失败:', e)
-  } finally {
-    skillLoading.value = false
-  }
-}
+const loadSkillList = skill.load
 
 /** 进入详情时预加载全部绑定目录，避免未点 Tab 误判「已删除」 */
 async function loadBindingCatalogs() {
@@ -3025,32 +2866,7 @@ async function onBindingTabChange(tab) {
   }
 }
 
-async function loadMcpServerList() {
-  mcpLoading.value = true
-  try {
-    const res = await getMcpServers({ pageNum: 1, pageSize: 100 })
-    mcpServerList.value = (res.data?.records || []).map(s => ({ ...s, id: toBindingId(s.id) }))
-  } catch (e) {
-    console.error('[AgentDetail] 加载MCP Server列表失败:', e)
-  } finally {
-    mcpLoading.value = false
-  }
-}
-
-function clearSelectedTools() {
-  if (isVersionPreview.value) return
-  selectedToolIds.value = new Set()
-}
-
-function clearSelectedMcpServers() {
-  if (isVersionPreview.value) return
-  selectedMcpServerIds.value = new Set()
-}
-
-function clearSelectedKnowledge() {
-  if (isVersionPreview.value) return
-  selectedKnowledgeIds.value = new Set()
-}
+const loadMcpServerList = mcp.load
 
 async function handleGeneratePrompt() {
   if (isVersionPreview.value) return

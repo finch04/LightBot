@@ -94,4 +94,11 @@ public interface AgentVersionService {
      * 从 agent.config 迁移历史版本数据（一次性）
      */
     void migrateLegacyIfNeeded(Agent agent);
+
+    /**
+     * 删除指定 Agent 的所有版本记录（级联删除，跳过权限校验）
+     *
+     * @param agentId AgentID
+     */
+    void deleteByAgentId(Long agentId);
 }

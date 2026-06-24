@@ -87,4 +87,11 @@ public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model>
         List<Model> all = list(new LambdaQueryWrapper<Model>().orderByAsc(Model::getProviderId));
         modelCacheUtil.cacheAllModels(all);
     }
+
+    @Override
+    public void deleteByProviderId(Long providerId) {
+        remove(new LambdaQueryWrapper<Model>().eq(Model::getProviderId, providerId));
+        syncCache(providerId);
+        log.info("[Model] 批量删除: providerId={}", providerId);
+    }
 }

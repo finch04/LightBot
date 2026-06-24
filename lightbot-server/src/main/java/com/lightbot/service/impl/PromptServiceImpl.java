@@ -9,6 +9,7 @@ import com.lightbot.entity.Prompt;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.PromptMapper;
 import com.lightbot.service.PromptService;
+import com.lightbot.service.PromptVersionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -27,6 +28,8 @@ import java.io.Serializable;
 @Service
 @RequiredArgsConstructor
 public class PromptServiceImpl extends ServiceImpl<PromptMapper, Prompt> implements PromptService {
+
+    private final PromptVersionService promptVersionService;
 
     @Override
     @Cacheable(value = RedisCacheConfig.CACHE_PROMPT, key = "#id", unless = "#result == null")
@@ -76,8 +79,15 @@ public class PromptServiceImpl extends ServiceImpl<PromptMapper, Prompt> impleme
     @Override
     @CacheEvict(value = RedisCacheConfig.CACHE_PROMPT, key = "#id")
     public void deleteById(Long id) {
-        if (getById(id) == null) {
+        Prompt prompt = getById(id);
+        if (prompt == null) {
             throw new BizException(ErrorCode.PROMPT_NOT_FOUND);
+        }
+        // 级联删除所有版本
+        try {
+            promptVersionService.deleteByPromptKey(prompt.getPromptKey());
+        } catch (Exception e) {
+            log.warn("[Prompt] 级联删除版本失败, promptKey={}, error={}", prompt.getPromptKey(), e.getMessage());
         }
         removeById(id);
     }

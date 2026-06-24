@@ -193,7 +193,7 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
-import { taskCounts, updateTaskCounts } from '../stores/task'
+import { useTaskStore } from '../stores/task'
 import { Modal } from 'ant-design-vue'
 import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
 import AvatarFrame from '../components/AvatarFrame.vue'
@@ -202,6 +202,7 @@ import LevelTag from '../components/LevelTag.vue'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const taskStore = useTaskStore()
 
 const userRoleText = computed(() => {
   const role = userStore.user?.role
@@ -227,8 +228,8 @@ const SSE_MAX_RETRIES = 10
 const SSE_BASE_DELAY = 3000
 
 const taskBadgeCount = computed(() => {
-  if (taskCounts.active <= 0) return 0
-  return taskCounts.active > 10 ? '10+' : taskCounts.active
+  if (taskStore.active <= 0) return 0
+  return taskStore.active > 10 ? '10+' : taskStore.active
 })
 
 const taskBadgeStyle = { fontSize: '10px', boxShadow: 'none', backgroundColor: '#f5222d' }
@@ -385,9 +386,9 @@ function connectTaskSSE() {
   taskSSE.addEventListener('count', (e) => {
     try {
       const counts = JSON.parse(e.data)
-      updateTaskCounts(counts)
+      taskStore.updateCounts(counts)
     } catch {
-      updateTaskCounts({ active: Number(e.data) || 0, pending: 0, running: 0 })
+      taskStore.updateCounts({ active: Number(e.data) || 0, pending: 0, running: 0 })
     }
   })
 

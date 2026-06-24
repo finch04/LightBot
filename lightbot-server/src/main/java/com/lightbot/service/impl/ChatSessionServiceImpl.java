@@ -280,4 +280,21 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         }
         evictListCache(StpUtil.getLoginIdAsLong());
     }
+
+    @Override
+    public void deleteByAgentId(Long agentId) {
+        List<ChatSession> sessions = list(new LambdaQueryWrapper<ChatSession>()
+                .eq(ChatSession::getAgentId, agentId));
+        if (sessions.isEmpty()) {
+            return;
+        }
+        for (ChatSession session : sessions) {
+            try {
+                deleteSession(session.getId());
+            } catch (Exception e) {
+                log.warn("[ChatSession] 级联删除会话失败: sessionId={}, error={}", session.getId(), e.getMessage());
+            }
+        }
+        log.info("[ChatSession] 批量删除: agentId={}, count={}", agentId, sessions.size());
+    }
 }

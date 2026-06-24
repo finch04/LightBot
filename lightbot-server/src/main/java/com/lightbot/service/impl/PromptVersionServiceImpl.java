@@ -1,5 +1,6 @@
 package com.lightbot.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
 import com.lightbot.entity.Prompt;
@@ -11,6 +12,8 @@ import com.lightbot.service.PromptService;
 import com.lightbot.service.PromptVersionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +31,9 @@ import java.util.List;
 public class PromptVersionServiceImpl extends ServiceImpl<PromptVersionMapper, PromptVersion>
         implements PromptVersionService {
 
-    private final PromptService promptService;
+    @Lazy
+    @Autowired
+    private PromptService promptService;
 
     @Override
     @Transactional
@@ -98,5 +103,11 @@ public class PromptVersionServiceImpl extends ServiceImpl<PromptVersionMapper, P
                 .eq(PromptVersion::getPromptKey, promptKey)
                 .orderByDesc(PromptVersion::getCreateTime)
                 .list();
+    }
+
+    @Override
+    public void deleteByPromptKey(String promptKey) {
+        remove(new LambdaQueryWrapper<PromptVersion>().eq(PromptVersion::getPromptKey, promptKey));
+        log.info("[PromptVersion] 批量删除: promptKey={}", promptKey);
     }
 }

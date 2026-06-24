@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import Antd, { message } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 import './styles/code-block-scrollbar.css'
 
@@ -13,5 +13,5 @@ message.config({ maxCount: 3 })
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
-app.use(Antd)
+// Ant Design Vue 组件通过 unplugin-vue-components 自动按需引入
 app.mount('#app')

@@ -45,4 +45,11 @@ public interface ModelService extends IService<Model> {
      * @param id 主键ID
      */
     void deleteById(Long id);
+
+    /**
+     * 删除指定提供商的所有模型（级联删除，跳过权限校验）
+     *
+     * @param providerId 提供商ID
+     */
+    void deleteByProviderId(Long providerId);
 }

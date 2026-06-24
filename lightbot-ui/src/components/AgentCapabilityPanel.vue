@@ -72,7 +72,7 @@ function syncExpanded() {
   expanded.value = s
 }
 
-watch(() => props.events, syncExpanded, { immediate: true, deep: true })
+watch(() => props.events?.length, syncExpanded, { immediate: true })
 
 function hasSubagentResult(callIndex) {
   return !!getSubagentResult(callIndex)

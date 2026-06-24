@@ -60,14 +60,23 @@ public class MilvusUtil {
         log.info("[Milvus] 配置已加载, enabled={}, uri={}（懒初始化，首次使用时连接）", enabled, uri);
     }
 
+    /** 上次重连尝试时间戳，避免频繁重连 */
+    private volatile long lastReconnectAttempt = 0;
+    /** 重连最小间隔（毫秒） */
+    private static final long RECONNECT_INTERVAL_MS = 60_000;
+
     /**
-     * 获取客户端（懒初始化）
+     * 获取客户端（懒初始化，失败后支持重试）
      */
     private MilvusClientV2 getClient() {
-        if (!initialized) {
+        if (!initialized || (!available && shouldRetryReconnect())) {
             synchronized (this) {
-                if (!initialized) {
+                if (!initialized || (!available && shouldRetryReconnect())) {
                     try {
+                        // 关闭旧客户端（如果有）
+                        if (this.client != null) {
+                            try { this.client.close(); } catch (Exception ignored) {}
+                        }
                         ConnectConfig config = ConnectConfig.builder()
                                 .uri(uri)
                                 .token(token)
@@ -80,12 +89,21 @@ public class MilvusUtil {
                     } catch (Exception e) {
                         log.warn("[Milvus] 连接失败, uri={}, error={}", uri, e.getMessage());
                         this.available = false;
+                        this.client = null;
                     }
                     this.initialized = true;
+                    this.lastReconnectAttempt = System.currentTimeMillis();
                 }
             }
         }
         return client;
+    }
+
+    /**
+     * 是否应该尝试重连（距上次尝试超过最小间隔）
+     */
+    private boolean shouldRetryReconnect() {
+        return System.currentTimeMillis() - lastReconnectAttempt > RECONNECT_INTERVAL_MS;
     }
 
     /**

@@ -46,4 +46,11 @@ public interface PromptVersionService extends IService<PromptVersion> {
      * @return 版本列表
      */
     List<PromptVersion> listByKey(String promptKey);
+
+    /**
+     * 删除指定提示词的所有版本（级联删除，跳过权限校验）
+     *
+     * @param promptKey 提示词唯一标识
+     */
+    void deleteByPromptKey(String promptKey);
 }

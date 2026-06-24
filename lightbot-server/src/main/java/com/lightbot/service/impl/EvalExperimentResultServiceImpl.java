@@ -91,4 +91,10 @@ public class EvalExperimentResultServiceImpl extends ServiceImpl<EvalExperimentR
                 .orderByDesc(EvalExperimentResult::getEvaluationTime);
         return baseMapper.selectPage(page, wrapper);
     }
+
+    @Override
+    public void removeByExperimentId(Long experimentId) {
+        lambdaUpdate().eq(EvalExperimentResult::getExperimentId, experimentId).remove();
+        log.info("[EvalExperimentResult] 批量删除: experimentId={}", experimentId);
+    }
 }

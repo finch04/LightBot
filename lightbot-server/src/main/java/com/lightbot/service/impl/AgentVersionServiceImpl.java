@@ -1068,6 +1068,13 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         return agent;
     }
 
+    @Override
+    public void deleteByAgentId(Long agentId) {
+        agentVersionMapper.delete(
+                new LambdaQueryWrapper<AgentVersion>().eq(AgentVersion::getAgentId, agentId));
+        log.info("[AgentVersion] 批量删除: agentId={}", agentId);
+    }
+
     /**
      * 从 agent.config 读取绑定 ID 列表（与 AgentServiceImpl 解析规则一致）
      */

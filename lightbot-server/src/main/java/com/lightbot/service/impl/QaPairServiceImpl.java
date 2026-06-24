@@ -29,6 +29,7 @@ import com.lightbot.service.TaskService;
 import com.lightbot.util.QaPairVectorizeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -55,6 +56,7 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
     @Autowired
     private KnowledgeMemberService permissionHelper;
 
+    @Lazy
     @Autowired
     private KnowledgeService knowledgeService;
 
@@ -363,5 +365,15 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteByKnowledgeId(Long knowledgeId) {
+        // 1. 批量删除关联向量（SQL 一条搞定）
+        embeddingMapper.deleteByQaPairKnowledgeId(knowledgeId);
+        // 2. 批量删除问答对（逻辑删除）
+        remove(new LambdaQueryWrapper<QaPair>().eq(QaPair::getKnowledgeId, knowledgeId));
+        log.info("[QaPair] 批量删除: knowledgeId={}", knowledgeId);
     }
 }

@@ -645,8 +645,11 @@ function parseSpansFromDetail() {
   }
 }
 
+// 共享的 parsedSpans computed，避免 traceModelInput 和 waterfallGroups 重复解析
+const parsedSpans = computed(() => parseSpansFromDetail())
+
 const traceModelInput = computed(() => {
-  const spans = parseSpansFromDetail()
+  const spans = parsedSpans.value
   const userSpan = spans.find(s => s.name === 'user_message')
   const llmSpan = spans.find(s => s.name === 'messages_to_llm')
   const userAttrs = userSpan?.attributes || {}
@@ -683,7 +686,7 @@ const traceModelInput = computed(() => {
 })
 
 const waterfallGroups = computed(() => {
-  const spans = parseSpansFromDetail()
+  const spans = parsedSpans.value
   if (spans.length === 0) return []
 
   const totalDuration = detailTrace.value.totalDurationMs || 1

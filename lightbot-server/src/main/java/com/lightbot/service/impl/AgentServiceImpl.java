@@ -29,7 +29,9 @@ import com.lightbot.util.WorkflowExampleTemplates;
 import com.lightbot.dto.WorkflowExampleVO;
 import com.lightbot.enums.AgentType;
 import com.lightbot.service.AgentVersionService;
+import com.lightbot.service.ChatSessionService;
 import com.lightbot.config.RedisCacheConfig;
+import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -68,6 +70,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final McpServerService mcpServerService;
     private final SystemConfigService systemConfigService;
     private final AgentVersionService agentVersionService;
+    private final ObjectProvider<ChatSessionService> chatSessionServiceProvider;
     private final ProviderResolver providerResolver;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
@@ -234,8 +237,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         if (agent == null) {
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
-        // 删除 MinIO 中的头像文件
-        deleteOldAvatar(agent.getAvatar());
+        // 1. 级联删除版本记录
+        safeRemove(() -> agentVersionService.deleteByAgentId(id), "AgentVersion");
+        // 2. 级联删除会话（含消息、ToolCall、Trace）
+        safeRemove(() -> chatSessionServiceProvider.getObject().deleteByAgentId(id), "ChatSession");
+        // 3. 删除 MinIO 中的头像文件
+        safeRemove(() -> deleteOldAvatar(agent.getAvatar()), "MinIO头像");
+        // 4. 删除 Agent
         removeById(id);
     }
 
@@ -624,5 +632,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         return list(new LambdaQueryWrapper<Agent>()
                 .eq(Agent::getUserId, userId)
                 .orderByDesc(Agent::getCreateTime));
+    }
+
+    private void safeRemove(Runnable action, String label) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.warn("[Agent删除] {}清理失败, 跳过: {}", label, e.getMessage());
+        }
     }
 }

@@ -19,8 +19,10 @@ import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.mapper.KnowledgeMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.service.DocumentService;
+import com.lightbot.service.GraphService;
 import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.QaPairService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MilvusUtil;
@@ -58,6 +60,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     private final KnowledgeMemberService knowledgeMemberService;
     private final DocumentService documentService;
+    private final QaPairService qaPairService;
+    private final GraphService graphService;
     private final ModelFactory modelFactory;
     private final ObjectMapper objectMapper;
     private final MindmapUtil mindmapUtil;
@@ -167,7 +171,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
 
-        // 3. 级联删除所有子文档（含 MinIO 文件、向量、分片、版本快照）
+        // 3. 级联删除所有子文档（含 MinIO 文件、向量、分片、版本快照、图谱）
         List<Document> documents = documentService.listByKnowledgeIdInternal(id);
         for (Document doc : documents) {
             try {
@@ -177,10 +181,16 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             }
         }
 
-        // 4. 逻辑删除知识库
+        // 4. 级联删除问答对（含 Milvus 向量）
+        safeRemove(() -> qaPairService.deleteByKnowledgeId(id), "QaPair");
+
+        // 5. 级联删除图谱（Neo4j + DB）
+        safeRemove(() -> graphService.deleteByKnowledgeIdInternal(id), "KnowledgeGraph");
+
+        // 6. 逻辑删除知识库
         removeById(id);
 
-        // 5. 同时删除所有成员关系
+        // 7. 同时删除所有成员关系
         knowledgeMemberService.removeByKnowledgeId(id);
     }
 
@@ -723,6 +733,14 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
             return new HashMap<>();
+        }
+    }
+
+    private void safeRemove(Runnable action, String label) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.warn("[知识库删除] {}清理失败, 跳过: {}", label, e.getMessage());
         }
     }
 }
