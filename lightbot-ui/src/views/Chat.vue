@@ -396,6 +396,13 @@
               </span>
             </a-select-option>
           </a-select>
+          <a-tooltip v-if="sessionTokenCount > 0" :title="`本次会话累计消耗 ${sessionTokenCount.toLocaleString()} tokens`">
+            <div class="token-pill">
+              <ThunderboltOutlined class="token-pill-icon" />
+              <span class="token-pill-value">{{ formatTokenCount(sessionTokenCount) }}</span>
+              <span class="token-pill-label">tokens</span>
+            </div>
+          </a-tooltip>
         </div>
         <!-- 引用回复预览条 -->
         <div v-if="replyTo.active" class="reply-preview-bar">
@@ -583,7 +590,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, refreshChatAttachmentPreviews } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
@@ -611,6 +618,7 @@ const input = ref('')
 const loading = ref(false)
 const streaming = ref(false)
 const messages = ref([])
+const sessionTokenCount = ref(0)
 const messagesRef = ref(null)
 const inputRef = ref(null)
 const skipNextWatch = ref(false)
@@ -758,6 +766,12 @@ function scrollToBottom() {
   nextTick(() => {
     el.scrollTop = el.scrollHeight
   })
+}
+
+function formatTokenCount(tokens) {
+  if (!tokens) return '0'
+  if (tokens >= 10000) return (tokens / 10000).toFixed(1) + '万'
+  return tokens.toLocaleString()
 }
 
 /** 流式输出期间，自动滚动深度思考面板到底部 */
@@ -1040,6 +1054,7 @@ async function loadHistory() {
     selectedAgentId.value = null
     currentAgent.value = null
     lastReplyElapsed.value = null
+    sessionTokenCount.value = 0
     switchingSession.value = false
     return
   }
@@ -1074,6 +1089,7 @@ async function loadHistory() {
 
     // 从会话中恢复 agentId 和 agentVersionId
     const session = sessionRes.data
+    sessionTokenCount.value = session?.totalTokens || 0
     if (session?.agentId) {
       selectedAgentId.value = session.agentId
       // 先加载版本列表（传入会话保存的版本 ID），再加载 agent 详情
@@ -1495,6 +1511,10 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             // 后端 [DONE] 事件携带消息ID，直接赋值（无需刷新）
             if (meta?.assistantMessageId) {
               assistantMsg._id = meta.assistantMessageId
+            }
+            // 累加本次回复的 Token 消耗
+            if (meta?.totalTokens) {
+              sessionTokenCount.value += meta.totalTokens
             }
           }
           loading.value = false
@@ -2879,6 +2899,30 @@ span.agent-menu-icon {
   font-size: 12px;
   color: #a1a1aa;
   margin-top: 8px;
+}
+.token-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px 10px;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  border-radius: 100px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.token-pill-icon {
+  color: #f59e0b;
+  font-size: 12px;
+}
+.token-pill-value {
+  color: #171717;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.token-pill-label {
+  color: #a1a1aa;
 }
 /* RAG 引用样式 */
 .rag-references {

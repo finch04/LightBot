@@ -188,17 +188,13 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     public void updateStats(Long sessionId, int tokenCount) {
-        // 累加消息数、token数，更新最后消息时间
+        // 原子累加消息数、token数，避免并发竞态导致数据丢失
+        baseMapper.incrementStats(sessionId, 1, tokenCount);
+        // 失效列表缓存（列表排序依赖 lastMessageAt）
         ChatSession session = getById(sessionId);
-        if (session == null) {
-            return;
+        if (session != null) {
+            evictListCache(session.getUserId());
         }
-        session.setMessageCount(session.getMessageCount() + 1);
-        session.setTotalTokens(session.getTotalTokens() + tokenCount);
-        session.setLastMessageAt(LocalDateTime.now());
-        updateById(session);
-        // updateStats 高频调用，只失效列表缓存（列表排序依赖 lastMessageAt），不失效详情缓存
-        evictListCache(session.getUserId());
     }
 
     @Override

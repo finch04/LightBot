@@ -247,6 +247,10 @@ public class ToolEventGenerator {
      * @param assistantMessageId AI回复消息ID
      */
     public String doneWithMetadata(Long userMessageId, Long assistantMessageId) {
+        return doneWithMetadata(userMessageId, assistantMessageId, 0);
+    }
+
+    public String doneWithMetadata(Long userMessageId, Long assistantMessageId, long totalTokens) {
         try {
             Map<String, Object> meta = new java.util.LinkedHashMap<>();
             if (userMessageId != null) {
@@ -254,6 +258,9 @@ public class ToolEventGenerator {
             }
             if (assistantMessageId != null) {
                 meta.put("assistantMessageId", assistantMessageId.toString());
+            }
+            if (totalTokens > 0) {
+                meta.put("totalTokens", totalTokens);
             }
             if (meta.isEmpty()) {
                 return DONE_PREFIX;

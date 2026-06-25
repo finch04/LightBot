@@ -433,8 +433,8 @@ public class ChatServiceImpl implements ChatService {
             ctx.getFullReply().setLength(0);
             ctx.getFullReply().append(replyToSave);
 
-            // 2. 返回带消息ID的 [DONE] 事件
-            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId);
+            // 2. 返回带消息ID和Token数的 [DONE] 事件
+            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId, totalTokens);
         } catch (Exception e) {
             log.error("[Chat] 构建[DONE]事件异常: {}", e.getMessage(), e);
             return DONE_PREFIX;

@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  */
 public final class PromptTemplateUtil {
 
-    private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([a-zA-Z_][a-zA-Z0-9_]*)}}");
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^{}]+?)}}");
 
     private PromptTemplateUtil() {
     }

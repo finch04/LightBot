@@ -210,18 +210,33 @@
                       提示词中变量的选项来自下方「变量配置」。可通过入参变量表单填写，或对话请求的
                       <code>biz_params</code> 字段传递；传入的值将替换提示词中对应的 <code v-pre>{{变量名}}</code> 位置。
                     </div>
-                    <div v-if="validPromptVariables.length" class="prompt-insert-vars">
-                      <span class="insert-label">插入变量：</span>
+                    <div class="prompt-insert-vars">
+                      <template v-if="validPromptVariables.length">
+                        <span class="insert-label">插入变量：</span>
+                        <button
+                          v-for="v in validPromptVariables"
+                          :key="v.key"
+                          type="button"
+                          class="var-insert-btn"
+                          :disabled="isVersionPreview"
+                          @click="insertPromptVariable(v.key)"
+                        >
+                          {{ v.label || v.key }}
+                        </button>
+                      </template>
                       <button
-                        v-for="v in validPromptVariables"
-                        :key="v.key"
+                        v-if="agent.systemPrompt"
                         type="button"
-                        class="var-insert-btn"
-                        :disabled="isVersionPreview"
-                        @click="insertPromptVariable(v.key)"
+                        class="var-insert-btn preview-toggle-btn"
+                        :class="{ active: promptPreviewVisible }"
+                        @click="promptPreviewVisible = !promptPreviewVisible"
                       >
-                        {{ v.label || v.key }}
+                        {{ promptPreviewVisible ? '隐藏预览' : '预览替换' }}
                       </button>
+                    </div>
+                    <div v-if="promptPreviewVisible && agent.systemPrompt" class="prompt-preview-box">
+                      <div class="prompt-preview-label">变量替换预览（使用默认值）</div>
+                      <pre class="prompt-preview-content" v-html="promptPreviewHtml"></pre>
                     </div>
                   </a-form-item>
                   <!-- 变量配置 -->
@@ -230,8 +245,7 @@
                       <div>
                         <h4 class="sub-config-card-title">变量配置</h4>
                         <p class="sub-config-card-desc">
-                          变量名仅支持英文、数字、下划线<br/>
-                          在系统提示词中用 <code v-pre>{{变量名}}</code> 引用
+                          在系统提示词中用 <code v-pre>{{变量名}}</code> 引用，支持中英文
                         </p>
                       </div>
                       <button type="button" class="btn-add-inline" :disabled="isVersionPreview" @click="addPromptVariable">
@@ -1697,8 +1711,28 @@ const configTab = ref('prompt')
 
 const promptVariables = ref([])
 const validPromptVariables = computed(() =>
-  promptVariables.value.filter(v => v.key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(v.key.trim()))
+  promptVariables.value.filter(v => v.key && /^\S+$/.test(v.key.trim()))
 )
+
+const promptPreviewVisible = ref(false)
+const promptPreviewHtml = computed(() => {
+  const template = agent.systemPrompt || ''
+  if (!template) return ''
+  const varMap = {}
+  validPromptVariables.value.forEach(v => {
+    varMap[v.key.trim()] = v.defaultValue || ''
+  })
+  return template.replace(/\{\{([^{}]+?)\}\}/g, (_, key) => {
+    if (key in varMap) {
+      const val = varMap[key]
+      return val ? `<span class="preview-replaced">${escapeHtml(val)}</span>` : `<span class="preview-empty">[${key}]</span>`
+    }
+    return `<span class="preview-unset">[${key}]</span>`
+  })
+})
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
 const isVersionPreview = computed(() => selectedVersion.value !== 'draft' && selectedVersion.value != null)
 
@@ -3915,6 +3949,53 @@ onMounted(async () => {
 }
 .var-insert-btn:hover {
   background: #e0e7ff;
+}
+.preview-toggle-btn {
+  border-color: #a1a1aa;
+  background: #f4f4f5;
+  color: #52525b;
+}
+.preview-toggle-btn.active {
+  border-color: #0070f3;
+  background: #eff6ff;
+  color: #0070f3;
+}
+.prompt-preview-box {
+  margin-top: 10px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.prompt-preview-label {
+  padding: 6px 12px;
+  background: #f9fafb;
+  font-size: 12px;
+  color: #71717a;
+  border-bottom: 1px solid #e4e4e7;
+}
+.prompt-preview-content {
+  padding: 12px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.prompt-preview-content :deep(.preview-replaced) {
+  background: #dcfce7;
+  color: #166534;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.prompt-preview-content :deep(.preview-empty),
+.prompt-preview-content :deep(.preview-unset) {
+  background: #fef9c3;
+  color: #854d0e;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 /* 子配置卡片（变量、模型配置等） */
 .sub-config-card {
