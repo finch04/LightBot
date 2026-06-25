@@ -556,6 +556,31 @@
       </div>
     </a-modal>
 
+    <!-- 重复文档检测弹窗 -->
+    <a-modal
+      v-model:open="dupDetectVisible"
+      title="检测到重复文档"
+      :width="460"
+      :footer="null"
+      :maskClosable="false"
+    >
+      <div class="dup-detect-body">
+        <p>当前知识库已存在相同内容的文档：<b>{{ dupDetectName }}</b></p>
+        <p class="dup-detect-hint">请选择处理方式：</p>
+      </div>
+      <div class="dup-detect-actions">
+        <button class="btn-outline" @click="handleDupChoice('skip')">
+          跳过，不上传
+        </button>
+        <button class="btn-outline" @click="handleDupChoice('keep-both')">
+          保留两个版本
+        </button>
+        <button class="btn-primary-sm" @click="handleDupChoice('overwrite')">
+          覆盖旧文档
+        </button>
+      </div>
+    </a-modal>
+
     <!-- URL 网页预览弹窗 -->
     <a-modal
       v-model:open="urlPreviewVisible"
@@ -1060,6 +1085,11 @@ const urlPreviewItem = ref(null)
 const urlPreviewTab = ref('html')
 const urlSaving = ref(false)
 
+// 重复文档检测弹窗
+const dupDetectVisible = ref(false)
+const dupDetectName = ref('')
+const dupPendingFiles = ref([])
+
 // 计算属性：是否有成功的 URL
 const hasSuccessfulUrls = computed(() => urlList.value.some(item => item.status === 'success'))
 
@@ -1254,6 +1284,17 @@ async function handleUpload(file) {
   return false
 }
 
+function handleDupChoice(force) {
+  dupDetectVisible.value = false
+  if (force === 'skip') {
+    uploadFiles.value = []
+    return
+  }
+  // overwrite 或 keep-both：重新上传
+  uploadFiles.value = dupPendingFiles.value
+  nextTick(() => handleBatchUpload(force))
+}
+
 // ========== 上传弹窗 ==========
 
 function openUploadModal() {
@@ -1317,20 +1358,29 @@ async function handleOcrToggle(checked) {
   }
 }
 
-async function handleBatchUpload() {
+async function handleBatchUpload(force = null) {
   if (uploadFiles.value.length === 0 || uploadSubmitting.value) return
   uploadSubmitting.value = true
 
   try {
     const files = uploadFiles.value.map(f => f)
-    await uploadDocuments(knowledgeId, files, ocrEnabled.value)
+    await uploadDocuments(knowledgeId, files, ocrEnabled.value, force)
     message.success(`文档上传任务已提交，共 ${files.length} 个文件，可在任务中心查看进度`)
     uploadVisible.value = false
     uploadFiles.value = []
     await loadDocuments()
     setTimeout(startDocPoll, 1500)
   } catch (e) {
-    // interceptor已处理错误提示
+    // 检测到重复文档时，弹出选择弹窗
+    const resData = e?.response?.data
+    if (resData?.code === 60002) {
+      const msg = resData.message || ''
+      // 消息格式："xxx.pdf已是相同内容文件，无需重复上传"
+      const match = msg.match(/^(.+?)已是相同内容文件/)
+      dupDetectName.value = match ? match[1] : '未知文档'
+      dupPendingFiles.value = uploadFiles.value.map(f => f)
+      dupDetectVisible.value = true
+    }
   } finally {
     uploadSubmitting.value = false
   }
@@ -3575,5 +3625,22 @@ onUnmounted(() => {
 .qa-disabled-content p {
   font-size: 15px;
   margin-bottom: 12px;
+}
+.dup-detect-body {
+  margin-bottom: 20px;
+}
+.dup-detect-body p {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.dup-detect-hint {
+  color: #71717a;
+  font-size: 13px;
+}
+.dup-detect-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>

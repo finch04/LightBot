@@ -85,10 +85,11 @@
                 <!-- 引用回复内容 -->
                 <div v-if="messages[virtualRow.index]?.role === 'user' && getReplyToInfo(messages[virtualRow.index])" class="reply-quote">
                   <div class="reply-quote-bar"></div>
-                  <div class="reply-quote-content">
-                    <span class="reply-quote-role">{{ getReplyToInfo(messages[virtualRow.index]).role === 'user' ? '你' : 'AI' }}：</span>
-                    <span class="reply-quote-text">{{ getReplyToInfo(messages[virtualRow.index]).content }}</span>
-                  </div>
+                  <a-tooltip :title="getReplyToInfo(messages[virtualRow.index]).content" placement="topLeft" :mouseEnterDelay="0.3" :overlay-style="{ maxWidth: '520px' }">
+                    <div class="reply-quote-content">
+                      <span class="reply-quote-text">{{ getReplyToInfo(messages[virtualRow.index]).content }}</span>
+                    </div>
+                  </a-tooltip>
                 </div>
                 <!-- 用户附件 -->
                 <div
@@ -253,14 +254,14 @@
                     </button>
                   </a-tooltip>
                   <a-tooltip
-                    v-if="messages[virtualRow.index].role === 'user' && !loading && isLastUserMessage(virtualRow.index)"
+                    v-if="messages[virtualRow.index].role === 'user' && !loading && isLastUserMessage(virtualRow.index) && !messages[virtualRow.index]._replyToMessageId"
                     title="编辑"
                   >
                     <button class="btn-copy" @click="startEdit(virtualRow.index)">
                       <EditOutlined />
                     </button>
                   </a-tooltip>
-                  <a-tooltip title="引用回复">
+                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant'" title="引用回复">
                     <button class="btn-copy" @click="startReply(virtualRow.index)">
                       <CommentOutlined />
                     </button>
@@ -398,10 +399,11 @@
         </div>
         <!-- 引用回复预览条 -->
         <div v-if="replyTo.active" class="reply-preview-bar">
-          <div class="reply-preview-content">
-            <span class="reply-preview-role">{{ replyTo.role === 'user' ? '你' : 'AI' }}：</span>
-            <span class="reply-preview-text">{{ replyTo.content }}</span>
-          </div>
+          <a-tooltip :title="replyTo.content" placement="topLeft" :mouseEnterDelay="0.3" :overlay-style="{ maxWidth: '520px' }">
+            <div class="reply-preview-content">
+              <span class="reply-preview-text">{{ replyTo.content }}</span>
+            </div>
+          </a-tooltip>
           <button class="reply-preview-close" @click="cancelReply">
             <CloseOutlined />
           </button>
@@ -1049,6 +1051,7 @@ async function loadHistory() {
   lastReplyElapsed.value = null
   input.value = ''
   pendingAttachments.value = []
+  cancelReply()
   loadingHistory.value = true
   switchingSession.value = true
   messagePage.value = 1
@@ -2139,7 +2142,7 @@ watch(sessionId, (newVal, oldVal) => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  margin: 0 12px 8px;
+  margin: 8px 12px 8px;
   background: #f4f4f5;
   border-radius: 8px;
   border-left: 3px solid #0070f3;
@@ -2151,18 +2154,13 @@ watch(sessionId, (newVal, oldVal) => {
   line-height: 1.4;
   overflow: hidden;
 }
-.reply-preview-role {
-  color: #0070f3;
-  font-weight: 500;
-}
 .reply-preview-text {
   color: #71717a;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
-  max-width: 400px;
-  vertical-align: bottom;
+  display: block;
+  width: 100%;
 }
 .reply-preview-close {
   flex-shrink: 0;
@@ -2185,9 +2183,11 @@ watch(sessionId, (newVal, oldVal) => {
   gap: 8px;
   padding: 6px 10px;
   margin-bottom: 6px;
+  margin-left: 42px;
   background: rgba(0, 112, 243, 0.06);
   border-radius: 8px;
   border-left: 3px solid #0070f3;
+  align-self: stretch;
 }
 .reply-quote-bar {
   display: none;
@@ -2198,10 +2198,6 @@ watch(sessionId, (newVal, oldVal) => {
   font-size: 12px;
   line-height: 1.4;
   overflow: hidden;
-}
-.reply-quote-role {
-  color: #0070f3;
-  font-weight: 500;
 }
 .reply-quote-text {
   color: #71717a;

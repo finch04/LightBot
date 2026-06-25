@@ -51,16 +51,18 @@ public class KnowledgeDocController {
     @PostMapping("/{id}/documents")
     public Result<Document> uploadDocument(@PathVariable Long id,
                                             @RequestParam("file") MultipartFile file,
-                                            @RequestParam(defaultValue = "false") boolean ocrEnabled) {
-        return Result.ok(documentService.uploadDocument(id, file, ocrEnabled));
+                                            @RequestParam(defaultValue = "false") boolean ocrEnabled,
+                                            @RequestParam(required = false) String force) {
+        return Result.ok(documentService.uploadDocument(id, file, ocrEnabled, force));
     }
 
     @Operation(summary = "批量上传文档到知识库（需要DEVELOPER及以上权限）")
     @PostMapping("/{id}/documents/batch")
     public Result<List<Document>> uploadDocuments(@PathVariable Long id,
                                                    @RequestParam("files") List<MultipartFile> files,
-                                                   @RequestParam(defaultValue = "false") boolean ocrEnabled) {
-        return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled));
+                                                   @RequestParam(defaultValue = "false") boolean ocrEnabled,
+                                                   @RequestParam(required = false) String force) {
+        return Result.ok(documentService.uploadDocuments(id, files, ocrEnabled, force));
     }
 
     @Operation(summary = "预览URL网页内容（不入库）")

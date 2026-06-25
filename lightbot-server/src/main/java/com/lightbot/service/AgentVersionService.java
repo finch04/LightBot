@@ -72,6 +72,14 @@ public interface AgentVersionService {
      */
     Map<String, Object> loadVersionPayloadById(Long versionId);
 
+    /**
+     * 获取草稿版本的主键 ID
+     *
+     * @param agentId Agent ID
+     * @return 草稿行的 agent_version.id，无草稿返回 null
+     */
+    Long getDraftVersionId(Long agentId);
+
     WorkflowDefinition loadWorkflowDefinition(Long agentId, boolean useDraft);
 
     /**

@@ -37,4 +37,8 @@ public class WorkflowVersionVO {
 
     @Schema(description = "发布说明")
     private String description;
+
+    @Schema(description = "草稿版本快照ID（agent_version.id），仅用于前端匹配草稿选项")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long draftVersionId;
 }

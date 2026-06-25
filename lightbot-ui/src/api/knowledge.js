@@ -20,21 +20,25 @@ export function deleteKnowledge(id) {
   return request.delete(`/knowledge/${id}`)
 }
 
-export function uploadDocument(knowledgeId, file, ocrEnabled = false) {
+export function uploadDocument(knowledgeId, file, ocrEnabled = false, force = null) {
   const formData = new FormData()
   formData.append('file', file)
+  const params = { ocrEnabled }
+  if (force) params.force = force
   return request.post(`/knowledge/${knowledgeId}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    params: { ocrEnabled },
+    params,
   })
 }
 
-export function uploadDocuments(knowledgeId, files, ocrEnabled = false) {
+export function uploadDocuments(knowledgeId, files, ocrEnabled = false, force = null) {
   const formData = new FormData()
   files.forEach(file => formData.append('files', file))
+  const params = { ocrEnabled }
+  if (force) params.force = force
   return request.post(`/knowledge/${knowledgeId}/documents/batch`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    params: { ocrEnabled },
+    params,
   })
 }
 

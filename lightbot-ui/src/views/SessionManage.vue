@@ -42,7 +42,10 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'title'">
           <a-tooltip :title="record.title">
-            <span class="session-title-cell">{{ record.title || '新对话' }}</span>
+            <span class="session-title-cell">
+              <PushpinFilled v-if="record.pinned" class="session-pinned-icon" />
+              {{ record.title || '新对话' }}
+            </span>
           </a-tooltip>
         </template>
         <template v-else-if="column.key === 'messageCount'">
@@ -170,7 +173,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined, PushpinFilled } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
 
@@ -483,6 +486,11 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.session-pinned-icon {
+  color: #6366f1;
+  font-size: 12px;
+  margin-right: 4px;
 }
 .detail-desc {
   margin-bottom: 20px;

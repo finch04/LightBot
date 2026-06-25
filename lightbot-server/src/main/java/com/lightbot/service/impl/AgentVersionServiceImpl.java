@@ -148,6 +148,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
                         .orderByDesc(AgentVersion::getVersion));
 
         int current = agent.getVersion() != null ? agent.getVersion() : 0;
+        Long draftId = getDraftVersionId(agentId);
 
         List<WorkflowVersionVO> list = new ArrayList<>();
         for (AgentVersion row : rows) {
@@ -159,6 +160,13 @@ public class AgentVersionServiceImpl implements AgentVersionService {
                     .edgeCount(row.getEdgeCount())
                     .current(row.getVersion() != null && row.getVersion().equals(current))
                     .description(row.getDescription())
+                    .draftVersionId(draftId)
+                    .build());
+        }
+        // 无已发布版本时，仍返回一条携带 draftVersionId 的占位 VO，供前端匹配草稿选项
+        if (list.isEmpty() && draftId != null) {
+            list.add(WorkflowVersionVO.builder()
+                    .draftVersionId(draftId)
                     .build());
         }
         return list;
@@ -693,6 +701,17 @@ public class AgentVersionServiceImpl implements AgentVersionService {
             return payload;
         }
         return null;
+    }
+
+    @Override
+    public Long getDraftVersionId(Long agentId) {
+        AgentVersion draft = agentVersionMapper.selectOne(
+                new LambdaQueryWrapper<AgentVersion>()
+                        .select(AgentVersion::getId)
+                        .eq(AgentVersion::getAgentId, agentId)
+                        .eq(AgentVersion::getStatus, AgentVersionStatus.DRAFT)
+                        .last("LIMIT 1"));
+        return draft != null ? draft.getId() : null;
     }
 
     @Override

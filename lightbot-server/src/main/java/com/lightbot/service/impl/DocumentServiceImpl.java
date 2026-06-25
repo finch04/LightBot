@@ -103,7 +103,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     private final ObjectProvider<DocumentVersionService> documentVersionServiceProvider;
 
     @Override
-    public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled) {
+    public Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled, String force) {
         // 权限校验：需要DEVELOPER及以上权限
         permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
 
@@ -130,7 +130,17 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 .eq(Document::getFileHash, fileHash)
                 .eq(Document::getDeleted, 0));
         if (existing != null) {
-            throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS, existing.getName());
+            if ("overwrite".equals(force)) {
+                // 覆盖模式：删除旧文档后继续上传
+                log.info("[文档上传] 覆盖模式, 删除旧文档, documentId={}, name={}", existing.getId(), existing.getName());
+                deleteDocument(existing.getId());
+            } else if ("keep-both".equals(force)) {
+                // 保留两个版本：跳过哈希检查，继续上传
+                log.info("[文档上传] 保留两个版本, existingDocumentId={}, name={}", existing.getId(), existing.getName());
+            } else {
+                // 默认：拒绝重复上传
+                throw new BizException(ErrorCode.DOCUMENT_ALREADY_EXISTS, existing.getName());
+            }
         }
 
         // 5. 保存文件到临时目录
@@ -170,10 +180,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     @Override
-    public List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled) {
+    public List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled, String force) {
         List<Document> results = new ArrayList<>();
         for (MultipartFile file : files) {
-            results.add(uploadDocument(knowledgeId, file, ocrEnabled));
+            results.add(uploadDocument(knowledgeId, file, ocrEnabled, force));
         }
         return results;
     }

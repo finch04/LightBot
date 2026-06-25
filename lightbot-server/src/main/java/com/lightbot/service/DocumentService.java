@@ -27,9 +27,10 @@ public interface DocumentService extends IService<Document> {
      * @param knowledgeId 知识库ID
      * @param file        上传的文件
      * @param ocrEnabled  是否启用OCR识别
+     * @param force       重复处理策略：null=正常检测并拒绝，"overwrite"=覆盖旧文档，"keep-both"=保留两个版本
      * @return 文档记录
      */
-    Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled);
+    Document uploadDocument(Long knowledgeId, MultipartFile file, boolean ocrEnabled, String force);
 
     /**
      * 批量上传文档
@@ -37,9 +38,10 @@ public interface DocumentService extends IService<Document> {
      * @param knowledgeId 知识库ID
      * @param files       上传的文件列表
      * @param ocrEnabled  是否启用OCR识别
+     * @param force       重复处理策略：null=正常检测并拒绝，"overwrite"=覆盖旧文档，"keep-both"=保留两个版本
      * @return 文档记录列表
      */
-    List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled);
+    List<Document> uploadDocuments(Long knowledgeId, List<MultipartFile> files, boolean ocrEnabled, String force);
 
     /**
      * 入库：创建任务并推入队列

@@ -321,15 +321,15 @@ public class InitMiddleware implements ChatMiddleware {
 
         // 确定最终要存的 agentVersionId：
         // - 有 agentVersionId（发布版本）→ 直接存
-        // - configVersion=0 且 agentVersionId 为空（主动切到草稿）→ 清除为 null
+        // - configVersion=0 且 agentVersionId 为空（主动切到草稿）→ 查询草稿行 ID 并存入
         // - 都为空（新会话首次发消息）→ 不更新版本
-        Long targetVersionId = agentVersionId;
         boolean isDraft = configVersion != null && configVersion == 0;
+        Long targetVersionId = agentVersionId;
         if (targetVersionId == null && isDraft) {
-            targetVersionId = null; // 草稿：明确清除
+            targetVersionId = agentVersionService.getDraftVersionId(agentId);
         }
 
-        boolean versionChanged = agentVersionId != null || isDraft;
+        boolean versionChanged = targetVersionId != null;
         boolean needUpdate = agentChanged || (versionChanged && !java.util.Objects.equals(targetVersionId, session.getAgentVersionId()));
         if (needUpdate) {
             chatSessionService.updateSessionAgent(sessionId, agentId, targetVersionId);

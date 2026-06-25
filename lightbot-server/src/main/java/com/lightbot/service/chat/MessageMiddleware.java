@@ -117,7 +117,11 @@ public class MessageMiddleware implements ChatMiddleware {
         } else {
             // 检测 ask_user 父消息（在保存前执行，因为保存后当前消息变成最后一条）
             Long askUserParentId = detectAskUserParentId(ctx.getSessionId());
+            // 校验引用回复目标：必须存在且属于同一会话
             Long replyToId = ctx.getRequest().getReplyToMessageId();
+            if (replyToId != null) {
+                validateReplyToMessage(replyToId, ctx.getSessionId());
+            }
             Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), askUserParentId, replyToId);
             ctx.setUserMessageId(userMsgId);
             if (askUserParentId != null) {
@@ -251,6 +255,33 @@ public class MessageMiddleware implements ChatMiddleware {
     }
 
     /**
+     * 校验引用回复目标：消息必须存在且属于同一会话
+     */
+    private void validateReplyToMessage(Long replyToMessageId, Long sessionId) {
+        Message target = messageMapper.selectById(replyToMessageId);
+        if (target == null || !sessionId.equals(target.getSessionId())) {
+            throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "引用的消息不存在或不属于当前会话");
+        }
+    }
+
+    /**
+     * 查询被引用消息的内容（截取前 200 字用于 LLM 上下文注入）
+     *
+     * @return 被引用内容摘要，无则返回 null
+     */
+    private String resolveReplyToContent(Long replyToMessageId) {
+        if (replyToMessageId == null) {
+            return null;
+        }
+        Message target = messageMapper.selectById(replyToMessageId);
+        if (target == null || target.getContent() == null) {
+            return null;
+        }
+        String content = target.getContent();
+        return content.length() > 200 ? content.substring(0, 200) + "..." : content;
+    }
+
+    /**
      * 构建消息列表：系统提示词 + 工具使用引导 + 历史消息 + 当前用户消息
      */
     private List<org.springframework.ai.chat.messages.Message> buildMessages(
@@ -344,8 +375,17 @@ public class MessageMiddleware implements ChatMiddleware {
         }
 
         // 6. 当前用户消息（文档走文本注入，图片/视频走多模态）
+        // 6.1 引用回复：将被引用消息内容注入到用户消息前，让 LLM 理解追问上下文
+        Long replyToId = request != null ? request.getReplyToMessageId() : null;
+        String effectiveUserMessage = userMessage;
+        if (replyToId != null) {
+            String replyToContent = resolveReplyToContent(replyToId);
+            if (replyToContent != null && !replyToContent.isBlank()) {
+                effectiveUserMessage = "[引用消息：" + replyToContent + "]\n" + userMessage;
+            }
+        }
         List<ChatAttachmentDTO> attachments = request != null ? request.getAttachments() : null;
-        messages.add(buildUserMessageForAttachments(userMessage, attachments));
+        messages.add(buildUserMessageForAttachments(effectiveUserMessage, attachments));
         return messages;
     }
 

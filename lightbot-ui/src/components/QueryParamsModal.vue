@@ -7,6 +7,23 @@
     @cancel="handleCancel"
   >
     <a-form :model="form" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }">
+      <!-- 预设模式 -->
+      <div class="preset-bar">
+        <span class="preset-label">快捷预设</span>
+        <div class="preset-btns">
+          <button
+            v-for="p in presetOptions"
+            :key="p.key"
+            class="preset-btn"
+            :class="{ active: activePreset === p.key }"
+            @click="applyPreset(p.key)"
+          >{{ p.label }}</button>
+        </div>
+        <a-tooltip title="选择预设模式可快速填充推荐参数，也可手动微调">
+          <QuestionCircleOutlined class="field-tip-icon" />
+        </a-tooltip>
+      </div>
+
       <!-- 检索模式 -->
       <a-form-item>
         <template #label>
@@ -361,20 +378,65 @@ function getDefaults() {
   return props.knowledgeType === 'milvus' ? { ...milvusDefaults } : { ...pgDefaults }
 }
 
+// 预设模式
+const activePreset = ref('balanced')
+
+const presetOptions = [
+  { key: 'precise', label: '精确模式' },
+  { key: 'balanced', label: '平衡模式' },
+  { key: 'broad', label: '广泛模式' },
+]
+
+const presetConfigs = {
+  precise: {
+    final_top_k: 3,
+    similarity_threshold: 0.7,
+    search_mode: 'hybrid',
+    use_reranker: true,
+    recall_top_k: 20,
+  },
+  balanced: null,
+  broad: {
+    final_top_k: 10,
+    similarity_threshold: 0.2,
+    search_mode: 'vector',
+    use_reranker: false,
+  },
+}
+
+function applyPreset(key) {
+  activePreset.value = key
+  const cfg = presetConfigs[key]
+  if (cfg) {
+    Object.assign(form, cfg)
+  } else {
+    Object.assign(form, getDefaults())
+  }
+}
+
+function detectPreset(data) {
+  if (data.final_top_k <= 3 && data.similarity_threshold >= 0.65 && data.use_reranker) return 'precise'
+  if (data.final_top_k >= 8 && data.similarity_threshold <= 0.25 && !data.use_reranker) return 'broad'
+  return 'balanced'
+}
+
 async function open() {
   try {
     const res = await getQueryParams(props.knowledgeId)
     const saved = res.data || {}
     const defaults = getDefaults()
     Object.assign(form, { ...defaults, ...saved })
+    activePreset.value = detectPreset(form)
   } catch {
     Object.assign(form, getDefaults())
+    activePreset.value = 'balanced'
   }
   visible.value = true
 }
 
 function handleReset() {
   Object.assign(form, getDefaults())
+  activePreset.value = 'balanced'
 }
 
 function handleCancel() {
@@ -405,6 +467,43 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
 </script>
 
 <style scoped>
+.preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+.preset-label {
+  font-size: 13px;
+  color: #52525b;
+  white-space: nowrap;
+}
+.preset-btns {
+  display: flex;
+  gap: 6px;
+}
+.preset-btn {
+  padding: 4px 14px;
+  border: 1px solid #d4d4d8;
+  border-radius: 100px;
+  background: #fff;
+  font-size: 12px;
+  color: #52525b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset-btn:hover {
+  border-color: #0070f3;
+  color: #0070f3;
+}
+.preset-btn.active {
+  background: #0070f3;
+  border-color: #0070f3;
+  color: #fff;
+}
 .field-tip-icon {
   font-size: 13px;
   color: #a1a1aa;

@@ -106,15 +106,17 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
       return false
     }
     try {
+      const res = await listAgentVersions(agentId)
+      const versions = res.data || []
+      // 从版本列表中取草稿行的真实 agent_version.id（每个版本 VO 都携带同一个 draftVersionId）
+      const draftVersionId = versions[0]?.draftVersionId ? String(versions[0].draftVersionId) : null
       const opts = [{
         value: 0,
-        versionId: null,
+        versionId: draftVersionId,
         versionLabel: '暂存草稿',
         selectLabel: '暂存草稿',
         badge: 'draft',
       }]
-      const res = await listAgentVersions(agentId)
-      const versions = res.data || []
       for (const v of versions) {
         const num = v.version
         if (num == null || num <= 0) continue
@@ -139,14 +141,13 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
         } else {
           // 版本已不存在（被删除），回退到草稿
           selectedConfigVersion.value = 0
-          selectedAgentVersionId.value = null
+          selectedAgentVersionId.value = draftVersionId
           versionDeleted = true
         }
       } else {
-        const currentPublished = versions.find(v => v.current)
-        selectedConfigVersion.value = currentPublished?.version ?? 0
-        const matched = opts.find(o => o.value === selectedConfigVersion.value)
-        selectedAgentVersionId.value = matched?.versionId || null
+        // 无指定版本时默认选中草稿
+        selectedConfigVersion.value = 0
+        selectedAgentVersionId.value = draftVersionId
       }
       await loadChatCapabilities(agentId, selectedConfigVersion.value)
       return versionDeleted
