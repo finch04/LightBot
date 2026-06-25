@@ -943,6 +943,7 @@ import {
   refreshKnowledgeStats,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
+import request from '../utils/request'
 import { getProvidersWithModels } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import { useUserStore } from '../stores/user'
@@ -1043,7 +1044,7 @@ const downloadUrl = ref('')
 const chunks = ref([])
 
 /** 解析文档入库配置JSON，缓存结果避免重复解析 */
-const _ingestConfigCache = new Map()
+let _ingestConfigCache = new Map()
 function parseIngestConfig(json) {
   if (!json) return {}
   if (_ingestConfigCache.has(json)) return _ingestConfigCache.get(json)
@@ -1615,15 +1616,10 @@ async function openDocModal(doc) {
 async function handleDownload() {
   if (!currentDoc.value?.id) return
   try {
-    const token = localStorage.getItem('token')
-    const resp = await fetch(`/api/knowledge/documents/${currentDoc.value.id}/download-file`, {
-      headers: token ? { 'Authorization': token } : {},
+    const blob = await request.get(`/knowledge/documents/${currentDoc.value.id}/download-file`, {
+      responseType: 'blob',
+      silent: true,
     })
-    if (!resp.ok) {
-      message.error('下载失败')
-      return
-    }
-    const blob = await resp.blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1631,7 +1627,7 @@ async function handleDownload() {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
   } catch {
     message.error('下载失败')
   }
@@ -2184,6 +2180,8 @@ onUnmounted(() => {
     questionRotateTimer = null
   }
   stopDocPoll()
+  _ingestConfigCache.clear()
+  _ingestConfigCache = null
 })
 </script>
 

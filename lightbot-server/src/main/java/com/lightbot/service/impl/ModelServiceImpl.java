@@ -81,11 +81,12 @@ public class ModelServiceImpl extends ServiceImpl<ModelMapper, Model>
     }
 
     /**
-     * 模型变更后同步缓存
+     * 模型变更后增量同步缓存（仅刷新受影响的 providerId）
      */
     private void syncCache(Long providerId) {
-        List<Model> all = list(new LambdaQueryWrapper<Model>().orderByAsc(Model::getProviderId));
-        modelCacheUtil.cacheAllModels(all);
+        List<Model> models = list(new LambdaQueryWrapper<Model>()
+                .eq(Model::getProviderId, providerId));
+        modelCacheUtil.cacheModelsByProviderId(providerId, models);
     }
 
     @Override

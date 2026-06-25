@@ -344,8 +344,9 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
         if (text == null) return 0;
         int chineseCount = 0;
         int otherCount = 0;
-        for (char c : text.toCharArray()) {
-            if (Character.toString(c).matches("[\\u4e00-\\u9fa5]")) {
+        for (int i = 0, len = text.length(); i < len; i++) {
+            char c = text.charAt(i);
+            if (c >= '一' && c <= '龥') {
                 chineseCount++;
             } else {
                 otherCount++;

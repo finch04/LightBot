@@ -173,7 +173,11 @@ async function loadData() {
   }
 }
 
-watch(searchText, () => loadData())
+let searchDebounceTimer = null
+watch(searchText, () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => loadData(), 300)
+})
 
 function handleDelete(id) {
   Modal.confirm({

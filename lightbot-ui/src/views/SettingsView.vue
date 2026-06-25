@@ -10,6 +10,7 @@
       <a-tab-pane key="landing" tab="Landing 管理" />
       <a-tab-pane key="users" tab="用户管理" />
       <a-tab-pane key="token" tab="Token 管理" />
+      <a-tab-pane key="apiKey" tab="API Key 管理" />
     </a-tabs>
 
     <!-- Tab 1: 默认模型管理 -->
@@ -35,7 +36,7 @@
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="chatSaving" @click="saveChatModel">
+              <button class="btn-primary" :disabled="chatSaving" @click="saveModel('chat')">
                 <SaveOutlined /> {{ chatSaving ? '保存中...' : '保存配置' }}
               </button>
             </a-form-item>
@@ -66,7 +67,7 @@
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="embeddingSaving" @click="saveEmbeddingModel">
+              <button class="btn-primary" :disabled="embeddingSaving" @click="saveModel('embedding')">
                 <SaveOutlined /> {{ embeddingSaving ? '保存中...' : '保存配置' }}
               </button>
             </a-form-item>
@@ -97,7 +98,7 @@
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="rerankSaving" @click="saveRerankModel">
+              <button class="btn-primary" :disabled="rerankSaving" @click="saveModel('rerank')">
                 <SaveOutlined /> {{ rerankSaving ? '保存中...' : '保存配置' }}
               </button>
             </a-form-item>
@@ -128,7 +129,7 @@
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="ttsSaving" @click="saveTtsModel">
+              <button class="btn-primary" :disabled="ttsSaving" @click="saveModel('tts')">
                 <SaveOutlined /> {{ ttsSaving ? '保存中...' : '保存配置' }}
               </button>
             </a-form-item>
@@ -258,10 +259,8 @@
       <!-- 全局统计大屏 -->
       <div class="panel token-stats-panel">
         <div class="panel-header">
-          <div class="panel-title-wrap">
-            <h3>今日 Token 消耗</h3>
-            <span class="panel-desc">{{ tokenStats.date }}</span>
-          </div>
+          <h3>今日 Token 消耗</h3>
+          <span class="panel-desc panel-desc-right">{{ tokenStats.date }}</span>
           <button class="btn-icon-refresh" @click="loadTokenStats" :disabled="tokenStatsLoading">
             <SyncOutlined :spin="tokenStatsLoading" />
           </button>
@@ -315,10 +314,8 @@
     <!-- 用户消耗排行 -->
     <div class="panel token-ranking-panel">
       <div class="panel-header">
-        <div class="panel-title-wrap">
-          <h3>用户 Token 消耗排行</h3>
-          <span class="panel-desc">今日 Top {{ tokenRanking.length }}</span>
-        </div>
+        <h3>用户 Token 消耗排行</h3>
+        <span class="panel-desc panel-desc-right">今日 Top {{ tokenRanking.length }}</span>
         <button class="btn-icon-refresh" @click="loadTokenRanking" :disabled="tokenRankingLoading">
           <SyncOutlined :spin="tokenRankingLoading" />
         </button>
@@ -353,11 +350,137 @@
     </div>
     </a-spin>
     </div>
+
+    <!-- Tab 5: API Key 管理 -->
+    <div v-show="activeTab === 'apiKey'">
+    <a-spin :spinning="apiKeyLoading">
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h3>API Key 管理</h3>
+          <a-popover trigger="click" placement="right" :overlay-style="{ maxWidth: '480px' }">
+            <template #content>
+              <div style="font-size: 13px; line-height: 1.8; padding: 4px 0;">
+                <p style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">API Key 使用说明</p>
+                <p><b>什么是 API Key？</b></p>
+                <p>API Key 是用于外部系统调用 LightBot 接口的认证凭证，格式为 <code>lbkey_xxxx...</code>，支持通过 HTTP Header 传递。</p>
+                <p style="margin-top: 8px;"><b>如何使用？</b></p>
+                <p>在请求头中添加：</p>
+                <p><code>Authorization: Bearer lbkey_your_key_here</code></p>
+                <p style="margin-top: 8px;"><b>支持的接口：</b></p>
+                <ul style="padding-left: 16px; margin: 4px 0;">
+                  <li><code>chat</code> 权限：仅可调用对话相关接口（/api/chat/**）</li>
+                  <li><code>full</code> 权限：可调用所有已认证接口</li>
+                </ul>
+                <p style="margin-top: 8px;"><b>注意事项：</b></p>
+                <ul style="padding-left: 16px; margin: 4px 0;">
+                  <li>密钥仅在创建时显示一次，请妥善保管</li>
+                  <li>可随时启用/禁用或删除密钥</li>
+                  <li>支持设置过期时间，过期后自动失效</li>
+                  <li>如密钥泄露，请立即删除并重新生成</li>
+                </ul>
+              </div>
+            </template>
+            <QuestionCircleOutlined style="font-size: 15px; color: #a1a1aa; cursor: pointer; margin-left: 6px;" />
+          </a-popover>
+        </div>
+        <span class="panel-desc">用于外部系统调用 LightBot 接口的认证凭证</span>
+        <button class="btn-primary" style="margin-left: auto;" @click="showCreateApiKey">
+          <PlusOutlined /> 创建 API Key
+        </button>
+      </div>
+      <div class="panel-body">
+        <div v-if="apiKeyList.length === 0 && !apiKeyLoading" class="empty-tip">暂无 API Key，点击上方按钮创建一个</div>
+        <div v-else class="apikey-cards-grid">
+          <div v-for="key in apiKeyList" :key="key.id" class="apikey-card">
+            <div class="apikey-card-header">
+              <div class="apikey-card-info">
+                <KeyOutlined style="font-size: 16px; color: #0070f3;" />
+                <span class="apikey-card-name">{{ key.name }}</span>
+              </div>
+              <code class="apikey-card-prefix">{{ key.keyPrefix }}</code>
+            </div>
+            <div class="apikey-card-body">
+              <div class="apikey-card-row">
+                <span class="apikey-card-label">权限</span>
+                <a-tag :color="key.permissions === 'full' ? 'blue' : 'default'">
+                  {{ key.permissions === 'full' ? '完全访问' : '仅对话' }}
+                </a-tag>
+              </div>
+              <div class="apikey-card-row">
+                <span class="apikey-card-label">过期时间</span>
+                <span>{{ key.expiresAt || '永不过期' }}</span>
+              </div>
+              <div class="apikey-card-row">
+                <span class="apikey-card-label">最近使用</span>
+                <span>{{ key.lastUsedAt || '-' }}</span>
+              </div>
+            </div>
+            <div class="apikey-card-footer">
+              <div class="apikey-card-switch">
+                <span class="apikey-card-switch-label">{{ key.isEnabled === 1 ? '已启用' : '已禁用' }}</span>
+                <a-switch :checked="key.isEnabled === 1" size="small" @change="handleToggleApiKey(key)" />
+              </div>
+              <div class="apikey-card-actions">
+                <a-popconfirm title="确定要删除此 API Key 吗？" @confirm="handleDeleteApiKey(key)" ok-text="确定" cancel-text="取消">
+                  <a-button type="text" size="small" danger>
+                    <DeleteOutlined /> 删除
+                  </a-button>
+                </a-popconfirm>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </a-spin>
+    </div>
+
+    <!-- 创建 API Key 弹窗 -->
+    <a-modal
+      v-model:open="apiKeyCreateVisible"
+      title="创建 API Key"
+      :maskClosable="false"
+      @ok="handleCreateApiKey"
+      :confirmLoading="apiKeyCreateLoading"
+      ok-text="创建"
+      cancel-text="取消"
+    >
+      <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }">
+        <a-form-item label="名称" required>
+          <a-input v-model:value="apiKeyForm.name" placeholder="如：生产环境API" :maxlength="64" />
+        </a-form-item>
+        <a-form-item label="权限">
+          <a-select v-model:value="apiKeyForm.permissions">
+            <a-select-option value="chat">仅对话</a-select-option>
+            <a-select-option value="full">完全访问</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 密钥展示弹窗（创建后一次性显示） -->
+    <a-modal
+      v-model:open="apiKeySecretVisible"
+      title="API Key 已创建"
+      :maskClosable="false"
+      :footer="null"
+      width="720px"
+    >
+      <a-alert type="warning" message="请立即复制密钥，关闭后将无法再次查看完整密钥" show-icon style="margin-bottom: 16px;" />
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <code class="apikey-secret-value">{{ apiKeyCreatedSecret }}</code>
+        <a-button type="primary" @click="copyApiKeySecret" style="flex-shrink: 0;">
+          <CopyOutlined /> 复制
+        </a-button>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, watch, markRaw } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   SaveOutlined, BulbOutlined, PlusOutlined, DeleteOutlined,
   UpOutlined, DownOutlined,
@@ -367,6 +490,7 @@ import {
   CloudOutlined, CodeOutlined, FileTextOutlined, RocketOutlined,
   SafetyOutlined, SettingOutlined, ThunderboltFilled, SyncOutlined,
   AppstoreOutlined, ControlOutlined, ClusterOutlined, BlockOutlined,
+  QuestionCircleOutlined, KeyOutlined, CopyOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
@@ -378,10 +502,15 @@ import {
 } from '../api/systemConfig'
 import { getLandingConfig, updateLandingConfig } from '../api/landing'
 import { getTokenBudgetConfig, updateTokenBudgetConfig, getTokenBudgetStats, getTokenBudgetRanking } from '../api/tokenBudget'
+import { listApiKeys, createApiKey, toggleApiKey, deleteApiKey } from '../api/apiKey'
 import ModelSelect from '../components/ModelSelect.vue'
 import UserManage from './UserManage.vue'
+import { copyToClipboard } from '../utils/clipboard'
 
-const activeTab = ref('model')
+const route = useRoute()
+const router = useRouter()
+const VALID_TABS = ['model', 'landing', 'users', 'token', 'apiKey']
+const activeTab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'model')
 const modelLoading = ref(false)
 const landingLoading = ref(false)
 const loadedTabs = new Set()
@@ -412,6 +541,8 @@ onMounted(() => {
 
 watch(activeTab, (tab) => {
   loadTabData(tab)
+  // 同步 URL query 参数
+  router.replace({ query: { ...route.query, tab } })
 })
 
 async function loadTabData(tab) {
@@ -443,6 +574,13 @@ async function loadTabData(tab) {
     } finally {
       tokenLoading.value = false
     }
+  } else if (tab === 'apiKey') {
+    apiKeyLoading.value = true
+    try {
+      await loadApiKeys()
+    } finally {
+      apiKeyLoading.value = false
+    }
   }
 }
 
@@ -464,55 +602,24 @@ function onModelChange(kind, { providerId, modelId }) {
   else if (kind === 'tts') { ttsProviderId.value = pid; ttsModelId.value = mid }
 }
 
-async function saveChatModel() {
-  if (!chatProviderId.value || !chatModelId.value) return message.warning('请选择模型')
-  chatSaving.value = true
-  try {
-    await updateDefaultChatModel({ providerId: chatProviderId.value, modelId: chatModelId.value })
-    message.success('默认对话模型已保存')
-  } catch (e) {
-    message.error(e.response?.data?.message || '保存失败')
-  } finally {
-    chatSaving.value = false
-  }
+const modelSaveConfig = {
+  chat:      { providerId: chatProviderId,      modelId: chatModelId,      saving: chatSaving,      api: updateDefaultChatModel,      label: '默认对话模型' },
+  embedding: { providerId: embeddingProviderId, modelId: embeddingModelId, saving: embeddingSaving, api: updateDefaultEmbeddingModel, label: '默认向量模型' },
+  rerank:    { providerId: rerankProviderId,    modelId: rerankModelId,    saving: rerankSaving,    api: updateDefaultRerankModel,    label: '默认重排模型' },
+  tts:       { providerId: ttsProviderId,       modelId: ttsModelId,       saving: ttsSaving,       api: updateDefaultTtsModel,       label: '默认 TTS 模型' },
 }
 
-async function saveEmbeddingModel() {
-  if (!embeddingProviderId.value || !embeddingModelId.value) return message.warning('请选择模型')
-  embeddingSaving.value = true
+async function saveModel(kind) {
+  const cfg = modelSaveConfig[kind]
+  if (!cfg.providerId.value || !cfg.modelId.value) return message.warning('请选择模型')
+  cfg.saving.value = true
   try {
-    await updateDefaultEmbeddingModel({ providerId: embeddingProviderId.value, modelId: embeddingModelId.value })
-    message.success('默认向量模型已保存')
+    await cfg.api({ providerId: cfg.providerId.value, modelId: cfg.modelId.value })
+    message.success(`${cfg.label}已保存`)
   } catch (e) {
     message.error(e.response?.data?.message || '保存失败')
   } finally {
-    embeddingSaving.value = false
-  }
-}
-
-async function saveRerankModel() {
-  if (!rerankProviderId.value || !rerankModelId.value) return message.warning('请选择模型')
-  rerankSaving.value = true
-  try {
-    await updateDefaultRerankModel({ providerId: rerankProviderId.value, modelId: rerankModelId.value })
-    message.success('默认重排模型已保存')
-  } catch (e) {
-    message.error(e.response?.data?.message || '保存失败')
-  } finally {
-    rerankSaving.value = false
-  }
-}
-
-async function saveTtsModel() {
-  if (!ttsProviderId.value || !ttsModelId.value) return message.warning('请选择模型')
-  ttsSaving.value = true
-  try {
-    await updateDefaultTtsModel({ providerId: ttsProviderId.value, modelId: ttsModelId.value })
-    message.success('默认 TTS 模型已保存')
-  } catch (e) {
-    message.error(e.response?.data?.message || '保存失败')
-  } finally {
-    ttsSaving.value = false
+    cfg.saving.value = false
   }
 }
 
@@ -670,6 +777,71 @@ function formatToken(val) {
   if (val >= 1_000) return (val / 1_000).toFixed(1) + 'K'
   return String(val)
 }
+
+// API Key 管理
+const apiKeyLoading = ref(false)
+const apiKeyList = ref([])
+const apiKeyCreateVisible = ref(false)
+const apiKeyCreateLoading = ref(false)
+const apiKeySecretVisible = ref(false)
+const apiKeyCreatedSecret = ref('')
+const apiKeyForm = reactive({ name: '', permissions: 'chat' })
+
+async function loadApiKeys() {
+  const res = await listApiKeys()
+  apiKeyList.value = res.data || []
+}
+
+function showCreateApiKey() {
+  apiKeyForm.name = ''
+  apiKeyForm.permissions = 'chat'
+  apiKeyCreateVisible.value = true
+}
+
+async function handleCreateApiKey() {
+  if (!apiKeyForm.name.trim()) return message.warning('请输入名称')
+  apiKeyCreateLoading.value = true
+  try {
+    const res = await createApiKey({
+      name: apiKeyForm.name.trim(),
+      permissions: apiKeyForm.permissions,
+    })
+    const data = res.data || {}
+    apiKeyCreatedSecret.value = data.secret
+    apiKeyCreateVisible.value = false
+    apiKeySecretVisible.value = true
+    await loadApiKeys()
+  } catch {
+    // interceptor handled
+  } finally {
+    apiKeyCreateLoading.value = false
+  }
+}
+
+async function copyApiKeySecret() {
+  await copyToClipboard(apiKeyCreatedSecret.value)
+  message.success('已复制到剪贴板')
+}
+
+async function handleToggleApiKey(key) {
+  try {
+    await toggleApiKey(key.id)
+    message.success(key.isEnabled === 1 ? '已禁用' : '已启用')
+    await loadApiKeys()
+  } catch {
+    // interceptor handled
+  }
+}
+
+async function handleDeleteApiKey(key) {
+  try {
+    await deleteApiKey(key.id)
+    message.success('已删除')
+    await loadApiKeys()
+  } catch {
+    // interceptor handled
+  }
+}
 </script>
 
 <style scoped>
@@ -730,6 +902,9 @@ function formatToken(val) {
 .panel-desc {
   font-size: 13px;
   color: #71717a;
+}
+.panel-desc-right {
+  margin-left: auto;
 }
 .panel-body {
   padding: 20px;
@@ -991,6 +1166,94 @@ function formatToken(val) {
 }
 .ranking-username {
   font-weight: 500;
+  color: #171717;
+}
+.apikey-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+.apikey-card {
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+.apikey-card:hover {
+  border-color: #d4d4d8;
+}
+.apikey-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.apikey-card-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.apikey-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
+.apikey-card-prefix {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: #71717a;
+  background: #f4f4f5;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.apikey-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.apikey-card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #52525b;
+}
+.apikey-card-label {
+  color: #a1a1aa;
+  flex-shrink: 0;
+  min-width: 64px;
+}
+.apikey-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid #f4f4f5;
+}
+.apikey-card-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.apikey-card-switch-label {
+  font-size: 12px;
+  color: #71717a;
+}
+.apikey-card-actions {
+  display: flex;
+  gap: 4px;
+}
+.apikey-secret-value {
+  flex: 1;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  background: #f4f4f5;
+  border: 1px solid #ebebeb;
+  border-radius: 6px;
+  padding: 12px;
+  white-space: nowrap;
+  overflow-x: auto;
   color: #171717;
 }
 </style>

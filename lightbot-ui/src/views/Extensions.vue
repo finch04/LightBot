@@ -51,10 +51,10 @@
       </div>
     </div>
     <div class="tab-content">
-      <McpManage v-if="activeTab === 'mcp'" ref="mcpRef" hide-header />
-      <SkillManage v-if="activeTab === 'skills'" ref="skillRef" hide-header />
-      <ToolManage v-if="activeTab === 'tools'" ref="toolRef" hide-header />
-      <SubAgentManage v-if="activeTab === 'subagents'" ref="subAgentRef" hide-header />
+      <McpManage v-show="activeTab === 'mcp'" ref="mcpRef" hide-header />
+      <SkillManage v-show="activeTab === 'skills'" ref="skillRef" hide-header />
+      <ToolManage v-show="activeTab === 'tools'" ref="toolRef" hide-header />
+      <SubAgentManage v-show="activeTab === 'subagents'" ref="subAgentRef" hide-header />
     </div>
   </div>
 </template>

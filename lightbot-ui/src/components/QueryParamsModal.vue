@@ -4,9 +4,11 @@
     title="检索配置"
     :width="480"
     :maskClosable="false"
+    :bodyStyle="{ padding: 0 }"
     @cancel="handleCancel"
   >
-    <a-form :model="form" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }">
+    <div class="scroll-body">
+    <a-form :model="form" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }" class="config-form">
       <!-- 预设模式 -->
       <div class="preset-bar">
         <span class="preset-label">快捷预设</span>
@@ -292,6 +294,7 @@
       </template>
       </template>
     </a-form>
+    </div>
 
     <template #footer>
       <div style="display: flex; justify-content: space-between;">
@@ -467,6 +470,25 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
 </script>
 
 <style scoped>
+.scroll-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 24px 24px 24px 16px;
+  scrollbar-gutter: stable;
+}
+.scroll-body::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-body::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+.scroll-body::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+.config-form {
+  padding-right: 8px;
+}
 .preset-bar {
   display: flex;
   align-items: center;

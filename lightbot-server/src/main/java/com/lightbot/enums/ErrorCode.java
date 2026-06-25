@@ -147,6 +147,12 @@ public enum ErrorCode {
     FILE_URL_FAILED(80003, "获取文件URL失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_TOO_LARGE_FOR_MEMORY(80004, "文件过大，无法加载到内存，请使用流式下载", HttpStatus.BAD_REQUEST),
 
+    // ========== API Key模块 ==========
+    API_KEY_NOT_FOUND(94001, "API Key不存在", HttpStatus.BAD_REQUEST),
+    API_KEY_EXPIRED(94002, "API Key已过期", HttpStatus.UNAUTHORIZED),
+    API_KEY_DISABLED(94003, "API Key已被禁用", HttpStatus.UNAUTHORIZED),
+    API_KEY_INVALID(94004, "API Key无效", HttpStatus.UNAUTHORIZED),
+
     // ========== Prompt模块 ==========
     PROMPT_NOT_FOUND(100001, "Prompt不存在", HttpStatus.BAD_REQUEST),
     PROMPT_KEY_EXISTS(100002, "Prompt Key已存在", HttpStatus.BAD_REQUEST),

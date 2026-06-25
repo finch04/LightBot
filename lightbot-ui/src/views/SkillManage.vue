@@ -227,7 +227,11 @@ const form = reactive({
   toolIds: [], mcpServerIds: [], skillDependencies: [], scope: 'global', isBuiltin: 0,
 })
 
-watch(searchText, () => loadData())
+let searchDebounceTimer = null
+watch(searchText, () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => loadData(), 300)
+})
 
 async function loadData() {
   loading.value = true

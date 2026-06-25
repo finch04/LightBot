@@ -46,6 +46,7 @@ public class RedisCacheConfig {
     public static final String CACHE_EVAL_DATASET = "evalDataset";
     public static final String CACHE_EVAL_EVALUATOR = "evalEvaluator";
     public static final String CACHE_EVAL_EXPERIMENT = "evalExperiment";
+    public static final String CACHE_DASHBOARD = "dashboard";
 
     /** 统一缓存前缀 */
     private static final String KEY_PREFIX = "lightbot";
@@ -80,7 +81,8 @@ public class RedisCacheConfig {
                 Map.entry(CACHE_SYSTEM_CONFIG, defaultConfig.entryTtl(Duration.ofHours(2))),
                 Map.entry(CACHE_EVAL_DATASET,  defaultConfig.entryTtl(Duration.ofHours(2))),
                 Map.entry(CACHE_EVAL_EVALUATOR,defaultConfig.entryTtl(Duration.ofHours(2))),
-                Map.entry(CACHE_EVAL_EXPERIMENT,defaultConfig.entryTtl(Duration.ofMinutes(30)))
+                Map.entry(CACHE_EVAL_EXPERIMENT,defaultConfig.entryTtl(Duration.ofMinutes(30))),
+                Map.entry(CACHE_DASHBOARD,     defaultConfig.entryTtl(Duration.ofSeconds(30)))
         );
 
         return RedisCacheManager.builder(factory)

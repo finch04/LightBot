@@ -113,7 +113,7 @@
           <div class="user-info">
             <AvatarFrame :frame="userStore.user?.avatarFrame" :size="28">
               <div class="user-avatar">
-                <img v-if="userStore.user?.avatar" :src="userStore.user.avatar" alt="avatar" class="user-avatar-img" @error="userStore.user.avatar = ''" />
+                <img v-if="userStore.user?.avatar" :src="userStore.user.avatar" alt="avatar" class="user-avatar-img" @error="userStore.user?.avatar && (userStore.user.avatar = '')" />
                 <span v-else>{{ (userStore.user?.username || userStore.user?.nickname || 'U')[0] }}</span>
               </div>
             </AvatarFrame>
@@ -199,7 +199,7 @@ import {
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { useTaskStore } from '../stores/task'
-import { Modal } from 'ant-design-vue'
+import { Modal, message } from 'ant-design-vue'
 import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
 import AvatarFrame from '../components/AvatarFrame.vue'
 import LevelTag from '../components/LevelTag.vue'
@@ -382,12 +382,18 @@ function startRename(session) {
   renameVisible.value = true
 }
 
-function confirmRename() {
+async function confirmRename() {
   const val = renameValue.value.trim()
   if (!val) return
   if (renameTarget.value) {
-    updateSessionTitle(renameTarget.value.id, val)
+    const oldTitle = renameTarget.value.title
     renameTarget.value.title = val
+    try {
+      await updateSessionTitle(renameTarget.value.id, val)
+    } catch {
+      renameTarget.value.title = oldTitle
+      message.error('重命名失败')
+    }
   }
   renameVisible.value = false
 }
@@ -413,10 +419,10 @@ function handleCommand({ key }) {
 
 function connectTaskSSE() {
   if (taskSSE) return
-  const userId = userStore.user?.id
-  if (!userId) return
+  const token = localStorage.getItem('token') || ''
+  if (!token) return
 
-  taskSSE = new EventSource(`/api/tasks/stream?userId=${userId}`)
+  taskSSE = new EventSource(`/api/tasks/stream?satoken=${encodeURIComponent(token)}`)
 
   taskSSE.addEventListener('count', (e) => {
     try {

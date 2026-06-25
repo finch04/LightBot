@@ -116,6 +116,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { LinkOutlined, DisconnectOutlined, SearchOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import { getRecentLogs } from '../api/log'
+import { sseFetch } from '../utils/sseFetch'
 
 const levels = [
   { value: 'INFO', label: 'INFO' },
@@ -134,7 +135,6 @@ const logBodyRef = ref(null)
 const detailVisible = ref(false)
 const detailLog = ref(null)
 let eventSource = null
-let logRetries = 0
 const LOG_SSE_MAX_RETRIES = 10
 const LOG_SSE_BASE_DELAY = 3000
 
@@ -201,51 +201,42 @@ function connectSSE() {
 
   connecting.value = true
   const token = localStorage.getItem('token') || ''
-  eventSource = new EventSource(`/api/logs/stream?token=${encodeURIComponent(token)}`)
 
-  eventSource.addEventListener('log', (e) => {
-    try {
-      const logEvent = JSON.parse(e.data)
-      logs.value.push(logEvent)
-      // 限制内存中日志数量
-      if (logs.value.length > 5000) {
-        logs.value = logs.value.slice(-3000)
+  eventSource = sseFetch(`/api/logs/stream`, {
+    token,
+    maxRetries: LOG_SSE_MAX_RETRIES,
+    retryDelay: LOG_SSE_BASE_DELAY,
+    onEvent({ event, data }) {
+      if (event === 'log') {
+        try {
+          const logEvent = JSON.parse(data)
+          logs.value.push(logEvent)
+          if (logs.value.length > 5000) {
+            logs.value = logs.value.slice(-3000)
+          }
+          nextTick(() => scrollToBottom())
+        } catch { /* ignore parse error */ }
       }
-      nextTick(() => scrollToBottom())
-    } catch (err) {
-      // ignore parse error
-    }
+      if (connecting.value) {
+        sseConnected.value = true
+        connecting.value = false
+      }
+    },
+    onDone() {
+      sseConnected.value = false
+    },
+    onError() {
+      sseConnected.value = false
+      connecting.value = false
+      eventSource = null
+    },
   })
-
-  // 心跳事件仅用于保持连接活跃，无需处理
-  eventSource.addEventListener('heartbeat', () => {})
-
-  eventSource.onopen = () => {
-    sseConnected.value = true
-    connecting.value = false
-    logRetries = 0
-  }
-
-  eventSource.onerror = () => {
-    sseConnected.value = false
-    connecting.value = false
-    eventSource?.close()
-    eventSource = null
-    logRetries++
-    if (logRetries <= LOG_SSE_MAX_RETRIES) {
-      const delay = Math.min(LOG_SSE_BASE_DELAY * Math.pow(1.5, logRetries - 1), 30000)
-      setTimeout(() => {
-        if (!eventSource && !connecting.value) connectSSE()
-      }, delay)
-    }
-  }
 }
 
 function disconnectSSE() {
   eventSource?.close()
   eventSource = null
   sseConnected.value = false
-  logRetries = 0
 }
 
 function scrollToBottom() {

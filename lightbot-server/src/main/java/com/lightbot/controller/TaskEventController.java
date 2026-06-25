@@ -35,7 +35,8 @@ public class TaskEventController {
 
     @Operation(summary = "任务计数实时推送（SSE）")
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(@RequestParam Long userId) {
+    public SseEmitter stream() {
+        Long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
         SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
 
         // 关闭同一用户的旧连接

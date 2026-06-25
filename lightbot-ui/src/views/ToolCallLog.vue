@@ -107,6 +107,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { ToolOutlined, SearchOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getToolCalls } from '../api/toolCall'
+import { formatTime, formatJson } from '../utils/format'
+import { copyToClipboard } from '../utils/clipboard'
 
 const loading = ref(false)
 const records = ref([])
@@ -168,16 +170,6 @@ function openDetail(record) {
   detailVisible.value = true
 }
 
-function formatTime(t) {
-  if (!t) return '-'
-  if (Array.isArray(t)) {
-    return `${t[0]}-${String(t[1]).padStart(2, '0')}-${String(t[2]).padStart(2, '0')} ${String(t[3]).padStart(2, '0')}:${String(t[4]).padStart(2, '0')}:${String(t[5]).padStart(2, '0')}`
-  }
-  const d = new Date(t)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
 function truncate(str, len) {
   if (!str) return '-'
   return str.length > len ? str.substring(0, len) + '...' : str
@@ -194,24 +186,13 @@ function formatJsonPreview(jsonStr) {
   }
 }
 
-function formatJson(jsonStr) {
-  if (!jsonStr) return '-'
-  try {
-    const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
-    return JSON.stringify(obj, null, 2)
-  } catch {
-    return jsonStr
-  }
-}
-
-function copyOutput() {
+async function copyOutput() {
   const text = detailRecord.value?.toolOutput || ''
   if (!text) return
-  navigator.clipboard.writeText(text).then(() => {
-    copied.value = true
-    message.success('已复制')
-    setTimeout(() => { copied.value = false }, 1500)
-  }).catch(() => message.error('复制失败'))
+  await copyToClipboard(text)
+  copied.value = true
+  message.success('已复制')
+  setTimeout(() => { copied.value = false }, 1500)
 }
 
 onMounted(() => {

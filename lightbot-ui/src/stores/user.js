@@ -16,7 +16,7 @@ export const useUserStore = defineStore('user', () => {
     if (res.data.user?.role) {
       localStorage.setItem('role', res.data.user.role)
     }
-    if (res.data.user.firstLogin) {
+    if (res.data.user?.firstLogin) {
       localStorage.setItem('first-login', '1')
     }
     initialized.value = true

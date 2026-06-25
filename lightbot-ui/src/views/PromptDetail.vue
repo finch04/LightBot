@@ -257,6 +257,7 @@ import { getProviderConfigFields } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import TemplateImportModalLR from '../components/TemplateImportModalLR.vue'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
+import { copyToClipboard } from '../utils/clipboard'
 
 const route = useRoute()
 const router = useRouter()
@@ -511,8 +512,9 @@ async function handlePublishVersion() {
 }
 
 // 复制输入内容
-function copyInput(inst) {
-  navigator.clipboard.writeText(inst.userInput).then(() => message.success('已复制到剪贴板'))
+async function copyInput(inst) {
+  await copyToClipboard(inst.userInput)
+  message.success('已复制到剪贴板')
 }
 
 // 调试运行

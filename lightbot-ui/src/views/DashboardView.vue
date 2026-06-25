@@ -195,7 +195,7 @@ const chatTrend = computed(() => chatStats.value.messagesPerDay || [])
 
 const chatTrendMax = computed(() => {
   const counts = chatTrend.value.map(d => d.count || 0)
-  return Math.max(...counts, 1)
+  return counts.reduce((max, c) => Math.max(max, c), 1)
 })
 
 const TREND_COL_MIN = 40

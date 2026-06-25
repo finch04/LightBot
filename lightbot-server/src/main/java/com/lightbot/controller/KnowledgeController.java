@@ -14,10 +14,13 @@ import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 /**
  * 知识库管理接口（CRUD、成员管理、配置、思维导图、示例问题）
@@ -25,6 +28,7 @@ import java.util.Map;
  * @author finch
  * @since 2026-05-19
  */
+@Slf4j
 @Tag(name = "知识库管理", description = "知识库CRUD、成员管理、配置、思维导图、示例问题")
 @RestController
 @RequestMapping("/api/knowledge")
@@ -34,6 +38,8 @@ public class KnowledgeController {
     private final KnowledgeService knowledgeService;
     private final DocumentService documentService;
     private final KnowledgeMemberService knowledgeMemberService;
+    @Qualifier("lightBotExecutor")
+    private final Executor lightBotExecutor;
 
     // ========== 知识库 CRUD ==========
 
@@ -179,13 +185,19 @@ public class KnowledgeController {
     @Operation(summary = "为知识库所有已完成文档生成示例问题")
     @PostMapping("/{id}/generate-questions")
     public Result<Void> generateQuestions(@PathVariable Long id) {
-        // 遍历所有已完成文档，逐个生成问题
-        List<Document> documents = documentService.listByKnowledgeId(id).stream()
-                .filter(doc -> doc.getStatus() == com.lightbot.enums.DocumentStatus.COMPLETED)
-                .toList();
-        for (Document doc : documents) {
-            knowledgeService.generateExampleQuestions(id, doc.getId());
-        }
+        // 异步执行，避免 LLM 逐文档调用阻塞 HTTP 线程
+        lightBotExecutor.execute(() -> {
+            try {
+                List<Document> documents = documentService.listByKnowledgeId(id).stream()
+                        .filter(doc -> doc.getStatus() == com.lightbot.enums.DocumentStatus.COMPLETED)
+                        .toList();
+                for (Document doc : documents) {
+                    knowledgeService.generateExampleQuestions(id, doc.getId());
+                }
+            } catch (Exception e) {
+                log.error("[Knowledge] 异步生成示例问题失败: knowledgeId={}", id, e);
+            }
+        });
         return Result.ok();
     }
 }

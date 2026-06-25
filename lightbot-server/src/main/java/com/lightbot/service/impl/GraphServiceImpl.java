@@ -678,71 +678,81 @@ public class GraphServiceImpl implements GraphService {
      *
      * @return int[]{nodeCount, edgeCount}
      */
+    private static final int NEO4J_BATCH_SIZE = 50;
+
     int[] writeTriplesToNeo4j(String label, List<GraphTripleDTO> triples, Long documentId, Long knowledgeId, String source) {
-        Set<String> nodes = new HashSet<>();
-        int edgeCount = 0;
-
-        for (GraphTripleDTO triple : triples) {
-            if (triple.getHead() == null || triple.getTail() == null || triple.getRelation() == null) {
-                continue;
-            }
-
-            String nodeCypher = """
-                MERGE (n:Entity:`%s` {name: $name})
-                ON CREATE SET n.id = $nodeId, n.entity_type = $entityType, n.description = $description,
-                              n.source = $source, n.knowledge_id = $knowledgeId,
-                              n.graph_source = 'merged',
-                              n.created_at = datetime(), n.updated_at = datetime()
-                ON MATCH SET n.updated_at = datetime()
-                """.formatted(label);
-
-            if (documentId != null) {
-                nodeCypher = nodeCypher.replace("n.source = $source,",
-                        "n.source = $source, n.document_id = $documentId,");
-            }
-
-            neo4jUtil.run(nodeCypher, Map.of(
-                    "name", triple.getHead(), "nodeId", String.valueOf(snowflakeId()),
-                    "entityType", triple.getHeadType() != null ? triple.getHeadType() : "其他",
-                    "description", triple.getHeadDesc() != null ? triple.getHeadDesc() : "",
-                    "source", source, "knowledgeId", String.valueOf(knowledgeId),
-                    "documentId", documentId != null ? String.valueOf(documentId) : ""));
-            nodes.add(triple.getHead());
-
-            neo4jUtil.run(nodeCypher.replace("$name", "$name2").replace("$nodeId", "$nodeId2")
-                            .replace("$entityType", "$entityType2").replace("$description", "$description2"),
-                    Map.of("name2", triple.getTail(), "nodeId2", String.valueOf(snowflakeId()),
-                            "entityType2", triple.getTailType() != null ? triple.getTailType() : "其他",
-                            "description2", triple.getTailDesc() != null ? triple.getTailDesc() : "",
-                            "source", source, "knowledgeId", String.valueOf(knowledgeId),
-                            "documentId", documentId != null ? String.valueOf(documentId) : ""));
-            nodes.add(triple.getTail());
-
-            String relCypher = """
-                MATCH (h:Entity:`%s` {name: $head})
-                MATCH (t:Entity:`%s` {name: $tail})
-                MERGE (h)-[r:RELATION {relation_type: $relation}]->(t)
-                ON CREATE SET r.id = $relId, r.description = $relDesc, r.weight = 1.0,
-                              r.source = $source, r.knowledge_id = $knowledgeId,
-                              r.graph_source = 'merged',
-                              r.created_at = datetime(), r.updated_at = datetime()
-                ON MATCH SET r.weight = r.weight + 0.1, r.updated_at = datetime()
-                """.formatted(label, label);
-
-            Map<String, Object> relParams = new LinkedHashMap<>();
-            relParams.put("head", triple.getHead());
-            relParams.put("tail", triple.getTail());
-            relParams.put("relation", triple.getRelation());
-            relParams.put("relId", String.valueOf(snowflakeId()));
-            relParams.put("relDesc", triple.getRelationDesc() != null ? triple.getRelationDesc() : "");
-            relParams.put("source", source);
-            relParams.put("knowledgeId", String.valueOf(knowledgeId));
-
-            neo4jUtil.run(relCypher, relParams);
-            edgeCount++;
+        // 1. 过滤无效三元组
+        List<GraphTripleDTO> valid = triples.stream()
+                .filter(t -> t.getHead() != null && t.getTail() != null && t.getRelation() != null)
+                .toList();
+        if (valid.isEmpty()) {
+            return new int[]{0, 0};
         }
 
-        return new int[]{nodes.size(), edgeCount};
+        Set<String> nodes = new HashSet<>();
+        String docIdStr = documentId != null ? String.valueOf(documentId) : "";
+        String knoIdStr = String.valueOf(knowledgeId);
+
+        // 2. 预计算 Cypher 模板（label 和 documentId 条件在循环外确定）
+        String hasDocField = documentId != null ? " n.document_id = item.documentId," : "";
+        String nodeCypher = """
+            UNWIND $items AS item
+            MERGE (n:Entity:`%s` {name: item.name})
+            ON CREATE SET n.id = item.nodeId, n.entity_type = item.entityType, n.description = item.description,
+                          n.source = item.source, n.knowledge_id = item.knowledgeId,%s
+                          n.graph_source = 'merged',
+                          n.created_at = datetime(), n.updated_at = datetime()
+            ON MATCH SET n.updated_at = datetime()
+            """.formatted(label, hasDocField);
+
+        String relCypher = """
+            UNWIND $items AS item
+            MATCH (h:Entity:`%s` {name: item.head})
+            MATCH (t:Entity:`%s` {name: item.tail})
+            MERGE (h)-[r:RELATION {relation_type: item.relation}]->(t)
+            ON CREATE SET r.id = item.relId, r.description = item.relDesc, r.weight = 1.0,
+                          r.source = item.source, r.knowledge_id = item.knowledgeId,
+                          r.graph_source = 'merged',
+                          r.created_at = datetime(), r.updated_at = datetime()
+            ON MATCH SET r.weight = r.weight + 0.1, r.updated_at = datetime()
+            """.formatted(label, label);
+
+        // 3. 分批写入（每批 NEO4J_BATCH_SIZE 个三元组）
+        for (int i = 0; i < valid.size(); i += NEO4J_BATCH_SIZE) {
+            List<GraphTripleDTO> batch = valid.subList(i, Math.min(i + NEO4J_BATCH_SIZE, valid.size()));
+
+            // 3.1 构建节点批量参数（每个三元组产生 head + tail 两个节点）
+            List<Map<String, Object>> nodeItems = new ArrayList<>(batch.size() * 2);
+            for (GraphTripleDTO triple : batch) {
+                nodes.add(triple.getHead());
+                nodes.add(triple.getTail());
+                nodeItems.add(Map.of(
+                        "name", triple.getHead(), "nodeId", String.valueOf(snowflakeId()),
+                        "entityType", triple.getHeadType() != null ? triple.getHeadType() : "其他",
+                        "description", triple.getHeadDesc() != null ? triple.getHeadDesc() : "",
+                        "source", source, "knowledgeId", knoIdStr, "documentId", docIdStr));
+                nodeItems.add(Map.of(
+                        "name", triple.getTail(), "nodeId", String.valueOf(snowflakeId()),
+                        "entityType", triple.getTailType() != null ? triple.getTailType() : "其他",
+                        "description", triple.getTailDesc() != null ? triple.getTailDesc() : "",
+                        "source", source, "knowledgeId", knoIdStr, "documentId", docIdStr));
+            }
+            neo4jUtil.run(nodeCypher, Map.of("items", nodeItems));
+
+            // 3.2 构建关系批量参数
+            List<Map<String, Object>> relItems = new ArrayList<>(batch.size());
+            for (GraphTripleDTO triple : batch) {
+                relItems.add(Map.of(
+                        "head", triple.getHead(), "tail", triple.getTail(),
+                        "relation", triple.getRelation(),
+                        "relId", String.valueOf(snowflakeId()),
+                        "relDesc", triple.getRelationDesc() != null ? triple.getRelationDesc() : "",
+                        "source", source, "knowledgeId", knoIdStr));
+            }
+            neo4jUtil.run(relCypher, Map.of("items", relItems));
+        }
+
+        return new int[]{nodes.size(), valid.size()};
     }
 
     private List<org.neo4j.driver.Record> queryByKeyword(String label, String keyword, int maxNodes) {

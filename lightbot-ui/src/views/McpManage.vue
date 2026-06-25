@@ -358,6 +358,7 @@ import { message, Modal } from 'ant-design-vue'
 import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool, setMcpServerEnabled } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
 import { truncateText } from '../utils/format'
+import { copyToClipboard } from '../utils/clipboard'
 
 const list = ref([])
 const loading = ref(false)
@@ -434,8 +435,8 @@ function generateExampleValue(type) {
 }
 
 // 复制示例
-function copyExample() {
-  navigator.clipboard.writeText(requestExample.value)
+async function copyExample() {
+  await copyToClipboard(requestExample.value)
   message.success('已复制到剪贴板')
 }
 
@@ -459,7 +460,11 @@ async function loadData() {
   }
 }
 
-watch(searchText, () => loadData())
+let searchDebounceTimer = null
+watch(searchText, () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => loadData(), 300)
+})
 
 function parseDeployConfig(configStr) {
   if (!configStr) return

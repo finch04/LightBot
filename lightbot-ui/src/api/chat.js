@@ -13,6 +13,7 @@ export function chat(data) {
  */
 export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }, signal, options = {}) {
   const { maxRetries = 3, retryDelay = 2000 } = options
+  // SSE 场景必须直读 localStorage：fetch 早于 Pinia store 水合，从 store 取 token 可能为 null
   const token = localStorage.getItem('token')
   let retries = 0
 

@@ -96,6 +96,24 @@ public class ModelCacheUtil {
     }
 
     /**
+     * 增量刷新指定提供商的模型缓存（单模型增删时调用，避免全量重载）
+     *
+     * @param providerId 提供商ID
+     * @param models     该提供商下的最新模型列表
+     */
+    public void cacheModelsByProviderId(Long providerId, List<Model> models) {
+        try {
+            stringRedisTemplate.opsForValue().set(CACHE_PREFIX + providerId,
+                    objectMapper.writeValueAsString(models), CACHE_TTL);
+            // 全量缓存标记为失效，下次读取时回源重建
+            stringRedisTemplate.delete(ALL_MODELS_KEY);
+            log.debug("[Cache] 增量刷新模型缓存: providerId={}, count={}", providerId, models.size());
+        } catch (Exception e) {
+            log.warn("[Cache] 增量刷新模型缓存失败: providerId={}", providerId, e);
+        }
+    }
+
+    /**
      * 清除指定提供商的模型缓存（删除模型后调用）
      *
      * @param providerId 提供商ID

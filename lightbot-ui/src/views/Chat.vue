@@ -598,6 +598,7 @@ import { enrichVideoThumbnails } from '../utils/videoThumbnail'
 import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi } from '../api/chatSession'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
+import { copyToClipboard } from '../utils/clipboard'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
@@ -1569,29 +1570,26 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
   }
 }
 
-function copyMessage(msg) {
-  navigator.clipboard.writeText(msg.content).then(() => {
-    msg._copied = true
-    setTimeout(() => { msg._copied = false }, 2000)
-  })
+async function copyMessage(msg) {
+  await copyToClipboard(msg.content)
+  msg._copied = true
+  setTimeout(() => { msg._copied = false }, 2000)
 }
 
-function copyRequestId(msg) {
+async function copyRequestId(msg) {
   if (!msg._requestId) return
-  navigator.clipboard.writeText(msg._requestId).then(() => {
-    msg._requestIdCopied = true
-    message.success('Request ID 已复制')
-    setTimeout(() => { msg._requestIdCopied = false }, 2000)
-  })
+  await copyToClipboard(msg._requestId)
+  msg._requestIdCopied = true
+  message.success('Request ID 已复制')
+  setTimeout(() => { msg._requestIdCopied = false }, 2000)
 }
 
-function copyMessageId(msg) {
+async function copyMessageId(msg) {
   if (!msg._id) return
-  navigator.clipboard.writeText(String(msg._id)).then(() => {
-    msg._msgIdCopied = true
-    message.success('Message ID 已复制')
-    setTimeout(() => { msg._msgIdCopied = false }, 2000)
-  })
+  await copyToClipboard(String(msg._id))
+  msg._msgIdCopied = true
+  message.success('Message ID 已复制')
+  setTimeout(() => { msg._msgIdCopied = false }, 2000)
 }
 
 function openRawModal(index) {
@@ -1771,29 +1769,52 @@ function goToKnowledge(knowledgeId, documentId) {
 // scrollToBottom 已在虚拟滚动区域定义
 
 /** 轮询等待会话标题生成完成（轻量接口，跳过缓存） */
+let pollTitleTimer = null
 function pollSessionTitle(sid) {
   if (!sid) return
+  if (pollTitleTimer) clearInterval(pollTitleTimer)
   let count = 0
   const maxRetries = 8
   const interval = 2000
-  const timer = setInterval(async () => {
+  pollTitleTimer = setInterval(async () => {
     try {
       const res = await getSessionTitle(sid)
       const title = res.data
       if (title && title !== '新对话') {
-        clearInterval(timer)
+        clearInterval(pollTitleTimer)
+        pollTitleTimer = null
         window.dispatchEvent(new CustomEvent('session-title-updated'))
       }
     } catch {
       // ignore
     }
     count++
-    if (count >= maxRetries) clearInterval(timer)
+    if (count >= maxRetries) {
+      clearInterval(pollTitleTimer)
+      pollTitleTimer = null
+    }
   }, interval)
+}
+
+/** scroll 事件处理器引用，用于 onUnmounted 移除 */
+const scrollHandler = () => {
+  handleScroll()
+  const container = messagesRef.value
+  if (container && container.scrollTop < 50 && hasMoreMessages.value && !loadingOlder.value && !streaming.value) {
+    loadOlderMessages()
+  }
 }
 
 onUnmounted(() => {
   voiceCleanup()
+  if (pollTitleTimer) {
+    clearInterval(pollTitleTimer)
+    pollTitleTimer = null
+  }
+  const container = messagesRef.value
+  if (container) {
+    container.removeEventListener('scroll', scrollHandler)
+  }
 })
 
 onMounted(async () => {
@@ -1811,12 +1832,7 @@ onMounted(async () => {
   // 滚动到顶部自动加载更早的消息 + 虚拟滚动距离检测
   const container = messagesRef.value
   if (container) {
-    container.addEventListener('scroll', () => {
-      handleScroll()
-      if (container.scrollTop < 50 && hasMoreMessages.value && !loadingOlder.value && !streaming.value) {
-        loadOlderMessages()
-      }
-    })
+    container.addEventListener('scroll', scrollHandler)
   }
 })
 

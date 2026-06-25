@@ -532,6 +532,8 @@ import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
 import { getTraces, getTraceDetail, getTraceOverview, deleteTraces } from '../api/observability'
 import { getToolCalls, deleteToolCalls } from '../api/toolCall'
 import { useRouter } from 'vue-router'
+import { formatTime, formatJson } from '../utils/format'
+import { copyToClipboard as sharedCopy } from '../utils/clipboard'
 
 const router = useRouter()
 
@@ -543,14 +545,14 @@ const selectedRowKeys = ref([])
 const selectedToolRowKeys = ref([])
 const detailVisible = ref(false)
 const detailTrace = ref(null)
-const expandedSpans = ref(new Set())
+const expandedSpans = reactive(new Set())
 const copiedKey = ref(null)
 const configModalVisible = ref(false)
 const toolsModalVisible = ref(false)
 let copyTimer = null
 
-function copyToClipboard(text, key) {
-  navigator.clipboard.writeText(text)
+async function copyToClipboard(text, key) {
+  await sharedCopy(text)
   copiedKey.value = key
   clearTimeout(copyTimer)
   copyTimer = setTimeout(() => { copiedKey.value = null }, 2000)
@@ -842,10 +844,10 @@ function spanTypeClass(name) {
 }
 
 function toggleSpanDetail(group) {
-  if (expandedSpans.value.has(group.spanId)) {
-    expandedSpans.value.delete(group.spanId)
+  if (expandedSpans.has(group.spanId)) {
+    expandedSpans.delete(group.spanId)
   } else {
-    expandedSpans.value.add(group.spanId)
+    expandedSpans.add(group.spanId)
   }
 }
 
@@ -931,7 +933,7 @@ async function openDetail(record) {
     return
   }
   detailVisible.value = true
-  expandedSpans.value = new Set()
+  expandedSpans.clear()
   configModalVisible.value = false
   toolsModalVisible.value = false
   try {
@@ -940,16 +942,6 @@ async function openDetail(record) {
   } catch {
     detailTrace.value = record
   }
-}
-
-function formatTime(t) {
-  if (!t) return '-'
-  if (Array.isArray(t)) {
-    return `${t[0]}-${String(t[1]).padStart(2,'0')}-${String(t[2]).padStart(2,'0')} ${String(t[3]).padStart(2,'0')}:${String(t[4]).padStart(2,'0')}:${String(t[5]).padStart(2,'0')}`
-  }
-  const d = new Date(t)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 function formatDuration(ms) {
@@ -996,14 +988,13 @@ function openToolDetail(record) {
   toolDetailVisible.value = true
 }
 
-function copyToolOutput() {
+async function copyToolOutput() {
   const text = toolDetailRecord.value?.toolOutput || ''
   if (!text) return
-  navigator.clipboard.writeText(text).then(() => {
-    toolOutputCopied.value = true
-    message.success('已复制')
-    setTimeout(() => { toolOutputCopied.value = false }, 1500)
-  }).catch(() => message.error('复制失败'))
+  await sharedCopy(text)
+  toolOutputCopied.value = true
+  message.success('已复制')
+  setTimeout(() => { toolOutputCopied.value = false }, 1500)
 }
 
 function handleBatchDelete() {
@@ -1053,16 +1044,6 @@ function formatJsonPreview(jsonStr) {
 function truncate(str, len) {
   if (!str) return '-'
   return str.length > len ? str.substring(0, len) + '...' : str
-}
-
-function formatJson(jsonStr) {
-  if (!jsonStr) return '-'
-  try {
-    const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
-    return JSON.stringify(obj, null, 2)
-  } catch {
-    return jsonStr
-  }
 }
 
 function formatConfigValue(value) {

@@ -1,6 +1,7 @@
 package com.lightbot.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.lightbot.config.RedisCacheConfig;
 import com.lightbot.entity.*;
 import com.lightbot.enums.AgentStatus;
 import com.lightbot.enums.DocumentStatus;
@@ -8,6 +9,7 @@ import com.lightbot.mapper.*;
 import com.lightbot.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final ModelMapper modelMapper;
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_DASHBOARD, key = "'basic'")
     public Map<String, Object> getBasicStats() {
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("agentCount", agentMapper.selectCount(null));

@@ -256,6 +256,7 @@ import { getProviderConfigFields } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import CreatePromptModal from '../components/CreatePromptModal.vue'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
+import { copyToClipboard } from '../utils/clipboard'
 
 const router = useRouter()
 const promptList = ref([])
@@ -307,8 +308,8 @@ function removeInstance(id) {
   instances.value = instances.value.filter(i => i.id !== id)
 }
 
-function copyText(text) {
-  navigator.clipboard.writeText(text)
+async function copyText(text) {
+  await copyToClipboard(text)
   message.success('已复制到剪贴板')
 }
 

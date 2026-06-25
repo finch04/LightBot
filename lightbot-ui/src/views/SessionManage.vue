@@ -176,6 +176,7 @@ import { useRouter } from 'vue-router'
 import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined, PushpinFilled } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
+import { formatTime } from '../utils/format'
 
 const router = useRouter()
 
@@ -402,14 +403,6 @@ function formatMetaJson(metadata) {
   } catch {
     return metadata
   }
-}
-
-function formatTime(time) {
-  if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
 }
 
 function formatTokens(tokens) {

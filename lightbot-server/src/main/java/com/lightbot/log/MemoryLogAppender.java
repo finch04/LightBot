@@ -5,8 +5,8 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.ThrowableProxyUtil;
 import ch.qos.logback.core.UnsynchronizedAppenderBase;
 
-import java.util.Deque;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -20,8 +20,8 @@ public class MemoryLogAppender extends UnsynchronizedAppenderBase<ILoggingEvent>
     /** 最大缓存日志条数 */
     private static final int MAX_CAPACITY = 2000;
 
-    /** 环形日志队列 */
-    private static final Deque<LogEvent> LOG_BUFFER = new ConcurrentLinkedDeque<>();
+    /** 环形日志队列（ArrayList 支持 O(1) 随机访问，写操作由 Logback 单线程调用无需额外同步） */
+    private static final List<LogEvent> LOG_BUFFER = new ArrayList<>(MAX_CAPACITY + 64);
 
     /** SSE 订阅者列表 */
     private static final CopyOnWriteArrayList<java.util.function.Consumer<LogEvent>> SUBSCRIBERS =
@@ -44,10 +44,10 @@ public class MemoryLogAppender extends UnsynchronizedAppenderBase<ILoggingEvent>
         );
 
         // 超过上限时移除最旧的
-        while (LOG_BUFFER.size() >= MAX_CAPACITY) {
-            LOG_BUFFER.pollFirst();
+        if (LOG_BUFFER.size() >= MAX_CAPACITY) {
+            LOG_BUFFER.remove(0);
         }
-        LOG_BUFFER.addLast(logEvent);
+        LOG_BUFFER.add(logEvent);
 
         // 通知所有 SSE 订阅者
         for (java.util.function.Consumer<LogEvent> subscriber : SUBSCRIBERS) {
@@ -60,10 +60,10 @@ public class MemoryLogAppender extends UnsynchronizedAppenderBase<ILoggingEvent>
     }
 
     /** 获取最近的日志列表 */
-    public static java.util.List<LogEvent> getRecentLogs(int limit) {
+    public static List<LogEvent> getRecentLogs(int limit) {
         int size = LOG_BUFFER.size();
         int fromIndex = Math.max(0, size - limit);
-        return LOG_BUFFER.stream().skip(fromIndex).toList();
+        return new ArrayList<>(LOG_BUFFER.subList(fromIndex, size));
     }
 
     /** 注册 SSE 订阅者 */

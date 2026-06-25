@@ -649,7 +649,11 @@ async function loadToolTypes() {
   }
 }
 
-watch(searchText, () => loadData())
+let searchDebounceTimer = null
+watch(searchText, () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => loadData(), 300)
+})
 watch(toolTypeFilter, () => loadData())
 watch(tagFilter, () => loadData())
 watch(allTags, (v) => { tagSuggestions.value = v })

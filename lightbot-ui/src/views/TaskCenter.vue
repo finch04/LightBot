@@ -157,6 +157,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ReloadOutlined, SearchOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTaskList, cancelTask, deleteTask, getTaskTypeCounts } from '../api/task'
+import { formatTime } from '../utils/format'
 import { useTaskStore } from '../stores/task'
 
 const taskStore = useTaskStore()
@@ -258,9 +259,13 @@ function handleTableChange(pag) {
   loadTasks()
 }
 
+let searchDebounceTimer = null
 watch(searchText, () => {
-  pagination.current = 1
-  loadTasks()
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    pagination.current = 1
+    loadTasks()
+  }, 300)
 })
 
 watch(statusFilter, () => {
@@ -312,18 +317,6 @@ function handleDelete(record) {
         // interceptor handled
       }
     },
-  })
-}
-
-function formatTime(time) {
-  if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
   })
 }
 

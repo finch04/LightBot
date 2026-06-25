@@ -56,46 +56,67 @@ export function deletePromptTemplate(id) {
 }
 
 /**
- * 流式运行Prompt调试（SSE）
+ * 流式运行Prompt调试（SSE，带重试）
  */
-export async function runPromptStream(data, { onChunk, onDone, onError }, signal) {
+export async function runPromptStream(data, { onChunk, onDone, onError }, signal, options = {}) {
+  const { maxRetries = 3, retryDelay = 2000 } = options
   const token = localStorage.getItem('token')
-  const response = await fetch('/api/prompts/run', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token || '',
-    },
-    body: JSON.stringify(data),
-    signal,
-  })
+  let retries = 0
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    onError?.(text || '流式请求失败')
-    return
-  }
+  async function attempt() {
+    const response = await fetch('/api/prompts/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token || '',
+      },
+      body: JSON.stringify(data),
+      signal,
+    })
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) {
-      onDone?.()
-      break
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(text || `流式请求失败: ${response.status}`)
     }
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-    for (const line of lines) {
-      if (line.startsWith('data:')) {
-        const content = line.substring(5).trimStart()
-        if (content) {
-          onChunk?.(content)
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const content = line.substring(5).trimStart()
+            if (content) onChunk?.(content)
+          }
         }
       }
+    } catch (err) {
+      if (err.name === 'AbortError') return
+      throw err
+    }
+  }
+
+  while (retries <= maxRetries) {
+    try {
+      await attempt()
+      onDone?.()
+      return
+    } catch (err) {
+      if (err.name === 'AbortError') return
+      retries++
+      if (retries > maxRetries || signal?.aborted) {
+        onError?.(err.message || '流式请求失败')
+        return
+      }
+      const delay = retryDelay * Math.pow(2, retries - 1)
+      await new Promise(r => setTimeout(r, delay))
     }
   }
 }
