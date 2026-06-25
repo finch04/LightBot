@@ -83,7 +83,11 @@
               </template>
             </a-dropdown>
           </div>
-          <div v-if="sessions.length === 0" class="session-empty">暂无对话</div>
+          <div v-if="sessionLoading && sessions.length > 0" class="session-loading-more">
+            <LoadingOutlined spin style="font-size: 12px; color: #71717a" />
+          </div>
+          <div v-if="sessionHasMore && !sessionLoading" ref="sessionLoadMoreRef" class="session-load-more-sentinel"></div>
+          <div v-if="sessions.length === 0 && !sessionLoading" class="session-empty">暂无对话</div>
         </div>
       </div>
 
@@ -168,7 +172,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, markRaw, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   PlusOutlined,
@@ -191,6 +195,7 @@ import {
   ApiOutlined,
   InfoCircleOutlined,
   LogoutOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { useTaskStore } from '../stores/task'
@@ -214,6 +219,11 @@ const userRoleText = computed(() => {
 const sessions = ref([])
 const currentSessionId = ref(null)
 const sessionListRef = ref(null)
+const sessionLoadMoreRef = ref(null)
+const sessionPageNum = ref(1)
+const sessionHasMore = ref(true)
+const sessionLoading = ref(false)
+let sessionObserver = null
 const renameVisible = ref(false)
 const renameValue = ref('')
 const renameTarget = ref(null)
@@ -275,18 +285,44 @@ function getPopupContainer() {
   return document.body
 }
 
-async function loadSessions() {
+async function loadSessions(append = false) {
+  if (sessionLoading.value) return
+  sessionLoading.value = true
   try {
-    const res = await getSessions({ pageNum: 1, pageSize: 50 })
-    sessions.value = res.data.records || []
+    const res = await getSessions({ pageNum: sessionPageNum.value, pageSize: 10 })
+    const records = res.data.records || []
+    if (append) {
+      sessions.value.push(...records)
+    } else {
+      sessions.value = records
+    }
+    sessionHasMore.value = records.length === 10
   } catch (e) {
     // ignore
+  } finally {
+    sessionLoading.value = false
   }
+}
+
+function resetSessions() {
+  sessionPageNum.value = 1
+  sessionHasMore.value = true
+  loadSessions(false)
+}
+
+function initSessionObserver() {
+  if (sessionObserver) sessionObserver.disconnect()
+  sessionObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && sessionHasMore.value && !sessionLoading.value) {
+      sessionPageNum.value++
+      loadSessions(true)
+    }
+  }, { rootMargin: '50px' })
 }
 
 // 标题异步生成完成后刷新侧边栏（重试3次，间隔2秒，覆盖AI生成标题的延迟）
 function refreshSessions() {
-  loadSessions()
+  resetSessions()
 }
 
 function newChat() {
@@ -312,9 +348,8 @@ function handleSessionMenu(key, session) {
 async function handleTogglePin(session) {
   try {
     await togglePinSession(session.id)
-    session.pinned = !session.pinned
-    // 重新排序：置顶的排前面
-    sessions.value.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+    // 重新加载列表以确保置顶排序正确
+    resetSessions()
   } catch {
     // interceptor已处理错误提示
   }
@@ -423,6 +458,7 @@ onMounted(async () => {
     }
   }
   loadSessions()
+  initSessionObserver()
   // 监听对话标题更新事件（Chat.vue 轮询标题接口后触发，刷新侧边栏）
   window.addEventListener('session-title-updated', refreshSessions)
   // SSE 实时监听任务计数（需等 user 加载完成后才有 userId）
@@ -440,9 +476,16 @@ watch(() => route.path, (path) => {
     const newId = match ? match[1] : null
     if (newId && newId !== currentSessionId.value) {
       // 新会话创建后刷新侧边栏列表
-      loadSessions()
+      resetSessions()
     }
     currentSessionId.value = newId
+  }
+})
+
+// 观察 sentinel 元素以触发无限滚动
+watch(sessionLoadMoreRef, (el) => {
+  if (sessionObserver && el) {
+    sessionObserver.observe(el)
   }
 })
 </script>
@@ -713,6 +756,14 @@ watch(() => route.path, (path) => {
   font-size: 13px;
   color: #52525b;
   text-align: center;
+}
+.session-loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+.session-load-more-sentinel {
+  height: 1px;
 }
 
 /* 用户信息 */

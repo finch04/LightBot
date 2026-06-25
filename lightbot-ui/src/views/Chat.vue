@@ -82,6 +82,14 @@
                 </button>
               </div>
               <div v-else class="message-content-wrapper" :class="{ 'user-message-stack': messages[virtualRow.index]?.role === 'user' }">
+                <!-- 引用回复内容 -->
+                <div v-if="messages[virtualRow.index]?.role === 'user' && getReplyToInfo(messages[virtualRow.index])" class="reply-quote">
+                  <div class="reply-quote-bar"></div>
+                  <div class="reply-quote-content">
+                    <span class="reply-quote-role">{{ getReplyToInfo(messages[virtualRow.index]).role === 'user' ? '你' : 'AI' }}：</span>
+                    <span class="reply-quote-text">{{ getReplyToInfo(messages[virtualRow.index]).content }}</span>
+                  </div>
+                </div>
                 <!-- 用户附件 -->
                 <div
                   v-if="messages[virtualRow.index]?.role === 'user' && getMsgAttachments(messages[virtualRow.index]).length && !messages[virtualRow.index]._sensitiveBlock"
@@ -252,6 +260,11 @@
                       <EditOutlined />
                     </button>
                   </a-tooltip>
+                  <a-tooltip title="引用回复">
+                    <button class="btn-copy" @click="startReply(virtualRow.index)">
+                      <CommentOutlined />
+                    </button>
+                  </a-tooltip>
                   <a-tooltip title="删除">
                     <button
                       class="btn-copy btn-delete"
@@ -382,6 +395,16 @@
               </span>
             </a-select-option>
           </a-select>
+        </div>
+        <!-- 引用回复预览条 -->
+        <div v-if="replyTo.active" class="reply-preview-bar">
+          <div class="reply-preview-content">
+            <span class="reply-preview-role">{{ replyTo.role === 'user' ? '你' : 'AI' }}：</span>
+            <span class="reply-preview-text">{{ replyTo.content }}</span>
+          </div>
+          <button class="reply-preview-close" @click="cancelReply">
+            <CloseOutlined />
+          </button>
         </div>
         <div class="chat-input">
           <input
@@ -558,7 +581,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, refreshChatAttachmentPreviews } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
@@ -595,6 +618,7 @@ const loadingHistory = ref(false)
 const editingMessageId = ref(null)
 const editContent = ref('')
 const editInputRef = ref(null)
+const replyTo = reactive({ active: false, messageId: null, content: '', role: '' })
 const messagePage = ref(1)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
@@ -630,7 +654,7 @@ const speakingMsgKey = ref(null)
 // Agent 管理（chatCapabilities 在此 composable 内部创建）
 const {
   agents, selectedAgentId, currentAgent, chatCapabilities,
-  selectedConfigVersion, configVersionOptions,
+  selectedConfigVersion, selectedAgentVersionId, configVersionOptions,
   showFileUploadBtn, showVoiceInputBtn, showTtsBtn,
   fileAcceptTypes, fileUploadHint,
   currentWelcomeMessage, currentRecommendedQuestions,
@@ -991,6 +1015,9 @@ function parseMessage(m) {
     _reasoningDone: true,
     _sensitiveBlock: sensitiveBlock,
     _requestId: requestId,
+    _replyToMessageId: m.replyToMessageId || null,
+    _replyToContent: null,
+    _replyToRole: null,
   }
 }
 
@@ -1042,12 +1069,15 @@ async function loadHistory() {
     messages.value = parsed
     hasMoreMessages.value = records.length === 10
 
-    // 从会话中恢复 agentId
+    // 从会话中恢复 agentId 和 agentVersionId
     const session = sessionRes.data
     if (session?.agentId) {
       selectedAgentId.value = session.agentId
-      // 先加载版本列表（会设置 selectedConfigVersion），再加载 agent 详情
-      await loadAgentConfigVersions(session.agentId)
+      // 先加载版本列表（传入会话保存的版本 ID），再加载 agent 详情
+      const versionDeleted = await loadAgentConfigVersions(session.agentId, session.agentVersionId)
+      if (versionDeleted) {
+        message.warning('当前对话Agent版本可能已被删除，已切换到草稿版本，你可以重新选择Agent版本')
+      }
       if (reqId !== loadHistoryRequestId) return
       await loadCurrentAgent(session.agentId)
       if (reqId !== loadHistoryRequestId) return
@@ -1127,9 +1157,21 @@ async function sendMessage() {
   const displayContent = text || (attachments.length ? '[附件]' : '')
   const sentAttachments = attachments.map(a => ({ ...a }))
   await enrichVideoThumbnails(sentAttachments)
-  messages.value.push({ role: 'user', content: displayContent, _attachments: sentAttachments })
+
+  const userMsg = { role: 'user', content: displayContent, _attachments: sentAttachments }
+  // 携带引用回复信息（用于前端渲染引用摘要）
+  const currentReplyToId = replyTo.active ? replyTo.messageId : null
+  const currentReplyToContent = replyTo.active ? replyTo.content : ''
+  const currentReplyToRole = replyTo.active ? replyTo.role : ''
+  if (currentReplyToId) {
+    userMsg._replyToMessageId = currentReplyToId
+    userMsg._replyToContent = currentReplyToContent
+    userMsg._replyToRole = currentReplyToRole
+  }
+  messages.value.push(userMsg)
   input.value = ''
   pendingAttachments.value = []
+  cancelReply()
   autoResize()
   isNearBottom.value = true
   userScrolledUp.value = false
@@ -1139,6 +1181,7 @@ async function sendMessage() {
     message: text,
     attachments: sentAttachments,
     regenerate: false,
+    replyToMessageId: currentReplyToId,
   })
 }
 
@@ -1187,6 +1230,37 @@ function cancelEdit() {
   editContent.value = ''
 }
 
+function startReply(index) {
+  const msg = messages.value[index]
+  if (!msg || loading.value) return
+  replyTo.active = true
+  replyTo.messageId = msg._id
+  replyTo.content = (msg.content || '').slice(0, 100)
+  replyTo.role = msg.role
+  nextTick(() => inputRef.value?.focus())
+}
+
+function cancelReply() {
+  replyTo.active = false
+  replyTo.messageId = null
+  replyTo.content = ''
+  replyTo.role = ''
+}
+
+function getReplyToInfo(msg) {
+  if (!msg._replyToMessageId) return null
+  // 当前会话发送的消息直接携带引用内容
+  if (msg._replyToContent) {
+    return { content: msg._replyToContent, role: msg._replyToRole }
+  }
+  // 历史消息：从已加载的消息列表中查找被引用的消息
+  const refMsg = messages.value.find(m => m._id === msg._replyToMessageId)
+  if (refMsg) {
+    return { content: (refMsg.content || '').slice(0, 100), role: refMsg.role }
+  }
+  return null
+}
+
 async function submitEdit() {
   const newText = editContent.value.trim()
   if (!newText || loading.value) return
@@ -1217,7 +1291,7 @@ async function submitEdit() {
   })
 }
 
-async function runChatStream({ message, attachments, regenerate, editMessageId: editMsgId }) {
+async function runChatStream({ message, attachments, regenerate, editMessageId: editMsgId, replyToMessageId: replyMsgId }) {
   loading.value = true
   streaming.value = true
   hasStreamContent.value = false
@@ -1253,8 +1327,10 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
       sessionId: sid,
       agentId: currentAgentId || undefined,
       configVersion: selectedConfigVersion.value ?? 0,
+      agentVersionId: selectedAgentVersionId.value || undefined,
       regenerate: regenerate || undefined,
       editMessageId: editMsgId || undefined,
+      replyToMessageId: replyMsgId || undefined,
       attachments: attachments?.length ? attachments.map(a => ({
         id: a.id,
         type: a.type,
@@ -2057,6 +2133,86 @@ watch(sessionId, (newVal, oldVal) => {
   cursor: not-allowed;
 }
 
+/* 引用回复预览条 */
+.reply-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 12px 8px;
+  background: #f4f4f5;
+  border-radius: 8px;
+  border-left: 3px solid #0070f3;
+}
+.reply-preview-content {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.reply-preview-role {
+  color: #0070f3;
+  font-weight: 500;
+}
+.reply-preview-text {
+  color: #71717a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  max-width: 400px;
+  vertical-align: bottom;
+}
+.reply-preview-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #a1a1aa;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.reply-preview-close:hover {
+  color: #171717;
+}
+
+/* 引用回复内容展示 */
+.reply-quote {
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  background: rgba(0, 112, 243, 0.06);
+  border-radius: 8px;
+  border-left: 3px solid #0070f3;
+}
+.reply-quote-bar {
+  display: none;
+}
+.reply-quote-content {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.reply-quote-role {
+  color: #0070f3;
+  font-weight: 500;
+}
+.reply-quote-text {
+  color: #71717a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
 /* 原始内容弹窗 */
 .raw-modal-content {
   margin: 0;
@@ -2119,9 +2275,15 @@ watch(sessionId, (newVal, oldVal) => {
   padding: 16px;
   overflow-x: auto;
   margin: 12px 0;
+
+  /* 细滚动条 */
+  &::-webkit-scrollbar { height: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
+  &::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
 }
 .message-content :deep(pre code) {
-  background: transparent;
+  background: transparent !important;
   color: #e4e4e7;
   padding: 0;
   font-size: 13px;
@@ -2617,6 +2779,9 @@ span.agent-menu-icon {
 /* 工具块内联容器 */
 .tool-block-inline {
   margin: 8px 0;
+}
+.capability-block-inline {
+  margin-top: 8px;
 }
 
 .workflow-block-inline {

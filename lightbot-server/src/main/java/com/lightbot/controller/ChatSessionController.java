@@ -105,4 +105,14 @@ public class ChatSessionController {
         messageService.deleteMessage(messageId, sessionId);
         return Result.ok();
     }
+
+    @Operation(summary = "搜索会话内的消息（模糊匹配）")
+    @GetMapping("/{id}/messages/search")
+    public Result<Page<Message>> searchMessages(
+            @PathVariable Long id,
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.ok(messageService.searchBySessionId(id, keyword, pageNum, pageSize));
+    }
 }

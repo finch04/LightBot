@@ -27,6 +27,12 @@ public class ChatRequest {
     private Integer configVersion;
 
     /**
+     * Agent版本快照ID（agent_version.id），用于持久化到会话。
+     * 优先级高于 configVersion：非空时用于会话绑定，避免版本编号复用导致误匹配。
+     */
+    private Long agentVersionId;
+
+    /**
      * 多模态附件（先调用上传接口获得）
      */
     private List<ChatAttachmentDTO> attachments;
@@ -41,4 +47,9 @@ public class ChatRequest {
      * <p>与 regenerate=true 配合使用，此时 message 为编辑后的新内容</p>
      */
     private Long editMessageId;
+
+    /**
+     * 引用回复：引用某条历史消息进行回复
+     */
+    private Long replyToMessageId;
 }

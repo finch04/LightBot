@@ -91,7 +91,18 @@
         </a-descriptions>
 
         <div class="detail-messages-header">
-          <span class="detail-messages-title">消息记录</span>
+          <div class="detail-messages-header-left">
+            <span class="detail-messages-title">消息记录</span>
+            <a-input
+              v-model:value="msgSearchText"
+              placeholder="搜索消息内容..."
+              allow-clear
+              size="small"
+              style="width: 180px; margin-left: 12px"
+            >
+              <template #prefix><SearchOutlined /></template>
+            </a-input>
+          </div>
           <button v-if="selectedMsgKeys.length > 0" class="btn-msg-delete" @click="confirmDeleteMessages">
             <DeleteOutlined /> 删除 ({{ selectedMsgKeys.length }})
           </button>
@@ -103,7 +114,14 @@
               <div v-for="(msg, i) in detailMessages" :key="msg.id || i" class="detail-msg" :class="msg.role">
                 <a-checkbox :value="msg.id" class="msg-checkbox" />
                 <div class="msg-body">
-                  <div class="detail-msg-role">{{ roleLabels[msg.role] || msg.role }}</div>
+                  <div class="detail-msg-role">
+                    {{ roleLabels[msg.role] || msg.role }}
+                    <a-tooltip title="查看元数据">
+                      <button class="btn-msg-meta" @click="openMsgMeta(msg)">
+                        <CodeOutlined />
+                      </button>
+                    </a-tooltip>
+                  </div>
                   <div class="detail-msg-content">{{ msg.content }}</div>
                 </div>
               </div>
@@ -117,15 +135,44 @@
         </a-spin>
       </template>
     </a-drawer>
+
+    <!-- 消息元数据弹窗 -->
+    <a-modal
+      v-model:open="metaModalVisible"
+      title="消息元数据"
+      :footer="null"
+      :width="600"
+    >
+      <a-descriptions v-if="metaModalMsg" :column="1" bordered size="small">
+        <a-descriptions-item label="消息ID">
+          <span class="detail-mono">{{ metaModalMsg.id }}</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="角色">{{ roleLabels[metaModalMsg.role] || metaModalMsg.role }}</a-descriptions-item>
+        <a-descriptions-item label="内容类型">{{ metaModalMsg.contentType || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="消息类型">{{ metaModalMsg.messageType || '-' }}</a-descriptions-item>
+        <a-descriptions-item label="Token 数">{{ metaModalMsg.tokenCount ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="父消息ID">
+          <span class="detail-mono">{{ metaModalMsg.parentId || '-' }}</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="引用回复ID">
+          <span class="detail-mono">{{ metaModalMsg.replyToMessageId || '-' }}</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="创建时间">{{ formatTime(metaModalMsg.createTime) }}</a-descriptions-item>
+      </a-descriptions>
+      <div v-if="metaModalMsg?.metadata" class="meta-json-section">
+        <div class="meta-json-title">Metadata JSON</div>
+        <pre class="meta-json-content">{{ formatMetaJson(metaModalMsg.metadata) }}</pre>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage } from '../api/chatSession'
+import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
 
 const router = useRouter()
 
@@ -144,6 +191,14 @@ let detailPageNum = 1
 
 // 消息批量选择
 const selectedMsgKeys = ref([])
+
+// 消息搜索
+const msgSearchText = ref('')
+let msgSearchDebounceTimer = null
+
+// 消息元数据弹窗
+const metaModalVisible = ref(false)
+const metaModalMsg = ref(null)
 
 const pagination = reactive({
   current: 1,
@@ -225,6 +280,7 @@ function openDetail(record) {
   detailPageNum = 1
   hasMoreMessages.value = false
   selectedMsgKeys.value = []
+  msgSearchText.value = ''
   detailVisible.value = true
   loadMessages()
 }
@@ -248,7 +304,12 @@ async function loadOlderMessages() {
   loadingOlder.value = true
   try {
     detailPageNum++
-    const res = await getSessionMessages(detailSession.value.id, { pageNum: detailPageNum, pageSize: 20 })
+    let res
+    if (msgSearchText.value) {
+      res = await searchMessages(detailSession.value.id, msgSearchText.value, { pageNum: detailPageNum, pageSize: 20 })
+    } else {
+      res = await getSessionMessages(detailSession.value.id, { pageNum: detailPageNum, pageSize: 20 })
+    }
     const records = res.data?.records || []
     detailMessages.value = [...records.reverse(), ...detailMessages.value]
     hasMoreMessages.value = records.length === 20
@@ -292,6 +353,52 @@ function confirmDeleteMessages() {
 
 function goToChat(record) {
   router.push(`/app/chat/${record.id}`)
+}
+
+watch(msgSearchText, () => {
+  clearTimeout(msgSearchDebounceTimer)
+  if (!msgSearchText.value) {
+    // 搜索框清空时恢复普通消息列表
+    detailPageNum = 1
+    loadMessages()
+    return
+  }
+  msgSearchDebounceTimer = setTimeout(() => {
+    detailPageNum = 1
+    loadSearchMessages()
+  }, 300)
+})
+
+async function loadSearchMessages() {
+  if (!detailSession.value || !msgSearchText.value) return
+  messagesLoading.value = true
+  try {
+    const res = await searchMessages(detailSession.value.id, msgSearchText.value, {
+      pageNum: detailPageNum,
+      pageSize: 20,
+    })
+    const records = res.data?.records || []
+    detailMessages.value = records.reverse()
+    hasMoreMessages.value = records.length === 20
+  } catch {
+    // interceptor handled
+  } finally {
+    messagesLoading.value = false
+  }
+}
+
+function openMsgMeta(msg) {
+  metaModalMsg.value = msg
+  metaModalVisible.value = true
+}
+
+function formatMetaJson(metadata) {
+  if (!metadata) return ''
+  try {
+    return JSON.stringify(JSON.parse(metadata), null, 2)
+  } catch {
+    return metadata
+  }
 }
 
 function formatTime(time) {
@@ -483,5 +590,44 @@ onMounted(() => {
 .detail-load-more {
   text-align: center;
   padding: 8px 0;
+}
+.detail-messages-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-msg-meta {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #a1a1aa;
+  font-size: 12px;
+  transition: color 0.15s;
+}
+.btn-msg-meta:hover {
+  color: #0070f3;
+}
+.meta-json-section {
+  margin-top: 16px;
+}
+.meta-json-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #171717;
+}
+.meta-json-content {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  overflow: auto;
+  max-height: 300px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

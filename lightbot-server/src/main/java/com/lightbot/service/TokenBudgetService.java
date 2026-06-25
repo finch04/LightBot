@@ -173,7 +173,7 @@ public class TokenBudgetService {
      * 获取用户 Token 消耗排行（当日 Top N）
      *
      * @param limit 返回条数
-     * @return 排行列表，每项含 userId / usedTokens
+     * @return 排行列表，每项含 userId / username / avatar / usedTokens
      */
     public List<Map<String, Object>> getUserRanking(int limit) {
         String today = LocalDate.now().toString();
@@ -189,8 +189,8 @@ public class TokenBudgetService {
             return null;
         }, true);
 
-        // 解析 userId → usedTokens，按消耗降序排列
-        return keys.stream()
+        // 解析 userId → usedTokens，按消耗降序排列，取 Top N
+        List<Map<String, Object>> ranking = keys.stream()
                 .map(key -> {
                     String userId = key.replace(KEY_PREFIX + "user:", "").replace(":" + today, "");
                     long used = parseLong(stringRedisTemplate.opsForValue().get(key));
@@ -202,6 +202,25 @@ public class TokenBudgetService {
                 .sorted((a, b) -> Long.compare((long) b.get("usedTokens"), (long) a.get("usedTokens")))
                 .limit(limit)
                 .collect(Collectors.toList());
+
+        // 批量查询用户信息
+        if (!ranking.isEmpty()) {
+            List<Long> userIds = ranking.stream()
+                    .map(r -> Long.parseLong((String) r.get("userId")))
+                    .collect(Collectors.toList());
+            Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
+                    .collect(Collectors.toMap(User::getId, u -> u));
+            for (Map<String, Object> row : ranking) {
+                Long uid = Long.parseLong((String) row.get("userId"));
+                User user = userMap.get(uid);
+                if (user != null) {
+                    row.put("username", user.getNickname() != null ? user.getNickname() : user.getUsername());
+                    row.put("avatar", user.getAvatar());
+                }
+            }
+        }
+
+        return ranking;
     }
 
     private long parseLong(String val) {

@@ -291,10 +291,68 @@ function patchStreamingTables(text) {
   return out.join('\n')
 }
 
+// ── 代码围栏畸形修复 ──────────────────────────────────────────
+
+/**
+ * 修复 AI 输出中常见的代码围栏畸形：
+ * 1. 语言标签和代码粘在一行：```javascriptconst x = 1;  →  ```javascript\nconst x = 1;
+ * 2. 闭合 ``` 紧跟内容不在行首：code```  →  code\n```
+ */
+function normalizeCodeFences(text) {
+  if (!text || !text.includes('```')) return text
+
+  const KNOWN_LANGS = [
+    'javascript', 'typescript', 'python', 'java', 'csharp', 'ruby', 'go', 'rust',
+    'c', 'cpp', 'php', 'swift', 'kotlin', 'scala', 'bash', 'shell', 'sql', 'html',
+    'css', 'json', 'yaml', 'xml', 'markdown', 'latex', 'r', 'lua', 'perl', 'haskell',
+    'elixir', 'clojure', 'groovy', 'powershell', 'dockerfile', 'makefile', 'toml',
+  ]
+
+  let s = text
+
+  // 修复1：``` 后语言标签和代码粘连（无换行）
+  // 标题```javascript代码 → 标题\n```javascript\n代码
+  // 通过已知语言列表精确切分语言标签和代码（解决 javascriptconst 无法拆分的问题）
+  s = s.replace(
+    /(^|\n)(.*?)`{3,}([a-zA-Z0-9_+#.:-]{1,20})((?:\n)|[^\n`])/gm,
+    (match, prefix, before, lang, after) => {
+      // 尝试从 lang 中切出已知语言名
+      let actualLang = lang
+      let codeAfter = after
+      if (!KNOWN_LANGS.includes(lang.toLowerCase())) {
+        for (let i = lang.length - 1; i >= 2; i--) {
+          if (KNOWN_LANGS.includes(lang.substring(0, i).toLowerCase())) {
+            actualLang = lang.substring(0, i)
+            codeAfter = lang.substring(i) + after
+            break
+          }
+        }
+      }
+      const needsSplit = before && /\S$/.test(before)
+      const beforeFixed = needsSplit ? before + '\n' : before
+      if (codeAfter === '\n') {
+        return prefix + beforeFixed + '```' + actualLang + '\n'
+      }
+      return prefix + beforeFixed + '```' + actualLang + '\n' + codeAfter
+    }
+  )
+
+  // 修复2：闭合 ``` 在行尾紧跟内容（markdown-it 要求 ``` 独占一行）
+  // code```  →  code\n```
+  // .*\S 匹配行内容（含反引号），``` 后仅允许空白到行尾（排除 ```language 开头的围栏）
+  s = s.replace(
+    /(^|\n)(.*\S)`{3,}[ \t]*$/gm,
+    '$1$2\n```'
+  )
+
+  return s
+}
+
 // ── 流式 Markdown 补丁 ──────────────────────────────────────────
 
 function patchStreamingMarkdown(text) {
   let processed = text
+
   const backtickCount = (processed.match(/```/g) || []).length
   if (backtickCount % 2 !== 0) {
     processed += '\n```'
@@ -314,10 +372,11 @@ function patchStreamingMarkdown(text) {
  * @param {{ streaming?: boolean, theme?: string }} options
  * @returns {Promise<string>}
  */
-export async function renderMarkdown(text, { streaming = false, theme = 'github-light' } = {}) {
+export async function renderMarkdown(text, { streaming = false, theme = 'github-dark' } = {}) {
   if (!text) return ''
 
   let processed = normalizeMarkdown(text)
+  processed = normalizeCodeFences(processed)
   processed = patchStreamingTables(processed)
   if (streaming) {
     processed = patchStreamingMarkdown(processed)

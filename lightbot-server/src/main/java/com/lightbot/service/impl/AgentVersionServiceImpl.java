@@ -152,6 +152,7 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         List<WorkflowVersionVO> list = new ArrayList<>();
         for (AgentVersion row : rows) {
             list.add(WorkflowVersionVO.builder()
+                    .id(row.getId())
                     .version(row.getVersion())
                     .publishedAt(row.getPublishTime())
                     .nodeCount(row.getNodeCount())
@@ -662,6 +663,25 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         } else {
             row = requirePublishedRow(agentId, configVersion);
         }
+        if (row == null || row.getConfig() == null || row.getConfig().isBlank()) {
+            return null;
+        }
+        Map<String, Object> snap = parseJsonMap(row.getConfig());
+        if (KIND_CHAT.equals(snap.get("kind"))) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = snap.get("payload") instanceof Map
+                    ? (Map<String, Object>) snap.get("payload") : snap;
+            return payload;
+        }
+        return null;
+    }
+
+    @Override
+    public Map<String, Object> loadVersionPayloadById(Long versionId) {
+        if (versionId == null) {
+            return null;
+        }
+        AgentVersion row = agentVersionMapper.selectById(versionId);
         if (row == null || row.getConfig() == null || row.getConfig().isBlank()) {
             return null;
         }

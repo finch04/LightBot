@@ -230,7 +230,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
-    public void updateAgentId(Long sessionId, Long agentId) {
+    public void updateSessionAgent(Long sessionId, Long agentId, Long agentVersionId) {
         ChatSession session = getById(sessionId);
         if (session == null) {
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
@@ -239,10 +239,15 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         if (userId != session.getUserId()) {
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
         }
-        if (agentId == null || agentId.equals(session.getAgentId())) {
+        boolean agentChanged = agentId != null && !agentId.equals(session.getAgentId());
+        boolean versionChanged = !java.util.Objects.equals(agentVersionId, session.getAgentVersionId());
+        if (!agentChanged && !versionChanged) {
             return;
         }
-        session.setAgentId(agentId);
+        if (agentChanged) {
+            session.setAgentId(agentId);
+        }
+        session.setAgentVersionId(agentVersionId);
         updateById(session);
         evictSessionCache(sessionId);
     }

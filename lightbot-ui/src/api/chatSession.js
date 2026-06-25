@@ -43,3 +43,9 @@ export function deleteSessionsBatch(ids) {
 export function deleteMessage(sessionId, messageId) {
   return request.delete(`/chat/sessions/${sessionId}/messages/${messageId}`)
 }
+
+export function searchMessages(sessionId, keyword, params = {}) {
+  return request.get(`/chat/sessions/${sessionId}/messages/search`, {
+    params: { keyword, ...params },
+  })
+}

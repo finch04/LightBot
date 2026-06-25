@@ -79,6 +79,15 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
                 .eq(Message::getSessionId, sessionId));
     }
 
+    @Override
+    public Page<Message> searchBySessionId(Long sessionId, String keyword, int pageNum, int pageSize) {
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getSessionId, sessionId)
+                        .like(Message::getContent, keyword)
+                        .orderByDesc(Message::getCreateTime));
+    }
+
     /**
      * 清理消息关联的 MinIO 资源
      * <p>包含两类：AI 生图生成的图片、用户上传的附件</p>

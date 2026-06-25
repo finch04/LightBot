@@ -117,7 +117,8 @@ public class MessageMiddleware implements ChatMiddleware {
         } else {
             // 检测 ask_user 父消息（在保存前执行，因为保存后当前消息变成最后一条）
             Long askUserParentId = detectAskUserParentId(ctx.getSessionId());
-            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), askUserParentId);
+            Long replyToId = ctx.getRequest().getReplyToMessageId();
+            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), askUserParentId, replyToId);
             ctx.setUserMessageId(userMsgId);
             if (askUserParentId != null) {
                 ctx.setUserMessageParentId(askUserParentId);
@@ -195,19 +196,24 @@ public class MessageMiddleware implements ChatMiddleware {
     }
 
     private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments, Long parentId) {
+        return saveUserMessage(sessionId, content, attachments, parentId, null);
+    }
+
+    private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments,
+                                 Long parentId, Long replyToMessageId) {
         // 检测是否有图片附件 → messageType 为 MULTIMODAL_IMAGE
         boolean hasImage = attachments != null && attachments.stream()
                 .anyMatch(att -> "image".equals(att.getType()));
         MessageType messageType = hasImage ? MessageType.MULTIMODAL_IMAGE : MessageType.TEXT;
 
         if (attachments == null || attachments.isEmpty()) {
-            return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId);
+            return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId, replyToMessageId);
         }
         try {
             String metadata = objectMapper.writeValueAsString(Map.of("attachments", attachments));
-            return saveMessage(sessionId, MessageRole.USER, content, metadata, 0, messageType, parentId);
+            return saveMessage(sessionId, MessageRole.USER, content, metadata, 0, messageType, parentId, replyToMessageId);
         } catch (Exception e) {
-            return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId);
+            return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId, replyToMessageId);
         }
     }
 
@@ -540,9 +546,19 @@ public class MessageMiddleware implements ChatMiddleware {
      *
      * @return 消息ID
      */
-    @Transactional(rollbackFor = Exception.class)
     public Long saveMessage(Long sessionId, MessageRole role, String content, String metadata,
                             int tokenCount, MessageType messageType, Long parentId) {
+        return saveMessage(sessionId, role, content, metadata, tokenCount, messageType, parentId, null);
+    }
+
+    /**
+     * 持久化消息（含 messageType、parentId 和 replyToMessageId）
+     *
+     * @return 消息ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long saveMessage(Long sessionId, MessageRole role, String content, String metadata,
+                            int tokenCount, MessageType messageType, Long parentId, Long replyToMessageId) {
         Message msg = new Message();
         msg.setSessionId(sessionId);
         msg.setRole(role);
@@ -552,6 +568,7 @@ public class MessageMiddleware implements ChatMiddleware {
         msg.setTokenCount(tokenCount);
         msg.setMetadata(metadata);
         msg.setParentId(parentId);
+        msg.setReplyToMessageId(replyToMessageId);
         messageMapper.insert(msg);
         chatSessionService.updateStats(sessionId, tokenCount);
         return msg.getId();

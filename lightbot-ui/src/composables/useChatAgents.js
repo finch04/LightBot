@@ -15,6 +15,8 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
   const currentAgent = ref(null)
   const chatCapabilities = ref({})
   const selectedConfigVersion = ref(0)
+  /** 当前选中版本的 agent_version.id（主键），用于会话持久化，草稿时为 null */
+  const selectedAgentVersionId = ref(null)
   const configVersionOptions = ref([])
 
   // ===== Computed =====
@@ -54,6 +56,7 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
   // ===== Functions =====
   function handleAgentSelect({ key }) {
     selectedAgentId.value = key
+    selectedAgentVersionId.value = null
     pendingAttachments.value = []
     loadCurrentAgent(key)
     loadAgentConfigVersions(key)
@@ -81,20 +84,31 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
   async function onConfigVersionChange(version) {
     if (loading.value) return
     selectedConfigVersion.value = version
+    // 同步更新 selectedAgentVersionId：从选项列表中匹配
+    const opt = configVersionOptions.value.find(o => o.value === version)
+    selectedAgentVersionId.value = opt?.versionId || null
     if (selectedAgentId.value) {
       await loadChatCapabilities(selectedAgentId.value, version)
     }
   }
 
-  async function loadAgentConfigVersions(agentId) {
+  /**
+   * 加载版本列表并选中指定版本
+   * @param {string} agentId
+   * @param {string} [preferredAgentVersionId] - 会话保存的 agent_version.id，优先匹配
+   * @returns {Promise<boolean>} 版本是否已被删除（仅在传入 preferredAgentVersionId 且未匹配时返回 true）
+   */
+  async function loadAgentConfigVersions(agentId, preferredAgentVersionId) {
     if (!agentId) {
       configVersionOptions.value = []
       selectedConfigVersion.value = 0
-      return
+      selectedAgentVersionId.value = null
+      return false
     }
     try {
       const opts = [{
         value: 0,
+        versionId: null,
         versionLabel: '暂存草稿',
         selectLabel: '暂存草稿',
         badge: 'draft',
@@ -107,24 +121,47 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
         const ver = `v${num}`
         opts.push({
           value: num,
+          versionId: v.id ? String(v.id) : null,
           versionLabel: ver,
           selectLabel: v.current ? `${ver} · 线上` : ver,
           badge: v.current ? 'online' : null,
         })
       }
       configVersionOptions.value = opts
-      const currentPublished = versions.find(v => v.current)
-      selectedConfigVersion.value = currentPublished?.version ?? 0
+
+      let versionDeleted = false
+      if (preferredAgentVersionId != null) {
+        // 按 agent_version.id 匹配
+        const matched = opts.find(o => o.versionId === String(preferredAgentVersionId))
+        if (matched) {
+          selectedConfigVersion.value = matched.value
+          selectedAgentVersionId.value = matched.versionId
+        } else {
+          // 版本已不存在（被删除），回退到草稿
+          selectedConfigVersion.value = 0
+          selectedAgentVersionId.value = null
+          versionDeleted = true
+        }
+      } else {
+        const currentPublished = versions.find(v => v.current)
+        selectedConfigVersion.value = currentPublished?.version ?? 0
+        const matched = opts.find(o => o.value === selectedConfigVersion.value)
+        selectedAgentVersionId.value = matched?.versionId || null
+      }
       await loadChatCapabilities(agentId, selectedConfigVersion.value)
+      return versionDeleted
     } catch {
       configVersionOptions.value = [{
         value: 0,
+        versionId: null,
         versionLabel: '暂存草稿',
         selectLabel: '暂存草稿',
         badge: 'draft',
       }]
       selectedConfigVersion.value = 0
+      selectedAgentVersionId.value = null
       await loadChatCapabilities(agentId, 0)
+      return false
     }
   }
 
@@ -186,6 +223,7 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
     currentAgent,
     chatCapabilities,
     selectedConfigVersion,
+    selectedAgentVersionId,
     configVersionOptions,
     showFileUploadBtn,
     showVoiceInputBtn,

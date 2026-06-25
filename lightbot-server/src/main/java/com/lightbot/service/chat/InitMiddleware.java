@@ -51,7 +51,7 @@ public class InitMiddleware implements ChatMiddleware {
         // 1. 解析会话ID，并在对话中切换智能体时更新会话绑定
         Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
         ctx.setSessionId(sessionId);
-        bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId());
+        bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId(), ctx.getRequest().getAgentVersionId(), ctx.getRequest().getConfigVersion());
         long t1 = System.currentTimeMillis();
         log.info("[Chat][Trace] 会话解析: {}ms, sessionId={}", t1 - t0, sessionId);
         ctx.getSpans().add(LlmTraceSpan.of("s1", null, "session_resolve", t0, t1 - t0, "OK", Map.of("sessionId", sessionId)));
@@ -85,7 +85,7 @@ public class InitMiddleware implements ChatMiddleware {
 
         Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
         ctx.setSessionId(sessionId);
-        bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId());
+        bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId(), ctx.getRequest().getAgentVersionId(), ctx.getRequest().getConfigVersion());
 
         Agent agent = loadAgent(ctx.getRequest().getAgentId());
         ctx.setAgent(agent);
@@ -113,6 +113,20 @@ public class InitMiddleware implements ChatMiddleware {
     public Map<String, Object> resolveRuntimeConfigMap(Agent agent, com.lightbot.dto.ChatRequest request, ChatContext ctx) {
         if (agent == null) {
             return Map.of();
+        }
+        // 优先按 agentVersionId（主键）加载，其次按 configVersion（版本号）加载
+        if (request != null && request.getAgentVersionId() != null) {
+            Map<String, Object> payload = agentVersionService.loadVersionPayloadById(request.getAgentVersionId());
+            if (payload != null && ctx != null) {
+                applyVersionBindingIds(ctx, payload);
+            }
+            if (payload != null) {
+                Object cfg = payload.get("config");
+                if (cfg instanceof Map<?, ?> cfgMap) {
+                    return new java.util.HashMap<>((Map<String, Object>) cfgMap);
+                }
+            }
+            return parseConfig(agent.getConfig());
         }
         if (request != null && request.getConfigVersion() != null) {
             // 显式指定版本：单次加载 payload，同时提取 config 和绑定 ID（避免双重查询）
@@ -291,9 +305,11 @@ public class InitMiddleware implements ChatMiddleware {
     }
 
     /**
-     * 已有会话中用户切换智能体并继续对话时，将会话 agentId 同步为当前所选智能体
+     * 已有会话中用户切换智能体或版本并继续对话时，将会话 agentId 和 agentVersionId 同步为当前所选
+     *
+     * @param configVersion 配置版本号：0=草稿，>0=发布版本，用于判断是否主动切到草稿
      */
-    private void bindSessionAgentIfNeeded(Long sessionId, Long agentId) {
+    private void bindSessionAgentIfNeeded(Long sessionId, Long agentId, Long agentVersionId, Integer configVersion) {
         if (sessionId == null || agentId == null) {
             return;
         }
@@ -301,9 +317,24 @@ public class InitMiddleware implements ChatMiddleware {
         if (session == null) {
             return;
         }
-        if (!agentId.equals(session.getAgentId())) {
-            chatSessionService.updateAgentId(sessionId, agentId);
-            log.info("[Chat] 会话智能体已切换: sessionId={}, agentId={}", sessionId, agentId);
+        boolean agentChanged = !agentId.equals(session.getAgentId());
+
+        // 确定最终要存的 agentVersionId：
+        // - 有 agentVersionId（发布版本）→ 直接存
+        // - configVersion=0 且 agentVersionId 为空（主动切到草稿）→ 清除为 null
+        // - 都为空（新会话首次发消息）→ 不更新版本
+        Long targetVersionId = agentVersionId;
+        boolean isDraft = configVersion != null && configVersion == 0;
+        if (targetVersionId == null && isDraft) {
+            targetVersionId = null; // 草稿：明确清除
+        }
+
+        boolean versionChanged = agentVersionId != null || isDraft;
+        boolean needUpdate = agentChanged || (versionChanged && !java.util.Objects.equals(targetVersionId, session.getAgentVersionId()));
+        if (needUpdate) {
+            chatSessionService.updateSessionAgent(sessionId, agentId, targetVersionId);
+            log.info("[Chat] 会话智能体/版本已更新: sessionId={}, agentId={}, agentVersionId={}",
+                    sessionId, agentId, targetVersionId);
         }
     }
 

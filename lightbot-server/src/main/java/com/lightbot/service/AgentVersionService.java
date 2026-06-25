@@ -63,6 +63,15 @@ public interface AgentVersionService {
      */
     Map<String, Object> loadVersionPayload(Long agentId, Integer configVersion);
 
+    /**
+     * 按版本快照主键加载 payload（含绑定 ID）
+     * <p>用于会话恢复场景：session 存储 agent_version.id，按 ID 精确加载，避免版本编号复用导致误匹配</p>
+     *
+     * @param versionId agent_version.id
+     * @return payload Map（含 toolIds/knowledgeIds 等），版本不存在或已删除返回 null
+     */
+    Map<String, Object> loadVersionPayloadById(Long versionId);
+
     WorkflowDefinition loadWorkflowDefinition(Long agentId, boolean useDraft);
 
     /**

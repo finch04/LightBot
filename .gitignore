@@ -32,5 +32,8 @@ logs/
 # Claude Code
 .claude/
 
+# Docs (本地文档，不上传远程)
+docs/
+
 # CodeGraph
 .codegraph/

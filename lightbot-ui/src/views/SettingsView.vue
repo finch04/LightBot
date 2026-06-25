@@ -335,6 +335,14 @@
             <template v-if="column.key === 'rank'">
               <span class="rank-badge" :class="{ 'rank-top': index < 3 }">{{ index + 1 }}</span>
             </template>
+            <template v-if="column.key === 'user'">
+              <div class="ranking-user">
+                <a-avatar :size="28" :src="record.avatar">
+                  {{ (record.username || record.userId || '?').charAt(0) }}
+                </a-avatar>
+                <span class="ranking-username">{{ record.username || '用户 ' + record.userId }}</span>
+              </div>
+            </template>
             <template v-if="column.key === 'usedTokens'">
               <span class="token-amount">{{ formatToken(record.usedTokens) }}</span>
             </template>
@@ -605,7 +613,7 @@ const tokenStats = reactive({ globalUsed: 0, globalLimit: 0, date: '' })
 const tokenRanking = ref([])
 const rankingColumns = [
   { title: '排名', key: 'rank', width: 80, align: 'center' },
-  { title: '用户 ID', dataIndex: 'userId', key: 'userId' },
+  { title: '用户', key: 'user' },
   { title: '消耗 Token', key: 'usedTokens', align: 'right' },
 ]
 
@@ -975,5 +983,14 @@ function formatToken(val) {
   padding: 40px 0;
   color: #a1a1aa;
   font-size: 14px;
+}
+.ranking-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ranking-username {
+  font-weight: 500;
+  color: #171717;
 }
 </style>

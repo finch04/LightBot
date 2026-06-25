@@ -63,6 +63,11 @@ public class Message {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long parentId;
 
+    @TableField("reply_to_message_id")
+    @Schema(description = "引用回复的消息ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long replyToMessageId;
+
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

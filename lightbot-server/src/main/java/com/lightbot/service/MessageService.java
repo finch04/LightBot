@@ -46,4 +46,15 @@ public interface MessageService extends IService<Message> {
      * @param sessionId 会话ID（用于校验归属）
      */
     void deleteMessage(Long messageId, Long sessionId);
+
+    /**
+     * 搜索会话内的消息（内容模糊匹配）
+     *
+     * @param sessionId 会话ID
+     * @param keyword   搜索关键词
+     * @param pageNum   页码
+     * @param pageSize  每页数量
+     * @return 匹配的消息分页列表
+     */
+    Page<Message> searchBySessionId(Long sessionId, String keyword, int pageNum, int pageSize);
 }

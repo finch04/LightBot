@@ -35,6 +35,11 @@ public class ChatSession {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long agentId;
 
+    @TableField("agent_version_id")
+    @Schema(description = "最近使用的Agent版本快照ID（agent_version.id），null=未指定")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long agentVersionId;
+
     @TableField("user_id")
     @Schema(description = "用户ID")
     @JsonSerialize(using = ToStringSerializer.class)

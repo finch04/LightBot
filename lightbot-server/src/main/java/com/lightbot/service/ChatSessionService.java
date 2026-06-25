@@ -94,12 +94,13 @@ public interface ChatSessionService extends IService<ChatSession> {
     void updateStats(Long sessionId, int tokenCount);
 
     /**
-     * 对话中切换智能体后，将会话绑定到新的 Agent
+     * 对话中切换智能体或版本后，将会话绑定到新的 Agent 和版本快照
      *
-     * @param sessionId 会话ID
-     * @param agentId   新 Agent ID
+     * @param sessionId      会话ID
+     * @param agentId        新 Agent ID
+     * @param agentVersionId Agent版本快照ID（agent_version.id），null=未指定
      */
-    void updateAgentId(Long sessionId, Long agentId);
+    void updateSessionAgent(Long sessionId, Long agentId, Long agentVersionId);
 
     /**
      * 删除指定 Agent 的所有会话（级联删除消息和轨迹，跳过权限校验）
