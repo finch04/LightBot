@@ -1,6 +1,7 @@
 package com.lightbot.dto;
 
 import com.lightbot.enums.AuthType;
+import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ToolType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -47,4 +48,6 @@ public class ToolRequest {
 
     /** 工具标签（JSON数组字符串） */
     private String tags;
+
+    private CommonStatus status;
 }

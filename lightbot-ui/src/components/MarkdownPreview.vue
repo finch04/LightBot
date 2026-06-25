@@ -1,6 +1,6 @@
 <template>
-  <div class="markdown-preview" ref="containerRef" v-html="renderedHtml" @click="onContainerClick"></div>
-  <ChatMediaPreview v-model:open="previewOpen" :src="previewSrc" media-type="image" />
+  <div class="markdown-preview" :class="{ 'no-image-preview': !imagePreview }" ref="containerRef" v-html="renderedHtml" @click="onContainerClick"></div>
+  <ChatMediaPreview v-if="imagePreview" v-model:open="previewOpen" :src="previewSrc" media-type="image" />
 </template>
 
 <script setup>
@@ -13,6 +13,10 @@ const props = defineProps({
   content: { type: String, default: '' },
   /** false=流式进行中（补全未闭合标记）；true=对话结束后的终态渲染 */
   finalized: { type: Boolean, default: true },
+  /** 是否启用图片点击预览（仅 AI 对话场景需要） */
+  imagePreview: { type: Boolean, default: true },
+  /** 是否剥离 YAML frontmatter（SKILL.md 等文件需要） */
+  stripFrontmatter: { type: Boolean, default: false },
 })
 
 const renderedHtml = shallowRef('')
@@ -23,12 +27,30 @@ const previewOpen = ref(false)
 const previewSrc = ref('')
 
 function onContainerClick(e) {
+  // 拦截 markdown 内的链接点击：外部链接新窗口打开，相对链接阻止跳转
+  const anchor = e.target.closest('a')
+  if (anchor && containerRef.value?.contains(anchor)) {
+    e.preventDefault()
+    const href = anchor.getAttribute('href')
+    if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+      window.open(href, '_blank', 'noopener')
+    }
+    return
+  }
+
+  if (!props.imagePreview) return
   const img = e.target.closest('img')
   if (!img || !containerRef.value?.contains(img)) return
   if (img.src) {
     previewSrc.value = img.src
     previewOpen.value = true
   }
+}
+
+/** 剥离 YAML frontmatter（--- 包裹的头部元数据） */
+function stripFrontmatter(text) {
+  if (!text) return text
+  return text.replace(/^---\n[\s\S]*?\n---\n?/, '')
 }
 
 watch(
@@ -42,7 +64,8 @@ watch(
       return
     }
 
-    const html = await renderMarkdown(val, { streaming: !finalized })
+    const textToRender = props.stripFrontmatter ? stripFrontmatter(val) : val
+    const html = await renderMarkdown(textToRender, { streaming: !finalized })
     if (!expired) renderedHtml.value = html
   },
   { immediate: true }
@@ -160,5 +183,11 @@ watch(
   img:hover {
     transform: scale(1.02);
   }
+}
+.no-image-preview img {
+  cursor: default;
+}
+.no-image-preview img:hover {
+  transform: none;
 }
 </style>

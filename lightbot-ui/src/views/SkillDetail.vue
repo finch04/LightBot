@@ -27,6 +27,7 @@
     </div>
 
     <!-- Tab 内容 -->
+    <a-spin :spinning="loading" tip="加载中..." style="flex:1; min-height:0; display:flex; flex-direction:column;">
     <a-tabs v-model:activeKey="activeTab" class="detail-tabs">
       <!-- Tab 1: 基本信息 -->
       <a-tab-pane key="info" tab="基本信息">
@@ -51,8 +52,17 @@
             </a-descriptions-item>
           </a-descriptions>
           <div class="detail-section">
-            <div class="detail-section-title">提示词模板</div>
-            <pre class="detail-pre">{{ skill.promptTemplate || '—' }}</pre>
+            <div class="detail-section-title">
+              提示词模板
+              <button v-if="skill.promptTemplate" class="btn-outline-sm" style="margin-left: 8px" @click="promptMdPreview = !promptMdPreview">
+                <EyeOutlined v-if="promptMdPreview" /> <EditOutlined v-else />
+                {{ promptMdPreview ? '查看原文' : 'Markdown 预览' }}
+              </button>
+            </div>
+            <div v-if="promptMdPreview && skill.promptTemplate" class="md-rendered">
+              <MarkdownPreview :content="skill.promptTemplate" :finalized="true" :image-preview="false" :strip-frontmatter="true" />
+            </div>
+            <pre v-else class="detail-pre">{{ skill.promptTemplate || '—' }}</pre>
           </div>
           <div v-if="skill.config && skill.config !== '{}'" class="detail-section">
             <div class="detail-section-title">扩展配置</div>
@@ -68,34 +78,30 @@
             <button class="btn-outline-sm" @click="refreshFiles">
               <ReloadOutlined :spin="filesLoading" /> 刷新
             </button>
-            <button class="btn-outline-sm" @click="showCreateFile = true">
+            <button v-if="skill.isBuiltin !== 1" class="btn-outline-sm" @click="showCreateFile = true">
               <FileAddOutlined /> 新建文件
             </button>
+            <span v-if="skill.isBuiltin === 1" class="builtin-hint">内置 Skill 文件只读</span>
           </div>
           <div class="file-content">
             <!-- 文件树 -->
-            <div class="file-tree">
-              <a-spin :spinning="filesLoading">
-                <div v-if="fileTree.length === 0 && !filesLoading" class="empty-tree">
-                  暂无文件
+            <div class="file-tree-panel">
+              <div v-if="filesLoading" class="tree-loading">
+                <a-spin size="small" /> 加载中...
+              </div>
+              <div v-else-if="fileTree.length === 0" class="empty-tree">
+                暂无文件
+              </div>
+              <div v-else class="tree-container">
+                <div v-for="node in fileTree" :key="node.path">
+                  <TreeNode
+                    :node="node"
+                    :depth="0"
+                    :selected="selectedFile"
+                    @select="handleFileSelect"
+                  />
                 </div>
-                <a-tree
-                  v-else
-                  :tree-data="fileTree"
-                  :field-names="{ title: 'name', key: 'path', children: 'children' }"
-                  default-expand-all
-                  :selectable="true"
-                  @select="handleFileSelect"
-                >
-                  <template #title="{ name, isDir }">
-                    <span class="tree-node">
-                      <FolderOutlined v-if="isDir" style="color: #d4a017; margin-right: 4px" />
-                      <FileTextOutlined v-else style="color: #71717a; margin-right: 4px" />
-                      {{ name }}
-                    </span>
-                  </template>
-                </a-tree>
-              </a-spin>
+              </div>
             </div>
             <!-- 文件预览 -->
             <div class="file-preview">
@@ -104,14 +110,34 @@
                   <span class="preview-path">{{ selectedFile }}</span>
                   <div class="preview-actions">
                     <button
-                      v-if="isEditable(selectedFile)"
+                      v-if="isMarkdown(selectedFile)"
+                      class="btn-outline-sm"
+                      @click="mdPreview = !mdPreview"
+                    >
+                      <EyeOutlined v-if="mdPreview" /> <EditOutlined v-else />
+                      {{ mdPreview ? '查看原文' : 'Markdown 预览' }}
+                    </button>
+                    <button
+                      v-if="isEditable(selectedFile) && !isMarkdown(selectedFile) && skill.isBuiltin !== 1"
                       class="btn-outline-sm"
                       :disabled="fileSaving"
                       @click="handleSaveFile"
                     >
                       <SaveOutlined /> {{ fileSaving ? '保存中...' : '保存' }}
                     </button>
-                    <button class="btn-outline-sm danger" @click="handleDeleteFile">
+                    <button
+                      v-if="isMarkdown(selectedFile) && !mdPreview && skill.isBuiltin !== 1"
+                      class="btn-outline-sm"
+                      :disabled="fileSaving"
+                      @click="handleSaveFile"
+                    >
+                      <SaveOutlined /> {{ fileSaving ? '保存中...' : '保存' }}
+                    </button>
+                    <button
+                      v-if="skill.isBuiltin !== 1"
+                      class="btn-outline-sm danger"
+                      @click="handleDeleteFile"
+                    >
                       <DeleteOutlined /> 删除
                     </button>
                   </div>
@@ -121,8 +147,25 @@
                     <template v-if="isImage(selectedFile)">
                       <img :src="fileDataUrl" class="preview-image" />
                     </template>
+                    <template v-else-if="isMarkdown(selectedFile)">
+                      <div v-if="mdPreview" class="md-rendered">
+                        <MarkdownPreview :content="fileContent" :finalized="true" :image-preview="false" :strip-frontmatter="true" />
+                      </div>
+                      <template v-else>
+                        <pre v-if="skill.isBuiltin === 1" class="file-readonly">{{ fileContent }}</pre>
+                        <a-textarea
+                          v-else
+                          v-model:value="fileContent"
+                          :rows="24"
+                          class="file-editor"
+                          placeholder="文件内容"
+                        />
+                      </template>
+                    </template>
                     <template v-else-if="isEditable(selectedFile)">
+                      <pre v-if="skill.isBuiltin === 1" class="file-readonly">{{ fileContent }}</pre>
                       <a-textarea
+                        v-else
                         v-model:value="fileContent"
                         :rows="24"
                         class="file-editor"
@@ -157,50 +200,57 @@
             <h3 class="deps-title">依赖工具</h3>
             <div v-if="depTools.length === 0" class="deps-empty">无依赖工具</div>
             <div v-else class="deps-grid">
-              <div v-for="t in depTools" :key="t.id" class="dep-card">
-                <span class="dep-icon" style="background: linear-gradient(135deg, #10b981, #059669)">
-                  {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
-                </span>
-                <div class="dep-info">
-                  <span class="dep-name">{{ t.displayName || t.name }}</span>
-                  <span class="dep-desc">{{ truncateText(t.description, 40) }}</span>
+              <a-tooltip v-for="t in depTools" :key="t.id" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '360px' }">
+                <div class="dep-card" @click="openToolDetail(t)">
+                  <span class="dep-icon" style="background: linear-gradient(135deg, #10b981, #059669)">
+                    {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
+                  </span>
+                  <div class="dep-info">
+                    <span class="dep-name">{{ t.displayName || t.name }}</span>
+                    <span class="dep-desc">{{ truncateText(t.description, 40) }}</span>
+                  </div>
                 </div>
-              </div>
+              </a-tooltip>
             </div>
           </div>
           <div class="deps-section">
             <h3 class="deps-title">依赖 MCP Server</h3>
             <div v-if="depMcps.length === 0" class="deps-empty">无依赖 MCP Server</div>
             <div v-else class="deps-grid">
-              <div v-for="m in depMcps" :key="m.id" class="dep-card">
-                <span class="dep-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed)">
-                  {{ (m.name || 'M')[0].toUpperCase() }}
-                </span>
-                <div class="dep-info">
-                  <span class="dep-name">{{ m.name }}</span>
-                  <span class="dep-desc">{{ truncateText(m.description, 40) }}</span>
+              <a-tooltip v-for="m in depMcps" :key="m.id" :title="m.description" placement="topLeft" :overlay-style="{ maxWidth: '360px' }">
+                <div class="dep-card" @click="openMcpDetail(m)">
+                  <span class="dep-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed)">
+                    {{ (m.name || 'M')[0].toUpperCase() }}
+                  </span>
+                  <div class="dep-info">
+                    <span class="dep-name">{{ m.name }}</span>
+                    <span class="dep-desc">{{ truncateText(m.description, 40) }}</span>
+                  </div>
                 </div>
-              </div>
+              </a-tooltip>
             </div>
           </div>
           <div class="deps-section">
             <h3 class="deps-title">依赖 Skill</h3>
             <div v-if="depSkills.length === 0" class="deps-empty">无依赖 Skill</div>
             <div v-else class="deps-grid">
-              <div v-for="s in depSkills" :key="s.id" class="dep-card">
-                <span class="dep-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706)">
-                  {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
-                </span>
-                <div class="dep-info">
-                  <span class="dep-name">{{ s.displayName || s.name }}</span>
-                  <span class="dep-desc">{{ truncateText(s.description, 40) }}</span>
+              <a-tooltip v-for="s in depSkills" :key="s.id" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '360px' }">
+                <div class="dep-card" @click="router.push('/app/skills/' + s.id)">
+                  <span class="dep-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706)">
+                    {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
+                  </span>
+                  <div class="dep-info">
+                    <span class="dep-name">{{ s.displayName || s.name }}</span>
+                    <span class="dep-desc">{{ truncateText(s.description, 40) }}</span>
+                  </div>
                 </div>
-              </div>
+              </a-tooltip>
             </div>
           </div>
         </div>
       </a-tab-pane>
     </a-tabs>
+    </a-spin>
 
     <!-- 新建文件弹窗 -->
     <a-modal v-model:open="showCreateFile" title="新建文件" :width="480" :maskClosable="false">
@@ -225,16 +275,48 @@
         </button>
       </template>
     </a-modal>
+
+    <!-- 工具详情弹窗 -->
+    <a-modal v-model:open="toolDetailVisible" :title="toolDetail?.displayName || toolDetail?.name || '工具详情'" :width="640" :footer="null" :maskClosable="false">
+      <div v-if="toolDetail" class="dep-detail-body">
+        <a-descriptions bordered :column="1" size="small">
+          <a-descriptions-item label="名称">{{ toolDetail.displayName || toolDetail.name }}</a-descriptions-item>
+          <a-descriptions-item label="标识">{{ toolDetail.name }}</a-descriptions-item>
+          <a-descriptions-item label="类型">{{ toolDetail.toolType?.label || toolDetail.toolType?.code || toolDetail.toolType || '—' }}</a-descriptions-item>
+          <a-descriptions-item label="描述">{{ toolDetail.description || '—' }}</a-descriptions-item>
+          <a-descriptions-item v-if="toolDetail.endpointUrl" label="端点">{{ toolDetail.endpointUrl }}</a-descriptions-item>
+        </a-descriptions>
+      </div>
+    </a-modal>
+
+    <!-- MCP 详情弹窗 -->
+    <a-modal v-model:open="mcpDetailVisible" :title="mcpDetail?.name || 'MCP Server 详情'" :width="640" :footer="null" :maskClosable="false">
+      <div v-if="mcpDetail" class="dep-detail-body">
+        <a-descriptions bordered :column="1" size="small">
+          <a-descriptions-item label="名称">{{ mcpDetail.name }}</a-descriptions-item>
+          <a-descriptions-item label="描述">{{ mcpDetail.description || '—' }}</a-descriptions-item>
+          <a-descriptions-item label="安装类型">{{ mcpDetail.installType?.label || mcpDetail.installType?.code || mcpDetail.installType || '—' }}</a-descriptions-item>
+          <a-descriptions-item label="传输协议">{{ mcpDetail.transport?.label || mcpDetail.transport?.code || mcpDetail.transport || '—' }}</a-descriptions-item>
+          <a-descriptions-item v-if="mcpDetail.host" label="服务地址">{{ mcpDetail.host }}</a-descriptions-item>
+          <a-descriptions-item label="状态">
+            <a-tag :color="mcpDetail.status === 'disabled' ? 'default' : 'success'">
+              {{ mcpDetail.status === 'disabled' ? '已禁用' : '已启用' }}
+            </a-tag>
+          </a-descriptions-item>
+        </a-descriptions>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, ExportOutlined, DeleteOutlined, ReloadOutlined,
   FileAddOutlined, FolderOutlined, FileTextOutlined, FileOutlined,
-  FolderOpenOutlined, SaveOutlined
+  FolderOpenOutlined, SaveOutlined, RightOutlined, DownOutlined,
+  EyeOutlined, EditOutlined
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -245,6 +327,72 @@ import { getTools } from '../api/tool'
 import { getMcpServers } from '../api/mcp'
 import { getEnabledSkills } from '../api/skill'
 import { truncateText } from '../utils/format'
+import MarkdownPreview from '../components/MarkdownPreview.vue'
+
+// ==================== 文件树节点组件 ====================
+
+const TreeNode = {
+  name: 'TreeNode',
+  props: {
+    node: { type: Object, required: true },
+    depth: { type: Number, default: 0 },
+    selected: { type: String, default: null },
+  },
+  emits: ['select'],
+  setup(props, { emit }) {
+    const expanded = ref(false)
+    const toggle = () => {
+      if (props.node.isDir) expanded.value = !expanded.value
+    }
+    const handleClick = () => {
+      if (props.node.isDir) {
+        expanded.value = !expanded.value
+      } else {
+        emit('select', props.node.path)
+      }
+    }
+    return () => {
+      const { node, depth, selected } = props
+      const indent = depth * 20
+      const isSelected = !node.isDir && selected === node.path
+      return h('div', { class: 'tree-node-wrapper' }, [
+        h('div', {
+          class: ['tree-node-row', { 'tree-selected': isSelected, 'tree-dir': node.isDir }],
+          style: { paddingLeft: indent + 'px' },
+          onClick: handleClick,
+        }, [
+          // 展开/折叠箭头
+          node.isDir
+            ? h('span', { class: 'tree-arrow' }, [
+                expanded.value
+                  ? h(DownOutlined, { style: 'font-size: 10px; color: #a1a1aa' })
+                  : h(RightOutlined, { style: 'font-size: 10px; color: #a1a1aa' })
+              ])
+            : h('span', { class: 'tree-arrow-placeholder' }),
+          // 图标
+          node.isDir
+            ? h(FolderOutlined, { style: 'font-size: 14px; color: #d4a017; margin-right: 6px' })
+            : h(FileTextOutlined, { style: 'font-size: 14px; color: #71717a; margin-right: 6px' }),
+          // 文件名
+          h('span', { class: 'tree-name' }, node.name),
+        ]),
+        // 子节点
+        node.isDir && expanded.value && node.children
+          ? h('div', { class: 'tree-children' },
+              node.children.map(child =>
+                h(TreeNode, {
+                  node: child,
+                  depth: depth + 1,
+                  selected: selected,
+                  onSelect: (path) => emit('select', path),
+                })
+              )
+            )
+          : null,
+      ])
+    }
+  },
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -252,6 +400,7 @@ const router = useRouter()
 const skill = ref({})
 const activeTab = ref('info')
 const loading = ref(false)
+const promptMdPreview = ref(true) // 提示词模板默认 markdown 渲染
 
 // 文件管理
 const filesLoading = ref(false)
@@ -261,10 +410,17 @@ const fileContent = ref('')
 const fileDataUrl = ref('')
 const fileSize = ref(0)
 const fileLoading = ref(false)
+const mdPreview = ref(true) // true=渲染markdown，false=查看原文
 const fileSaving = ref(false)
 const showCreateFile = ref(false)
 const creatingFile = ref(false)
 const newFileForm = reactive({ path: '', content: '', isDir: false })
+
+// 依赖详情弹窗
+const toolDetailVisible = ref(false)
+const toolDetail = ref(null)
+const mcpDetailVisible = ref(false)
+const mcpDetail = ref(null)
 
 // 依赖
 const toolOptions = ref([])
@@ -295,7 +451,6 @@ const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bm
 function isEditable(path) {
   if (!path) return false
   const lower = path.toLowerCase()
-  // 无扩展名的文件（如 Makefile, Dockerfile）也可编辑
   if (!lower.includes('.')) return true
   return EDITABLE_EXTENSIONS.some(ext => lower.endsWith(ext))
 }
@@ -304,6 +459,12 @@ function isImage(path) {
   if (!path) return false
   const lower = path.toLowerCase()
   return IMAGE_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
+function isMarkdown(path) {
+  if (!path) return false
+  const lower = path.toLowerCase()
+  return lower.endsWith('.md') || lower.endsWith('.markdown')
 }
 
 function formatFileSize(bytes) {
@@ -374,6 +535,18 @@ async function loadOptions() {
   }
 }
 
+// ==================== 依赖详情 ====================
+
+function openToolDetail(tool) {
+  toolDetail.value = tool
+  toolDetailVisible.value = true
+}
+
+function openMcpDetail(mcp) {
+  mcpDetail.value = mcp
+  mcpDetailVisible.value = true
+}
+
 // ==================== 文件管理 ====================
 
 async function refreshFiles() {
@@ -389,9 +562,8 @@ async function refreshFiles() {
   }
 }
 
-async function handleFileSelect(keys) {
-  if (!keys.length) return
-  const path = keys[0]
+async function handleFileSelect(path) {
+  if (!path) return
   // 目录路径以 / 结尾，不加载
   if (path.endsWith('/')) return
 
@@ -400,19 +572,37 @@ async function handleFileSelect(keys) {
   fileContent.value = ''
   fileDataUrl.value = ''
   fileSize.value = 0
+  mdPreview.value = true
 
   try {
     const res = await readSkillFile(skill.value.id, path)
+    // 拦截器已解包 response.data，res = {code, data, message}，res.data 即 base64 字符串
+    const base64Data = res.data
+    if (!base64Data) {
+      fileContent.value = ''
+      return
+    }
+
     if (isImage(path)) {
-      // 图片：转为 data URL
-      const blob = new Blob([res.data])
+      // 图片：base64 → blob URL
+      const mimeType = getMimeType(path)
+      const byteChars = atob(base64Data)
+      const byteArray = new Uint8Array(byteChars.length)
+      for (let i = 0; i < byteChars.length; i++) {
+        byteArray[i] = byteChars.charCodeAt(i)
+      }
+      const blob = new Blob([byteArray], { type: mimeType })
       fileSize.value = blob.size
       fileDataUrl.value = URL.createObjectURL(blob)
     } else {
-      // 文本：解码
-      const text = new TextDecoder('utf-8').decode(new Uint8Array(res.data))
-      fileContent.value = text
-      fileSize.value = res.data.byteLength
+      // 文本：base64 → utf-8
+      const byteChars = atob(base64Data)
+      const byteArray = new Uint8Array(byteChars.length)
+      for (let i = 0; i < byteChars.length; i++) {
+        byteArray[i] = byteChars.charCodeAt(i)
+      }
+      fileContent.value = new TextDecoder('utf-8').decode(byteArray)
+      fileSize.value = byteArray.length
     }
   } catch {
     // interceptor handles error
@@ -421,8 +611,20 @@ async function handleFileSelect(keys) {
   }
 }
 
+function getMimeType(path) {
+  const lower = path.toLowerCase()
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.gif')) return 'image/gif'
+  if (lower.endsWith('.svg')) return 'image/svg+xml'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.bmp')) return 'image/bmp'
+  if (lower.endsWith('.ico')) return 'image/x-icon'
+  return 'application/octet-stream'
+}
+
 async function handleSaveFile() {
-  if (!selectedFile.value || !skill.value.id) return
+  if (!selectedFile.value || !skill.value.id || skill.value.isBuiltin === 1) return
   fileSaving.value = true
   try {
     await updateSkillFile(skill.value.id, {
@@ -438,7 +640,7 @@ async function handleSaveFile() {
 }
 
 async function handleDeleteFile() {
-  if (!selectedFile.value || !skill.value.id) return
+  if (!selectedFile.value || !skill.value.id || skill.value.isBuiltin === 1) return
   Modal.confirm({
     title: '删除文件',
     content: `确定删除 ${selectedFile.value} 吗？`,
@@ -457,7 +659,7 @@ async function handleDeleteFile() {
 }
 
 async function handleCreateFile() {
-  if (!newFileForm.path || !skill.value.id) return
+  if (!newFileForm.path || !skill.value.id || skill.value.isBuiltin === 1) return
   creatingFile.value = true
   try {
     await createSkillFile(skill.value.id, {
@@ -588,6 +790,14 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
 }
+/* a-spin 内部容器必须继承 flex 布局，否则 tabs 无法撑满 */
+:deep(.ant-spin-nested-loading),
+:deep(.ant-spin-nested-loading > .ant-spin-container) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
 .detail-tabs :deep(.ant-tabs-nav) {
   padding: 0 32px;
   background: #fff;
@@ -596,14 +806,13 @@ onMounted(() => {
 .detail-tabs :deep(.ant-tabs-content-holder) {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 .detail-tabs :deep(.ant-tabs-content) {
-  height: 100%;
+  height: auto;
 }
 .detail-tabs :deep(.ant-tabs-tabpane) {
-  height: 100%;
-  overflow-y: auto;
+  min-height: 0;
 }
 
 .tab-body {
@@ -642,8 +851,7 @@ onMounted(() => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 400px;
-  overflow-y: auto;
+  min-height: 200px;
 }
 
 /* 文件管理 */
@@ -655,9 +863,15 @@ onMounted(() => {
 }
 .file-toolbar {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 12px;
   flex-shrink: 0;
+}
+.builtin-hint {
+  font-size: 12px;
+  color: #a1a1aa;
+  margin-left: 4px;
 }
 .file-content {
   display: flex;
@@ -665,28 +879,85 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
 }
-.file-tree {
-  width: 260px;
+
+/* 文件树面板 */
+.file-tree-panel {
+  width: 280px;
   flex-shrink: 0;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 12px;
   overflow-y: auto;
   background: #fff;
 }
-.file-tree :deep(.ant-tree-title) {
+.tree-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 0;
+  color: #a1a1aa;
   font-size: 13px;
 }
 .empty-tree {
   text-align: center;
-  padding: 32px;
+  padding: 40px 0;
   color: #a1a1aa;
   font-size: 13px;
 }
-.tree-node {
-  display: inline-flex;
-  align-items: center;
+.tree-container {
+  padding: 8px 0;
 }
+
+/* 树节点行 */
+:deep(.tree-node-row) {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding-right: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+:deep(.tree-node-row:hover) {
+  background: #f5f5f5;
+}
+:deep(.tree-selected) {
+  background: #eff6ff !important;
+}
+:deep(.tree-selected .tree-name) {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+:deep(.tree-dir) {
+  font-weight: 500;
+}
+:deep(.tree-arrow) {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+:deep(.tree-arrow-placeholder) {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+:deep(.tree-name) {
+  font-size: 13px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:deep(.tree-children) {
+  /* 子节点缩进由 depth * 20px 控制 */
+}
+
+/* 文件预览 */
 .file-preview {
   flex: 1;
   min-width: 0;
@@ -727,6 +998,53 @@ onMounted(() => {
   display: block;
   margin: 16px auto;
 }
+.md-rendered {
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #171717;
+}
+.md-rendered :deep(h1),
+.md-rendered :deep(h2),
+.md-rendered :deep(h3) {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+.md-rendered :deep(pre) {
+  background: #f4f4f5;
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.md-rendered :deep(code) {
+  background: #f4f4f5;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+.md-rendered :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+.md-rendered :deep(img) {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.md-rendered :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.md-rendered :deep(th),
+.md-rendered :deep(td) {
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  text-align: left;
+}
+.md-rendered :deep(th) {
+  background: #f9fafb;
+  font-weight: 600;
+}
 .preview-empty, .preview-unsupported {
   display: flex;
   flex-direction: column;
@@ -741,6 +1059,18 @@ onMounted(() => {
 .file-meta {
   font-size: 12px;
   color: #d4d4d8;
+}
+.file-readonly {
+  background: #f9fafb;
+  padding: 16px;
+  margin: 0;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 300px;
+  overflow-y: auto;
 }
 .file-editor {
   border: none;
@@ -782,6 +1112,12 @@ onMounted(() => {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.dep-card:hover {
+  border-color: #d4d4d8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .dep-icon {
   width: 36px;
@@ -812,6 +1148,10 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.dep-detail-body {
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 /* 按钮 */
@@ -866,4 +1206,18 @@ onMounted(() => {
   cursor: pointer;
 }
 .btn-cancel:hover { border-color: #171717; color: #171717; }
+
+/* a-descriptions 表头不换行（参考 TaskCenter） */
+:deep(.ant-descriptions-view) {
+  table-layout: fixed;
+}
+:deep(.ant-descriptions-item-label) {
+  width: 100px;
+  min-width: 100px;
+  white-space: nowrap;
+}
+:deep(.ant-descriptions-item-content) {
+  word-break: break-all;
+  overflow-wrap: break-word;
+}
 </style>

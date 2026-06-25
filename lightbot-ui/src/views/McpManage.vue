@@ -1119,11 +1119,16 @@ defineExpose({ openDialog, search, refresh })
 .detail-scroll-body::-webkit-scrollbar-track {
   background: transparent;
 }
+.detail-scroll-body :deep(.ant-descriptions-view) {
+  table-layout: fixed;
+}
 .detail-scroll-body :deep(.ant-descriptions-item-label) {
+  width: 100px;
+  min-width: 100px;
   white-space: nowrap;
 }
 .detail-scroll-body :deep(.ant-descriptions-item-content) {
-  word-break: break-word;
+  word-break: break-all;
   overflow-wrap: break-word;
 }
 .schema-table-wrap {

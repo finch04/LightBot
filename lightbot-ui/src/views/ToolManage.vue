@@ -1334,6 +1334,7 @@ defineExpose({ openDialog, search, refresh })
 .detail-info-label {
   font-size: 12px;
   color: #a1a1aa;
+  white-space: nowrap;
 }
 .detail-info-value {
   font-size: 13px;

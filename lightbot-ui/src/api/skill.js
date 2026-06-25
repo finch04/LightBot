@@ -88,9 +88,9 @@ export function getSkillFiles(id) {
   return request.get(`/skills/${id}/files`)
 }
 
-/** 读取 Skill 文件内容（返回 ArrayBuffer） */
+/** 读取 Skill 文件内容（返回 Result<byte[]>，byte[] 被 Jackson 序列化为 base64） */
 export function readSkillFile(id, path) {
-  return request.get(`/skills/${id}/file`, { params: { path }, responseType: 'arraybuffer' })
+  return request.get(`/skills/${id}/file`, { params: { path } })
 }
 
 /** 创建 Skill 文件/目录 */

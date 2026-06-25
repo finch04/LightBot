@@ -1,5 +1,6 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -21,11 +22,9 @@ public class SkillFileTreeNode {
     @Schema(description = "相对路径（如 SKILL.md 或 images/logo.png）")
     private String path;
 
+    @JsonProperty("isDir")
     @Schema(description = "是否为目录")
     private boolean isDir;
-
-    @Schema(description = "文件大小（字节），目录为 0")
-    private long size;
 
     @Schema(description = "子节点（仅目录有值）")
     private List<SkillFileTreeNode> children;

@@ -200,6 +200,7 @@ public class SkillStorageService {
         for (String path : paths) {
             String[] parts = path.split("/");
             Map<String, SkillFileTreeNode> currentLevel = rootMap;
+            List<SkillFileTreeNode> parentChildren = null; // 父节点的 children 列表，root 层为 null
 
             for (int i = 0; i < parts.length; i++) {
                 String part = parts[i];
@@ -220,15 +221,20 @@ public class SkillStorageService {
                         node.setChildren(new ArrayList<>());
                     }
                     currentLevel.put(part, node);
+                    // 关键：新节点也要加入父节点的 children 列表，否则下次重建 childMap 时会丢失
+                    if (parentChildren != null) {
+                        parentChildren.add(node);
+                    }
                 }
 
                 if (!isLeaf) {
                     if (node.getChildren() == null) {
                         node.setChildren(new ArrayList<>());
                     }
-                    // 构建子层级索引
+                    parentChildren = node.getChildren();
+                    // 从 children 列表重建子层级索引
                     Map<String, SkillFileTreeNode> childMap = new LinkedHashMap<>();
-                    for (SkillFileTreeNode child : node.getChildren()) {
+                    for (SkillFileTreeNode child : parentChildren) {
                         childMap.put(child.getName(), child);
                     }
                     currentLevel = childMap;
