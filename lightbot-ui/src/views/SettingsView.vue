@@ -262,8 +262,8 @@
             <h3>今日 Token 消耗</h3>
             <span class="panel-desc">{{ tokenStats.date }}</span>
           </div>
-          <button class="btn-icon-refresh" @click="loadTokenStats" :disabled="tokenLoading">
-            <SyncOutlined />
+          <button class="btn-icon-refresh" @click="loadTokenStats" :disabled="tokenStatsLoading">
+            <SyncOutlined :spin="tokenStatsLoading" />
           </button>
         </div>
         <div class="panel-body">
@@ -319,8 +319,8 @@
           <h3>用户 Token 消耗排行</h3>
           <span class="panel-desc">今日 Top {{ tokenRanking.length }}</span>
         </div>
-        <button class="btn-icon-refresh" @click="loadTokenRanking" :disabled="tokenLoading">
-          <SyncOutlined />
+        <button class="btn-icon-refresh" @click="loadTokenRanking" :disabled="tokenRankingLoading">
+          <SyncOutlined :spin="tokenRankingLoading" />
         </button>
       </div>
       <div class="panel-body">
@@ -597,6 +597,8 @@ async function saveLandingConfig() {
 
 // Token 管理
 const tokenLoading = ref(false)
+const tokenStatsLoading = ref(false)
+const tokenRankingLoading = ref(false)
 const tokenSaving = ref(false)
 const tokenConfig = reactive({ singleCallLimit: 32000, userDailyLimit: 1000000, globalDailyLimit: 10000000 })
 const tokenStats = reactive({ globalUsed: 0, globalLimit: 0, date: '' })
@@ -616,16 +618,26 @@ async function loadTokenConfig() {
 }
 
 async function loadTokenStats() {
-  const res = await getTokenBudgetStats()
-  const data = res.data || {}
-  tokenStats.globalUsed = data.globalUsed ?? 0
-  tokenStats.globalLimit = data.globalLimit ?? 0
-  tokenStats.date = data.date ?? ''
+  tokenStatsLoading.value = true
+  try {
+    const res = await getTokenBudgetStats()
+    const data = res.data || {}
+    tokenStats.globalUsed = data.globalUsed ?? 0
+    tokenStats.globalLimit = data.globalLimit ?? 0
+    tokenStats.date = data.date ?? ''
+  } finally {
+    tokenStatsLoading.value = false
+  }
 }
 
 async function loadTokenRanking() {
-  const res = await getTokenBudgetRanking(20)
-  tokenRanking.value = res.data || []
+  tokenRankingLoading.value = true
+  try {
+    const res = await getTokenBudgetRanking(20)
+    tokenRanking.value = res.data || []
+  } finally {
+    tokenRankingLoading.value = false
+  }
 }
 
 async function saveTokenConfig() {
@@ -883,12 +895,6 @@ function formatToken(val) {
   font-size: 13px;
   font-weight: 600;
   color: #71717a;
-}
-.token-stats-panel {
-  grid-column: 1 / -1;
-}
-.token-config-panel {
-  grid-column: 1 / -1;
 }
 .token-ranking-panel {
   margin-top: 24px;

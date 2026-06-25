@@ -86,6 +86,7 @@ public class ChatServiceImpl implements ChatService {
     private final TraceMiddleware traceMiddleware;
     private final MimoChatClient mimoChatClient;
     private final ModelProviderService modelProviderService;
+    private final TokenBudgetService tokenBudgetService;
     private final ObjectMapper objectMapper;
     private final ToolEventGenerator toolEventGenerator;
     private final ToolArgsSanitizer toolArgsSanitizer;
@@ -126,6 +127,11 @@ public class ChatServiceImpl implements ChatService {
         Long messageId = messageMiddleware.saveMessage(ctx.getSessionId(), MessageRole.ASSISTANT,
                 reply, metadataStr, totalTokens);
         ctx.setAssistantMessageId(messageId);
+
+        // 3.0 记录 Token 消耗
+        if (ctx.getUserId() != null) {
+            tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
+        }
 
         // 3.1 批量写入工具调用记录
         if (!ctx.getPendingToolCalls().isEmpty()) {
@@ -398,6 +404,11 @@ public class ChatServiceImpl implements ChatService {
         try {
             long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
             Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
+
+            // 0. 记录 Token 消耗到预算服务
+            if (ctx.getUserId() != null) {
+                tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
+            }
 
             // 1. 持久化 AI 回复
             String replyToSave = SensitiveWordFilter.filterAiOutput(

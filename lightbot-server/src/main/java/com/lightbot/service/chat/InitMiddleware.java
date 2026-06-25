@@ -42,6 +42,12 @@ public class InitMiddleware implements ChatMiddleware {
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
         long t0 = System.currentTimeMillis();
 
+        // 0. 记录当前用户ID（后续 Mono 线程可能丢失 Sa-Token ThreadLocal）
+        try {
+            ctx.setUserId(cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong());
+        } catch (Exception ignored) {
+        }
+
         // 1. 解析会话ID，并在对话中切换智能体时更新会话绑定
         Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
         ctx.setSessionId(sessionId);
@@ -71,6 +77,12 @@ public class InitMiddleware implements ChatMiddleware {
      * 同步路径专用：仅初始化，不走 Flux 链
      */
     public void init(ChatContext ctx) {
+        // 记录当前用户ID
+        try {
+            ctx.setUserId(cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong());
+        } catch (Exception ignored) {
+        }
+
         Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
         ctx.setSessionId(sessionId);
         bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId());

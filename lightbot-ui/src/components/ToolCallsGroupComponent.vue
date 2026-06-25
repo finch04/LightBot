@@ -113,9 +113,9 @@ function syncExpandedResults() {
 }
 
 watch(
-  () => props.toolEvents?.length,
+  () => props.toolEvents,
   () => syncExpandedResults(),
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
 const uniqueToolNames = computed(() => {

@@ -29,6 +29,7 @@ public class ChatContext {
     private ChatRequest request;
 
     // ===== InitMiddleware 解析 =====
+    private Long userId;
     private Long sessionId;
     private Agent agent;
     private Map<String, Object> configMap;

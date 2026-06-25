@@ -3,6 +3,7 @@ package com.lightbot.config;
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.router.SaRouter;
 import cn.dev33.satoken.stp.StpUtil;
+import com.lightbot.enums.UserRole;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -19,9 +20,13 @@ public class SaTokenConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new SaInterceptor(handle -> {
+            // 日志/任务 SSE 接口：需要登录 + ADMIN 角色
+            SaRouter.match("/api/logs/**").check(r -> {
+                StpUtil.checkLogin();
+                StpUtil.checkRole(UserRole.ADMIN.getCode());
+            });
+            SaRouter.match("/api/tasks/stream").check(r -> StpUtil.checkLogin());
             // 排除不需要认证的路径
-            SaRouter.match("/api/logs/**").stop();
-            SaRouter.match("/api/tasks/stream").stop();
             SaRouter.match("/api/auth/login").stop();
             SaRouter.match("/api/auth/register").stop();
             SaRouter.match("/api/auth/init-status").stop();

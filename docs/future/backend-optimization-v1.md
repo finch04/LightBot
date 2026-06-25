@@ -21,7 +21,7 @@
 
 **修复**：解析 hostname 到 IP 后拒绝私有/保留 IP 段，复用 `ApiToolExecutionService.validateUrl()` 的校验逻辑。
 
-#### 1.1.2 日志/任务端点未鉴权
+#### 1.1.2 日志/任务端点未鉴权 ✅ 已修复
 
 **文件**：`lightbot-server/.../config/SaTokenConfig.java`，line 23-24
 
@@ -30,6 +30,8 @@
 **影响**：敏感信息泄露。
 
 **修复**：移除排除规则或改为仅 ADMIN 角色可访问。SSE 流若需无 cookie 认证，改为手动校验 query token。
+
+**修复方案**：`SaTokenConfig` 中将 `.stop()` 改为 `.check(r -> { StpUtil.checkLogin(); StpUtil.checkRole("ADMIN"); })`，`/api/tasks/stream` 改为需登录。
 
 #### 1.1.3 MinIO Bucket 公开读策略
 
@@ -51,7 +53,7 @@
 
 **修复**：改为 `StpUtil.getLoginIdAsLong()`。
 
-#### 1.1.5 登录/注册无限速限制
+#### 1.1.5 登录/注册无限速限制 ✅ 已修复
 
 **文件**：`lightbot-server/.../controller/AuthController.java`
 
@@ -60,6 +62,8 @@
 **影响**：暴力破解密码、批量注册攻击。
 
 **修复**：基于 Redis 的计数器实现速率限制，N 次失败后锁定账户。
+
+**修复方案**：新增 `RateLimitFilter`（Redis INCR + TTL 滑动窗口），通过 `FilterRegistrationBean` 注册到 `/api/auth/login` 和 `/api/auth/register`，同一 IP 每分钟最多 10 次，超限返回 429。新增 `ErrorCode.RATE_LIMITED` 错误码。
 
 #### 1.1.6 Chat/LLM 端点无限速限制
 
@@ -502,10 +506,10 @@ public Result<Void> handleMethodNotAllowed(HttpRequestMethodNotSupportedExceptio
 | 任务 | 预估 | 状态 |
 |------|------|------|
 | SSRF 防护（WebFetchUtil） | 0.5d | 新增 |
-| 日志端点鉴权 | 0.5d | 新增 |
+| 日志端点鉴权 | 0.5d | ✅ 已修复 |
 | MinIO 公开读 → presigned URL | 1d | 新增 |
 | SSE userId 参数 → 会话获取 | 0.5h | 新增 |
-| 登录速率限制 | 1d | 新增 |
+| 登录速率限制 | 1d | ✅ 已修复 |
 | initAdmin 竞态修复 | 0.5d | 新增 |
 | updateStats 原子化（2 处） | 0.5d | 新增 |
 | setDefaultAgent 原子化 | 0.5d | 新增 |
@@ -547,10 +551,10 @@ public Result<Void> handleMethodNotAllowed(HttpRequestMethodNotSupportedExceptio
 | 文件 | 优化项 | 优先级 |
 |------|--------|--------|
 | `util/WebFetchUtil.java` | SSRF 防护 | P0 |
-| `config/SaTokenConfig.java` | 日志端点鉴权 | P0 |
+| `config/SaTokenConfig.java` | 日志端点鉴权 ✅ | P0 |
 | `util/MinioUtil.java` | 公开读策略 → presigned URL | P0 |
 | `controller/TaskEventController.java` | userId 参数修复 | P0 |
-| `controller/AuthController.java` | 速率限制 | P0 |
+| `controller/AuthController.java` | 速率限制 ✅ | P0 |
 | `controller/ChatController.java` | 速率限制 | P0 |
 | `service/impl/UserServiceImpl.java` | initAdmin 竞态 | P0 |
 | `service/impl/AgentServiceImpl.java` | setDefaultAgent 原子化、绑定异常吞没 | P0-P1 |
@@ -583,4 +587,5 @@ public Result<Void> handleMethodNotAllowed(HttpRequestMethodNotSupportedExceptio
 | 新增 `util/VectorUtil.java` | toVectorString 提取 | P2 |
 | 新增 `util/JsonUtil.java` | parseJson 提取 | P2 |
 | 新增 `util/HashUtil.java` | 哈希计算提取 | P2 |
-| 新增 `filter/RateLimitFilter.java` | 速率限制 | P0 |
+| 新增 `filter/RateLimitFilter.java` | 速率限制 ✅ | P0 |
+| 新增 `config/RateLimitConfig.java` | 速率限制注册 | P0 |

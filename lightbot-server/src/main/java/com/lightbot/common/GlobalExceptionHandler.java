@@ -1,6 +1,8 @@
 package com.lightbot.common;
 
 import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotPermissionException;
+import cn.dev33.satoken.exception.NotRoleException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,20 @@ public class GlobalExceptionHandler {
         log.info("未登录访问: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Result.fail(401, "未登录或登录已过期"));
+    }
+
+    @ExceptionHandler(NotRoleException.class)
+    public ResponseEntity<Result<Void>> handleNotRole(NotRoleException e) {
+        log.warn("角色校验失败: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Result.fail(403, "无权访问，需要" + e.getRole() + "角色"));
+    }
+
+    @ExceptionHandler(NotPermissionException.class)
+    public ResponseEntity<Result<Void>> handleNotPermission(NotPermissionException e) {
+        log.warn("权限校验失败: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Result.fail(403, "无权访问"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
