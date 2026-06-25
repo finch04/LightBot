@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.dto.SkillFileTreeNode;
 import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
@@ -388,6 +389,11 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
     }
 
     @Override
+    public void cleanupDraft(String draftId) {
+        skillStorageService.cleanupDraft(draftId);
+    }
+
+    @Override
     public List<Skill> listBySlugs(Collection<String> slugs) {
         if (slugs == null || slugs.isEmpty()) {
             return List.of();
@@ -405,6 +411,78 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
             result.put(skill.getSlug(), parseStringList(skill.getSkillDependencies()));
         }
         return result;
+    }
+
+    // ==================== 文件管理 ====================
+
+    @Override
+    public List<SkillFileTreeNode> listFiles(Long id) {
+        Skill skill = getById(id);
+        if (skill == null) {
+            throw new BizException(ErrorCode.SKILL_NOT_FOUND);
+        }
+        if (skill.getSlug() == null) {
+            return List.of();
+        }
+        return skillStorageService.buildFileTree(skill.getSlug());
+    }
+
+    @Override
+    public byte[] readFile(Long id, String path) {
+        Skill skill = getById(id);
+        if (skill == null) {
+            throw new BizException(ErrorCode.SKILL_NOT_FOUND);
+        }
+        if (skill.getSlug() == null) {
+            throw new BizException(ErrorCode.SKILL_FILE_NOT_FOUND);
+        }
+        skillStorageService.validateFilePath(path);
+        return skillStorageService.readFile(skill.getSlug(), path);
+    }
+
+    @Override
+    public void createFile(Long id, String path, String content, boolean isDir) {
+        Skill skill = getById(id);
+        if (skill == null) {
+            throw new BizException(ErrorCode.SKILL_NOT_FOUND);
+        }
+        if (skill.getSlug() == null) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "Skill 未关联文件目录");
+        }
+        skillStorageService.validateFilePath(path);
+        if (isDir) {
+            // 目录：创建一个占位的 .gitkeep 文件
+            String dirPath = path.endsWith("/") ? path : path + "/";
+            skillStorageService.writeFile(skill.getSlug(), dirPath + ".gitkeep", "");
+        } else {
+            skillStorageService.writeFile(skill.getSlug(), path, content != null ? content : "");
+        }
+    }
+
+    @Override
+    public void updateFile(Long id, String path, String content) {
+        Skill skill = getById(id);
+        if (skill == null) {
+            throw new BizException(ErrorCode.SKILL_NOT_FOUND);
+        }
+        if (skill.getSlug() == null) {
+            throw new BizException(ErrorCode.SKILL_FILE_NOT_FOUND);
+        }
+        skillStorageService.validateFilePath(path);
+        skillStorageService.writeFile(skill.getSlug(), path, content != null ? content : "");
+    }
+
+    @Override
+    public void deleteFile(Long id, String path) {
+        Skill skill = getById(id);
+        if (skill == null) {
+            throw new BizException(ErrorCode.SKILL_NOT_FOUND);
+        }
+        if (skill.getSlug() == null) {
+            throw new BizException(ErrorCode.SKILL_FILE_NOT_FOUND);
+        }
+        skillStorageService.validateFilePath(path);
+        skillStorageService.deleteFile(skill.getSlug(), path);
     }
 
     // ==================== 内部方法 ====================

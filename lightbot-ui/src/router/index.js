@@ -89,6 +89,11 @@ const routes = [
         component: () => import('../views/SkillManage.vue'),
       },
       {
+        path: 'skills/:id',
+        name: 'SkillDetail',
+        component: () => import('../views/SkillDetail.vue'),
+      },
+      {
         path: 'tools',
         name: 'Tools',
         component: () => import('../views/ToolManage.vue'),

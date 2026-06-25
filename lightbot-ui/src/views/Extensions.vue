@@ -63,6 +63,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined, SearchOutlined, UploadOutlined, CloudDownloadOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import McpManage from './McpManage.vue'
 import SkillManage from './SkillManage.vue'
@@ -70,7 +71,9 @@ import ToolManage from './ToolManage.vue'
 import SubAgentManage from './SubAgentManage.vue'
 import SystemToolDrawer from '../components/SystemToolDrawer.vue'
 
-const activeTab = ref('mcp')
+const route = useRoute()
+const router = useRouter()
+const activeTab = ref(route.query.tab || 'mcp')
 const searchText = ref('')
 const toolTypeFilter = ref('all')
 const mcpRef = ref(null)
@@ -127,14 +130,14 @@ watch(toolTypeFilter, () => {
   }
 })
 
-// 切换Tab时清空搜索并刷新数据
-watch(activeTab, () => {
+// 切换Tab时清空搜索、同步URL、刷新数据
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
   searchText.value = ''
   toolTypeFilter.value = 'all'
-  // 触发对应组件的数据刷新
-  const target = activeTab.value === 'mcp' ? mcpRef.value
-    : activeTab.value === 'skills' ? skillRef.value
-    : activeTab.value === 'tools' ? toolRef.value
+  const target = tab === 'mcp' ? mcpRef.value
+    : tab === 'skills' ? skillRef.value
+    : tab === 'tools' ? toolRef.value
     : subAgentRef.value
   target?.refresh()
 })

@@ -121,6 +121,11 @@ public enum ErrorCode {
     SKILL_BUILTIN_NOT_EDITABLE(92009, "内置Skill不可编辑", HttpStatus.BAD_REQUEST),
     SKILL_BUILTIN_NOT_DELETABLE(92010, "内置Skill不可删除", HttpStatus.BAD_REQUEST),
     SANDBOX_PATH_VIOLATION(92011, "路径安全校验失败: %s", HttpStatus.FORBIDDEN),
+    SANDBOX_ENGINE_NOT_FOUND(92020, "不支持的编程语言: %s", HttpStatus.BAD_REQUEST),
+    SANDBOX_EXEC_FAILED(92021, "代码执行失败: %s", HttpStatus.BAD_REQUEST),
+    SANDBOX_COMPILE_ERROR(92022, "代码编译错误: %s", HttpStatus.BAD_REQUEST),
+    SANDBOX_TIMEOUT(92023, "代码执行超时（%sms）", HttpStatus.BAD_REQUEST),
+    SANDBOX_SECURITY_VIOLATION(92024, "代码安全校验未通过: %s", HttpStatus.FORBIDDEN),
 
     // ========== MCP模块 ==========
     MCP_SERVER_NOT_FOUND(90001, "MCP Server不存在", HttpStatus.BAD_REQUEST),

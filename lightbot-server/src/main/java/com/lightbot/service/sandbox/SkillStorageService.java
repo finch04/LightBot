@@ -1,6 +1,7 @@
 package com.lightbot.service.sandbox;
 
 import com.lightbot.common.BizException;
+import com.lightbot.dto.SkillFileTreeNode;
 import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.model.SkillMetadata;
@@ -104,6 +105,159 @@ public class SkillStorageService {
         return objects.stream()
                 .map(obj -> obj.substring(prefix.length()))
                 .toList();
+    }
+
+    /**
+     * 构建 Skill 文件树结构
+     *
+     * @param slug Skill 标识
+     * @return 文件树根节点列表
+     */
+    public List<SkillFileTreeNode> buildFileTree(String slug) {
+        List<String> files = listSkillFiles(slug);
+        return buildTreeFromPaths(files);
+    }
+
+    /**
+     * 读取 Skill 目录下任意文件内容
+     *
+     * @param slug         Skill 标识
+     * @param relativePath 相对路径
+     * @return 文件字节数组
+     */
+    public byte[] readFile(String slug, String relativePath) {
+        String fullPath = SKILLS_ROOT + slug + "/" + relativePath;
+        if (!minioUtil.exists(fullPath)) {
+            throw new BizException(ErrorCode.SKILL_FILE_NOT_FOUND);
+        }
+        return minioUtil.downloadBytes(fullPath);
+    }
+
+    /**
+     * 写入 Skill 目录下任意文件
+     *
+     * @param slug         Skill 标识
+     * @param relativePath 相对路径
+     * @param content      文件内容
+     */
+    public void writeFile(String slug, String relativePath, String content) {
+        String fullPath = SKILLS_ROOT + slug + "/" + relativePath;
+        String contentType = guessContentType(relativePath);
+        minioUtil.uploadString(content, fullPath, contentType);
+        log.info("[SkillStorage] 写入文件: path={}", fullPath);
+    }
+
+    /**
+     * 删除 Skill 目录下任意文件或目录
+     *
+     * @param slug         Skill 标识
+     * @param relativePath 相对路径
+     */
+    public void deleteFile(String slug, String relativePath) {
+        String prefix = SKILLS_ROOT + slug + "/" + relativePath;
+        // 如果是目录（以/结尾或匹配到子对象），批量删除
+        if (relativePath.endsWith("/")) {
+            List<String> objects = minioUtil.listObjects(prefix);
+            for (String obj : objects) {
+                minioUtil.delete(obj);
+            }
+            log.info("[SkillStorage] 删除目录: prefix={}, 文件数={}", prefix, objects.size());
+        } else {
+            if (!minioUtil.exists(prefix)) {
+                throw new BizException(ErrorCode.SKILL_FILE_NOT_FOUND);
+            }
+            minioUtil.delete(prefix);
+            log.info("[SkillStorage] 删除文件: path={}", prefix);
+        }
+    }
+
+    /**
+     * 校验文件路径安全性：禁止 .. 并确保在 Skill 目录范围内
+     *
+     * @param relativePath 相对路径
+     */
+    public void validateFilePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "文件路径不能为空");
+        }
+        // 标准化路径分隔符
+        String normalized = relativePath.replace("\\", "/");
+        if (normalized.contains("..")) {
+            throw new BizException(ErrorCode.SANDBOX_PATH_VIOLATION, "路径不允许包含 ..");
+        }
+        if (normalized.startsWith("/") || normalized.startsWith("skills/")) {
+            throw new BizException(ErrorCode.SANDBOX_PATH_VIOLATION, "路径必须为相对路径");
+        }
+    }
+
+    /**
+     * 从扁平路径列表构建树形结构
+     */
+    private List<SkillFileTreeNode> buildTreeFromPaths(List<String> paths) {
+        // 使用 LinkedHashMap 保持插入顺序
+        Map<String, SkillFileTreeNode> rootMap = new LinkedHashMap<>();
+
+        for (String path : paths) {
+            String[] parts = path.split("/");
+            Map<String, SkillFileTreeNode> currentLevel = rootMap;
+
+            for (int i = 0; i < parts.length; i++) {
+                String part = parts[i];
+                boolean isLeaf = (i == parts.length - 1);
+
+                SkillFileTreeNode node = currentLevel.get(part);
+                if (node == null) {
+                    node = new SkillFileTreeNode();
+                    node.setName(part);
+                    if (isLeaf) {
+                        // 完整相对路径
+                        node.setPath(path);
+                        node.setDir(false);
+                    } else {
+                        // 中间目录：path 为到此层级的前缀
+                        node.setPath(String.join("/", java.util.Arrays.copyOfRange(parts, 0, i + 1)) + "/");
+                        node.setDir(true);
+                        node.setChildren(new ArrayList<>());
+                    }
+                    currentLevel.put(part, node);
+                }
+
+                if (!isLeaf) {
+                    if (node.getChildren() == null) {
+                        node.setChildren(new ArrayList<>());
+                    }
+                    // 构建子层级索引
+                    Map<String, SkillFileTreeNode> childMap = new LinkedHashMap<>();
+                    for (SkillFileTreeNode child : node.getChildren()) {
+                        childMap.put(child.getName(), child);
+                    }
+                    currentLevel = childMap;
+                }
+            }
+        }
+
+        return new ArrayList<>(rootMap.values());
+    }
+
+    /**
+     * 根据文件扩展名猜测 Content-Type
+     */
+    private String guessContentType(String path) {
+        String lower = path.toLowerCase();
+        if (lower.endsWith(".md")) return "text/markdown";
+        if (lower.endsWith(".txt")) return "text/plain";
+        if (lower.endsWith(".json")) return "application/json";
+        if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+        if (lower.endsWith(".xml")) return "application/xml";
+        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+        if (lower.endsWith(".css")) return "text/css";
+        if (lower.endsWith(".js")) return "application/javascript";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        return "application/octet-stream";
     }
 
     // ==================== Frontmatter 解析 ====================
@@ -301,6 +455,11 @@ public class SkillStorageService {
             String relativePath = srcPath.substring(draftSkillPrefix.length());
             String destPath = targetPrefix + relativePath;
             minioUtil.copyObject(srcPath, destPath);
+        }
+
+        // 清理该 slug 的草稿子目录
+        for (String obj : objects) {
+            minioUtil.delete(obj);
         }
 
         log.info("[SkillStorage] 远程草稿提交: draftId={}, slug={}, 文件数={}", draftId, slug, objects.size());

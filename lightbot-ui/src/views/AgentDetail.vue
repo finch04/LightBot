@@ -976,29 +976,61 @@
               >{{ opt.label }}</button>
             </div>
             <div class="list-body">
-              <div
+              <a-popover
                 v-for="t in filteredToolList"
                 :key="t.name"
-                class="knowledge-item"
-                :class="{ selected: selectedToolIds.has(toBindingId(t.id)), 'is-preview-locked': isVersionPreview }"
-                @click="!isVersionPreview && toggleTool(t)"
+                trigger="click"
+                placement="right"
+                :overlay-style="{ width: '320px' }"
+                :disabled="isVersionPreview"
               >
-                <div class="item-icon tool-icon-bg">
-                  <span v-if="isKnowledgeTool(t)" class="knowledge-badge">知识库</span>
-                  <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
-                  {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
+                <template #content>
+                  <div class="card-detail-popover">
+                    <div class="card-detail-header">
+                      <span class="card-detail-name">{{ t.displayName || t.name }}</span>
+                      <a-tag v-if="t.toolType?.code === 'builtin' || t.toolType === 'builtin'" color="green" size="small">内置</a-tag>
+                      <a-tag v-else-if="isKnowledgeTool(t)" color="purple" size="small">知识库</a-tag>
+                      <a-tag v-else color="blue" size="small">自定义</a-tag>
+                    </div>
+                    <div class="card-detail-desc">{{ t.description || '暂无描述' }}</div>
+                    <div v-if="t.name" class="card-detail-meta">
+                      <span class="card-detail-label">标识</span>
+                      <span class="card-detail-value mono">{{ t.name }}</span>
+                    </div>
+                    <div v-if="t.inputSchema" class="card-detail-meta">
+                      <span class="card-detail-label">参数</span>
+                      <span class="card-detail-value mono">{{ summarizeSchema(t.inputSchema) }}</span>
+                    </div>
+                    <button
+                      class="card-detail-toggle"
+                      :class="{ bound: selectedToolIds.has(toBindingId(t.id)) }"
+                      @click.stop="toggleTool(t)"
+                    >
+                      {{ selectedToolIds.has(toBindingId(t.id)) ? '取消绑定' : '绑定' }}
+                    </button>
+                  </div>
+                </template>
+                <div
+                  class="knowledge-item"
+                  :class="{ selected: selectedToolIds.has(toBindingId(t.id)), 'is-preview-locked': isVersionPreview }"
+                >
+                  <div class="item-icon tool-icon-bg">
+                    <span v-if="isKnowledgeTool(t)" class="knowledge-badge">知识库</span>
+                    <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
+                    {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
+                  </div>
+                  <div class="item-info">
+                    <div class="item-name">{{ t.displayName || t.name }}</div>
+                    <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                      <div class="item-desc">{{ truncateText(t.description, 50) }}</div>
+                    </a-tooltip>
+                    <div v-else class="item-desc">暂无描述</div>
+                  </div>
+                  <div class="item-check" v-if="selectedToolIds.has(toBindingId(t.id))">
+                    <CheckOutlined />
+                  </div>
                 </div>
-                <div class="item-info">
-                  <div class="item-name">{{ t.displayName || t.name }}</div>
-                  <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-                    <div class="item-desc">{{ truncateText(t.description, 50) }}</div>
-                  </a-tooltip>
-                  <div v-else class="item-desc">暂无描述</div>
-                </div>
-                <div class="item-check" v-if="selectedToolIds.has(toBindingId(t.id))">
-                  <CheckOutlined />
-                </div>
-              </div>
+              </a-popover>
               <div v-if="filteredToolList.length === 0" class="empty-tip">
                 暂无可用工具
               </div>
@@ -1142,27 +1174,57 @@
               </a-input>
             </div>
             <div class="list-body">
-              <div
+              <a-popover
                 v-for="s in filteredMcpServerList"
                 :key="s.id"
-                class="knowledge-item"
-                :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
-                @click="!isVersionPreview && toggleMcpServer(s)"
+                trigger="click"
+                placement="right"
+                :overlay-style="{ width: '320px' }"
+                :disabled="isVersionPreview"
               >
-                <div class="item-icon mcp-icon-bg">
-                  {{ (s.name || 'M')[0].toUpperCase() }}
+                <template #content>
+                  <div class="card-detail-popover">
+                    <div class="card-detail-header">
+                      <span class="card-detail-name">{{ s.name }}</span>
+                      <a-tag v-if="s.transportType" color="purple" size="small">{{ s.transportType }}</a-tag>
+                    </div>
+                    <div class="card-detail-desc">{{ s.description || '暂无描述' }}</div>
+                    <div v-if="s.baseUrl" class="card-detail-meta">
+                      <span class="card-detail-label">地址</span>
+                      <span class="card-detail-value mono">{{ s.baseUrl }}</span>
+                    </div>
+                    <div v-if="s.toolCount != null" class="card-detail-meta">
+                      <span class="card-detail-label">工具数</span>
+                      <span class="card-detail-value">{{ s.toolCount }} 个</span>
+                    </div>
+                    <button
+                      class="card-detail-toggle"
+                      :class="{ bound: selectedMcpServerIds.has(toBindingId(s.id)) }"
+                      @click.stop="toggleMcpServer(s)"
+                    >
+                      {{ selectedMcpServerIds.has(toBindingId(s.id)) ? '取消绑定' : '绑定' }}
+                    </button>
+                  </div>
+                </template>
+                <div
+                  class="knowledge-item"
+                  :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
+                >
+                  <div class="item-icon mcp-icon-bg">
+                    {{ (s.name || 'M')[0].toUpperCase() }}
+                  </div>
+                  <div class="item-info">
+                    <div class="item-name">{{ s.name }}</div>
+                    <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                      <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                    </a-tooltip>
+                    <div v-else class="item-desc">暂无描述</div>
+                  </div>
+                  <div class="item-check" v-if="selectedMcpServerIds.has(toBindingId(s.id))">
+                    <CheckOutlined />
+                  </div>
                 </div>
-                <div class="item-info">
-                  <div class="item-name">{{ s.name }}</div>
-                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
-                  </a-tooltip>
-                  <div v-else class="item-desc">暂无描述</div>
-                </div>
-                <div class="item-check" v-if="selectedMcpServerIds.has(toBindingId(s.id))">
-                  <CheckOutlined />
-                </div>
-              </div>
+              </a-popover>
               <div v-if="filteredMcpServerList.length === 0" class="empty-tip">
                 暂无可用 MCP Server
               </div>
@@ -1218,31 +1280,61 @@
               </a-input>
             </div>
             <div class="list-body">
-              <div
+              <a-popover
                 v-for="s in filteredSubAgentList"
                 :key="s.id"
-                class="subagent-item"
-                :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
-                @click="!isVersionPreview && toggleSubAgent(s)"
+                trigger="click"
+                placement="right"
+                :overlay-style="{ width: '320px' }"
+                :disabled="isVersionPreview"
               >
-                <div class="item-icon subagent-icon">
-                  <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
-                  {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
-                </div>
-                <div class="item-info">
-                  <div class="item-name">{{ s.displayName }}</div>
-                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
-                  </a-tooltip>
-                  <div v-else class="item-desc">暂无描述</div>
-                  <div class="item-tools" v-if="s.tools && JSON.parse(s.tools).length > 0">
-                    工具: {{ JSON.parse(s.tools).join(', ') }}
+                <template #content>
+                  <div class="card-detail-popover">
+                    <div class="card-detail-header">
+                      <span class="card-detail-name">{{ s.displayName || s.name }}</span>
+                      <a-tag v-if="s.isBuiltin === 1" color="green" size="small">内置</a-tag>
+                    </div>
+                    <div class="card-detail-desc">{{ s.description || '暂无描述' }}</div>
+                    <div v-if="s.name" class="card-detail-meta">
+                      <span class="card-detail-label">标识</span>
+                      <span class="card-detail-value mono">{{ s.name }}</span>
+                    </div>
+                    <div v-if="s.tools" class="card-detail-meta">
+                      <span class="card-detail-label">工具</span>
+                      <span class="card-detail-value">{{ parseToolsList(s.tools) }}</span>
+                    </div>
+                    <button
+                      class="card-detail-toggle"
+                      :class="{ bound: selectedSubAgentIds.has(toBindingId(s.id)) }"
+                      @click.stop="toggleSubAgent(s)"
+                    >
+                      {{ selectedSubAgentIds.has(toBindingId(s.id)) ? '取消绑定' : '绑定' }}
+                    </button>
+                  </div>
+                </template>
+                <div
+                  class="subagent-item"
+                  :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
+                >
+                  <div class="item-icon subagent-icon">
+                    <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+                    {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
+                  </div>
+                  <div class="item-info">
+                    <div class="item-name">{{ s.displayName }}</div>
+                    <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                      <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                    </a-tooltip>
+                    <div v-else class="item-desc">暂无描述</div>
+                    <div class="item-tools" v-if="s.tools && JSON.parse(s.tools).length > 0">
+                      工具: {{ JSON.parse(s.tools).join(', ') }}
+                    </div>
+                  </div>
+                  <div class="item-check" v-if="selectedSubAgentIds.has(toBindingId(s.id))">
+                    <CheckOutlined />
                   </div>
                 </div>
-                <div class="item-check" v-if="selectedSubAgentIds.has(toBindingId(s.id))">
-                  <CheckOutlined />
-                </div>
-              </div>
+              </a-popover>
               <div v-if="filteredSubAgentList.length === 0" class="empty-tip">
                 暂无可用 SubAgent
               </div>
@@ -2765,6 +2857,22 @@ function normalizeToolRecord(t) {
 
 function isKnowledgeTool(t) {
   return (t?.toolType?.code || t?.toolType) === 'knowledge'
+}
+
+function summarizeSchema(schema) {
+  try {
+    const obj = typeof schema === 'string' ? JSON.parse(schema) : schema
+    const props = obj?.properties
+    if (!props) return '无参数'
+    return Object.keys(props).join(', ')
+  } catch { return '无参数' }
+}
+
+function parseToolsList(tools) {
+  try {
+    const arr = typeof tools === 'string' ? JSON.parse(tools) : tools
+    return Array.isArray(arr) && arr.length > 0 ? arr.join(', ') : '无'
+  } catch { return '无' }
 }
 
 /** 合并工具目录（不整表覆盖，避免切换 Tab 时丢失已绑定/知识库） */
@@ -5214,6 +5322,77 @@ onMounted(async () => {
   font-size: 14px;
   color: #52525b;
   font-weight: 500;
+}
+
+/* 卡片详情弹窗 */
+.card-detail-popover {
+  min-width: 240px;
+}
+.card-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.card-detail-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+}
+.card-detail-desc {
+  font-size: 13px;
+  color: #52525b;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.card-detail-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.card-detail-label {
+  color: #a1a1aa;
+  flex-shrink: 0;
+}
+.card-detail-value {
+  color: #3f3f46;
+  word-break: break-all;
+}
+.card-detail-value.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #be185d;
+  background: #fdf2f8;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.card-detail-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 6px 0;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  color: #3f3f46;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.card-detail-toggle:hover {
+  border-color: #171717;
+  color: #171717;
+}
+.card-detail-toggle.bound {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+.card-detail-toggle.bound:hover {
+  background: #fee2e2;
 }
 
 </style>

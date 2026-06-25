@@ -73,3 +73,37 @@ export function commitRemoteInstall(draftId, slug) {
     params: { draftId, slug }
   })
 }
+
+/** 远程仓库：清理草稿 */
+export function cleanupRemoteDraft(draftId) {
+  return request.post('/skills/remote/cleanup', null, {
+    params: { draftId }
+  })
+}
+
+// ==================== 文件管理 ====================
+
+/** 获取 Skill 文件树 */
+export function getSkillFiles(id) {
+  return request.get(`/skills/${id}/files`)
+}
+
+/** 读取 Skill 文件内容（返回 ArrayBuffer） */
+export function readSkillFile(id, path) {
+  return request.get(`/skills/${id}/file`, { params: { path }, responseType: 'arraybuffer' })
+}
+
+/** 创建 Skill 文件/目录 */
+export function createSkillFile(id, data) {
+  return request.post(`/skills/${id}/file`, data)
+}
+
+/** 更新 Skill 文件内容 */
+export function updateSkillFile(id, data) {
+  return request.put(`/skills/${id}/file`, data)
+}
+
+/** 删除 Skill 文件/目录 */
+export function deleteSkillFile(id, path) {
+  return request.delete(`/skills/${id}/file`, { params: { path } })
+}

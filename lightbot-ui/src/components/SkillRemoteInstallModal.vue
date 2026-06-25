@@ -190,7 +190,7 @@
 import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
-import { listRemoteSkills, searchRemoteSkills, prepareRemoteInstall, commitRemoteInstall } from '../api/skill'
+import { listRemoteSkills, searchRemoteSkills, prepareRemoteInstall, commitRemoteInstall, cleanupRemoteDraft } from '../api/skill'
 
 const MODELSCOPE_PREFIX = 'https://modelscope.cn/skills/'
 
@@ -352,6 +352,10 @@ async function handleCommit() {
     if (successCount > 0) emit('installed')
   } finally {
     committing.value = false
+    // 清理 MinIO 草稿文件（best effort）
+    if (draftId.value) {
+      cleanupRemoteDraft(draftId.value).catch(() => {})
+    }
   }
 }
 

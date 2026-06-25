@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.RemoteListRequest;
 import com.lightbot.dto.RemotePrepareRequest;
+import com.lightbot.dto.SkillFileTreeNode;
+import com.lightbot.dto.SkillFileWriteRequest;
 import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
@@ -99,6 +101,41 @@ public class SkillController {
         return Result.ok(skillService.exportZip(id));
     }
 
+    // ==================== 文件管理 ====================
+
+    @Operation(summary = "获取 Skill 文件树")
+    @GetMapping("/{id}/files")
+    public Result<List<SkillFileTreeNode>> listFiles(@PathVariable Long id) {
+        return Result.ok(skillService.listFiles(id));
+    }
+
+    @Operation(summary = "读取 Skill 文件内容")
+    @GetMapping("/{id}/file")
+    public Result<byte[]> readFile(@PathVariable Long id, @RequestParam String path) {
+        return Result.ok(skillService.readFile(id, path));
+    }
+
+    @Operation(summary = "创建 Skill 文件/目录")
+    @PostMapping("/{id}/file")
+    public Result<Void> createFile(@PathVariable Long id, @Valid @RequestBody SkillFileWriteRequest request) {
+        skillService.createFile(id, request.getPath(), request.getContent(), request.isDir());
+        return Result.ok();
+    }
+
+    @Operation(summary = "更新 Skill 文件内容")
+    @PutMapping("/{id}/file")
+    public Result<Void> updateFile(@PathVariable Long id, @Valid @RequestBody SkillFileWriteRequest request) {
+        skillService.updateFile(id, request.getPath(), request.getContent());
+        return Result.ok();
+    }
+
+    @Operation(summary = "删除 Skill 文件/目录")
+    @DeleteMapping("/{id}/file")
+    public Result<Void> deleteFile(@PathVariable Long id, @RequestParam String path) {
+        skillService.deleteFile(id, path);
+        return Result.ok();
+    }
+
     // ==================== 远程安装 ====================
 
     @Operation(summary = "列出远程仓库中的 Skill")
@@ -134,5 +171,12 @@ public class SkillController {
     @PostMapping("/remote/commit")
     public Result<Skill> commitRemoteInstall(@RequestParam String draftId, @RequestParam String slug) {
         return Result.ok(skillService.commitRemoteSkill(draftId, slug));
+    }
+
+    @Operation(summary = "清理远程安装草稿")
+    @PostMapping("/remote/cleanup")
+    public Result<Void> cleanupDraft(@RequestParam String draftId) {
+        skillService.cleanupDraft(draftId);
+        return Result.ok();
     }
 }

@@ -1,7 +1,9 @@
 package com.lightbot.workflow.processor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.dto.CodeExecResult;
 import com.lightbot.enums.NodeType;
+import com.lightbot.service.sandbox.SandboxService;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
@@ -9,19 +11,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import javax.script.Bindings;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 脚本节点：执行 JavaScript main(params) 并写入输出变量
+ * 脚本节点：委托 {@link SandboxService} 执行 JavaScript main(params) 并写入输出变量
+ * <p>向后兼容现有工作流脚本（JavaScript main(params) 模式）。</p>
+ *
+ * @author finch
+ * @since 2026-06-24
  */
 @Slf4j
 @Component
@@ -30,14 +31,9 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
 
     private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^}]+)}}");
 
-    /** 脚本执行超时（秒） */
-    private static final int SCRIPT_TIMEOUT_SECONDS = 5;
+    private static final long SCRIPT_TIMEOUT_MS = 5000;
 
-    /** 危险的 Java 包/类访问模式 */
-    private static final Pattern DANGEROUS_ACCESS = Pattern.compile(
-            "\\b(Java\\.type|Java\\.extend|importClass|importPackage|Packages\\.|java\\.lang\\.Runtime|java\\.lang\\.ProcessBuilder|java\\.io\\.|java\\.net\\.|java\\.nio\\.file\\.|javax\\.script\\.ScriptEngineManager)\\b",
-            Pattern.CASE_INSENSITIVE);
-
+    private final SandboxService sandboxService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -58,17 +54,17 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
         if (script.isBlank()) {
             throw new IllegalArgumentException("脚本内容不能为空");
         }
-        if (!"javascript".equalsIgnoreCase(language) && !language.isBlank()) {
-            log.warn("[ScriptNodeProcessor] 暂仅支持 javascript，当前: {}", language);
+
+        // 委托统一沙盒执行
+        String lang = language.isBlank() ? "javascript" : language;
+        CodeExecResult result = sandboxService.executeCode(script, lang, params, SCRIPT_TIMEOUT_MS);
+
+        if (!result.isSuccess()) {
+            throw new IllegalArgumentException("脚本执行失败: " + result.getError());
         }
 
-        // 安全校验：检测危险的 Java 访问
-        String securityError = checkScriptSecurity(script);
-        if (securityError != null) {
-            throw new IllegalArgumentException(securityError);
-        }
-
-        Object rawResult = runJavaScript(script, params);
+        // 解析返回值为 Map（保持现有 output 映射逻辑）
+        Object rawResult = parseReturnValue(result.getReturnValue());
         Map<String, Object> outputs = normalizeOutputs(rawResult, nodeData);
         context.getVariables().putAll(outputs);
 
@@ -111,43 +107,19 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
         return expr;
     }
 
-    private Object runJavaScript(String script, Map<String, Object> params) {
-        ScriptEngine engine = new ScriptEngineManager().getEngineByName("javascript");
-        if (engine == null) {
-            throw new IllegalStateException("未找到 JavaScript 引擎，请确认运行环境支持脚本执行");
-        }
-        try {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    Bindings bindings = engine.createBindings();
-                    bindings.put("params", params);
-                    engine.eval(script, bindings);
-                    Object mainFn = bindings.get("main");
-                    if (mainFn != null) {
-                        return engine.eval("main(params)", bindings);
-                    }
-                    return bindings.get("result");
-                } catch (Exception e) {
-                    throw new RuntimeException("脚本执行失败: " + e.getMessage(), e);
-                }
-            }).orTimeout(SCRIPT_TIMEOUT_SECONDS, TimeUnit.SECONDS).join();
-        } catch (java.util.concurrent.CompletionException e) {
-            if (e.getCause() instanceof java.util.concurrent.TimeoutException) {
-                throw new IllegalArgumentException("脚本执行超时（" + SCRIPT_TIMEOUT_SECONDS + "秒），请检查是否存在死循环");
-            }
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            throw new IllegalArgumentException(cause.getMessage(), cause);
-        }
-    }
-
     /**
-     * 脚本安全校验：检测危险的 Java 访问
+     * 解析返回值：尝试 JSON 反序列化为 Map，否则作为原始值
      */
-    private String checkScriptSecurity(String script) {
-        if (DANGEROUS_ACCESS.matcher(script).find()) {
-            return "脚本中包含不允许的 Java 访问（禁止访问文件系统、网络、进程等系统资源）";
+    private Object parseReturnValue(String returnValue) {
+        if (returnValue == null || returnValue.isBlank()) return null;
+        String trimmed = returnValue.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                return objectMapper.readValue(trimmed, Object.class);
+            } catch (Exception ignored) {
+            }
         }
-        return null;
+        return trimmed;
     }
 
     @SuppressWarnings("unchecked")

@@ -25,7 +25,7 @@
 
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
-      <div v-for="s in list" :key="s.id" class="provider-card">
+      <div v-for="s in list" :key="s.id" class="provider-card" @click="openDetail(s)">
         <div class="card-top">
           <div class="card-icon">
             <span class="status-dot" :class="isDisabled(s) ? 'status-disabled' : 'status-active'"></span>
@@ -34,10 +34,7 @@
           <div class="card-info">
             <h3>{{ s.name }}</h3>
           </div>
-          <div class="card-actions">
-            <a-tooltip title="查看详情">
-              <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
-            </a-tooltip>
+          <div class="card-actions" @click.stop>
             <a-tooltip title="删除">
               <button class="btn-icon danger" @click="handleDelete(s.id)"><DeleteOutlined /></button>
             </a-tooltip>
@@ -759,6 +756,12 @@ defineExpose({ openDialog, search, refresh })
   padding: 20px;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.provider-card:hover {
+  border-color: #d4d4d8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .card-top {
   display: flex;

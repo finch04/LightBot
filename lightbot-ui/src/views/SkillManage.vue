@@ -32,7 +32,7 @@
 
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
-      <div v-for="s in list" :key="s.id" class="provider-card">
+      <div v-for="s in list" :key="s.id" class="provider-card" @click="router.push('/app/skills/' + s.id)">
         <div class="card-top">
           <div class="card-icon card-icon--skill">
             <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
@@ -42,10 +42,7 @@
           <div class="card-info">
             <h3>{{ s.displayName || s.name }}</h3>
           </div>
-          <div class="card-actions">
-            <a-tooltip title="查看详情">
-              <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
-            </a-tooltip>
+          <div class="card-actions" @click.stop>
             <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
               <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
             </a-tooltip>
@@ -84,52 +81,6 @@
       </div>
     </div>
     </a-spin>
-
-    <!-- 查看详情弹窗 -->
-    <a-modal v-model:open="detailVisible" title="Skill 详情" :width="720" :footer="null" :maskClosable="false">
-      <div class="detail-scroll-body">
-        <template v-if="detailRow">
-          <a-descriptions bordered :column="1" size="small">
-            <a-descriptions-item label="显示名称">{{ detailRow.displayName || detailRow.name }}</a-descriptions-item>
-            <a-descriptions-item label="技能名称">{{ detailRow.name }}</a-descriptions-item>
-            <a-descriptions-item label="slug">{{ detailRow.slug || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="版本">{{ detailRow.version || '1.0.0' }}</a-descriptions-item>
-            <a-descriptions-item label="状态">
-              <a-tag :color="detailRow.status === 'disabled' ? 'default' : 'success'">
-                {{ detailRow.status === 'disabled' ? '已禁用' : '已启用' }}
-              </a-tag>
-              <a-tag v-if="detailRow.isBuiltin === 1" color="blue">内置</a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="描述">{{ detailRow.description || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="排序">{{ detailRow.sortOrder ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="依赖工具">
-              {{ formatIdLabels(detailRow.toolIds, toolOptions) || '无' }}
-            </a-descriptions-item>
-            <a-descriptions-item label="依赖 MCP">
-              {{ formatIdLabels(detailRow.mcpServerIds, mcpOptions) || '无' }}
-            </a-descriptions-item>
-          </a-descriptions>
-          <div class="detail-section">
-            <div class="detail-section-title">提示词模板</div>
-            <pre class="detail-pre">{{ detailRow.promptTemplate || '—' }}</pre>
-          </div>
-          <div v-if="detailRow.config && detailRow.config !== '{}'" class="detail-section">
-            <div class="detail-section-title">扩展配置</div>
-            <pre class="detail-pre">{{ detailRow.config }}</pre>
-          </div>
-        </template>
-      </div>
-      <div class="dialog-footer">
-        <div class="dialog-footer-left">
-          <button v-if="detailRow && detailRow.isBuiltin !== 1" class="btn-cancel" @click="detailVisible = false; openDialog(detailRow)">
-            <EditOutlined /> 编辑
-          </button>
-        </div>
-        <div class="dialog-footer-right">
-          <button class="btn-cancel" @click="detailVisible = false">关闭</button>
-        </div>
-      </div>
-    </a-modal>
 
     <!-- 新增/编辑弹窗 -->
     <a-modal v-model:open="dialogVisible" :width="720" :footer="null" :maskClosable="false">
@@ -242,7 +193,8 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined, CloudDownloadOutlined, MoreOutlined } from '@ant-design/icons-vue'
+import { useRouter } from 'vue-router'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined, CloudDownloadOutlined, MoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import EntitySelectOption from '../components/EntitySelectOption.vue'
 import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled, exportSkillZip } from '../api/skill'
@@ -254,6 +206,7 @@ import SkillRemoteInstallModal from '../components/SkillRemoteInstallModal.vue'
 import { truncateText } from '../utils/format'
 import { getToolTypeLabel } from '../utils/bindingTheme'
 
+const router = useRouter()
 const list = ref([])
 const loading = ref(false)
 const searchText = ref('')
@@ -267,8 +220,6 @@ const dialogVisible = ref(false)
 const guideVisible = ref(false)
 const importModalVisible = ref(false)
 const remoteInstallVisible = ref(false)
-const detailVisible = ref(false)
-const detailRow = ref(null)
 const submitting = ref(false)
 const form = reactive({
   id: null, slug: '', name: '', displayName: '',
@@ -312,18 +263,6 @@ async function loadOptions() {
   } catch (e) {
     // ignore
   }
-}
-
-function openDetail(row) {
-  detailRow.value = row
-  detailVisible.value = true
-}
-
-function formatIdLabels(raw, options) {
-  const ids = parseIdArray(raw)
-  if (!ids.length) return ''
-  const labelMap = Object.fromEntries((options || []).map(o => [String(o.value), o.label]))
-  return ids.map(id => labelMap[id] || `[已删除]`).join('、')
 }
 
 function openDialog(row) {
@@ -564,6 +503,12 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.provider-card:hover {
+  border-color: #d4d4d8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .card-top {
   display: flex;

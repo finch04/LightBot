@@ -37,6 +37,8 @@ const GetMindmapResult = defineAsyncComponent(() => import('./tools/GetMindmapRe
 const OpenKbDocumentResult = defineAsyncComponent(() => import('./tools/OpenKbDocumentResult.vue'))
 const ReadSkillResult = defineAsyncComponent(() => import('./tools/ReadSkillResult.vue'))
 const ListSkillFilesResult = defineAsyncComponent(() => import('./tools/ListSkillFilesResult.vue'))
+const ExecuteCodeResult = defineAsyncComponent(() => import('./tools/ExecuteCodeResult.vue'))
+const SandboxFileResult = defineAsyncComponent(() => import('./tools/SandboxFileResult.vue'))
 
 // 工具渲染组件映射
 export const TOOL_RENDERERS = {
@@ -62,6 +64,11 @@ export const TOOL_RENDERERS = {
   // 技能
   read_skill: ReadSkillResult,
   list_skill_files: ListSkillFilesResult,
+  // 沙盒
+  execute_code: ExecuteCodeResult,
+  sandbox_read_file: SandboxFileResult,
+  sandbox_list_files: SandboxFileResult,
+  sandbox_write_file: SandboxFileResult,
 }
 
 // 工具图标
@@ -81,6 +88,10 @@ export const TOOL_ICON_MAP = {
   image_generation: PictureOutlined,
   read_skill: ThunderboltOutlined,
   list_skill_files: FolderOpenOutlined,
+  execute_code: CodeOutlined,
+  sandbox_read_file: FileTextOutlined,
+  sandbox_list_files: FolderOpenOutlined,
+  sandbox_write_file: FileTextOutlined,
   skill_active: ThunderboltOutlined,
   subagent_call: RobotOutlined,
   subagent_result: RobotOutlined,
@@ -103,6 +114,10 @@ export const TOOL_DISPLAY_NAMES = {
   image_generation: '图片生成',
   read_skill: '读取技能',
   list_skill_files: '技能文件列表',
+  execute_code: '代码执行',
+  sandbox_read_file: '读取文件',
+  sandbox_list_files: '文件列表',
+  sandbox_write_file: '写入文件',
   skill_active: 'Skill 启用',
   subagent_call: 'SubAgent 委派',
   subagent_result: 'SubAgent 结果',

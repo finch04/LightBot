@@ -2,6 +2,7 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.SkillFileTreeNode;
 import com.lightbot.dto.SkillImportPreview;
 import com.lightbot.dto.SkillRequest;
 import com.lightbot.entity.Skill;
@@ -52,6 +53,9 @@ public interface SkillService extends IService<Skill> {
     /** 远程安装确认（提交草稿中指定 slug 的 Skill） */
     Skill commitRemoteSkill(String draftId, String slug);
 
+    /** 清理远程安装草稿 */
+    void cleanupDraft(String draftId);
+
     /** ZIP 导出 */
     byte[] exportZip(Long skillId);
 
@@ -60,4 +64,21 @@ public interface SkillService extends IService<Skill> {
 
     /** 构建 slug -> skillDependencies 映射（用于依赖闭包展开） */
     Map<String, List<String>> buildDependencyMap(Collection<String> slugs);
+
+    // ==================== 文件管理 ====================
+
+    /** 获取 Skill 文件树 */
+    List<SkillFileTreeNode> listFiles(Long id);
+
+    /** 读取 Skill 文件内容 */
+    byte[] readFile(Long id, String path);
+
+    /** 创建 Skill 文件/目录 */
+    void createFile(Long id, String path, String content, boolean isDir);
+
+    /** 更新 Skill 文件内容 */
+    void updateFile(Long id, String path, String content);
+
+    /** 删除 Skill 文件/目录 */
+    void deleteFile(Long id, String path);
 }

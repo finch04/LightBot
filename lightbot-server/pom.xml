@@ -62,6 +62,23 @@
             <version>15.4</version>
         </dependency>
 
+        <!-- ===== 统一沙盒模块：代码执行引擎 ===== -->
+
+        <!-- GraalVM Polyglot（JavaScript 引擎，可选，无 GraalVM 时自动降级到 Nashorn）
+             注意：需添加 GraalVM Maven 仓库才能解析：
+             <repository>
+                 <id>graalvm</id>
+                 <url>https://repo.graalvm.org/repository/maven-public</url>
+             </repository>
+        -->
+
+        <!-- Janino Java 编译器（轻量级，~600KB） -->
+        <dependency>
+            <groupId>org.codehaus.janino</groupId>
+            <artifactId>janino</artifactId>
+            <version>3.1.12</version>
+        </dependency>
+
         <!-- PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>

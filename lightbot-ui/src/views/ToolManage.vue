@@ -41,7 +41,7 @@
 
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
-      <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'knowledge-card': (t.toolType?.code || t.toolType) === 'knowledge' }">
+      <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'knowledge-card': (t.toolType?.code || t.toolType) === 'knowledge' }" @click="openDetail(t)">
         <div class="card-top">
           <div class="card-icon card-icon--tool">
             <span v-if="(t.toolType?.code || t.toolType) === 'builtin'" class="type-badge badge-builtin">内置</span>
@@ -53,10 +53,7 @@
             <h3>{{ t.displayName || t.name }}</h3>
             <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
           </div>
-          <div class="card-actions">
-            <a-tooltip title="查看详情">
-              <button class="btn-icon" @click="openDetail(t)"><EyeOutlined /></button>
-            </a-tooltip>
+          <div class="card-actions" @click.stop>
             <a-tooltip v-if="(t.toolType?.code || t.toolType) !== 'builtin' && (t.toolType?.code || t.toolType) !== 'knowledge'" title="删除">
               <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
             </a-tooltip>
@@ -456,7 +453,7 @@
 <script setup>
 defineProps({ hideHeader: Boolean })
 import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, EyeOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined, SwapOutlined, CodeOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined, SwapOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool, setToolEnabled } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -881,6 +878,12 @@ defineExpose({ openDialog, search, refresh })
   border: 1px solid #ebebeb;
   border-radius: 12px;
   padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.provider-card:hover {
+  border-color: #d4d4d8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .card-top {
   display: flex;

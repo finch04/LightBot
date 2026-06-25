@@ -15,9 +15,6 @@
             <span class="card-name">{{ s.name }}</span>
           </div>
           <div class="card-actions" @click.stop>
-            <a-tooltip title="查看详情">
-              <button class="btn-icon" @click="openDetail(s)"><EyeOutlined /></button>
-            </a-tooltip>
             <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
               <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
             </a-tooltip>
@@ -221,7 +218,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined, EyeOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
+import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import EntitySelectOption from '../components/EntitySelectOption.vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
