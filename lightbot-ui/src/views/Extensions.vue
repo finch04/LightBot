@@ -25,9 +25,7 @@
           <a-select-option value="all">全部</a-select-option>
           <a-select-option value="builtin">内置</a-select-option>
           <a-select-option value="knowledge">知识库</a-select-option>
-          <a-select-option value="custom">自定义</a-select-option>
           <a-select-option value="api">API调用</a-select-option>
-          <a-select-option value="mcp">MCP协议</a-select-option>
         </a-select>
         <a-input
           v-model:value="searchText"

@@ -9,6 +9,7 @@
       <a-tab-pane key="model" tab="默认模型管理" />
       <a-tab-pane key="landing" tab="Landing 管理" />
       <a-tab-pane key="users" tab="用户管理" />
+      <a-tab-pane key="token" tab="Token 管理" />
     </a-tabs>
 
     <!-- Tab 1: 默认模型管理 -->
@@ -249,6 +250,101 @@
     <div v-show="activeTab === 'users'">
       <UserManage />
     </div>
+
+    <!-- Tab 4: Token 管理 -->
+    <div v-show="activeTab === 'token'">
+    <a-spin :spinning="tokenLoading">
+    <div class="content-grid">
+      <!-- 全局统计大屏 -->
+      <div class="panel token-stats-panel">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <h3>今日 Token 消耗</h3>
+            <span class="panel-desc">{{ tokenStats.date }}</span>
+          </div>
+          <button class="btn-icon-refresh" @click="loadTokenStats" :disabled="tokenLoading">
+            <SyncOutlined />
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="token-stat-cards">
+            <div class="token-stat-card">
+              <div class="token-stat-label">全局已用</div>
+              <div class="token-stat-value">{{ formatToken(tokenStats.globalUsed) }}</div>
+              <div class="token-stat-sub">/ {{ formatToken(tokenStats.globalLimit) }}</div>
+              <a-progress
+                :percent="tokenStats.globalLimit ? Math.min(100, (tokenStats.globalUsed / tokenStats.globalLimit * 100)) : 0"
+                :stroke-color="tokenStats.globalUsed / tokenStats.globalLimit > 0.8 ? '#ef4444' : '#10b981'"
+                :show-info="false"
+                size="small"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 限额配置 -->
+      <div class="panel token-config-panel">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <h3>限额配置</h3>
+            <span class="panel-desc">调整 Token 使用限制</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <a-form :label-col="{ span: 8 }">
+            <a-form-item label="单次调用上限">
+              <a-input-number v-model:value="tokenConfig.singleCallLimit" :min="1000" :step="1000" style="width: 100%" addon-after="tokens" />
+            </a-form-item>
+            <a-form-item label="用户日限额">
+              <a-input-number v-model:value="tokenConfig.userDailyLimit" :min="10000" :step="100000" style="width: 100%" addon-after="tokens" />
+            </a-form-item>
+            <a-form-item label="全局日限额">
+              <a-input-number v-model:value="tokenConfig.globalDailyLimit" :min="100000" :step="1000000" style="width: 100%" addon-after="tokens" />
+            </a-form-item>
+            <a-form-item :wrapper-col="{ offset: 8 }">
+              <button class="btn-primary" :disabled="tokenSaving" @click="saveTokenConfig">
+                <SaveOutlined /> {{ tokenSaving ? '保存中...' : '保存配置' }}
+              </button>
+            </a-form-item>
+          </a-form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 用户消耗排行 -->
+    <div class="panel token-ranking-panel">
+      <div class="panel-header">
+        <div class="panel-title-wrap">
+          <h3>用户 Token 消耗排行</h3>
+          <span class="panel-desc">今日 Top {{ tokenRanking.length }}</span>
+        </div>
+        <button class="btn-icon-refresh" @click="loadTokenRanking" :disabled="tokenLoading">
+          <SyncOutlined />
+        </button>
+      </div>
+      <div class="panel-body">
+        <a-table
+          :data-source="tokenRanking"
+          :columns="rankingColumns"
+          :pagination="false"
+          size="small"
+          :scroll="{ y: 400 }"
+        >
+          <template #bodyCell="{ column, record, index }">
+            <template v-if="column.key === 'rank'">
+              <span class="rank-badge" :class="{ 'rank-top': index < 3 }">{{ index + 1 }}</span>
+            </template>
+            <template v-if="column.key === 'usedTokens'">
+              <span class="token-amount">{{ formatToken(record.usedTokens) }}</span>
+            </template>
+          </template>
+        </a-table>
+        <div v-if="!tokenRanking.length && !tokenLoading" class="empty-tip">暂无数据</div>
+      </div>
+    </div>
+    </a-spin>
+    </div>
   </div>
 </template>
 
@@ -273,6 +369,7 @@ import {
   updateDefaultRerankModel,
 } from '../api/systemConfig'
 import { getLandingConfig, updateLandingConfig } from '../api/landing'
+import { getTokenBudgetConfig, updateTokenBudgetConfig, getTokenBudgetStats, getTokenBudgetRanking } from '../api/tokenBudget'
 import ModelSelect from '../components/ModelSelect.vue'
 import UserManage from './UserManage.vue'
 
@@ -330,6 +427,13 @@ async function loadTabData(tab) {
       await loadLandingConfig()
     } finally {
       landingLoading.value = false
+    }
+  } else if (tab === 'token') {
+    tokenLoading.value = true
+    try {
+      await Promise.all([loadTokenConfig(), loadTokenStats(), loadTokenRanking()])
+    } finally {
+      tokenLoading.value = false
     }
   }
 }
@@ -489,6 +593,62 @@ async function saveLandingConfig() {
   } finally {
     landingSaving.value = false
   }
+}
+
+// Token 管理
+const tokenLoading = ref(false)
+const tokenSaving = ref(false)
+const tokenConfig = reactive({ singleCallLimit: 32000, userDailyLimit: 1000000, globalDailyLimit: 10000000 })
+const tokenStats = reactive({ globalUsed: 0, globalLimit: 0, date: '' })
+const tokenRanking = ref([])
+const rankingColumns = [
+  { title: '排名', key: 'rank', width: 80, align: 'center' },
+  { title: '用户 ID', dataIndex: 'userId', key: 'userId' },
+  { title: '消耗 Token', key: 'usedTokens', align: 'right' },
+]
+
+async function loadTokenConfig() {
+  const res = await getTokenBudgetConfig()
+  const data = res.data || {}
+  tokenConfig.singleCallLimit = data.singleCallLimit ?? 32000
+  tokenConfig.userDailyLimit = data.userDailyLimit ?? 1000000
+  tokenConfig.globalDailyLimit = data.globalDailyLimit ?? 10000000
+}
+
+async function loadTokenStats() {
+  const res = await getTokenBudgetStats()
+  const data = res.data || {}
+  tokenStats.globalUsed = data.globalUsed ?? 0
+  tokenStats.globalLimit = data.globalLimit ?? 0
+  tokenStats.date = data.date ?? ''
+}
+
+async function loadTokenRanking() {
+  const res = await getTokenBudgetRanking(20)
+  tokenRanking.value = res.data || []
+}
+
+async function saveTokenConfig() {
+  tokenSaving.value = true
+  try {
+    await updateTokenBudgetConfig({
+      singleCallLimit: tokenConfig.singleCallLimit,
+      userDailyLimit: tokenConfig.userDailyLimit,
+      globalDailyLimit: tokenConfig.globalDailyLimit,
+    })
+    message.success('Token 限额配置已保存')
+  } catch (e) {
+    message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    tokenSaving.value = false
+  }
+}
+
+function formatToken(val) {
+  if (val == null) return '0'
+  if (val >= 1_000_000) return (val / 1_000_000).toFixed(1) + 'M'
+  if (val >= 1_000) return (val / 1_000).toFixed(1) + 'K'
+  return String(val)
 }
 </script>
 
@@ -723,5 +883,91 @@ async function saveLandingConfig() {
   font-size: 13px;
   font-weight: 600;
   color: #71717a;
+}
+.token-stats-panel {
+  grid-column: 1 / -1;
+}
+.token-config-panel {
+  grid-column: 1 / -1;
+}
+.token-ranking-panel {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+}
+.token-stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.token-stat-card {
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid #ebebeb;
+  border-radius: 8px;
+}
+.token-stat-label {
+  font-size: 13px;
+  color: #71717a;
+  margin-bottom: 4px;
+}
+.token-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #171717;
+  line-height: 1.2;
+}
+.token-stat-sub {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin-bottom: 8px;
+}
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f4f4f5;
+  color: #71717a;
+}
+.rank-badge.rank-top {
+  background: #171717;
+  color: #fff;
+}
+.token-amount {
+  font-weight: 600;
+  color: #171717;
+  font-variant-numeric: tabular-nums;
+}
+.btn-icon-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d4d4d8;
+  background: #fff;
+  color: #52525b;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-icon-refresh:hover:not(:disabled) {
+  background: #f4f4f5;
+  border-color: #a1a1aa;
+}
+.btn-icon-refresh:disabled {
+  color: #d4d4d8;
+  cursor: not-allowed;
+}
+.empty-tip {
+  text-align: center;
+  padding: 40px 0;
+  color: #a1a1aa;
+  font-size: 14px;
 }
 </style>

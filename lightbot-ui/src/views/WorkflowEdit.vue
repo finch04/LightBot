@@ -26,6 +26,18 @@
       @open-publish="openPublishModal"
     />
 
+    <!-- 加载遮罩 -->
+    <Transition name="workflow-loading-fade">
+      <div v-if="!workflowLoaded" class="workflow-loading-overlay">
+        <div class="workflow-loading-spinner">
+          <div class="loading-dots">
+            <span /><span /><span />
+          </div>
+          <div class="loading-text">正在加载工作流...</div>
+        </div>
+      </div>
+    </Transition>
+
     <div class="workflow-content">
       <WorkflowEditLeftPanel
         v-model:panel-collapsed="panelCollapsed"
@@ -2381,6 +2393,52 @@ function goBack() {
   flex-direction: column;
   background: #f5f5f5;
   overflow-x: hidden;
+  position: relative;
+}
+
+/* 工作流加载遮罩 */
+.workflow-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: #f8f9fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.workflow-loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.loading-dots {
+  display: flex;
+  gap: 8px;
+}
+.loading-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6366f1;
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.loading-text {
+  font-size: 14px;
+  color: #71717a;
+  font-weight: 500;
+}
+.workflow-loading-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.workflow-loading-fade-leave-to {
+  opacity: 0;
 }
 
 .publish-tag { flex-shrink: 0; }

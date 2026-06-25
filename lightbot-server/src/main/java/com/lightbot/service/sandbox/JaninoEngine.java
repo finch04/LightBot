@@ -81,17 +81,24 @@ public class JaninoEngine implements CodeEngine {
         String className = "Sandbox_" + UUID.randomUUID().toString().replace("-", "");
         String wrappedCode = wrapCode(className, code);
 
-        // 3. 编译
+        // 3. 编译（使用标准 ClassLoader，SandboxingClassLoader 仅用于运行时隔离）
         Class<?> compiledClass;
         try {
             SimpleCompiler compiler = new SimpleCompiler();
-            compiler.setParentClassLoader(new SandboxingClassLoader(getClass().getClassLoader()));
             compiler.cook(wrappedCode);
-            compiledClass = compiler.getClassLoader().loadClass(className);
+            // 编译产物通过 SandboxingClassLoader 加载，限制运行时可访问的类
+            ClassLoader sandboxLoader = new SandboxingClassLoader(compiler.getClassLoader());
+            compiledClass = sandboxLoader.loadClass(className);
         } catch (Exception e) {
+            String errMsg = sanitizeError(e.getMessage());
+            // 检测常见错误：用户在方法体中写了 import
+            if (errMsg != null && errMsg.contains("import")) {
+                errMsg = errMsg + " 提示：Java 代码直接写方法体，不要写 import 语句"
+                        + "（java.time.*、java.util.* 等已自动导入）";
+            }
             return CodeExecResult.builder()
                     .success(false)
-                    .error("编译错误: " + sanitizeError(e.getMessage()))
+                    .error("编译错误: " + errMsg)
                     .elapsedMs(System.currentTimeMillis() - start)
                     .language("java")
                     .build();

@@ -1,744 +1,856 @@
-# LightBot 业务逻辑不合理之处审查报告
+# LightBot 业务逻辑审查报告 v1.0
 
-> 审查时间：2026-06-24
-> 审查范围：后端全模块 + 前端核心模块
-> 审查标准：安全性、可靠性、性能、可维护性
+> **审查日期**：2026-06-25
+> **审查范围**：全量后端（33 Controller + 中间件链 + 工作流引擎 + 任务系统）+ 全量前端（75 Views + 60 Components + 28 API 模块）
+> **审查标准**：业务合理性、用户体验、功能完整性、扩展性
+> **前置版本**：v0.9（聚焦安全/可靠性/性能/代码质量，已归档为 `business-logic-review-0.9.md`）
 
 ---
 
 ## 目录
 
-- [一、安全类问题（Critical）](#一安全类问题critical)
-- [二、可靠性问题（High）](#二可靠性问题high)
-- [三、性能问题（High）](#三性能问题high)
-- [四、数据一致性问题（Medium）](#四数据一致性问题medium)
-- [五、代码设计问题（Medium）](#五代码设计问题medium)
-- [六、前端问题（Medium）](#六前端问题medium)
-- [七、代码质量问题（Low）](#七代码质量问题low)
+- [一、对话交互业务](#一对话交互业务)
+- [二、Agent 配置与管理](#二agent-配置与管理)
+- [三、知识库与 RAG](#三知识库与-rag)
+- [四、工作流引擎](#四工作流引擎)
+- [五、工具与 MCP 体系](#五工具与-mcp-体系)
+- [六、Skill 体系](#六skill-体系)
+- [七、评估与实验系统](#七评估与实验系统)
+- [八、可观测性与运维](#八可观测性与运维)
+- [九、用户与权限体系](#九用户与权限体系)
+- [十、前端交互体验](#十前端交互体验)
+- [附录：优先级排序](#附录优先级排序)
 
 ---
 
-## 一、安全类问题（Critical）
+## 一、对话交互业务
 
-### 1.1 PgSqlTool SQL 注入风险 ✅ 已修复
+### 1.1 对话无消息引用/回复功能
 
-**位置**：`PgSqlTool.java` L104, L125, L150
-
-**问题**：`describeTable()` 将 `tableName` 直接拼接进 SQL 字符串。`query()` 方法接受 LLM 生成的原始 SQL，仅靠正则过滤（`^[a-zA-Z_][a-zA-Z0-9_]*$`），prompt injection 可绕过。
-
-**修复内容**（2026-06-24）：
-- `describeTable` 改用 `PreparedStatement` 参数化查询（列信息和索引查询均已参数化）
-- `query()` 增加安全校验：禁止访问 `pg_catalog`/`information_schema`/`pg_toast`/`pg_temp` 系统 schema
-- 增加危险函数拦截：`pg_sleep`/`pg_terminate_backend`/`lo_import` 等
-- 增加 SQL 注释剥离后校验，防止利用注释绕过
-- `DANGEROUS_KEYWORDS` 增加 `COPY`/`IMPORT`
-
-**工作量**：已完成
-**影响范围**：PgSqlTool 单个工具
-
----
-
-### 1.2 ScriptNodeProcessor 无沙箱执行用户脚本 ✅ 已修复
-
-**位置**：`ScriptNodeProcessor.java` L98-116
-
-**问题**：用户配置的 JavaScript 通过 `ScriptEngine.eval()` 直接执行，无沙箱、无资源限制、无安全 Manager。脚本可访问完整 Java 运行时（文件读写、网络、进程）。
-
-**修复内容**（2026-06-24）：
-- 新增 `DANGEROUS_ACCESS` 正则，拦截 `Java.type`/`importClass`/`Packages.*`/`java.lang.Runtime`/`java.io`/`java.net` 等危险访问
-- 脚本执行前调用 `checkScriptSecurity()` 检测，命中则拒绝执行
-- 使用 `CompletableFuture.orTimeout(5s)` 包装执行，超时自动终止（防止死循环）
-- 超时抛出友好错误信息："脚本执行超时（5秒），请检查是否存在死循环"
-
-**工作量**：已完成
-**影响范围**：工作流 Script 节点
-
----
-
-### 1.3 ApiNodeProcessor SSRF 风险 ✅ 已修复
-
-**位置**：`ApiNodeProcessor.java` L49
-
-**问题**：URL 由用户配置，无白名单校验。可访问内网服务（如 `http://localhost:8080/api/admin/...`）。
-
-**修复内容**（2026-06-24）：
-- 新增 `validateUrl()` 方法，在 HTTP 请求前校验 URL
-- 仅允许 http/https 协议
-- 禁止 localhost、IPv6 回环（::1）
-- 通过 `InetAddress` 解析 IP，禁止回环地址、站点本地地址（内网）、链路本地地址
-- 禁止云厂商元数据服务（169.254.x.x）
-
-**工作量**：已完成
-**影响范围**：工作流 API 节点
-
----
-
-### 1.5 Windows 命令注入（MCP Stdio 传输） ✅ 已修复
-
-**位置**：`McpClientServiceImpl.java` L316-324
-
-**问题**：Stdio 传输在 Windows 上用 `cmd /c` 包装命令，若命令含 `&`、`|`、`>` 等特殊字符可被利用。
-
-**修复内容**（2026-06-24）：
-- 新增 `validateCommandSafety()` 方法，在 Windows `cmd /c` 包装前校验命令和参数
-- 使用正则检测 shell 元字符（`& | > < ^ ! \` $`），命中则拒绝并抛出 `MCP_CONFIG_ERROR`
-- 校验覆盖 command 和所有 args
-
-**工作量**：已完成
-**影响范围**：MCP Stdio 传输
-
----
-
-### 1.6 GlobalExceptionHandler 信息泄露 — 风险极低，暂不修改
-
-**位置**：`GlobalExceptionHandler.java` L54
-
-**问题**：`BizException` 处理器直接返回 `e.getMessage()`，若 BizException 包装了含敏感信息的 cause（如数据库连接串），会暴露给客户端。
-
-**分析**（2026-06-24）：
-- 当前项目中所有 `BizException` 均由 `ErrorCode` 枚举构造（如 `throw new BizException(ErrorCode.AGENT_NOT_FOUND)`），ErrorCode 的 message 是固定的中文提示，不含敏感信息
-- `handleException` 兜底处理器已返回通用 "系统内部错误"，不会泄露原始异常
-- `BizException` 构造函数不接受 cause 参数，无法携带底层异常的敏感信息
-- 结论：**当前实现不存在信息泄露风险**，无需修改
-
-**工作量**：无需修改
-**影响范围**：全局异常处理
-
----
-
-## 二、可靠性问题（High）
-
-### 2.1 工作流引擎无环路检测 ✅ 已修复
-
-**位置**：`WorkflowExecutorService.java` L143-246
-
-**问题**：`while (currentNodeId != null)` 循环沿边遍历节点，若图中存在环路（A→B→A）将无限循环，线程永久阻塞。
-
-**修复内容**（2026-06-24）：
-- 在 `WorkflowConfigServiceImpl.validateGraph()` 中增加 DFS 环路检测
-- 构建邻接表 → DFS 遍历（三色标记法：未访问/访问中/已完成）→ 发现"访问中"节点即为环路
-- 检测到环路时返回环路路径描述（如 "A → B → A"），前端在发布/校验时展示
-- 发布（`publish`）和独立校验（`validate`）均会触发检测，保存草稿不检测
-
-**工作量**：已完成
-**影响范围**：工作流发布校验
-
----
-
-### 2.2 工作流 LLM 节点无超时保护 ✅ 已修复
-
-**位置**：`LlmNodeProcessor.java` L237-265
-
-**问题**：`callSync()` 和 `callStream()` 均无超时设置，LLM API 挂起时线程永久阻塞。
-
-**修复内容**（2026-06-24）：
-- 新增常量 `LLM_TIMEOUT_SECONDS = 120`
-- `callSync` 使用 `CompletableFuture.supplyAsync().orTimeout(120s).join()` 包装，超时抛出 `BizException`
-- `callStream` 在 Reactor Flux 上添加 `.timeout(Duration.ofSeconds(120))` 操作符，超时抛出 `BizException`
-- 超时异常统一捕获并返回用户友好的错误信息："LLM调用超时（120秒），请检查模型服务状态"
-
-**工作量**：已完成
-**影响范围**：工作流 LLM 节点
-
----
-
-### 2.3 QueryKnowledgeTool.SEARCH_RESULTS_MAP 内存泄漏 ✅ 已修复
-
-**位置**：`QueryKnowledgeTool.java` L69
-
-**问题**：静态 `ConcurrentHashMap` 按 requestId 存储搜索结果，仅通过 `getSearchResults()` 的 `remove()` 清理。若调用方因异常未读取结果，条目永久残留。
-
-**修复内容**（2026-06-24）：
-- 引入 `TimedEntry` record 包装搜索结果 + 创建时间戳
-- `SEARCH_RESULTS_MAP` 改为 `ConcurrentHashMap<String, TimedEntry>`
-- `getSearchResults()` 读取时检查 TTL（5 分钟），过期条目自动丢弃
-- 无外部依赖，纯 JDK 实现
-
-**工作量**：已完成
-**影响范围**：知识库搜索工具
-
----
-
-### 2.4 ModelFactory ChatModel 缓存无淘汰
-
-**位置**：`ModelFactory.java` L48
-
-**问题**：`chatModelCache` 是无 TTL 的 `ConcurrentHashMap`。Provider 凭证变更后旧 ChatModel 仍被使用，直到显式调用 `invalidateCache()`。且 `invalidateCache()` 不关闭底层 HTTP 客户端，可能泄漏连接。
-
-**修改建议**：
-- 使用 Caffeine Cache 设置 TTL（如 30 分钟）和最大容量
-- `invalidateCache()` 时清理底层资源
-
-**工作量**：1 天
-**影响范围**：模型调用层
-
----
-
-### 2.5 Milvus 连接初始化失败后永久禁用 ✅ 已修复
-
-**位置**：`MilvusUtil.java` L66-89
-
-**问题**：首次连接失败后 `available = false`，后续所有 Milvus 操作静默跳过，直到服务重启。无重试机制。
-
-**修复内容**（2026-06-24）：
-- 新增 `lastReconnectAttempt` 字段和 `RECONNECT_INTERVAL_MS = 60_000` 常量
-- `getClient()` 方法增加重连逻辑：当 `available=false` 且距上次重连超过 60 秒时，尝试重新初始化客户端
-- 使用 `synchronized` 保证并发安全，重连前先 `close()` 旧客户端
-- 新增 `shouldRetryReconnect()` 方法控制重连频率
-
-**工作量**：已完成
-**影响范围**：向量检索
-
----
-
-### 2.6 SubAgent 同步阻塞执行
-
-**位置**：`SubAgentRuntime.java` L60-151
-
-**问题**：`run()` 完全同步执行，阻塞调用线程直到 SubAgent 完成所有工具循环。长时间任务可能导致主 Agent 的 SSE 连接超时。
-
-**修改建议**：
-- 改为异步执行 + 超时保护
-- 或设置 SubAgent 最大执行时间（如 60 秒）
-
-**工作量**：3-5 天
-**影响范围**：SubAgent 委派系统
-
----
-
-### 2.7 孤儿任务恢复误杀长时任务
-
-**位置**：`TaskConsumerConfig.java` L96-127
-
-**问题**：`recoverOrphanTasks` 将 updateTime 超过 10 分钟的 RUNNING 任务视为孤儿并标记 FAILED。大文档 ingestion 可能超过 10 分钟。
-
-**修改建议**：
-- 使用分布式锁（Redis）标记任务归属，而非时间判断
-- 或将超时阈值改为可配置（当前硬编码 10 分钟）
-
-**工作量**：1-2 天
-**影响范围**：异步任务系统
-
----
-
-### 2.8 敏感词过滤正则每次编译 ✅ 已修复
-
-**位置**：`SensitiveWordFilter.java` L217-224
-
-**问题**：`containsIgnoreCase()` 和 `replaceIgnoreCase()` 每次调用都 `Pattern.compile()`。流式输出时 `processChunk` 每个 token 调用一次，50 个敏感词 × 1000 个 token = 50,000 次正则编译/消息。
-
-**修复内容**（2026-06-24）：
-- 新增 `PATTERN_CACHE`（`ConcurrentHashMap<String, Pattern>`）缓存编译后的正则
-- 新增 `getPattern()` 方法，通过 `computeIfAbsent` 懒加载编译并缓存
-- `containsIgnoreCase()` 和 `replaceIgnoreCase()` 改为从缓存获取 Pattern
-
-**工作量**：已完成
-**影响范围**：敏感词过滤、所有对话
-
----
-
-### 2.9 消息保存无事务保护 ✅ 已修复
-
-**位置**：`MessageMiddleware.java` L529-552
-
-**问题**：`saveMessage` 插入消息并更新 session 统计（messageCount、lastMessageAt），但不在同一事务中。统计更新失败时 session 计数漂移。
-
-**修复内容**（2026-06-24）：
-- 在主 `saveMessage` 方法上添加 `@Transactional(rollbackFor = Exception.class)`
-- 保证消息插入和 session 统计更新在同一事务中，任一失败则整体回滚
-
-**工作量**：已完成
-**影响范围**：消息保存、会话统计
-
----
-
-## 三、性能问题（High）
-
-### 3.1 多个无界线程池 ✅ 已修复
-
-**位置**：
-- `ChatServiceImpl.RAG_EXECUTOR` — `newCachedThreadPool()`
-- `QueryKnowledgeTool.SEARCH_EXECUTOR` — `newCachedThreadPool()`
-- `DocumentServiceImpl.INGEST_EXECUTOR` — 固定 3 线程
-
-**问题**：无界线程池在高并发下可创建数千线程，导致 OOM 或 CPU 争抢。
-
-**修复内容**（2026-06-24）：
-- 新增 `ThreadPoolConfig` 配置类，定义共享有界线程池 `lightBotExecutor`
-- corePoolSize=8, maxPoolSize=32, queueCapacity=256, CallerRunsPolicy
-- `ChatServiceImpl` 的 `RAG_EXECUTOR` 替换为注入的 `lightBotExecutor`
-- `QueryKnowledgeTool` 的 `SEARCH_EXECUTOR` 替换为注入的 `lightBotExecutor`
-- `DocumentServiceImpl.INGEST_EXECUTOR`（固定3线程）已有界，暂不修改
-
-**工作量**：已完成
-**影响范围**：全局线程管理
-
----
-
-### 3.2 ToolServiceImpl 每次解析工具都扫描全量 Bean ✅ 已修复
-
-**位置**：`ToolServiceImpl.java` L288-319
-
-**问题**：`getAllBuiltinToolCallbacks()` 每次调用都扫描所有 Spring Bean（`getBeansWithAnnotation(Component.class)`），用反射找 `@Tool` 方法。每个对话请求都会触发。
-
-**修复内容**（2026-06-24）：
-- `@PostConstruct` 启动时扫描一次，结果缓存到 `cachedBuiltinCallbacks`
-- `getAllBuiltinToolCallbacks()` 优先返回缓存，兜底实时扫描
-- 扫描逻辑提取到 `scanBuiltinToolCallbacks()` 方法
-
-**工作量**：已完成
-**影响范围**：工具解析、每次对话
-
----
-
-### 3.3 ToolPrepMiddleware 每次查询 Tool 表获取 displayName ✅ 已修复
-
-**位置**：`ToolPrepMiddleware.java` L242-256
-
-**问题**：`buildDisplayNameMap()` 每次对话请求都查 Tool 表。工具显示名很少变更。
-
-**修复内容**（2026-06-24）：
-- 新增 `displayNameCache` + 5 分钟 TTL
-- `getDisplayNameCache()` 缓存全量 toolName → displayName 映射
-- `buildDisplayNameMap()` 从缓存中按需过滤，不再每次查库
-
-**工作量**：已完成
-**影响范围**：每次对话
-
----
-
-### 3.4 MCP 工具加载 N+1 问题 ✅ 已修复
-
-**位置**：`ToolPrepMiddleware.java` L187-193
-
-**问题**：每个 MCP Server ID 串行调用 `mcpClientService.getToolCallbacks(serverId)`。5 个 MCP Server = 5 次串行网络调用。
-
-**修复内容**（2026-06-24）：
-- 使用 `CompletableFuture.allOf()` + `lightBotExecutor` 并行加载所有 MCP Server 工具
-- 单个 MCP 加载失败不影响其他 Server，返回空列表并 warn 日志
-
-**工作量**：已完成
-**影响范围**：对话工具准备
-
----
-
-### 3.5 EmbeddingServiceImpl 路由决策每次查库 ✅ 已修复
-
-**位置**：`EmbeddingServiceImpl.java`
-
-**问题**：`shouldRouteToMilvus()` 每次 RAG 搜索都查 `knowledgeService.getById()` 判断用 pgvector 还是 Milvus。
-
-**修复内容**（2026-06-24）：
-- 新增 `routingCache`（`ConcurrentHashMap<Long, Boolean>`），缓存 knowledgeId → 是否 Milvus 类型
-- 知识库类型创建后不变，缓存永不失效
-- Milvus 可用性（`milvusUtil.isAvailable()`）仍实时检查，不受缓存影响
-
-**工作量**：已完成
-**影响范围**：RAG 搜索
-
----
-
-### 3.6 MimoChatClient 每次请求创建新 RestClient ✅ 已修复
-
-**位置**：`MimoChatClient.java` L306-319
-
-**问题**：`buildClient()` 每次 `streamChat()` 创建新 `RestClient`，无法复用连接池。
-
-**修复内容**（2026-06-24）：
-- 新增 `clientCache`（`ConcurrentHashMap<Long, RestClient>`），按 providerId 缓存 RestClient
-- `buildClient()` 使用 `computeIfAbsent` 懒创建
-- 新增 `clearClientCache(providerId)` 方法，Provider 凭证变更时可清除缓存
-
-**工作量**：已完成
-**影响范围**：Mimo 模型调用
-
----
-
-### 3.7 全量导入 Ant Design（前端）✅ 已修复
-
-**位置**：`main.js` L3
-
-**问题**：`app.use(Antd)` 注册所有组件，无法 tree-shaking，显著增大打包体积。
-
-**修复内容**（2026-06-24）：
-- `main.js` 无 `app.use(Antd)` 全量注册
-- `vite.config.js` 已配置 `Components({ resolvers: [AntDesignVueResolver({ importStyle: false })] })` 按需导入
-
-**工作量**：已完成
-**影响范围**：前端构建产物
-
----
-
-## 四、数据一致性问题（Medium）
-
-### 4.2 setDefaultAgent 竞态条件
-
-**位置**：`AgentServiceImpl.java` L567-587
-
-**问题**：先清除所有默认 Agent，再设置新的。两个并发请求可同时清除，导致无默认 Agent。
-
-**修改建议**：
-- 使用数据库唯一约束 + 事务
-- 或用 `UPDATE agent SET is_default = CASE WHEN id = ? THEN true ELSE false END`
-
-**工作量**：0.5 天
-**影响范围**：Agent 默认设置
-
----
-
-### 4.3 Knowledge 计数器无事务保证
-
-**位置**：`Knowledge` entity（`documentCount`、`chunkCount`、`totalTokens`）
-
-**问题**：计数器在多个 Service 方法中增量更新，无事务保护，易漂移。
-
-**修改建议**：
-- 定期用 `SELECT COUNT(*)` 校准
-- 或改为查询时实时计算，不维护冗余字段
-
-**工作量**：1-2 天
-**影响范围**：知识库管理
-
----
-
-### 4.4 chat_session 逻辑删除 + 消息级联清理不完整 ✅ 已修复
-
-**位置**：`ChatSessionServiceImpl.java` L205-218
+**位置**：`Chat.vue` + `ChatController.java` + `Message` entity
 
 **问题**：
-- 删除会话时未清理 `tool_calls` 孤儿记录
-- 未清理用户附件 MinIO 文件
-- 未清理 Redis 中的 Skill 激活状态（`skill:activated:{sessionId}`）
-- `chat_session` 使用逻辑删除，但关联数据（message、tool_calls、llm_trace）是物理删除，不一致
+当前对话是纯线性消息流，用户无法引用某条历史消息进行回复或追问。在长对话中，用户想针对 AI 某段具体回答提问时，只能手动粘贴原文，体验差。
 
-**修复内容**（2026-06-24）：
-- `chat_session` 已改为物理删除（`removeById`），与子表一致
-- `MessageServiceImpl.deleteBySessionId` 级联清理：tool_calls + MinIO 附件（AI 图片 + 用户上传）
-- `LlmTraceServiceImpl.deleteBySessionId` 级联清理调用链记录
-- Redis `skill:activated:{sessionId}` 有 24 小时 TTL 自动过期，暂不主动清理
+**技术设计**：
+- 后端：`Message` entity 新增 `replyToMessageId` 字段；`ChatRequest` 新增 `replyToMessageId`；`MessageMiddleware` 保存时关联引用
+- 前端：用户消息气泡增加"引用回复"入口，发送时携带 `replyToMessageId`；渲染时在消息上方显示被引用内容的摘要（截取前 100 字）
+- 引用消息被删除时，引用关系置空，显示"原消息已删除"
 
-**工作量**：已完成
-**影响范围**：会话删除、消息删除
+**难点**：虚拟滚动下的引用消息定位与跳转
 
----
+**工作量**：2 天
 
-### 4.5 前端 Loosse Equality 作为后端类型不一致的 Workaround
-
-**位置**：`Chat.vue` L1714, L1732, L1759, L1762, L1770
-
-**问题**：offset 值有时是 number 有时是 string，前端用 `==`（宽松比较）规避。根源在后端 SSE 事件序列化不一致。
-
-**修改建议**：
-- 后端 `ToolEventGenerator` 确保 `contentOffset` 始终为 int
-- 前端改用 `===` 并在边界处做类型归一化
-
-**工作量**：0.5 天
-**影响范围**：对话流式渲染
+**影响范围**：Message entity、ChatRequest DTO、MessageMiddleware、Chat.vue
 
 ---
 
-## 五、代码设计问题（Medium）
+### 1.2 对话无消息搜索功能
 
-### 5.1 ChatServiceImpl 流式/非流式路径大量重复
-
-**位置**：`ChatServiceImpl.java`（1479 行）
-
-**问题**：`processToolCallsRecursively`（流式）和 `processBlockingRound`（非流式）实现几乎相同的工具调用循环逻辑。非流式路径还只处理第一个工具调用。
-
-**修改建议**：
-- 抽取共享的工具执行逻辑为独立方法
-- 统一事件发射和元数据构建
-- 非流式路径补全多工具调用支持
-
-**难点**：流式路径涉及 SSE 发射，需小心处理异步边界
-**工作量**：3-5 天
-**影响范围**：核心对话引擎
-
----
-
-### 5.2 Model Handler 大量重复代码
-
-**位置**：`OpenAIModelHandler.java`、`DashScopeModelHandler.java`、`MimoModelHandler.java`、`MimoChatClient.java`
+**位置**：`ChatSessionController.java` + `Chat.vue`
 
 **问题**：
-- `toDouble()`/`toInt()` 在 4 个文件中重复
-- `addExtraHeaders()`/`resolveBaseUrl()`/`resolveModelsEndpoint()` 在 3 个 Handler 中重复
-- 多处 `new ObjectMapper()` 而非注入
+用户无法在当前对话或历史对话中搜索特定消息内容。当对话量大时，查找历史信息只能手动翻页，效率极低。
 
-**修改建议**：
-- 提取 `AbstractModelHandler` 基类
-- 共享工具方法放到 `ModelHandlerUtil`
-- 统一注入 ObjectMapper
+**技术设计**：
+- 后端：新增 `GET /api/chat/sessions/{id}/messages/search?keyword=xxx` 接口，使用 PostgreSQL `ILIKE` 或 `tsvector` 全文检索
+- 前端：对话工具栏增加搜索图标，点击展开搜索框，搜索结果高亮显示并自动滚动到匹配位置
+- 支持全局搜索：`GET /api/chat/messages/search?keyword=xxx`，跨会话搜索，返回消息列表 + 所属会话信息
 
-**工作量**：2-3 天
-**影响范围**：模型层
+**难点**：虚拟滚动下的搜索结果定位；全局搜索的性能（需加索引）
 
----
+**工作量**：3 天
 
-### 5.3 RAG 引用映射逻辑重复 4 次
-
-**位置**：`ChatServiceImpl.buildRagMetadataJson`、`buildChatMetadata`、`buildPersistMetadata`，`TraceMiddleware.buildPersistMetadata`
-
-**问题**：将搜索结果转为 `RagReferenceVO` 的逻辑在 4 处重复。
-
-**修改建议**：
-- 抽取为 `RagMetadataBuilder` 工具类
-
-**工作量**：0.5 天
-**影响范围**：RAG 元数据构建
+**影响范围**：新增 API、MessageMapper、Chat.vue、MainLayout.vue
 
 ---
 
-### 5.4 resolveAgentId 在 3 个工具中复制粘贴
+### 1.3 对话无消息收藏/标记功能
 
-**位置**：`QueryKnowledgeTool` L271、`KnowledgeTools` L181、`ReadSkillTool` L97
+**位置**：`Chat.vue` + `Message` entity
 
-**问题**：完全相同的 `resolveAgentId(ToolContext)` 方法在 3 个工具类中重复。
+**问题**：
+用户无法收藏重要的 AI 回复。有价值的信息淹没在大量对话中，后续难以快速找到。
 
-**修改建议**：
-- 提取到 `ToolContextUtil` 或基类
+**技术设计**：
+- 后端：`Message` entity 新增 `starred` 字段（Boolean）；新增 `PUT /api/chat/sessions/{sessionId}/messages/{messageId}/star` 切换收藏状态；新增 `GET /api/chat/messages/starred` 获取所有收藏消息
+- 前端：助手消息 action bar 增加收藏图标（星标）；侧边栏或独立页面展示收藏列表
 
-**工作量**：0.5 天
-**影响范围**：工具层
+**难点**：收藏列表的跨会话聚合查询
 
----
+**工作量**：1.5 天
 
-### 5.5 ChatContext God Object
-
-**位置**：`ChatContext.java`（40+ 字段）
-
-**问题**：可变共享状态对象，任何中间件可修改任何字段，难以推理状态。
-
-**修改建议**：
-- 按阶段拆分：`ChatInput`（不可变）→ `ChatPrepState`（中间件产出）→ `ChatStreamState`（流式累加器）
-- 减少可变字段，使用不可变对象传递
-
-**难点**：改动范围大，涉及所有中间件
-**工作量**：5-7 天
-**影响范围**：整个对话管道
+**影响范围**：Message entity、MessageMapper、ChatSessionController、Chat.vue
 
 ---
 
-### 5.6 接口向下转型（Interface Downcast）
+### 1.4 会话无标签/分组管理
 
-**位置**：`RagServiceImpl.java` L95-96、`QueryKnowledgeTool.java` L52
+**位置**：`ChatSession` entity + `ChatSessionController.java`
 
-**问题**：注入 `EmbeddingService` 接口后强转为 `EmbeddingServiceImpl` 调用实现类特有方法。
+**问题**：
+会话列表只有"置顶"和"归档"两种状态，无法按项目/主题分组管理。当会话数量增多后，查找困难。
 
-**修改建议**：
-- 将 `searchSimilarSql` 方法加入 `EmbeddingService` 接口
+**技术设计**：
+- 后端：新增 `session_tag` 表（id, userId, name, color）；`chat_session` 新增 `tagId` 字段；新增 Tag CRUD 接口
+- 前端：会话列表增加按标签筛选；会话设置中增加标签选择；侧边栏标签分组展示
 
-**工作量**：0.5 天
-**影响范围**：RAG 搜索
+**难点**：标签与会话的多对一关系管理
+
+**工作量**：2 天
+
+**影响范围**：新增 entity/mapper/controller、ChatSession entity、MainLayout.vue
 
 ---
 
-### 5.7 InitMiddleware 硬编码 30+ 配置键
+### 1.5 对话导出功能缺失
 
-**位置**：`InitMiddleware.java` L145-188
+**位置**：`ChatSessionController.java`
 
-**问题**：`overlayModelBehaviorConfig` 手动维护 30+ 个配置键列表。新增配置键时必须同步修改，否则静默失效。
+**问题**：
+用户无法导出对话记录。对于有价值的对话（如技术方案讨论、调试过程），用户需要离线保存或分享。
 
-**修改建议**：
-- 用反射或注解自动收集 `ConfigKeys.Agent` 的所有字段
-- 或将 overlay 逻辑改为"除明确排除的字段外全部 overlay"
+**技术设计**：
+- 后端：新增 `GET /api/chat/sessions/{id}/export?format=markdown|json` 接口，将完整对话（含工具调用、RAG 引用）格式化为 Markdown 或 JSON
+- 前端：会话操作菜单增加"导出"选项，支持下载为 `.md` 或 `.json` 文件
+
+**难点**：工具调用结果的格式化（部分工具结果是 JSON，需转换为可读格式）
+
+**工作量**：1.5 天
+
+**影响范围**：ChatSessionController、ChatSessionService、Chat.vue
+
+---
+
+### 1.6 多模态输入不完整 — 图片理解能力未暴露
+
+**位置**：`ToolPrepMiddleware.java` + `Chat.vue`
+
+**问题**：
+系统已支持图片上传（`ChatAttachmentDTO`），但图片仅作为附件展示，未作为视觉内容传入 LLM 进行理解。支持视觉能力的模型（如 GPT-4o、Qwen-VL）的图片理解能力被浪费。
+
+**技术设计**：
+- 后端：`ChatServiceCore` 构建消息时，将图片附件转换为 Spring AI 的 `Media` 对象，附加到用户消息中；需判断当前模型是否支持 vision（从 `Model` entity 的 capabilities JSONB 读取）
+- 前端：图片上传后显示缩略图预览；发送时图片作为多模态内容传入
+- 不支持 vision 的模型：图片仍作为文件附件展示，提示用户"当前模型不支持图片理解"
+
+**难点**：不同模型的多模态 API 格式差异（OpenAI vs DashScope）
+
+**工作量**：2 天
+
+**影响范围**：ChatServiceCore、Model entity、ToolPrepMiddleware、Chat.vue
+
+---
+
+### 1.7 会话列表无分页 — 固定 50 条
+
+**位置**：`MainLayout.vue` L1680 附近
+
+**问题**：
+侧边栏会话列表固定加载 50 条，无分页或无限滚动。会话超过 50 条后，旧会话无法在侧边栏找到，只能通过搜索。
+
+**技术设计**：
+- 后端：`getSessions` 已支持分页参数，无需改动
+- 前端：侧边栏会话列表改为无限滚动（IntersectionObserver），滚动到底部自动加载下一页；增加 `totalCount` 显示
+
+**难点**：虚拟列表与无限滚动的结合
 
 **工作量**：1 天
-**影响范围**：对话初始化
+
+**影响范围**：MainLayout.vue
 
 ---
 
-### 5.8 前端巨型组件
+## 二、Agent 配置与管理
 
-**位置**：
-- `AgentDetail.vue`：5,423 行
-- `KnowledgeDetail.vue`：3,579 行
-- `WorkflowEdit.vue`：3,472 行
-- `Chat.vue`：2,974 行
+### 2.1 Agent 无复制/克隆功能
 
-**问题**：单文件组件过大，难以维护和测试。
+**位置**：`AgentController.java` + `AgentManage.vue`
 
-**修改建议**：
-- `AgentDetail.vue`：按 Tab 拆分为独立子组件
-- `Chat.vue`：抽取 `useChatStream`、`useChatHistory`、`useChatAttachments` 等 composable
-- `KnowledgeDetail.vue`：按功能域拆分
+**问题**：
+用户无法基于现有 Agent 快速创建副本。当需要创建相似配置的 Agent（如不同模型版本对比）时，必须手动重新配置所有内容。
 
-**难点**：需要仔细处理 props/events 传递
-**工作量**：每个组件 3-5 天
-**影响范围**：前端可维护性
+**技术设计**：
+- 后端：新增 `POST /api/agents/{id}/clone` 接口，深拷贝 Agent 配置（含绑定的知识库、工具、MCP、SubAgent、Skill），名称加"(副本)"后缀，状态重置为 draft
+- 前端：Agent 卡片操作菜单增加"复制"选项
 
----
-
-## 六、前端问题（Medium）
-
-### 6.1 Token 存在 localStorage + v-html 使用
-
-**位置**：`request.js` L79、`user.js` L14、`MarkdownPreview.vue`、`KnowledgeDetail.vue` L364/L578
-
-**问题**：Token 存 localStorage 易被 XSS 窃取。`v-html` 在 8 处使用，虽 Markdown 有 DOMPurify，但 `KnowledgeDetail.vue` 直接渲染服务端 HTML。
-
-**修改建议**：
-- Token 改存 httpOnly Cookie
-- 所有 `v-html` 使用 DOMPurify 过滤
-
-**工作量**：2-3 天
-**影响范围**：全局安全
-
----
-
-### 6.2 225 个空 catch 块
-
-**位置**：73 个文件中
-
-**问题**：`catch {}` 静默吞掉错误，生产环境难以调试。
-
-**修改建议**：
-- 至少加 `console.warn`
-- 关键路径加 `message.error()` 提示
-
-**工作量**：2-3 天（逐步修复）
-**影响范围**：全局错误处理
-
----
-
-### 6.3 工具组件大量内联样式
-
-**位置**：`QueryKnowledgeResult.vue`、`PgSqlQueryResult.vue`、`AskUserResult.vue`、`ImageGenResult.vue`
-
-**问题**：数百行 `style=""` 内联样式，无法覆盖、无法响应式、膨胀 DOM。
-
-**修改建议**：
-- 提取为 scoped CSS 类
-
-**工作量**：1-2 天
-**影响范围**：工具渲染组件
-
----
-
-### 6.4 SSE 解析逻辑重复
-
-**位置**：`api/chat.js`、`api/prompt.js`
-
-**问题**：两处独立实现 SSE 流解析，错误处理和缓冲策略不同。
-
-**修改建议**：
-- 抽取共享的 `useSSE` composable
+**难点**：绑定关系的深拷贝（需要复制关联表记录）
 
 **工作量**：1 天
-**影响范围**：SSE 通信层
+
+**影响范围**：AgentController、AgentService、AgentManage.vue
 
 ---
 
-### 6.5 scrollToBottom 无防抖
+### 2.2 Agent 无导入/导出功能
+
+**位置**：`AgentController.java`
+
+**问题**：
+用户无法将 Agent 配置导出为文件分享给他人，也无法从文件导入 Agent 配置。团队协作时只能口头描述配置。
+
+**技术设计**：
+- 后端：新增 `GET /api/agents/{id}/export` 导出为 JSON（含 system prompt、config、绑定 ID 列表）；新增 `POST /api/agents/import` 从 JSON 导入（绑定 ID 需映射到当前环境）
+- 前端：Agent 列表增加"导入"按钮；Agent 操作菜单增加"导出"选项
+
+**难点**：跨环境导入时 ID 映射问题（知识库/工具/MCP 在目标环境可能不存在）
+
+**工作量**：2 天
+
+**影响范围**：AgentController、AgentService、AgentManage.vue
+
+---
+
+### 2.3 Agent 系统提示词无变量预览
+
+**位置**：`AgentDetail.vue`
+
+**问题**：
+系统提示词支持 `{{变量名}}` 占位符（通过 `bizParams` 替换），但编辑时无法预览替换后的效果。用户不知道变量是否正确替换。
+
+**技术设计**：
+- 前端：在系统提示词编辑区增加"预览"按钮，点击后展示变量输入表单 + 替换后的提示词预览
+- 复用 Playground 的变量替换逻辑
+
+**难点**：变量类型推断（字符串/数字/布尔）
+
+**工作量**：1 天
+
+**影响范围**：AgentDetail.vue
+
+---
+
+### 2.4 Agent 版本对比功能缺失
+
+**位置**：`AgentDetail.vue` 版本管理抽屉
+
+**问题**：
+版本管理支持查看历史版本和恢复，但无法对比两个版本之间的差异。用户不知道某个版本改了什么。
+
+**技术设计**：
+- 后端：`GET /api/agents/{id}/versions/{v1}/diff/{v2}` 返回两个版本的字段级差异
+- 前端：版本列表增加"对比"入口，左右分栏展示两个版本的 system prompt、config、绑定差异
+
+**难点**：JSONB 字段的结构化 diff
+
+**工作量**：2 天
+
+**影响范围**：AgentController、AgentService、AgentDetail.vue
+
+---
+
+### 2.5 SubAgent 执行不可观测
+
+**位置**：`SubAgentRuntime.java` + `Chat.vue`
+
+**问题**：
+当主 Agent 调用 SubAgent 时，用户只能看到"正在调用 SubAgent: xxx"的工具事件，无法看到 SubAgent 的内部推理过程（中间工具调用、思考过程）。对于复杂的 SubAgent 任务，用户完全黑盒。
+
+**技术设计**：
+- 后端：`SubAgentRuntime.run()` 执行过程中，将中间事件（工具调用、中间结果）通过回调推送给主 Agent 的 SSE 流，使用新的事件类型 `subagent_step`
+- 前端：`AgentCapabilityPanel` 中 SubAgent 事件支持展开查看内部步骤，类似工作流节点展开
+
+**难点**：SubAgent 的流式回调与主 Agent SSE 流的合并
+
+**工作量**：3 天
+
+**影响范围**：SubAgentRuntime、ChatServiceCore、AgentCapabilityPanel.vue、Chat.vue
+
+---
+
+## 三、知识库与 RAG
+
+### 3.1 知识库无增量更新机制
+
+**位置**：`DocumentIngestExecutor.java` + `KnowledgeDocController.java`
+
+**问题**：
+文档内容变更后，必须删除旧文档重新上传。对于 URL 类型的文档（如在线 Wiki），无法自动检测更新并重新导入。
+
+**技术设计**：
+- 后端：URL 文档增加 `lastFetchedAt` 和 `contentHash` 字段；新增定时任务（可配置周期）自动抓取 URL 内容，对比 hash，变化时触发重新导入
+- 前端：URL 文档详情显示"最后同步时间"和"手动同步"按钮
+
+**难点**：内容变更检测的准确性（hash 对比 vs 语义对比）
+
+**工作量**：3 天
+
+**影响范围**：Document entity、新增定时任务、KnowledgeDocController、KnowledgeDetail.vue
+
+---
+
+### 3.2 知识库无重复文档检测
+
+**位置**：`DocumentIngestExecutor.java`
+
+**问题**：
+用户上传相同文档时，系统不会检测重复，导致同一文档被多次导入，浪费存储和向量空间。
+
+**技术设计**：
+- 后端：上传时计算文件 MD5/SHA256，与同知识库下已有文档对比；发现重复时返回提示（允许强制导入或跳过）
+- 前端：上传组件显示"检测到重复文档"提示，提供覆盖/跳过/保留两个版本三个选项
+
+**难点**：内容相同但文件名不同的场景（需按内容 hash 判断）
+
+**工作量**：1.5 天
+
+**影响范围**：Document entity、DocumentIngestExecutor、KnowledgeDetail.vue
+
+---
+
+### 3.3 RAG 检索质量无反馈闭环
+
+**位置**：`QueryKnowledgeTool.java` + `Chat.vue`
+
+**问题**：
+RAG 检索返回的文档片段质量无法评估。用户无法对检索结果给出"有用/无用"反馈，系统无法基于反馈优化检索策略。
+
+**技术设计**：
+- 后端：新增 `rag_feedback` 表（messageId, chunkId, feedbackType: positive/negative, userId）；新增 `POST /api/chat/messages/{messageId}/rag-feedback` 接口
+- 前端：RAG 引用区域每个引用增加 👍/👎 按钮
+- 后续可基于反馈数据调整 rerank 权重或检索参数
+
+**难点**：反馈数据的积累需要时间才能产生价值
+
+**工作量**：1.5 天
+
+**影响范围**：新增 entity/mapper/controller、Chat.vue
+
+---
+
+### 3.4 知识库查询参数配置对用户不友好
+
+**位置**：`KnowledgeDetail.vue` 查询参数配置
+
+**问题**：
+查询参数（topK、similarityThreshold、rerank 等）对普通用户来说太技术化。用户不知道这些参数的含义和调优方向。
+
+**技术设计**：
+- 前端：参数配置页增加"推荐配置"预设（精确模式/平衡模式/广泛模式），每个预设对应一组参数值；增加参数说明气泡和示例
+- 后端：无改动，前端预设值直接映射到现有参数
+
+**难点**：推荐配置的默认值需要根据实际场景调优
+
+**工作量**：1 天
+
+**影响范围**：KnowledgeDetail.vue
+
+---
+
+### 3.5 知识图谱与 RAG 检索未融合
+
+**位置**：`QueryKnowledgeTool.java` + `KnowledgeGraphService.java`
+
+**问题**：
+知识图谱和向量检索是两套独立系统。当知识库同时开启了图谱和向量检索时，查询工具只做向量检索，图谱中的结构化关系知识未被利用。
+
+**技术设计**：
+- 后端：`QueryKnowledgeTool` 增加图谱检索路径：先从用户 query 中提取实体（NER），在 Neo4j 中查找相关三元组，将图谱结果与向量检索结果合并排序
+- 新增 `graphRetrievalEnabled` 配置项，控制是否启用混合检索
+- 结果中区分来源（向量/图谱），便于 LLM 引用
+
+**难点**：NER 实体提取的准确性；图谱结果与向量结果的融合排序策略
+
+**工作量**：5 天
+
+**影响范围**：QueryKnowledgeTool、KnowledgeGraphService、ToolCallRenderer.vue
+
+---
+
+## 四、工作流引擎
+
+### 4.1 工作流无条件分支默认路径校验
+
+**位置**：`WorkflowConfigServiceImpl.java` + `ConditionNode.vue`
+
+**问题**：
+条件分支节点（Condition）可以不配置默认分支（else）。当所有条件都不满足时，工作流直接结束，无任何提示。这在生产环境中是隐患。
+
+**技术设计**：
+- 后端：`validateGraph()` 中对 Condition 节点校验：必须至少有一个 outgoing edge 的 `conditionType = DEFAULT`，否则校验失败
+- 前端：Condition 节点配置面板增加"默认分支"开关，未配置时显示黄色警告
+
+**难点**：无
+
+**工作量**：0.5 天
+
+**影响范围**：WorkflowConfigServiceImpl、ConditionNode.vue
+
+---
+
+### 4.2 工作流无人工审批节点
+
+**位置**：工作流引擎
+
+**问题**：
+工作流完全自动化执行，无法在关键步骤插入人工审批/确认。对于需要人工介入的业务流程（如内容审核、决策确认），只能通过外部系统实现。
+
+**技术设计**：
+- 新增 `HumanApprovalNode` 节点类型
+- 执行到该节点时，工作流暂停，推送通知给指定用户（SSE/站内消息）
+- 用户审批后（通过/驳回 + 意见），工作流从暂停点恢复执行
+- `Task` entity 增加 `HUMAN_APPROVAL` 类型，存储审批状态
+
+**难点**：工作流暂停/恢复的状态持久化；审批通知机制
+
+**工作量**：5 天
+
+**影响范围**：工作流引擎核心、新增节点类型、Task 系统、前端审批 UI
+
+---
+
+### 4.3 工作流无变量面板 — 调试困难
+
+**位置**：`WorkflowTestDrawer.vue`
+
+**问题**：
+工作流调试时，用户只能看到每个节点的输入输出，无法查看中间变量的实时状态。调试复杂工作流时需要逐个节点查看，效率低。
+
+**技术设计**：
+- 后端：`WorkflowExecutorService` 在执行过程中，将每个节点的输出写入 `variables` map；测试执行完成后返回完整的变量快照
+- 前端：测试抽屉增加"变量面板"标签页，实时展示所有变量的当前值（树形结构，支持 JSON 展开）
+
+**难点**：变量类型的多样性（字符串/JSON/文件路径）的展示
+
+**工作量**：2 天
+
+**影响范围**：WorkflowExecutorService、WorkflowTestDrawer.vue
+
+---
+
+### 4.4 工作流无子流程/模块化支持
+
+**位置**：工作流引擎
+
+**问题**：
+复杂工作流只能在一个画布上实现，导致画布过于庞大。无法将常用的节点组合封装为可复用的子流程。
+
+**技术设计**：
+- 新增 `SubWorkflowNode` 节点类型，引用另一个已发布的工作流
+- 执行时递归调用子工作流的 `WorkflowExecutorService`
+- 子工作流的输入输出映射到主工作流的变量
+
+**难点**：递归执行的深度限制和超时控制；循环引用检测
+
+**工作量**：5 天
+
+**影响范围**：工作流引擎核心、新增节点类型、WorkflowEdit.vue
+
+---
+
+## 五、工具与 MCP 体系
+
+### 5.1 API 工具不支持自动执行
+
+**位置**：`ToolServiceImpl.java` L247
+
+**问题**：
+`ToolType.API` 类型的工具在 `resolveToolCallbacks()` 中被跳过（仅打印日志），无法被 LLM 自动调用。用户创建 API 工具后发现无法使用，体验差。
+
+**技术设计**：
+- 后端：实现 `ApiToolCallback`，根据 `endpointUrl`、`authType`、`authConfig`、`inputSchema` 构建 HTTP 请求并执行
+- 需要处理：请求参数映射（LLM 参数 → HTTP 参数）、响应解析（JSON → 字符串）、超时控制、错误处理
+- 安全：URL 白名单校验（复用 ApiNodeProcessor 的 SSRF 防护）
+
+**难点**：HTTP 响应格式的多样性（JSON/XML/HTML/纯文本）；认证方式的多样性（Bearer/Basic/API Key/自定义 Header）
+
+**工作量**：5 天
+
+**影响范围**：ToolServiceImpl、新增 ApiToolCallback、ToolManage.vue
+
+---
+
+### 5.2 MCP 工具热更新缺失
+
+**位置**：`McpClientServiceImpl.java`
+
+**问题**：
+MCP Server 的工具列表在 Agent 配置时加载一次，之后不会自动更新。当 MCP Server 新增或修改工具后，用户必须手动刷新。且 MCP Server 宕机恢复后，工具状态不会自动恢复。
+
+**技术设计**：
+- 后端：新增 MCP Server 心跳检测（定时 ping），工具列表变更时自动更新缓存；Agent 对话时，ToolPrepMiddleware 从缓存读取工具列表（而非每次都连接 MCP Server）
+- 前端：MCP 管理页显示"最后同步时间"和"手动同步"按钮
+
+**难点**：MCP 协议本身不支持工具变更通知（需轮询）
+
+**工作量**：3 天
+
+**影响范围**：McpClientServiceImpl、McpServer entity、McpManage.vue
+
+---
+
+### 5.3 工具测试结果无历史记录
+
+**位置**：`ToolController.java` testTool
+
+**问题**：
+工具测试执行后，结果仅显示在当前页面，刷新后丢失。用户无法回顾历史测试结果，也无法对比不同参数的执行效果。
+
+**技术设计**：
+- 后端：新增 `tool_test_result` 表（toolId, args, result, duration, status, userId, createTime）；新增查询接口
+- 前端：工具测试面板增加"历史记录"标签页，展示最近 20 次测试结果
+
+**难点**：无
+
+**工作量**：1.5 天
+
+**影响范围**：新增 entity/mapper、ToolController、ToolManage.vue
+
+---
+
+## 六、Skill 体系
+
+### 6.1 Skill 无在线编辑器 — 必须上传 ZIP
+
+**位置**：`SkillController.java` + `SkillManage.vue`
+
+**问题**：
+Skill 的内容（SKILL.md + 脚本文件）只能通过 ZIP 导入或远程安装。用户无法在线编辑 Skill 内容，修改一个小错误也需要重新打包上传。
+
+**技术设计**：
+- 后端：已有 `SkillStorageService` 的文件 CRUD 接口（`getSkillFiles`、`readSkillFile`、`createSkillFile`、`updateSkillFile`、`deleteSkillFile`），前端只需对接
+- 前端：`SkillDetail.vue` 已有文件树编辑器，确保功能完整（Markdown 编辑 + 预览 + 保存）
+
+**难点**：文件树的实时保存与冲突处理
+
+**工作量**：1 天（后端已就绪，主要前端对接）
+
+**影响范围**：SkillDetail.vue
+
+---
+
+### 6.2 Skill 依赖的工具/MCP 未自动绑定
+
+**位置**：`SkillPrepMiddleware.java` + `AgentDetail.vue`
+
+**问题**：
+Skill 依赖特定工具或 MCP Server（通过 `toolIds`/`mcpServerIds` 声明），但 Agent 绑定 Skill 时，不会自动检查或提示依赖的工具是否已绑定。用户可能绑定了 Skill 但忘了绑定其依赖的工具，导致 Skill 执行失败。
+
+**技术设计**：
+- 后端：`AgentService.updateSkills()` 时，检查 Skill 的依赖工具是否已在 Agent 的工具绑定中，返回缺失的依赖列表（warning 级别，不阻断）
+- 前端：绑定 Skill 时，如果依赖工具未绑定，显示黄色提示"该 Skill 依赖以下工具：xxx，请先绑定"
+
+**难点**：依赖工具的匹配（工具名 vs 工具 ID）
+
+**工作量**：1.5 天
+
+**影响范围**：AgentService、AgentDetail.vue
+
+---
+
+### 6.3 Skill 无版本管理
+
+**位置**：`Skill` entity
+
+**问题**：
+Skill 更新后旧版本丢失，无法回滚。与 Agent 的版本管理（draft/publish/restore）相比，Skill 缺乏版本控制。
+
+**技术设计**：
+- 后端：新增 `skill_version` 表，记录每次更新的完整快照；Skill 增加 `version` 字段（已有）；新增版本列表/恢复接口
+- 前端：Skill 详情页增加版本历史面板
+
+**难点**：Skill 文件的版本快照存储（MinIO 中的文件版本）
+
+**工作量**：3 天
+
+**影响范围**：Skill entity、新增 skill_version entity、SkillController、SkillDetail.vue
+
+---
+
+## 七、评估与实验系统
+
+### 7.1 评估实验无法与 Agent 对话直接关联
+
+**位置**：`EvalExperimentController.java`
+
+**问题**：
+评估实验使用独立的评估聊天服务（`EvalChatService`），与 Agent 的实际对话服务是两套独立流程。评估结果可能与 Agent 实际表现不一致（模型版本、工具配置差异）。
+
+**设计思路**：
+评估实验应复用 Agent 的实际对话链路（中间件链），确保评估结果与真实场景一致。具体方案需要评估 `EvalChatService` 与 `ChatService` 的差异后再定。
+
+**难点**：评估需要批量执行，直接复用对话链路可能影响在线服务
+
+**工作量**：待评估，预估 5 天
+
+**影响范围**：EvalChatService、ChatService、评估实验整体架构
+
+---
+
+### 7.2 评估数据集无自动更新机制
+
+**位置**：`EvalDatasetController.java`
+
+**问题**：
+评估数据集是静态的，不会随知识库内容更新而更新。当知识库新增文档后，评估基准（benchmark）可能过时。
+
+**设计思路**：
+知识库文档变更时，触发 benchmark 的增量更新（基于新增文档生成新的 QA 对）。需要与知识库的增量更新机制联动。
+
+**难点**：自动生成的 QA 对质量控制
+
+**工作量**：3 天
+
+**影响范围**：EvalDatasetService、KnowledgeService、异步任务系统
+
+---
+
+## 八、可观测性与运维
+
+### 8.1 对话 Token 用量无实时统计
+
+**位置**：`ChatServiceCore.java` + `ChatSession` entity
+
+**问题**：
+`ChatSession` 有 `totalTokens` 字段，但更新存在竞态条件（v0.9 已指出），且用户在对话过程中无法实时看到本次对话的 Token 消耗。用户无法控制 Token 成本。
+
+**技术设计**：
+- 后端：每次 LLM 调用后，从 response metadata 中提取 token usage，累加到 session 的 `totalTokens`（使用 SQL 原子操作 `UPDATE chat_session SET total_tokens = total_tokens + #{delta}`）
+- 前端：对话底部状态栏显示"本次对话：输入 xxx tokens / 输出 xxx tokens"
+
+**难点**：流式响应的 token 统计（部分模型在流式结束时才返回 usage）
+
+**工作量**：2 天
+
+**影响范围**：ChatServiceCore、ChatSessionMapper、Chat.vue
+
+---
+
+### 8.2 LLM 调用无限流/预算控制
+
+**位置**：`ChatServiceCore.java` + `ModelProvider` entity
+
+**问题**：
+没有 Token 预算控制机制。用户可以无限调用 LLM，无法设置每月/每日 Token 上限，存在成本失控风险。
+
+**设计思路**：
+- `ModelProvider` 或 `User` 增加 `tokenBudget` 配置（月度上限）
+- 每次 LLM 调用前检查累计用量，超限时拒绝并提示
+- 新增 `token_usage_daily` 表记录每日用量
+
+**难点**：流式调用的 token 统计延迟（调用开始时不知道最终消耗多少）
+
+**工作量**：3 天
+
+**影响范围**：ModelProvider/User entity、ChatServiceCore、新增用量统计表
+
+---
+
+### 8.3 系统健康检查不完整
+
+**位置**：`SystemConfigController.java` health
+
+**问题**：
+当前健康检查仅返回简单的 `{"status": "UP"}`，不检查下游依赖（PostgreSQL、Redis、MinIO、Milvus、Neo4j）的连通性。运维人员无法通过健康检查判断系统真实状态。
+
+**技术设计**：
+- 后端：`/api/system-config/health` 扩展为详细健康检查，逐个 ping 下游依赖，返回每个组件的状态（UP/DOWN/DEGRADED）和响应时间
+- 敏感信息脱敏（不暴露连接字符串）
+
+**难点**：无
+
+**工作量**：1 天
+
+**影响范围**：SystemConfigController
+
+---
+
+## 九、用户与权限体系
+
+### 9.1 无多租户/团队协作支持
+
+**位置**：全系统
+
+**问题**：
+当前系统是单用户模式（admin + 普通用户），所有资源（Agent、知识库、工具）按 userId 隔离。无法支持团队协作（多人共享 Agent、知识库协同编辑）。
+
+**设计思路**（远期）：
+- 引入 `team` / `workspace` 概念
+- 资源归属从 `userId` 扩展为 `teamId + userId`
+- 权限模型：Owner > Admin > Editor > Viewer
+- 知识库已有 `knowledge_member` 表，可作为权限模型的基础
+
+**难点**：权限模型的全面改造；现有数据的迁移
+
+**工作量**：15-20 天（远期规划）
+
+**影响范围**：全系统
+
+---
+
+### 9.2 API Key 认证缺失
+
+**位置**：`SaTokenConfig.java`
+
+**问题**：
+系统只支持 Session 认证（Sa-Token），不支持 API Key 认证。外部系统（如第三方应用、自动化脚本）无法通过 API Key 调用 LightBot 的对话接口。
+
+**设计思路**：
+- 新增 `api_key` 表（userId, keyHash, name, permissions, expiresAt）
+- 请求拦截器中优先检查 `Authorization: Bearer sk-xxx` 格式的 API Key
+- API Key 权限范围：chat-only / full-access
+
+**难点**：API Key 的安全管理（哈希存储、限流、过期）
+
+**工作量**：3 天
+
+**影响范围**：新增 entity、SaTokenConfig、认证拦截器
+
+---
+
+## 十、前端交互体验
+
+### 10.1 对话页面无快捷键支持
 
 **位置**：`Chat.vue`
 
-**问题**：`onChunk`、`onToolEvent`、`onStatus` 每次回调都调 `scrollToBottom()`，快速流式时每秒数百次 DOM 读取。
+**问题**：
+对话页面没有键盘快捷键。用户必须用鼠标点击发送按钮、切换 Agent、新建对话等操作。
 
-**修改建议**：
-- 使用 `requestAnimationFrame` 做防抖，每帧最多滚动一次
+**技术设计**：
+- `Enter` 发送消息（已有）
+- `Ctrl+Shift+N` 新建对话
+- `Ctrl+Shift+O` 打开/关闭侧边栏
+- `Ctrl+/` 聚焦输入框
+- `Escape` 停止生成 / 关闭弹窗
 
-**工作量**：0.5 天
-**影响范围**：对话滚动体验
-
----
-
-### 6.6 工具渲染 JSON 重复解析
-
-**位置**：`ToolCallsGroupComponent.vue`、各 ToolResult 组件
-
-**问题**：`hasArgs()` 和 `parseArgsPreview()` 各自 `JSON.parse(evt.args)`。每个工具组件也独立 `JSON.parse(event.result)`。
-
-**修改建议**：
-- 使用 `computed` 缓存解析结果，避免重复解析
-- 统一使用 `useToolResult.js` composable
+**难点**：快捷键冲突检测（与浏览器/输入法快捷键）
 
 **工作量**：1 天
-**影响范围**：工具渲染
+
+**影响范围**：Chat.vue、MainLayout.vue
 
 ---
 
-## 七、代码质量问题（Low）
+### 10.2 对话输入框无历史消息回溯
 
-### 7.1 魔法数字散布
+**位置**：`Chat.vue` 输入框
 
-| 位置 | 魔法值 | 含义 |
-|------|--------|------|
-| `GeneralChunkStrategy.java:21` | `200` | 最大重叠 token |
-| `GraphExtractor.java:87` | `2000` | 内容截断长度 |
-| `WorkflowExecutorService.java:539` | `400` | 截断长度 |
-| `SubAgentRuntime.java:45` | `6` | 最大循环深度 |
-| `PgSqlTool.java:39-40` | `50/10000` | 最大行数/内容长度 |
-| `LlmNodeProcessor.java:211` | `3` | 默认历史轮次 |
-| `EmbeddingServiceImpl.java:285` | `60` | RRF k 常数 |
-| `GraphRetrievalUtil.java:21` | `15` | PPR 迭代次数 |
+**问题**：
+输入框不支持上下键翻阅历史发送的消息。在调试场景中，用户经常需要重复发送类似内容。
 
-**修改建议**：抽取为可配置常量或 application.yml 配置项。
+**技术设计**：
+- 前端：维护 `inputHistory` 数组（当前会话的已发送消息），上下键翻阅，`Escape` 清空
+- 历史仅保留当前会话，不跨会话
 
----
+**难点**：无
 
-### 7.2 死代码
+**工作量**：0.5 天
 
-| 文件 | 问题 |
-|------|------|
-| `stores/workflow.js` | 整个 store 未使用 |
-| `utils/theme.js` | 空文件 |
-| `workflowLayout.js` L551-572 | 5 个 `@deprecated` 函数仍在导出 |
-| `Chat.vue` L746 `toolEvents` ref | 写入但从未读取 |
-| `OpenAiStreamUsageSupport.java` | 只调一行 `streamUsage(true)` |
+**影响范围**：Chat.vue
 
 ---
 
-### 7.3 命名不一致
+### 10.3 巨型组件可维护性差
 
-- 文件名混用 `PascalCase`（`Chat.vue`）和 `camelCase`（`toolRegistry.js`）
-- 组件名混用 `ToolCallsGroupComponent` 和 `BaseToolCall`
-- API 函数名混用 `getAgents` 和 `getAgentDetail`
-- `SubAgentRuntime` 中 `modelId` 实际用作 `providerId`
+**位置**：`AgentDetail.vue`（5400+ 行）、`Chat.vue`（2850+ 行）、`KnowledgeDetail.vue`（3500+ 行）、`WorkflowEdit.vue`（3400+ 行）
+
+**问题**：
+4 个核心页面都是单文件组件，代码量均超过 2800 行。维护困难，每次修改都需要在大量代码中定位，容易引入副作用。
+
+**设计思路**：
+按功能域拆分为 composable + 子组件：
+- `AgentDetail.vue` → `useAgentConfig` + `useAgentBinding` + `useAgentVersion` + 子组件（BasicInfoPanel、BindingTabs、VersionDrawer）
+- `Chat.vue` → `useChatMessages` + `useChatStream` + `useChatEdit` + 子组件（MessageList、ChatInput、AgentSelector）
+- `KnowledgeDetail.vue` → `useDocuments` + `useChunks` + `useGraph` + 子组件
+- `WorkflowEdit.vue` → `useWorkflowCanvas` + `useNodeConfig` + `useWorkflowTest` + 子组件
+
+**难点**：拆分过程中的状态提升和事件传递；避免过度拆分导致文件碎片化
+
+**工作量**：每个 3-5 天，共 12-20 天（持续重构）
+
+**影响范围**：4 个核心页面及相关组件
 
 ---
 
-### 7.4 前端死代码/废弃设计
+### 10.4 深色模式缺失
 
-- `stores/task.js` 使用 `reactive()` 而非 `defineStore`，与 Pinia 不一致
-- `window.dispatchEvent('session-title-updated')` 全局事件总线绕过 Vue 响应式
-- 会话列表只加载 50 条，无分页/无限滚动
-- SSE 重连无 jitter，服务重启时所有客户端同时重连（惊群效应）
+**位置**：`App.vue` + 全局 CSS
+
+**问题**：
+系统只有浅色主题，不支持深色模式。长时间使用时眼睛疲劳。
+
+**设计思路**：
+- 使用 CSS 变量管理所有颜色（已有部分基础）
+- `App.vue` 的 `ConfigProvider` 中动态切换 `algorithm: theme.darkAlgorithm`
+- 用户偏好存储在 `localStorage`
+
+**难点**：部分组件内联样式需要改造为 CSS 变量
+
+**工作量**：5 天
+
+**影响范围**：App.vue、全局 CSS、所有组件的内联样式
 
 ---
 
-## 附录：修改优先级排序
+## 附录：优先级排序
 
-### P0（安全，立即修复）
-1. ~~PgSqlTool SQL 注入 → 参数化查询~~ ✅ 已修复（2026-06-24）
-2. ~~ScriptNodeProcessor 沙箱 → 危险访问拦截 + 5 秒超时~~ ✅ 已修复（2026-06-24）
-3. ~~ApiNodeProcessor SSRF → URL 校验（禁止内网/元数据服务）~~ ✅ 已修复（2026-06-24）
+### P0 — 业务核心缺陷（1-2 周）
 
-### P1（可靠性，1-2 周内修复）
-1. ~~工作流环路检测 → visited 集合~~ ✅ 已修复（2026-06-24）— DFS 环路检测，发布/校验时拦截
-2. ~~LLM 节点超时 → HTTP 超时配置~~ ✅ 已修复（2026-06-24）— 120 秒超时保护
-3. ~~Milvus 连接重试~~ ✅ 已修复（2026-06-24）— 60 秒冷却重连
-4. ~~SEARCH_RESULTS_MAP 泄漏 → TTL 缓存~~ ✅ 已修复（2026-06-24）— 5 分钟 TTL 自动过期
-5. ~~敏感词正则预编译 → Pattern 缓存~~ ✅ 已修复（2026-06-24）— ConcurrentHashMap 缓存
-6. ~~消息保存事务 → @Transactional~~ ✅ 已修复（2026-06-24）— 事务保护消息插入+统计更新
-7. ~~MCP Stdio 命令注入 → shell 元字符校验~~ ✅ 已修复（2026-06-24）
-8. ~~无界线程池 → 有界线程池~~ ✅ 已修复（2026-06-24）— ThreadPoolConfig 统一有界线程池
+| 编号 | 问题 | 工作量 | 理由 |
+|------|------|--------|------|
+| 1.6 | 多模态图片理解未暴露 | 2d | 浪费已有模型能力 |
+| 5.1 | API 工具不支持自动执行 | 5d | 创建了但无法用，功能缺失 |
+| 1.1 | 对话消息引用/回复 | 2d | 长对话基本需求 |
+| 1.7 | 会话列表无分页 | 1d | 会话多了找不到 |
+| 8.1 | Token 用量实时统计 | 2d | 成本控制基本需求 |
 
-### P2（性能/一致性，1 个月内）
-1. 流式/非流式去重 → 抽取共享逻辑
-2. Model Handler 去重 → 基类
-3. ~~工具解析缓存 → 启动时缓存~~ ✅ 已修复（2026-06-24）— @PostConstruct 缓存
-4. ~~chat_session 级联清理~~ ✅ 已修复（2026-06-24）— 物理删除 + tool_calls/MinIO/Trace 级联清理
-5. 前端组件拆分 → composables
-6. ~~displayName 缓存~~ ✅ 已修复（2026-06-24）— 5 分钟 TTL 缓存
-7. ~~MCP 工具并行加载~~ ✅ 已修复（2026-06-24）— CompletableFuture.allOf()
-8. ~~向量路由缓存~~ ✅ 已修复（2026-06-24）— routingCache 永久缓存
-9. ~~RestClient 缓存~~ ✅ 已修复（2026-06-24）— 按 providerId 缓存
-10. ~~Ant Design 按需导入~~ ✅ 已修复（2026-06-24）— 已配置按需导入
+### P1 — 体验优化（2-4 周）
 
-### P3（代码质量，持续改进）
-1. 魔法数字常量化
-2. 死代码清理
-3. 空 catch 块修复
-4. 内联样式提取
-5. 命名统一
+| 编号 | 问题 | 工作量 | 理由 |
+|------|------|--------|------|
+| 1.2 | 对话消息搜索 | 3d | 历史信息查找效率 |
+| 1.5 | 对话导出 | 1.5d | 知识沉淀需求 |
+| 2.1 | Agent 复制/克隆 | 1d | 配置效率 |
+| 2.5 | SubAgent 执行可观测 | 3d | 调试需求 |
+| 3.2 | 重复文档检测 | 1.5d | 存储浪费 |
+| 3.3 | RAG 反馈闭环 | 1.5d | 检索质量改进 |
+| 4.1 | 条件分支默认路径校验 | 0.5d | 工作流健壮性 |
+| 5.2 | MCP 工具热更新 | 3d | 运维效率 |
+| 6.2 | Skill 依赖自动检查 | 1.5d | 配置正确性 |
+| 8.3 | 完整健康检查 | 1d | 运维基本需求 |
+| 10.1 | 快捷键支持 | 1d | 交互效率 |
+| 10.2 | 输入框历史回溯 | 0.5d | 交互效率 |
+
+### P2 — 功能增强（1-2 月）
+
+| 编号 | 问题 | 工作量 | 理由 |
+|------|------|--------|------|
+| 1.3 | 消息收藏/标记 | 1.5d | 知识管理 |
+| 1.4 | 会话标签/分组 | 2d | 会话管理 |
+| 2.2 | Agent 导入/导出 | 2d | 团队协作 |
+| 2.3 | 系统提示词变量预览 | 1d | 配置体验 |
+| 2.4 | Agent 版本对比 | 2d | 版本管理 |
+| 3.1 | 知识库增量更新 | 3d | 自动化运维 |
+| 3.4 | 查询参数友好配置 | 1d | 用户体验 |
+| 4.3 | 工作流变量面板 | 2d | 调试效率 |
+| 5.3 | 工具测试历史 | 1.5d | 调试效率 |
+| 6.1 | Skill 在线编辑 | 1d | 编辑效率 |
+| 6.3 | Skill 版本管理 | 3d | 版本控制 |
+| 8.2 | Token 限流/预算 | 3d | 成本控制 |
+| 9.2 | API Key 认证 | 3d | 外部集成 |
+| 10.4 | 深色模式 | 5d | 用户体验 |
+
+### P3 — 架构演进（持续）
+
+| 编号 | 问题 | 工作量 | 理由 |
+|------|------|--------|------|
+| 3.5 | 知识图谱与 RAG 融合 | 5d | 检索质量提升 |
+| 4.2 | 人工审批节点 | 5d | 业务流程扩展 |
+| 4.4 | 子流程/模块化 | 5d | 工作流复用 |
+| 7.1 | 评估与对话链路统一 | 5d | 评估准确性 |
+| 7.2 | 评估数据集自动更新 | 3d | 评估自动化 |
+| 9.1 | 多租户/团队协作 | 15-20d | 企业级需求 |
+| 10.3 | 巨型组件拆分 | 12-20d | 可维护性 |
+
+---
+
+**工作量汇总**：
+
+| 优先级 | 工作量 | 建议周期 |
+|--------|--------|----------|
+| P0 | ~11 天 | 2 周 |
+| P1 | ~23 天 | 4 周 |
+| P2 | ~28 天 | 6 周 |
+| P3 | ~50-58 天 | 持续 |
+| **合计** | **~112-120 天** | — |

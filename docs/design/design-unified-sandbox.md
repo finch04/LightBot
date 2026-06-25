@@ -26,7 +26,7 @@ LightBot 当前有三处"沙盒相关"能力，各自独立、能力不完整：
 
 | 需求 | 说明 |
 |------|------|
-| 多语言支持 | 至少 JavaScript + Java，可选 Python |
+| 多语言支持 | JavaScript + Java + Python |
 | 安全沙盒 | 禁止文件/网络/进程/反射操作 |
 | 超时控制 | 单次执行 ≤ 5 秒 |
 | 内存限制 | 单次执行 ≤ 64MB |
@@ -72,7 +72,7 @@ LightBot 当前有三处"沙盒相关"能力，各自独立、能力不完整：
 | MinIO 文件操作 | ❌ | ✅ | ❌ | ✅ 聚合 |
 | JS 代码执行 | ❌ | ❌ | ✅ 裸执行 | ✅ 沙盒 |
 | Java 代码执行 | ❌ | ❌ | ❌ | ✅ 沙盒 |
-| Python 代码执行 | ❌ | ❌ | ❌ | ⏳ 扩展点 |
+| Python 代码执行 | ❌ | ❌ | ❌ | ✅ 进程沙盒 |
 | ClassFilter | ❌ | ❌ | ❌ | ✅ |
 | 超时控制 | ❌ | ❌ | ✅ 5s | ✅ |
 | 内存限制 | ❌ | ❌ | ❌ | ✅ |
@@ -84,12 +84,12 @@ LightBot 当前有三处"沙盒相关"能力，各自独立、能力不完整：
 
 | 等级 | 描述 | 当前实现 | 目标 |
 |------|------|----------|------|
-| L0 | 裸执行，无保护 | `ScriptNodeProcessor` | 淘汰 |
-| L1 | 正则黑名单 | `ScriptNodeProcessor` | 淘汰 |
-| L2 | ClassFilter + 超时 | — | Nashorn 降级方案 |
-| L3 | GraalVM Context 沙盒 | — | **JS 目标** |
-| L3.5 | GraalVM + ClassLoader 隔离 | — | **Java 目标** |
-| L4 | Docker 容器 | — | 远期规划 |
+| L0 | 裸执行，无保护 | `ScriptNodeProcessor`（已废弃） | 淘汰 |
+| L1 | 正则黑名单 | — | 淘汰 |
+| L2 | ClassFilter + 超时 | `NashornEngine`（JS） | 降级方案 |
+| L3 | GraalVM Context 沙盒 | `GraalVmEngine`（JS，占位） | JS 首选 |
+| L3.5 | 编译期黑名单 + ClassLoader 隔离 | `JaninoEngine`（Java） | **Java 目标** |
+| L4 | OS 进程隔离 | `PythonEngine`（Python） | **Python 目标** |
 
 ### 2.3 现有组件复用
 
@@ -129,13 +129,16 @@ LightBot 当前有三处"沙盒相关"能力，各自独立、能力不完整：
 │  │ EngineRegistry  │  │ SkillStorage     │                         │
 │  │ ┌─────────────┐ │  │ Service (复用)    │                         │
 │  │ │ GraalVmEngine│ │  │                  │                         │
-│  │ │ (JS/Python)  │ │  │ PathValidator    │                         │
+│  │ │ (JS, 占位)   │ │  │ PathValidator    │                         │
 │  │ ├─────────────┤ │  │ (复用)            │                         │
 │  │ │ JaninoEngine │ │  └──────────────────┘                         │
 │  │ │ (Java)       │ │                                               │
 │  │ ├─────────────┤ │                                               │
-│  │ │ NashornEngine│ │  ← 降级方案                                   │
-│  │ │ (JS fallback)│ │                                               │
+│  │ │ NashornEngine│ │  ← JS 降级方案                                │
+│  │ │ (JS)         │ │                                               │
+│  │ ├─────────────┤ │                                               │
+│  │ │ PythonEngine │ │  ← Python (ProcessBuilder)                   │
+│  │ │ (Python)     │ │                                               │
 │  │ └─────────────┘ │                                               │
 │  └─────────────────┘                                               │
 └──────────────────────────────────────────────────────────────────────┘
@@ -967,6 +970,7 @@ GraalVM Polyglot 天然支持 GraalPython，仅需添加依赖：
 | `service/sandbox/NashornEngine.java` | ~150 | Nashorn JS 引擎（L2 安全级别，ClassFilter + 超时） |
 | `service/sandbox/GraalVmEngine.java` | ~30 | GraalVM 引擎占位（当前不可用，需添加依赖后启用） |
 | `service/sandbox/JaninoEngine.java` | ~180 | Janino Java 编译执行引擎（L3.5 安全级别） |
+| `service/sandbox/PythonEngine.java` | ~210 | Python 3 引擎（ProcessBuilder 子进程，L4 安全级别） |
 | `service/sandbox/SandboxingClassLoader.java` | ~40 | Java 类加载白名单 |
 | `service/sandbox/SandboxService.java` | ~55 | 统一沙盒服务接口 |
 | `service/sandbox/SandboxServiceImpl.java` | ~70 | 统一沙盒服务实现 |
@@ -1019,10 +1023,47 @@ GraalVM Polyglot 天然支持 GraalPython，仅需添加依赖：
 | GraalVM `@ConditionalOnClass` | `isAvailable()` 运行时检测 | 效果相同，运行时检测更灵活 |
 | SandboxPathValidator 增强 | 未修改 | 现有方法已满足需求，SandboxPath 通过 `toMinioPath()` 适配 |
 
-### 9.6 待完善事项
+### 9.6 Python 支持（2026-06-25 新增）
+
+**方案选择**：ProcessBuilder 子进程方式（L4 安全级别，OS 进程隔离），而非 GraalVM Python（需 ~30MB 依赖 + GraalVM 仓库不可达）。
+
+**新增文件**：
+
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `service/sandbox/PythonEngine.java` | ~210 | Python 3 引擎（ProcessBuilder 子进程，L4 安全级别） |
+
+**修改文件**：
+
+| 文件 | 改动 |
+|------|------|
+| `tool/builtin/ExecuteCodeTool.java` | 描述更新：支持 Java/JavaScript/Python 三种语言 |
+| `workflow/processor/ScriptNodeProcessor.java` | 已通过 SandboxService 自动路由到 PythonEngine |
+
+**Python 引擎特性**：
+- 通过 `ProcessBuilder("python3", ...)` 启动独立子进程
+- 环境变量清空（`pb.environment().clear()`），防止信息泄露
+- 5 秒超时（`process.waitFor(timeout, MILLISECONDS)` + `destroyForcibly()`）
+- import 黑名单：禁止 os/subprocess/socket/http/sys 等系统模块
+- stdout 捕获 + 10000 字符截断
+- 脚本需定义 `main()` 函数，返回值通过标记 `__SANDBOX_RESULT_START__/END__` 提取
+- params 变量通过 JSON 注入，脚本中以 `params.xxx` 访问
+- `isAvailable()` 自动检测 `python3` 或 `python` 命令是否可用
+
+**安全模型**：
+
+| 层级 | 措施 |
+|------|------|
+| 进程隔离 | OS 级子进程，独立地址空间 |
+| 环境隔离 | 环境变量清空 |
+| import 黑名单 | 正则拦截 os/subprocess/socket/http/sys 等 |
+| 超时控制 | 5 秒 + destroyForcibly() |
+| 输出截断 | 10000 字符上限 |
+
+### 9.7 待完善事项
 
 1. **GraalVM 引擎启用**：当 GraalVM Maven 仓库可访问时，恢复 GraalVmEngine 的完整实现，替换 NashornEngine 为默认 JS 引擎
 2. **单元测试**：SandboxServiceTest（安全测试 + 边界测试），预计 ~200 行
 3. **引擎缓存**：Janino 编译结果可按代码 hash 缓存，减少重复编译开销
 4. **输出截断策略**：当前截断 10000 字符，可配置化
-5. **Python 支持**：GraalVM GraalPython 依赖（~30MB），远期扩展
+5. **Python 沙盒增强**：可引入 Docker 容器执行，进一步提升隔离级别

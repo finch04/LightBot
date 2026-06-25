@@ -189,10 +189,9 @@ function formatValue(v) {
   if (v === null || v === undefined) return { value: 'null', type: 'null' }
   if (typeof v === 'boolean') return { value: String(v), type: 'bool' }
   if (typeof v === 'number') return { value: String(v), type: 'number' }
-  if (Array.isArray(v)) return { value: `[${v.length}项]`, type: 'array' }
-  if (typeof v === 'object') return { value: `{${Object.keys(v).length}个字段}`, type: 'object' }
-  const s = String(v)
-  return { value: s.length > 200 ? s.substring(0, 200) + '...' : s, type: 'string' }
+  if (Array.isArray(v)) return { value: JSON.stringify(v, null, 2), type: 'string' }
+  if (typeof v === 'object') return { value: JSON.stringify(v, null, 2), type: 'string' }
+  return { value: String(v), type: 'string' }
 }
 
 function openArgs(index) {

@@ -117,9 +117,7 @@
         </a-form-item>
         <a-form-item label="工具类型" required>
           <a-select v-model:value="form.toolType" style="width: 100%" :disabled="form.id && form.toolType === 'builtin'">
-            <a-select-option value="custom">自定义</a-select-option>
             <a-select-option value="api">API调用</a-select-option>
-            <a-select-option value="mcp">MCP协议</a-select-option>
           </a-select>
           <div v-if="form.id && form.toolType === 'builtin'" class="param-hint">内置工具类型不可修改</div>
         </a-form-item>
@@ -408,7 +406,7 @@
             </table>
             <!-- JSON 示例 -->
             <div v-if="formatOutputExample(detailTool)" class="detail-output-example">
-              <div class="detail-output-example-title">示例 JSON</div>
+              <div class="detail-output-example-title">返回示例 JSON</div>
               <pre class="detail-output-json">{{ formatOutputExample(detailTool) }}</pre>
             </div>
           </div>
@@ -464,8 +462,8 @@ function getPopupContainer() {
   return document.body
 }
 
-const toolTypeLabels = { builtin: '内置', knowledge: '知识库', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
-const typeColors = { builtin: '#171717', knowledge: '#7c3aed', custom: '#0070f3', api: '#10b981', mcp: '#8b5cf6' }
+const toolTypeLabels = { builtin: '内置', knowledge: '知识库', api: 'API调用' }
+const typeColors = { builtin: '#171717', knowledge: '#7c3aed', api: '#10b981' }
 
 const list = ref([])
 const loading = ref(false)
@@ -479,7 +477,7 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({
   id: null, name: '', displayName: '', description: '',
-  toolType: 'custom', endpointUrl: '', authType: 'none',
+  toolType: 'api', endpointUrl: '', authType: 'none',
   inputSchema: '{}', outputSchema: '{}', outputExample: '{}', authConfig: '{}', config: '{}',
   tags: [],
 })
@@ -670,7 +668,7 @@ function openDialog(row) {
     }
     Object.assign(form, {
       ...row,
-      toolType: row.toolType?.code || row.toolType || 'custom',
+      toolType: row.toolType?.code || row.toolType || 'api',
       authType: row.authType?.code || row.authType || 'none',
       tags: parseTags(row.tags),
       outputExample: outputExampleStr,
@@ -679,7 +677,7 @@ function openDialog(row) {
   } else {
     Object.assign(form, {
       id: null, name: '', displayName: '', description: '',
-      toolType: 'custom', endpointUrl: '', authType: 'none',
+      toolType: 'api', endpointUrl: '', authType: 'none',
       inputSchema: '{}', outputSchema: '{}', outputExample: '{}', authConfig: '{}', config: '{}',
       tags: [],
     })
@@ -693,8 +691,20 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const data = {
-      ...form,
+      id: form.id,
+      name: form.name,
+      displayName: form.displayName,
+      description: form.description,
+      toolType: form.toolType,
+      inputSchema: form.inputSchema,
+      outputSchema: form.outputSchema,
+      outputExample: form.outputExample,
+      config: form.config,
+      endpointUrl: form.endpointUrl,
+      authType: form.authType,
+      authConfig: form.authConfig,
       tags: JSON.stringify(form.tags || []),
+      status: form.status,
     }
     if (form.id) {
       await updateTool(data)

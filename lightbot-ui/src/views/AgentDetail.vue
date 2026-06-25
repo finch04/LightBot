@@ -976,61 +976,29 @@
               >{{ opt.label }}</button>
             </div>
             <div class="list-body">
-              <a-popover
+              <div
                 v-for="t in filteredToolList"
                 :key="t.name"
-                trigger="click"
-                placement="right"
-                :overlay-style="{ width: '320px' }"
-                :disabled="isVersionPreview"
+                class="knowledge-item"
+                :class="{ selected: selectedToolIds.has(toBindingId(t.id)), 'is-preview-locked': isVersionPreview }"
+                @click="!isVersionPreview && toggleTool(t)"
               >
-                <template #content>
-                  <div class="card-detail-popover">
-                    <div class="card-detail-header">
-                      <span class="card-detail-name">{{ t.displayName || t.name }}</span>
-                      <a-tag v-if="t.toolType?.code === 'builtin' || t.toolType === 'builtin'" color="green" size="small">内置</a-tag>
-                      <a-tag v-else-if="isKnowledgeTool(t)" color="purple" size="small">知识库</a-tag>
-                      <a-tag v-else color="blue" size="small">自定义</a-tag>
-                    </div>
-                    <div class="card-detail-desc">{{ t.description || '暂无描述' }}</div>
-                    <div v-if="t.name" class="card-detail-meta">
-                      <span class="card-detail-label">标识</span>
-                      <span class="card-detail-value mono">{{ t.name }}</span>
-                    </div>
-                    <div v-if="t.inputSchema" class="card-detail-meta">
-                      <span class="card-detail-label">参数</span>
-                      <span class="card-detail-value mono">{{ summarizeSchema(t.inputSchema) }}</span>
-                    </div>
-                    <button
-                      class="card-detail-toggle"
-                      :class="{ bound: selectedToolIds.has(toBindingId(t.id)) }"
-                      @click.stop="toggleTool(t)"
-                    >
-                      {{ selectedToolIds.has(toBindingId(t.id)) ? '取消绑定' : '绑定' }}
-                    </button>
-                  </div>
-                </template>
-                <div
-                  class="knowledge-item"
-                  :class="{ selected: selectedToolIds.has(toBindingId(t.id)), 'is-preview-locked': isVersionPreview }"
-                >
-                  <div class="item-icon tool-icon-bg">
-                    <span v-if="isKnowledgeTool(t)" class="knowledge-badge">知识库</span>
-                    <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
-                    {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
-                  </div>
-                  <div class="item-info">
-                    <div class="item-name">{{ t.displayName || t.name }}</div>
-                    <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-                      <div class="item-desc">{{ truncateText(t.description, 50) }}</div>
-                    </a-tooltip>
-                    <div v-else class="item-desc">暂无描述</div>
-                  </div>
-                  <div class="item-check" v-if="selectedToolIds.has(toBindingId(t.id))">
-                    <CheckOutlined />
-                  </div>
+                <div class="item-icon tool-icon-bg">
+                  <span v-if="isKnowledgeTool(t)" class="knowledge-badge">知识库</span>
+                  <span v-else-if="(t.toolType?.code || t.toolType) === 'builtin'" class="builtin-badge">内置</span>
+                  {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
                 </div>
-              </a-popover>
+                <div class="item-info">
+                  <div class="item-name">{{ t.displayName || t.name }}</div>
+                  <a-tooltip v-if="t.description" :title="t.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(t.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
+                </div>
+                <div class="item-check" v-if="selectedToolIds.has(toBindingId(t.id))">
+                  <CheckOutlined />
+                </div>
+              </div>
               <div v-if="filteredToolList.length === 0" class="empty-tip">
                 暂无可用工具
               </div>
@@ -1174,57 +1142,27 @@
               </a-input>
             </div>
             <div class="list-body">
-              <a-popover
+              <div
                 v-for="s in filteredMcpServerList"
                 :key="s.id"
-                trigger="click"
-                placement="right"
-                :overlay-style="{ width: '320px' }"
-                :disabled="isVersionPreview"
+                class="knowledge-item"
+                :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
+                @click="!isVersionPreview && toggleMcpServer(s)"
               >
-                <template #content>
-                  <div class="card-detail-popover">
-                    <div class="card-detail-header">
-                      <span class="card-detail-name">{{ s.name }}</span>
-                      <a-tag v-if="s.transportType" color="purple" size="small">{{ s.transportType }}</a-tag>
-                    </div>
-                    <div class="card-detail-desc">{{ s.description || '暂无描述' }}</div>
-                    <div v-if="s.baseUrl" class="card-detail-meta">
-                      <span class="card-detail-label">地址</span>
-                      <span class="card-detail-value mono">{{ s.baseUrl }}</span>
-                    </div>
-                    <div v-if="s.toolCount != null" class="card-detail-meta">
-                      <span class="card-detail-label">工具数</span>
-                      <span class="card-detail-value">{{ s.toolCount }} 个</span>
-                    </div>
-                    <button
-                      class="card-detail-toggle"
-                      :class="{ bound: selectedMcpServerIds.has(toBindingId(s.id)) }"
-                      @click.stop="toggleMcpServer(s)"
-                    >
-                      {{ selectedMcpServerIds.has(toBindingId(s.id)) ? '取消绑定' : '绑定' }}
-                    </button>
-                  </div>
-                </template>
-                <div
-                  class="knowledge-item"
-                  :class="{ selected: selectedMcpServerIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
-                >
-                  <div class="item-icon mcp-icon-bg">
-                    {{ (s.name || 'M')[0].toUpperCase() }}
-                  </div>
-                  <div class="item-info">
-                    <div class="item-name">{{ s.name }}</div>
-                    <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-                      <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
-                    </a-tooltip>
-                    <div v-else class="item-desc">暂无描述</div>
-                  </div>
-                  <div class="item-check" v-if="selectedMcpServerIds.has(toBindingId(s.id))">
-                    <CheckOutlined />
-                  </div>
+                <div class="item-icon mcp-icon-bg">
+                  {{ (s.name || 'M')[0].toUpperCase() }}
                 </div>
-              </a-popover>
+                <div class="item-info">
+                  <div class="item-name">{{ s.name }}</div>
+                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
+                </div>
+                <div class="item-check" v-if="selectedMcpServerIds.has(toBindingId(s.id))">
+                  <CheckOutlined />
+                </div>
+              </div>
               <div v-if="filteredMcpServerList.length === 0" class="empty-tip">
                 暂无可用 MCP Server
               </div>
@@ -1280,61 +1218,31 @@
               </a-input>
             </div>
             <div class="list-body">
-              <a-popover
+              <div
                 v-for="s in filteredSubAgentList"
                 :key="s.id"
-                trigger="click"
-                placement="right"
-                :overlay-style="{ width: '320px' }"
-                :disabled="isVersionPreview"
+                class="subagent-item"
+                :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
+                @click="!isVersionPreview && toggleSubAgent(s)"
               >
-                <template #content>
-                  <div class="card-detail-popover">
-                    <div class="card-detail-header">
-                      <span class="card-detail-name">{{ s.displayName || s.name }}</span>
-                      <a-tag v-if="s.isBuiltin === 1" color="green" size="small">内置</a-tag>
-                    </div>
-                    <div class="card-detail-desc">{{ s.description || '暂无描述' }}</div>
-                    <div v-if="s.name" class="card-detail-meta">
-                      <span class="card-detail-label">标识</span>
-                      <span class="card-detail-value mono">{{ s.name }}</span>
-                    </div>
-                    <div v-if="s.tools" class="card-detail-meta">
-                      <span class="card-detail-label">工具</span>
-                      <span class="card-detail-value">{{ parseToolsList(s.tools) }}</span>
-                    </div>
-                    <button
-                      class="card-detail-toggle"
-                      :class="{ bound: selectedSubAgentIds.has(toBindingId(s.id)) }"
-                      @click.stop="toggleSubAgent(s)"
-                    >
-                      {{ selectedSubAgentIds.has(toBindingId(s.id)) ? '取消绑定' : '绑定' }}
-                    </button>
-                  </div>
-                </template>
-                <div
-                  class="subagent-item"
-                  :class="{ selected: selectedSubAgentIds.has(toBindingId(s.id)), 'is-preview-locked': isVersionPreview }"
-                >
-                  <div class="item-icon subagent-icon">
-                    <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
-                    {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
-                  </div>
-                  <div class="item-info">
-                    <div class="item-name">{{ s.displayName }}</div>
-                    <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-                      <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
-                    </a-tooltip>
-                    <div v-else class="item-desc">暂无描述</div>
-                    <div class="item-tools" v-if="s.tools && JSON.parse(s.tools).length > 0">
-                      工具: {{ JSON.parse(s.tools).join(', ') }}
-                    </div>
-                  </div>
-                  <div class="item-check" v-if="selectedSubAgentIds.has(toBindingId(s.id))">
-                    <CheckOutlined />
+                <div class="item-icon subagent-icon">
+                  <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+                  {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
+                </div>
+                <div class="item-info">
+                  <div class="item-name">{{ s.displayName }}</div>
+                  <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(s.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
+                  <div class="item-tools" v-if="s.tools && JSON.parse(s.tools).length > 0">
+                    工具: {{ JSON.parse(s.tools).join(', ') }}
                   </div>
                 </div>
-              </a-popover>
+                <div class="item-check" v-if="selectedSubAgentIds.has(toBindingId(s.id))">
+                  <CheckOutlined />
+                </div>
+              </div>
               <div v-if="filteredSubAgentList.length === 0" class="empty-tip">
                 暂无可用 SubAgent
               </div>
@@ -2124,7 +2032,7 @@ const toolList = tools.list
 const toolSearchText = tools.searchText
 const toolTypeFilter = ref('')
 const toolTypeList = ref([])
-const toolTypeLabels = { builtin: '内置', knowledge: '知识库', custom: '自定义', api: 'API调用', mcp: 'MCP协议' }
+const toolTypeLabels = { builtin: '内置', knowledge: '知识库', api: 'API调用' }
 const toolTypeOptions = computed(() => {
   const options = [{ value: '', label: '全部' }]
   for (const t of toolTypeList.value) {

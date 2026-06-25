@@ -53,6 +53,11 @@
           }"
         >
           <div :class="['message', messages[virtualRow.index]?.role]">
+            <!-- AI 头像 -->
+            <div v-if="messages[virtualRow.index]?.role === 'assistant'" class="message-avatar">
+              <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="message-avatar-img" />
+              <span v-else class="message-avatar-initial">{{ (currentAgent?.name || 'A')[0].toUpperCase() }}</span>
+            </div>
             <div class="message-body">
               <!-- 编辑模式：独立于 message-content-wrapper，占满整行 -->
               <div v-if="editingMessageId === messages[virtualRow.index]._id" class="edit-message-outer">
@@ -1867,6 +1872,33 @@ watch(sessionId, (newVal, oldVal) => {
   margin: 0 auto;
   width: 100%;
 }
+.message.assistant {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.message-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7928ca, #ff0080);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+}
+.message-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.message-avatar-initial {
+  line-height: 1;
+}
 .message-body {
   min-width: 0;
 }
@@ -2224,6 +2256,14 @@ watch(sessionId, (newVal, oldVal) => {
 .btn-agent-initial {
   font-size: 14px;
   font-weight: 600;
+  background: linear-gradient(135deg, #7928ca, #ff0080);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
 }
 
 /* Agent 下拉菜单项 */
@@ -2238,14 +2278,17 @@ watch(sessionId, (newVal, oldVal) => {
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
+}
+span.agent-menu-icon {
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  background: #f4f4f5;
-  color: #52525b;
-  flex-shrink: 0;
+  line-height: 1;
+  background: linear-gradient(135deg, #7928ca, #ff0080);
+  color: #fff;
 }
 .agent-menu-icon.default-icon {
   background: #0070f3;

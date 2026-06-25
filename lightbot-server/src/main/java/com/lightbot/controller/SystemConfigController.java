@@ -5,12 +5,14 @@ import com.lightbot.dto.DefaultAiConfigDTO;
 import com.lightbot.dto.DefaultModelsConfigDTO;
 import jakarta.validation.Valid;
 import com.lightbot.service.SystemConfigService;
+import com.lightbot.service.TokenBudgetService;
 import com.lightbot.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,6 +28,7 @@ import java.util.Map;
 public class SystemConfigController {
 
     private final SystemConfigService systemConfigService;
+    private final TokenBudgetService tokenBudgetService;
     private final UserService userService;
 
     @Operation(summary = "获取默认AI配置（兼容旧接口，等同于默认对话模型）")
@@ -108,5 +111,34 @@ public class SystemConfigController {
     @GetMapping("/health")
     public Result<Map<String, String>> health() {
         return Result.ok(Map.of("status", "ok"));
+    }
+
+    // ========== Token 预算管理 ==========
+
+    @Operation(summary = "获取 Token 限额配置")
+    @GetMapping("/token-budget/config")
+    public Result<Map<String, Object>> getTokenBudgetConfig() {
+        return Result.ok(tokenBudgetService.getConfig());
+    }
+
+    @Operation(summary = "更新 Token 限额配置")
+    @PutMapping("/token-budget/config")
+    public Result<Void> updateTokenBudgetConfig(@RequestBody Map<String, Object> config) {
+        userService.checkAdmin();
+        tokenBudgetService.updateConfig(config);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取全局 Token 使用统计")
+    @GetMapping("/token-budget/stats")
+    public Result<Map<String, Object>> getTokenBudgetStats() {
+        return Result.ok(tokenBudgetService.getGlobalStats());
+    }
+
+    @Operation(summary = "获取用户 Token 消耗排行")
+    @GetMapping("/token-budget/ranking")
+    public Result<List<Map<String, Object>>> getTokenBudgetRanking(
+            @RequestParam(defaultValue = "20") int limit) {
+        return Result.ok(tokenBudgetService.getUserRanking(limit));
     }
 }

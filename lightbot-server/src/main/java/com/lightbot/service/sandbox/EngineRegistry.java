@@ -41,11 +41,27 @@ public class EngineRegistry {
     public CodeEngine resolve(String language) {
         String lang = normalizeLanguage(language);
         List<CodeEngine> candidates = engines.getOrDefault(lang, List.of());
+        if (candidates.isEmpty()) {
+            throw new BizException(ErrorCode.SANDBOX_ENGINE_NOT_FOUND,
+                    "不支持的编程语言: " + language + "（目前支持: " + String.join(", ", availableLanguages()) + "）");
+        }
         return candidates.stream()
                 .filter(CodeEngine::isAvailable)
                 .findFirst()
                 .orElseThrow(() -> new BizException(ErrorCode.SANDBOX_ENGINE_NOT_FOUND,
-                        "不支持的编程语言: " + language));
+                        buildEnvErrorMessage(lang)));
+    }
+
+    /**
+     * 构建环境不可用的详细错误信息
+     */
+    private String buildEnvErrorMessage(String lang) {
+        return switch (lang) {
+            case "python" -> "Python 执行环境不可用：服务器未安装 Python 3，请联系管理员安装 Python 3.8+ 后重试";
+            case "javascript" -> "JavaScript 执行环境不可用：JVM 未包含 Nashorn 引擎，请确认使用 JDK 内置 Nashorn 或引入 org.openjdk.nashorn:nashorn-core 依赖";
+            case "java" -> "Java 执行环境不可用：Janino 编译器未正确加载，请确认 org.codehaus.janino:janino 依赖已引入";
+            default -> "「" + lang + "」执行环境不可用，请联系管理员检查运行环境";
+        };
     }
 
     /**

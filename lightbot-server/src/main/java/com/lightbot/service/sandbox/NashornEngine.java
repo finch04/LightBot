@@ -69,7 +69,8 @@ public class NashornEngine implements CodeEngine {
         if (engine == null) {
             return CodeExecResult.builder()
                     .success(false)
-                    .error("未找到 JavaScript 引擎")
+                    .error("JavaScript 引擎初始化失败：当前 JVM 未包含 Nashorn 引擎。"
+                            + "JDK 15+ 已移除内置 Nashorn，请引入依赖 org.openjdk.nashorn:nashorn-core:15.4")
                     .elapsedMs(System.currentTimeMillis() - start)
                     .language("javascript")
                     .build();
@@ -112,10 +113,11 @@ public class NashornEngine implements CodeEngine {
                 } catch (Exception e) {
                     String output = truncateOutput(outputBuf.toString(StandardCharsets.UTF_8));
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    String errMsg = sanitizeError(cause.getMessage());
                     return CodeExecResult.builder()
                             .success(false)
                             .output(output)
-                            .error("执行错误: " + sanitizeError(cause.getMessage()))
+                            .error("执行错误: " + errMsg + hintForError(errMsg))
                             .elapsedMs(System.currentTimeMillis() - start)
                             .language("javascript")
                             .build();
@@ -169,5 +171,19 @@ public class NashornEngine implements CodeEngine {
         if (message == null) return "未知错误";
         return message.replaceAll("[A-Z]:\\\\[\\S]+", "<path>")
                 .replaceAll("/[a-z]+/[a-z]+/[\\S]+", "<path>");
+    }
+
+    /**
+     * 为常见语法错误追加提示
+     */
+    private String hintForError(String message) {
+        if (message == null) return "";
+        if (message.contains("const") || message.contains("let")) {
+            return " 提示：Nashorn 引擎仅支持 ES5 语法，请使用 var 声明变量，不要使用 const/let/箭头函数";
+        }
+        if (message.contains("Unexpected token") && message.contains("=>")) {
+            return " 提示：Nashorn 引擎不支持箭头函数，请使用 function(){} 语法";
+        }
+        return "";
     }
 }

@@ -51,6 +51,8 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
 
     private final ApplicationContext applicationContext;
     private final com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer;
+    private final ApiToolExecutionService apiToolExecutionService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /** 启动时扫描缓存的内置 ToolCallback 列表 */
     private volatile List<ToolCallback> cachedBuiltinCallbacks;
@@ -59,9 +61,14 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
     @Lazy
     private AgentService agentService;
 
-    public ToolServiceImpl(ApplicationContext applicationContext, com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer) {
+    public ToolServiceImpl(ApplicationContext applicationContext,
+                           com.lightbot.util.ToolArgsSanitizer toolArgsSanitizer,
+                           ApiToolExecutionService apiToolExecutionService,
+                           com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.applicationContext = applicationContext;
         this.toolArgsSanitizer = toolArgsSanitizer;
+        this.apiToolExecutionService = apiToolExecutionService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -92,6 +99,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         tool.setToolType(request.getToolType());
         tool.setInputSchema(request.getInputSchema());
         tool.setOutputSchema(request.getOutputSchema());
+        tool.setOutputExample(request.getOutputExample());
         tool.setConfig(request.getConfig());
         tool.setEndpointUrl(request.getEndpointUrl());
         tool.setAuthType(request.getAuthType());
@@ -127,11 +135,13 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         tool.setToolType(request.getToolType());
         tool.setInputSchema(request.getInputSchema());
         tool.setOutputSchema(request.getOutputSchema());
+        tool.setOutputExample(request.getOutputExample());
         tool.setConfig(request.getConfig());
         tool.setEndpointUrl(request.getEndpointUrl());
         tool.setAuthType(request.getAuthType());
         tool.setAuthConfig(request.getAuthConfig());
         tool.setTags(request.getTags());
+        tool.setStatus(request.getStatus());
         updateById(tool);
         return tool;
     }
@@ -244,7 +254,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                         .findFirst()
                         .ifPresent(result::add);
             } else if (tool.getToolType() == ToolType.API) {
-                log.info("[ToolService] API工具暂不支持自动执行: name={}", tool.getName());
+                result.add(new ApiToolCallback(tool, apiToolExecutionService, objectMapper));
             }
         }
         return result;
@@ -277,7 +287,7 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
                         .findFirst()
                         .ifPresent(result::add);
             } else if (tool.getToolType() == ToolType.API) {
-                log.info("[ToolService] API工具暂不支持自动执行: name={}", tool.getName());
+                result.add(new ApiToolCallback(tool, apiToolExecutionService, objectMapper));
             }
         }
         return result;

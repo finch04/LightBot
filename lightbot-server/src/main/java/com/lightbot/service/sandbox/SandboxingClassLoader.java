@@ -38,6 +38,8 @@ public class SandboxingClassLoader extends ClassLoader {
     private boolean isAllowed(String className) {
         // 基本类型和数组始终允许
         if (className.startsWith("[")) return true;
+        // 沙盒编译产物（Sandbox_ 开头的类）始终允许
+        if (className.startsWith("Sandbox_")) return true;
         for (String pkg : ALLOWED_PACKAGES) {
             if (className.startsWith(pkg)) {
                 return true;

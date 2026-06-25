@@ -103,6 +103,9 @@ public enum ErrorCode {
     TOOL_NAME_EXISTS(91002, "工具标识已存在", HttpStatus.BAD_REQUEST),
     TOOL_NOT_EDITABLE(91003, "知识库工具由系统自动管理，不可编辑", HttpStatus.BAD_REQUEST),
     TOOL_NOT_DELETABLE(91004, "知识库工具由系统自动管理，不可删除", HttpStatus.BAD_REQUEST),
+    TOOL_MISSING_PARAM(91005, "缺少必填参数", HttpStatus.BAD_REQUEST),
+    TOOL_EXEC_FAILED(91006, "工具执行失败", HttpStatus.INTERNAL_SERVER_ERROR),
+    TOOL_SSRF_BLOCKED(91007, "禁止访问内网地址", HttpStatus.BAD_REQUEST),
 
     // ========== SubAgent模块 ==========
     SUBAGENT_NOT_FOUND(91101, "SubAgent不存在", HttpStatus.BAD_REQUEST),
