@@ -273,7 +273,7 @@ onUnmounted(() => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -331,14 +331,14 @@ onUnmounted(() => {
 .btn-primary:hover { background: #27272a; }
 .btn-cancel {
   padding: 8px 16px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.btn-cancel:hover { border-color: var(--color-ink); color: var(--color-ink); }
 
 .filter-bar {
   display: flex;
@@ -353,9 +353,9 @@ onUnmounted(() => {
 }
 .level-btn {
   padding: 4px 12px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
-  background: #fff;
+  background: var(--color-canvas);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -373,7 +373,7 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   overflow: hidden;
@@ -384,15 +384,15 @@ onUnmounted(() => {
   table-layout: fixed;
 }
 .log-table thead {
-  background: #f9fafb;
+  background: var(--color-canvas-soft-2);
 }
 .log-table th {
   padding: 10px 12px;
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #52525b;
-  border-bottom: 1px solid #ebebeb;
+  color: var(--color-body);
+  border-bottom: 1px solid var(--color-hairline);
   white-space: nowrap;
 }
 .log-table-body {
@@ -402,8 +402,8 @@ onUnmounted(() => {
 .log-table td {
   padding: 8px 12px;
   font-size: 13px;
-  color: #3f3f46;
-  border-bottom: 1px solid #f4f4f5;
+  color: var(--color-ink);
+  border-bottom: 1px solid var(--color-hairline);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -413,16 +413,16 @@ onUnmounted(() => {
   transition: background 0.1s;
 }
 .log-row:hover {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
 }
 .log-row.error {
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 .log-row.error:hover {
-  background: #fee2e2;
+  background: var(--color-error-bg);
 }
 .log-row.warn {
-  background: #fffbeb;
+  background: var(--color-warn-bg);
 }
 
 .level-tag {
@@ -432,10 +432,10 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 600;
 }
-.level-tag.info { background: #dbeafe; color: #1d4ed8; }
-.level-tag.debug { background: #ede9fe; color: #6d28d9; }
-.level-tag.warn { background: #fef3c7; color: #b45309; }
-.level-tag.error { background: #fee2e2; color: #dc2626; }
+.level-tag.info { background: var(--color-info-bg); color: #1d4ed8; }
+.level-tag.debug { background: var(--color-purple-bg); color: #6d28d9; }
+.level-tag.warn { background: var(--color-warn-bg-deep); color: #b45309; }
+.level-tag.error { background: var(--color-error-bg); color: #dc2626; }
 
 .logger-cell {
   font-family: 'Consolas', 'Monaco', monospace;
@@ -448,7 +448,7 @@ onUnmounted(() => {
 }
 .empty-cell {
   text-align: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
   padding: 48px 12px !important;
 }
 
@@ -456,7 +456,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: 8px 0;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   text-align: right;
 }
 
@@ -479,10 +479,10 @@ onUnmounted(() => {
 .detail-message {
   margin: 0;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
   font-size: 13px;
-  color: #3f3f46;
+  color: var(--color-ink);
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 200px;
@@ -492,7 +492,7 @@ onUnmounted(() => {
 .detail-stack {
   margin: 0;
   padding: 12px;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-radius: 6px;
   font-size: 12px;
   color: #dc2626;

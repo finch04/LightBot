@@ -427,14 +427,14 @@ function formatTime(t) {
 .user-name-cell {
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .user-username-cell {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .action-btns {
   display: flex;
@@ -452,11 +452,11 @@ function formatTime(t) {
   font-size: 14px;
 }
 .btn-icon:hover {
-  background: #f4f4f5;
-  color: var(--color-primary);
+  background: var(--color-canvas-soft-2);
+  color: var(--color-ink);
 }
 .btn-icon.danger:hover {
-  background: #fee2e2;
+  background: var(--color-error-bg);
   color: #ef4444;
 }
 
@@ -467,7 +467,7 @@ function formatTime(t) {
   gap: 16px;
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #ebebeb;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .detail-avatar {
   width: 56px;
@@ -494,12 +494,12 @@ function formatTime(t) {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .detail-user-info p {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .detail-rows {
   display: flex;
@@ -519,7 +519,7 @@ function formatTime(t) {
 }
 .detail-value {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .detail-resources {
   margin-bottom: 24px;
@@ -527,12 +527,12 @@ function formatTime(t) {
 .detail-resources h4 {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 12px;
 }
 .resource-empty {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   padding: 12px 0;
 }
 .resource-list {
@@ -547,7 +547,7 @@ function formatTime(t) {
   padding: 10px 12px;
   background: var(--color-canvas-soft);
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
 }
 .resource-icon {
   font-size: 16px;
@@ -564,14 +564,14 @@ function formatTime(t) {
 .resource-name {
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .resource-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 2px;
   display: flex;
   align-items: center;

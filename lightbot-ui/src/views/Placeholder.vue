@@ -27,7 +27,7 @@ const route = useRoute()
 .placeholder h2 {
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .placeholder p {

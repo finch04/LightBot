@@ -129,7 +129,7 @@ async function handleLogin() {
   left: 0;
   right: 0;
   z-index: 1000;
-  background: #fff2f0;
+  background: var(--color-error-bg);
   border-bottom: 1px solid #ffccc7;
   padding: 10px 16px;
   text-align: center;
@@ -142,7 +142,7 @@ async function handleLogin() {
   display: flex;
   width: 900px;
   height: 560px;
-  background: #ffffff;
+  background: var(--color-canvas);
   border-radius: 12px;
   box-shadow: 0px 1px 1px rgba(0,0,0,0.02), 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
   overflow: hidden;
@@ -190,7 +190,7 @@ async function handleLogin() {
 
 .form-header p {
   font-size: 14px;
-  color: #8c8c8c;
+  color: var(--color-mute);
   margin: 0;
 }
 
@@ -221,20 +221,20 @@ async function handleLogin() {
   border-radius: 6px;
   padding: 0 10px;
   transition: all 0.2s;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 
 .input-wrapper:hover {
-  border-color: #a1a1aa;
+  border-color: var(--color-mute);
 }
 
 .input-wrapper:focus-within {
-  border-color: var(--color-primary);
+  border-color: var(--color-ink);
   box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
 }
 
 .input-icon {
-  color: #bfbfbf;
+  color: var(--color-mute);
   font-size: 14px;
   margin-right: 8px;
 }
@@ -250,7 +250,7 @@ async function handleLogin() {
 }
 
 .input-wrapper input::placeholder {
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 /* 登录按钮 */
@@ -289,7 +289,7 @@ async function handleLogin() {
   margin-top: 16px;
   text-align: center;
   font-size: 14px;
-  color: #8c8c8c;
+  color: var(--color-mute);
 }
 
 .form-footer .link {
@@ -310,17 +310,17 @@ async function handleLogin() {
   right: 0;
   text-align: center;
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--color-mute);
 }
 
 .page-footer a {
-  color: #8c8c8c;
+  color: var(--color-mute);
   text-decoration: none;
   transition: color 0.15s;
 }
 
 .page-footer a:hover {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .page-footer .divider {
@@ -333,7 +333,7 @@ async function handleLogin() {
 }
 
 .footer-copyright {
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 /* 响应式 */

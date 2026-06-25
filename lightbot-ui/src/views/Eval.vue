@@ -165,10 +165,10 @@
                 <template v-for="(name, i) in record.evaluatorNameList.slice(0, 2)" :key="i">
                   <a v-if="record.evaluatorIdList?.[i]" @click.stop="router.push(`/app/eval/evaluators/${record.evaluatorIdList[i]}`)">{{ name }}</a>
                   <span v-else>{{ name }}</span>
-                  <span v-if="i < Math.min(1, record.evaluatorNameList.length - 1)" style="color: #a1a1aa;">、</span>
+                  <span v-if="i < Math.min(1, record.evaluatorNameList.length - 1)" style="color: var(--color-mute);">、</span>
                 </template>
                 <a-tooltip v-if="record.evaluatorNameList.length > 2" :title="record.evaluatorNameList.join('、')">
-                  <span style="color: #a1a1aa; cursor: pointer;">...等{{ record.evaluatorNameList.length }}个</span>
+                  <span style="color: var(--color-mute); cursor: pointer;">...等{{ record.evaluatorNameList.length }}个</span>
                 </a-tooltip>
               </template>
               <span v-else>{{ record.evaluatorName || '-' }}</span>
@@ -430,7 +430,7 @@
         <a-button v-if="experimentForm.evaluators.length < 5" type="dashed" size="small" block @click="addExpEvaluator" style="margin-top: 4px;">
           <PlusOutlined /> 添加评估器
         </a-button>
-        <div v-if="experimentForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: #a1a1aa; text-align: center;">最多添加5个评估器</div>
+        <div v-if="experimentForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: var(--color-mute); text-align: center;">最多添加5个评估器</div>
       </div>
 
       <div class="dialog-footer">
@@ -882,7 +882,7 @@ function formatTime(t) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px;
 }
 .page-desc {
@@ -959,7 +959,7 @@ function formatTime(t) {
   gap: 16px;
 }
 .card-item {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -994,7 +994,7 @@ function formatTime(t) {
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1003,7 +1003,7 @@ function formatTime(t) {
 .card-version {
   font-size: 12px;
   color: var(--color-link);
-  background: #e8f4ff;
+  background: var(--color-info-bg);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -1030,7 +1030,7 @@ function formatTime(t) {
 }
 .card-time {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .card-tags { display: flex; gap: 4px; flex-wrap: wrap; }
 .table-actions { display: flex; gap: 4px; }
@@ -1040,7 +1040,7 @@ function formatTime(t) {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;
@@ -1082,7 +1082,7 @@ function formatTime(t) {
 .example-name {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .example-desc-text {
   font-size: 13px;
@@ -1098,12 +1098,12 @@ function formatTime(t) {
 }
 .example-count {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-left: 4px;
 }
-.evaluator-config-block { border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.evaluator-config-block { border: 1px solid var(--color-hairline); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
 .evaluator-config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.evaluator-config-title { font-size: 13px; font-weight: 600; color: var(--color-primary); }
-.evaluator-remove-btn { color: #a1a1aa; cursor: pointer; font-size: 14px; }
+.evaluator-config-title { font-size: 13px; font-weight: 600; color: var(--color-ink); }
+.evaluator-remove-btn { color: var(--color-mute); cursor: pointer; font-size: 14px; }
 .evaluator-remove-btn:hover { color: #ef4444; }
 </style>

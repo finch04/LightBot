@@ -326,7 +326,7 @@ onMounted(loadProfile)
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -339,7 +339,7 @@ onMounted(loadProfile)
   gap: 16px;
 }
 .panel {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -350,7 +350,7 @@ onMounted(loadProfile)
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .btn-primary {
   display: inline-flex;
@@ -398,7 +398,7 @@ onMounted(loadProfile)
   flex-shrink: 0;
 }
 .avatar-preview.has-avatar {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
 }
 .avatar-img {
   width: 100%;
@@ -426,7 +426,7 @@ onMounted(loadProfile)
 }
 .avatar-tip {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .frame-panel {
   grid-column: 1 / -1;
@@ -513,7 +513,7 @@ onMounted(loadProfile)
 }
 .frame-option-label {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
 }
 
 /* 等级选择 */
@@ -550,13 +550,13 @@ onMounted(loadProfile)
 }
 .level-5-option:hover:not(.active),
 .level-6-option:hover:not(.active) {
-  border-color: #e4e4e7;
+  border-color: var(--color-hairline);
   transform: none;
   box-shadow: none;
   background: transparent;
 }
 .level-option-empty {
   font-size: 14px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 </style>

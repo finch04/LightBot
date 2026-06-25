@@ -394,10 +394,10 @@ onUnmounted(() => {
   font-size: 13px;
 }
 .type-filter-item:hover {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
 }
 .type-filter-item.active {
-  background: #f0f0f0;
+  background: var(--color-canvas-soft-3);
   outline: 2px solid #1677ff;
   outline-offset: -1px;
 }
@@ -448,7 +448,7 @@ onUnmounted(() => {
 }
 .progress-text {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   min-width: 36px;
   text-align: right;
   flex-shrink: 0;
@@ -475,7 +475,7 @@ onUnmounted(() => {
   margin: 0;
   padding: 8px 10px;
   background: var(--color-canvas-soft);
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 4px;
   font-family: 'Geist Mono', 'Menlo', monospace;
   font-size: 12px;

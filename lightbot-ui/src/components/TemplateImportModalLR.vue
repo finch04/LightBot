@@ -223,13 +223,13 @@ onMounted(() => {
 
 .template-item.selected {
   border-color: var(--color-link);
-  background: #f0f7ff;
+  background: var(--color-info-bg);
 }
 
 .template-item-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 
@@ -250,13 +250,13 @@ onMounted(() => {
 .template-list-empty {
   text-align: center;
   padding: 40px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 
 .template-manage-link {
   padding-top: 12px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 12px;
 }
 
@@ -290,7 +290,7 @@ onMounted(() => {
 .preview-header h4 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px 0;
 }
 
@@ -307,7 +307,7 @@ onMounted(() => {
 .preview-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 
@@ -315,7 +315,7 @@ onMounted(() => {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
   line-height: 1.6;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
@@ -330,7 +330,7 @@ onMounted(() => {
 .preview-config {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
-  background: #fff;
+  background: var(--color-canvas);
   padding: 10px;
   border-radius: 6px;
   border: 1px solid var(--color-hairline);
@@ -344,7 +344,7 @@ onMounted(() => {
   justify-content: center;
   height: 100%;
   min-height: 300px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .template-preview-empty .empty-icon {
@@ -362,7 +362,7 @@ onMounted(() => {
   justify-content: space-between;
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
 }
 
 .dialog-footer-left {
@@ -376,7 +376,7 @@ onMounted(() => {
 }
 .template-tip {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-left: 12px;
 }
 

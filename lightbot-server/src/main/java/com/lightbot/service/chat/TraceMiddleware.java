@@ -24,6 +24,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -45,7 +46,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TraceMiddleware implements ChatMiddleware {
 
-    private final TaskExecutor taskExecutor;
+    private final ThreadPoolTaskExecutor taskExecutor;
     private final LlmTraceService llmTraceService;
     private final ProviderResolver providerResolver;
     private final ModelFactory modelFactory;

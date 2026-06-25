@@ -241,14 +241,14 @@ watch(() => props.modelType, loadOptions)
   width: 20px;
   height: 20px;
   cursor: pointer;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
   border-radius: 3px;
   transition: color 0.15s, background 0.15s;
 }
 .suffix-icon-btn:hover {
-  color: var(--color-primary);
-  background: #f4f4f5;
+  color: var(--color-ink);
+  background: var(--color-canvas-soft-2);
 }
 .suffix-icon-btn.disabled {
   color: #d4d4d8;

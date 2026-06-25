@@ -88,7 +88,7 @@ function onDragStart(event, nodeType) {
 <style scoped>
 .node-palette {
   width: 200px;
-  background: #fff;
+  background: var(--color-canvas);
   border-right: 1px solid #e8e8e8;
   padding: 16px;
 }
@@ -110,7 +110,7 @@ function onDragStart(event, nodeType) {
   display: flex;
   align-items: center;
   padding: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-hairline);
   border-radius: 4px;
   cursor: grab;
   transition: all 0.2s;
@@ -118,7 +118,7 @@ function onDragStart(event, nodeType) {
 
 .node-item:hover {
   border-color: #1890ff;
-  background: #f0f7ff;
+  background: var(--color-info-bg);
 }
 
 .node-item:active {

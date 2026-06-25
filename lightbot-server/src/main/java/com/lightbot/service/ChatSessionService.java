@@ -108,4 +108,13 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @param agentId AgentID
      */
     void deleteByAgentId(Long agentId);
+
+    /**
+     * 导出会话为 Markdown 或 JSON 格式
+     *
+     * @param sessionId 会话ID
+     * @param format    格式：markdown 或 json
+     * @return 文件内容字符串
+     */
+    String exportSession(Long sessionId, String format);
 }

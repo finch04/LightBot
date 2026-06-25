@@ -31,6 +31,10 @@ export function deleteAgent(id) {
   return request.delete(`/agents/${id}`)
 }
 
+export function cloneAgent(id) {
+  return request.post(`/agents/${id}/clone`)
+}
+
 export function updateAgentKnowledge(id, knowledgeIds) {
   return request.put(`/agents/${id}/knowledge`, knowledgeIds)
 }

@@ -237,17 +237,17 @@ onMounted(loadBenchmarks)
 .benchmarks-empty { text-align: center; color: #999; padding: 40px 0; }
 .benchmark-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .benchmark-card {
-  border: 1px solid #e8e8e8; border-radius: 6px; padding: 12px;
+  border: 1px solid var(--color-hairline); border-radius: 6px; padding: 12px;
   display: flex; flex-direction: column; gap: 6px;
 }
 .benchmark-generating {
   border-color: #91caff;
-  background: #e6f4ff;
+  background: var(--color-info-bg);
 }
 .benchmark-card-header { display: flex; justify-content: space-between; align-items: center; }
 .benchmark-card-left { display: flex; align-items: center; gap: 8px; }
 .benchmark-name { font-weight: 500; }
-.benchmark-count { color: #666; font-size: 12px; background: #f0f0f0; padding: 2px 8px; border-radius: 4px; }
+.benchmark-count { color: #666; font-size: 12px; background: var(--color-canvas-soft-3); padding: 2px 8px; border-radius: 4px; }
 .benchmark-desc { color: #888; font-size: 12px; }
 .benchmark-card-actions { display: flex; gap: 12px; }
 .action-icon { cursor: pointer; color: #666; font-size: 14px; }
@@ -255,7 +255,7 @@ onMounted(loadBenchmarks)
 .action-danger:hover { color: #ff4d4f; }
 .preview-summary {
   display: flex; gap: 24px; margin-bottom: 12px; padding: 8px 12px;
-  background: #f6f8fa; border-radius: 6px; font-size: 13px; color: #333;
+  background: var(--color-canvas-soft-2); border-radius: 6px; font-size: 13px; color: #333;
 }
 .preview-summary strong { margin-left: 4px; }
 .cell-ellipsis {

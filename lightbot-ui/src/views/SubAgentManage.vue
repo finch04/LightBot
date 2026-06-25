@@ -474,7 +474,7 @@ defineExpose({ openDialog, search, refresh })
 
 <style scoped>
 .subagent-manage {
-  background: #fff;
+  background: var(--color-canvas);
   border-radius: 12px;
   padding: 20px;
 }
@@ -542,7 +542,7 @@ defineExpose({ openDialog, search, refresh })
   grid-column: 1 / -1;
   text-align: center;
   padding: 48px 24px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;
@@ -578,7 +578,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-value {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .detail-prompt {
   margin-top: 8px;
@@ -586,7 +586,7 @@ defineExpose({ openDialog, search, refresh })
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 300px;
@@ -595,7 +595,7 @@ defineExpose({ openDialog, search, refresh })
 
 .help-icon {
   margin-left: 8px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 16px;
   vertical-align: middle;
@@ -608,7 +608,7 @@ defineExpose({ openDialog, search, refresh })
   justify-content: space-between;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 8px;
 }
 .dialog-footer-left {
@@ -621,16 +621,16 @@ defineExpose({ openDialog, search, refresh })
 }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .guide {
   max-height: 60vh;
@@ -645,18 +645,18 @@ defineExpose({ openDialog, search, refresh })
 .guide-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .guide-section p {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.6;
   margin: 0 0 8px;
 }
 .guide-section code {
   font-size: 12px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 1px 4px;
   border-radius: 4px;
 }
@@ -669,7 +669,7 @@ defineExpose({ openDialog, search, refresh })
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fffbeb;
+  background: var(--color-warn-bg);
   color: #b45309;
   font-size: 12px;
   font-weight: 600;
@@ -710,20 +710,20 @@ defineExpose({ openDialog, search, refresh })
 }
 .tool-option-name {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   flex-shrink: 0;
 }
 .tool-option-tag {
   font-size: 11px;
   color: var(--color-mute);
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 1px 6px;
   border-radius: 4px;
   flex-shrink: 0;
 }
 .tool-option-desc {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

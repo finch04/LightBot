@@ -96,7 +96,7 @@ function handleConfirm() {
 .tag-add-btn {
   cursor: pointer;
   border-style: dashed;
-  background: #fff;
+  background: var(--color-canvas);
 }
 .tag-add-btn:hover {
   border-color: var(--color-link);

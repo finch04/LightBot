@@ -137,7 +137,7 @@ const drawerVisible = ref(false)
 
   // AI 摘要
   .ws-answer {
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--color-border-blue);
     border-radius: 8px;
     background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
     overflow: hidden;
@@ -220,7 +220,7 @@ const drawerVisible = ref(false)
 
     .ws-item-score {
       font-size: 11px; font-weight: 600; color: #52c41a;
-      background: #f6ffed; border: 1px solid #b7eb8f;
+      background: var(--color-success-bg); border: 1px solid #b7eb8f;
       border-radius: 4px; padding: 0 6px; white-space: nowrap;
       flex-shrink: 0;
     }
@@ -253,7 +253,7 @@ const drawerVisible = ref(false)
 }
 
 .detail-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--gray-150);
   border-radius: 10px;
   padding: 14px 16px;
@@ -280,7 +280,7 @@ const drawerVisible = ref(false)
 
     .detail-card-score {
       font-size: 11px; font-weight: 500; color: #52c41a;
-      background: #f6ffed; border: 1px solid #b7eb8f;
+      background: var(--color-success-bg); border: 1px solid #b7eb8f;
       border-radius: 4px; padding: 1px 8px; white-space: nowrap;
       flex-shrink: 0;
     }

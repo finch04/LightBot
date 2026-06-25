@@ -43,7 +43,7 @@ const handleTitle = computed(() =>
   width: 14px !important;
   height: 14px !important;
   border: 2px solid #6366f1 !important;
-  background: #fff !important;
+  background: var(--color-canvas) !important;
   border-radius: 50% !important;
   transition: width 0.15s, height 0.15s, background 0.15s, border-color 0.15s;
 }

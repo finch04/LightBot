@@ -364,7 +364,7 @@ function resetState() {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
   gap: 8px;
 }
@@ -383,7 +383,7 @@ function resetState() {
 }
 .editor-unsupported-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .editor-body {
   flex: 1;
@@ -391,7 +391,7 @@ function resetState() {
 }
 .editor-char-count {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .btn-icon-only {
   display: inline-flex;
@@ -402,16 +402,16 @@ function resetState() {
   background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-icon-only:hover {
-  background: #f4f4f5;
-  border-color: #d4d4d8;
+  background: var(--color-canvas-soft-2);
+  border-color: var(--color-hairline);
 }
 .btn-icon-only.active {
-  background: #f0f0ff;
+  background: var(--color-purple-bg);
   border-color: #b4b4ff;
   color: #5b5bf0;
 }
@@ -420,7 +420,7 @@ function resetState() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
   background: var(--color-canvas-soft);
 }
 .editor-footer-left {
@@ -438,9 +438,9 @@ function resetState() {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
@@ -475,14 +475,14 @@ function resetState() {
   align-items: center;
   justify-content: center;
   padding: 40px 0;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
   gap: 8px;
 }
 .version-empty {
   text-align: center;
   padding: 40px 0;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
 }
 .version-list {
@@ -506,11 +506,11 @@ function resetState() {
 .version-tag {
   font-weight: 600;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .version-hash {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-family: monospace;
 }
 .version-time {

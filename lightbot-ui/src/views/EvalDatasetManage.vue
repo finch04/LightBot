@@ -255,7 +255,7 @@ async function handleCreateExample(key) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -325,7 +325,7 @@ async function handleCreateExample(key) {
 .card-type {
   font-size: 12px;
   color: var(--color-link);
-  background: #e8f4ff;
+  background: var(--color-info-bg);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -346,13 +346,13 @@ async function handleCreateExample(key) {
 }
 .card-time {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;
@@ -390,7 +390,7 @@ async function handleCreateExample(key) {
 .example-name {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .example-desc-text {
   font-size: 13px;
@@ -406,7 +406,7 @@ async function handleCreateExample(key) {
 }
 .example-count {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-left: 4px;
 }
 </style>

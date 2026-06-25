@@ -103,8 +103,8 @@ defineEmits([
   align-items: center;
   gap: 16px;
   padding: 12px 24px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
 }
 .publish-tag { flex-shrink: 0; }
@@ -114,17 +114,17 @@ defineEmits([
   gap: 4px;
   padding: 8px 16px;
   background: transparent;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  color: #374151;
+  color: var(--color-text-dark);
 }
-.btn-back:hover { background: #f9fafb; }
+.btn-back:hover { background: var(--color-canvas-soft); }
 .workflow-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-ink);
   margin: 0;
 }
 .toolbar-status {
@@ -153,10 +153,10 @@ defineEmits([
   border-radius: 4px;
   transition: background 0.2s;
 }
-.status-error.clickable:hover { background: #fef2f2; }
-.status-empty { color: #9ca3af; font-size: 13px; }
+.status-error.clickable:hover { background: var(--color-error-bg); }
+.status-empty { color: var(--color-mute); font-size: 13px; }
 .error-dropdown {
-  background: #fff;
+  background: var(--color-canvas);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 300px;
@@ -166,8 +166,8 @@ defineEmits([
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
-  border-bottom: 1px solid #e5e7eb;
+  color: var(--color-ink);
+  border-bottom: 1px solid var(--color-hairline);
 }
 .error-list {
   padding: 8px;
@@ -179,22 +179,22 @@ defineEmits([
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-radius: 6px;
   margin-bottom: 6px;
   font-size: 13px;
 }
 .error-node { color: #7c3aed; font-weight: 600; }
 .error-field {
-  color: #6b7280;
-  background: #e5e7eb;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
 }
 .error-msg { color: #dc2626; flex: 1; }
 .toolbar-actions { display: flex; gap: 8px; }
-.btn-validate { color: #6366f1; }
-.auto-save-hint { font-size: 12px; color: #94a3b8; white-space: nowrap; min-width: 128px; text-align: center; }
-.auto-save-hint.saving { color: #6366f1; }
+.btn-validate { color: var(--color-link); }
+.auto-save-hint { font-size: 12px; color: var(--color-mute); white-space: nowrap; min-width: 128px; text-align: center; }
+.auto-save-hint.saving { color: var(--color-link); }
 </style>

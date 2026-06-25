@@ -157,7 +157,7 @@ watch(activeTab, (tab) => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px;
 }
 .page-desc {

@@ -49,7 +49,7 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
   border-left: 3px solid #8b5cf6;
   border-radius: 8px;
   overflow: hidden;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
 
   .lsf-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
@@ -60,12 +60,12 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
   .lsf-header {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px; border-bottom: 1px solid #c4b5fd;
-    background: #ede9fe; font-size: 12px; font-weight: 600; color: #5b21b6;
+    background: var(--color-purple-bg); font-size: 12px; font-weight: 600; color: #5b21b6;
     .lsf-icon { color: #7c3aed; font-size: 14px; }
     .lsf-slug { font-family: monospace; }
     .lsf-count {
       margin-left: auto; font-size: 11px; color: #6d28d9;
-      background: #ede9fe; border: 1px solid #c4b5fd;
+      background: var(--color-purple-bg); border: 1px solid #c4b5fd;
       border-radius: 4px; padding: 0 6px;
     }
   }
@@ -76,7 +76,7 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
     display: flex; align-items: center; gap: 6px;
     padding: 5px 8px; font-size: 12px;
     border: 1px solid #ddd6fe; border-radius: 6px;
-    background: #fff;
+    background: var(--color-canvas);
     &:hover { border-color: #c4b5fd; }
     .lsf-file-icon { color: #7c3aed; font-size: 12px; }
     .lsf-file-name { color: var(--gray-700); font-family: monospace; }

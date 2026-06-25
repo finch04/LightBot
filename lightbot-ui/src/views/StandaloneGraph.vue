@@ -973,7 +973,7 @@ onUnmounted(() => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 
@@ -992,7 +992,7 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--color-mute);
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
@@ -1004,7 +1004,7 @@ onUnmounted(() => {
   font-size: 13px;
   padding: 4px 12px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
 }
 
@@ -1018,7 +1018,7 @@ onUnmounted(() => {
 .neo4j-status.connected {
   color: #16a34a;
   border-color: #bbf7d0;
-  background: #f0fdf4;
+  background: var(--color-success-bg);
 }
 
 .neo4j-status.connected .neo4j-dot {
@@ -1029,7 +1029,7 @@ onUnmounted(() => {
 .neo4j-status.disconnected {
   color: #dc2626;
   border-color: #fecaca;
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 
 .neo4j-status.disconnected .neo4j-dot {
@@ -1074,7 +1074,7 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   min-height: 400px;
-  background: #fff;
+  background: var(--color-canvas);
 }
 
 .sg-canvas {
@@ -1095,7 +1095,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .sg-empty p {
@@ -1104,7 +1104,7 @@ onUnmounted(() => {
 
 .sg-empty-hint {
   font-size: 13px;
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 .sg-detail-actions {
@@ -1140,7 +1140,7 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 .import-field-desc code {
-  background: #f0f0f0;
+  background: var(--color-canvas-soft-3);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
@@ -1155,7 +1155,7 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 .import-rules code {
-  background: #f0f0f0;
+  background: var(--color-canvas-soft-3);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;

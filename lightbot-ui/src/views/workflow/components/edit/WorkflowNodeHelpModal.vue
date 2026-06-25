@@ -57,12 +57,12 @@ const open = defineModel('open', { type: Boolean, default: false })
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.7;
-  color: #374151;
+  color: var(--color-text-dark);
 }
 .node-help-content h4 {
   margin: 16px 0 8px;
   font-size: 15px;
-  color: #1f2937;
+  color: var(--color-ink);
 }
 .node-help-content ul,
 .node-help-content ol {
@@ -73,7 +73,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 .node-help-intro {
   margin: 0 0 12px;
   padding: 10px 12px;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
   border-radius: 8px;
   color: #5b21b6;
 }
@@ -86,7 +86,7 @@ const open = defineModel('open', { type: Boolean, default: false })
   overflow-x: auto;
 }
 .node-help-content code {
-  background: #f3f4f6;
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
@@ -94,8 +94,8 @@ const open = defineModel('open', { type: Boolean, default: false })
 .node-help-tip {
   margin-top: 16px;
   padding: 10px 12px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--color-warn-bg);
+  border: 1px solid var(--color-warn-bg-deep);
   border-radius: 8px;
   color: #92400e;
   font-size: 13px;

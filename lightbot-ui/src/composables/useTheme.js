@@ -1,7 +1,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { theme } from 'ant-design-vue'
 
-const isDark = ref(false)
+const saved = localStorage.getItem('lightbot-theme')
+const isDark = ref(saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches))
 
 export function useTheme() {
   const themeConfig = computed(() => ({

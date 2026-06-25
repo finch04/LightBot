@@ -61,7 +61,7 @@ function formatNumber(n) {
   border-left: 3px solid #8b5cf6;
   border-radius: 8px;
   overflow: hidden;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
 
   .lkb-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
@@ -72,13 +72,13 @@ function formatNumber(n) {
   .lkb-header {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px; border-bottom: 1px solid #c4b5fd;
-    background: #ede9fe; font-size: 12px; font-weight: 600; color: #5b21b6;
+    background: var(--color-purple-bg); font-size: 12px; font-weight: 600; color: #5b21b6;
     .lkb-header-icon { color: #7c3aed; font-size: 14px; }
     .lkb-detail-btn {
       margin-left: auto; appearance: none; border: 1px solid #c4b5fd;
-      border-radius: 4px; background: #fff; color: #7c3aed;
+      border-radius: 4px; background: var(--color-canvas); color: #7c3aed;
       font-size: 11px; padding: 2px 8px; cursor: pointer;
-      &:hover { background: #ede9fe; }
+      &:hover { background: var(--color-purple-bg); }
     }
   }
 
@@ -86,7 +86,7 @@ function formatNumber(n) {
 
   .lkb-item {
     border: 1px solid #ddd6fe; border-radius: 6px;
-    background: #fff; overflow: hidden;
+    background: var(--color-canvas); overflow: hidden;
     &:hover { border-color: #c4b5fd; }
   }
 
@@ -96,7 +96,7 @@ function formatNumber(n) {
     .lkb-item-icon { color: #7c3aed; font-size: 12px; }
     .lkb-item-name { font-size: 12px; font-weight: 500; color: var(--gray-700); flex: 1; }
     .lkb-item-stat {
-      font-size: 11px; color: #6d28d9; background: #ede9fe;
+      font-size: 11px; color: #6d28d9; background: var(--color-purple-bg);
       border-radius: 4px; padding: 0 5px; white-space: nowrap;
     }
   }
@@ -107,14 +107,14 @@ function formatNumber(n) {
   }
 
   .lkb-more-hint {
-    font-size: 11px; color: #6b7280; text-align: center; padding: 4px 0;
+    font-size: 11px; color: var(--color-mute); text-align: center; padding: 4px 0;
   }
 }
 
 .lkb-detail-content {
   margin: 0; padding: 0;
   font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
-  font-size: 12px; line-height: 1.6; color: #1e293b;
+  font-size: 12px; line-height: 1.6; color: var(--color-text-code);
   white-space: pre-wrap; word-break: break-word;
 }
 </style>

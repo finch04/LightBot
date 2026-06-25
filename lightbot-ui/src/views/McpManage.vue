@@ -71,6 +71,10 @@
           <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
             <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
           </a-tooltip>
+          <div v-if="s.lastSyncTime" class="card-sync-time">
+            <SyncOutlined style="font-size: 10px; margin-right: 4px" />
+            <span>同步于 {{ formatSyncTime(s.lastSyncTime) }}</span>
+          </div>
         </div>
       </EntityCard>
     </div>
@@ -687,6 +691,20 @@ function refresh() {
   loadData()
 }
 
+function formatSyncTime(time) {
+  if (!time) return ''
+  const date = new Date(time)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}分钟前`
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `${diffHour}小时前`
+  const diffDay = Math.floor(diffHour / 24)
+  return `${diffDay}天前`
+}
+
 defineExpose({ openDialog, search, refresh })
 </script>
 
@@ -722,7 +740,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .card-desc {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   line-height: 1.5;
 }
 .card-tags {
@@ -747,14 +765,14 @@ defineExpose({ openDialog, search, refresh })
   border: 1px solid #dbeafe;
 }
 .tag-npx {
-  background: #f0fdf4;
+  background: var(--color-success-bg);
   color: #16a34a;
   border: 1px solid #dcfce7;
 }
 .tag-uvx {
-  background: #fef3c7;
+  background: var(--color-warn-bg-deep);
   color: #d97706;
-  border: 1px solid #fde68a;
+  border: 1px solid var(--color-warn-bg-deep);
 }
 .tag-sse {
   background: #fce7f3;
@@ -762,7 +780,7 @@ defineExpose({ openDialog, search, refresh })
   border: 1px solid #fbcfe8;
 }
 .tag-transport {
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
   color: #7c3aed;
   border: 1px solid #ede9fe;
 }
@@ -778,7 +796,7 @@ defineExpose({ openDialog, search, refresh })
   justify-content: space-between;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 8px;
 }
 .dialog-footer-right {
@@ -791,16 +809,16 @@ defineExpose({ openDialog, search, refresh })
 }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .btn-primary-sm {
   padding: 6px 14px;
@@ -824,7 +842,7 @@ defineExpose({ openDialog, search, refresh })
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
 }
 .btn-text {
   display: flex;
@@ -832,10 +850,10 @@ defineExpose({ openDialog, search, refresh })
   gap: 4px;
   padding: 4px 10px;
   background: transparent;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -849,7 +867,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .tools-empty {
   text-align: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
   padding: 40px 0;
 }
 .tools-header {
@@ -858,7 +876,7 @@ defineExpose({ openDialog, search, refresh })
   align-items: center;
   padding: 12px 0;
   margin-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .tools-header-left {
   display: flex;
@@ -868,7 +886,7 @@ defineExpose({ openDialog, search, refresh })
 .tools-server-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .tools-count {
   font-size: 12px;
@@ -882,11 +900,11 @@ defineExpose({ openDialog, search, refresh })
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -915,7 +933,7 @@ defineExpose({ openDialog, search, refresh })
   display: flex;
   flex-direction: column;
   padding: 12px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   margin-bottom: 8px;
 }
@@ -931,11 +949,11 @@ defineExpose({ openDialog, search, refresh })
 .tool-name {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .tool-desc {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -952,11 +970,11 @@ defineExpose({ openDialog, search, refresh })
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -977,11 +995,11 @@ defineExpose({ openDialog, search, refresh })
 .detail-label {
   font-size: 13px;
   font-weight: 500;
-  color: #52525b;
+  color: var(--color-body);
 }
 .detail-value {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .detail-scroll-body {
   max-height: calc(100vh - 260px);
@@ -1012,7 +1030,7 @@ defineExpose({ openDialog, search, refresh })
   overflow-wrap: break-word;
 }
 .schema-table-wrap {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1026,14 +1044,14 @@ defineExpose({ openDialog, search, refresh })
   padding: 10px 12px;
   text-align: left;
   font-weight: 500;
-  color: #52525b;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--color-body);
+  border-bottom: 1px solid var(--color-hairline);
   white-space: nowrap;
 }
 .schema-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  color: var(--color-primary);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-ink);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -1055,7 +1073,7 @@ defineExpose({ openDialog, search, refresh })
   text-align: center;
 }
 .schema-empty {
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
   padding: 16px;
   text-align: center;
@@ -1110,7 +1128,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .help-icon {
   margin-left: 8px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 16px;
   vertical-align: middle;
@@ -1131,12 +1149,12 @@ defineExpose({ openDialog, search, refresh })
 .guide-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .guide p {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.6;
   margin: 0;
 }
@@ -1161,7 +1179,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .guide-step b {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .guide-step p {
   font-size: 12px;
@@ -1169,16 +1187,16 @@ defineExpose({ openDialog, search, refresh })
   margin-top: 2px;
 }
 .guide-code {
-  background: #f9fafb;
-  border: 1px solid #f0f0f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 14px;
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-dark);
   line-height: 1.8;
 }
 .guide-code b {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .guide-code pre {
   background: #1e1e2e;
@@ -1199,10 +1217,17 @@ defineExpose({ openDialog, search, refresh })
   overflow-x: auto;
 }
 .guide code {
-  background: #f0f0f0;
+  background: var(--color-canvas-soft-3);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12px;
   color: #e11d48;
+}
+.card-sync-time {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--color-mute);
+  margin-top: 6px;
 }
 </style>

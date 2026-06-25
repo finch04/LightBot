@@ -222,7 +222,7 @@ function toggleResult(index) {
 .tool-calls-group {
   margin-top: 8px;
   padding: 10px 12px;
-  background: #F9FAFB;
+  background: var(--color-canvas-soft);
   border: 1px solid lightgray;
   border-radius: 8px;
 }

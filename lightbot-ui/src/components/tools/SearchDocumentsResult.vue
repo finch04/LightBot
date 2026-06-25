@@ -127,11 +127,11 @@ const knowledgeBaseCount = computed(() => {
 
 <style lang="less" scoped>
 .search-docs-result {
-  border: 1px solid #93c5fd;
+  border: 1px solid var(--color-border-blue);
   border-left: 3px solid #3b82f6;
   border-radius: 8px;
   overflow: hidden;
-  background: #eff6ff;
+  background: var(--color-info-bg);
 
   .sd-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
@@ -142,18 +142,18 @@ const knowledgeBaseCount = computed(() => {
 
   .sd-header {
     display: flex; align-items: center; gap: 6px;
-    padding: 8px 10px; border-bottom: 1px solid #93c5fd;
-    background: #dbeafe; font-size: 12px; font-weight: 600; color: #1e40af;
-    .sd-header-icon { color: #2563eb; font-size: 14px; }
+    padding: 8px 10px; border-bottom: 1px solid var(--color-border-blue);
+    background: var(--color-info-bg); font-size: 12px; font-weight: 600; color: var(--color-link);
+    .sd-header-icon { color: var(--color-link); font-size: 14px; }
     .sd-detail-btn {
       margin-left: auto;
       appearance: none;
-      border: 1px solid #93c5fd;
+      border: 1px solid var(--color-border-blue);
       border-radius: 6px;
-      background: #fff;
-      color: #2563eb;
-      font-size: 12px; 
-      padding: 6px 12px; 
+      background: var(--color-canvas);
+      color: var(--color-link);
+      font-size: 12px;
+      padding: 6px 12px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -162,7 +162,7 @@ const knowledgeBaseCount = computed(() => {
       transition: all 0.2s ease;
       
       &:hover { 
-        background: #dbeafe; 
+        background: var(--color-info-bg); 
         transform: translateY(-1px);
         box-shadow: 0 2px 6px rgba(37, 99, 235, 0.15);
       }
@@ -177,15 +177,15 @@ const knowledgeBaseCount = computed(() => {
 
   .sd-doc-card {
     display: flex; align-items: center; gap: 8px;
-    padding: 6px 8px; border: 1px solid #bfdbfe;
-    border-radius: 6px; background: #fff;
+    padding: 6px 8px; border: 1px solid var(--color-border-blue);
+    border-radius: 6px; background: var(--color-canvas);
     transition: border-color 0.2s;
-    &:hover { border-color: #93c5fd; }
+    &:hover { border-color: var(--color-border-blue); }
   }
 
   .sd-doc-index {
-    font-size: 11px; color: #2563eb;
-    background: #dbeafe; border-radius: 4px;
+    font-size: 11px; color: var(--color-link);
+    background: var(--color-info-bg); border-radius: 4px;
     padding: 0 5px; min-width: 20px; text-align: center; flex-shrink: 0;
   }
 
@@ -201,16 +201,16 @@ const knowledgeBaseCount = computed(() => {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        color: #1e40af; background: #dbeafe;
+        color: var(--color-link); background: var(--color-info-bg);
         border-radius: 4px; padding: 2px 6px;
       }
     }
   }
 
-  .sd-doc-icon { color: #93c5fd; font-size: 14px; flex-shrink: 0; }
+  .sd-doc-icon { color: var(--color-mute); font-size: 14px; flex-shrink: 0; }
 
   .sd-more-hint {
-    font-size: 11px; color: #6b7280; text-align: center;
+    font-size: 11px; color: var(--color-mute); text-align: center;
     padding: 4px 0;
   }
 }
@@ -222,7 +222,7 @@ const knowledgeBaseCount = computed(() => {
     gap: 16px;
     margin-bottom: 20px;
     padding: 16px;
-    background: #eff6ff;
+    background: var(--color-info-bg);
     border-radius: 8px;
     
     .sd-stat-item {
@@ -235,12 +235,12 @@ const knowledgeBaseCount = computed(() => {
       .sd-stat-value {
         font-size: 24px;
         font-weight: 700;
-        color: #2563eb;
+        color: var(--color-link);
       }
       
       .sd-stat-label {
         font-size: 12px;
-        color: #6b7280;
+        color: var(--color-mute);
       }
     }
   }
@@ -268,13 +268,13 @@ const knowledgeBaseCount = computed(() => {
     align-items: flex-start;
     gap: 12px;
     padding: 14px 16px;
-    background: #fff;
-    border: 1px solid #bfdbfe;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-border-blue);
     border-radius: 8px;
     transition: all 0.2s;
     
     &:hover {
-      border-color: #93c5fd;
+      border-color: var(--color-border-blue);
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
     }
     
@@ -284,8 +284,8 @@ const knowledgeBaseCount = computed(() => {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #dbeafe;
-      color: #2563eb;
+      background: var(--color-info-bg);
+      color: var(--color-link);
       font-size: 13px;
       font-weight: 600;
       border-radius: 6px;
@@ -309,8 +309,8 @@ const knowledgeBaseCount = computed(() => {
         align-items: center;
         gap: 6px;
         font-size: 12px;
-        color: #2563eb;
-        background: #eff6ff;
+        color: var(--color-link);
+        background: var(--color-info-bg);
         padding: 4px 10px;
         border-radius: 4px;
       }

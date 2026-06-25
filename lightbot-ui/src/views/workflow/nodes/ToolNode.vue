@@ -43,7 +43,7 @@ const nodeClass = computed(() => ({
 
 <style scoped>
 .tool-node {
-  background: #fff;
+  background: var(--color-canvas);
   border: 2px solid #059669;
   border-radius: 12px;
   min-width: 180px;
@@ -65,7 +65,7 @@ const nodeClass = computed(() => ({
   gap: 8px;
   padding: 10px 14px;
   background: #ecfdf5;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-hairline);
   border-radius: 10px 10px 0 0;
 }
 
@@ -77,7 +77,7 @@ const nodeClass = computed(() => ({
 .node-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-ink);
 }
 
 .node-body {
@@ -91,16 +91,16 @@ const nodeClass = computed(() => ({
 }
 
 .config-label {
-  color: #6b7280;
+  color: var(--color-mute);
 }
 
 .config-value {
-  color: #374151;
+  color: var(--color-text-dark);
   font-weight: 500;
 }
 
 .node-placeholder {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-mute);
 }
 </style>

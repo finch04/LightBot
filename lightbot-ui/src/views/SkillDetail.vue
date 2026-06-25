@@ -746,8 +746,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 16px;
   padding: 20px 32px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
 }
 
@@ -757,14 +757,14 @@ onUnmounted(() => {
   gap: 4px;
   padding: 6px 12px;
   background: transparent;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
-  color: #52525b;
+  color: var(--color-body);
   flex-shrink: 0;
 }
-.btn-back:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.btn-back:hover { border-color: var(--color-ink); color: var(--color-ink); }
 
 .header-info {
   flex: 1;
@@ -773,7 +773,7 @@ onUnmounted(() => {
 .header-title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px;
 }
 .header-tags {
@@ -804,7 +804,7 @@ onUnmounted(() => {
 }
 .detail-tabs :deep(.ant-tabs-nav) {
   padding: 0 32px;
-  background: #fff;
+  background: var(--color-canvas);
   margin-bottom: 0;
 }
 .detail-tabs :deep(.ant-tabs-content-holder) {
@@ -831,11 +831,11 @@ onUnmounted(() => {
 .tag-slug {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   color: #be185d;
-  background: #fdf2f8;
+  background: var(--color-purple-bg);
 }
 .tag-version {
   color: #0369a1;
-  background: #f0f9ff;
+  background: var(--color-info-bg);
 }
 
 .detail-section {
@@ -844,11 +844,11 @@ onUnmounted(() => {
 .detail-section-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .detail-pre {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -874,7 +874,7 @@ onUnmounted(() => {
 }
 .builtin-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-left: 4px;
 }
 .file-content {
@@ -888,10 +888,10 @@ onUnmounted(() => {
 .file-tree-panel {
   width: 280px;
   flex-shrink: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow-y: auto;
-  background: #fff;
+  background: var(--color-canvas);
 }
 .tree-loading {
   display: flex;
@@ -899,13 +899,13 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   padding: 40px 0;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .empty-tree {
   text-align: center;
   padding: 40px 0;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .tree-container {
@@ -965,26 +965,26 @@ onUnmounted(() => {
 .file-preview {
   flex: 1;
   min-width: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--color-canvas);
 }
 .preview-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
   background: var(--color-canvas-soft);
   flex-shrink: 0;
 }
 .preview-path {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
 }
 .preview-actions {
   display: flex;
@@ -1006,7 +1006,7 @@ onUnmounted(() => {
   padding: 16px 20px;
   font-size: 14px;
   line-height: 1.7;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .md-rendered :deep(h1),
 .md-rendered :deep(h2),
@@ -1015,13 +1015,13 @@ onUnmounted(() => {
   margin-bottom: 0.5em;
 }
 .md-rendered :deep(pre) {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 12px 16px;
   border-radius: 6px;
   overflow-x: auto;
 }
 .md-rendered :deep(code) {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 5px;
   border-radius: 3px;
   font-size: 13px;
@@ -1041,12 +1041,12 @@ onUnmounted(() => {
 }
 .md-rendered :deep(th),
 .md-rendered :deep(td) {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   padding: 8px 12px;
   text-align: left;
 }
 .md-rendered :deep(th) {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   font-weight: 600;
 }
 .preview-empty, .preview-unsupported {
@@ -1056,7 +1056,7 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   min-height: 300px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
   gap: 8px;
 }
@@ -1065,7 +1065,7 @@ onUnmounted(() => {
   color: #d4d4d8;
 }
 .file-readonly {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   padding: 16px;
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
@@ -1095,11 +1095,11 @@ onUnmounted(() => {
 .deps-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 12px;
 }
 .deps-empty {
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
   padding: 12px 0;
 }
@@ -1113,14 +1113,14 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-canvas);
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .dep-card:hover {
-  border-color: #d4d4d8;
+  border-color: var(--color-hairline);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .dep-icon {
@@ -1144,7 +1144,7 @@ onUnmounted(() => {
 .dep-name {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .dep-desc {
   font-size: 12px;
@@ -1165,12 +1165,12 @@ onUnmounted(() => {
   gap: 6px;
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   transition: border-color 0.2s;
-  color: #52525b;
+  color: var(--color-body);
 }
 .btn-outline:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-outline.danger:hover { border-color: #ef4444; color: #ef4444; }
@@ -1180,11 +1180,11 @@ onUnmounted(() => {
   gap: 4px;
   padding: 4px 12px;
   background: transparent;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
 }
 .btn-outline-sm:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-outline-sm.danger:hover { border-color: #ef4444; color: #ef4444; }
@@ -1202,14 +1202,14 @@ onUnmounted(() => {
 .btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.btn-cancel:hover { border-color: var(--color-ink); color: var(--color-ink); }
 
 /* a-descriptions 表头不换行（参考 TaskCenter） */
 :deep(.ant-descriptions-view) {

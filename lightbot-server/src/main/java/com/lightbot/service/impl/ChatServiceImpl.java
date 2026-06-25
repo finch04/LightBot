@@ -40,6 +40,7 @@ import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -73,7 +74,7 @@ public class ChatServiceImpl implements ChatService {
     private final EmbeddingService embeddingService;
     private final KnowledgeService knowledgeService;
     private final EmbeddingModel embeddingModel;
-    private final TaskExecutor taskExecutor;
+    private final ThreadPoolTaskExecutor taskExecutor;
     private final ToolCallService toolCallService;
 
     // 中间件

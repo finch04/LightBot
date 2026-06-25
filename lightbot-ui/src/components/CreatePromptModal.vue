@@ -205,13 +205,13 @@ watch(visible, (val) => {
 
 .preview-value {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .preview-content {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
-  background: #fff;
+  background: var(--color-canvas);
   padding: 8px;
   border-radius: 6px;
   border: 1px solid var(--color-hairline);

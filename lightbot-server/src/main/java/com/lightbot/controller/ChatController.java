@@ -2,11 +2,14 @@ package com.lightbot.controller;
 
 import com.lightbot.common.Result;
 import com.lightbot.dto.ChatRequest;
+import com.lightbot.dto.RagFeedbackRequest;
 import com.lightbot.dto.RagReferenceVO;
+import com.lightbot.entity.RagFeedback;
 import jakarta.validation.Valid;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.service.ChatAttachmentService;
 import com.lightbot.service.ChatService;
+import com.lightbot.service.RagFeedbackService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +33,7 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatAttachmentService chatAttachmentService;
+    private final RagFeedbackService ragFeedbackService;
 
     /** SSE 超时时间：5分钟（长文本生成可能较慢） */
     private static final long SSE_TIMEOUT = 5 * 60 * 1000L;
@@ -100,5 +104,11 @@ public class ChatController {
             @RequestParam(required = false) Long agentId,
             @RequestParam String question) {
         return Result.ok(chatService.getRagReferences(sessionId, agentId, question));
+    }
+
+    @Operation(summary = "提交RAG检索反馈（👍/👎，重复提交切换/取消）")
+    @PostMapping("/rag-feedback")
+    public Result<RagFeedback> submitRagFeedback(@Valid @RequestBody RagFeedbackRequest request) {
+        return Result.ok(ragFeedbackService.submitFeedback(request));
     }
 }

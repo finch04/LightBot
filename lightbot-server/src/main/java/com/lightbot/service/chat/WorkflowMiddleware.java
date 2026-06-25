@@ -15,6 +15,7 @@ import com.lightbot.workflow.WorkflowNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
@@ -41,7 +42,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
     private final MessageMiddleware messageMiddleware;
     private final TraceMiddleware traceMiddleware;
     private final LlmTraceService llmTraceService;
-    private final TaskExecutor taskExecutor;
+    private final ThreadPoolTaskExecutor taskExecutor;
     private final ObjectMapper objectMapper;
 
     @Override

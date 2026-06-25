@@ -393,7 +393,7 @@ function handleCancel() {
 .btn-fetch:disabled { background: #d4d4d8; cursor: not-allowed; }
 .repo-hint-text {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   line-height: 1.6;
   margin-bottom: 12px;
   padding: 8px 12px;
@@ -409,7 +409,7 @@ function handleCancel() {
   max-height: 300px;
   overflow-y: auto;
   overflow-x: auto;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 4px;
   scrollbar-width: thin;
@@ -451,21 +451,21 @@ function handleCancel() {
 .skill-repo {
   font-size: 12px;
   color: #0369a1;
-  background: #f0f9ff;
+  background: var(--color-info-bg);
   padding: 2px 8px;
   border-radius: 4px;
   flex-shrink: 0;
 }
 .single-skill-card {
   padding: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   background: var(--color-canvas-soft);
 }
 .single-skill-name {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .single-skill-meta {
@@ -477,18 +477,18 @@ function handleCancel() {
 }
 .preview-card {
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   margin-bottom: 8px;
   transition: border-color 0.2s, background 0.2s;
 }
 .preview-installed {
   border-color: #86efac;
-  background: #f0fdf4;
+  background: var(--color-success-bg);
 }
 .preview-installing {
   border-color: #93c5fd;
-  background: #eff6ff;
+  background: var(--color-info-bg);
 }
 .preview-status-tag {
   font-size: 12px;
@@ -500,11 +500,11 @@ function handleCancel() {
 }
 .preview-status-tag.done {
   color: #15803d;
-  background: #dcfce7;
+  background: var(--color-success-bg);
 }
 .preview-status-tag.installing {
   color: #1d4ed8;
-  background: #dbeafe;
+  background: var(--color-info-bg);
 }
 .preview-header {
   display: flex;
@@ -517,20 +517,20 @@ function handleCancel() {
   font-size: 13px;
   font-weight: 600;
   color: #be185d;
-  background: #fdf2f8;
+  background: var(--color-purple-bg);
   padding: 2px 8px;
   border-radius: 4px;
 }
 .preview-version {
   font-size: 12px;
   color: #0369a1;
-  background: #f0f9ff;
+  background: var(--color-info-bg);
   padding: 2px 8px;
   border-radius: 4px;
 }
 .preview-desc {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   margin-bottom: 4px;
 }
 .preview-meta {
@@ -551,24 +551,24 @@ function handleCancel() {
   gap: 8px;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
 }
 .empty-tip {
   text-align: center;
   padding: 32px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
 }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.btn-cancel:hover { border-color: var(--color-ink); color: var(--color-ink); }
 .btn-primary-sm {
   padding: 6px 14px;
   background: var(--color-primary);
@@ -582,7 +582,7 @@ function handleCancel() {
 .btn-primary-sm:hover:not(:disabled) { background: #27272a; }
 .btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
 .search-help-icon {
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   margin-left: 4px;
@@ -591,7 +591,7 @@ function handleCancel() {
 .skill-installs {
   font-size: 12px;
   color: #16a34a;
-  background: #f0fdf4;
+  background: var(--color-success-bg);
   padding: 2px 8px;
   border-radius: 4px;
   flex-shrink: 0;
@@ -600,11 +600,11 @@ function handleCancel() {
 .guide { max-height: 60vh; overflow-y: auto; }
 .guide-section { margin-bottom: 20px; }
 .guide-section:last-child { margin-bottom: 0; }
-.guide-h3 { font-size: 15px; font-weight: 600; color: var(--color-primary); margin-bottom: 8px; }
-.guide-section p { font-size: 13px; color: #52525b; line-height: 1.6; margin: 0 0 8px; }
-.guide-section code { font-size: 12px; background: #f4f4f5; padding: 1px 4px; border-radius: 4px; }
+.guide-h3 { font-size: 15px; font-weight: 600; color: var(--color-ink); margin-bottom: 8px; }
+.guide-section p { font-size: 13px; color: var(--color-body); line-height: 1.6; margin: 0 0 8px; }
+.guide-section code { font-size: 12px; background: var(--color-canvas-soft-2); padding: 1px 4px; border-radius: 4px; }
 .guide-step { display: flex; gap: 12px; margin-bottom: 12px; }
-.guide-num { width: 22px; height: 22px; border-radius: 50%; background: #fffbeb; color: #b45309; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.guide-num { width: 22px; height: 22px; border-radius: 50%; background: var(--color-warn-bg); color: #b45309; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .guide-step b { display: block; font-size: 13px; margin-bottom: 4px; }
 .guide-step p { margin: 0; font-size: 12px; color: var(--color-mute); }
 </style>

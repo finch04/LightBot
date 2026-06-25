@@ -80,7 +80,7 @@ watch(() => data.value, () => {
   border-left: 3px solid #f97316;
   border-radius: 8px;
   overflow: hidden;
-  background: #fff7ed;
+  background: var(--color-warn-bg);
 
   .gm-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
@@ -100,10 +100,24 @@ watch(() => data.value, () => {
     overflow: auto;
     max-height: 300px;
   }
-}
 
-.gm-svg {
-  width: 100%;
-  min-height: 200px;
+  .gm-svg {
+    width: 100%;
+    min-height: 200px;
+    background: var(--color-canvas);
+    border-radius: 6px;
+    --markmap-text-color: var(--color-ink);
+    --markmap-circle-open-bg: var(--color-canvas);
+    --markmap-code-bg: var(--color-canvas-soft-2);
+    --markmap-code-color: var(--color-ink);
+
+    :deep(.markmap-link) {
+      stroke: var(--color-mute);
+    }
+    :deep(.markmap-node > circle) {
+      stroke: var(--color-mute);
+      fill: var(--color-canvas);
+    }
+  }
 }
 </style>

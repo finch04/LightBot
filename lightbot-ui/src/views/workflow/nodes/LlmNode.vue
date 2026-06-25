@@ -55,7 +55,7 @@ function truncate(str, len) {
 
 <style scoped>
 .llm-node {
-  background: #fff;
+  background: var(--color-canvas);
   border: 2px solid #7c3aed;
   border-radius: 12px;
   min-width: 180px;
@@ -71,7 +71,7 @@ function truncate(str, len) {
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
 }
 
-.llm-node.debug-executing { animation: wf-exec 1.2s linear infinite; border-color: #6366f1; }
+.llm-node.debug-executing { animation: wf-exec 1.2s linear infinite; border-color: var(--color-link); }
 .llm-node.debug-success { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
 .llm-node.debug-fail { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
 @keyframes wf-exec {
@@ -86,7 +86,7 @@ function truncate(str, len) {
   gap: 8px;
   padding: 10px 14px;
   background: #f3e8ff;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-hairline);
   border-radius: 10px 10px 0 0;
 }
 
@@ -98,7 +98,7 @@ function truncate(str, len) {
 .node-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-ink);
 }
 
 .node-body {
@@ -113,16 +113,16 @@ function truncate(str, len) {
 }
 
 .config-label {
-  color: #6b7280;
+  color: var(--color-mute);
 }
 
 .config-value {
-  color: #374151;
+  color: var(--color-text-dark);
   font-weight: 500;
 }
 
 .node-placeholder {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-mute);
 }
 </style>

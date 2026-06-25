@@ -45,8 +45,12 @@
 .btn-primary:hover {
   background: #27272a;
 }
+[data-theme="dark"] .btn-primary {
+  border: 1px solid #444;
+}
 [data-theme="dark"] .btn-primary:hover {
   background: #3f3f46;
+  border-color: #555;
 }
 .btn-outline {
   display: flex;
@@ -84,6 +88,10 @@
 .btn-primary-sm:hover {
   background: #27272a;
 }
+[data-theme="dark"] .btn-primary-sm {
+  border: 1px solid #444;
+}
 [data-theme="dark"] .btn-primary-sm:hover {
   background: #3f3f46;
+  border-color: #555;
 }

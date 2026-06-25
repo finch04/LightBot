@@ -177,10 +177,10 @@ function removeRule(gIdx, rIdx) {
   gap: 12px;
 }
 .condition-group-card {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border-slate);
   border-radius: 8px;
   padding: 12px;
-  background: #f8fafc;
+  background: var(--color-canvas-soft);
 }
 .condition-group-header {
   display: flex;
@@ -195,8 +195,8 @@ function removeRule(gIdx, rIdx) {
   border-radius: 4px;
   flex-shrink: 0;
 }
-.handle-out_a { background: #fef3c7; color: #b45309; }
-.handle-out_b { background: #dbeafe; color: #1d4ed8; }
+.handle-out_a { background: var(--color-warn-bg-deep); color: #b45309; }
+.handle-out_b { background: var(--color-info-bg); color: #1d4ed8; }
 .handle-out_c { background: #f3e8ff; color: #7c3aed; }
 .condition-group-title-input {
   flex: 1;
@@ -209,7 +209,7 @@ function removeRule(gIdx, rIdx) {
 }
 .relation-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-mute);
 }
 .condition-rule-row {
   display: flex;
@@ -224,15 +224,15 @@ function removeRule(gIdx, rIdx) {
 }
 .condition-else-hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-mute);
   padding: 8px;
-  background: #fff;
+  background: var(--color-canvas);
   border-radius: 6px;
   border: 1px dashed #cbd5e1;
 }
 .condition-tip {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-mute);
   line-height: 1.5;
 }
 .param-add-btn {

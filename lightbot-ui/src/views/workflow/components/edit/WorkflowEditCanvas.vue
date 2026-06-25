@@ -235,7 +235,7 @@ defineExpose({
 .canvas-area {
   flex: 1;
   position: relative;
-  background: #fff;
+  background: var(--color-canvas);
   isolation: isolate;
 }
 .canvas-area :deep(.vue-flow__controls),
@@ -246,7 +246,7 @@ defineExpose({
   width: 16px !important;
   height: 16px !important;
   border: 2px solid #6366f1 !important;
-  background: #fff !important;
+  background: var(--color-canvas) !important;
   border-radius: 50% !important;
   transition: width 0.15s, height 0.15s, background 0.15s;
 }
@@ -281,7 +281,7 @@ defineExpose({
 .workflow-trash.is-over:not(.is-disabled) {
   border-color: #ef4444;
   border-style: solid;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   color: #dc2626;
   transform: translateX(-50%) scale(1.05);
 }
@@ -291,7 +291,7 @@ defineExpose({
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: #9ca3af;
+  color: var(--color-mute);
   font-size: 14px;
 }
 .edge-insert-label-layer { pointer-events: none; }
@@ -307,8 +307,8 @@ defineExpose({
   z-index: 1;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border-slate);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   overflow: hidden;
@@ -319,7 +319,7 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
   cursor: default;
 }
@@ -329,29 +329,29 @@ defineExpose({
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: #94a3b8;
+  color: var(--color-mute);
   border-radius: 4px;
   cursor: grab;
   flex-shrink: 0;
   user-select: none;
 }
-.version-panel-drag-handle:hover { color: #64748b; background: #f1f5f9; }
+.version-panel-drag-handle:hover { color: var(--color-mute); background: var(--color-canvas-soft); }
 .version-panel-drag-handle:active { cursor: grabbing; }
 .version-panel-title {
   flex: 1;
   font-weight: 600;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--color-text-code);
 }
 .version-panel-close {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--color-mute);
   padding: 4px;
   line-height: 1;
 }
-.version-panel-close:hover { color: #475569; }
+.version-panel-close:hover { color: var(--color-body); }
 .version-panel-body {
   flex: 1;
   overflow-y: auto;
@@ -360,7 +360,7 @@ defineExpose({
 .version-panel-footer {
   flex-shrink: 0;
   padding: 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--color-hairline);
 }
 .version-preview-banner {
   position: absolute;
@@ -369,7 +369,7 @@ defineExpose({
   transform: translateX(-50%);
   z-index: 999;
   padding: 8px 16px;
-  background: #fffbeb;
+  background: var(--color-warn-bg);
   border: 1px solid #fcd34d;
   border-radius: 8px;
   font-size: 13px;
@@ -383,17 +383,17 @@ defineExpose({
   cursor: pointer;
   transition: background 0.15s;
 }
-.version-item:hover { background: #f3f4f6; }
-.version-item.active { background: #eef2ff; border: 1px solid #c7d2fe; }
+.version-item:hover { background: var(--color-canvas-soft-2); }
+.version-item.active { background: var(--color-info-bg); border: 1px solid var(--color-purple-border); }
 .version-item.draft { margin-bottom: 4px; }
 .version-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.version-item-title { font-weight: 600; font-size: 14px; color: #1f2937; }
+.version-item-title { font-weight: 600; font-size: 14px; color: var(--color-ink); }
 .version-item-note {
   font-size: 13px;
-  color: #334155;
+  color: var(--color-text-dark);
   line-height: 1.45;
   margin-bottom: 4px;
   word-break: break-word;
 }
-.version-item-desc { font-size: 12px; color: #9ca3af; }
+.version-item-desc { font-size: 12px; color: var(--color-mute); }
 </style>

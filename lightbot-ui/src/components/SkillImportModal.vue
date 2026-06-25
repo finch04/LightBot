@@ -14,7 +14,7 @@
         :show-upload-list="false"
         accept=".zip"
       >
-        <p style="font-size: 32px; color: #a1a1aa; margin-bottom: 8px">
+        <p style="font-size: 32px; color: var(--color-mute); margin-bottom: 8px">
           <CloudUploadOutlined />
         </p>
         <p style="font-size: 14px; color: #52525b">拖拽 ZIP 文件到此处，或点击上传</p>
@@ -138,14 +138,14 @@ function handleCancel() {
 <style scoped>
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.btn-cancel:hover { border-color: var(--color-ink); color: var(--color-ink); }
 .btn-primary-sm {
   padding: 6px 14px;
   background: var(--color-primary);

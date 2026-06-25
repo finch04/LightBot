@@ -383,7 +383,7 @@ function formatTime(t) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -399,9 +399,9 @@ function formatTime(t) {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
@@ -458,7 +458,7 @@ function formatTime(t) {
   gap: 16px;
 }
 .panel {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
@@ -474,12 +474,12 @@ function formatTime(t) {
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0;
 }
 .panel-count {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .item-list {
@@ -497,10 +497,10 @@ function formatTime(t) {
   align-items: flex-start;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
-.item-row:hover { border-color: #e4e4e7; }
+.item-row:hover { border-color: var(--color-hairline); }
 .item-content { flex: 1; min-width: 0; }
 .item-field {
   font-size: 13px;
@@ -511,12 +511,12 @@ function formatTime(t) {
   margin-right: 4px;
 }
 .item-val {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .item-empty {
   text-align: center;
   padding: 40px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .item-pagination {
@@ -537,12 +537,12 @@ function formatTime(t) {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .version-item:hover {
-  border-color: #e4e4e7;
+  border-color: var(--color-hairline);
   box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 .version-body { flex: 1; min-width: 0; }
@@ -555,13 +555,13 @@ function formatTime(t) {
 .version-tag {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .version-meta {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .dialog-footer {

@@ -84,23 +84,23 @@ const langLabel = computed(() => {
     padding: 6px 10px;
     border-bottom: 1px solid var(--gray-100);
 
-    &.success { background: #f0fdf4; }
-    &.error { background: #fef2f2; }
+    &.success { background: var(--color-success-bg); }
+    &.error { background: var(--color-error-bg); }
 
     // Java: 红色系
     &.lang-java {
-      &.success { background: #fff1f2; border-bottom-color: #fecdd3; }
-      &.error { background: #fef2f2; }
+      &.success { background: var(--color-error-bg); border-bottom-color: var(--color-error-soft); }
+      &.error { background: var(--color-error-bg); }
     }
     // JavaScript: 黄色系
     &.lang-js {
-      &.success { background: #fffbeb; border-bottom-color: #fde68a; }
-      &.error { background: #fef2f2; }
+      &.success { background: var(--color-warn-bg); border-bottom-color: #fde68a; }
+      &.error { background: var(--color-error-bg); }
     }
     // Python: 蓝色系
     &.lang-python {
-      &.success { background: #eff6ff; border-bottom-color: #bfdbfe; }
-      &.error { background: #fef2f2; }
+      &.success { background: var(--color-info-bg); border-bottom-color: #bfdbfe; }
+      &.error { background: var(--color-error-bg); }
     }
   }
 
@@ -113,10 +113,10 @@ const langLabel = computed(() => {
       color: #be123c; background: #ffe4e6;
     }
     .lang-js & {
-      color: #92400e; background: #fef3c7;
+      color: #92400e; background: var(--color-warn-bg-deep);
     }
     .lang-python & {
-      color: #1e40af; background: #dbeafe;
+      color: #1e40af; background: var(--color-info-bg);
     }
     .lang-unknown & {
       color: var(--gray-500); background: var(--gray-100);
@@ -131,8 +131,8 @@ const langLabel = computed(() => {
   .ecr-badge {
     font-size: 11px; font-weight: 600; padding: 1px 6px;
     border-radius: 4px;
-    &.success { color: #16a34a; background: #dcfce7; }
-    &.error { color: #dc2626; background: #fee2e2; }
+    &.success { color: #16a34a; background: var(--color-success-bg); }
+    &.error { color: #dc2626; background: var(--color-error-bg); }
   }
 
   .ecr-section-title {
@@ -142,7 +142,7 @@ const langLabel = computed(() => {
 
   .ecr-error pre {
     margin: 0; padding: 8px 10px;
-    background: #fef2f2; color: #dc2626;
+    background: var(--color-error-bg); color: #dc2626;
     font-size: 12px; line-height: 1.5;
     white-space: pre-wrap; word-break: break-word;
   }
@@ -159,10 +159,10 @@ const langLabel = computed(() => {
 
   // 返回值区域也按语言着色
   .ecr-return pre {
-    .lang-java & { background: #fff1f2; color: #881337; }
-    .lang-js & { background: #fffbeb; color: #78350f; }
-    .lang-python & { background: #eff6ff; color: #1e3a5f; }
-    .lang-unknown & { background: #f0f9ff; color: var(--gray-800); }
+    .lang-java & { background: var(--color-error-bg); color: #881337; }
+    .lang-js & { background: var(--color-warn-bg); color: #78350f; }
+    .lang-python & { background: var(--color-info-bg); color: #1e3a5f; }
+    .lang-unknown & { background: var(--color-info-bg); color: var(--gray-800); }
   }
 }
 </style>

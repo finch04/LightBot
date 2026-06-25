@@ -51,18 +51,18 @@ const nodeClass = computed(() => ({
 
 <style scoped>
 .classifier-node {
-  background: #fff;
+  background: var(--color-canvas);
   border: 2px solid #f59e0b;
   border-radius: 12px;
   min-width: 200px;
 }
 .classifier-node.selected { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25); }
-.classifier-node.debug-executing { animation: wf-executing 1.2s linear infinite; border-color: #6366f1; }
+.classifier-node.debug-executing { animation: wf-executing 1.2s linear infinite; border-color: var(--color-link); }
 .classifier-node.debug-success { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
 .classifier-node.debug-fail { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25); }
 .node-header {
   display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-  background: #fffbeb; border-bottom: 1px solid #fde68a; border-radius: 10px 10px 0 0;
+  background: var(--color-warn-bg); border-bottom: 1px solid #fde68a; border-radius: 10px 10px 0 0;
 }
 .node-icon { color: #f59e0b; font-size: 16px; }
 .node-title { font-size: 14px; font-weight: 600; }
@@ -71,8 +71,8 @@ const nodeClass = computed(() => ({
   padding: 6px 12px 6px 14px; min-height: 36px;
 }
 .branch-row + .branch-row { border-top: 1px dashed #f3f4f6; }
-.branch-label { font-size: 12px; color: #374151; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.default-row .branch-label { color: #9ca3af; }
+.branch-label { font-size: 12px; color: var(--color-text-dark); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.default-row .branch-label { color: var(--color-mute); }
 @keyframes wf-executing {
   0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
   50% { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.15); }

@@ -202,7 +202,7 @@ function handleDelete(id) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -275,7 +275,7 @@ function handleDelete(id) {
   right: -6px;
   font-size: 10px;
   color: var(--color-link);
-  background: #e8f4ff;
+  background: var(--color-info-bg);
   border: 1px solid #b3d8ff;
   border-radius: 100px;
   padding: 0 5px;
@@ -295,7 +295,7 @@ function handleDelete(id) {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;

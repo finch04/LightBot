@@ -68,6 +68,10 @@ public class McpServer {
     @Schema(description = "禁用的工具名列表(JSONB数组)")
     private String disabledTools;
 
+    @TableField("last_sync_time")
+    @Schema(description = "最后一次工具列表同步时间")
+    private LocalDateTime lastSyncTime;
+
     @TableField("status")
     @Schema(description = "状态")
     private CommonStatus status;

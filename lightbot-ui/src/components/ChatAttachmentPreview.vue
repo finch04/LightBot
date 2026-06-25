@@ -158,7 +158,7 @@ function handleClose() {
   word-break: break-word;
   font-size: 13px;
   line-height: 1.6;
-  color: #3f3f46;
+  color: var(--color-ink);
   font-family: inherit;
 }
 .text-content-preview .markdown-content {

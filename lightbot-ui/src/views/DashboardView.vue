@@ -400,7 +400,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -415,14 +415,18 @@ onUnmounted(() => {
   font-size: 22px;
   flex-shrink: 0;
 }
-.agent-icon { background: #ede9fe; color: #7c3aed; }
-.knowledge-icon { background: #dbeafe; color: #2563eb; }
-.session-icon { background: #dcfce7; color: #16a34a; }
-.message-icon { background: #fef3c7; color: #d97706; }
+.agent-icon { background: var(--color-purple-bg); color: #7c3aed; }
+.knowledge-icon { background: var(--color-info-bg); color: #2563eb; }
+.session-icon { background: var(--color-success-bg); color: #16a34a; }
+.message-icon { background: var(--color-warn-bg-deep); color: #d97706; }
+[data-theme="dark"] .agent-icon { background: #2e1065; }
+[data-theme="dark"] .knowledge-icon { background: #0c1a3d; }
+[data-theme="dark"] .session-icon { background: #052e16; }
+[data-theme="dark"] .message-icon { background: #422006; }
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-ink);
   line-height: 1.2;
 }
 .stat-label {
@@ -482,7 +486,7 @@ onUnmounted(() => {
 .trend-range-info {
   margin-left: auto;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 /* ===== Grid 布局 ===== */
@@ -497,7 +501,7 @@ onUnmounted(() => {
 
 /* ===== 面板通用 ===== */
 .panel {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -531,10 +535,10 @@ onUnmounted(() => {
 .trend-quick-btn {
   padding: 4px 10px;
   font-size: 12px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
-  background: #fff;
-  color: #52525b;
+  background: var(--color-canvas);
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -544,19 +548,19 @@ onUnmounted(() => {
 }
 .trend-quick-btn.active {
   border-color: var(--color-link);
-  background: #eff6ff;
+  background: var(--color-link-bg-soft);
   color: var(--color-link);
   font-weight: 500;
 }
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0;
 }
 .panel-tip {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 /* ===== 柱状图 ===== */
@@ -579,12 +583,12 @@ onUnmounted(() => {
 .bar-value {
   font-size: 11px;
   font-weight: 600;
-  color: #52525b;
+  color: var(--color-body);
 }
 .bar-track {
   width: 100%;
   height: 140px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px 6px 0 0;
   display: flex;
   align-items: flex-end;
@@ -602,26 +606,26 @@ onUnmounted(() => {
 }
 .bar-label {
   font-size: 11px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .chart-empty {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .chat-summary {
   display: flex;
   gap: 24px;
   padding-top: 12px;
-  border-top: 1px solid #f4f4f5;
+  border-top: 1px solid var(--color-hairline);
   font-size: 13px;
   color: var(--color-mute);
 }
 .chat-summary b {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 /* ===== 状态条 ===== */
@@ -645,7 +649,7 @@ onUnmounted(() => {
 .status-track {
   flex: 1;
   height: 8px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -669,7 +673,7 @@ onUnmounted(() => {
   text-align: right;
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 /* ===== 最近列表 ===== */
@@ -679,7 +683,7 @@ onUnmounted(() => {
 .recent-title {
   font-size: 12px;
   font-weight: 500;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -689,12 +693,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 0;
-  border-bottom: 1px solid #f4f4f5;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .recent-item:last-child { border-bottom: none; }
 .recent-name {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -709,10 +713,13 @@ onUnmounted(() => {
   padding: 1px 8px;
   border-radius: 100px;
 }
-.recent-tag.draft { background: #f4f4f5; color: var(--color-mute); }
-.recent-tag.published { background: #dcfce7; color: #16a34a; }
-.recent-tag.published_editing { background: #dbeafe; color: #2563eb; }
-.recent-tag.archived { background: #fef3c7; color: #d97706; }
+.recent-tag.draft { background: var(--color-canvas-soft-2); color: var(--color-mute); }
+.recent-tag.published { background: var(--color-success-bg); color: #16a34a; }
+.recent-tag.published_editing { background: var(--color-info-bg); color: #2563eb; }
+.recent-tag.archived { background: var(--color-warn-bg-deep); color: #d97706; }
+[data-theme="dark"] .recent-tag.published { background: #052e16; }
+[data-theme="dark"] .recent-tag.published_editing { background: #0c1a3d; }
+[data-theme="dark"] .recent-tag.archived { background: #422006; }
 
 /* ===== 知识库指标 ===== */
 .knowledge-metrics {
@@ -726,7 +733,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft-2);
   border-radius: 8px;
 }
 .metric-label {
@@ -736,7 +743,7 @@ onUnmounted(() => {
 .metric-value {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 /* ===== 模型指标 ===== */
@@ -749,13 +756,13 @@ onUnmounted(() => {
 .model-metric-card {
   text-align: center;
   padding: 16px 12px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft-2);
   border-radius: 8px;
 }
 .model-metric-value {
   font-size: 24px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .model-metric-label {
   font-size: 12px;

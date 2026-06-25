@@ -100,13 +100,13 @@ defineExpose({
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--color-canvas);
 }
 .markdown-preview-header {
   padding: 8px 16px;
   font-size: 12px;
   color: var(--color-mute);
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-hairline);
   flex-shrink: 0;
 }
 .markdown-preview-body {
@@ -115,18 +115,18 @@ defineExpose({
   padding: 16px;
   font-size: 14px;
   line-height: 1.75;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .markdown-preview-body :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
 .markdown-preview-body :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }
 .markdown-preview-body :deep(h3) { font-size: 1.1em; margin: 0.5em 0; font-weight: 600; }
 .markdown-preview-body :deep(p) { margin: 0.5em 0; }
-.markdown-preview-body :deep(code) { background: #f4f4f5; padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }
-.markdown-preview-body :deep(pre) { background: #f4f4f5; padding: 12px; border-radius: 6px; overflow-x: auto; }
+.markdown-preview-body :deep(code) { background: var(--color-canvas-soft-2); padding: 2px 4px; border-radius: 4px; font-size: 0.9em; }
+.markdown-preview-body :deep(pre) { background: var(--color-canvas-soft-2); padding: 12px; border-radius: 6px; overflow-x: auto; }
 .markdown-preview-body :deep(ul), .markdown-preview-body :deep(ol) { padding-left: 1.5em; margin: 0.5em 0; }
 .markdown-preview-body :deep(table) { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
-.markdown-preview-body :deep(th), .markdown-preview-body :deep(td) { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
-.markdown-preview-body :deep(th) { background: #f9fafb; font-weight: 600; }
-.markdown-preview-body :deep(blockquote) { border-left: 4px solid #d4d4d8; padding-left: 12px; color: #52525b; margin: 0.5em 0; }
-.markdown-preview-body :deep(hr) { border: none; border-top: 1px solid #e5e7eb; margin: 1em 0; }
+.markdown-preview-body :deep(th), .markdown-preview-body :deep(td) { border: 1px solid var(--color-hairline); padding: 6px 10px; text-align: left; }
+.markdown-preview-body :deep(th) { background: var(--color-canvas-soft); font-weight: 600; }
+.markdown-preview-body :deep(blockquote) { border-left: 4px solid #d4d4d8; padding-left: 12px; color: var(--color-body); margin: 0.5em 0; }
+.markdown-preview-body :deep(hr) { border: none; border-top: 1px solid var(--color-hairline); margin: 1em 0; }
 </style>

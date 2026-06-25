@@ -144,7 +144,7 @@ async function handleInit() {
   display: flex;
   width: 900px;
   height: 600px;
-  background: #ffffff;
+  background: var(--color-canvas);
   border-radius: 12px;
   box-shadow: 0px 1px 1px rgba(0,0,0,0.02), 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
   overflow: hidden;
@@ -190,7 +190,7 @@ async function handleInit() {
 
 .form-header p {
   font-size: 14px;
-  color: #8c8c8c;
+  color: var(--color-mute);
   margin: 0;
 }
 
@@ -214,7 +214,7 @@ async function handleInit() {
 
 .form-label .optional {
   font-weight: 400;
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 .input-wrapper {
@@ -225,20 +225,20 @@ async function handleInit() {
   border-radius: 6px;
   padding: 0 10px;
   transition: all 0.2s;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 
 .input-wrapper:hover {
-  border-color: #a1a1aa;
+  border-color: var(--color-mute);
 }
 
 .input-wrapper:focus-within {
-  border-color: var(--color-primary);
+  border-color: var(--color-ink);
   box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
 }
 
 .input-icon {
-  color: #bfbfbf;
+  color: var(--color-mute);
   font-size: 14px;
   margin-right: 8px;
 }
@@ -254,7 +254,7 @@ async function handleInit() {
 }
 
 .input-wrapper input::placeholder {
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 .btn-init {
@@ -294,11 +294,11 @@ async function handleInit() {
   right: 0;
   text-align: center;
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--color-mute);
 }
 
 .footer-copyright {
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 @media (max-width: 960px) {

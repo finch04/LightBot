@@ -614,7 +614,7 @@ function scrollToBottom(inst) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -653,16 +653,16 @@ function scrollToBottom(inst) {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
 .btn-outline-sm:hover:not(:disabled) { border-color: var(--color-link); color: var(--color-link); }
-.btn-outline-sm:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d4d4d8; color: var(--color-mute); }
+.btn-outline-sm:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--color-hairline); color: var(--color-mute); }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
@@ -721,7 +721,7 @@ function scrollToBottom(inst) {
 }
 
 .instance-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -737,7 +737,7 @@ function scrollToBottom(inst) {
 .instance-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .instance-actions {
   display: flex;
@@ -761,7 +761,7 @@ function scrollToBottom(inst) {
 .config-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .model-select-row {
@@ -787,7 +787,7 @@ function scrollToBottom(inst) {
 }
 .param-value {
   font-size: 12px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   min-width: 40px;
   text-align: right;
 }
@@ -800,8 +800,8 @@ function scrollToBottom(inst) {
 .var-key {
   font-size: 12px;
   font-family: 'SFMono-Regular', Consolas, monospace;
-  color: #6366f1;
-  background: #eef2ff;
+  color: var(--color-link);
+  background: var(--color-info-bg);
   padding: 2px 6px;
   border-radius: 4px;
   min-width: 100px;
@@ -824,12 +824,12 @@ function scrollToBottom(inst) {
 .debug-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .debug-help-icon {
   margin-left: 4px;
   font-size: 14px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: help;
   vertical-align: middle;
 }
@@ -838,7 +838,7 @@ function scrollToBottom(inst) {
 }
 .debug-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .debug-messages {
   height: 400px;
@@ -847,7 +847,7 @@ function scrollToBottom(inst) {
   flex-direction: column;
   gap: 12px;
   padding-bottom: 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
@@ -857,7 +857,7 @@ function scrollToBottom(inst) {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .debug-msg {
@@ -872,12 +872,12 @@ function scrollToBottom(inst) {
 .debug-msg.user {
   align-self: flex-end;
   background: var(--color-canvas-soft-2);
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .debug-msg.assistant {
   align-self: flex-start;
   background: #eff6ff;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .debug-footer {
   display: flex;
@@ -912,15 +912,15 @@ function scrollToBottom(inst) {
   transition: background 0.2s, color 0.2s;
 }
 .btn-text-xs:hover {
-  background: #f4f4f5;
-  color: var(--color-primary);
+  background: var(--color-canvas-soft-2);
+  color: var(--color-ink);
 }
 .debug-footer .btn-text-xs {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .debug-footer .btn-text-xs:hover {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .cursor {
   animation: blink 1s step-end infinite;
@@ -929,7 +929,7 @@ function scrollToBottom(inst) {
   50% { opacity: 0; }
 }
 .debug-input {
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 12px;
 }
 .debug-input-actions {
@@ -945,7 +945,7 @@ function scrollToBottom(inst) {
 }
 .debug-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .dialog-footer {

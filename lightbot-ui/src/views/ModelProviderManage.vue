@@ -608,9 +608,9 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   font-weight: 500;
@@ -635,7 +635,7 @@ onMounted(async () => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -665,7 +665,7 @@ onMounted(async () => {
   gap: 16px;
 }
 .provider-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -675,7 +675,7 @@ onMounted(async () => {
 }
 .provider-card.disabled {
   opacity: 0.6;
-  border-color: #e4e4e7;
+  border-color: var(--color-hairline);
 }
 .provider-card.disabled .card-icon {
   background: #a1a1aa;
@@ -705,7 +705,7 @@ onMounted(async () => {
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -745,12 +745,12 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-bottom: 12px;
   flex: 1;
 }
 .card-footer {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 12px;
 }
 .btn-link {
@@ -765,7 +765,7 @@ onMounted(async () => {
   text-decoration: underline;
 }
 .btn-link:disabled {
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: not-allowed;
 }
 .btn-link:disabled:hover {
@@ -784,7 +784,7 @@ onMounted(async () => {
   color: var(--color-mute);
 }
 .add-model-form {
-  background: #f9f9f9;
+  background: var(--color-canvas-soft-2);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
@@ -812,7 +812,7 @@ onMounted(async () => {
   border-radius: 8px;
 }
 .model-item:hover {
-  border-color: #d4d4d8;
+  border-color: var(--color-hairline-strong);
 }
 .model-info {
   display: flex;
@@ -829,7 +829,7 @@ onMounted(async () => {
 .model-id {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   font-family: monospace;
   max-width: 180px;
 }
@@ -854,7 +854,7 @@ onMounted(async () => {
 .model-empty {
   text-align: center;
   padding: 32px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .model-modal-actions {
@@ -863,9 +863,9 @@ onMounted(async () => {
 }
 .btn-fetch {
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
@@ -884,7 +884,7 @@ onMounted(async () => {
 .fetch-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid #ebebeb;
+  border-bottom: 1px solid var(--color-hairline);
   margin-bottom: 12px;
 }
 .fetch-tab {
@@ -898,16 +898,16 @@ onMounted(async () => {
   transition: all 0.15s;
 }
 .fetch-tab:hover {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .fetch-tab.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  color: var(--color-ink);
+  border-bottom-color: var(--color-ink);
   font-weight: 500;
 }
 .fetch-tab-count {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-left: 4px;
 }
 .fetch-filter-bar {
@@ -923,9 +923,9 @@ onMounted(async () => {
 }
 .type-tab {
   padding: 3px 10px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
-  background: #fff;
+  background: var(--color-canvas);
   font-size: 12px;
   cursor: pointer;
   color: var(--color-mute);
@@ -938,7 +938,7 @@ onMounted(async () => {
 }
 .type-tab.active {
   background: var(--color-primary);
-  border-color: var(--color-primary);
+  border-color: var(--color-ink);
   color: #fff;
 }
 .fetch-model-list {
@@ -950,7 +950,7 @@ onMounted(async () => {
   width: 4px;
 }
 .fetch-model-list::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: var(--color-hairline-strong);
   border-radius: 2px;
 }
 .fetch-model-grid {
@@ -963,20 +963,20 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
 .fetch-model-item:hover {
-  border-color: #d4d4d8;
+  border-color: var(--color-hairline-strong);
 }
 .fetch-model-item.existing {
-  background: #f9f9f9;
+  background: var(--color-canvas-soft-2);
 }
 .fetch-model-id {
   font-family: monospace;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   flex-shrink: 0;
 }
 .fetch-model-name {
@@ -999,7 +999,7 @@ onMounted(async () => {
 .fetch-empty {
   text-align: center;
   padding: 32px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .fetch-modal-footer {
@@ -1007,7 +1007,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
 }
 .fetch-footer-left,
 .fetch-footer-right {
@@ -1022,7 +1022,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 8px;
 }
 .dialog-footer-right {
@@ -1031,9 +1031,9 @@ onMounted(async () => {
 }
 .btn-check {
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
@@ -1049,16 +1049,16 @@ onMounted(async () => {
 }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .btn-primary-sm {
   padding: 6px 14px;
@@ -1088,7 +1088,7 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-mute);
   user-select: none;
-  border-top: 1px dashed #ebebeb;
+  border-top: 1px dashed var(--color-hairline);
   margin-top: 4px;
 }
 .advanced-toggle:hover {
@@ -1103,7 +1103,7 @@ onMounted(async () => {
 }
 .form-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 2px;
 }
 .form-error {

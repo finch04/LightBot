@@ -174,23 +174,23 @@ function formatSize(n) {
     border-left: 3px solid #8b5cf6;
     border-radius: 8px;
     overflow: hidden;
-    background: #f5f3ff;
+    background: var(--color-purple-bg);
   }
   .sfr-card-error {
     border-color: #fca5a5;
     border-left-color: #ef4444;
-    background: #fef2f2;
+    background: var(--color-error-bg);
   }
 
   // ── Header ──
   .sfr-header {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px;
-    background: #ede9fe; border-bottom: 1px solid #c4b5fd;
+    background: var(--color-purple-bg); border-bottom: 1px solid #c4b5fd;
     font-size: 12px; font-weight: 600; color: #5b21b6;
   }
   .sfr-header-error {
-    background: #fee2e2; border-bottom-color: #fca5a5; color: #991b1b;
+    background: var(--color-error-bg); border-bottom-color: #fca5a5; color: #991b1b;
   }
   .sfr-header-icon {
     font-size: 14px; color: #7c3aed; flex-shrink: 0;
@@ -210,13 +210,13 @@ function formatSize(n) {
   }
   .sfr-badge {
     font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 4px; flex-shrink: 0;
-    &.success { color: #16a34a; background: #dcfce7; }
+    &.success { color: #16a34a; background: var(--color-success-bg); }
   }
   .sfr-detail-btn {
     appearance: none;
     border: 1px solid #c4b5fd;
     border-radius: 6px;
-    background: #fff;
+    background: var(--color-canvas);
     color: #7c3aed;
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 12px; cursor: pointer;
@@ -224,7 +224,7 @@ function formatSize(n) {
     font-weight: 500;
     transition: all 0.2s ease;
     &:hover {
-      background: #ede9fe;
+      background: var(--color-purple-bg);
       transform: translateY(-1px);
       box-shadow: 0 2px 6px rgba(139, 92, 246, 0.15);
     }
@@ -241,7 +241,7 @@ function formatSize(n) {
   // ── read_file 预览 ──
   .sfr-content-preview {
     margin: 0; padding: 10px 12px;
-    background: #f5f3ff; color: var(--gray-700);
+    background: var(--color-purple-bg); color: var(--gray-700);
     font-size: 12px; line-height: 1.6;
     white-space: pre-wrap; word-break: break-word;
     max-height: 200px; overflow-y: auto;
@@ -251,7 +251,7 @@ function formatSize(n) {
     padding: 6px 12px; font-size: 11px; color: #8b5cf6;
     text-align: center;
     border-top: 1px solid #ddd6fe;
-    background: #ede9fe;
+    background: var(--color-purple-bg);
   }
 
   // ── list_files ──
@@ -263,7 +263,7 @@ function formatSize(n) {
   .sfr-file-item {
     display: flex; align-items: center; gap: 6px;
     padding: 4px 12px; color: var(--gray-700);
-    &:hover { background: #ede9fe; }
+    &:hover { background: var(--color-purple-bg); }
   }
   .sfr-file-icon { font-size: 12px; color: #a78bfa; flex-shrink: 0; }
   .sfr-file-name {
@@ -273,7 +273,7 @@ function formatSize(n) {
   .sfr-more {
     padding: 6px 12px; font-size: 11px; color: #8b5cf6;
     text-align: center; border-top: 1px dashed #ddd6fe;
-    background: #f5f3ff;
+    background: var(--color-purple-bg);
   }
 
   // ── write_file ──

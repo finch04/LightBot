@@ -134,17 +134,17 @@ function getSubagentSteps(callIndex) {
 
 .cap-block {
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   overflow: hidden;
 }
 
 .cap-skill {
-  background: #fdf2f8;
+  background: var(--color-purple-bg);
   border-color: #f9a8d4;
 }
 
 .cap-subagent {
-  background: #fffbeb;
+  background: var(--color-warn-bg);
   border-color: #fcd34d;
 }
 
@@ -160,7 +160,7 @@ function getSubagentSteps(callIndex) {
   cursor: pointer;
   text-align: left;
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-dark);
 }
 
 .cap-icon {
@@ -180,13 +180,13 @@ function getSubagentSteps(callIndex) {
 }
 
 .cap-spinner {
-  color: #9ca3af;
+  color: var(--color-mute);
 }
 
 .expand-icon {
   font-size: 10px;
   transition: transform 0.2s;
-  color: #9ca3af;
+  color: var(--color-mute);
 }
 
 .expand-icon.expanded {
@@ -196,7 +196,7 @@ function getSubagentSteps(callIndex) {
 .cap-body {
   padding: 0 12px 10px 34px;
   font-size: 12px;
-  color: #4b5563;
+  color: var(--color-body);
 }
 
 .cap-skill-item {
@@ -221,7 +221,7 @@ function getSubagentSteps(callIndex) {
 }
 
 .cap-meta {
-  color: #9ca3af;
+  color: var(--color-mute);
   font-size: 11px;
 }
 
@@ -240,7 +240,7 @@ function getSubagentSteps(callIndex) {
 
 .cap-label {
   font-weight: 500;
-  color: #6b7280;
+  color: var(--color-mute);
 }
 
 .cap-steps {
@@ -276,7 +276,7 @@ function getSubagentSteps(callIndex) {
 }
 
 .cap-step-preview {
-  color: #9ca3af;
+  color: var(--color-mute);
   font-size: 11px;
   max-width: 200px;
   overflow: hidden;
@@ -285,7 +285,7 @@ function getSubagentSteps(callIndex) {
 }
 
 .cap-step-token {
-  color: #6b7280;
+  color: var(--color-mute);
   font-size: 12px;
   line-height: 1.6;
   word-break: break-word;

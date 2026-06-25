@@ -225,6 +225,12 @@ public class AgentController {
         return Result.ok();
     }
 
+    @Operation(summary = "克隆Agent（深拷贝配置+绑定关系）")
+    @PostMapping("/{id}/clone")
+    public Result<Agent> clone(@PathVariable Long id) {
+        return Result.ok(agentService.clone(id));
+    }
+
     @Operation(summary = "AI生成系统提示词")
     @PostMapping("/{id}/generate-prompt")
     public Result<String> generatePrompt(@PathVariable Long id) {

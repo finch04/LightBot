@@ -34,15 +34,15 @@ function onDragStart(event) {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   cursor: grab;
   transition: all 0.2s ease;
   margin-bottom: 8px;
 }
 .node-item:hover {
-  border-color: #6366f1;
+  border-color: var(--color-link);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 .node-icon {
@@ -54,6 +54,6 @@ function onDragStart(event) {
   border-radius: 6px;
   font-size: 16px;
 }
-.node-title { font-size: 13px; font-weight: 600; color: #1f2937; }
-.node-desc { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.node-title { font-size: 13px; font-weight: 600; color: var(--color-ink); }
+.node-desc { font-size: 11px; color: var(--color-mute); margin-top: 2px; }
 </style>

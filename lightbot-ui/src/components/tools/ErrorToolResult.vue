@@ -25,11 +25,11 @@ const displayName = computed(() => getToolDisplayName(props.event.toolName))
 
 <style lang="less" scoped>
 .error-tool-result {
-  border: 1px solid #fecaca;
+  border: 1px solid var(--color-error-soft);
   border-left: 3px solid #ef4444;
   border-radius: 8px;
   overflow: hidden;
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 
 .etr-header {
@@ -38,7 +38,7 @@ const displayName = computed(() => getToolDisplayName(props.event.toolName))
   gap: 6px;
   padding: 8px 10px;
   border-bottom: 1px solid #fecaca;
-  background: #fef2f2;
+  background: var(--color-error-bg);
 
   .etr-icon {
     color: #ef4444;

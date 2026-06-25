@@ -199,7 +199,7 @@ onMounted(() => nextTick(syncActiveEditor))
 /* 唯一滚动容器 */
 .code-editor-body {
   position: relative;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border-slate);
   border-radius: 8px;
   overflow: auto;
   overflow-x: auto;
@@ -243,7 +243,7 @@ onMounted(() => nextTick(syncActiveEditor))
 .code-editor-highlight :deep(.hljs-keyword) { color: #c084fc; }
 .code-editor-highlight :deep(.hljs-string) { color: #86efac; }
 .code-editor-highlight :deep(.hljs-number) { color: #fcd34d; }
-.code-editor-highlight :deep(.hljs-comment) { color: #64748b; }
+.code-editor-highlight :deep(.hljs-comment) { color: var(--color-mute); }
 .code-editor-highlight :deep(.hljs-function) { color: #7dd3fc; }
 
 .code-editor-input {
@@ -264,7 +264,7 @@ onMounted(() => nextTick(syncActiveEditor))
 }
 
 .code-editor-input::placeholder {
-  color: #64748b;
+  color: var(--color-mute);
 }
 
 .code-editor-input:disabled {

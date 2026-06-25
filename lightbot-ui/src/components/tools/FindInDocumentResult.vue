@@ -182,7 +182,7 @@ function isHighlighted(lineNum) {
   border-left: 3px solid #22c55e;
   border-radius: 8px;
   overflow: hidden;
-  background: #f0fdf4;
+  background: var(--color-success-bg);
 
   .fid-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
@@ -194,7 +194,7 @@ function isHighlighted(lineNum) {
   .fid-header {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px; border-bottom: 1px solid #86efac;
-    background: #dcfce7; font-size: 12px; font-weight: 600; color: #166534;
+    background: var(--color-success-bg); font-size: 12px; font-weight: 600; color: #166534;
     .fid-header-icon { color: #16a34a; font-size: 14px; }
     .fid-header-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fid-header-info { color: #4ade80; font-weight: 400; white-space: nowrap; }
@@ -202,7 +202,7 @@ function isHighlighted(lineNum) {
       appearance: none;
       border: 1px solid #86efac;
       border-radius: 6px;
-      background: #fff;
+      background: var(--color-canvas);
       color: #16a34a;
       font-size: 12px;
       padding: 6px 12px;
@@ -216,7 +216,7 @@ function isHighlighted(lineNum) {
       flex-shrink: 0;
 
       &:hover {
-        background: #dcfce7;
+        background: var(--color-success-bg);
         transform: translateY(-1px);
         box-shadow: 0 2px 6px rgba(22, 163, 74, 0.15);
       }
@@ -237,7 +237,7 @@ function isHighlighted(lineNum) {
     display: flex; gap: 8px; padding: 1px 10px;
     font-size: 12px; line-height: 1.6;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    &:hover { background: #dcfce7; }
+    &:hover { background: var(--color-success-bg); }
     .fid-line-num {
       color: #86efac; min-width: 32px; text-align: right;
       user-select: none; flex-shrink: 0;
@@ -249,22 +249,22 @@ function isHighlighted(lineNum) {
 
   .fid-doc-card {
     padding: 6px 8px; border: 1px solid #bbf7d0;
-    border-radius: 6px; background: #fff;
+    border-radius: 6px; background: var(--color-canvas);
     .fid-doc-row {
       display: flex; align-items: center; gap: 8px;
     }
     .fid-doc-name {
-      flex: 1; font-size: 12px; font-weight: 500; color: #374151;
+      flex: 1; font-size: 12px; font-weight: 500; color: var(--color-text-dark);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .fid-match-tag {
-      font-size: 11px; color: #166534; background: #dcfce7;
+      font-size: 11px; color: #166534; background: var(--color-success-bg);
       border-radius: 4px; padding: 0 6px; white-space: nowrap; flex-shrink: 0;
     }
   }
 
   .fid-more-hint {
-    font-size: 11px; color: #6b7280; text-align: center;
+    font-size: 11px; color: var(--color-mute); text-align: center;
     padding: 4px 0;
   }
 }
@@ -277,7 +277,7 @@ function isHighlighted(lineNum) {
     flex-wrap: wrap;
     gap: 12px;
     padding: 12px 16px;
-    background: #f0fdf4;
+    background: var(--color-success-bg);
     border-radius: 8px;
     margin-bottom: 16px;
     font-size: 13px;
@@ -300,7 +300,7 @@ function isHighlighted(lineNum) {
     border: 1px solid #bbf7d0;
     border-radius: 8px;
     overflow: hidden;
-    background: #fff;
+    background: var(--color-canvas);
     max-height: 55vh;
     overflow-y: auto;
     
@@ -313,11 +313,11 @@ function isHighlighted(lineNum) {
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       
       &:hover {
-        background: #f0fdf4;
+        background: var(--color-success-bg);
       }
       
       &.highlight {
-        background: #fef3c7;
+        background: var(--color-warn-bg-deep);
       }
       
       .fid-detail-line-num {
@@ -343,7 +343,7 @@ function isHighlighted(lineNum) {
     gap: 16px;
     margin-bottom: 20px;
     padding: 16px;
-    background: #f0fdf4;
+    background: var(--color-success-bg);
     border-radius: 8px;
     
     .fid-stat-item {
@@ -361,7 +361,7 @@ function isHighlighted(lineNum) {
       
       .fid-stat-label {
         font-size: 12px;
-        color: #6b7280;
+        color: var(--color-mute);
       }
     }
   }
@@ -388,14 +388,14 @@ function isHighlighted(lineNum) {
     border: 1px solid #bbf7d0;
     border-radius: 10px;
     overflow: hidden;
-    background: #fff;
+    background: var(--color-canvas);
     
     .fid-doc-header {
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      background: #f0fdf4;
+      background: var(--color-success-bg);
       border-bottom: 1px solid #bbf7d0;
       
       .fid-doc-icon {
@@ -415,7 +415,7 @@ function isHighlighted(lineNum) {
         font-size: 12px;
         font-weight: 500;
         color: #16a34a;
-        background: #dcfce7;
+        background: var(--color-success-bg);
         padding: 4px 10px;
         border-radius: 12px;
         flex-shrink: 0;
@@ -440,10 +440,10 @@ function isHighlighted(lineNum) {
       }
       
       .fid-match-context {
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--color-hairline);
         border-radius: 6px;
         overflow: hidden;
-        background: #f9fafb;
+        background: var(--color-canvas-soft);
       }
       
       .fid-context-line {
@@ -455,12 +455,12 @@ function isHighlighted(lineNum) {
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         
         &.matched {
-          background: #fef3c7;
+          background: var(--color-warn-bg-deep);
           font-weight: 500;
         }
         
         .ctx-line-num {
-          color: #9ca3af;
+          color: var(--color-mute);
           min-width: 35px;
           text-align: right;
           flex-shrink: 0;
@@ -477,7 +477,7 @@ function isHighlighted(lineNum) {
     .fid-more-matches {
       text-align: center;
       font-size: 12px;
-      color: #6b7280;
+      color: var(--color-mute);
       padding: 8px;
       font-style: italic;
     }

@@ -294,8 +294,8 @@ async function loadMessages() {
   try {
     const res = await getSessionMessages(detailSession.value.id, { pageNum: detailPageNum, pageSize: 20 })
     const records = res.data?.records || []
-    // API 按创建时间倒序返回，前端正序显示
-    detailMessages.value = records.reverse()
+    // API 按创建时间倒序返回，直接倒序显示（最新消息在前）
+    detailMessages.value = records
     hasMoreMessages.value = records.length === 20
   } catch {
     // interceptor handled
@@ -315,7 +315,7 @@ async function loadOlderMessages() {
       res = await getSessionMessages(detailSession.value.id, { pageNum: detailPageNum, pageSize: 20 })
     }
     const records = res.data?.records || []
-    detailMessages.value = [...records.reverse(), ...detailMessages.value]
+    detailMessages.value = [...detailMessages.value, ...records]
     hasMoreMessages.value = records.length === 20
   } catch {
     detailPageNum--
@@ -382,7 +382,7 @@ async function loadSearchMessages() {
       pageSize: 20,
     })
     const records = res.data?.records || []
-    detailMessages.value = records.reverse()
+    detailMessages.value = records
     hasMoreMessages.value = records.length === 20
   } catch {
     // interceptor handled
@@ -478,7 +478,7 @@ onUnmounted(() => {
 }
 .btn-danger-outline:hover {
   border-color: #dc2626;
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 .session-title-cell {
   overflow: hidden;
@@ -486,7 +486,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .session-pinned-icon {
-  color: #6366f1;
+  color: var(--color-link);
   font-size: 12px;
   margin-right: 4px;
 }
@@ -511,10 +511,10 @@ onUnmounted(() => {
   justify-content: space-between;
   margin-bottom: 10px;
   padding: 10px 24px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
   position: sticky;
   top: -24px;
-  background: #fff;
+  background: var(--color-canvas);
   z-index: 1;
   margin-left: -24px;
   margin-right: -24px;
@@ -522,7 +522,7 @@ onUnmounted(() => {
 .detail-messages-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .btn-msg-delete {
   display: inline-flex;
@@ -538,12 +538,12 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 .btn-msg-delete:hover {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-color: #dc2626;
 }
 .detail-messages-empty {
   text-align: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
   padding: 24px 0;
   font-size: 13px;
 }
@@ -575,10 +575,10 @@ onUnmounted(() => {
   min-width: 0;
 }
 .detail-msg.user {
-  background: #eff6ff;
+  background: var(--color-info-bg);
 }
 .detail-msg.assistant {
-  background: #f0fdf4;
+  background: var(--color-success-bg);
 }
 .detail-msg-role {
   font-size: 11px;
@@ -588,7 +588,7 @@ onUnmounted(() => {
 }
 .detail-msg-content {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
@@ -609,7 +609,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   cursor: pointer;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 12px;
   transition: color 0.15s;
 }
@@ -623,7 +623,7 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .meta-json-content {
   background: var(--color-canvas-soft-2);

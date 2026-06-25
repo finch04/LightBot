@@ -198,7 +198,7 @@ async function handleOk() {
 .jsonl-help li { margin-bottom: 4px; }
 .jsonl-help code { background: var(--color-canvas-soft-2); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .jsonl-example {
-  background: #f6f8fa; border: 1px solid #e8e8e8; border-radius: 6px;
+  background: var(--color-canvas-soft-2); border: 1px solid var(--color-hairline); border-radius: 6px;
   padding: 12px; font-size: 12px; line-height: 1.6; overflow-x: auto;
   white-space: pre-wrap; word-break: break-all;
 }

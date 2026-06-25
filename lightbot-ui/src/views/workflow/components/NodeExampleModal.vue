@@ -52,14 +52,14 @@ function applyExample() {
 
 <style scoped>
 .node-example-summary {
-  color: #4b5563;
+  color: var(--color-body);
   margin-bottom: 12px;
   line-height: 1.6;
 }
 .node-example-label {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-mute);
   margin-bottom: 6px;
 }
 .node-example-pre {
@@ -74,7 +74,7 @@ function applyExample() {
 }
 .node-example-readonly-tip {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-mute);
   margin-top: 8px;
 }
 </style>

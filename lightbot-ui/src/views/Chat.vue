@@ -289,6 +289,20 @@
                       <a-tag v-if="ref.sourceType === 'qa_pair'" color="success" class="rag-qa-tag">问答对</a-tag>
                       <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
                       <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
+                      <span class="rag-feedback-btns" @click.stop>
+                        <a-tooltip title="有用">
+                          <button class="rag-fb-btn" :class="{ active: getRagFeedbackType(messages[virtualRow.index], ref) === 'positive' }" @click="handleRagFeedback(messages[virtualRow.index], ref, 'positive')">
+                            <LikeFilled v-if="getRagFeedbackType(messages[virtualRow.index], ref) === 'positive'" />
+                            <LikeOutlined v-else />
+                          </button>
+                        </a-tooltip>
+                        <a-tooltip title="无用">
+                          <button class="rag-fb-btn" :class="{ active: getRagFeedbackType(messages[virtualRow.index], ref) === 'negative' }" @click="handleRagFeedback(messages[virtualRow.index], ref, 'negative')">
+                            <DislikeFilled v-if="getRagFeedbackType(messages[virtualRow.index], ref) === 'negative'" />
+                            <DislikeOutlined v-else />
+                          </button>
+                        </a-tooltip>
+                      </span>
                       <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
                         <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
                       </a-tooltip>
@@ -596,9 +610,9 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { chatStream, refreshChatAttachmentPreviews } from '../api/chat'
+import { chatStream, refreshChatAttachmentPreviews, submitRagFeedback } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
 import { enrichVideoThumbnails } from '../utils/videoThumbnail'
 import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi } from '../api/chatSession'
@@ -622,6 +636,8 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const input = ref('')
+const inputHistory = ref([])
+const historyIndex = ref(-1)
 const loading = ref(false)
 const streaming = ref(false)
 const messages = ref([])
@@ -840,6 +856,8 @@ const abortController = ref(null)
 const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
+// RAG 反馈状态：key = "messageId-chunkId/qaPairId" → "positive"/"negative"
+const ragFeedbackMap = ref(new Map())
 
 const canSend = computed(() =>
   !loading.value && (input.value.trim().length > 0 || pendingAttachments.value.length > 0))
@@ -853,6 +871,30 @@ function handleKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     sendMessage()
+    return
+  }
+  // 上下键翻阅输入历史（仅在光标位于首尾时触发）
+  const ta = inputRef.value
+  if (!ta || inputHistory.value.length === 0) return
+  if (e.key === 'ArrowUp' && ta.selectionStart === 0 && ta.selectionEnd === 0) {
+    e.preventDefault()
+    const idx = historyIndex.value < 0
+      ? inputHistory.value.length - 1
+      : Math.max(0, historyIndex.value - 1)
+    historyIndex.value = idx
+    input.value = inputHistory.value[idx]
+    nextTick(() => { ta.selectionStart = ta.selectionEnd = 0 })
+  } else if (e.key === 'ArrowDown' && historyIndex.value >= 0) {
+    e.preventDefault()
+    const idx = historyIndex.value + 1
+    if (idx >= inputHistory.value.length) {
+      historyIndex.value = -1
+      input.value = ''
+    } else {
+      historyIndex.value = idx
+      input.value = inputHistory.value[idx]
+    }
+    nextTick(() => { ta.selectionStart = ta.selectionEnd = ta.value.length })
   }
 }
 
@@ -930,17 +972,37 @@ function toggleReasoningExpand(index) {
   const msg = messages.value[index]
   if (!msg) return
   msg._reasoningExpanded = !msg._reasoningExpanded
-  nextTick(() => {
-    const container = messagesRef.value
-    if (!container) return
-    const rowEl = container.querySelector(`[data-index="${index}"]`)
-    if (!rowEl) return
-    const scrollTopBefore = container.scrollTop
-    const rowTopBefore = rowEl.getBoundingClientRect().top
-    virtualizer.value.measureElement(rowEl)
-    const rowTopAfter = rowEl.getBoundingClientRect().top
-    container.scrollTop = scrollTopBefore + (rowTopAfter - rowTopBefore)
-  })
+}
+
+function getRagFeedbackKey(msg, ref) {
+  const targetId = ref.sourceType === 'qa_pair' ? ref.qaPairId : ref.chunkId
+  return `${msg._id || msg.id}-${targetId}`
+}
+
+function getRagFeedbackType(msg, ref) {
+  return ragFeedbackMap.value.get(getRagFeedbackKey(msg, ref)) || null
+}
+
+async function handleRagFeedback(msg, ref, feedbackType) {
+  const key = getRagFeedbackKey(msg, ref)
+  const current = ragFeedbackMap.value.get(key)
+  // 点击已选中的反馈则取消
+  if (current === feedbackType) {
+    ragFeedbackMap.value.delete(key)
+  } else {
+    ragFeedbackMap.value.set(key, feedbackType)
+  }
+  try {
+    await submitRagFeedback({
+      messageId: msg._id || msg.id,
+      chunkId: ref.chunkId || null,
+      qaPairId: ref.qaPairId || null,
+      sourceType: ref.sourceType || 'chunk',
+      feedbackType,
+    })
+  } catch {
+    // interceptor handled
+  }
 }
 
 function parseAttachmentsFromMetadata(metadata) {
@@ -1086,6 +1148,8 @@ async function loadHistory() {
   initialLoadDone.value = false
   lastReplyElapsed.value = null
   input.value = ''
+  inputHistory.value = []
+  historyIndex.value = -1
   pendingAttachments.value = []
   cancelReply()
   loadingHistory.value = true
@@ -1209,6 +1273,11 @@ async function sendMessage() {
     userMsg._replyToRole = currentReplyToRole
   }
   messages.value.push(userMsg)
+  // 记录输入历史（去重：与上一条相同则不重复记录）
+  if (text && (inputHistory.value.length === 0 || inputHistory.value[inputHistory.value.length - 1] !== text)) {
+    inputHistory.value.push(text)
+  }
+  historyIndex.value = -1
   input.value = ''
   pendingAttachments.value = []
   cancelReply()
@@ -1942,7 +2011,7 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .history-loading-icon {
   font-size: 24px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .virtual-list-container {
   width: 100%;
@@ -1969,13 +2038,13 @@ watch(sessionId, (newVal, oldVal) => {
   margin-bottom: 24px;
   font-size: 15px;
   line-height: 1.7;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .welcome-content :deep(h1),
 .welcome-content :deep(h2) {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .welcome-content :deep(p) {
@@ -1991,22 +2060,22 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .btn-question {
   padding: 8px 16px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-question:hover {
   border-color: var(--color-link);
   color: var(--color-link);
-  background: #f0f7ff;
+  background: var(--color-link-bg-soft);
 }
 .no-default-hint {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 8px;
 }
 .no-default-hint a {
@@ -2060,7 +2129,7 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .message-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-bottom: 6px;
 }
 .message-actions {
@@ -2102,16 +2171,19 @@ watch(sessionId, (newVal, oldVal) => {
 .message-content {
   font-size: 15px;
   line-height: 1.7;
-  color: var(--color-primary);
+  color: var(--color-ink);
   word-break: break-word;
 }
 .message.user .message-content {
   display: inline-block;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 10px 16px;
   border-radius: 12px 12px 2px 12px;
   text-align: left;
   max-width: 80%;
+}
+[data-theme="dark"] .message.user .message-content {
+  background: #27272a;
 }
 /* 用户消息气泡内紧凑样式 */
 .message.user .message-content :deep(.markdown-preview p) {
@@ -2132,7 +2204,7 @@ watch(sessionId, (newVal, oldVal) => {
   border: none;
   border-radius: 4px;
   font-size: 14px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, color 0.15s;
@@ -2151,7 +2223,7 @@ watch(sessionId, (newVal, oldVal) => {
   justify-content: flex-end;
 }
 .btn-copy:hover {
-  color: #52525b;
+  color: var(--color-body);
 }
 .btn-copy.copied {
   color: #16a34a;
@@ -2162,7 +2234,7 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .btn-copy.active {
   color: var(--color-link);
-  background: #e8f4ff;
+  background: var(--color-link-bg-soft);
 }
 
 /* 编辑消息 */
@@ -2178,9 +2250,12 @@ watch(sessionId, (newVal, oldVal) => {
 .edit-message-box {
   flex: 1;
   min-width: 0;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 12px 12px 2px 12px;
   padding: 10px 16px;
+}
+[data-theme="dark"] .edit-message-box {
+  background: #27272a;
 }
 .edit-message-box :deep(textarea) {
   background: transparent;
@@ -2205,7 +2280,7 @@ watch(sessionId, (newVal, oldVal) => {
   color: var(--color-link);
 }
 .edit-btn-send:disabled {
-  color: #c0c0c0;
+  color: var(--color-hairline-strong);
   cursor: not-allowed;
 }
 
@@ -2216,9 +2291,12 @@ watch(sessionId, (newVal, oldVal) => {
   gap: 8px;
   padding: 8px 12px;
   margin: 8px 12px 8px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 8px;
   border-left: 3px solid #0070f3;
+}
+[data-theme="dark"] .reply-preview-bar {
+  background: #27272a;
 }
 .reply-preview-content {
   flex: 1;
@@ -2240,14 +2318,14 @@ watch(sessionId, (newVal, oldVal) => {
   background: none;
   border: none;
   cursor: pointer;
-  color: #a1a1aa;
+  color: var(--color-mute);
   padding: 2px;
   display: flex;
   align-items: center;
   transition: color 0.15s;
 }
 .reply-preview-close:hover {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 /* 引用回复内容展示 */
@@ -2292,7 +2370,7 @@ watch(sessionId, (newVal, oldVal) => {
   font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.7;
-  color: #1e293b;
+  color: var(--color-text-code);
 }
 
 .raw-modal-meta-btn {
@@ -2320,7 +2398,7 @@ watch(sessionId, (newVal, oldVal) => {
   margin: 16px 0 8px;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .message-content :deep(h1) { font-size: 1.5em; }
 .message-content :deep(h2) { font-size: 1.3em; }
@@ -2332,14 +2410,17 @@ watch(sessionId, (newVal, oldVal) => {
   margin: 0 0 12px;
 }
 .message-content :deep(code) {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
   font-family: 'Geist Mono', 'Menlo', monospace;
 }
+[data-theme="dark"] .message-content :deep(code) {
+  background: #27272a;
+}
 .message-content :deep(pre) {
-  background: var(--color-primary);
+  background: #171717;
   border-radius: 8px;
   padding: 16px;
   overflow-x: auto;
@@ -2372,10 +2453,10 @@ watch(sessionId, (newVal, oldVal) => {
   margin: 2px 0;
 }
 .message-content :deep(blockquote) {
-  border-left: 3px solid #0070f3;
+  border-left: 3px solid var(--color-link);
   padding-left: 12px;
   margin: 12px 0;
-  color: #52525b;
+  color: var(--color-body);
 }
 .message-content :deep(table) {
   border-collapse: collapse;
@@ -2384,13 +2465,13 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .message-content :deep(th),
 .message-content :deep(td) {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   padding: 8px 12px;
   text-align: left;
   font-size: 14px;
 }
 .message-content :deep(th) {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
 }
 
 /* 输入区 */
@@ -2401,9 +2482,9 @@ watch(sessionId, (newVal, oldVal) => {
   width: 100%;
 }
 .chat-input-shell {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
-  background: #fff;
+  background: var(--color-canvas);
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
   position: relative;
@@ -2418,13 +2499,13 @@ watch(sessionId, (newVal, oldVal) => {
   gap: 10px;
   padding: 8px 12px;
   background: var(--color-canvas-soft);
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
   position: relative;
 }
 .toolbar-loading-mask {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(24, 24, 27, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2440,7 +2521,7 @@ watch(sessionId, (newVal, oldVal) => {
   min-width: 0;
   font-size: 13px;
   font-weight: 500;
-  color: #3f3f46;
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2450,7 +2531,7 @@ watch(sessionId, (newVal, oldVal) => {
   align-items: flex-end;
   gap: 8px;
   padding: 8px 8px 8px 4px;
-  background: #fff;
+  background: var(--color-canvas);
 }
 .chat-input-actions {
   display: flex;
@@ -2465,8 +2546,8 @@ watch(sessionId, (newVal, oldVal) => {
   height: 36px;
   border-radius: 8px;
   border: none;
-  background: #f4f4f5;
-  color: #52525b;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-mute);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2477,7 +2558,7 @@ watch(sessionId, (newVal, oldVal) => {
   overflow: hidden;
 }
 .btn-agent:hover {
-  background: #e4e4e7;
+  background: var(--color-hairline);
 }
 .btn-agent-avatar {
   width: 36px;
@@ -2535,7 +2616,7 @@ span.agent-menu-icon {
 .agent-version-tag {
   font-size: 10px;
   padding: 1px 6px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   color: var(--color-mute);
   border-radius: 100px;
   flex-shrink: 0;
@@ -2543,14 +2624,14 @@ span.agent-menu-icon {
 .agent-default-tag {
   font-size: 10px;
   padding: 1px 6px;
-  background: #eff6ff;
+  background: var(--color-info-bg);
   color: #2563eb;
   border-radius: 100px;
   flex-shrink: 0;
 }
 .empty-agent-tip {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   white-space: nowrap;
 }
 .empty-agent-tip a {
@@ -2571,7 +2652,7 @@ span.agent-menu-icon {
 }
 .version-option-num {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .version-status-tag {
   margin: 0;
@@ -2580,8 +2661,8 @@ span.agent-menu-icon {
   padding: 0 6px;
 }
 .version-status-tag.draft {
-  background: #f4f4f5;
-  color: #52525b;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-body);
 }
 .message-actions {
   display: inline-flex;
@@ -2601,7 +2682,7 @@ span.agent-menu-icon {
   font-size: 15px;
   line-height: 1.5;
   font-family: inherit;
-  color: var(--color-primary);
+  color: var(--color-ink);
   background: transparent;
   max-height: 200px;
   min-height: 36px;
@@ -2609,7 +2690,7 @@ span.agent-menu-icon {
   align-items: center;
 }
 .input-textarea::placeholder {
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .hidden-file-input {
   display: none;
@@ -2620,8 +2701,8 @@ span.agent-menu-icon {
   height: 36px;
   border-radius: 8px;
   border: none;
-  background: #f4f4f5;
-  color: #52525b;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-mute);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2631,7 +2712,7 @@ span.agent-menu-icon {
 }
 .btn-attach:hover:not(:disabled),
 .btn-voice:hover:not(:disabled) {
-  background: #e4e4e7;
+  background: var(--color-hairline);
 }
 .btn-attach:disabled,
 .btn-voice:disabled {
@@ -2639,7 +2720,7 @@ span.agent-menu-icon {
   cursor: not-allowed;
 }
 .btn-attach--uploading {
-  background: #eff6ff;
+  background: var(--color-info-bg);
   color: var(--color-link);
   animation: attach-btn-pulse 1s ease-in-out infinite;
 }
@@ -2648,7 +2729,7 @@ span.agent-menu-icon {
   50% { box-shadow: 0 0 0 6px rgba(0, 112, 243, 0); }
 }
 .btn-voice.listening {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   color: #ef4444;
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
 }
@@ -2658,8 +2739,8 @@ span.agent-menu-icon {
   gap: 6px;
   padding: 4px 8px;
   border-radius: 8px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-soft);
 }
 .voice-listening-text {
   font-size: 12px;
@@ -2673,10 +2754,10 @@ span.agent-menu-icon {
   height: 52px;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   flex-shrink: 0;
   display: block;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 0;
   cursor: pointer;
 }
@@ -2729,9 +2810,9 @@ span.agent-menu-icon {
 }
 .msg-att-file-tag {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   padding: 4px 10px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
 }
 .pending-attachments {
@@ -2760,9 +2841,9 @@ span.agent-menu-icon {
   height: 48px;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   padding: 0;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   cursor: pointer;
 }
 .att-thumb {
@@ -2773,7 +2854,7 @@ span.agent-menu-icon {
 }
 .pending-att-item .att-name {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2786,8 +2867,8 @@ span.agent-menu-icon {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2823,7 +2904,7 @@ span.agent-menu-icon {
   background: #005bc4;
 }
 .btn-send:disabled {
-  background: #d4d4d8;
+  background: var(--color-hairline-strong);
   cursor: not-allowed;
 }
 .btn-stop {
@@ -2860,16 +2941,19 @@ span.agent-menu-icon {
 /* 深度思考面板 */
 .reasoning-panel {
   margin-bottom: 8px;
-  border: 1px solid #fef3c7;
+  border: 1px solid var(--color-warn-bg-deep);
   border-radius: 8px;
   overflow: hidden;
+}
+[data-theme="dark"] .reasoning-panel {
+  border-color: #3b2f0a;
 }
 .reasoning-header {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #fefce8;
+  background: var(--color-warn-bg);
   cursor: pointer;
   user-select: none;
   font-size: 13px;
@@ -2877,7 +2961,14 @@ span.agent-menu-icon {
   transition: background 0.15s;
 }
 .reasoning-header:hover {
-  background: #fef9c3;
+  background: var(--color-warn-bg-deep);
+}
+[data-theme="dark"] .reasoning-header {
+  background: #3b2f0a;
+  color: #fbbf24;
+}
+[data-theme="dark"] .reasoning-header:hover {
+  background: #422006;
 }
 .reasoning-icon {
   color: #eab308;
@@ -2902,7 +2993,7 @@ span.agent-menu-icon {
 }
 .reasoning-content {
   padding: 10px 12px;
-  background: #fffbeb;
+  background: var(--color-warn-bg);
   font-size: 13px;
   color: var(--color-mute);
   line-height: 1.6;
@@ -2910,6 +3001,9 @@ span.agent-menu-icon {
   word-break: break-word;
   max-height: 300px;
   overflow-y: auto;
+}
+[data-theme="dark"] .reasoning-content {
+  background: #27272a;
 }
 
 /* 敏感词拦截提示 */
@@ -2924,16 +3018,16 @@ span.agent-menu-icon {
   animation: fadeIn 0.3s ease;
 }
 .sensitive-block-alert.user_input {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-soft);
   color: #991b1b;
 }
 .sensitive-block-alert.user_input .sensitive-block-icon {
   color: #ef4444;
 }
 .sensitive-block-alert.ai_output {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: var(--color-warn-bg);
+  border: 1px solid var(--color-warn-bg-deep);
   color: #9a3412;
 }
 .sensitive-block-alert.ai_output .sensitive-block-icon {
@@ -2950,7 +3044,7 @@ span.agent-menu-icon {
 .input-hint {
   text-align: center;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 8px;
 }
 .token-pill {
@@ -2959,8 +3053,8 @@ span.agent-menu-icon {
   gap: 4px;
   margin-left: auto;
   padding: 2px 10px;
-  background: #f4f4f5;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas-soft-2);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 12px;
   white-space: nowrap;
@@ -2970,12 +3064,12 @@ span.agent-menu-icon {
   font-size: 12px;
 }
 .token-pill-value {
-  color: var(--color-primary);
+  color: var(--color-ink);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .token-pill-label {
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 /* RAG 引用样式 */
 .rag-references {
@@ -3000,7 +3094,7 @@ span.agent-menu-icon {
   gap: 8px;
 }
 .rag-item {
-  background: #fff;
+  background: var(--color-canvas);
   border-radius: 6px;
   border: 1px solid var(--main-200, #bfdbfe);
   border-left: 3px solid var(--main-400, #60a5fa);
@@ -3056,6 +3150,32 @@ span.agent-menu-icon {
 .rag-nav-btn:hover {
   color: var(--main-600, #2563eb);
 }
+.rag-feedback-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+}
+.rag-fb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  color: var(--gray-400, #9ca3af);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.rag-fb-btn:hover {
+  color: var(--main-500, #3b82f6);
+  background: var(--main-50, #eff6ff);
+}
+.rag-fb-btn.active {
+  color: var(--main-600, #2563eb);
+}
 .rag-item-content {
   padding: 12px;
   background: var(--gray-25, #fafafa);
@@ -3079,7 +3199,7 @@ span.agent-menu-icon {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 12px;
   animation: fadeIn 0.3s ease;
 }
@@ -3090,7 +3210,7 @@ span.agent-menu-icon {
 .status-spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #e4e4e7;
+  border: 2px solid var(--color-hairline);
   border-top-color: var(--color-link);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -3100,14 +3220,14 @@ span.agent-menu-icon {
 }
 .status-text {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
 }
 
 /* 耗时显示 */
 .reply-elapsed {
   margin-top: 8px;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 </style>
 

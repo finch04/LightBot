@@ -578,8 +578,8 @@ watch(drawerVisible, (visible) => {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   color: var(--color-mute);
@@ -607,10 +607,10 @@ watch(drawerVisible, (visible) => {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 4px;
-  background: #fff;
-  color: #a1a1aa;
+  background: var(--color-canvas);
+  color: var(--color-mute);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -623,7 +623,7 @@ watch(drawerVisible, (visible) => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   transition: all 0.15s;
@@ -668,14 +668,14 @@ watch(drawerVisible, (visible) => {
 .tool-card-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tool-card-desc {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -704,7 +704,7 @@ watch(drawerVisible, (visible) => {
 .empty-tip {
   text-align: center;
   padding: 24px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 
@@ -724,10 +724,10 @@ watch(drawerVisible, (visible) => {
 }
 .tool-detail-modal .detail-value {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .tool-detail-modal .schema-table-wrap {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -738,13 +738,13 @@ watch(drawerVisible, (visible) => {
 .tool-detail-modal .schema-table th,
 .tool-detail-modal .schema-table td {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
   font-size: 13px;
 }
 .tool-detail-modal .schema-table th {
   background: var(--color-canvas-soft);
   font-weight: 500;
-  color: #374151;
+  color: var(--color-text-dark);
   white-space: nowrap;
 }
 .tool-detail-modal .schema-table td {
@@ -762,7 +762,7 @@ watch(drawerVisible, (visible) => {
   color: var(--color-mute);
 }
 .tool-detail-modal .prop-desc {
-  color: #52525b;
+  color: var(--color-body);
 }
 .tool-detail-modal .prop-required {
   color: var(--color-mute);
@@ -770,18 +770,18 @@ watch(drawerVisible, (visible) => {
 .tool-detail-modal .schema-empty {
   text-align: center;
   padding: 16px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
   background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .example-json {
   background: var(--color-canvas-soft-2);
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow-x: auto;
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
@@ -811,12 +811,12 @@ watch(drawerVisible, (visible) => {
 .test-params-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .test-params-hint {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-style: italic;
 }
 .test-params-table {
@@ -828,15 +828,15 @@ watch(drawerVisible, (visible) => {
   text-align: left;
   padding: 6px 12px;
   background: var(--color-canvas-soft-2);
-  color: #52525b;
+  color: var(--color-body);
   font-weight: 600;
   border-bottom: 1px solid #e5e5e5;
   white-space: nowrap;
 }
 .test-params-table td {
   padding: 6px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  color: var(--color-primary);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-ink);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -853,7 +853,7 @@ watch(drawerVisible, (visible) => {
   font-weight: 500;
 }
 .param-optional {
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 12px;
 }
 .test-input-header {
@@ -865,7 +865,7 @@ watch(drawerVisible, (visible) => {
 .test-input-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .btn-text {
   background: none;
@@ -883,7 +883,7 @@ watch(drawerVisible, (visible) => {
   width: 100%;
   min-height: 120px;
   padding: 12px 16px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   font-size: 13px;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
@@ -892,19 +892,19 @@ watch(drawerVisible, (visible) => {
   outline: none;
   transition: border-color 0.2s;
   background: var(--color-canvas-soft);
-  color: var(--color-primary);
+  color: var(--color-ink);
   box-sizing: border-box;
 }
 .test-json-input:focus {
   border-color: var(--color-link);
-  background: #fff;
+  background: var(--color-canvas);
 }
 .dialog-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 16px;
 }
 .dialog-footer-right {
@@ -913,16 +913,16 @@ watch(drawerVisible, (visible) => {
 }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .btn-primary-sm {
   padding: 6px 14px;
@@ -944,7 +944,7 @@ watch(drawerVisible, (visible) => {
 .test-result-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .test-result-content {
@@ -953,7 +953,7 @@ watch(drawerVisible, (visible) => {
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -978,12 +978,12 @@ watch(drawerVisible, (visible) => {
 .help-section h4 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .help-section p {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.6;
 }
 .help-section code {
@@ -1018,18 +1018,18 @@ watch(drawerVisible, (visible) => {
 }
 .help-step b {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .help-step p {
   margin-top: 8px;
 }
 .code-block {
   background: var(--color-canvas-soft-2);
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow-x: auto;
   margin: 8px 0;
 }
@@ -1037,7 +1037,7 @@ watch(drawerVisible, (visible) => {
   list-style: disc;
   padding-left: 20px;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.8;
 }
 .help-table {
@@ -1055,11 +1055,11 @@ watch(drawerVisible, (visible) => {
 .help-table th {
   background: var(--color-canvas-soft-2);
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-dark);
   white-space: nowrap;
 }
 .help-table td {
-  color: #52525b;
+  color: var(--color-body);
   word-break: break-word;
   overflow-wrap: break-word;
 }

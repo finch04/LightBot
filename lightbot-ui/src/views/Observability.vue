@@ -1083,8 +1083,8 @@ onUnmounted(() => clearTimeout(copyTimer))
   display: flex;
   align-items: center;
   gap: 14px;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-color, #e8e8e8);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 10px;
   padding: 18px 20px;
 }
@@ -1103,7 +1103,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 .duration-icon { background: linear-gradient(135deg, #13c2c2, #08979c); }
 .tool-icon { background: linear-gradient(135deg, #fa8c16, #d46b08); }
 .stat-value { font-size: 22px; font-weight: 600; line-height: 1.2; }
-.stat-label { font-size: 12px; color: #8c8c8c; margin-top: 2px; }
+.stat-label { font-size: 12px; color: var(--color-mute); margin-top: 2px; }
 
 /* 筛选栏 */
 .filter-bar {
@@ -1133,13 +1133,13 @@ onUnmounted(() => clearTimeout(copyTimer))
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
 }
 
 /* Token 详情 */
 .token-detail { font-size: 13px; }
 .token-input { color: #1890ff; }
-.token-sep { color: #d9d9d9; margin: 0 3px; }
+.token-sep { color: var(--color-hairline-strong); margin: 0 3px; }
 .token-output { color: #52c41a; }
 
 /* 瀑布图 */
@@ -1152,8 +1152,8 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .waterfall-header {
   font-size: 12px;
-  color: #8c8c8c;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--color-mute);
+  border-bottom: 1px solid var(--color-hairline);
 }
 .wf-label {
   width: 180px;
@@ -1176,7 +1176,7 @@ onUnmounted(() => clearTimeout(copyTimer))
   top: 0;
   transform: translateX(-50%);
   font-size: 10px;
-  color: #d9d9d9;
+  color: var(--color-hairline-strong);
 }
 .wf-bar {
   position: absolute;
@@ -1200,14 +1200,14 @@ onUnmounted(() => clearTimeout(copyTimer))
   min-width: 70px;
   text-align: right;
   font-size: 12px;
-  color: #595959;
+  color: var(--color-body);
 }
-.wf-expand-icon { font-size: 10px; color: #8c8c8c; }
+.wf-expand-icon { font-size: 10px; color: var(--color-mute); }
 .wf-count { font-size: 10px; color: #fa8c16; margin-left: 4px; font-weight: 500; }
 .wf-bar-segment { border-right: 1px solid rgba(255,255,255,0.6); }
 .waterfall-row { cursor: pointer; border-radius: 4px; }
 .waterfall-row:hover { background: var(--color-canvas-soft); }
-.waterfall-row.wf-active { background: #e6f7ff; }
+.waterfall-row.wf-active { background: var(--color-link-bg-soft); }
 
 /* 行内 Span 详情 */
 .span-inline-detail {
@@ -1239,7 +1239,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .sd-sub-time {
   font-size: 11px;
-  color: #8c8c8c;
+  color: var(--color-mute);
 }
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-4px); }
@@ -1252,13 +1252,13 @@ onUnmounted(() => clearTimeout(copyTimer))
   margin-bottom: 10px;
 }
 .sd-item { display: flex; align-items: center; gap: 6px; }
-.sd-key { color: #8c8c8c; font-size: 12px; min-width: 50px; }
-.sd-val { font-size: 12px; color: #262626; }
+.sd-key { color: var(--color-mute); font-size: 12px; min-width: 50px; }
+.sd-val { font-size: 12px; color: var(--color-ink); }
 .sd-section { margin-top: 8px; }
-.sd-section-title { font-size: 12px; color: #8c8c8c; margin-bottom: 4px; font-weight: 500; }
+.sd-section-title { font-size: 12px; color: var(--color-mute); margin-bottom: 4px; font-weight: 500; }
 .sd-content-box {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 12px;
@@ -1270,8 +1270,8 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .reasoning-box { color: #722ed1; background: #f9f0ff; border-color: #d3adf7; }
 .sd-json {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 11px;
@@ -1292,7 +1292,7 @@ onUnmounted(() => clearTimeout(copyTimer))
   border-radius: 8px;
 }
 .info-row { display: flex; align-items: center; gap: 8px; }
-.info-label { color: #8c8c8c; font-size: 13px; min-width: 50px; }
+.info-label { color: var(--color-mute); font-size: 13px; min-width: 50px; }
 .info-value { font-size: 13px; }
 .error-row { grid-column: 1 / -1; align-items: flex-start; }
 .error-content-wrap {
@@ -1308,7 +1308,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 
 .empty-spans {
   text-align: center;
-  color: #bfbfbf;
+  color: var(--color-hairline-strong);
   padding: 40px;
   font-size: 13px;
 }
@@ -1317,8 +1317,8 @@ onUnmounted(() => clearTimeout(copyTimer))
 .model-input-section {
   margin-bottom: 24px;
   padding: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 .model-input-section h4 {
@@ -1335,7 +1335,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 .mi-block-title {
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: var(--color-ink);
   margin-bottom: 0;
 }
 .mi-block-title-row {
@@ -1349,13 +1349,13 @@ onUnmounted(() => clearTimeout(copyTimer))
   word-break: break-word;
   font-size: 13px;
   line-height: 1.6;
-  color: #1e293b;
+  color: var(--color-ink);
 }
 .mi-pre {
   margin: 0;
   padding: 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 12px;
   line-height: 1.55;
@@ -1370,13 +1370,13 @@ onUnmounted(() => clearTimeout(copyTimer))
 .mi-sub-label {
   display: block;
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-mute);
   margin-bottom: 4px;
 }
 .mi-msg {
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px dashed #e2e8f0;
+  border-bottom: 1px dashed var(--color-hairline);
 }
 .mi-msg:last-child {
   margin-bottom: 0;
@@ -1395,7 +1395,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .mi-empty-text {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-mute);
 }
 /* 附件缩略图（与对话页一致） */
 .trace-att-thumbs {
@@ -1406,9 +1406,9 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .trace-inline-tag {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   padding: 4px 10px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
   max-width: 100%;
   word-break: break-all;
@@ -1439,19 +1439,19 @@ onUnmounted(() => clearTimeout(copyTimer))
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
 .config-key {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-mute);
   min-width: 80px;
   font-weight: 500;
 }
 .config-val {
   font-size: 12px;
-  color: #1e293b;
+  color: var(--color-ink);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   word-break: break-all;
 }
@@ -1460,8 +1460,8 @@ onUnmounted(() => clearTimeout(copyTimer))
 .tool-def-item {
   margin-bottom: 10px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
 .tool-def-item:last-child { margin-bottom: 0; }
@@ -1472,7 +1472,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .tool-def-desc {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-mute);
 }
 
 /* AI回复内容 */
@@ -1493,7 +1493,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .trace-llm-media-hint {
   font-size: 11px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 4px;
   display: inline-block;
 }
@@ -1505,8 +1505,8 @@ onUnmounted(() => clearTimeout(copyTimer))
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 12px;
   color: var(--color-mute);
@@ -1526,12 +1526,12 @@ onUnmounted(() => clearTimeout(copyTimer))
   border: none;
   border-radius: 4px;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--color-mute);
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-copy-sm:hover {
-  background: #f0f0f0;
+  background: var(--color-canvas-soft-2);
   color: var(--color-link);
 }
 .sd-section-title-row {
@@ -1544,8 +1544,8 @@ onUnmounted(() => clearTimeout(copyTimer))
   margin-bottom: 0;
 }
 .reply-content-box {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 14px 16px;
   font-size: 13px;
@@ -1562,7 +1562,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 }
 .detail-label {
   font-size: 13px;
-  color: #888;
+  color: var(--color-mute);
   margin-bottom: 6px;
   font-weight: 500;
   display: flex;
@@ -1607,7 +1607,7 @@ onUnmounted(() => clearTimeout(copyTimer))
   gap: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  background: #fff7e6;
+  background: var(--color-warn-bg);
   border: 1px solid #ffd591;
   border-radius: 6px;
   font-size: 12px;
@@ -1629,7 +1629,7 @@ onUnmounted(() => clearTimeout(copyTimer))
 .ask-user-trigger {
   border-left: 3px solid #fa8c16;
   padding-left: 12px;
-  background: #fffbe6;
+  background: var(--color-warn-bg);
   border-radius: 0 6px 6px 0;
 }
 .ask-user-response {
@@ -1646,7 +1646,7 @@ onUnmounted(() => clearTimeout(copyTimer))
   font-weight: 500;
 }
 .trigger-badge {
-  background: #fff1b8;
+  background: var(--color-warn-bg-deep);
   color: #d46b08;
 }
 .response-badge {

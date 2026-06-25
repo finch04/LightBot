@@ -126,7 +126,7 @@ defineEmits([
   min-width: 480px;
   max-width: 42vw;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--color-canvas);
   border-left: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
@@ -136,7 +136,7 @@ defineEmits([
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-hairline);
   gap: 12px;
 }
 .node-type-badge {
@@ -154,7 +154,7 @@ defineEmits([
   align-items: center;
   justify-content: center;
 }
-.type-name { font-weight: 600; color: #1f2937; }
+.type-name { font-weight: 600; color: var(--color-ink); }
 .panel-header-right {
   display: flex;
   align-items: center;
@@ -176,8 +176,8 @@ defineEmits([
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: #eef2ff;
-  color: #6366f1;
+  background: var(--color-info-bg);
+  color: var(--color-link);
   font-size: 14px;
   cursor: pointer;
   flex-shrink: 0;
@@ -193,8 +193,8 @@ defineEmits([
   padding: 0;
   border: none;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--color-canvas-soft);
+  color: var(--color-body);
   cursor: pointer;
 }
 .btn-node-action:hover:not(:disabled) { background: #6366f1; color: #fff; }
@@ -204,7 +204,7 @@ defineEmits([
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: #6b7280;
+  color: var(--color-mute);
 }
 .panel-body {
   position: relative;
@@ -233,7 +233,7 @@ defineEmits([
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-radius: 4px;
   color: #dc2626;
   font-size: 12px;
@@ -241,7 +241,7 @@ defineEmits([
 }
 .panel-footer {
   padding: 12px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-hairline);
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

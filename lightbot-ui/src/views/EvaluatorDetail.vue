@@ -380,7 +380,7 @@ function formatJson(str) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -422,7 +422,7 @@ function formatJson(str) {
   gap: 16px;
 }
 .panel {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
@@ -438,7 +438,7 @@ function formatJson(str) {
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0;
 }
 
@@ -454,7 +454,7 @@ function formatJson(str) {
 }
 .version-item {
   padding: 10px 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s;
@@ -463,7 +463,7 @@ function formatJson(str) {
 .version-item:hover { border-color: var(--color-link); }
 .version-item.active {
   border-color: var(--color-link);
-  background: #f0f7ff;
+  background: var(--color-info-bg);
 }
 .btn-icon {
   width: 28px;
@@ -488,11 +488,11 @@ function formatJson(str) {
 .version-tag {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .version-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -500,7 +500,7 @@ function formatJson(str) {
 .version-empty {
   text-align: center;
   padding: 40px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 
@@ -512,13 +512,13 @@ function formatJson(str) {
   justify-content: flex-end;
 }
 .debug-result {
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 24px;
 }
 .result-header {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 16px;
 }
 .result-score {
@@ -529,9 +529,9 @@ function formatJson(str) {
   border-radius: 8px;
   margin-bottom: 16px;
 }
-.result-score.score-high { background: #dcfce7; }
-.result-score.score-mid { background: #fef3c7; }
-.result-score.score-low { background: #fee2e2; }
+.result-score.score-high { background: var(--color-success-bg); }
+.result-score.score-mid { background: var(--color-warn-bg-deep); }
+.result-score.score-low { background: var(--color-error-bg); }
 .score-label {
   font-size: 14px;
   color: var(--color-mute);
@@ -539,11 +539,11 @@ function formatJson(str) {
 .score-value {
   font-size: 28px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .result-reason {
   padding: 12px 16px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .reason-label {
@@ -554,7 +554,7 @@ function formatJson(str) {
 .result-reason p {
   margin: 0;
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   line-height: 1.6;
 }
 
@@ -575,12 +575,12 @@ function formatJson(str) {
   margin-bottom: 8px;
 }
 .detail-pre {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
@@ -602,11 +602,11 @@ function formatJson(str) {
 .variable-field-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .variable-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 4px;
 }
 </style>

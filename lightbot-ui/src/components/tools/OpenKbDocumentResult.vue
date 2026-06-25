@@ -241,17 +241,17 @@ function openFile() {
 
 <style lang="less" scoped>
 .open-kb-doc-result {
-  border: 1px solid #93c5fd;
+  border: 1px solid var(--color-border-blue);
   border-left: 3px solid #3b82f6;
   border-radius: 8px;
   overflow: hidden;
-  background: #eff6ff;
+  background: var(--color-info-bg);
 
   .okd-plain {
     .okd-debug-info {
       margin-bottom: 8px;
       padding: 8px;
-      background: #fef3c7;
+      background: var(--color-warn-bg-deep);
       border: 1px solid #fcd34d;
       border-radius: 4px;
       font-size: 11px;
@@ -262,11 +262,11 @@ function openFile() {
     pre {
       margin: 0;
       padding: 10px 12px;
-      background: #f8fafc;
+      background: var(--color-canvas-soft);
       border-radius: 6px;
       font-size: 12px;
       line-height: 1.6;
-      color: #374151;
+      color: var(--color-text-dark);
       white-space: pre-wrap;
       word-break: break-word;
       max-height: 300px;
@@ -280,7 +280,7 @@ function openFile() {
     gap: 8px;
     padding: 10px 12px;
     border-bottom: 1px solid #93c5fd;
-    background: #dbeafe;
+    background: var(--color-info-bg);
     font-size: 13px;
     font-weight: 600;
     color: #1e40af;
@@ -310,7 +310,7 @@ function openFile() {
       appearance: none;
       border: none;
       border-radius: 6px;
-      background: #fff;
+      background: var(--color-canvas);
       color: #2563eb;
       font-size: 12px;
       padding: 6px 12px;
@@ -323,7 +323,7 @@ function openFile() {
       flex-shrink: 0;
 
       &:hover {
-        background: #dbeafe;
+        background: var(--color-info-bg);
         transform: translateY(-1px);
         box-shadow: 0 2px 6px rgba(37, 99, 235, 0.15);
       }
@@ -336,12 +336,12 @@ function openFile() {
 
   .okd-content {
     padding: 12px 14px;
-    background: #fff;
+    background: var(--color-canvas);
 
     .okd-preview-text {
       font-size: 13px;
       line-height: 1.8;
-      color: #374151;
+      color: var(--color-text-dark);
       white-space: pre-wrap;
       word-break: break-word;
       margin: 0;
@@ -350,7 +350,7 @@ function openFile() {
     .okd-more-hint {
       margin-top: 10px;
       font-size: 12px;
-      color: #6b7280;
+      color: var(--color-mute);
       text-align: center;
       padding: 8px 0;
       border-top: 1px dashed #bfdbfe;
@@ -362,8 +362,8 @@ function openFile() {
 .okd-modal-body {
   .okd-modal-tabs {
     display: flex;
-    border-bottom: 1px solid #e5e7eb;
-    background: #f9fafb;
+    border-bottom: 1px solid var(--color-hairline);
+    background: var(--color-canvas-soft);
 
     .okd-modal-tab {
       flex: 1;
@@ -374,7 +374,7 @@ function openFile() {
       padding: 10px 16px;
       border: none;
       background: transparent;
-      color: #6b7280;
+      color: var(--color-mute);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -407,20 +407,20 @@ function openFile() {
     font-weight: 500;
     margin-bottom: 16px;
     padding: 10px 14px;
-    background: #eff6ff;
+    background: var(--color-info-bg);
     border-radius: 6px;
-    border: 1px solid #bfdbfe;
+    border: 1px solid var(--color-border-blue);
   }
 
   .okd-modal-text {
     font-size: 14px;
     line-height: 1.9;
-    color: #1f2937;
+    color: var(--color-ink);
     white-space: pre-wrap;
     word-break: break-word;
     padding: 20px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
+    background: var(--color-canvas-soft);
+    border: 1px solid var(--color-hairline);
     border-radius: 8px;
     max-height: 55vh;
     overflow-y: auto;
@@ -432,7 +432,7 @@ function openFile() {
     justify-content: center;
     gap: 8px;
     padding: 40px;
-    color: #9ca3af;
+    color: var(--color-mute);
     font-size: 13px;
   }
 
@@ -457,7 +457,7 @@ function openFile() {
       margin: 0;
       font-size: 13px;
       line-height: 1.6;
-      color: #374151;
+      color: var(--color-text-dark);
       white-space: pre-wrap;
       word-break: break-word;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -475,9 +475,9 @@ function openFile() {
 
   .okd-download-btn {
     appearance: none;
-    border: 1px solid #93c5fd;
+    border: 1px solid var(--color-border-blue);
     border-radius: 6px;
-    background: #fff;
+    background: var(--color-canvas);
     color: #2563eb;
     font-size: 12px;
     padding: 6px 14px;
@@ -490,7 +490,7 @@ function openFile() {
     transition: all 0.2s;
 
     &:hover {
-      background: #dbeafe;
+      background: var(--color-info-bg);
     }
   }
 }

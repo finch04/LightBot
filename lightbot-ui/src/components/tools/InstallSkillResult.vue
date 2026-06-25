@@ -93,12 +93,12 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
     border-left: 3px solid #8b5cf6;
     border-radius: 8px;
     overflow: hidden;
-    background: #f5f3ff;
+    background: var(--color-purple-bg);
   }
   .isr-card-error {
     border-color: #fca5a5;
     border-left-color: #ef4444;
-    background: #fef2f2;
+    background: var(--color-error-bg);
   }
 
   // ── Header ──
@@ -109,11 +109,11 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
     border-bottom: 1px solid #c4b5fd;
   }
   .isr-header-success {
-    background: #dcfce7; border-bottom-color: #bbf7d0; color: #166534;
+    background: var(--color-success-bg); border-bottom-color: #bbf7d0; color: #166534;
     .isr-header-icon { color: #16a34a; }
   }
   .isr-header-error {
-    background: #fee2e2; border-bottom-color: #fca5a5; color: #991b1b;
+    background: var(--color-error-bg); border-bottom-color: #fca5a5; color: #991b1b;
     .isr-header-icon { color: #dc2626; }
   }
   .isr-header-icon { font-size: 14px; flex-shrink: 0; }
@@ -124,13 +124,13 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
   .isr-skill-item {
     display: flex; align-items: center; gap: 8px;
     padding: 8px 12px;
-    &:hover { background: #ede9fe; }
+    &:hover { background: var(--color-purple-bg); }
   }
 
   .isr-skill-icon {
     width: 28px; height: 28px; flex-shrink: 0;
     border-radius: 6px;
-    background: #ede9fe; border: 1px solid #c4b5fd;
+    background: var(--color-purple-bg); border: 1px solid #c4b5fd;
     display: flex; align-items: center; justify-content: center;
     color: #7c3aed; font-size: 14px;
   }
@@ -145,7 +145,7 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
   .isr-skill-slug {
     font-family: 'Monaco', 'Menlo', monospace;
     font-size: 11px; color: #6d28d9;
-    background: #ede9fe; border: 1px solid #c4b5fd;
+    background: var(--color-purple-bg); border: 1px solid #c4b5fd;
     border-radius: 4px; padding: 0 5px;
   }
 
@@ -155,10 +155,10 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
     border-radius: 4px; flex-shrink: 0;
   }
   .isr-badge-active {
-    color: #16a34a; background: #dcfce7; border: 1px solid #bbf7d0;
+    color: #16a34a; background: var(--color-success-bg); border: 1px solid #bbf7d0;
   }
   .isr-badge-inactive {
-    color: #d97706; background: #fffbeb; border: 1px solid #fde68a;
+    color: #d97706; background: var(--color-warn-bg); border: 1px solid var(--color-warn-bg-deep);
   }
 
   // ── 错误内容 ──
@@ -172,7 +172,7 @@ const displayText = computed(() => typeof data.value === 'string' ? data.value :
   .isr-errors {
     padding: 8px 12px;
     border-top: 1px dashed #fca5a5;
-    background: #fff5f5;
+    background: var(--color-error-bg);
   }
   .isr-error-item {
     font-size: 11px; color: #b91c1c; padding: 2px 0;

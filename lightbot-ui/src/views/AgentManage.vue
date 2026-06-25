@@ -64,6 +64,9 @@
           <a-tooltip title="编辑">
             <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
           </a-tooltip>
+          <a-tooltip title="复制">
+            <button class="btn-icon" @click="handleClone(a.id)"><CopyOutlined /></button>
+          </a-tooltip>
           <a-tooltip title="删除">
             <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
           </a-tooltip>
@@ -148,9 +151,9 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
+import { getAgents, createAgent, updateAgent, deleteAgent, cloneAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 import ModelSelect from '../components/ModelSelect.vue'
 import EntityCard from '../components/EntityCard.vue'
@@ -243,6 +246,16 @@ function handleDelete(id) {
       loadData()
     },
   })
+}
+
+async function handleClone(id) {
+  try {
+    const res = await cloneAgent(id)
+    message.success(`已复制: ${res.data?.name || '新 Agent'}`)
+    loadData()
+  } catch {
+    // interceptor handled
+  }
 }
 
 function handleSetDefault(id) {
@@ -343,16 +356,16 @@ onMounted(async () => {
 .card-type--chat,
 .card-type--assistant {
   color: #1d4ed8;
-  background: #eff6ff;
+  background: var(--color-info-bg);
 }
 .card-type--workflow {
   color: #7c3aed;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
 }
 .card-default-tag {
   font-size: 11px;
   padding: 1px 6px;
-  background: #eff6ff;
+  background: var(--color-info-bg);
   color: #2563eb;
   border-radius: 100px;
   font-weight: 500;
@@ -377,26 +390,26 @@ onMounted(async () => {
   color: var(--color-mute);
 }
 .card-status.published {
-  background: #dcfce7;
+  background: var(--color-success-bg);
   color: #16a34a;
 }
 .card-status.published_editing {
-  background: #fef3c7;
+  background: var(--color-warn-bg-deep);
   color: #d97706;
 }
 .card-status.archived {
-  background: #fef3c7;
+  background: var(--color-warn-bg-deep);
   color: #d97706;
 }
 .card-time {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;
@@ -414,7 +427,7 @@ onMounted(async () => {
   gap: 12px;
 }
 .example-card {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 14px 16px;
   transition: border-color 0.2s;
@@ -431,7 +444,7 @@ onMounted(async () => {
 .example-name {
   font-weight: 500;
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .example-desc-text {
   font-size: 12px;

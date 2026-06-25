@@ -307,7 +307,7 @@ onMounted(() => {
 .eval-toolbar-right { display: flex; gap: 8px; align-items: center; }
 .eval-model-row { padding: 0 2px; }
 .eval-model-item { display: flex; flex-direction: column; gap: 4px; }
-.eval-model-label { font-size: 13px; color: #374151; font-weight: 500; }
+.eval-model-label { font-size: 13px; color: var(--color-text-dark); font-weight: 500; }
 .eval-history { flex: 1; overflow-y: auto; }
 .eval-history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .eval-history-title { font-weight: 500; font-size: 14px; }

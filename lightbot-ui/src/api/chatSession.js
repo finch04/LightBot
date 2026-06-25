@@ -49,3 +49,10 @@ export function searchMessages(sessionId, keyword, params = {}) {
     params: { keyword, ...params },
   })
 }
+
+export function exportSession(id, format = 'markdown') {
+  return request.get(`/chat/sessions/${id}/export`, {
+    params: { format },
+    responseType: 'blob',
+  })
+}

@@ -256,7 +256,7 @@ async function runTest() {
   font-size: 13px;
   font-weight: 600;
   line-height: 20px;
-  color: #1e293b;
+  color: var(--color-text-code);
 }
 .test-input-list {
   display: flex;
@@ -277,14 +277,14 @@ async function runTest() {
 .var-name {
   font-size: 13px;
   font-weight: 500;
-  background: #f1f5f9;
+  background: var(--color-canvas-soft);
   padding: 2px 8px;
   border-radius: 4px;
-  color: #334155;
+  color: var(--color-text-dark);
 }
 .var-hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-mute);
 }
 .test-actions {
   display: flex;
@@ -292,7 +292,7 @@ async function runTest() {
 }
 .test-result-section {
   padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--color-border-slate);
   gap: 16px;
 }
 .result-status-bar {
@@ -301,15 +301,15 @@ async function runTest() {
   gap: 10px;
   padding: 12px 14px;
   border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-border-slate);
 }
 .result-status-bar.success {
-  background: #f0fdf4;
+  background: var(--color-success-bg);
   border-color: #bbf7d0;
 }
 .result-status-bar.fail {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-color: #fecaca;
 }
 .status-icon {
@@ -326,12 +326,12 @@ async function runTest() {
   flex: 1;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-ink);
 }
 .status-duration {
   font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--color-mute);
   font-variant-numeric: tabular-nums;
   padding: 2px 10px;
   background: rgba(255, 255, 255, 0.7);
@@ -346,7 +346,7 @@ async function runTest() {
 .result-block-title {
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--color-mute);
   letter-spacing: 0.02em;
 }
 .result-pre {

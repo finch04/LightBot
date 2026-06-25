@@ -59,18 +59,18 @@ const letter = computed(() => (props.name || '?')[0].toUpperCase())
   font-size: 11px;
   padding: 0 6px;
   border-radius: 4px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   color: var(--color-mute);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .entity-select-tag--muted {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   color: #dc2626;
 }
 .entity-select-desc {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

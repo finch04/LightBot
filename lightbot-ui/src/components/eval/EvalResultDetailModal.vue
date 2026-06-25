@@ -326,7 +326,7 @@ watch(() => props.open, (val) => {
   overflow: hidden; text-overflow: ellipsis; word-break: break-all;
 }
 .result-analysis {
-  background: #f6ffed;
+  background: var(--color-success-bg);
   border: 1px solid #b7eb8f;
   border-radius: 6px;
   padding: 12px 16px;
@@ -346,12 +346,12 @@ watch(() => props.open, (val) => {
 .metric-help-item h4 {
   margin: 0 0 4px;
   font-size: 14px;
-  color: #262626;
+  color: var(--color-ink);
 }
 .metric-help-item p {
   margin: 2px 0;
   font-size: 13px;
-  color: #595959;
+  color: var(--color-body);
   line-height: 1.6;
 }
 .metric-formula {
@@ -369,11 +369,11 @@ watch(() => props.open, (val) => {
 .metric-help-note {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
 }
 .metric-help-note p {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--color-mute);
 }
 .metric-help-note a {
   color: #1890ff;
@@ -383,7 +383,7 @@ watch(() => props.open, (val) => {
   text-decoration: underline;
 }
 .score-rubric {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   overflow: hidden;
   margin: 8px 0;
@@ -391,7 +391,7 @@ watch(() => props.open, (val) => {
 .score-rubric-row {
   display: flex;
   align-items: baseline;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .score-rubric-row:last-child { border-bottom: none; }
 .score-range {
@@ -408,6 +408,6 @@ watch(() => props.open, (val) => {
   flex: 1;
   padding: 6px 12px;
   font-size: 12px;
-  color: #595959;
+  color: var(--color-body);
 }
 </style>

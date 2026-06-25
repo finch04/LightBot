@@ -495,12 +495,12 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
   gap: 10px;
   margin-bottom: 18px;
   padding: 10px 12px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .preset-label {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   white-space: nowrap;
 }
 .preset-btns {
@@ -509,11 +509,11 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
 }
 .preset-btn {
   padding: 4px 14px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
-  background: #fff;
+  background: var(--color-canvas);
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -528,7 +528,7 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
 }
 .field-tip-icon {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: help;
   margin-left: 4px;
 }
@@ -537,9 +537,9 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;

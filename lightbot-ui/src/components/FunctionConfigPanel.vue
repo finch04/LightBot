@@ -180,7 +180,7 @@ onMounted(() => {
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .panel-content {
@@ -201,7 +201,7 @@ onMounted(() => {
 }
 
 .tool-config-item {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
@@ -222,7 +222,7 @@ onMounted(() => {
 .tool-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   display: block;
 }
 
@@ -265,7 +265,7 @@ onMounted(() => {
 .tool-empty {
   text-align: center;
   padding: 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 </style>

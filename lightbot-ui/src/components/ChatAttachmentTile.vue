@@ -94,9 +94,9 @@ const shortName = computed(() => {
   height: 52px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   padding: 0;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   cursor: pointer;
   display: block;
 }
@@ -129,7 +129,7 @@ const shortName = computed(() => {
 }
 .doc-name {
   font-size: 10px;
-  color: #52525b;
+  color: var(--color-body);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -160,7 +160,7 @@ const shortName = computed(() => {
 }
 .chat-att-tile-fallback {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -175,8 +175,8 @@ const shortName = computed(() => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   display: flex;
   align-items: center;
   justify-content: center;

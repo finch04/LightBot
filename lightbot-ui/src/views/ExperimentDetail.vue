@@ -187,13 +187,13 @@
           <a-radio value="direct">
             <div>
               <div style="font-weight: 500;">直接重新评测</div>
-              <div style="font-size: 12px; color: #a1a1aa;">使用当前配置立即重新运行</div>
+              <div style="font-size: 12px; color: var(--color-mute);">使用当前配置立即重新运行</div>
             </div>
           </a-radio>
           <a-radio value="modify">
             <div>
               <div style="font-weight: 500;">修改配置后重新评测</div>
-              <div style="font-size: 12px; color: #a1a1aa;">修改实验名称、评测集版本、Prompt 版本、评估器版本等</div>
+              <div style="font-size: 12px; color: var(--color-mute);">修改实验名称、评测集版本、Prompt 版本、评估器版本等</div>
             </div>
           </a-radio>
         </a-radio-group>
@@ -265,7 +265,7 @@
           <a-button v-if="editForm.evaluators.length < 5" type="dashed" size="small" block @click="addEditEvaluator" style="margin-top: 4px;">
             <PlusOutlined /> 添加评估器
           </a-button>
-          <div v-if="editForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: #a1a1aa; text-align: center;">最多添加5个评估器</div>
+          <div v-if="editForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: var(--color-mute); text-align: center;">最多添加5个评估器</div>
         </a-form>
         </div>
         </a-spin>
@@ -728,7 +728,7 @@ function formatTime(t) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -766,7 +766,7 @@ function formatTime(t) {
   max-width: 1200px;
 }
 .info-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px 24px;
@@ -779,7 +779,7 @@ function formatTime(t) {
 .info-value {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .info-value a {
   color: var(--color-link);
@@ -799,7 +799,7 @@ function formatTime(t) {
   gap: 16px;
 }
 .evaluator-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -813,12 +813,12 @@ function formatTime(t) {
 .evaluator-name {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .evaluator-version {
   font-size: 12px;
   color: var(--color-link);
-  background: #e8f4ff;
+  background: var(--color-info-bg);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -831,7 +831,7 @@ function formatTime(t) {
 .evaluator-score .score-value {
   font-size: 32px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .evaluator-score .score-label {
   font-size: 13px;
@@ -843,7 +843,7 @@ function formatTime(t) {
 .evaluator-meta {
   margin-top: 8px;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 /* 评分标签 */
@@ -854,9 +854,9 @@ function formatTime(t) {
   font-size: 13px;
   font-weight: 600;
 }
-.score-tag.score-high { background: #dcfce7; color: #16a34a; }
-.score-tag.score-mid { background: #fef3c7; color: #d97706; }
-.score-tag.score-low { background: #fee2e2; color: #dc2626; }
+.score-tag.score-high { background: var(--color-success-bg); color: #16a34a; }
+.score-tag.score-mid { background: var(--color-warn-bg-deep); color: #d97706; }
+.score-tag.score-low { background: var(--color-error-bg); color: #dc2626; }
 
 .cell-preview {
   font-size: 13px;
@@ -865,7 +865,7 @@ function formatTime(t) {
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .tabs-container {
   position: relative;
@@ -877,7 +877,7 @@ function formatTime(t) {
 .running-mask {
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: var(--color-canvas);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -892,7 +892,7 @@ function formatTime(t) {
 }
 .running-mask-text {
   font-size: 14px;
-  color: #52525b;
+  color: var(--color-body);
   margin: 0;
 }
 .btn-outline-sm {
@@ -900,9 +900,9 @@ function formatTime(t) {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
@@ -978,7 +978,7 @@ function formatTime(t) {
 .evaluator-config-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .result-detail-scroll {
   max-height: 65vh;
@@ -989,18 +989,18 @@ function formatTime(t) {
   gap: 16px;
 }
 .result-detail-item {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 16px;
 }
 .result-detail-label {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-bottom: 6px;
 }
 .result-detail-value {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   line-height: 1.8;
   word-break: break-all;
   white-space: pre-wrap;

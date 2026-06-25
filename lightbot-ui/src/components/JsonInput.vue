@@ -101,9 +101,9 @@ watch(() => props.modelValue, (val) => {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 4px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
   cursor: pointer;
   font-size: 12px;
@@ -113,7 +113,7 @@ watch(() => props.modelValue, (val) => {
 .json-btn:hover:not(:disabled) {
   border-color: var(--color-link);
   color: var(--color-link);
-  background: #f0f7ff;
+  background: var(--color-info-bg);
 }
 .json-btn:disabled {
   opacity: 0.4;

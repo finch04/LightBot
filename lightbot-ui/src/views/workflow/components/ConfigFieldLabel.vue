@@ -29,10 +29,10 @@ defineProps({
 }
 .config-field-help-icon {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--color-mute);
   cursor: help;
 }
 .config-field-help-icon:hover {
-  color: #6366f1;
+  color: var(--color-link);
 }
 </style>

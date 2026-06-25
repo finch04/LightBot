@@ -227,14 +227,14 @@ onUnmounted(() => {
 .toolbar-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-canvas);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #52525b;
+  color: var(--color-body);
 }
 .toolbar-btn:hover:not(:disabled) {
   border-color: var(--color-link);
@@ -257,7 +257,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 8px;
   cursor: grab;
   user-select: none;

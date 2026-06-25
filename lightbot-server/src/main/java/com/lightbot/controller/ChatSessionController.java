@@ -11,6 +11,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -114,5 +119,22 @@ public class ChatSessionController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize) {
         return Result.ok(messageService.searchBySessionId(id, keyword, pageNum, pageSize));
+    }
+
+    @Operation(summary = "导出会话为 Markdown 或 JSON 文件")
+    @GetMapping("/{id}/export")
+    public ResponseEntity<byte[]> exportSession(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "markdown") String format) {
+        String content = chatSessionService.exportSession(id, format);
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+
+        String ext = "json".equalsIgnoreCase(format) ? "json" : "md";
+        String filename = "session-" + id + "." + ext;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + java.net.URLEncoder.encode(filename, StandardCharsets.UTF_8))
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(bytes.length)
+                .body(bytes);
     }
 }

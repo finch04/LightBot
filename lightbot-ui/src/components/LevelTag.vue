@@ -42,9 +42,9 @@ defineProps({
 
 /* ========== Lv 1: 灰色静默 ========== */
 .level-tag.level-1 {
-  color: #a1a1aa;
-  background: #f4f4f5;
-  border: 1px solid #e4e4e7;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
+  border: 1px solid var(--color-hairline);
 }
 
 /* ========== Lv 2: 蓝色闪光 ========== */
@@ -72,7 +72,7 @@ defineProps({
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: #fff;
+  background: var(--color-canvas);
   z-index: -1;
 }
 .level-tag.level-2 .level-tag-inner {
@@ -121,7 +121,7 @@ defineProps({
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: #fff;
+  background: var(--color-canvas);
   z-index: -1;
 }
 .level-tag.level-3 .level-tag-inner {
@@ -170,7 +170,7 @@ defineProps({
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: #fff;
+  background: var(--color-canvas);
   z-index: -1;
 }
 .level-tag.level-4 .level-tag-inner {
@@ -219,7 +219,7 @@ defineProps({
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: #fff;
+  background: var(--color-canvas);
   z-index: -1;
 }
 .level-tag.level-5 .level-tag-inner {
@@ -268,7 +268,7 @@ defineProps({
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: #fff;
+  background: var(--color-canvas);
   z-index: -1;
 }
 .level-tag.level-6 .level-tag-inner {

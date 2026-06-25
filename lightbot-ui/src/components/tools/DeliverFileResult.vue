@@ -151,23 +151,23 @@ function formatSize(bytes) {
     border-left: 3px solid #8b5cf6;
     border-radius: 8px;
     overflow: hidden;
-    background: #f5f3ff;
+    background: var(--color-purple-bg);
   }
   .dfr-card-error {
     border-color: #fca5a5;
     border-left-color: #ef4444;
-    background: #fef2f2;
+    background: var(--color-error-bg);
   }
 
   // ── Header ──
   .dfr-header {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px;
-    background: #ede9fe; border-bottom: 1px solid #c4b5fd;
+    background: var(--color-purple-bg); border-bottom: 1px solid #c4b5fd;
     font-size: 12px; font-weight: 600; color: #5b21b6;
   }
   .dfr-header-error {
-    background: #fee2e2; border-bottom-color: #fca5a5; color: #991b1b;
+    background: var(--color-error-bg); border-bottom-color: #fca5a5; color: #991b1b;
   }
   .dfr-header-icon {
     font-size: 14px; flex-shrink: 0;
@@ -188,13 +188,13 @@ function formatSize(bytes) {
     border-left: 3px solid #8b5cf6;
     border-radius: 8px;
     overflow: hidden;
-    background: #f5f3ff;
+    background: var(--color-purple-bg);
   }
 
   .dfr-summary {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 12px;
-    background: #ede9fe; border-bottom: 1px solid #c4b5fd;
+    background: var(--color-purple-bg); border-bottom: 1px solid #c4b5fd;
     font-size: 12px; font-weight: 600; color: #5b21b6;
   }
   .dfr-summary-icon { font-size: 14px; color: #16a34a; }
@@ -209,10 +209,10 @@ function formatSize(bytes) {
   .dfr-file-card {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px;
-    background: #faf8ff;
+    background: var(--color-purple-bg);
     cursor: pointer;
     transition: background 0.15s;
-    &:hover { background: #ede9fe; }
+    &:hover { background: var(--color-purple-bg); }
   }
 
   // ── 缩略图 ──
@@ -220,7 +220,7 @@ function formatSize(bytes) {
     width: 40px; height: 40px; flex-shrink: 0;
     border-radius: 6px; overflow: hidden;
     border: 1px solid #ddd6fe;
-    background: #fff;
+    background: var(--color-canvas);
     display: flex; align-items: center; justify-content: center;
     img {
       width: 100%; height: 100%; object-fit: cover;
@@ -232,7 +232,7 @@ function formatSize(bytes) {
     width: 40px; height: 40px; flex-shrink: 0;
     border-radius: 6px;
     border: 1px solid #ddd6fe;
-    background: #fff;
+    background: var(--color-canvas);
     display: flex; align-items: center; justify-content: center;
   }
   .dfr-file-icon {
@@ -259,7 +259,7 @@ function formatSize(bytes) {
     color: #7c3aed; font-size: 14px;
     transition: all 0.15s;
     &:hover {
-      background: #ede9fe;
+      background: var(--color-purple-bg);
       color: #5b21b6;
     }
   }
@@ -268,7 +268,7 @@ function formatSize(bytes) {
   .dfr-errors {
     padding: 8px 12px;
     border-top: 1px dashed #fca5a5;
-    background: #fff5f5;
+    background: var(--color-error-bg);
   }
   .dfr-error-item {
     font-size: 11px; color: #b91c1c; padding: 2px 0;

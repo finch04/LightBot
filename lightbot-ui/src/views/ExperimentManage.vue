@@ -208,7 +208,7 @@
         <a-button v-if="createForm.evaluators.length < 5" type="dashed" size="small" block @click="addCreateEvaluator" style="margin-top: 4px;">
           <PlusOutlined /> 添加评估器
         </a-button>
-        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: #a1a1aa; text-align: center;">最多添加5个评估器</div>
+        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: var(--color-mute); text-align: center;">最多添加5个评估器</div>
       </div>
 
       <!-- 底部按钮 -->
@@ -508,7 +508,7 @@ function formatTime(t) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .page-desc {
@@ -594,9 +594,9 @@ function formatTime(t) {
   margin-top: 24px;
 }
 .dialog-footer-right { display: flex; gap: 8px; }
-.evaluator-config-block { border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.evaluator-config-block { border: 1px solid var(--color-hairline); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
 .evaluator-config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.evaluator-config-title { font-size: 13px; font-weight: 600; color: var(--color-primary); }
-.evaluator-remove-btn { color: #a1a1aa; cursor: pointer; font-size: 14px; }
+.evaluator-config-title { font-size: 13px; font-weight: 600; color: var(--color-ink); }
+.evaluator-remove-btn { color: var(--color-mute); cursor: pointer; font-size: 14px; }
 .evaluator-remove-btn:hover { color: #ef4444; }
 </style>

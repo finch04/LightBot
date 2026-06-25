@@ -306,4 +306,121 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         }
         log.info("[ChatSession] 批量删除: agentId={}, count={}", agentId, sessions.size());
     }
+
+    @Override
+    public String exportSession(Long sessionId, String format) {
+        // 1. 校验会话归属
+        ChatSession session = getById(sessionId);
+        if (session == null) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        long userId = StpUtil.getLoginIdAsLong();
+        if (userId != session.getUserId()) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+
+        // 2. 获取全部消息（按时间正序）
+        List<com.lightbot.entity.Message> messages = messageService.listBySessionId(sessionId);
+
+        // 3. 按格式导出
+        if ("json".equalsIgnoreCase(format)) {
+            return exportAsJson(session, messages);
+        }
+        return exportAsMarkdown(session, messages);
+    }
+
+    private String exportAsJson(ChatSession session, List<com.lightbot.entity.Message> messages) {
+        try {
+            java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+            result.put("title", session.getTitle());
+            result.put("createTime", session.getCreateTime());
+            result.put("totalTokens", session.getTotalTokens());
+            result.put("messageCount", messages.size());
+
+            java.util.List<java.util.Map<String, Object>> msgList = new java.util.ArrayList<>();
+            for (com.lightbot.entity.Message msg : messages) {
+                java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("role", msg.getRole() != null ? msg.getRole().getCode() : "unknown");
+                item.put("content", msg.getContent());
+                item.put("createTime", msg.getCreateTime());
+                if (msg.getMetadata() != null && !msg.getMetadata().isBlank()) {
+                    item.put("metadata", objectMapper.readTree(msg.getMetadata()));
+                }
+                msgList.add(item);
+            }
+            result.put("messages", msgList);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+        } catch (Exception e) {
+            log.error("[ChatSession] JSON导出失败: sessionId={}", session.getId(), e);
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
+        }
+    }
+
+    private String exportAsMarkdown(ChatSession session, List<com.lightbot.entity.Message> messages) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# ").append(session.getTitle()).append("\n\n");
+        sb.append("> 导出时间：").append(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))).append("\n");
+        sb.append("> 消息数：").append(messages.size()).append("\n\n");
+        sb.append("---\n\n");
+
+        for (com.lightbot.entity.Message msg : messages) {
+            String role = msg.getRole() != null ? msg.getRole().getCode() : "unknown";
+            String time = msg.getCreateTime() != null
+                    ? msg.getCreateTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                    : "";
+            if ("user".equals(role)) {
+                sb.append("### 👤 用户 ").append(time).append("\n\n");
+            } else if ("assistant".equals(role)) {
+                sb.append("### 🤖 助手 ").append(time).append("\n\n");
+            } else {
+                sb.append("### ").append(role).append(" ").append(time).append("\n\n");
+            }
+
+            // 消息内容
+            if (msg.getContent() != null && !msg.getContent().isBlank()) {
+                sb.append(msg.getContent()).append("\n\n");
+            }
+
+            // RAG 引用
+            if (msg.getMetadata() != null && msg.getMetadata().contains("ragReferences")) {
+                try {
+                    var metaNode = objectMapper.readTree(msg.getMetadata());
+                    if (metaNode.has("ragReferences") && metaNode.get("ragReferences").isArray()) {
+                        sb.append("**RAG 引用：**\n\n");
+                        for (var ref : metaNode.get("ragReferences")) {
+                            String docName = ref.has("documentName") ? ref.get("documentName").asText() : "";
+                            String preview = ref.has("contentPreview") ? ref.get("contentPreview").asText() : "";
+                            double score = ref.has("score") ? ref.get("score").asDouble() : 0;
+                            sb.append("- 📄 ").append(docName).append(" (相似度: ").append(String.format("%.2f", score)).append(")\n");
+                            if (!preview.isBlank()) {
+                                sb.append("  > ").append(preview.length() > 200 ? preview.substring(0, 200) + "..." : preview).append("\n");
+                            }
+                        }
+                        sb.append("\n");
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            // 工具调用摘要
+            if (msg.getMetadata() != null && msg.getMetadata().contains("toolEvents")) {
+                try {
+                    var metaNode = objectMapper.readTree(msg.getMetadata());
+                    if (metaNode.has("toolEvents") && metaNode.get("toolEvents").isArray()) {
+                        java.util.Set<String> toolNames = new java.util.LinkedHashSet<>();
+                        for (var evt : metaNode.get("toolEvents")) {
+                            if (evt.has("toolName")) toolNames.add(evt.get("toolName").asText());
+                        }
+                        if (!toolNames.isEmpty()) {
+                            sb.append("**工具调用：** ").append(String.join(", ", toolNames)).append("\n\n");
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            sb.append("---\n\n");
+        }
+        return sb.toString();
+    }
 }

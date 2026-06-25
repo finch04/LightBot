@@ -135,6 +135,45 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    public Agent clone(Long id) {
+        // 1. 校验源Agent存在性
+        Agent source = getById(id);
+        if (source == null) {
+            throw new BizException(ErrorCode.AGENT_NOT_FOUND);
+        }
+
+        // 2. 生成唯一名称：原名 + "(副本)"，冲突时追加序号
+        String baseName = source.getName() + "(副本)";
+        String cloneName = baseName;
+        int seq = 2;
+        while (count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, cloneName)) > 0) {
+            cloneName = baseName + seq;
+            seq++;
+        }
+
+        // 3. 深拷贝Agent（config JSONB 已包含所有绑定关系）
+        Agent clone = new Agent();
+        clone.setName(cloneName);
+        clone.setDescription(source.getDescription());
+        clone.setSystemPrompt(source.getSystemPrompt());
+        clone.setWelcomeMessage(source.getWelcomeMessage());
+        clone.setRecommendedQuestions(source.getRecommendedQuestions());
+        clone.setIcon(source.getIcon());
+        clone.setAgentType(source.getAgentType());
+        clone.setConfig(source.getConfig());
+        clone.setUserId(StpUtil.getLoginIdAsLong());
+        clone.setStatus(AgentStatus.DRAFT);
+        clone.setVersion(0);
+        save(clone);
+
+        // 4. 初始化草稿版本快照
+        agentVersionService.initDraftOnCreate(clone);
+
+        log.info("[Agent] 克隆成功: sourceId={}, cloneId={}, name={}", id, clone.getId(), cloneName);
+        return clone;
+    }
+
+    @Override
     @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
     public Agent update(AgentSaveRequest request) {
         // 1. 校验存在性

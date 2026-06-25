@@ -692,7 +692,7 @@
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-switch v-model:checked="editForm.autoGenerateQuestions" />
             <a-tooltip title="入库文档时AI自动生成示例问题">
-              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help;" />
             </a-tooltip>
           </div>
         </a-form-item>
@@ -700,7 +700,7 @@
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-switch v-model:checked="editForm.graphEnabled" />
             <a-tooltip title="开启后，文档入库完成时自动触发知识图谱抽取，提取实体和关系用于图谱检索增强（RAG Graph）">
-              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help;" />
             </a-tooltip>
           </div>
         </a-form-item>
@@ -708,7 +708,7 @@
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-switch v-model:checked="editForm.contentScanEnabled" />
             <a-tooltip title="上传文件/网页抓取时使用 AI 模型检测 Prompt 注入">
-              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help;" />
             </a-tooltip>
           </div>
         </a-form-item>
@@ -719,7 +719,7 @@
           <div style="display: flex; align-items: center; gap: 8px;">
             <a-switch v-model:checked="editForm.duplicateDetectionEnabled" />
             <a-tooltip title="文档入库时自动检测内容与已有文档的相似度，超过阈值的文档会在列表中标记橙色警告标签">
-              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help;" />
             </a-tooltip>
           </div>
         </a-form-item>
@@ -733,7 +733,7 @@
               style="width: 160px"
             />
             <a-tooltip title="文档内容重复度阈值，超过此值的文档会被标记为重复警告（用于检测文档间重复，非检索相似度阈值）。建议值 0.7-0.9">
-              <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help;" />
+              <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help;" />
             </a-tooltip>
           </div>
         </a-form-item>
@@ -765,7 +765,7 @@
                 <RobotOutlined /> AI生成
               </a-button>
               <a-tooltip title="知识库的示例问题会展示在RAG问答界面，帮助用户快速了解知识库内容。最多10个。">
-                <QuestionCircleOutlined style="font-size: 14px; color: #a1a1aa; cursor: help; margin-left: 4px;" />
+                <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help; margin-left: 4px;" />
               </a-tooltip>
             </div>
           </div>
@@ -2267,7 +2267,7 @@ onUnmounted(() => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .title-type-icon {
@@ -2292,12 +2292,12 @@ onUnmounted(() => {
   margin-left: 12px;
   padding: 2px 10px;
   border-radius: 100px;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   vertical-align: middle;
 }
 .milvus-status.connected {
   color: #16a34a;
-  background: #f0fdf4;
+  background: var(--color-success-bg);
 }
 .milvus-status .status-dot {
   width: 6px;
@@ -2328,10 +2328,10 @@ onUnmounted(() => {
 .kb-stat-value {
   font-weight: 600;
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .kb-stat-label {
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .kb-stat-divider {
   width: 1px;
@@ -2347,7 +2347,7 @@ onUnmounted(() => {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s;
@@ -2367,7 +2367,7 @@ onUnmounted(() => {
   gap: 15px;
 }
 .panel {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
@@ -2382,7 +2382,7 @@ onUnmounted(() => {
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   flex-shrink: 0;
 }
 .panel-header-actions {
@@ -2402,9 +2402,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #fff;
-  color: var(--color-primary);
-  border: 1px solid #d4d4d8;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
@@ -2448,7 +2448,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s;
@@ -2469,7 +2469,7 @@ onUnmounted(() => {
   text-align: center;
 }
 .doc-status-icon.uploading { color: #d97706; }
-.doc-status-icon.uploaded { color: #a1a1aa; }
+.doc-status-icon.uploaded { color: var(--color-mute); }
 .doc-status-icon.pending { color: #2563eb; }
 .doc-status-icon.processing { color: #d97706; }
 .doc-status-icon.completed { color: #16a34a; }
@@ -2477,14 +2477,14 @@ onUnmounted(() => {
 .doc-name {
   display: block;
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .doc-chunk-count {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   flex-shrink: 0;
 }
 .doc-dup-tag {
@@ -2498,7 +2498,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 2px;
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -2517,17 +2517,17 @@ onUnmounted(() => {
   transition: background 0.15s, color 0.15s;
 }
 .doc-icon-btn:hover {
-  background: #f4f4f5;
-  color: var(--color-primary);
+  background: var(--color-canvas-soft-2);
+  color: var(--color-ink);
 }
 .doc-icon-btn.danger:hover {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   color: #dc2626;
 }
 .doc-empty {
   text-align: center;
   padding: 40px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .doc-pagination {
   display: flex;
@@ -2560,7 +2560,7 @@ onUnmounted(() => {
 }
 .rag-msg.assistant {
   align-self: flex-start;
-  background: #eff6ff;
+  background: var(--color-info-bg);
   padding: 12px 16px;
   border-radius: 8px;
   max-width: 85%;
@@ -2570,14 +2570,14 @@ onUnmounted(() => {
 
 /* 检索结果 - 文档块卡片 */
 .chunk-result-card {
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 16px;
   transition: border-color 0.15s;
 }
 .chunk-result-card:hover {
-  border-color: #6366f1;
+  border-color: var(--color-link);
 }
 .chunk-result-header {
   display: flex;
@@ -2595,7 +2595,7 @@ onUnmounted(() => {
   font-size: 12px;
 }
 .chunk-source {
-  color: #52525b;
+  color: var(--color-body);
   font-weight: 500;
 }
 .chunk-score {
@@ -2606,7 +2606,7 @@ onUnmounted(() => {
 }
 .chunk-result-content {
   font-size: 13px;
-  color: #3f3f46;
+  color: var(--color-ink);
   line-height: 1.6;
   max-height: 120px;
   overflow-y: auto;
@@ -2617,7 +2617,7 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
 }
 .rag-input input {
   flex: 1;
@@ -2628,7 +2628,7 @@ onUnmounted(() => {
   outline: none;
 }
 .rag-input input:focus {
-  border-color: var(--color-primary);
+  border-color: var(--color-ink);
 }
 
 /* 示例问题 */
@@ -2639,7 +2639,7 @@ onUnmounted(() => {
 }
 .example-question-text {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   transition: color 0.15s;
   display: inline-block;
@@ -2654,11 +2654,11 @@ onUnmounted(() => {
 }
 .example-questions-hint {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   padding-top: 10px;
 }
 .example-questions-hint a {
-  color: #6366f1;
+  color: var(--color-link);
   cursor: pointer;
 }
 .example-questions-hint a:hover {
@@ -2679,7 +2679,7 @@ onUnmounted(() => {
 .edit-question-text {
   flex: 1;
   font-size: 13px;
-  color: #3f3f46;
+  color: var(--color-ink);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -2688,10 +2688,10 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .edit-question-text:hover {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
 }
 .edit-question-delete {
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 12px;
   flex-shrink: 0;
@@ -2765,8 +2765,16 @@ onUnmounted(() => {
 .mindmap-svg {
   flex: 1;
   width: 100%;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
+  background: var(--color-canvas);
+}
+.mindmap-svg :deep(text) {
+  fill: var(--color-ink) !important;
+}
+.mindmap-svg :deep(line),
+.mindmap-svg :deep(path) {
+  stroke: var(--color-mute) !important;
 }
 .mindmap-actions {
   display: flex;
@@ -2778,7 +2786,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .mindmap-empty p {
   margin-bottom: 16px;
@@ -2799,15 +2807,15 @@ onUnmounted(() => {
   background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: #52525b;
+  color: var(--color-body);
   cursor: pointer;
   font-size: 15px;
   transition: all 0.15s;
 }
 .doc-modal-action-btn:hover {
-  background: #f4f4f5;
-  border-color: #d4d4d8;
-  color: var(--color-primary);
+  background: var(--color-canvas-soft-2);
+  border-color: var(--color-hairline);
+  color: var(--color-ink);
 }
 .doc-modal-tabs {
   margin-top: 4px;
@@ -2816,7 +2824,7 @@ onUnmounted(() => {
   margin: 0;
   padding: 8px 24px 0;
   background: var(--color-canvas-soft);
-  border-bottom: 1px solid #ebebeb;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .doc-modal-tabs :deep(.ant-tabs-content-holder) {
   padding: 0;
@@ -2847,12 +2855,12 @@ onUnmounted(() => {
 .doc-info-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 10px;
 }
 .doc-info-error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-soft);
   border-radius: 6px;
   padding: 10px 14px;
   color: #dc2626;
@@ -2865,13 +2873,13 @@ onUnmounted(() => {
 .ingest-config-display {
   padding: 10px 12px;
   margin-bottom: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-border-slate);
   border-radius: 6px;
 }
 .config-title {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-mute);
   margin-bottom: 6px;
   font-weight: 500;
 }
@@ -2889,19 +2897,19 @@ onUnmounted(() => {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  color: #3f3f46;
+  color: var(--color-ink);
 }
 .markdown-content {
   font-size: 14px;
   line-height: 1.8;
-  color: #27272a;
+  color: var(--color-ink);
 }
 .markdown-content h1 {
   font-size: 20px;
   font-weight: 700;
   margin: 24px 0 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .markdown-content h2 {
   font-size: 17px;
@@ -2918,7 +2926,7 @@ onUnmounted(() => {
   margin: 0 0 12px;
 }
 .markdown-content code {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
@@ -2930,7 +2938,7 @@ onUnmounted(() => {
   border-radius: 6px;
   overflow-x: auto;
   margin: 12px 0;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
 }
 .markdown-content pre code {
   background: none;
@@ -2960,14 +2968,14 @@ onUnmounted(() => {
 }
 .markdown-content th,
 .markdown-content td {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   padding: 8px 12px;
   text-align: left;
 }
 .markdown-content th {
   background: #f8f9fa;
   font-weight: 600;
-  color: #27272a;
+  color: var(--color-ink);
 }
 .markdown-content tr:hover td {
   background: var(--color-canvas-soft);
@@ -2978,11 +2986,11 @@ onUnmounted(() => {
 }
 .markdown-content hr {
   border: none;
-  border-top: 1px solid #e4e4e7;
+  border-top: 1px solid var(--color-hairline);
   margin: 16px 0;
 }
 .error-message {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-bottom: 1px solid #fecaca;
   padding: 10px 20px;
   color: #dc2626;
@@ -2996,7 +3004,7 @@ onUnmounted(() => {
 .modal-empty {
   text-align: center;
   padding: 40px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 /* 分块列表 */
@@ -3019,7 +3027,7 @@ onUnmounted(() => {
 .chunk-item {
   border: 1px solid var(--color-hairline);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-canvas);
   cursor: pointer;
   margin-bottom: 8px;
   overflow: hidden;
@@ -3031,8 +3039,8 @@ onUnmounted(() => {
   height: 30px;
   line-height: 30px;
   padding: 0 12px;
-  background: #f9fafb;
-  border-bottom: 1px solid #ebebeb;
+  background: var(--color-canvas-soft);
+  border-bottom: 1px solid var(--color-hairline);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3040,25 +3048,25 @@ onUnmounted(() => {
 .chunk-index {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .chunk-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .chunk-preview {
   height: 50px;
   line-height: 20px;
   padding: 5px 12px;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   overflow: hidden;
 }
 
 /* 分块详情弹窗 */
 .chunk-detail-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-bottom: 12px;
 }
 .chunk-detail-content {
@@ -3090,7 +3098,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 .member-info {
@@ -3123,12 +3131,12 @@ onUnmounted(() => {
 }
 .member-name {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   font-weight: 500;
 }
 .member-id {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .member-actions {
   display: flex;
@@ -3160,35 +3168,35 @@ onUnmounted(() => {
   gap: 8px;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
 }
 .empty-tip {
   text-align: center;
   padding: 24px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 
 /* 权限说明 */
-.perm-help p { margin-bottom: 12px; font-size: 13px; color: #595959; line-height: 1.6; }
+.perm-help p { margin-bottom: 12px; font-size: 13px; color: var(--color-body); line-height: 1.6; }
 .perm-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 .perm-table th, .perm-table td {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   padding: 6px 8px;
   text-align: center;
 }
 .perm-table th {
   background: var(--color-canvas-soft);
   font-weight: 600;
-  color: #262626;
+  color: var(--color-ink);
 }
 .perm-table td:first-child {
   text-align: left;
-  color: #595959;
+  color: var(--color-body);
 }
 .perm-table .yes { color: #52c41a; font-weight: 600; }
 .perm-table .no { color: #d9d9d9; }
@@ -3207,7 +3215,7 @@ onUnmounted(() => {
 .upload-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .upload-dropzone {
   border: 2px dashed #d4d4d8;
@@ -3222,12 +3230,12 @@ onUnmounted(() => {
 }
 .dropzone-text {
   font-size: 14px;
-  color: #52525b;
+  color: var(--color-body);
   margin-bottom: 4px;
 }
 .dropzone-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .upload-file-list {
   display: flex;
@@ -3241,20 +3249,20 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
 .upload-file-name {
   flex: 1;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .upload-file-status {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .upload-file-status.uploading {
   color: #d97706;
@@ -3279,7 +3287,7 @@ onUnmounted(() => {
 }
 .ocr-label {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
 }
 .ocr-status {
   margin-top: 8px;
@@ -3312,7 +3320,7 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
 }
 
 /* 上传模式切换 */
@@ -3336,7 +3344,7 @@ onUnmounted(() => {
 }
 .url-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 /* URL 列表 */
@@ -3353,14 +3361,14 @@ onUnmounted(() => {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   background: var(--color-canvas-soft);
   transition: border-color 0.15s, background 0.15s;
 }
 .url-item:hover {
-  border-color: #d4d4d8;
-  background: #fff;
+  border-color: var(--color-hairline);
+  background: var(--color-canvas);
 }
 .url-status-col {
   flex-shrink: 0;
@@ -3384,7 +3392,7 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   font-size: 12px;
-  color: #3f3f46;
+  color: var(--color-ink);
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3417,11 +3425,11 @@ onUnmounted(() => {
   transition: background 0.15s, color 0.15s;
 }
 .url-icon-btn:hover {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   color: #2563eb;
 }
 .url-icon-btn.danger:hover {
-  background: #fef2f2;
+  background: var(--color-error-bg);
   color: #dc2626;
 }
 .url-row-bottom {
@@ -3446,14 +3454,14 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 500;
   line-height: 1.4;
-  color: #52525b;
-  background: #fff;
-  border: 1px solid #e4e4e7;
+  color: var(--color-body);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 999px;
 }
 .url-status-text {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .url-preview-modal {
   display: flex;
@@ -3471,7 +3479,7 @@ onUnmounted(() => {
 .url-preview-desc {
   margin: 0;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   background: var(--color-canvas-soft);
   padding: 8px 10px;
   border-radius: 6px;
@@ -3480,9 +3488,9 @@ onUnmounted(() => {
   max-height: 480px;
   overflow: auto;
   padding: 12px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-canvas);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -3497,7 +3505,7 @@ onUnmounted(() => {
 }
 .url-preview-html :deep(th),
 .url-preview-html :deep(td) {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   padding: 6px 8px;
 }
 .url-preview-text {
@@ -3505,7 +3513,7 @@ onUnmounted(() => {
   overflow: auto;
   margin: 0;
   padding: 12px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   background: var(--color-canvas-soft);
   font-size: 13px;
@@ -3516,7 +3524,7 @@ onUnmounted(() => {
 .url-preview-empty {
   padding: 24px;
   text-align: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .url-icon {
@@ -3552,7 +3560,7 @@ onUnmounted(() => {
 
 .form-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 2px;
 }
 
@@ -3571,12 +3579,12 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .preview-header {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 500;
-  color: #52525b;
-  border-bottom: 1px solid #ebebeb;
+  color: var(--color-body);
+  border-bottom: 1px solid var(--color-hairline);
 }
 .preview-list {
   max-height: 300px;
@@ -3597,7 +3605,7 @@ onUnmounted(() => {
 }
 .preview-item-content {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -3607,7 +3615,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
 }
 .chunk-header-right {
   display: flex;
@@ -3633,7 +3641,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 .invite-user {
@@ -3649,18 +3657,18 @@ onUnmounted(() => {
 }
 .invite-name {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   font-weight: 500;
 }
 .invite-username {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .qa-disabled-mask {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;

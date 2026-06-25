@@ -222,6 +222,14 @@ public interface AgentService extends IService<Agent> {
     Agent createFromWorkflowExample(String key);
 
     /**
+     * 克隆Agent（深拷贝配置+绑定关系，名称加"(副本)"后缀）
+     *
+     * @param id 源Agent ID
+     * @return 克隆后的新Agent
+     */
+    Agent clone(Long id);
+
+    /**
      * 按用户ID查询Agent列表（管理员用）
      *
      * @param userId 用户ID

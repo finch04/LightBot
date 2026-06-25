@@ -53,4 +53,12 @@ public interface McpClientService {
      * @return 工具列表（从缓存或运行时获取）
      */
     List<McpSchema.Tool> getToolsWithCache(Long mcpServerId);
+
+    /**
+     * 刷新指定 MCP Server 的工具缓存（清除后重新加载）
+     *
+     * @param mcpServerId MCP Server ID
+     * @return 刷新后的工具数量，失败返回 -1
+     */
+    int refreshServer(Long mcpServerId);
 }

@@ -413,7 +413,7 @@ function extractResultText(step) {
 .workflow-nodes-group {
   margin-bottom: 8px;
   padding: 10px 12px;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
   border: 1px solid #ddd6fe;
   border-radius: 8px;
 }
@@ -470,7 +470,7 @@ function extractResultText(step) {
 
 .expand-icon {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--color-mute);
   transition: transform 0.2s;
 }
 
@@ -510,7 +510,7 @@ function extractResultText(step) {
   gap: 8px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-canvas);
   transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
 }
 
@@ -536,8 +536,8 @@ function extractResultText(step) {
 }
 
 .event-fail {
-  border: 1px solid #fecaca;
-  background: #fef2f2;
+  border: 1px solid var(--color-error-soft);
+  background: var(--color-error-bg);
 }
 
 .event-icon-col {
@@ -570,13 +570,13 @@ function extractResultText(step) {
 }
 
 .event-head:hover {
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
 }
 
 .event-label {
   flex: 1;
   min-width: 0;
-  color: #374151;
+  color: var(--color-text-dark);
   line-height: 1.5;
 }
 
@@ -584,13 +584,13 @@ function extractResultText(step) {
   margin-left: 6px;
   font-size: 11px;
   font-weight: normal;
-  color: #9ca3af;
+  color: var(--color-mute);
 }
 
 .event-duration {
   flex-shrink: 0;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--color-mute);
   font-variant-numeric: tabular-nums;
 }
 
@@ -617,7 +617,7 @@ function extractResultText(step) {
 
 .step-toggle-icon {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--color-mute);
   transition: transform 0.2s;
   flex-shrink: 0;
 }
@@ -629,7 +629,7 @@ function extractResultText(step) {
 .event-message {
   margin-top: 4px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-mute);
 }
 
 .event-message.fail {
@@ -639,12 +639,12 @@ function extractResultText(step) {
 .event-result {
   margin-top: 6px;
   padding: 8px 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-border-slate);
   border-radius: 6px;
   font-size: 12px;
   line-height: 1.6;
-  color: #334155;
+  color: var(--color-text-dark);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 200px;
@@ -654,8 +654,8 @@ function extractResultText(step) {
 .event-detail {
   margin-top: 6px;
   padding: 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-border-slate);
   border-radius: 6px;
   max-height: 160px;
   overflow: auto;
@@ -665,7 +665,7 @@ function extractResultText(step) {
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: #334155;
+  color: var(--color-text-dark);
   white-space: pre-wrap;
   word-break: break-word;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -699,14 +699,14 @@ function extractResultText(step) {
 .event-next-node {
   margin-top: 6px;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--color-mute);
   font-family: ui-monospace, monospace;
 }
 
 .event-node-id {
   margin-top: 4px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--color-mute);
   font-family: ui-monospace, monospace;
 }
 
@@ -738,7 +738,7 @@ function extractResultText(step) {
 
 .child-step .child-row.event-fail {
   border-color: #fecaca;
-  background: #fef2f2;
+  background: var(--color-error-bg);
 }
 
 .event-child-count {
@@ -746,7 +746,7 @@ function extractResultText(step) {
   font-size: 11px;
   font-weight: normal;
   color: #7c3aed;
-  background: #ede9fe;
+  background: var(--color-purple-bg);
   padding: 1px 6px;
   border-radius: 8px;
 }
@@ -755,8 +755,8 @@ function extractResultText(step) {
   margin-left: 4px;
   font-size: 10px;
   font-weight: normal;
-  color: #6366f1;
-  background: #eef2ff;
+  color: var(--color-link);
+  background: var(--color-info-bg);
   padding: 1px 5px;
   border-radius: 6px;
 }

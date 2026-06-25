@@ -562,13 +562,13 @@ async function loadPromptsData() {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .playground-help-icon {
   margin-left: 6px;
   font-size: 18px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   transition: color 0.2s;
   vertical-align: middle;
@@ -631,7 +631,7 @@ async function loadPromptsData() {
 .btn-text-xs {
   background: none;
   border: none;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 11px;
   padding: 2px 4px;
@@ -655,7 +655,7 @@ async function loadPromptsData() {
 }
 
 .instance-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -671,7 +671,7 @@ async function loadPromptsData() {
 .instance-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .instance-subtitle {
   font-size: 13px;
@@ -708,7 +708,7 @@ async function loadPromptsData() {
 .config-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .model-select-row {
@@ -734,7 +734,7 @@ async function loadPromptsData() {
 }
 .param-value {
   font-size: 12px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   min-width: 40px;
   text-align: right;
 }
@@ -747,8 +747,8 @@ async function loadPromptsData() {
 .var-key {
   font-size: 12px;
   font-family: 'SFMono-Regular', Consolas, monospace;
-  color: #6366f1;
-  background: #eef2ff;
+  color: var(--color-link);
+  background: var(--color-info-bg);
   padding: 2px 6px;
   border-radius: 4px;
   min-width: 100px;
@@ -771,11 +771,11 @@ async function loadPromptsData() {
 .chat-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .chat-meta {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .chat-messages {
   height: 350px;
@@ -783,7 +783,7 @@ async function loadPromptsData() {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border: 1px solid #f5f5f5;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
@@ -794,7 +794,7 @@ async function loadPromptsData() {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .chat-empty-icon {
   font-size: 32px;
@@ -820,7 +820,7 @@ async function loadPromptsData() {
 }
 .chat-msg.assistant .msg-body {
   background: var(--color-canvas-soft-2);
-  color: var(--color-primary);
+  color: var(--color-ink);
   border-radius: 2px 12px 12px 12px;
   padding: 10px 14px;
 }
@@ -866,8 +866,8 @@ async function loadPromptsData() {
   transition: background 0.2s, color 0.2s;
 }
 .btn-text-xs:hover {
-  background: #f4f4f5;
-  color: var(--color-primary);
+  background: var(--color-canvas-soft-2);
+  color: var(--color-ink);
 }
 .cursor {
   animation: blink 1s step-end infinite;
@@ -876,7 +876,7 @@ async function loadPromptsData() {
   50% { opacity: 0; }
 }
 .chat-input {
-  border-top: 1px solid #ebebeb;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 12px;
 }
 .chat-input-actions {
@@ -887,7 +887,7 @@ async function loadPromptsData() {
 }
 .chat-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 </style>
 
@@ -915,10 +915,10 @@ async function loadPromptsData() {
   margin-bottom: 2px;
 }
 .playground-help code {
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 12px;
-  color: #6366f1;
+  color: var(--color-link);
 }
 </style>

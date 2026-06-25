@@ -116,10 +116,10 @@ function openPreview() {
   height: 52px;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--color-hairline);
   flex-shrink: 0;
   display: block;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 0;
   cursor: pointer;
 }
@@ -143,7 +143,7 @@ function openPreview() {
   width: 100%;
   height: 100%;
   font-size: 11px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .msg-att-hover-mask {
   position: absolute;
@@ -184,9 +184,9 @@ function openPreview() {
 }
 .msg-att-file-tag {
   font-size: 12px;
-  color: #52525b;
+  color: var(--color-body);
   padding: 4px 10px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
 }
 </style>

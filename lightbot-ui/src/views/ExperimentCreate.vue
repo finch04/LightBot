@@ -140,7 +140,7 @@
         <button v-if="createForm.evaluators.length < 5" class="btn-outline" style="margin-top: 8px" @click="addEvaluator">
           <PlusOutlined /> 添加评估器
         </button>
-        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 8px; font-size: 12px; color: #a1a1aa;">最多添加5个评估器</div>
+        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 8px; font-size: 12px; color: var(--color-mute);">最多添加5个评估器</div>
       </div>
 
       <!-- 底部按钮 -->
@@ -334,7 +334,7 @@ async function handleCreate() {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px;
 }
 .page-desc {
@@ -343,7 +343,7 @@ async function handleCreate() {
   margin: 0;
 }
 .create-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 32px;
@@ -354,7 +354,7 @@ async function handleCreate() {
   justify-content: space-between;
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
 }
 .step-footer-right { display: flex; gap: 12px; }
 .btn-primary {
@@ -424,6 +424,6 @@ async function handleCreate() {
 .evaluator-config-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 </style>

@@ -61,7 +61,7 @@ function emitChange() {
 
 <style scoped>
 .short-memory-form {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
@@ -80,15 +80,15 @@ function emitChange() {
 .sm-help-icon {
   margin-left: 4px;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--color-mute);
   cursor: pointer;
 }
 .sm-help-icon:hover {
-  color: #6366f1;
+  color: var(--color-link);
 }
 .param-value {
   margin-left: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-mute);
 }
 </style>

@@ -120,7 +120,8 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
             if (parsed.type === 'tool_call' || parsed.type === 'tool_result' || parsed.type === 'tool_status' || parsed.type === 'tool_complete' || parsed.type === 'reasoning_content'
                 || parsed.type === 'workflow_node_start' || parsed.type === 'workflow_node_complete' || parsed.type === 'workflow_complete' || parsed.type === 'workflow_llm_chunk'
                 || parsed.type === 'sensitive_block'
-                || parsed.type === 'skill_active' || parsed.type === 'subagent_call' || parsed.type === 'subagent_result') {
+                || parsed.type === 'skill_active' || parsed.type === 'subagent_call' || parsed.type === 'subagent_result'
+                || parsed.type === 'subagent_token' || parsed.type === 'subagent_tool_call' || parsed.type === 'subagent_tool_result') {
               onToolEvent?.(parsed)
               continue
             }
@@ -144,6 +145,10 @@ export function getRagReferences(sessionId, agentId, question) {
   return request.get('/chat/rag-references', {
     params: { sessionId, agentId, question }
   })
+}
+
+export function submitRagFeedback(data) {
+  return request.post('/chat/rag-feedback', data)
 }
 
 export function refreshChatAttachmentPreviews(attachments) {

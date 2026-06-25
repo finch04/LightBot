@@ -217,7 +217,7 @@ function petalStyle(i) {
 .about-title {
   font-size: 30px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px;
   letter-spacing: 0.5px;
 }
@@ -230,7 +230,7 @@ function petalStyle(i) {
 
 .about-info {
   text-align: left;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 20px;
   margin-bottom: 28px;
 }
@@ -245,12 +245,12 @@ function petalStyle(i) {
   width: 80px;
   flex-shrink: 0;
   font-size: 14px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .info-value {
   font-size: 15px;
-  color: #27272a;
+  color: var(--color-ink);
 }
 
 .info-link {
@@ -268,14 +268,14 @@ function petalStyle(i) {
 
 .about-features {
   text-align: left;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   padding-top: 20px;
 }
 
 .about-features h2 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 12px;
 }
 
@@ -287,7 +287,7 @@ function petalStyle(i) {
 
 .about-features li {
   font-size: 14px;
-  color: #52525b;
+  color: var(--color-body);
   padding: 6px 0;
   padding-left: 16px;
   position: relative;

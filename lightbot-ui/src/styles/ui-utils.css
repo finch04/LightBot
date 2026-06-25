@@ -1,0 +1,33 @@
+/* UI 工具类 - 统一卡片/面板/按钮样式 */
+
+/* 面板（详情页、设置页的大区块） */
+.ui-panel {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+
+/* 卡片（管理页的网格卡片） */
+.ui-card {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+/* 柔和卡片（浅灰背景） */
+.ui-card-soft {
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+
+/* 分隔线 */
+.ui-divider {
+  border-top: 1px solid var(--color-hairline);
+}
+
+/* 柔和分隔线（dashed） */
+.ui-divider-dashed {
+  border-top: 1px dashed var(--color-hairline);
+}

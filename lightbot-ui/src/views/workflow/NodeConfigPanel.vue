@@ -226,8 +226,8 @@ function emitUpdate() {
 <style scoped>
 .node-config-panel {
   width: 280px;
-  background: #fff;
-  border-left: 1px solid #e8e8e8;
+  background: var(--color-canvas);
+  border-left: 1px solid var(--color-hairline);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -238,7 +238,7 @@ function emitUpdate() {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--color-hairline);
 }
 
 .panel-title {

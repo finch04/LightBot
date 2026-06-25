@@ -47,6 +47,10 @@
               ></path>
             </svg>
           </a>
+          <button class="theme-toggle-landing" @click="toggleTheme" :title="isDark ? '切换浅色模式' : '切换深色模式'">
+            <BulbFilled v-if="isDark" />
+            <BulbOutlined v-else />
+          </button>
           <!-- 已登录：头像 + 下拉菜单 -->
           <a-dropdown v-if="isLoggedIn" :trigger="['click']" overlay-class-name="landing-user-dropdown">
             <div class="header-avatar-wrap">
@@ -143,6 +147,7 @@ import { message } from 'ant-design-vue'
 import { getLandingConfig } from '../api/landing'
 import { checkHealth } from '../api/systemConfig'
 import { useUserStore } from '../stores/user'
+import { useTheme } from '../composables/useTheme'
 import {
   RightOutlined,
   RobotOutlined,
@@ -168,10 +173,13 @@ import {
   ControlOutlined,
   ClusterOutlined,
   BlockOutlined,
+  BulbOutlined,
+  BulbFilled,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { isDark, toggleTheme } = useTheme()
 const isLoggedIn = computed(() => !!userStore.token)
 
 const avatarInitial = computed(() => {
@@ -507,6 +515,24 @@ onUnmounted(() => {
 }
 .github-link svg {
   fill: currentColor;
+}
+.theme-toggle-landing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-mute);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+.theme-toggle-landing:hover {
+  color: var(--color-link);
+  background: rgba(0, 112, 243, 0.06);
 }
 .btn-login-header {
   height: 36px;

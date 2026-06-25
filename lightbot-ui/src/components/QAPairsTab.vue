@@ -480,7 +480,7 @@ onMounted(() => {
 }
 .qa-copy-btn {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   transition: color 0.15s;
 }

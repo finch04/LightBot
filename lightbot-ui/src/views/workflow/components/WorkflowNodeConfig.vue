@@ -1111,12 +1111,12 @@ function removeGroupVar(idx) {
 </script>
 
 <style scoped>
-.field-hint { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+.field-hint { font-size: 12px; color: var(--color-mute); margin-top: 4px; }
 .intent-item { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
 .intent-item .ant-input { flex: 1; }
-.branch-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; }
-.output-desc { font-size: 12px; color: #6b7280; padding: 8px; background: #f3f4f6; border-radius: 6px; }
-.node-id-display { font-size: 12px; color: #6b7280; }
+.branch-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding: 8px; background: var(--color-canvas-soft); border-radius: 6px; }
+.output-desc { font-size: 12px; color: var(--color-mute); padding: 8px; background: var(--color-canvas-soft-2); border-radius: 6px; }
+.node-id-display { font-size: 12px; color: var(--color-mute); }
 
 .resource-option { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
 .resource-option-header { display: flex; align-items: center; gap: 8px; }
@@ -1139,32 +1139,32 @@ function removeGroupVar(idx) {
 }
 .mcp-tools-hint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-mute);
   margin-top: 6px;
 }
 .resource-tag--muted {
-  background: #f4f4f5;
-  color: #a1a1aa;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-mute);
 }
-.resource-option-title { font-weight: 600; font-size: 13px; color: #1f2937; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.resource-option-desc { font-size: 12px; color: #6b7280; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.resource-option-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #9ca3af; }
+.resource-option-title { font-weight: 600; font-size: 13px; color: var(--color-ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resource-option-desc { font-size: 12px; color: var(--color-mute); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.resource-option-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--color-mute); }
 .resource-tag { flex-shrink: 0; font-size: 11px; padding: 0 6px; border-radius: 4px; background: #ecfdf5; color: #059669; }
 
 .kb-config-card {
   margin-bottom: 16px;
   padding: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-border-slate);
   border-radius: 8px;
 }
 .kb-config-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.kb-config-title { font-weight: 600; font-size: 13px; color: #334155; }
-.kb-config-source { font-size: 11px; color: #94a3b8; }
+.kb-config-title { font-weight: 600; font-size: 13px; color: var(--color-text-dark); }
+.kb-config-source { font-size: 11px; color: var(--color-mute); }
 .kb-config-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.kb-config-field label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; }
+.kb-config-field label { display: block; font-size: 12px; color: var(--color-mute); margin-bottom: 4px; }
 .kb-config-field :deep(.ant-input-number) { width: 100%; }
-.kb-config-readonly-hint { margin-top: 10px; font-size: 11px; color: #94a3b8; }
+.kb-config-readonly-hint { margin-top: 10px; font-size: 11px; color: var(--color-mute); }
 
 .param-row,
 .extract-param-row {
@@ -1207,19 +1207,19 @@ function removeGroupVar(idx) {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-hairline);
   border-radius: 4px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   cursor: pointer;
   font-size: 11px;
   line-height: 1.4;
 }
 .builtin-var-tag:hover:not(:disabled) {
-  border-color: #6366f1;
-  background: #eef2ff;
+  border-color: var(--color-link);
+  background: var(--color-info-bg);
 }
-.builtin-var-tag code { font-size: 11px; color: #6366f1; }
-.builtin-var-tag .copy-icon { font-size: 10px; color: #9ca3af; }
+.builtin-var-tag code { font-size: 11px; color: var(--color-link); }
+.builtin-var-tag .copy-icon { font-size: 10px; color: var(--color-mute); }
 .config-section { margin-bottom: 16px; }
 .config-section-title { margin-bottom: 8px; font-size: 13px; font-weight: 500; color: rgba(0, 0, 0, 0.88); }
 .param-add-btn { margin-top: 8px; margin-bottom: 16px; }

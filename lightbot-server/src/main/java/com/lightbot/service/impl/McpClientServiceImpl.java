@@ -211,6 +211,19 @@ public class McpClientServiceImpl implements McpClientService {
         log.info("[MCP] 已清除Redis缓存: serverId={}", mcpServerId);
     }
 
+    @Override
+    public int refreshServer(Long mcpServerId) {
+        try {
+            clearCache(mcpServerId);
+            List<McpSchema.Tool> tools = getToolsWithCache(mcpServerId);
+            log.info("[MCP] 刷新工具缓存成功: serverId={}, toolCount={}", mcpServerId, tools.size());
+            return tools.size();
+        } catch (Exception e) {
+            log.warn("[MCP] 刷新工具缓存失败: serverId={}, error={}", mcpServerId, e.getMessage());
+            return -1;
+        }
+    }
+
     @PreDestroy
     public void closeAll() {
         callbackCache.clear();

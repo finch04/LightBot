@@ -93,8 +93,8 @@ function onPick(type) {
   height: 28px;
   border-radius: 50%;
   border: 2px solid #6366f1;
-  background: #fff;
-  color: #6366f1;
+  background: var(--color-canvas);
+  color: var(--color-link);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -124,7 +124,7 @@ function onPick(type) {
   padding: 10px 12px 8px;
   font-weight: 600;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--color-ink);
   border-bottom: 1px solid #f3f4f6;
 }
 .edge-insert-search {
@@ -139,7 +139,7 @@ function onPick(type) {
 .edge-insert-group-title {
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--color-mute);
   padding: 6px 4px 4px;
 }
 .edge-insert-item {
@@ -155,7 +155,7 @@ function onPick(type) {
   text-align: left;
 }
 .edge-insert-item:hover {
-  background: #f3f4f6;
+  background: var(--color-canvas-soft-2);
 }
 .edge-insert-dot {
   width: 8px;
@@ -166,12 +166,12 @@ function onPick(type) {
 .edge-insert-item-title {
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-text-dark);
   flex-shrink: 0;
 }
 .edge-insert-item-desc {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

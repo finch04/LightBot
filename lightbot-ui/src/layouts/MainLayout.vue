@@ -83,6 +83,7 @@
                 <a-menu @click="({ key }) => handleSessionMenu(key, s)" >
                   <a-menu-item key="pin">{{ s.pinned ? '取消置顶' : '置顶' }}</a-menu-item>
                   <a-menu-item key="rename">重命名</a-menu-item>
+                  <a-menu-item key="export">导出</a-menu-item>
                   <a-menu-divider />
                   <a-menu-item key="delete" class="menu-danger">删除</a-menu-item>
                 </a-menu>
@@ -209,7 +210,7 @@ import { useUserStore } from '../stores/user'
 import { useTaskStore } from '../stores/task'
 import { useTheme } from '../composables/useTheme'
 import { Modal, message } from 'ant-design-vue'
-import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
+import { getSessions, updateSessionTitle, deleteSession, togglePinSession, exportSession } from '../api/chatSession'
 import AvatarFrame from '../components/AvatarFrame.vue'
 import LevelTag from '../components/LevelTag.vue'
 
@@ -365,8 +366,38 @@ function handleSessionMenu(key, session) {
     handleTogglePin(session)
   } else if (key === 'rename') {
     startRename(session)
+  } else if (key === 'export') {
+    handleExportSession(session)
   } else if (key === 'delete') {
     handleDeleteSession(session)
+  }
+}
+
+async function handleExportSession(session) {
+  Modal.confirm({
+    title: '导出会话',
+    content: '选择导出格式',
+    okText: 'Markdown',
+    cancelText: 'JSON',
+    onOk: () => doExportSession(session.id, 'markdown', session.title),
+    onCancel: () => doExportSession(session.id, 'json', session.title),
+  })
+}
+
+async function doExportSession(id, format, title) {
+  try {
+    const res = await exportSession(id, format)
+    const ext = format === 'json' ? 'json' : 'md'
+    const blob = new Blob([res], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title || 'session'}-${id}.${ext}`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('导出成功')
+  } catch {
+    message.error('导出失败')
   }
 }
 
@@ -535,8 +566,8 @@ watch(sessionLoadMoreRef, (el) => {
 /* ===== 侧边栏 ===== */
 .sidebar {
   width: 260px;
-  background: var(--color-primary);
-  color: #a1a1aa;
+  background: var(--sidebar-bg);
+  color: var(--color-mute);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -621,9 +652,9 @@ watch(sessionLoadMoreRef, (el) => {
   display: none;
   align-items: center;
   justify-content: center;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 18px;
-  background: var(--color-primary);
+  background: var(--sidebar-bg);
 }
 .sidebar.collapsed .sidebar-logo:hover .logo-unfold-icon {
   display: flex;
@@ -640,9 +671,9 @@ watch(sessionLoadMoreRef, (el) => {
   margin: 0 12px 12px;
   padding: 10px 0;
   background: transparent;
-  border: 1px solid #3f3f46;
+  border: 1px solid var(--sidebar-border);
   border-radius: 8px;
-  color: #fafafa;
+  color: var(--sidebar-text-bright);
   font-size: 14px;
   cursor: pointer;
   transition: border-color 0.15s;
@@ -665,18 +696,18 @@ watch(sessionLoadMoreRef, (el) => {
   gap: 10px;
   padding: 8px 12px;
   border-radius: 6px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   text-decoration: none;
   font-size: 14px;
   transition: background 0.15s, color 0.15s;
 }
 .nav-item:hover {
-  background: #27272a;
-  color: #fafafa;
+  background: var(--sidebar-bg-hover);
+  color: var(--sidebar-text-bright);
 }
 .nav-item.active {
-  background: #27272a;
-  color: #fafafa;
+  background: var(--sidebar-bg-hover);
+  color: var(--sidebar-text-bright);
 }
 
 /* 对话历史 */
@@ -691,14 +722,14 @@ watch(sessionLoadMoreRef, (el) => {
   width: 4px;
 }
 .session-section::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--sidebar-border);
   border-radius: 2px;
 }
 .section-title {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--color-primary);
+  background: var(--sidebar-bg);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -712,7 +743,7 @@ watch(sessionLoadMoreRef, (el) => {
   user-select: none;
 }
 .section-title:hover {
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .collapse-icon {
   font-size: 10px;
@@ -735,10 +766,10 @@ watch(sessionLoadMoreRef, (el) => {
   transition: background 0.15s, border-color 0.15s;
 }
 .session-item:hover {
-  background: #27272a;
+  background: var(--sidebar-bg-hover);
 }
 .session-item.active {
-  background: #27272a;
+  background: var(--sidebar-bg-hover);
 }
 .session-item--pinned {
   background: rgba(99, 102, 241, 0.1);
@@ -757,10 +788,10 @@ watch(sessionLoadMoreRef, (el) => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-  color: #d4d4d8;
+  color: var(--sidebar-text);
 }
 .session-item--pinned .session-title {
-  color: #e4e4e7;
+  color: var(--sidebar-text-bright);
   font-weight: 500;
 }
 .session-pin-icon {
@@ -779,8 +810,8 @@ watch(sessionLoadMoreRef, (el) => {
   border-radius: 4px;
 }
 .session-more:hover {
-  background: #3f3f46;
-  color: #d4d4d8;
+  background: var(--sidebar-border);
+  color: var(--sidebar-text);
 }
 .session-item:hover .session-more {
   opacity: 1;
@@ -788,7 +819,7 @@ watch(sessionLoadMoreRef, (el) => {
 .session-empty {
   padding: 12px;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   text-align: center;
 }
 .session-loading-more {
@@ -803,9 +834,9 @@ watch(sessionLoadMoreRef, (el) => {
 /* 用户信息 */
 .sidebar-footer {
   flex-shrink: 0;
-  background: var(--color-primary);
+  background: var(--sidebar-bg);
   padding: 12px;
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--sidebar-border);
   margin-top: auto;
 }
 .user-info {
@@ -818,7 +849,7 @@ watch(sessionLoadMoreRef, (el) => {
   transition: background 0.15s;
 }
 .user-info:hover {
-  background: #27272a;
+  background: var(--sidebar-bg-hover);
 }
 .user-avatar {
   width: 28px;
@@ -842,7 +873,7 @@ watch(sessionLoadMoreRef, (el) => {
 .user-name {
   flex: 1;
   font-size: 13px;
-  color: #d4d4d8;
+  color: var(--sidebar-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -879,14 +910,14 @@ watch(sessionLoadMoreRef, (el) => {
 .user-info-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 4px;
 }
 .user-info-meta {
   display: flex;
   gap: 10px;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 /* 收起/展开按钮 */
@@ -902,15 +933,15 @@ watch(sessionLoadMoreRef, (el) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #52525b;
+  color: var(--color-body);
   font-size: 14px;
   border-radius: 6px;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
 .sidebar-toggle:hover {
-  background: #27272a;
-  color: #a1a1aa;
+  background: var(--sidebar-bg-hover);
+  color: var(--color-mute);
 }
 
 /* ===== 主内容区 ===== */

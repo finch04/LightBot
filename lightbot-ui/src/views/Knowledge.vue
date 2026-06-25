@@ -233,7 +233,7 @@ onMounted(loadData)
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 14px;
   width: fit-content;
   max-width: 100%;
@@ -260,21 +260,21 @@ onMounted(loadData)
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 10px;
   line-height: 1;
 }
 .card-stat-icon {
   font-size: 11px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .card-stat-value {
   font-weight: 600;
-  color: #3f3f46;
+  color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
 .card-stat-label {
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .card-type-icon-wrap {
   margin-left: auto;
@@ -295,7 +295,7 @@ onMounted(loadData)
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;
@@ -316,13 +316,13 @@ onMounted(loadData)
   padding: 14px 16px;
   cursor: pointer;
   transition: all 0.15s;
-  background: #fff;
+  background: var(--color-canvas);
 }
 .kb-type-card:hover {
-  border-color: #a1a1aa;
+  border-color: var(--color-mute);
 }
 .kb-type-card.active {
-  border-color: var(--color-primary);
+  border-color: var(--color-ink);
   background: var(--color-canvas-soft);
   box-shadow: 0 0 0 1px var(--color-primary);
 }
@@ -334,16 +334,16 @@ onMounted(loadData)
 }
 .kb-type-icon {
   font-size: 18px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   transition: color 0.15s;
 }
 .kb-type-card.active .kb-type-icon {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .kb-type-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .kb-type-desc {
   font-size: 12px;

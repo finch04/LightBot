@@ -381,7 +381,7 @@
                 </ul>
               </div>
             </template>
-            <QuestionCircleOutlined style="font-size: 15px; color: #a1a1aa; cursor: pointer; margin-left: 6px;" />
+            <QuestionCircleOutlined style="font-size: 15px; color: var(--color-mute); cursor: pointer; margin-left: 6px;" />
           </a-popover>
         </div>
         <span class="panel-desc">用于外部系统调用 LightBot 接口的认证凭证</span>
@@ -863,7 +863,7 @@ async function handleDeleteApiKey(key) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0 0 4px;
 }
 .page-desc {
@@ -877,7 +877,7 @@ async function handleDeleteApiKey(key) {
   gap: 24px;
 }
 .panel {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
 }
@@ -886,7 +886,7 @@ async function handleDeleteApiKey(key) {
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  border-bottom: 1px solid #ebebeb;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .panel-title-wrap {
   display: flex;
@@ -896,7 +896,7 @@ async function handleDeleteApiKey(key) {
 .panel-title-wrap h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0;
 }
 .panel-desc {
@@ -935,11 +935,11 @@ async function handleDeleteApiKey(key) {
   gap: 8px;
   margin-top: 8px;
   padding: 10px 12px;
-  background: #f0f7ff;
-  border: 1px solid #bfdbfe;
+  background: var(--color-link-bg-soft);
+  border: 1px solid transparent;
   border-radius: 8px;
   font-size: 12px;
-  color: #1d4ed8;
+  color: var(--color-link);
 }
 .panel-tip :deep(svg) {
   flex-shrink: 0;
@@ -963,15 +963,15 @@ async function handleDeleteApiKey(key) {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid #fca5a5;
-  background: #fff;
-  color: #dc2626;
+  border: 1px solid var(--color-error-soft);
+  background: var(--color-canvas);
+  color: var(--color-error);
   border-radius: 6px;
   cursor: pointer;
   flex-shrink: 0;
 }
 .btn-icon-danger:hover {
-  background: #fef2f2;
+  background: var(--color-error-soft);
 }
 .btn-icon-move {
   display: inline-flex;
@@ -979,16 +979,16 @@ async function handleDeleteApiKey(key) {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid #d4d4d8;
-  background: #fff;
-  color: #52525b;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-body);
   border-radius: 6px;
   cursor: pointer;
   flex-shrink: 0;
 }
 .btn-icon-move:hover:not(:disabled) {
-  background: #f4f4f5;
-  border-color: #a1a1aa;
+  background: var(--color-canvas-soft-2);
+  border-color: var(--color-mute);
 }
 .btn-icon-move:disabled {
   color: #d4d4d8;
@@ -1013,16 +1013,16 @@ async function handleDeleteApiKey(key) {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  border: 1px dashed #d4d4d8;
+  border: 1px dashed var(--color-hairline-strong);
   background: var(--color-canvas-soft);
-  color: #52525b;
+  color: var(--color-body);
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
 }
 .btn-add:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .feature-list {
   display: flex;
@@ -1037,7 +1037,7 @@ async function handleDeleteApiKey(key) {
 }
 .features-count {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 .btn-text-toggle {
   display: inline-flex;
@@ -1081,7 +1081,7 @@ async function handleDeleteApiKey(key) {
 }
 .token-ranking-panel {
   margin-top: 24px;
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
 }
@@ -1104,12 +1104,12 @@ async function handleDeleteApiKey(key) {
 .token-stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-ink);
   line-height: 1.2;
 }
 .token-stat-sub {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-bottom: 8px;
 }
 .rank-badge {
@@ -1121,7 +1121,7 @@ async function handleDeleteApiKey(key) {
   border-radius: 50%;
   font-size: 12px;
   font-weight: 600;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   color: var(--color-mute);
 }
 .rank-badge.rank-top {
@@ -1130,7 +1130,7 @@ async function handleDeleteApiKey(key) {
 }
 .token-amount {
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
 .btn-icon-refresh {
@@ -1139,24 +1139,24 @@ async function handleDeleteApiKey(key) {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid #d4d4d8;
-  background: #fff;
-  color: #52525b;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-body);
   border-radius: 6px;
   cursor: pointer;
 }
 .btn-icon-refresh:hover:not(:disabled) {
-  background: #f4f4f5;
-  border-color: #a1a1aa;
+  background: var(--color-canvas-soft-2);
+  border-color: var(--color-hairline-strong);
 }
 .btn-icon-refresh:disabled {
-  color: #d4d4d8;
+  color: var(--color-hairline);
   cursor: not-allowed;
 }
 .empty-tip {
   text-align: center;
   padding: 40px 0;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
 }
 .ranking-user {
@@ -1166,7 +1166,7 @@ async function handleDeleteApiKey(key) {
 }
 .ranking-username {
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .apikey-cards-grid {
   display: grid;
@@ -1180,7 +1180,7 @@ async function handleDeleteApiKey(key) {
   transition: border-color 0.2s;
 }
 .apikey-card:hover {
-  border-color: #d4d4d8;
+  border-color: var(--color-hairline);
 }
 .apikey-card-header {
   display: flex;
@@ -1196,13 +1196,13 @@ async function handleDeleteApiKey(key) {
 .apikey-card-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .apikey-card-prefix {
   font-family: 'Monaco', 'Consolas', monospace;
   font-size: 12px;
   color: var(--color-mute);
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -1217,10 +1217,10 @@ async function handleDeleteApiKey(key) {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
 }
 .apikey-card-label {
-  color: #a1a1aa;
+  color: var(--color-mute);
   flex-shrink: 0;
   min-width: 64px;
 }
@@ -1229,7 +1229,7 @@ async function handleDeleteApiKey(key) {
   justify-content: space-between;
   align-items: center;
   padding-top: 10px;
-  border-top: 1px solid #f4f4f5;
+  border-top: 1px solid var(--color-hairline);
 }
 .apikey-card-switch {
   display: flex;
@@ -1248,12 +1248,12 @@ async function handleDeleteApiKey(key) {
   flex: 1;
   font-family: 'Monaco', 'Consolas', monospace;
   font-size: 13px;
-  background: #f4f4f5;
+  background: var(--color-canvas-soft-2);
   border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 12px;
   white-space: nowrap;
   overflow-x: auto;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 </style>

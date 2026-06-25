@@ -127,7 +127,7 @@ defineEmits([
 <style scoped>
 .node-panel {
   width: 240px;
-  background: #fff;
+  background: var(--color-canvas);
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
@@ -139,7 +139,7 @@ defineEmits([
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .node-panel.collapsed .panel-header {
   padding: 12px 8px;
@@ -158,22 +158,22 @@ defineEmits([
   height: 32px;
   border: none;
   border-radius: 8px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-mute);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
 }
-.rail-btn:hover { background: #eef2ff; color: #6366f1; }
+.rail-btn:hover { background: var(--color-info-bg); color: var(--color-link); }
 .rail-btn.active { background: #6366f1; color: #fff; }
 .btn-collapse {
   background: transparent;
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: #6b7280;
+  color: var(--color-mute);
 }
 .panel-header-actions {
   display: flex;
@@ -192,11 +192,11 @@ defineEmits([
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #6b7280;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 16px;
 }
-.btn-help:hover { background: #f3f4f6; color: #7c3aed; }
+.btn-help:hover { background: var(--color-canvas-soft-2); color: #7c3aed; }
 .node-panel .panel-body {
   flex: 1;
   padding: 12px;
@@ -206,7 +206,7 @@ defineEmits([
 .group-title {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-mute);
   padding: 4px 0;
 }
 .canvas-node-list {
@@ -224,7 +224,7 @@ defineEmits([
   font-size: 12px;
 }
 .canvas-node-item:hover,
-.canvas-node-item.active { background: #f3f4f6; }
+.canvas-node-item.active { background: var(--color-canvas-soft-2); }
 .canvas-node-dot {
   width: 8px;
   height: 8px;
@@ -233,11 +233,11 @@ defineEmits([
 }
 .canvas-node-name {
   flex: 1;
-  color: #1f2937;
+  color: var(--color-ink);
   font-weight: 500;
 }
 .canvas-node-type {
-  color: #9ca3af;
+  color: var(--color-mute);
   font-size: 11px;
 }
 </style>

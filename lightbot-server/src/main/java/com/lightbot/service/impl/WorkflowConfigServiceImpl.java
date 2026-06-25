@@ -263,6 +263,15 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
             if ("tool".equals(type) && data.get("toolId") == null) {
                 errors.add("工具节点未选择工具: " + id);
             }
+            // 条件分支节点必须有默认路径（out_c 边）
+            if ("condition".equals(type)) {
+                boolean hasDefaultEdge = edges.stream().anyMatch(e ->
+                        id.equals(String.valueOf(e.get("source")))
+                                && "out_c".equals(String.valueOf(e.get("sourceHandle"))));
+                if (!hasDefaultEdge) {
+                    errors.add("条件分支节点缺少默认路径: " + id);
+                }
+            }
             try {
                 NodeType.fromValue(type);
             } catch (IllegalArgumentException e) {

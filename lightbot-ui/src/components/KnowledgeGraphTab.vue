@@ -512,7 +512,7 @@ function renderGraph(subgraph, seq) {
       type: 'circle',
       style: {
         labelText: (d) => d.data.label,
-        labelFill: '#374151',
+        labelFill: '#ffffff',
         labelWordWrap: true,
         labelMaxWidth: '300%',
         size: (d) => {
@@ -548,13 +548,13 @@ function renderGraph(subgraph, seq) {
           return [{ x: mx + (-dy / len) * offset, y: my + (dx / len) * offset }]
         },
         labelText: (d) => d.data.label || '',
-        labelFill: '#6b7280',
+        labelFill: '#d1d5db',
         labelFontSize: 10,
-        stroke: '#d1d5db',
+        stroke: '#555',
         lineWidth: 1,
         endArrow: true,
         endArrowSize: 6,
-        endArrowFill: '#d1d5db'
+        endArrowFill: '#555'
       }
     },
     behaviors: [
@@ -992,7 +992,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
   padding: 4px 12px;
   margin-bottom: 8px;
   background: var(--color-canvas-soft);
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
 }
@@ -1004,23 +1004,23 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 }
 
 .kg-stat-label {
-  color: #8c8c8c;
+  color: var(--color-mute);
   font-weight: 500;
 }
 
 .kg-stat-value {
-  color: #262626;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
 .kg-stat-total {
-  color: #bfbfbf;
+  color: var(--color-mute);
   font-size: 11px;
 }
 
 .kg-canvas-wrapper {
   flex: 1;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -1030,6 +1030,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 .kg-canvas {
   width: 100%;
   height: 100%;
+  background: #000;
 }
 
 .kg-empty {
@@ -1038,7 +1039,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .kg-empty p {
@@ -1047,7 +1048,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 
 .kg-empty-hint {
   font-size: 13px;
-  color: #bfbfbf;
+  color: var(--color-mute);
 }
 
 .kg-detail-actions {
@@ -1067,7 +1068,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
   align-items: center;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .doc-extract-batch-hint {
   font-size: 12px;
@@ -1090,7 +1091,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
   min-width: 0;
 }
 .doc-extract-item:hover {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
 }
 .doc-extract-item :deep(.ant-checkbox-wrapper) {
   min-width: 0;
@@ -1098,7 +1099,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 }
 .doc-extract-name {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1106,18 +1107,18 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 .doc-extract-empty {
   text-align: center;
   padding: 32px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .doc-extract-actions {
   display: flex;
   justify-content: flex-end;
   padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
 }
 .doc-extract-actions :deep(.ant-btn-primary:disabled) {
   background: #d4d4d8;
-  border-color: #d4d4d8;
+  border-color: var(--color-hairline);
   color: #fff;
 }
 .doc-extract-btn-row {

@@ -480,14 +480,14 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 .detail-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-dark);
   margin-bottom: 8px;
 }
 .detail-pre {
   margin: 0;
   padding: 12px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   font-size: 12px;
   white-space: pre-wrap;
@@ -538,7 +538,7 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 }
 .card-desc {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-mute);
   line-height: 1.5;
 }
 .card-tags {
@@ -558,34 +558,34 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   line-height: 1.4;
 }
 .tag-slug {
-  background: #fdf2f8;
+  background: var(--color-purple-bg);
   color: #be185d;
   border: 1px solid #fbcfe8;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 .tag-version {
-  background: #f0f9ff;
+  background: var(--color-info-bg);
   color: #0369a1;
   border: 1px solid #bae6fd;
 }
 .tag-builtin {
-  background: #eff6ff;
+  background: var(--color-info-bg);
   color: #2563eb;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-border-blue);
 }
 .tag-upload {
-  background: #f0fdf4;
+  background: var(--color-success-bg);
   color: #15803d;
   border: 1px solid #bbf7d0;
 }
 .tag-remote {
-  background: #f0f9ff;
+  background: var(--color-info-bg);
   color: #0369a1;
   border: 1px solid #bae6fd;
 }
 .help-icon {
   margin-left: 8px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 16px;
   vertical-align: middle;
@@ -606,12 +606,12 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 .guide-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .guide-section p {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.6;
   margin: 0 0 8px;
 }
@@ -624,7 +624,7 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fdf2f8;
+  background: var(--color-purple-bg);
   color: #be185d;
   font-size: 12px;
   font-weight: 600;
@@ -648,7 +648,7 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   grid-column: 1 / -1;
   text-align: center;
   padding: 48px 24px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .dialog-footer {
@@ -656,21 +656,21 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   justify-content: space-between;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 8px;
 }
 .dialog-footer-left { display: flex; gap: 8px; }
 .dialog-footer-right { display: flex; gap: 8px; }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.btn-cancel:hover { border-color: var(--color-ink); color: var(--color-ink); }
 .btn-primary-sm {
   padding: 6px 14px;
   background: var(--color-primary);

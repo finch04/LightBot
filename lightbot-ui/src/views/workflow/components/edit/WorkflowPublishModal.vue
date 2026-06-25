@@ -49,6 +49,6 @@ const open = defineModel('open', { type: Boolean, default: false })
 .publish-modal .ant-modal-footer {
   margin-top: 4px;
   padding-top: 20px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--color-hairline);
 }
 </style>

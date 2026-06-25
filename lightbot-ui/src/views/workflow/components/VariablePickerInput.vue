@@ -82,15 +82,15 @@ function onPick({ key: menuKey }) {
 }
 .builtin-var-menu code {
   font-size: 12px;
-  color: #6366f1;
+  color: var(--color-link);
 }
 .builtin-var-menu .var-menu-label {
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-dark);
 }
 .builtin-var-menu .var-menu-desc {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--color-mute);
   margin-top: 2px;
   padding-left: 2px;
 }

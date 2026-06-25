@@ -870,7 +870,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .card-desc {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   line-height: 1.5;
 }
 .card-tags {
@@ -894,32 +894,32 @@ defineExpose({ openDialog, search, refresh })
   white-space: nowrap;
 }
 .tag-identifier {
-  background: #ecfdf5;
+  background: var(--color-success-bg);
   color: #059669;
-  border: 1px solid #d1fae5;
+  border: 1px solid var(--color-border-green);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 .tag-label {
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #dbeafe;
+  background: var(--color-info-bg);
+  color: var(--color-link);
+  border: 1px solid var(--color-border-blue);
 }
 .tag-endpoint {
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
   color: #7c3aed;
-  border: 1px solid #ede9fe;
+  border: 1px solid var(--color-purple-border);
   max-width: 200px;
 }
 .empty-tip {
   grid-column: 1 / -1;
   text-align: center;
   padding: 48px 24px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
 }
 .param-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 4px;
 }
 
@@ -932,12 +932,12 @@ defineExpose({ openDialog, search, refresh })
   cursor: pointer;
   font-size: 13px;
   color: var(--color-mute);
-  border-top: 1px dashed #ebebeb;
+  border-top: 1px dashed var(--color-hairline);
   user-select: none;
   margin-bottom: 8px;
 }
 .advanced-toggle:hover {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .toggle-icon {
   font-size: 10px;
@@ -948,13 +948,13 @@ defineExpose({ openDialog, search, refresh })
 }
 .form-hint {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   margin-top: 4px;
   line-height: 1.4;
 }
 .field-help-icon {
   margin-left: 4px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 14px;
   cursor: help;
   &:hover { color: #666; }
@@ -989,7 +989,7 @@ defineExpose({ openDialog, search, refresh })
   font-weight: 500;
 }
 .param-optional {
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-size: 12px;
 }
 
@@ -998,7 +998,7 @@ defineExpose({ openDialog, search, refresh })
   justify-content: space-between;
   align-items: center;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline);
   margin-top: 8px;
 }
 .dialog-footer-right {
@@ -1007,16 +1007,16 @@ defineExpose({ openDialog, search, refresh })
 }
 .btn-cancel {
   padding: 6px 14px;
-  background: #fff;
+  background: var(--color-canvas);
   color: var(--color-mute);
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 .btn-primary-sm {
   padding: 6px 14px;
@@ -1043,12 +1043,12 @@ defineExpose({ openDialog, search, refresh })
 .test-params-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .test-params-hint {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-style: italic;
 }
 .test-params-table {
@@ -1060,14 +1060,14 @@ defineExpose({ openDialog, search, refresh })
   text-align: left;
   padding: 6px 12px;
   background: var(--color-canvas-soft-2);
-  color: #52525b;
+  color: var(--color-body);
   font-weight: 600;
   border-bottom: 1px solid #e5e5e5;
 }
 .test-params-table td {
   padding: 6px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  color: var(--color-primary);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-ink);
 }
 .test-params-table code {
   background: var(--color-canvas-soft-2);
@@ -1085,7 +1085,7 @@ defineExpose({ openDialog, search, refresh })
 .test-input-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .btn-text {
   background: none;
@@ -1103,7 +1103,7 @@ defineExpose({ openDialog, search, refresh })
   width: 100%;
   min-height: 120px;
   padding: 12px 16px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   font-size: 13px;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
@@ -1112,17 +1112,17 @@ defineExpose({ openDialog, search, refresh })
   outline: none;
   transition: border-color 0.2s;
   background: var(--color-canvas-soft);
-  color: var(--color-primary);
+  color: var(--color-ink);
   box-sizing: border-box;
 }
 .test-json-input:focus {
   border-color: var(--color-link);
-  background: #fff;
+  background: var(--color-canvas);
 }
 .test-result-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 .test-result-content {
@@ -1131,7 +1131,7 @@ defineExpose({ openDialog, search, refresh })
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -1164,7 +1164,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .knowledge-card {
   border-color: #7c3aed;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
 }
 
 /* 工具详情弹窗样式 */
@@ -1227,10 +1227,10 @@ defineExpose({ openDialog, search, refresh })
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin-bottom: 10px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .detail-info-grid {
   display: grid;
@@ -1244,12 +1244,12 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-info-label {
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   white-space: nowrap;
 }
 .detail-info-value {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 .detail-info-code {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
@@ -1261,7 +1261,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-desc {
   font-size: 13px;
-  color: #52525b;
+  color: var(--color-body);
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -1272,7 +1272,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-empty {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
   font-style: italic;
 }
 .detail-output-example {
@@ -1281,7 +1281,7 @@ defineExpose({ openDialog, search, refresh })
 .detail-output-example-title {
   font-size: 12px;
   font-weight: 600;
-  color: #52525b;
+  color: var(--color-body);
   margin-bottom: 6px;
 }
 .detail-output-json {

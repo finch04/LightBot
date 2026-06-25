@@ -94,7 +94,7 @@ const iconStyle = computed(() => {
 .card-info :deep(h3) {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-ink);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;

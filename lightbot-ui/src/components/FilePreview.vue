@@ -145,7 +145,7 @@ function handleDownload() {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .preview-iframe {
@@ -161,7 +161,7 @@ function handleDownload() {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
 }
 
 .preview-image {
@@ -225,7 +225,7 @@ function handleDownload() {
   border-left: 4px solid #0070f3;
   padding-left: 16px;
   margin: 12px 0;
-  color: #52525b;
+  color: var(--color-body);
 }
 
 .preview-markdown :deep(table) {
@@ -242,7 +242,7 @@ function handleDownload() {
 }
 
 .preview-markdown :deep(th) {
-  background: #f9fafb;
+  background: var(--color-canvas-soft);
   font-weight: 600;
 }
 
@@ -266,7 +266,7 @@ function handleDownload() {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .preview-icon {
@@ -276,7 +276,7 @@ function handleDownload() {
 
 .preview-hint {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--color-mute);
 }
 
 .btn-primary-sm {

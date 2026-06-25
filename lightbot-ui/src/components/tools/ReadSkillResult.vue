@@ -112,7 +112,7 @@ function parseSimpleYaml(text) {
   border-left: 3px solid #8b5cf6;
   border-radius: 8px;
   overflow: hidden;
-  background: #f5f3ff;
+  background: var(--color-purple-bg);
 
   .rs-plain pre {
     margin: 0; padding: 8px 10px; background: var(--gray-25);
@@ -123,13 +123,13 @@ function parseSimpleYaml(text) {
   .rs-header {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 10px; border-bottom: 1px solid #c4b5fd;
-    background: #ede9fe; font-size: 12px; font-weight: 600; color: #5b21b6;
+    background: var(--color-purple-bg); font-size: 12px; font-weight: 600; color: #5b21b6;
     .rs-icon { color: #7c3aed; font-size: 14px; }
     .rs-name { font-weight: 600; }
     .rs-slug { font-family: monospace; color: #6d28d9; font-size: 11px; }
     .rs-activated {
       margin-left: auto; font-size: 11px; color: #16a34a;
-      background: #f0fdf4; border: 1px solid #bbf7d0;
+      background: var(--color-success-bg); border: 1px solid #bbf7d0;
       border-radius: 4px; padding: 0 6px;
     }
   }
@@ -138,7 +138,7 @@ function parseSimpleYaml(text) {
     padding: 8px 10px;
     display: flex; flex-direction: column; gap: 4px;
     border-bottom: 1px solid #e9e5ff;
-    background: #faf8ff;
+    background: var(--color-purple-bg);
     font-size: 12px;
 
     .rs-meta-row {
@@ -153,7 +153,7 @@ function parseSimpleYaml(text) {
     }
     .rs-meta-tag {
       display: inline-block; font-family: monospace; font-size: 11px;
-      background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd;
+      background: var(--color-purple-bg); color: #6d28d9; border: 1px solid #c4b5fd;
       border-radius: 4px; padding: 0 5px; line-height: 18px;
     }
   }

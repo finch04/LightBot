@@ -111,10 +111,19 @@ public class McpServerController {
     @Operation(summary = "刷新MCP Server工具（清除缓存重新获取）")
     @PostMapping("/{id}/tools/refresh")
     public Result<List<McpToolVO>> refreshTools(@PathVariable Long id) {
-        // 1. 清除缓存
-        mcpClientService.clearCache(id);
+        // 1. 清除缓存并重新加载
+        int toolCount = mcpClientService.refreshServer(id);
 
-        // 2. 重新获取工具列表
+        // 2. 更新最后同步时间
+        if (toolCount >= 0) {
+            McpServer server = mcpServerService.getById(id);
+            if (server != null) {
+                server.setLastSyncTime(java.time.LocalDateTime.now());
+                mcpServerService.updateById(server);
+            }
+        }
+
+        // 3. 返回工具列表
         return listTools(id);
     }
 

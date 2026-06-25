@@ -16,6 +16,7 @@
         <span class="config-value">{{ (data.conditionGroups || data.branches || []).length }}</span>
       </div>
       <div v-else class="node-placeholder">点击配置分支条件</div>
+      <div v-if="!hasDefaultEdge" class="node-warning">⚠ 未配置默认分支</div>
     </div>
   </div>
 </template>
@@ -25,6 +26,7 @@ import { computed } from 'vue'
 import WorkflowHandle from '../components/WorkflowHandle.vue'
 import { ForkOutlined } from '@ant-design/icons-vue'
 import { useGroupDragMask } from '../useGroupDragMask'
+import { useHandleConnections } from '@vue-flow/core'
 
 const props = defineProps({
   id: String,
@@ -37,6 +39,9 @@ defineEmits(['edit'])
 
 const { isGroupChildDragMasked } = useGroupDragMask(props)
 
+const defaultHandleConnections = useHandleConnections({ id: 'out_c', type: 'source', nodeId: props.id })
+const hasDefaultEdge = computed(() => defaultHandleConnections.value.length > 0)
+
 const nodeClass = computed(() => ({
   selected: props.selected,
   'wf-group-child-mask': isGroupChildDragMasked.value,
@@ -45,7 +50,7 @@ const nodeClass = computed(() => ({
 </script>
 
 <style scoped>
-.condition-node.debug-executing { animation: wf-exec 1.2s linear infinite; border-color: #6366f1; }
+.condition-node.debug-executing { animation: wf-exec 1.2s linear infinite; border-color: var(--color-link); }
 .condition-node.debug-success { border-color: #22c55e; }
 .condition-node.debug-fail { border-color: #ef4444; }
 @keyframes wf-exec {
@@ -55,7 +60,7 @@ const nodeClass = computed(() => ({
 }
 
 .condition-node {
-  background: #fff;
+  background: var(--color-canvas);
   border: 2px solid #d97706;
   border-radius: 12px;
   min-width: 140px;
@@ -76,8 +81,8 @@ const nodeClass = computed(() => ({
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #fef3c7;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--color-warn-bg-deep);
+  border-bottom: 1px solid var(--color-hairline);
   border-radius: 10px 10px 0 0;
 }
 
@@ -89,7 +94,7 @@ const nodeClass = computed(() => ({
 .node-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-ink);
 }
 
 .node-body {
@@ -103,16 +108,22 @@ const nodeClass = computed(() => ({
 }
 
 .config-label {
-  color: #6b7280;
+  color: var(--color-mute);
 }
 
 .config-value {
-  color: #374151;
+  color: var(--color-text-dark);
   font-weight: 500;
 }
 
 .node-placeholder {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--color-mute);
+}
+
+.node-warning {
+  font-size: 12px;
+  color: #d97706;
+  margin-top: 4px;
 }
 </style>
