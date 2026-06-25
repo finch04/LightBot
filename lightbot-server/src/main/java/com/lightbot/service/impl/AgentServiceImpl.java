@@ -389,7 +389,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             agent.setConfig(objectMapper.writeValueAsString(configMap));
             updateById(agent);
         } catch (Exception e) {
-            log.error("[Agent] 更新知识库绑定失败: agentId={}, error={}", agentId, e.getMessage());
+            log.error("[Agent] 更新知识库绑定失败: agentId={}, error={}", agentId, e.getMessage(), e);
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
         }
     }
 
@@ -509,7 +510,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
             agent.setConfig(objectMapper.writeValueAsString(configMap));
             updateById(agent);
         } catch (Exception e) {
-            log.error("[Agent] 更新config.{}失败: agentId={}, error={}", field, agentId, e.getMessage());
+            log.error("[Agent] 更新config.{}失败: agentId={}, error={}", field, agentId, e.getMessage(), e);
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
         }
     }
 

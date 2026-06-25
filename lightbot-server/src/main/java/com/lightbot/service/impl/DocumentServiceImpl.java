@@ -852,7 +852,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             }
             return sb.toString();
         } catch (Exception e) {
-            return String.valueOf(System.currentTimeMillis());
+            log.error("[Document] 计算文件哈希失败: name={}", file.getOriginalFilename(), e);
+            throw new BizException(ErrorCode.DOCUMENT_READ_FAILED);
         }
     }
 

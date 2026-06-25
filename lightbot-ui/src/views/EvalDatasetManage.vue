@@ -45,7 +45,7 @@
         <div class="card-top">
           <div class="card-icon">{{ (item.name || 'D')[0].toUpperCase() }}</div>
           <div class="card-info">
-            <h3>{{ item.name }}</h3>
+            <a-tooltip :title="item.name"><h3>{{ item.name }}</h3></a-tooltip>
             <span class="card-type" v-if="item.latestVersion">v{{ item.latestVersion }}</span>
           </div>
           <div class="card-actions" @click.stop>

@@ -11,8 +11,8 @@
             <span class="status-dot" :class="s.enabled === 1 ? 'status-active' : 'status-disabled'"></span>
           </div>
           <div class="card-info">
-            <h3>{{ s.displayName }}</h3>
-            <span class="card-name">{{ s.name }}</span>
+            <a-tooltip :title="s.displayName"><h3>{{ s.displayName }}</h3></a-tooltip>
+            <a-tooltip :title="s.name"><span class="card-name">{{ s.name }}</span></a-tooltip>
           </div>
           <div class="card-actions" @click.stop>
             <a-tooltip v-if="s.isBuiltin !== 1" title="删除">

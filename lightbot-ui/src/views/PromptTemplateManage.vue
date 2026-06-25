@@ -28,7 +28,7 @@
         <div class="card-top">
           <div class="card-icon">{{ (t.promptTemplateKey || 'T')[0].toUpperCase() }}</div>
           <div class="card-info">
-            <h3>{{ t.promptTemplateKey }}</h3>
+            <a-tooltip :title="t.promptTemplateKey"><h3>{{ t.promptTemplateKey }}</h3></a-tooltip>
             <span class="card-desc">{{ t.templateDesc || '暂无描述' }}</span>
           </div>
           <div class="card-actions" @click.stop>

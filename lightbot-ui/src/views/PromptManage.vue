@@ -43,7 +43,7 @@
             <span class="card-version-badge" v-if="item.latestVersion">{{ item.latestVersion }}</span>
           </div>
           <div class="card-info">
-            <h3>{{ item.promptKey }}</h3>
+            <a-tooltip :title="item.promptKey"><h3>{{ item.promptKey }}</h3></a-tooltip>
           </div>
           <div class="card-actions" @click.stop>
             <a-tooltip title="编辑">

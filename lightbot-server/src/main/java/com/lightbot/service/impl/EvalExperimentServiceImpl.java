@@ -410,6 +410,7 @@ public class EvalExperimentServiceImpl extends ServiceImpl<EvalExperimentMapper,
             throw e;
         } catch (Exception e) {
             log.warn("[评测实验] 评估器配置解析失败, evaluatorConfig={}", evaluatorConfig, e);
+            throw new BizException(ErrorCode.BAD_REQUEST);
         }
     }
 
