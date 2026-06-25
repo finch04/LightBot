@@ -217,7 +217,7 @@ public class ChatServiceImpl implements ChatService {
             toolEventsList.add(callEvtSync);
 
             // 执行工具
-            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), ctx.getSessionId(), requestId, null);
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), ctx.getSessionId(), requestId, null, ctx);
 
             // 暂存工具调用记录
             ToolCall toolCallLog = new ToolCall();
@@ -636,7 +636,7 @@ public class ChatServiceImpl implements ChatService {
                                 String result;
                                 try {
                                     result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs,
-                                            agent.getId(), ctx.getSessionId(), requestId, sink);
+                                            agent.getId(), ctx.getSessionId(), requestId, sink, ctx);
                                 } finally {
                                     if (sink != null) {
                                         ToolEventEmitter.teardownSink();
@@ -691,7 +691,7 @@ public class ChatServiceImpl implements ChatService {
                         String toolResult;
                         try {
                             toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs,
-                                    agent.getId(), ctx.getSessionId(), requestId, eventSink);
+                                    agent.getId(), ctx.getSessionId(), requestId, eventSink, ctx);
                         } finally {
                             ToolEventEmitter.teardownSink();
                         }
@@ -945,7 +945,7 @@ public class ChatServiceImpl implements ChatService {
                 final String dnFinal = dn;
                 futures.add(CompletableFuture.supplyAsync(() -> {
                     long tStart = System.currentTimeMillis();
-                    String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), ctx.getSessionId(), requestId, null);
+                    String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), ctx.getSessionId(), requestId, null, ctx);
                     long tEnd = System.currentTimeMillis();
                     spans.add(LlmTraceSpan.of("tool_" + toolCallCountHolder[0], llmSpanId, "tool_execute",
                             tStart, tEnd - tStart, "OK",
@@ -1009,7 +1009,7 @@ public class ChatServiceImpl implements ChatService {
             statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, dnSeq, safeArgs, toolContentOffset)));
 
             long tToolStart = System.currentTimeMillis();
-            String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), ctx.getSessionId(), requestId, null);
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), ctx.getSessionId(), requestId, null, ctx);
             long tToolEnd = System.currentTimeMillis();
             spans.add(LlmTraceSpan.of("tool_" + toolCallCountHolder[0], llmSpanId, "tool_execute",
                     tToolStart, tToolEnd - tToolStart, "OK",
@@ -1071,7 +1071,7 @@ public class ChatServiceImpl implements ChatService {
 
     private String executeToolCallback(Map<String, ToolCallback> toolCallbackMap, String toolName,
                                        String callArgs, Long agentId, Long sessionId, String requestId,
-                                       Sinks.Many<String> eventSink) {
+                                       Sinks.Many<String> eventSink, ChatContext chatContext) {
         ToolCallback callback = toolCallbackMap.get(toolName);
         if (callback != null) {
             try {
@@ -1080,10 +1080,15 @@ public class ChatServiceImpl implements ChatService {
                     ToolEventEmitter.setupSink(eventSink);
                 }
                 try {
-                    return callback.call(callArgs, new ToolContext(Map.of(
-                            "agentId", agentId,
-                            "sessionId", sessionId != null ? sessionId.toString() : "default",
-                            "requestId", requestId)));
+                    Map<String, Object> ctxMap = new java.util.HashMap<>();
+                    ctxMap.put("agentId", agentId);
+                    ctxMap.put("sessionId", sessionId != null ? sessionId.toString() : "default");
+                    ctxMap.put("requestId", requestId);
+                    ctxMap.put("parentThreadId", sessionId != null ? sessionId.toString() : "default");
+                    if (chatContext != null) {
+                        ctxMap.put("chatContext", chatContext);
+                    }
+                    return callback.call(callArgs, new ToolContext(ctxMap));
                 } finally {
                     if (eventSink != null) {
                         ToolEventEmitter.teardownSink();
@@ -1403,6 +1408,42 @@ public class ChatServiceImpl implements ChatService {
                                     String toolName, String args, String result, int contentOffset) {
         String truncated = truncateForSse(result);
         if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
+            // 1. 先 drain 并推送子代理中间事件（token/tool_call/tool_result）
+            if (ctx != null) {
+                List<ChatContext.SubAgentEvent> subEvents = ctx.drainSubAgentEvents();
+                for (ChatContext.SubAgentEvent se : subEvents) {
+                    switch (se.type()) {
+                        case "token" -> {
+                            Map<String, Object> tokenEvt = new HashMap<>();
+                            tokenEvt.put("type", "subagent_token");
+                            tokenEvt.put("subagentName", se.subagentName());
+                            tokenEvt.put("content", se.content());
+                            tokenEvt.put("contentOffset", contentOffset);
+                            toolEventsList.add(tokenEvt);
+                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentTokenEvent(se.subagentName(), se.content(), contentOffset)));
+                        }
+                        case "tool_call" -> {
+                            Map<String, Object> tcEvt = new HashMap<>();
+                            tcEvt.put("type", "subagent_tool_call");
+                            tcEvt.put("subagentName", se.subagentName());
+                            tcEvt.put("toolName", se.content());
+                            tcEvt.put("contentOffset", contentOffset);
+                            toolEventsList.add(tcEvt);
+                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentToolCallEvent(se.subagentName(), se.content(), contentOffset)));
+                        }
+                        case "tool_result" -> {
+                            Map<String, Object> trEvt = new HashMap<>();
+                            trEvt.put("type", "subagent_tool_result");
+                            trEvt.put("subagentName", se.subagentName());
+                            trEvt.put("content", se.content());
+                            trEvt.put("contentOffset", contentOffset);
+                            toolEventsList.add(trEvt);
+                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentToolResultEvent(se.subagentName(), se.content(), contentOffset)));
+                        }
+                    }
+                }
+            }
+            // 2. 推送 subagent_result 事件
             Map<String, String> parsed = parseSubagentArgs(args);
             String subName = parsed.get("subagentName");
             String displayName = parsed.get("displayName");

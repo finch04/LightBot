@@ -50,7 +50,7 @@ const iconStyle = computed(() => {
 
 <style scoped>
 .entity-card {
-  background: #fff;
+  background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
@@ -63,8 +63,7 @@ const iconStyle = computed(() => {
 }
 .entity-card--clickable:hover {
   border-color: var(--color-link);
-  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04),
-              inset 0 0 0 1px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-3);
 }
 
 .card-top {

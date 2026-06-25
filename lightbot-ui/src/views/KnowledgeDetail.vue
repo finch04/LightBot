@@ -920,7 +920,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
+import { ref, reactive, computed, h, nextTick, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { renderMarkdownSync } from '@/utils/markdown_preview'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -1398,6 +1398,24 @@ function isValidUrl(str) {
   }
 }
 
+/** 检测是否为内网/私有地址（前端基础校验，非安全兜底） */
+function isInternalUrl(urlStr) {
+  try {
+    const url = new URL(urlStr)
+    const host = url.hostname
+    if (['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'].includes(host)) return true
+    // 10.x / 172.16-31.x / 192.168.x
+    if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true
+    if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host)) return true
+    if (/^192\.168\.\d+\.\d+$/.test(host)) return true
+    // 169.254.x.x 元数据端点
+    if (/^169\.254\.\d+\.\d+$/.test(host)) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 async function handleFetchUrls() {
   const text = urlInput.value.trim()
   if (!text) return
@@ -1425,10 +1443,44 @@ async function handleFetchUrls() {
     return
   }
 
+  // 3. 安全警告弹窗：检测内网地址并提示用户
+  const internalUrls = pendingItems.filter(item => isInternalUrl(item.url))
+  const urlListHtml = pendingItems.map(item =>
+    `<div style="word-break:break-all;padding:2px 0;font-size:13px">${item.url}</div>`
+  ).join('')
+
+  const warningParts = ['即将访问以上 URL 获取网页内容，请确认链接来源可信。']
+  if (internalUrls.length > 0) {
+    warningParts.push(
+      `<span style="color:#ff4d4f;font-weight:600">检测到 ${internalUrls.length} 个内网/本地地址，可能涉及内网资源访问风险，请务必确认。</span>`
+    )
+  }
+
+  const confirmed = await new Promise(resolve => {
+    Modal.confirm({
+      title: 'URL 安全确认',
+      content: h => h('div', [
+        h('div', {
+          style: 'max-height:200px;overflow-y:auto;background:#fafafa;border-radius:6px;padding:8px 12px;margin-bottom:12px',
+          innerHTML: urlListHtml,
+        }),
+        ...warningParts.map(text => h('div', {
+          style: 'margin-bottom:6px;line-height:1.6',
+          innerHTML: text,
+        })),
+      ]),
+      okText: '确认解析',
+      cancelText: '取消',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    })
+  })
+  if (!confirmed) return
+
   urlInput.value = ''
   urlFetching.value = true
 
-  // 3. 并行抓取每个新添加的 URL
+  // 4. 并行抓取每个新添加的 URL
   const promises = pendingItems.map(item => fetchSingleUrl(item))
   await Promise.allSettled(promises)
 

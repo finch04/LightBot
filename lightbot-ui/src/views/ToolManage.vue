@@ -821,13 +821,13 @@ const paramColumns = [
   { title: '参数名', dataIndex: 'name', width: 140, customRender: ({ text }) => h('code', text) },
   { title: '类型', dataIndex: 'type', width: 80 },
   { title: '必填', dataIndex: 'required', width: 60, customRender: ({ text }) => text ? '是' : '否' },
-  { title: '说明', dataIndex: 'desc', ellipsis: true },
+  { title: '说明', dataIndex: 'desc' },
 ]
 
 const outputColumns = [
   { title: '字段名', dataIndex: 'name', width: 140, customRender: ({ text }) => h('code', text) },
   { title: '类型', dataIndex: 'type', width: 80 },
-  { title: '说明', dataIndex: 'desc', ellipsis: true },
+  { title: '说明', dataIndex: 'desc' },
 ]
 
 defineExpose({ openDialog, search, refresh })
@@ -1206,6 +1206,17 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-section {
   margin-bottom: 20px;
+
+  :deep(.ant-table) {
+    table-layout: fixed;
+  }
+  :deep(.ant-table-cell) {
+    white-space: normal;
+    word-break: break-word;
+  }
+  :deep(.ant-table-thead .ant-table-cell) {
+    white-space: nowrap;
+  }
 }
 .detail-section:last-child {
   margin-bottom: 0;

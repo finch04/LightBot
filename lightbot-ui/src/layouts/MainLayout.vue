@@ -11,8 +11,14 @@
             <MenuUnfoldOutlined />
           </div>
         </div>
-        <div v-if="!sidebarCollapsed" class="sidebar-toggle" @click="toggleSidebar">
-          <MenuFoldOutlined />
+        <div v-if="!sidebarCollapsed" class="sidebar-header-actions">
+          <div class="sidebar-toggle" @click="toggleTheme">
+            <BulbFilled v-if="isDark" />
+            <BulbOutlined v-else />
+          </div>
+          <div class="sidebar-toggle" @click="toggleSidebar">
+            <MenuFoldOutlined />
+          </div>
         </div>
       </div>
 
@@ -196,9 +202,12 @@ import {
   InfoCircleOutlined,
   LogoutOutlined,
   LoadingOutlined,
+  BulbOutlined,
+  BulbFilled,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '../stores/user'
 import { useTaskStore } from '../stores/task'
+import { useTheme } from '../composables/useTheme'
 import { Modal, message } from 'ant-design-vue'
 import { getSessions, updateSessionTitle, deleteSession, togglePinSession } from '../api/chatSession'
 import AvatarFrame from '../components/AvatarFrame.vue'
@@ -236,6 +245,8 @@ let taskSSE = null
 let sseRetries = 0
 const SSE_MAX_RETRIES = 10
 const SSE_BASE_DELAY = 3000
+
+const { isDark, toggleTheme } = useTheme()
 
 const taskBadgeCount = computed(() => {
   if (taskStore.active <= 0) return 0
@@ -879,6 +890,11 @@ watch(sessionLoadMoreRef, (el) => {
 }
 
 /* 收起/展开按钮 */
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .sidebar-toggle {
   width: 28px;
   height: 28px;
@@ -901,6 +917,6 @@ watch(sessionLoadMoreRef, (el) => {
 .main-content {
   flex: 1;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 </style>

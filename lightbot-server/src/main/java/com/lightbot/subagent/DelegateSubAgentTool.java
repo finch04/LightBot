@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.entity.SubAgent;
 import com.lightbot.service.SubAgentService;
+import com.lightbot.service.chat.ChatContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -42,7 +43,7 @@ public class DelegateSubAgentTool {
 
     /**
      * 为给定的一组 SubAgent ID 构造一个动态工具回调。
-     * 工具描述包含子 Agent 列表，输入参数为 subagent_name + task。
+     * 工具描述包含子 Agent 列表，输入参数为 subagent_name + task + thread_id(可选)。
      *
      * @param boundSubAgentIds 当前 Agent 绑定的 SubAgent ID 列表
      * @return ToolCallback，无可用 SubAgent 时返回 null
@@ -72,6 +73,7 @@ public class DelegateSubAgentTool {
                 1. 仅当子任务符合某个子智能体的专长时，才调用本工具；否则继续自己回答。
                 2. task 字段务必写完整、自包含的指令（背景 + 目标 + 期望产物），子智能体看不到主对话历史。
                 3. 子智能体会同步返回结果，主 Agent 需基于其回答继续对话或汇总。
+                4. thread_id 可选：传入已有线程 ID 可续跑上次会话，不传则自动创建新线程。
                 """;
 
         // 2. JSON Schema
@@ -90,6 +92,10 @@ public class DelegateSubAgentTool {
                     "task": {
                       "type": "string",
                       "description": "完整的子任务描述（背景 + 目标 + 期望产物）"
+                    },
+                    "thread_id": {
+                      "type": "string",
+                      "description": "子代理线程 ID，传入时续跑已有会话，不传时新建"
                     }
                   },
                   "required": ["subagent_name", "task"]
@@ -144,11 +150,13 @@ public class DelegateSubAgentTool {
         public String call(String toolInput, ToolContext toolContext) {
             String subName;
             String task;
+            String threadId;
             try {
                 Map<String, Object> args = objectMapper.readValue(
                         toolInput != null ? toolInput : "{}", new TypeReference<>() {});
                 subName = args.get("subagent_name") != null ? args.get("subagent_name").toString() : null;
                 task = args.get("task") != null ? args.get("task").toString() : null;
+                threadId = args.get("thread_id") != null ? args.get("thread_id").toString() : null;
             } catch (Exception e) {
                 return "参数解析失败: " + e.getMessage();
             }
@@ -164,13 +172,29 @@ public class DelegateSubAgentTool {
             }
             Long providerId = null;
             String requestId = null;
+            String parentThreadId = null;
+            ChatContext chatContext = null;
             if (toolContext != null && toolContext.getContext() != null) {
                 Object pid = toolContext.getContext().get("providerId");
                 if (pid instanceof Number n) providerId = n.longValue();
                 Object rid = toolContext.getContext().get("requestId");
                 if (rid != null) requestId = rid.toString();
+                Object ptid = toolContext.getContext().get("parentThreadId");
+                if (ptid != null) parentThreadId = ptid.toString();
+                Object cctx = toolContext.getContext().get("chatContext");
+                if (cctx instanceof ChatContext cc) chatContext = cc;
             }
-            return runtime.run(target, task, providerId, requestId);
+            SubAgentRuntime.SubAgentResult result = runtime.run(target, task, providerId, requestId, threadId, parentThreadId, chatContext);
+            // 返回 JSON 格式结果，包含 thread_id 供主 Agent 后续续跑
+            try {
+                Map<String, Object> out = new HashMap<>();
+                out.put("reply", result.reply());
+                out.put("thread_id", result.threadId());
+                out.put("continued", result.continued());
+                return objectMapper.writeValueAsString(out);
+            } catch (Exception e) {
+                return result.reply();
+            }
         }
     }
 }

@@ -223,6 +223,52 @@ public class ToolEventGenerator {
     }
 
     /**
+     * SubAgent 流式 token 事件
+     */
+    public String subagentTokenEvent(String subagentName, String token, int contentOffset) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "type", "subagent_token",
+                    "subagentName", subagentName != null ? subagentName : "",
+                    "content", token != null ? token : "",
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"subagent_token\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
+    /**
+     * SubAgent 子工具调用事件
+     */
+    public String subagentToolCallEvent(String subagentName, String toolName, int contentOffset) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "type", "subagent_tool_call",
+                    "subagentName", subagentName != null ? subagentName : "",
+                    "toolName", toolName != null ? toolName : "",
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"subagent_tool_call\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
+    /**
+     * SubAgent 子工具结果事件
+     */
+    public String subagentToolResultEvent(String subagentName, String result, int contentOffset) {
+        try {
+            String truncated = result != null && result.length() > 500 ? result.substring(0, 500) + "..." : (result != null ? result : "");
+            return objectMapper.writeValueAsString(Map.of(
+                    "type", "subagent_tool_result",
+                    "subagentName", subagentName != null ? subagentName : "",
+                    "content", truncated,
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return "{\"type\":\"subagent_tool_result\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+        }
+    }
+
+    /**
      * 敏感词拦截事件
      *
      * @param scope   拦截范围：user_input / ai_output

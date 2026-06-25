@@ -436,4 +436,47 @@ function getNodeTypeName(type) {
   padding: 1px 5px;
   border-radius: 6px;
 }
+
+/* 结果 Tab 切换 */
+.result-tab-header {
+  display: flex; gap: 16px; margin: 12px 0 8px;
+}
+.result-tab-header h4 {
+  font-size: 13px; font-weight: 500; color: #6b7280; cursor: pointer; margin: 0; padding-bottom: 4px; border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.result-tab-header h4.active { color: #6366f1; border-bottom-color: #6366f1; }
+.result-tab-header h4:hover { color: #4f46e5; }
+.var-count {
+  display: inline-block; margin-left: 4px; font-size: 10px; font-weight: 600; color: #6366f1; background: #eef2ff; padding: 0 5px; border-radius: 8px; line-height: 16px;
+}
+
+/* 变量面板 */
+.vars-panel { display: flex; flex-direction: column; gap: 4px; }
+.vars-empty { font-size: 12px; color: #9ca3af; text-align: center; padding: 20px 0; }
+.var-item {
+  border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; overflow: hidden;
+}
+.var-item.expanded { border-color: #c7d2fe; }
+.var-item-head {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; user-select: none;
+}
+.var-item-head:hover { background: #f9fafb; }
+.var-key { font-size: 13px; font-weight: 600; color: #374151; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.var-type {
+  font-size: 10px; color: #6366f1; background: #eef2ff; padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
+}
+.var-toggle {
+  flex-shrink: 0; font-size: 12px; color: #9ca3af; transition: transform 0.2s; display: inline-block; margin-left: auto;
+}
+.var-toggle.expanded { transform: rotate(90deg); }
+.var-item-body { padding: 0 10px 10px; }
+.var-value-json {
+  margin: 0; font-size: 12px; line-height: 1.45; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.var-value-text {
+  font-size: 13px; color: #374151; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+.var-preview {
+  padding: 0 10px 6px; font-size: 12px; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 </style>

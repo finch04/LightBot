@@ -14,7 +14,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * 对话管道上下文，承载整个中间件链的共享状态
@@ -100,6 +102,38 @@ public class ChatContext {
     /** 待持久化的工具调用记录（assistant 消息保存后批量写入，关联 messageId） */
     private List<ToolCall> pendingToolCalls;
 
+    // ===== 子代理流式事件队列 =====
+    private Queue<SubAgentEvent> subAgentEventQueue;
+
+    /**
+     * 子代理流式事件（token/tool_call/tool_result）
+     */
+    public record SubAgentEvent(String type, String subagentName, String content, int contentOffset) {}
+
+    /**
+     * 推送子代理事件到队列
+     */
+    public void pushSubAgentEvent(SubAgentEvent event) {
+        if (subAgentEventQueue != null && event != null) {
+            subAgentEventQueue.add(event);
+        }
+    }
+
+    /**
+     * 取出并清空所有待消费的子代理事件
+     */
+    public List<SubAgentEvent> drainSubAgentEvents() {
+        if (subAgentEventQueue == null) {
+            return List.of();
+        }
+        List<SubAgentEvent> events = new ArrayList<>();
+        SubAgentEvent event;
+        while ((event = subAgentEventQueue.poll()) != null) {
+            events.add(event);
+        }
+        return events;
+    }
+
     /**
      * 工厂方法：创建上下文并初始化所有累加器
      */
@@ -117,6 +151,7 @@ public class ChatContext {
         ctx.spans = new ArrayList<>();
         ctx.pendingToolCalls = new ArrayList<>();
         ctx.activatedSkills = new LinkedHashSet<>();
+        ctx.subAgentEventQueue = new ConcurrentLinkedQueue<>();
         return ctx;
     }
 }

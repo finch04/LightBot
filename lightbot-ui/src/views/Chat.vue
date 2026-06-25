@@ -1487,13 +1487,18 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             scrollToBottom()
             return
           }
-          if (event.type === 'subagent_call' || event.type === 'subagent_result') {
+          if (event.type === 'subagent_call' || event.type === 'subagent_result'
+              || event.type === 'subagent_token' || event.type === 'subagent_tool_call' || event.type === 'subagent_tool_result') {
             assistantMsg._toolEvents.push(event)
             if (event.type === 'subagent_call') {
               assistantMsg._toolExpanded = true
               assistantMsg._currentToolOffset = offset
               registerToolBlockOffset(assistantMsg, offset)
               currentStatus.value = `委派 SubAgent: ${event.displayName || event.subagentName || ''}`
+            } else if (event.type === 'subagent_tool_call') {
+              currentStatus.value = `SubAgent 调用工具: ${event.toolName || ''}`
+            } else if (event.type === 'subagent_token') {
+              currentStatus.value = `SubAgent 输出中...`
             }
             hasStreamContent.value = true
             scrollToBottom()
@@ -1685,7 +1690,7 @@ function registerToolBlockOffset(msg, offset) {
   }
 }
 
-const CAPABILITY_EVENT_TYPES = new Set(['skill_active', 'subagent_call', 'subagent_result'])
+const CAPABILITY_EVENT_TYPES = new Set(['skill_active', 'subagent_call', 'subagent_result', 'subagent_token', 'subagent_tool_call', 'subagent_tool_result'])
 
 function getCapabilityEvents(msg) {
   return (msg._toolEvents || []).filter(e => CAPABILITY_EVENT_TYPES.has(e.type))
@@ -1906,7 +1911,7 @@ watch(sessionId, (newVal, oldVal) => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #ffffff;
+  background: var(--color-canvas);
 }
 
 /* ===== 消息列表 ===== */

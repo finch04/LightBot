@@ -31,6 +31,23 @@
             <span class="cap-label">任务</span>
             <pre>{{ evt.task }}</pre>
           </div>
+          <!-- 子代理中间执行过程 -->
+          <div v-if="getSubagentSteps(i).length > 0" class="cap-steps">
+            <span class="cap-label">执行过程</span>
+            <div v-for="(step, si) in getSubagentSteps(i)" :key="si" class="cap-step">
+              <span v-if="step.type === 'subagent_tool_call'" class="cap-step-call">
+                <CodeOutlined class="cap-step-icon" /> 调用工具: <strong>{{ step.toolName }}</strong>
+              </span>
+              <span v-else-if="step.type === 'subagent_tool_result'" class="cap-step-result">
+                <CheckCircleOutlined class="cap-step-icon success" /> 工具结果
+                <span v-if="step.content" class="cap-step-preview">{{ step.content }}</span>
+              </span>
+              <span v-else-if="step.type === 'subagent_token'" class="cap-step-token">
+                {{ step.content }}
+              </span>
+            </div>
+          </div>
+          <!-- 最终结果 -->
           <div v-if="getSubagentResult(i)" class="cap-result">
             <span class="cap-label">执行结果</span>
             <pre>{{ getSubagentResult(i) }}</pre>
@@ -43,7 +60,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
-import { ThunderboltOutlined, RobotOutlined, LoadingOutlined, RightOutlined } from '@ant-design/icons-vue'
+import { ThunderboltOutlined, RobotOutlined, LoadingOutlined, RightOutlined, CodeOutlined, CheckCircleOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   events: { type: Array, default: () => [] },
@@ -89,6 +106,21 @@ function getSubagentResult(callIndex) {
       && e.contentOffset === offset
   )
   return resultEvt?.result || null
+}
+
+/**
+ * 获取子代理执行中间步骤（工具调用、工具结果、token 输出）
+ */
+function getSubagentSteps(callIndex) {
+  const call = props.events[callIndex]
+  if (!call || call.type !== 'subagent_call') return []
+  const name = call.subagentName
+  const offset = call.contentOffset
+  return props.events.filter(
+    e => (e.type === 'subagent_tool_call' || e.type === 'subagent_tool_result' || e.type === 'subagent_token')
+      && e.subagentName === name
+      && e.contentOffset === offset
+  )
 }
 </script>
 
@@ -209,5 +241,53 @@ function getSubagentResult(callIndex) {
 .cap-label {
   font-weight: 500;
   color: #6b7280;
+}
+
+.cap-steps {
+  margin-top: 6px;
+}
+
+.cap-step {
+  padding: 3px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cap-step-call {
+  color: #7c3aed;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cap-step-result {
+  color: #059669;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cap-step-icon {
+  font-size: 11px;
+}
+
+.cap-step-icon.success {
+  color: #10b981;
+}
+
+.cap-step-preview {
+  color: #9ca3af;
+  font-size: 11px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cap-step-token {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
 }
 </style>

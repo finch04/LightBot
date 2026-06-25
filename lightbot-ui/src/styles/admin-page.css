@@ -45,6 +45,9 @@
 .btn-primary:hover {
   background: #27272a;
 }
+[data-theme="dark"] .btn-primary:hover {
+  background: #3f3f46;
+}
 .btn-outline {
   display: flex;
   align-items: center;
@@ -80,4 +83,7 @@
 }
 .btn-primary-sm:hover {
   background: #27272a;
+}
+[data-theme="dark"] .btn-primary-sm:hover {
+  background: #3f3f46;
 }

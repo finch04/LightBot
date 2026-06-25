@@ -177,6 +177,8 @@ lightbot:
 # 访问地址：http://localhost:8080/swagger-ui.html
 # ========================================
 springdoc:
+  # 生产环境设置 SWAGGER_ENABLED=false 禁用 Swagger UI 和 API Docs
+  enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
     path: /swagger-ui.html
     tags-sorter: alpha

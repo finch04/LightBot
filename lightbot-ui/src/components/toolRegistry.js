@@ -102,6 +102,9 @@ export const TOOL_ICON_MAP = {
   skill_active: ThunderboltOutlined,
   subagent_call: RobotOutlined,
   subagent_result: RobotOutlined,
+  subagent_token: RobotOutlined,
+  subagent_tool_call: RobotOutlined,
+  subagent_tool_result: RobotOutlined,
 }
 
 // 工具显示名称
@@ -130,6 +133,9 @@ export const TOOL_DISPLAY_NAMES = {
   skill_active: 'Skill 启用',
   subagent_call: 'SubAgent 委派',
   subagent_result: 'SubAgent 结果',
+  subagent_token: 'SubAgent 输出',
+  subagent_tool_call: 'SubAgent 工具调用',
+  subagent_tool_result: 'SubAgent 工具结果',
 }
 
 // 不在 ToolCallsGroup 中展示的工具（由 AgentCapabilityPanel 单独处理）
@@ -137,6 +143,9 @@ export const HIDDEN_TOOL_NAMES = new Set([
   'skill_active',
   'subagent_call',
   'subagent_result',
+  'subagent_token',
+  'subagent_tool_call',
+  'subagent_tool_result',
 ])
 
 export function getToolIcon(toolName) {

@@ -1,11 +1,22 @@
 <template>
-  <a-config-provider :locale="zhCN">
+  <a-config-provider :locale="zhCN" :theme="themeConfig">
     <router-view />
   </a-config-provider>
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
+import { useTheme } from './composables/useTheme'
+
+const { isDark, themeConfig } = useTheme()
+
+onMounted(() => {
+  const saved = localStorage.getItem('lightbot-theme')
+  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    isDark.value = true
+  }
+})
 </script>
 
 <style>
@@ -60,6 +71,33 @@ import zhCN from 'ant-design-vue/es/locale/zh_CN'
   --shadow-5: 0px 1px 1px rgba(0,0,0,0.02), 0px 8px 16px -4px rgba(0,0,0,0.04), 0px 24px 32px -8px rgba(0,0,0,0.06), inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 
+/* 深色模式 CSS 变量覆盖 */
+[data-theme="dark"] {
+  --color-ink: #e4e4e7;
+  --color-body: #a1a1aa;
+  --color-mute: #71717a;
+  --color-hairline: #2e2e33;
+  --color-hairline-strong: #3f3f46;
+  --color-canvas: #111111;
+  --color-canvas-soft: #18181b;
+  --color-canvas-soft-2: #222225;
+  --color-link: #3b82f6;
+  --color-link-deep: #60a5fa;
+  --color-link-bg-soft: #1e3a5f;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-error-soft: #3b1111;
+  --color-error-deep: #f87171;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #3b2f0a;
+  --color-warning-deep: #fbbf24;
+  --shadow-1: 0 0 0 1px rgba(255,255,255,0.08);
+  --shadow-2: 0px 1px 1px rgba(0,0,0,0.2), 0px 2px 2px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.06);
+  --shadow-3: 0px 2px 2px rgba(0,0,0,0.2), 0px 8px 8px -8px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.06);
+  --shadow-4: 0px 2px 2px rgba(0,0,0,0.2), 0px 8px 16px -4px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.06);
+  --shadow-5: 0px 1px 1px rgba(0,0,0,0.2), 0px 8px 16px -4px rgba(0,0,0,0.2), 0px 24px 32px -8px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+
 /* 全局基础样式 */
 * {
   margin: 0;
@@ -92,6 +130,11 @@ body {
 .ant-btn-primary:hover {
   background: #27272a !important;
   border-color: #27272a !important;
+}
+
+[data-theme="dark"] .ant-btn-primary:hover {
+  background: #3f3f46 !important;
+  border-color: #3f3f46 !important;
 }
 
 .ant-btn-primary:disabled,
@@ -152,5 +195,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1aa;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
 }
 </style>

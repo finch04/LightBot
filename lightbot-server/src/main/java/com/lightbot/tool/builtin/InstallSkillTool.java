@@ -70,14 +70,14 @@ public class InstallSkillTool {
 
         ToolEventEmitter.emit("正在从 " + owner + "/" + repo + " 下载技能...");
 
-        // 2. 远程安装准备（下载 ZIP、暂存草稿）
+        // 2. 远程安装准备（下载 ZIP、暂存草稿），失败时降级全局搜索
         List<SkillImportPreview> previews;
         try {
             previews = gitHubSkillService.prepareRemoteInstall(owner, repo, branch,
                     skillNames != null && !skillNames.isEmpty() ? skillNames : List.of());
         } catch (Exception e) {
-            log.error("[Tool:install_skill] 远程安装准备失败: source={}", source, e);
-            return ToolResultPrefixes.failureJson("下载技能失败: " + e.getMessage());
+            log.warn("[Tool:install_skill] GitHub 下载失败，降级全局搜索: source={}, error={}", source, e.getMessage());
+            return fallbackGlobalSearch(source, skillNames, e.getMessage());
         }
 
         if (previews.isEmpty()) {
@@ -146,6 +146,31 @@ public class InstallSkillTool {
             return objectMapper.writeValueAsString(result);
         } catch (Exception e) {
             return ToolResultPrefixes.failureJson("序列化失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * GitHub 下载失败时降级全局搜索，返回搜索结果供 AI 推荐替代方案
+     */
+    private String fallbackGlobalSearch(String source, List<String> skillNames, String originalError) {
+        String keyword = (skillNames != null && !skillNames.isEmpty()) ? skillNames.get(0) : source;
+        try {
+            List<Map<String, String>> searchResults = gitHubSkillService.searchRemoteSkills(keyword);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("error", "GitHub 仓库下载失败: " + originalError);
+            if (!searchResults.isEmpty()) {
+                result.put("message", "已降级为全局搜索，以下是「" + keyword + "」的搜索结果，可从中选择安装");
+                result.put("searchResults", searchResults);
+                result.put("total", searchResults.size());
+            } else {
+                result.put("message", "GitHub 下载失败且全局搜索无结果，请检查仓库地址是否正确");
+            }
+            ToolEventEmitter.emit("GitHub 下载失败，已降级为全局搜索");
+            return objectMapper.writeValueAsString(result);
+        } catch (Exception searchEx) {
+            log.warn("[Tool:install_skill] 全局搜索也失败: keyword={}, error={}", keyword, searchEx.getMessage());
+            return ToolResultPrefixes.failureJson("下载技能失败: " + originalError + "；全局搜索也未能找到替代结果");
         }
     }
 

@@ -13,11 +13,14 @@ import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -117,6 +120,11 @@ public class WebFetchUtil {
         }
     }
 
+    private static final Set<String> ALLOWED_SCHEMES = Set.of("http", "https");
+
+    /**
+     * 校验 URL 合法性：协议/端口白名单 + DNS 解析后拒绝内网/私有 IP
+     */
     private boolean isValidUrl(String url) {
         if (url == null || url.isBlank()) {
             return false;
@@ -124,9 +132,51 @@ public class WebFetchUtil {
         try {
             URI uri = new URI(url.trim());
             String scheme = uri.getScheme();
-            return scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"));
+            if (scheme == null || !ALLOWED_SCHEMES.contains(scheme.toLowerCase())) {
+                return false;
+            }
+            int port = uri.getPort();
+            if (port != -1 && port != 80 && port != 443) {
+                log.warn("[WebFetch] 拒绝非标准端口: port={}", port);
+                return false;
+            }
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                return false;
+            }
+            // DNS 解析后校验 IP 是否为内网/私有地址
+            validateNotInternalIp(host);
+            return true;
         } catch (URISyntaxException e) {
             return false;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("[WebFetch] URL 校验异常: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * DNS 解析后拒绝内网/私有/保留 IP，防止 SSRF
+     */
+    private void validateNotInternalIp(String host) {
+        try {
+            InetAddress addr = InetAddress.getByName(host);
+            if (addr.isLoopbackAddress() || addr.isSiteLocalAddress()
+                    || addr.isLinkLocalAddress() || addr.isAnyLocalAddress()) {
+                log.warn("[WebFetch] 拒绝内网地址: host={}, ip={}", host, addr.getHostAddress());
+                throw new BizException(ErrorCode.SSRF_BLOCKED);
+            }
+            byte[] ip = addr.getAddress();
+            // 169.254.x.x — 云元数据端点（AWS/GCP/Azure）
+            if (ip.length == 4 && (ip[0] & 0xFF) == 169 && (ip[1] & 0xFF) == 254) {
+                log.warn("[WebFetch] 拒绝元数据地址: host={}, ip={}", host, addr.getHostAddress());
+                throw new BizException(ErrorCode.SSRF_BLOCKED);
+            }
+        } catch (UnknownHostException e) {
+            log.warn("[WebFetch] DNS 解析失败: host={}", host);
+            throw new BizException(ErrorCode.DOCUMENT_URL_NO_CONTENT);
         }
     }
 
