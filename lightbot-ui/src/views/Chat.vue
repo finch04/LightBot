@@ -856,6 +856,20 @@ function handleKeydown(e) {
   }
 }
 
+function handleChatKeydown(e) {
+  // Ctrl+/ — 聚焦输入框
+  if (e.ctrlKey && e.code === 'Slash') {
+    e.preventDefault()
+    inputRef.value?.focus()
+    return
+  }
+  // Escape — 停止生成
+  if (e.key === 'Escape' && streaming.value) {
+    e.preventDefault()
+    stopGenerating()
+  }
+}
+
 function handleEditKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
@@ -1830,6 +1844,7 @@ onUnmounted(() => {
   if (container) {
     container.removeEventListener('scroll', scrollHandler)
   }
+  document.removeEventListener('keydown', handleChatKeydown)
 })
 
 onMounted(async () => {
@@ -1849,6 +1864,8 @@ onMounted(async () => {
   if (container) {
     container.addEventListener('scroll', scrollHandler)
   }
+  // 对话页面快捷键
+  document.addEventListener('keydown', handleChatKeydown)
 })
 
 watch(() => route.params.sessionId, (newVal, oldVal) => {

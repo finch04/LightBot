@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
+import com.lightbot.dto.AgentSaveRequest;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
@@ -24,18 +25,18 @@ public interface AgentService extends IService<Agent> {
     /**
      * 创建Agent
      *
-     * @param agent Agent信息
+     * @param request Agent创建请求
      * @return Agent
      */
-    Agent create(Agent agent);
+    Agent create(AgentSaveRequest request);
 
     /**
      * 更新Agent
      *
-     * @param agent Agent信息
+     * @param request Agent更新请求
      * @return Agent
      */
-    Agent update(Agent agent);
+    Agent update(AgentSaveRequest request);
 
     /**
      * 分页查询当前用户的Agent列表

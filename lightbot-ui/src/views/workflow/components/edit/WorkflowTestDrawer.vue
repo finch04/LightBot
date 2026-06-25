@@ -60,7 +60,31 @@
     <div v-if="testResult">
       <h4>输出结果</h4>
       <pre class="test-output">{{ testResult.output || '（无输出）' }}</pre>
-      <h4>节点轨迹</h4>
+      <div class="result-tab-header">
+        <h4 :class="{ active: resultTab === 'trace' }" @click="resultTab = 'trace'">节点轨迹</h4>
+        <h4 :class="{ active: resultTab === 'variables' }" @click="resultTab = 'variables'">
+          变量面板
+          <span v-if="variableCount > 0" class="var-count">{{ variableCount }}</span>
+        </h4>
+      </div>
+      <!-- 变量面板 -->
+      <div v-if="resultTab === 'variables' && testResult.variables" class="vars-panel">
+        <div v-if="Object.keys(testResult.variables).length === 0" class="vars-empty">暂无变量</div>
+        <div v-for="(val, key) in testResult.variables" :key="key" class="var-item" :class="{ expanded: expandedVars.has(key) }">
+          <div class="var-item-head" @click="toggleVar(key)">
+            <span class="var-key">{{ key }}</span>
+            <span class="var-type">{{ getValueType(val) }}</span>
+            <span class="var-toggle" :class="{ expanded: expandedVars.has(key) }">›</span>
+          </div>
+          <div v-if="expandedVars.has(key)" class="var-item-body">
+            <pre v-if="isComplexValue(val)" class="var-value-json">{{ formatVarValue(val) }}</pre>
+            <div v-else class="var-value-text">{{ formatVarValue(val) }}</div>
+          </div>
+          <div v-if="!expandedVars.has(key)" class="var-preview">{{ getValuePreview(val) }}</div>
+        </div>
+      </div>
+      <!-- 节点轨迹 -->
+      <template v-if="resultTab === 'trace'">
       <div class="trace-steps">
         <template v-for="(step, i) in nodeSteps" :key="i">
           <div class="trace-step" :class="{ 'trace-active': step.nodeId === testCurrentNodeId }">
@@ -130,6 +154,7 @@
           </div>
         </template>
       </div>
+      </template>
     </div>
   </a-drawer>
 </template>
@@ -157,6 +182,19 @@ defineEmits([
 const open = defineModel('open', { type: Boolean, default: false })
 
 const expandedSteps = ref(new Set())
+const resultTab = ref('trace')
+const expandedVars = ref(new Set())
+
+const variableCount = computed(() => {
+  if (!props.testResult?.variables) return 0
+  return Object.keys(props.testResult.variables).length
+})
+
+// 测试结果变化时重置为轨迹 tab
+watch(() => props.testResult, () => {
+  resultTab.value = 'trace'
+  expandedVars.value = new Set()
+})
 
 function toggleStep(index) {
   const next = new Set(expandedSteps.value)
@@ -244,6 +282,38 @@ function hasKvData(value) {
 function formatKv(value) {
   if (!value) return ''
   try { return JSON.stringify(value, null, 2) } catch { return String(value) }
+}
+
+function toggleVar(key) {
+  const next = new Set(expandedVars.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedVars.value = next
+}
+
+function getValueType(val) {
+  if (val === null || val === undefined) return 'null'
+  if (Array.isArray(val)) return `array[${val.length}]`
+  return typeof val
+}
+
+function isComplexValue(val) {
+  if (val === null || val === undefined) return false
+  return typeof val === 'object'
+}
+
+function formatVarValue(val) {
+  if (val === null || val === undefined) return 'null'
+  try { return JSON.stringify(val, null, 2) } catch { return String(val) }
+}
+
+function getValuePreview(val) {
+  if (val === null || val === undefined) return 'null'
+  if (typeof val === 'string') return val.length > 120 ? val.slice(0, 120) + '...' : val
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+  if (Array.isArray(val)) return `[${val.length} 项]`
+  if (typeof val === 'object') return `{${Object.keys(val).length} 个字段}`
+  return String(val)
 }
 
 function getNodeTypeName(type) {

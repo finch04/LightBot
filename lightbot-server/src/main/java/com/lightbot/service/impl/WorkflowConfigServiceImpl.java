@@ -98,19 +98,15 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
 
         Map<String, Object> initialVariables = buildTestInitialVariables(request);
 
-        List<Map<String, Object>> events = new ArrayList<>();
-        String output = workflowExecutorService.executeWithDefinition(
-                agent, definition, null, request.getInput(), events, null, initialVariables);
-
         boolean usedDraft = request.getGraph() != null
                 || request.getUseDraft() == null
                 || Boolean.TRUE.equals(request.getUseDraft());
 
-        return WorkflowTestResultVO.builder()
-                .output(output)
-                .nodeEvents(events)
-                .usedDraft(usedDraft)
-                .build();
+        List<Map<String, Object>> events = new ArrayList<>();
+        WorkflowTestResultVO result = workflowExecutorService.executeForTest(
+                agent, definition, request.getInput(), events, initialVariables);
+        result.setUsedDraft(usedDraft);
+        return result;
     }
 
     @Override

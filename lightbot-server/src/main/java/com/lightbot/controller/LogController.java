@@ -72,6 +72,19 @@ public class LogController {
         }, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL, TimeUnit.SECONDS);
     }
 
+    @jakarta.annotation.PreDestroy
+    public void destroy() {
+        HEARTBEAT_EXECUTOR.shutdown();
+        try {
+            if (!HEARTBEAT_EXECUTOR.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                HEARTBEAT_EXECUTOR.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            HEARTBEAT_EXECUTOR.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
     @Operation(summary = "获取最近日志（历史）")
     @GetMapping("/recent")
     public Result<List<LogEvent>> recentLogs(

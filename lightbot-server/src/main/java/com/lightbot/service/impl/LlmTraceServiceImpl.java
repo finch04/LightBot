@@ -158,7 +158,7 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
                         .or().isNull(LlmTrace::getTraceSource));
     }
 
-    @Async
+    @Async("lightBotExecutor")
     @Override
     public void recordTrace(LlmTrace trace) {
         if (LlmTraceContext.isSuppressed()) {

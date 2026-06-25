@@ -263,6 +263,20 @@ function toggleSidebar() {
   localStorage.setItem('sidebar-collapsed', sidebarCollapsed.value)
 }
 
+function handleGlobalKeydown(e) {
+  // Ctrl+Shift+N — 新建对话
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyN') {
+    e.preventDefault()
+    newChat()
+    return
+  }
+  // Ctrl+Shift+O — 切换侧边栏
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyO') {
+    e.preventDefault()
+    toggleSidebar()
+  }
+}
+
 function syncSidebarForRoute(path) {
   const hide = path.startsWith('/app/workflow/')
   if (hide) {
@@ -467,12 +481,15 @@ onMounted(async () => {
   initSessionObserver()
   // 监听对话标题更新事件（Chat.vue 轮询标题接口后触发，刷新侧边栏）
   window.addEventListener('session-title-updated', refreshSessions)
+  // 全局快捷键
+  document.addEventListener('keydown', handleGlobalKeydown)
   // SSE 实时监听任务计数（需等 user 加载完成后才有 userId）
   connectTaskSSE()
 })
 
 onUnmounted(() => {
   window.removeEventListener('session-title-updated', refreshSessions)
+  document.removeEventListener('keydown', handleGlobalKeydown)
   disconnectTaskSSE()
 })
 

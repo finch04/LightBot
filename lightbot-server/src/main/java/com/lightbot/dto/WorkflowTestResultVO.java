@@ -23,4 +23,7 @@ public class WorkflowTestResultVO {
 
     @Schema(description = "是否使用草稿")
     private Boolean usedDraft;
+
+    @Schema(description = "执行完成后的变量快照")
+    private Map<String, Object> variables;
 }

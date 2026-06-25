@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.IngestRequest;
+import com.lightbot.dto.KnowledgeSaveRequest;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import org.springframework.util.StringUtils;
@@ -84,16 +85,26 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     @Override
     @Transactional(rollbackFor = Exception.class)
     @CacheEvict(value = RedisCacheConfig.CACHE_KNOWLEDGE, allEntries = true)
-    public Knowledge create(Knowledge knowledge) {
+    public Knowledge create(KnowledgeSaveRequest request) {
         long userId = StpUtil.getLoginIdAsLong();
 
         // 1. 校验名称唯一性
-        long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, knowledge.getName()));
+        long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, request.getName()));
         if (count > 0) {
             throw new BizException(ErrorCode.KNOWLEDGE_NAME_EXISTS);
         }
 
-        // 2. 初始化知识库字段
+        // 2. DTO → Entity，仅设置用户可编辑字段
+        Knowledge knowledge = new Knowledge();
+        knowledge.setName(request.getName());
+        knowledge.setDescription(request.getDescription());
+        knowledge.setEmbeddingModel(request.getEmbeddingModel());
+        knowledge.setType(request.getType());
+        knowledge.setConfig(request.getConfig());
+        knowledge.setQueryParams(request.getQueryParams());
+        knowledge.setGraphEnabled(request.getGraphEnabled());
+
+        // 3. 初始化内部字段
         knowledge.setUserId(userId);
         knowledge.setStatus(CommonStatus.ACTIVE);
         knowledge.setDocumentCount(0);
@@ -101,7 +112,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         knowledge.setTotalTokens(0L);
         save(knowledge);
 
-        // 2. 创建者自动成为成员（CREATOR角色）
+        // 4. 创建者自动成为成员（CREATOR角色）
         KnowledgeMember member = new KnowledgeMember();
         member.setKnowledgeId(knowledge.getId());
         member.setUserId(userId);
@@ -112,30 +123,30 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     }
 
     @Override
-    public Knowledge update(Knowledge knowledge) {
+    public Knowledge update(KnowledgeSaveRequest request) {
         // 1. 权限校验：需要MANAGER及以上权限
-        checkPermission(knowledge.getId(), KnowledgeRole.MANAGER);
+        checkPermission(request.getId(), KnowledgeRole.MANAGER);
 
         // 2. 校验存在性
-        Knowledge existing = getById(knowledge.getId());
+        Knowledge existing = getById(request.getId());
         if (existing == null) {
             throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
 
-        // 4. 名称变更时校验唯一性
-        if (!existing.getName().equals(knowledge.getName())) {
-            long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, knowledge.getName()));
+        // 3. 名称变更时校验唯一性
+        if (!existing.getName().equals(request.getName())) {
+            long count = count(new LambdaQueryWrapper<Knowledge>().eq(Knowledge::getName, request.getName()));
             if (count > 0) {
                 throw new BizException(ErrorCode.KNOWLEDGE_NAME_EXISTS);
             }
         }
 
-        // 5. 更新允许修改的字段
-        existing.setName(knowledge.getName());
-        existing.setDescription(knowledge.getDescription());
-        existing.setEmbeddingModel(knowledge.getEmbeddingModel());
-        existing.setGraphEnabled(knowledge.getGraphEnabled());
-        existing.setConfig(knowledge.getConfig());
+        // 4. 更新允许修改的字段
+        existing.setName(request.getName());
+        existing.setDescription(request.getDescription());
+        existing.setEmbeddingModel(request.getEmbeddingModel());
+        existing.setGraphEnabled(request.getGraphEnabled());
+        existing.setConfig(request.getConfig());
         updateById(existing);
         return existing;
     }

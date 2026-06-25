@@ -133,7 +133,7 @@ lightbot:
 # ========================================
   ocr:
     enabled: false
-    model-path: D:\models\RapidOCR\PP-OCRv4
+    model-path: ${OCR_MODEL_PATH:models/RapidOCR/PP-OCRv4}
     auto-download: true
   task:
     consumer:

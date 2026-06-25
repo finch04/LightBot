@@ -15,9 +15,10 @@ import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import java.security.MessageDigest;
+import java.util.concurrent.Executor;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -50,6 +51,8 @@ public class DocumentEditServiceImpl implements DocumentEditService {
     private final DocumentVersionService documentVersionService;
     private final MinioUtil minioUtil;
     private final KnowledgeMemberService permissionHelper;
+    @Qualifier("lightBotExecutor")
+    private final Executor lightBotExecutor;
 
     @Override
     public EditableContentVO getEditableContent(Long documentId) {
@@ -146,11 +149,13 @@ public class DocumentEditServiceImpl implements DocumentEditService {
         documentService.updateById(doc);
 
         // 7. 异步触发全量重建（复用现有 ingestDocument 流程）
-        try {
-            documentService.ingestDocument(documentId, doc.getEmbeddingJson());
-        } catch (Exception e) {
-            log.warn("[文档编辑] 触发重建失败（文档已保存）, documentId={}: {}", documentId, e.getMessage());
-        }
+        lightBotExecutor.execute(() -> {
+            try {
+                documentService.ingestDocument(documentId, doc.getEmbeddingJson());
+            } catch (Exception e) {
+                log.warn("[文档编辑] 触发重建失败（文档已保存）, documentId={}: {}", documentId, e.getMessage());
+            }
+        });
 
         log.info("[文档编辑] 保存成功, documentId={}, newVersion={}", documentId, doc.getVersion());
 
@@ -188,13 +193,7 @@ public class DocumentEditServiceImpl implements DocumentEditService {
      */
     private String calculateContentHash(String content) {
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(content.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
+            return com.lightbot.util.HashUtil.md5(content.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             return String.valueOf(System.currentTimeMillis());
         }

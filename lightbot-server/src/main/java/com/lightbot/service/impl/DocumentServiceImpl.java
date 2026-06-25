@@ -836,7 +836,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     }
 
     private int estimateTokens(String text) {
-        return (int) (text.length() * 1.2);
+        return com.lightbot.model.chunking.TokenUtil.countTokens(text);
     }
 
     /**

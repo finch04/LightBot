@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.IngestRequest;
+import com.lightbot.dto.KnowledgeSaveRequest;
 import com.lightbot.entity.Knowledge;
 
 import java.util.List;
@@ -19,18 +20,18 @@ public interface KnowledgeService extends IService<Knowledge> {
     /**
      * 创建知识库
      *
-     * @param knowledge 知识库信息
+     * @param request 知识库创建请求
      * @return 知识库
      */
-    Knowledge create(Knowledge knowledge);
+    Knowledge create(KnowledgeSaveRequest request);
 
     /**
      * 更新知识库
      *
-     * @param knowledge 知识库信息
+     * @param request 知识库更新请求
      * @return 知识库
      */
-    Knowledge update(Knowledge knowledge);
+    Knowledge update(KnowledgeSaveRequest request);
 
     /**
      * 分页查询当前用户有权限的知识库

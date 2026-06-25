@@ -543,6 +543,139 @@ public class WorkflowExecutorService {
     }
 
     /**
+     * 调试执行：返回输出内容 + 变量快照，供测试面板展示变量面板
+     */
+    public WorkflowTestResultVO executeForTest(Agent agent, WorkflowDefinition workflow,
+                                               String userInput, List<Map<String, Object>> workflowEvents,
+                                               Map<String, Object> initialVariables) {
+        NodeExecutionContext context = NodeExecutionContext.builder()
+                .agentId(agent.getId())
+                .userInput(userInput)
+                .agent(agent)
+                .workflow(workflow)
+                .variables(new LinkedHashMap<>())
+                .nodeOutputs(new LinkedHashMap<>())
+                .workflowEvents(workflowEvents)
+                .build();
+
+        applyGlobalConfig(context, workflow.getGlobalConfig());
+        injectSessionHistory(context, null, userInput);
+        if (initialVariables != null && !initialVariables.isEmpty()) {
+            context.getVariables().putAll(initialVariables);
+        }
+
+        String currentNodeId = workflow.getStartNodeId();
+        if (currentNodeId == null) {
+            return WorkflowTestResultVO.builder().output("工作流缺少开始节点").nodeEvents(workflowEvents).variables(context.getVariables()).build();
+        }
+
+        StringBuilder result = new StringBuilder();
+        int stepIndex = 0;
+
+        while (currentNodeId != null) {
+            stepIndex++;
+            WorkflowNode node = workflow.getNode(currentNodeId);
+            if (node == null) break;
+
+            context.setCurrentNodeId(currentNodeId);
+            context.setCurrentNodeData(node.getData());
+
+            String nodeLabel = resolveNodeLabel(node);
+            String nodeTypeCode = node.getType() != null ? node.getType().getCode() : "";
+            final String executingNodeId = currentNodeId;
+
+            long nodeStartMs = System.currentTimeMillis();
+            Map<String, Object> startEvent = new LinkedHashMap<>();
+            startEvent.put("type", "workflow_node_start");
+            startEvent.put("nodeId", executingNodeId);
+            startEvent.put("nodeType", nodeTypeCode);
+            startEvent.put("nodeLabel", nodeLabel);
+            startEvent.put("stepIndex", stepIndex);
+            startEvent.put("contentOffset", 0);
+            Map<String, Object> inputPreview = buildNodeInputPreview(node, context);
+            if (!inputPreview.isEmpty()) {
+                startEvent.put("input", inputPreview);
+            }
+            emitWorkflowEvent(workflowEvents, null, startEvent);
+
+            boolean nodeSuccess = true;
+            String completeMessage = "执行完成";
+            String nextNodeId = null;
+            NodeExecutionResult nodeResult = null;
+
+            try {
+                NodeProcessor processor = registry.getProcessor(node.getType());
+                nodeResult = processor.execute(context);
+
+                if (nodeResult.getOutputs() != null) {
+                    context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
+                    context.getVariables().putAll(nodeResult.getOutputs());
+                }
+                if (nodeResult.getStreamContent() != null) {
+                    result.append(nodeResult.getStreamContent());
+                }
+                if (nodeResult.isFinished() || node.getType() == NodeType.END) {
+                    nextNodeId = null;
+                } else {
+                    nextNodeId = nodeResult.getNextNodeId();
+                }
+            } catch (Exception e) {
+                nodeSuccess = false;
+                completeMessage = "执行失败: " + e.getMessage();
+                nextNodeId = null;
+            }
+
+            Map<String, Object> completeEvent = new HashMap<>();
+            completeEvent.put("type", "workflow_node_complete");
+            completeEvent.put("nodeId", executingNodeId);
+            completeEvent.put("nodeType", nodeTypeCode);
+            completeEvent.put("nodeLabel", nodeLabel);
+            completeEvent.put("message", completeMessage);
+            completeEvent.put("success", nodeSuccess);
+            completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
+            completeEvent.put("stepIndex", stepIndex);
+            completeEvent.put("contentOffset", 0);
+            if (nextNodeId != null) {
+                completeEvent.put("nextNodeId", nextNodeId);
+            }
+            if (node.getType() == NodeType.LOOP || node.getType() == NodeType.BATCH) {
+                completeEvent.put("isContainer", true);
+            }
+            String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
+            if (detail != null && !detail.isBlank()) {
+                completeEvent.put("detail", detail);
+            }
+            if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
+                Map<String, Object> outputSummary = summarizeMap(nodeResult.getOutputs(), 10);
+                if ("llm".equals(nodeTypeCode)) {
+                    outputSummary.remove("llmOutput");
+                }
+                if (!outputSummary.isEmpty()) {
+                    completeEvent.put("outputs", outputSummary);
+                }
+            }
+            if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
+                completeEvent.put("traceData", nodeResult.getTraceData());
+            }
+            emitWorkflowEvent(workflowEvents, null, completeEvent);
+
+            currentNodeId = nextNodeId;
+        }
+
+        emitWorkflowEvent(workflowEvents, null, Map.of("type", "workflow_complete", "contentOffset", 0));
+
+        String output = context.getVariables().containsKey("result")
+                ? String.valueOf(context.getVariables().get("result"))
+                : result.toString();
+
+        return WorkflowTestResultVO.builder()
+                .output(output)
+                .nodeEvents(workflowEvents)
+                .variables(new LinkedHashMap<>(context.getVariables()))
+                .build();
+    }
+
+    /**
      * 单节点调试：仅执行指定节点处理器，不跑完整 DAG
      */
     public WorkflowTestResultVO executeSingleNode(Agent agent, WorkflowDefinition workflow, String nodeId,

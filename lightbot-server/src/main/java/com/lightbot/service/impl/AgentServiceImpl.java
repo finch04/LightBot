@@ -16,6 +16,7 @@ import com.lightbot.model.ModelFactory;
 import com.lightbot.model.ProviderResolver;
 import com.lightbot.entity.McpServer;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
+import com.lightbot.dto.AgentSaveRequest;
 import com.lightbot.service.AgentService;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
 import com.lightbot.workflow.WorkflowConfigParser;
@@ -105,18 +106,27 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     @CacheEvict(value = RedisCacheConfig.CACHE_AGENT, allEntries = true)
-    public Agent create(Agent agent) {
+    public Agent create(AgentSaveRequest request) {
         // 1. 校验名称唯一性
-        long count = count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, agent.getName()));
+        long count = count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, request.getName()));
         if (count > 0) {
             throw new BizException(ErrorCode.AGENT_NAME_EXISTS);
         }
 
-        // 2. 获取当前用户ID
-        long userId = StpUtil.getLoginIdAsLong();
+        // 2. DTO → Entity，仅设置用户可编辑字段
+        Agent agent = new Agent();
+        agent.setName(request.getName());
+        agent.setDescription(request.getDescription());
+        agent.setSystemPrompt(request.getSystemPrompt());
+        agent.setWelcomeMessage(request.getWelcomeMessage());
+        agent.setRecommendedQuestions(request.getRecommendedQuestions());
+        agent.setAvatar(request.getAvatar());
+        agent.setIcon(request.getIcon());
+        agent.setAgentType(request.getAgentType());
+        agent.setConfig(request.getConfig());
 
-        // 3. 初始化Agent字段
-        agent.setUserId(userId);
+        // 3. 初始化内部字段
+        agent.setUserId(StpUtil.getLoginIdAsLong());
         agent.setStatus(AgentStatus.DRAFT);
         agent.setVersion(0);
         save(agent);
@@ -126,31 +136,31 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, allEntries = true)
-    public Agent update(Agent agent) {
+    public Agent update(AgentSaveRequest request) {
         // 1. 校验存在性
-        Agent existing = getById(agent.getId());
+        Agent existing = getById(request.getId());
         if (existing == null) {
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
         }
 
         // 2. 名称变更时校验唯一性
-        if (!existing.getName().equals(agent.getName())) {
-            long count = count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, agent.getName()));
+        if (!existing.getName().equals(request.getName())) {
+            long count = count(new LambdaQueryWrapper<Agent>().eq(Agent::getName, request.getName()));
             if (count > 0) {
                 throw new BizException(ErrorCode.AGENT_NAME_EXISTS);
             }
         }
 
         // 3. 更新允许修改的字段
-        existing.setName(agent.getName());
-        existing.setDescription(agent.getDescription());
-        existing.setSystemPrompt(agent.getSystemPrompt());
-        existing.setWelcomeMessage(agent.getWelcomeMessage());
-        existing.setRecommendedQuestions(agent.getRecommendedQuestions());
-        existing.setAvatar(agent.getAvatar());
-        existing.setIcon(agent.getIcon());
-        existing.setAgentType(agent.getAgentType());
-        existing.setConfig(agent.getConfig());
+        existing.setName(request.getName());
+        existing.setDescription(request.getDescription());
+        existing.setSystemPrompt(request.getSystemPrompt());
+        existing.setWelcomeMessage(request.getWelcomeMessage());
+        existing.setRecommendedQuestions(request.getRecommendedQuestions());
+        existing.setAvatar(request.getAvatar());
+        existing.setIcon(request.getIcon());
+        existing.setAgentType(request.getAgentType());
+        existing.setConfig(request.getConfig());
         updateById(existing);
         if (existing.getAgentType() != null && existing.getAgentType() != com.lightbot.enums.AgentType.WORKFLOW) {
             agentVersionService.saveChatDraft(existing.getId());

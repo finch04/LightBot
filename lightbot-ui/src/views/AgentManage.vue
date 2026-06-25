@@ -68,7 +68,10 @@
             <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
           </a-tooltip>
         </template>
-        <p class="card-desc">{{ a.description || '暂无描述' }}</p>
+        <a-tooltip v-if="a.description" :title="a.description" placement="top" :overlay-style="{ maxWidth: '400px' }">
+          <p class="card-desc">{{ a.description }}</p>
+        </a-tooltip>
+        <p v-else class="card-desc">暂无描述</p>
         <template #meta>
           <span class="card-status" :class="(a.status?.code || a.status || 'draft').toLowerCase()">
             {{ statusText(a.status?.code || a.status, a.version) }}
@@ -361,6 +364,8 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: fit-content;
+  max-width: 100%;
 }
 .card-status {
   font-size: 12px;

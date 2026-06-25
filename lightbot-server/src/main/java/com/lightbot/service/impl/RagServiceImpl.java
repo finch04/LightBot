@@ -129,8 +129,7 @@ public class RagServiceImpl implements RagService {
 
         // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层，传 queryParams 支持 Milvus search_mode）
         Map<String, Object> mergedParams = buildSearchParams(knowledge, null, question);
-        List<Map<String, Object>> results = ((EmbeddingServiceImpl) embeddingService)
-                .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
+        List<Map<String, Object>> results = embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
         log.info("[RAG] 向量检索完成(SQL过滤): threshold={}, 命中分块数={}", threshold, results.size());
         for (int i = 0; i < results.size(); i++) {
             Map<String, Object> row = results.get(i);
@@ -192,8 +191,7 @@ public class RagServiceImpl implements RagService {
 
         java.util.concurrent.CompletableFuture<List<Map<String, Object>>> chunkFuture =
                 java.util.concurrent.CompletableFuture.supplyAsync(() ->
-                    ((EmbeddingServiceImpl) embeddingService)
-                            .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams)
+                    embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams)
                 );
 
         java.util.concurrent.CompletableFuture<List<QaPairSearchResultVO>> qaFuture;

@@ -920,6 +920,6 @@ public class GraphServiceImpl implements GraphService {
     }
 
     private long snowflakeId() {
-        return java.util.concurrent.ThreadLocalRandom.current().nextLong(1000000000000000000L, Long.MAX_VALUE);
+        return com.baomidou.mybatisplus.core.toolkit.IdWorker.getId();
     }
 }

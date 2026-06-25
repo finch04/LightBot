@@ -143,16 +143,11 @@ public class KnowledgeDocController {
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(stream.getFileName(), java.nio.charset.StandardCharsets.UTF_8)
                 .build();
-        // 使用可关闭的 InputStreamResource，确保客户端断连时底层流被释放
+        // InputStreamResource.close() 会自动关闭底层 InputStream，客户端断连时流会被释放
         InputStreamResource resource = new InputStreamResource(stream.getInputStream()) {
             @Override
             public String getFilename() {
                 return stream.getFileName();
-            }
-
-            @Override
-            public void close() throws java.io.IOException {
-                stream.getInputStream().close();
             }
         };
         return ResponseEntity.ok()
@@ -170,17 +165,11 @@ public class KnowledgeDocController {
             var statObj = minioUtil.statObject(filePath);
             String contentType = statObj.contentType();
             InputStream is = minioUtil.downloadStream(filePath);
-            // 使用可关闭的 InputStreamResource，确保客户端断连时底层 MinIO 流被释放
-            InputStreamResource resource = new InputStreamResource(is) {
-                @Override
-                public void close() throws java.io.IOException {
-                    is.close();
-                }
-            };
+            // InputStreamResource.close() 会自动关闭底层 InputStream，客户端断连时 MinIO 流会被释放
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType != null ? contentType : "application/octet-stream"))
                     .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofDays(7)))
-                    .body(resource);
+                    .body(new InputStreamResource(is));
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }

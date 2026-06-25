@@ -5,6 +5,7 @@ import com.lightbot.common.BizException;
 import com.lightbot.common.Result;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.AgentPublishRequest;
+import com.lightbot.dto.AgentSaveRequest;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.dto.WorkflowExampleVO;
 import com.lightbot.entity.Agent;
@@ -41,14 +42,14 @@ public class AgentController {
 
     @Operation(summary = "创建Agent")
     @PostMapping
-    public Result<Agent> create(@RequestBody @Valid Agent agent) {
-        return Result.ok(agentService.create(agent));
+    public Result<Agent> create(@RequestBody @Valid AgentSaveRequest request) {
+        return Result.ok(agentService.create(request));
     }
 
     @Operation(summary = "更新Agent")
     @PutMapping
-    public Result<Agent> update(@RequestBody @Valid Agent agent) {
-        return Result.ok(agentService.update(agent));
+    public Result<Agent> update(@RequestBody @Valid AgentSaveRequest request) {
+        return Result.ok(agentService.update(request));
     }
 
     @Operation(summary = "分页查询当前用户的Agent列表")

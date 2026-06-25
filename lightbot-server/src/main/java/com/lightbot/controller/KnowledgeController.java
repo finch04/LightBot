@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.IngestRequest;
 import com.lightbot.dto.KnowledgeMemberVO;
+import com.lightbot.dto.KnowledgeSaveRequest;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.enums.KnowledgeRole;
@@ -45,14 +46,14 @@ public class KnowledgeController {
 
     @Operation(summary = "创建知识库")
     @PostMapping
-    public Result<Knowledge> create(@Valid @RequestBody Knowledge knowledge) {
-        return Result.ok(knowledgeService.create(knowledge));
+    public Result<Knowledge> create(@Valid @RequestBody KnowledgeSaveRequest request) {
+        return Result.ok(knowledgeService.create(request));
     }
 
     @Operation(summary = "更新知识库（需要MANAGER及以上权限）")
     @PutMapping
-    public Result<Knowledge> update(@Valid @RequestBody Knowledge knowledge) {
-        return Result.ok(knowledgeService.update(knowledge));
+    public Result<Knowledge> update(@Valid @RequestBody KnowledgeSaveRequest request) {
+        return Result.ok(knowledgeService.update(request));
     }
 
     @Operation(summary = "分页查询当前用户有权限的知识库")

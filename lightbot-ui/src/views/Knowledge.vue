@@ -234,7 +234,7 @@ onMounted(loadData)
   font-size: 16px;
   font-weight: 600;
   color: var(--color-primary);
-  margin-bottom: 6px;
+  margin-bottom: 14px;
   width: fit-content;
   max-width: 100%;
 }
@@ -244,6 +244,7 @@ onMounted(loadData)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-top: 6px;
   width: fit-content;
   max-width: 100%;
 }

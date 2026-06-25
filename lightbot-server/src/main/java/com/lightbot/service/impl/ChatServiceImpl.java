@@ -217,7 +217,7 @@ public class ChatServiceImpl implements ChatService {
             toolEventsList.add(callEvtSync);
 
             // 执行工具
-            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), requestId, null);
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, safeArgs, agent.getId(), ctx.getSessionId(), requestId, null);
 
             // 暂存工具调用记录
             ToolCall toolCallLog = new ToolCall();
@@ -636,7 +636,7 @@ public class ChatServiceImpl implements ChatService {
                                 String result;
                                 try {
                                     result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs,
-                                            agent.getId(), requestId, sink);
+                                            agent.getId(), ctx.getSessionId(), requestId, sink);
                                 } finally {
                                     if (sink != null) {
                                         ToolEventEmitter.teardownSink();
@@ -691,7 +691,7 @@ public class ChatServiceImpl implements ChatService {
                         String toolResult;
                         try {
                             toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs,
-                                    agent.getId(), requestId, eventSink);
+                                    agent.getId(), ctx.getSessionId(), requestId, eventSink);
                         } finally {
                             ToolEventEmitter.teardownSink();
                         }
@@ -945,7 +945,7 @@ public class ChatServiceImpl implements ChatService {
                 final String dnFinal = dn;
                 futures.add(CompletableFuture.supplyAsync(() -> {
                     long tStart = System.currentTimeMillis();
-                    String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), requestId, null);
+                    String result = executeToolCallback(toolCallbackMap, tcName, safeTcArgs, agent.getId(), ctx.getSessionId(), requestId, null);
                     long tEnd = System.currentTimeMillis();
                     spans.add(LlmTraceSpan.of("tool_" + toolCallCountHolder[0], llmSpanId, "tool_execute",
                             tStart, tEnd - tStart, "OK",
@@ -1009,7 +1009,7 @@ public class ChatServiceImpl implements ChatService {
             statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, dnSeq, safeArgs, toolContentOffset)));
 
             long tToolStart = System.currentTimeMillis();
-            String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), requestId, null);
+            String toolResult = executeToolCallback(toolCallbackMap, toolName, callArgs, agent.getId(), ctx.getSessionId(), requestId, null);
             long tToolEnd = System.currentTimeMillis();
             spans.add(LlmTraceSpan.of("tool_" + toolCallCountHolder[0], llmSpanId, "tool_execute",
                     tToolStart, tToolEnd - tToolStart, "OK",
@@ -1070,7 +1070,7 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private String executeToolCallback(Map<String, ToolCallback> toolCallbackMap, String toolName,
-                                       String callArgs, Long agentId, String requestId,
+                                       String callArgs, Long agentId, Long sessionId, String requestId,
                                        Sinks.Many<String> eventSink) {
         ToolCallback callback = toolCallbackMap.get(toolName);
         if (callback != null) {
@@ -1082,6 +1082,7 @@ public class ChatServiceImpl implements ChatService {
                 try {
                     return callback.call(callArgs, new ToolContext(Map.of(
                             "agentId", agentId,
+                            "sessionId", sessionId != null ? sessionId.toString() : "default",
                             "requestId", requestId)));
                 } finally {
                     if (eventSink != null) {

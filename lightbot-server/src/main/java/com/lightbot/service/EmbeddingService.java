@@ -55,6 +55,19 @@ public interface EmbeddingService extends IService<Embedding> {
     List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector, int topK, double threshold);
 
     /**
+     * 余弦相似度检索 Top-K（阈值过滤下沉到SQL层，支持额外检索参数）
+     *
+     * @param knowledgeId 知识库ID
+     * @param queryVector 查询向量
+     * @param topK        返回数量
+     * @param threshold   相似度阈值（SQL WHERE 过滤）
+     * @param queryParams 额外检索参数（search_mode、Reranker 配置等）
+     * @return 检索结果（chunk_id, content, document_name, score）
+     */
+    List<Map<String, Object>> searchSimilarSql(Long knowledgeId, float[] queryVector, int topK, double threshold,
+                                                Map<String, Object> queryParams);
+
+    /**
      * 余弦相似度检索 Top-K（不过滤阈值，返回原始结果）
      *
      * @param knowledgeId 知识库ID
