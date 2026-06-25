@@ -143,10 +143,22 @@ public class KnowledgeDocController {
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(stream.getFileName(), java.nio.charset.StandardCharsets.UTF_8)
                 .build();
+        // 使用可关闭的 InputStreamResource，确保客户端断连时底层流被释放
+        InputStreamResource resource = new InputStreamResource(stream.getInputStream()) {
+            @Override
+            public String getFilename() {
+                return stream.getFileName();
+            }
+
+            @Override
+            public void close() throws java.io.IOException {
+                stream.getInputStream().close();
+            }
+        };
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(stream.getContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .body(new InputStreamResource(stream.getInputStream()));
+                .body(resource);
     }
 
     @Operation(summary = "代理获取知识库文档图片（供 Markdown 预览）")
@@ -158,10 +170,17 @@ public class KnowledgeDocController {
             var statObj = minioUtil.statObject(filePath);
             String contentType = statObj.contentType();
             InputStream is = minioUtil.downloadStream(filePath);
+            // 使用可关闭的 InputStreamResource，确保客户端断连时底层 MinIO 流被释放
+            InputStreamResource resource = new InputStreamResource(is) {
+                @Override
+                public void close() throws java.io.IOException {
+                    is.close();
+                }
+            };
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType != null ? contentType : "application/octet-stream"))
                     .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofDays(7)))
-                    .body(new InputStreamResource(is));
+                    .body(resource);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }

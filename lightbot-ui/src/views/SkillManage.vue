@@ -31,40 +31,39 @@
     </div>
 
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
-    <div class="provider-grid">
-      <div v-for="s in list" :key="s.id" class="provider-card" @click="router.push('/app/skills/' + s.id)">
-        <div class="card-top">
-          <div class="card-icon card-icon--skill">
-            <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
-            <span class="status-dot" :class="s.status === 'disabled' ? 'status-disabled' : 'status-active'"></span>
-            {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
-          </div>
-          <div class="card-info">
-            <a-tooltip :title="s.displayName || s.name">
-              <h3>{{ s.displayName || s.name }}</h3>
-            </a-tooltip>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
-              <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
-            </a-tooltip>
-            <a-dropdown :trigger="['click']">
-              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item @click="toggleEnabled(s)">
-                    <CheckCircleOutlined v-if="s.status !== 'disabled'" style="color: #16a34a; margin-right: 6px" />
-                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
-                    {{ s.status === 'disabled' ? '启用' : '禁用' }}
-                  </a-menu-item>
-                  <a-menu-item @click="handleExport(s)">
-                    <ExportOutlined style="margin-right: 6px" /> 导出 ZIP
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-        </div>
+    <div class="card-grid">
+      <EntityCard
+        v-for="s in list"
+        :key="s.id"
+        type="skill"
+        :name="s.displayName || s.name"
+        @click="router.push('/app/skills/' + s.id)"
+      >
+        <template #icon>
+          <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+          <span class="status-dot" :class="s.status === 'disabled' ? 'status-disabled' : 'status-active'"></span>
+          {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
+        </template>
+        <template #actions>
+          <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
+            <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
+          </a-tooltip>
+          <a-dropdown :trigger="['click']">
+            <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item @click="toggleEnabled(s)">
+                  <CheckCircleOutlined v-if="s.status !== 'disabled'" style="color: #16a34a; margin-right: 6px" />
+                  <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                  {{ s.status === 'disabled' ? '启用' : '禁用' }}
+                </a-menu-item>
+                <a-menu-item @click="handleExport(s)">
+                  <ExportOutlined style="margin-right: 6px" /> 导出 ZIP
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
         <div class="card-detail">
           <div class="card-tags">
             <span v-if="s.slug" class="tag tag-slug">{{ s.slug }}</span>
@@ -77,7 +76,8 @@
             <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
           </a-tooltip>
         </div>
-      </div>
+      </EntityCard>
+
       <div v-if="list.length === 0 && !loading" class="empty-tip">
         {{ searchText ? '没有匹配的 Skill' : '暂无 Skill，点击右上角新增' }}
       </div>
@@ -199,6 +199,7 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined, UploadOutlined, ExportOutlined, CloudDownloadOutlined, MoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import EntitySelectOption from '../components/EntitySelectOption.vue'
+import EntityCard from '../components/EntityCard.vue'
 import { getSkills, createSkill, updateSkill, deleteSkill, setSkillEnabled, exportSkillZip } from '../api/skill'
 import { getTools } from '../api/tool'
 import { getMcpServers } from '../api/mcp'
@@ -447,17 +448,8 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 <style scoped>
 .page-header { margin-bottom: 24px; }
 
-.provider-grid {
-  display: grid;
+.card-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
-}
-.card-icon {
-  background: linear-gradient(135deg, #ec4899, #db2777);
-  position: relative;
-}
-.card-icon--skill {
-  background: linear-gradient(135deg, #ec4899, #db2777);
 }
 .detail-scroll-body {
   max-height: calc(100vh - 260px);
@@ -502,11 +494,6 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   word-break: break-word;
   max-height: 320px;
   overflow: auto;
-}
-.card-info h3 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 .card-type {
   font-size: 12px;

@@ -13,33 +13,15 @@
       </div>
 
       <!-- 字段表格 -->
-      <div v-if="data.columns?.length" style="border:1px solid #93c5fd;border-radius:8px;overflow:hidden;margin-bottom:10px;background:#fff;">
-        <div style="overflow-x:auto;&::-webkit-scrollbar{height:4px;}">
-          <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead>
-              <tr>
-                <th style="text-align:center;padding:7px 8px;background:#dbeafe;border-bottom:1px solid #93c5fd;color:#1e40af;font-weight:600;white-space:nowrap;width:32px;">#</th>
-                <th style="text-align:left;padding:7px 10px;background:#dbeafe;border-bottom:1px solid #93c5fd;color:#1e40af;font-weight:600;white-space:nowrap;">字段名</th>
-                <th style="text-align:left;padding:7px 10px;background:#dbeafe;border-bottom:1px solid #93c5fd;color:#1e40af;font-weight:600;white-space:nowrap;">类型</th>
-                <th style="text-align:center;padding:7px 10px;background:#dbeafe;border-bottom:1px solid #93c5fd;color:#1e40af;font-weight:600;white-space:nowrap;">可空</th>
-                <th style="text-align:left;padding:7px 10px;background:#dbeafe;border-bottom:1px solid #93c5fd;color:#1e40af;font-weight:600;white-space:nowrap;">默认值</th>
-                <th style="text-align:left;padding:7px 10px;background:#dbeafe;border-bottom:1px solid #93c5fd;color:#1e40af;font-weight:600;white-space:nowrap;">注释</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(col, i) in data.columns" :key="i" :style="{ background: i % 2 === 0 ? '#fff' : '#f0f7ff' }">
-                <td style="text-align:center;padding:6px 8px;border-bottom:1px solid #dbeafe;color:#9ca3af;font-size:10px;">{{ i + 1 }}</td>
-                <td style="padding:6px 10px;border-bottom:1px solid #dbeafe;font-family:monospace;font-weight:500;color:#1f2937;">{{ col.column_name }}</td>
-                <td style="padding:6px 10px;border-bottom:1px solid #dbeafe;font-family:monospace;color:#1d4ed8;white-space:nowrap;">{{ col.data_type }}</td>
-                <td style="text-align:center;padding:6px 10px;border-bottom:1px solid #dbeafe;">
-                  <span :style="{ color: col.is_nullable ? '#f59e0b' : '#9ca3af', fontWeight: 500 }">{{ col.is_nullable ? 'Y' : 'N' }}</span>
-                </td>
-                <td style="padding:6px 10px;border-bottom:1px solid #dbeafe;font-family:monospace;font-size:11px;color:#6b7280;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ col.column_default || '-' }}</td>
-                <td style="padding:6px 10px;border-bottom:1px solid #dbeafe;color:#6b7280;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ col.column_comment || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div v-if="data.columns?.length" style="margin-bottom:10px;">
+        <a-table
+          :columns="columns"
+          :data-source="tableData"
+          :pagination="false"
+          size="small"
+          :scroll="{ x: 600 }"
+          row-key="ordinalPosition"
+        />
       </div>
 
       <!-- 索引 -->
@@ -58,7 +40,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, h } from 'vue'
 import { TableOutlined, BranchesOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -69,4 +51,33 @@ const rawResult = computed(() => props.event.result || '')
 const data = computed(() => { try { return JSON.parse(rawResult.value) } catch { return null } })
 const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
 const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
+
+const tableData = computed(() => {
+  if (!data.value?.columns) return []
+  return data.value.columns.map((col, i) => ({
+    ordinalPosition: i + 1,
+    columnName: col.column_name,
+    dataType: col.data_type,
+    isNullable: col.is_nullable ? 'YES' : 'NO',
+    columnDefault: col.column_default || '-',
+    comment: col.column_comment || '-',
+  }))
+})
+
+const columns = [
+  { title: '#', dataIndex: 'ordinalPosition', width: 48, align: 'center' },
+  {
+    title: '字段名', dataIndex: 'columnName', width: 140, ellipsis: true,
+    customRender: ({ text }) => h('code', { style: 'font-family:monospace;font-weight:500;color:#1f2937;background:#f0f7ff;padding:1px 6px;border-radius:4px;font-size:12px;' }, text),
+  },
+  { title: '类型', dataIndex: 'dataType', width: 120 },
+  {
+    title: '可空', dataIndex: 'isNullable', width: 64, align: 'center',
+    customRender: ({ text }) => text === 'YES'
+      ? h('span', { style: 'color:#d97706;font-weight:500' }, 'Y')
+      : h('span', { style: 'color:#a1a1aa' }, 'N'),
+  },
+  { title: '默认值', dataIndex: 'columnDefault', width: 160, ellipsis: true },
+  { title: '注释', dataIndex: 'comment', ellipsis: true },
+]
 </script>

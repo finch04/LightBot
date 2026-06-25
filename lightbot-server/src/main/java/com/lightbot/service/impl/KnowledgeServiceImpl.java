@@ -24,6 +24,7 @@ import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.service.SystemConfigService;
+import com.lightbot.util.JsonUtil;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MilvusUtil;
 import com.lightbot.util.MindmapUtil;
@@ -717,16 +718,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         return milvusUtil.isAvailable();
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> parseJsonToMap(String json) {
-        if (json == null || json.isBlank() || "{}".equals(json)) {
-            return new HashMap<>();
-        }
-        try {
-            return objectMapper.readValue(json, Map.class);
-        } catch (Exception e) {
-            return new HashMap<>();
-        }
+        return JsonUtil.parseJsonToMap(objectMapper, json);
     }
 
     private void safeRemove(Runnable action, String label) {

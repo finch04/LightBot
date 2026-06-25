@@ -15,6 +15,7 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.service.RagService;
 import com.lightbot.service.SystemConfigService;
+import com.lightbot.util.JsonUtil;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.RagParamResolver;
 import com.lightbot.util.TextNormalizeUtil;
@@ -70,56 +71,15 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public String ask(Long knowledgeId, String question, Long providerId) {
-        // 1. 校验知识库存在性
-        Knowledge knowledge = knowledgeService.getById(knowledgeId);
-        if (knowledge == null) {
-            throw new BizException(ErrorCode.RAG_KNOWLEDGE_NOT_FOUND);
-        }
-        // 1.1 权限校验：需要成员权限
-        permissionHelper.checkMember(knowledgeId);
-
-        // 1.1 解析providerId（为空时使用默认提供商）
-        Long actualProviderId = providerResolver.resolve(providerId);
-
-        // 1.2 从知识库配置中读取检索参数
-        int topK = ragParamResolver.resolveTopK(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_TOP_K);
-        double threshold = ragParamResolver.resolveThreshold(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_THRESHOLD);
-        log.info("[RAG] 问答开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
-                knowledgeId, actualProviderId, topK, threshold, question);
-
-        // 2. 将问题文本向量化
-        float[] queryVector = embedText(question);
-
-        // 3. 在知识库中检索相似内容（阈值过滤下沉到SQL层，传 queryParams 支持 Milvus search_mode）
-        Map<String, Object> mergedParams = buildSearchParams(knowledge, null, question);
-        List<Map<String, Object>> results = ((EmbeddingServiceImpl) embeddingService)
-                .searchSimilarSql(knowledgeId, queryVector, topK, threshold, mergedParams);
-        log.info("[RAG] 向量检索完成(SQL过滤): threshold={}, 命中分块数={}", threshold, results.size());
-        for (int i = 0; i < results.size(); i++) {
-            Map<String, Object> row = results.get(i);
-            String content = String.valueOf(row.get("content"));
-            String preview = content.length() > 100 ? content.substring(0, 100) + "..." : content;
-            log.info("[RAG] 检索分块[{}]: document={}, score={}, content={}", i, row.get("document_name"), row.get("score"), preview);
-        }
-
-        if (results.isEmpty()) {
+        // 1. 公共 pipeline：校验 + 向量检索 + 上下文构建
+        RagPipelineResult pipeline = prepareRagPipeline(knowledgeId, question, providerId, "问答");
+        if (pipeline == null) {
             return "抱歉，在知识库中没有找到相关信息。";
         }
 
-        // 4. 构建参考资料上下文
-        String context = results.stream()
-                .map(row -> String.format("【%s】\n%s", row.get("document_name"),
-                        TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")))))
-                .collect(Collectors.joining("\n\n---\n\n"));
-
-        // 5. 通过 ModelFactory 获取 ChatModel 并调用
-        String systemPrompt = RAG_SYSTEM_PROMPT.replace("{context}", context);
-        List<Message> messages = new ArrayList<>();
-        messages.add(new SystemMessage(systemPrompt));
-        messages.add(new UserMessage(question));
-
-        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-        ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(messages)));
+        // 2. 同步调用 LLM
+        ChatModel chatModel = modelFactory.getChatModel(pipeline.providerId);
+        ChatResponse response = LlmTraceContext.callWithoutTrace(() -> chatModel.call(new Prompt(pipeline.messages)));
         String answer = response.getResult().getOutput().getText();
         log.info("[RAG] 问答完成: answerLength={}", answer != null ? answer.length() : 0);
         return answer;
@@ -127,6 +87,26 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public Flux<String> askStream(Long knowledgeId, String question, Long providerId) {
+        // 1. 公共 pipeline：校验 + 向量检索 + 上下文构建
+        RagPipelineResult pipeline = prepareRagPipeline(knowledgeId, question, providerId, "流式问答");
+        if (pipeline == null) {
+            return Flux.just("抱歉，在知识库中没有找到相关信息。");
+        }
+
+        // 2. 流式调用 LLM
+        ChatModel chatModel = modelFactory.getChatModel(pipeline.providerId);
+        return chatModel.stream(new Prompt(pipeline.messages))
+                .map(response -> response.getResult().getOutput().getText())
+                .doOnComplete(() -> log.info("[RAG] 流式问答完成: knowledgeId={}", knowledgeId))
+                .doOnError(e -> log.error("[RAG] 流式问答异常: knowledgeId={}, error={}", knowledgeId, e.getMessage()));
+    }
+
+    /**
+     * RAG 公共 pipeline：知识库校验 → 向量检索 → 上下文构建
+     *
+     * @return pipeline 结果，检索无命中时返回 null
+     */
+    private RagPipelineResult prepareRagPipeline(Long knowledgeId, String question, Long providerId, String logLabel) {
         // 1. 校验知识库存在性
         Knowledge knowledge = knowledgeService.getById(knowledgeId);
         if (knowledge == null) {
@@ -135,14 +115,14 @@ public class RagServiceImpl implements RagService {
         // 1.1 权限校验：需要成员权限
         permissionHelper.checkMember(knowledgeId);
 
-        // 1.1 解析providerId（为空时使用默认提供商）
+        // 1.2 解析providerId（为空时使用默认提供商）
         Long actualProviderId = providerResolver.resolve(providerId);
 
-        // 1.2 从知识库配置中读取检索参数
+        // 1.3 从知识库配置中读取检索参数
         int topK = ragParamResolver.resolveTopK(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_TOP_K);
         double threshold = ragParamResolver.resolveThreshold(null, parseJson(knowledge.getQueryParams()), knowledge.getConfig(), RagParamResolver.DEFAULT_THRESHOLD);
-        log.info("[RAG] 流式问答开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
-                knowledgeId, actualProviderId, topK, threshold, question);
+        log.info("[RAG] {}开始: knowledgeId={}, providerId={}, topK={}, threshold={}, question={}",
+                logLabel, knowledgeId, actualProviderId, topK, threshold, question);
 
         // 2. 将问题文本向量化
         float[] queryVector = embedText(question);
@@ -160,7 +140,7 @@ public class RagServiceImpl implements RagService {
         }
 
         if (results.isEmpty()) {
-            return Flux.just("抱歉，在知识库中没有找到相关信息。");
+            return null;
         }
 
         // 4. 构建参考资料上下文
@@ -169,18 +149,17 @@ public class RagServiceImpl implements RagService {
                         TextNormalizeUtil.normalizeForPrompt(String.valueOf(row.get("content")))))
                 .collect(Collectors.joining("\n\n---\n\n"));
 
-        // 5. 通过 ModelFactory 获取 ChatModel 并流式调用
+        // 5. 构建消息列表
         String systemPrompt = RAG_SYSTEM_PROMPT.replace("{context}", context);
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemPrompt));
         messages.add(new UserMessage(question));
 
-        ChatModel chatModel = modelFactory.getChatModel(actualProviderId);
-        return chatModel.stream(new Prompt(messages))
-                .map(response -> response.getResult().getOutput().getText())
-                .doOnComplete(() -> log.info("[RAG] 流式问答完成: knowledgeId={}", knowledgeId))
-                .doOnError(e -> log.error("[RAG] 流式问答异常: knowledgeId={}, error={}", knowledgeId, e.getMessage()));
+        return new RagPipelineResult(actualProviderId, messages);
     }
+
+    /** RAG pipeline 预处理结果 */
+    private record RagPipelineResult(Long providerId, List<Message> messages) {}
 
     @Override
     public List<RagSearchResultVO> search(Long knowledgeId, String question) {
@@ -309,16 +288,8 @@ public class RagServiceImpl implements RagService {
         return 0.85;
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> parseJson(String json) {
-        if (json == null || json.isBlank() || "{}".equals(json)) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(json, Map.class);
-        } catch (Exception e) {
-            return Map.of();
-        }
+        return JsonUtil.parseJsonToMap(objectMapper, json);
     }
 
     /**

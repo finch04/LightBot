@@ -258,13 +258,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private void deleteOldAvatar(String avatar) {
-        if (avatar == null || avatar.isEmpty()) return;
-        String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
-        try {
-            minioUtil.delete(path);
-        } catch (Exception e) {
-            log.warn("[用户] 删除头像失败: path={}, error={}", path, e.getMessage());
-        }
+        minioUtil.deleteAvatar(avatar);
     }
 
     private Map<String, Object> parseConfigMap(String config) {

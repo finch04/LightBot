@@ -24,26 +24,29 @@
 
     <a-spin :spinning="loading">
     <div class="template-grid">
-      <div v-for="t in filteredTemplates" :key="t.id" class="template-card" @click="previewTemplate(t)">
-        <div class="card-top">
-          <div class="card-icon">{{ (t.promptTemplateKey || 'T')[0].toUpperCase() }}</div>
-          <div class="card-info">
-            <a-tooltip :title="t.promptTemplateKey"><h3>{{ t.promptTemplateKey }}</h3></a-tooltip>
-            <span class="card-desc">{{ t.templateDesc || '暂无描述' }}</span>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip title="编辑">
-              <button class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
-            </a-tooltip>
-            <a-tooltip title="删除">
-              <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
-            </a-tooltip>
-          </div>
-        </div>
+      <EntityCard
+        v-for="t in filteredTemplates"
+        :key="t.id"
+        type="template"
+        :name="t.promptTemplateKey"
+        @click="previewTemplate(t)"
+      >
+        <template #info>
+          <a-tooltip :title="t.promptTemplateKey"><h3>{{ t.promptTemplateKey }}</h3></a-tooltip>
+          <span class="card-desc">{{ t.templateDesc || '暂无描述' }}</span>
+        </template>
+        <template #actions>
+          <a-tooltip title="编辑">
+            <button class="btn-icon" @click="openDialog(t)"><EditOutlined /></button>
+          </a-tooltip>
+          <a-tooltip title="删除">
+            <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+          </a-tooltip>
+        </template>
         <div class="card-tags" v-if="t.tags">
           <a-tag v-for="tag in t.tags.split(',').slice(0, 3)" :key="tag" color="blue" size="small">{{ tag.trim() }}</a-tag>
         </div>
-      </div>
+      </EntityCard>
       <div v-if="filteredTemplates.length === 0 && !loading" class="empty-state">
         <FileTextOutlined class="empty-icon" />
         <p>{{ searchText ? '没有匹配模板' : '暂无模板，点击右上角创建' }}</p>
@@ -140,6 +143,7 @@ import {
 import { message, Modal } from 'ant-design-vue'
 import TagInput from '../components/TagInput.vue'
 import JsonInput from '../components/JsonInput.vue'
+import EntityCard from '../components/EntityCard.vue'
 import {
   getPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate
 } from '../api/prompt'
@@ -393,73 +397,10 @@ function handleDelete(id) {
 
 .btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-mute);
-}
-
-.btn-icon:hover { background: var(--color-canvas-soft-2); }
-.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
-
 .template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-}
-
-.template-card {
-  background: #fff;
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.template-card:hover {
-  border-color: var(--color-link);
-  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #475569, #334155);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.card-info { flex: 1; min-width: 0; }
-
-.card-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-primary);
-  margin: 0 0 4px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .card-desc {
@@ -470,8 +411,6 @@ function handleDelete(id) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.card-actions { display: flex; gap: 4px; }
 
 .card-tags { display: flex; gap: 4px; flex-wrap: wrap; }
 

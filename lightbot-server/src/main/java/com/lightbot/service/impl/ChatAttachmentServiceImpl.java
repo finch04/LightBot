@@ -58,10 +58,14 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         String type = resolveAttachmentType(mime, ext, caps);
 
         try {
+            // 1. 先做大小校验（使用 file.getSize() 避免不必要的内存加载）
+            validateFileSize(file, type, caps);
+
+            // 2. 读取字节：Tika 解析 + MinIO 上传均需要完整内容
             byte[] bytes = file.getBytes();
             return switch (type) {
                 case "document" -> uploadDocument(file, bytes, mime, ext, agentId, sessionId, caps, config);
-                case "image", "video" -> uploadMedia(file, bytes, mime, type, agentId, sessionId, caps);
+                case "image", "video" -> storeAndBuildDto(file, bytes, mime, type, agentId, sessionId, null, false);
                 default -> throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "不支持的附件类型");
             };
         } catch (BizException e) {
@@ -72,26 +76,26 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         }
     }
 
-    private ChatAttachmentDTO uploadMedia(MultipartFile file, byte[] bytes, String mime, String type,
-                                          Long agentId, Long sessionId, AgentChatCapabilitiesDTO caps) {
-        long maxSize = "image".equals(type)
-                ? ChatAttachmentConstants.MAX_IMAGE_BYTES
-                : ChatAttachmentConstants.MAX_VIDEO_BYTES;
-        if (bytes.length > maxSize) {
-            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
-                    "image".equals(type) ? "图片不能超过 " + caps.getMaxImageSizeLabel()
-                            : "视频不能超过 " + caps.getMaxVideoSizeLabel());
+    private void validateFileSize(MultipartFile file, String type, AgentChatCapabilitiesDTO caps) {
+        long fileSize = file.getSize();
+        if ("image".equals(type)) {
+            if (fileSize > ChatAttachmentConstants.MAX_IMAGE_BYTES) {
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "图片不能超过 " + caps.getMaxImageSizeLabel());
+            }
+        } else if ("video".equals(type)) {
+            if (fileSize > ChatAttachmentConstants.MAX_VIDEO_BYTES) {
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "视频不能超过 " + caps.getMaxVideoSizeLabel());
+            }
+        } else if ("document".equals(type)) {
+            if (fileSize > ChatAttachmentConstants.MAX_DOCUMENT_BYTES) {
+                throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "文档不能超过 " + caps.getMaxDocumentSizeLabel());
+            }
         }
-        return storeAndBuildDto(file, bytes, mime, type, agentId, sessionId, null, false);
     }
 
     private ChatAttachmentDTO uploadDocument(MultipartFile file, byte[] bytes, String mime, String ext,
                                              Long agentId, Long sessionId, AgentChatCapabilitiesDTO caps,
                                              Map<String, Object> configMap) {
-        if (bytes.length > ChatAttachmentConstants.MAX_DOCUMENT_BYTES) {
-            throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
-                    "文档不能超过 " + caps.getMaxDocumentSizeLabel());
-        }
         String extNoDot = ext.startsWith(".") ? ext.substring(1) : ext;
         if (!tikaUtil.isSupported(extNoDot)) {
             throw new BizException(ErrorCode.BAD_REQUEST.getCode(),

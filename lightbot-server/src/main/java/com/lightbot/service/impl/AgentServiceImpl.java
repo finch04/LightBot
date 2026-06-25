@@ -552,18 +552,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         return fullUrl;
     }
 
-    /**
-     * 删除旧头像：兼容完整URL和相对路径
-     */
     private void deleteOldAvatar(String avatar) {
-        if (avatar == null || avatar.isEmpty()) return;
-        // 兼容旧数据（相对路径）和新数据（完整URL）
-        String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
-        try {
-            minioUtil.delete(path);
-        } catch (Exception e) {
-            log.warn("[Agent] 删除头像失败: path={}, error={}", path, e.getMessage());
-        }
+        minioUtil.deleteAvatar(avatar);
     }
 
     @Override

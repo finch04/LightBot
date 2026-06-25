@@ -364,6 +364,22 @@ public class MinioUtil {
     }
 
     /**
+     * 删除旧头像：兼容完整URL和相对路径
+     *
+     * @param avatar 头像URL或相对路径
+     */
+    public void deleteAvatar(String avatar) {
+        if (avatar == null || avatar.isEmpty()) return;
+        // 兼容旧数据（相对路径）和新数据（完整URL）
+        String path = avatar.contains("/lightbot/") ? avatar.substring(avatar.indexOf("/lightbot/") + 10) : avatar;
+        try {
+            delete(path);
+        } catch (Exception e) {
+            log.warn("[MinIO] 删除头像失败: path={}, error={}", path, e.getMessage());
+        }
+    }
+
+    /**
      * 双重检查锁确保 Bucket 仅在启动时创建一次
      */
     private void ensureBucketOnce() {

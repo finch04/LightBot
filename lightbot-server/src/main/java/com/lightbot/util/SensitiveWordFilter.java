@@ -24,7 +24,11 @@ public final class SensitiveWordFilter {
     /** AI 输出命中拦截策略时的提示（展示给用户） */
     public static final String AI_BLOCK_MESSAGE = "【安全提示】回复内容包含敏感信息，已停止输出。";
 
-    /** 敏感词正则缓存：word → 编译后的 Pattern */
+    /**
+     * 敏感词正则缓存：word → 编译后的 Pattern
+     * <p>缓存规模由业务约束：每个 Agent 的敏感词列表在 config 中配置，数量有限（通常几十个），
+     * 因此 ConcurrentHashMap 无界缓存在实际场景中不会造成内存压力，无需引入 Caffeine 等有界缓存。</p>
+     */
     private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
 
     private SensitiveWordFilter() {

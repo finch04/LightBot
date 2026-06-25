@@ -28,6 +28,7 @@ import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.*;
 import com.lightbot.service.DocumentVersionService;
 import com.lightbot.util.ContentDuplicateDetectionUtil;
+import com.lightbot.util.HashUtil;
 import com.lightbot.util.DocumentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.OcrUtil;
@@ -49,14 +50,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 
 /**
@@ -76,13 +73,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     /** 批量 Embedding 每批大小（受 Embedding API 限制，通常 50-200） */
     private static final int EMBED_BATCH_SIZE = 50;
-
-    /** 并行入库线程池（控制并发，避免 Embedding API 限流） */
-    private static final ExecutorService INGEST_EXECUTOR = Executors.newFixedThreadPool(3, r -> {
-        Thread t = new Thread(r, "doc-ingest");
-        t.setDaemon(true);
-        return t;
-    });
 
     private final MinioUtil minioUtil;
     private final TikaUtil tikaUtil;
@@ -773,13 +763,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
      */
     private String calculateContentHash(String content) {
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(content.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
+            return HashUtil.md5(content.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             return String.valueOf(System.currentTimeMillis());
         }
@@ -844,13 +828,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
 
     private String calculateHash(MultipartFile file) {
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(file.getBytes());
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
+            return HashUtil.md5(file.getBytes());
         } catch (Exception e) {
             log.error("[Document] 计算文件哈希失败: name={}", file.getOriginalFilename(), e);
             throw new BizException(ErrorCode.DOCUMENT_READ_FAILED);

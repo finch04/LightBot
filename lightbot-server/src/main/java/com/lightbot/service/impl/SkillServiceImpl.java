@@ -19,6 +19,7 @@ import com.lightbot.service.SkillService;
 import com.lightbot.service.ToolService;
 import com.lightbot.service.sandbox.SkillStorageService;
 import com.lightbot.config.RedisCacheConfig;
+import com.lightbot.util.HashUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -30,8 +31,6 @@ import org.springframework.util.StringUtils;
 import java.io.Serializable;
 
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.stream.Collectors;
@@ -539,36 +538,12 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill>
         return skillStorageService.buildSkillMarkdown(metadata);
     }
 
-    /** SHA-256 哈希 */
     private String sha256(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return String.valueOf(input.hashCode());
-        }
+        return HashUtil.sha256(input);
     }
 
-    /**
-     * 清理悬空工具ID：过滤掉已被删除的工具
-     *
-     * @param ids 工具ID列表
-     * @return 过滤后仍存在的工具ID列表
-     */
     private List<String> cleanStaleToolIds(List<String> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return ids;
-        }
-        List<Long> longIds = ids.stream().map(Long::parseLong).toList();
-        Set<String> existing = toolService.listByIds(longIds).stream()
-                .map(t -> String.valueOf(t.getId()))
-                .collect(Collectors.toSet());
-        return ids.stream().filter(existing::contains).toList();
+        return toolService.cleanStaleToolIds(ids);
     }
 
     /**

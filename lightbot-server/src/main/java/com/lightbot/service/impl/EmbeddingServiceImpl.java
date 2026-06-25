@@ -16,6 +16,7 @@ import com.lightbot.service.KnowledgeService;
 import com.lightbot.util.GraphRetrievalUtil;
 import com.lightbot.util.MilvusUtil;
 import com.lightbot.util.RerankerUtil;
+import com.lightbot.util.VectorUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -222,8 +223,10 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         embeddingMapper.deleteByKnowledgeId(knowledgeId);
         if (shouldRouteToMilvus(knowledgeId)) {
             milvusUtil.dropCollection(knowledgeId);
-            collectionExistsCache.remove(knowledgeId);
         }
+        // 清理本地缓存，防止已删除知识库的残留条目导致错误路由
+        collectionExistsCache.remove(knowledgeId);
+        routingCache.remove(knowledgeId);
     }
 
     @Override
@@ -356,17 +359,8 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
         return defaultValue;
     }
 
-    /**
-     * 将float数组转换为pgvector可识别的字符串格式 "[0.1,0.2,...]"
-     */
     private String toVectorString(float[] vector) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vector.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append(vector[i]);
-        }
-        sb.append("]");
-        return sb.toString();
+        return VectorUtil.toVectorString(vector);
     }
 
     /**

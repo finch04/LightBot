@@ -720,8 +720,8 @@ const tokenStats = reactive({ globalUsed: 0, globalLimit: 0, date: '' })
 const tokenRanking = ref([])
 const rankingColumns = [
   { title: '排名', key: 'rank', width: 80, align: 'center' },
-  { title: '用户', key: 'user' },
-  { title: '消耗 Token', key: 'usedTokens', align: 'right' },
+  { title: '用户', key: 'user', width: 200, ellipsis: true },
+  { title: '消耗 Token', key: 'usedTokens', width: 120, align: 'right' },
 ]
 
 async function loadTokenConfig() {

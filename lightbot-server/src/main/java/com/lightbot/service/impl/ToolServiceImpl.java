@@ -436,4 +436,16 @@ public class ToolServiceImpl extends ServiceImpl<ToolMapper, Tool>
         }
         return Map.of();
     }
+
+    @Override
+    public List<String> cleanStaleToolIds(List<String> toolIds) {
+        if (toolIds == null || toolIds.isEmpty()) {
+            return toolIds;
+        }
+        List<Long> ids = toolIds.stream().map(Long::parseLong).toList();
+        Set<String> existing = listByIds(ids).stream()
+                .map(t -> String.valueOf(t.getId()))
+                .collect(Collectors.toSet());
+        return toolIds.stream().filter(existing::contains).toList();
+    }
 }

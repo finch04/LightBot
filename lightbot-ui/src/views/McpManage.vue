@@ -25,41 +25,40 @@
 
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
-      <div v-for="s in list" :key="s.id" class="provider-card" @click="openDetail(s)">
-        <div class="card-top">
-          <div class="card-icon">
-            <span class="status-dot" :class="isDisabled(s) ? 'status-disabled' : 'status-active'"></span>
-            {{ (s.name || 'M')[0].toUpperCase() }}
-          </div>
-          <div class="card-info">
-            <a-tooltip :title="s.name">
-              <h3>{{ s.name }}</h3>
-            </a-tooltip>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip title="删除">
-              <button class="btn-icon danger" @click="handleDelete(s.id)"><DeleteOutlined /></button>
-            </a-tooltip>
-            <a-dropdown :trigger="['click']">
-              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item @click="handleToggleEnabled(s)">
-                    <CheckCircleOutlined v-if="!isDisabled(s)" style="color: #16a34a; margin-right: 6px" />
-                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
-                    {{ isDisabled(s) ? '启用' : '禁用' }}
-                  </a-menu-item>
-                  <a-menu-item @click="handleTest(s)">
-                    <ApiOutlined style="margin-right: 6px" /> 测试连接
-                  </a-menu-item>
-                  <a-menu-item @click="openToolsDrawer(s)">
-                    <ToolOutlined style="margin-right: 6px" /> 查看工具
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-        </div>
+      <EntityCard
+        v-for="s in list"
+        :key="s.id"
+        type="mcp"
+        :name="s.name"
+        @click="openDetail(s)"
+      >
+        <template #icon>
+          <span class="status-dot" :class="isDisabled(s) ? 'status-disabled' : 'status-active'"></span>
+          {{ (s.name || 'M')[0].toUpperCase() }}
+        </template>
+        <template #actions>
+          <a-tooltip title="删除">
+            <button class="btn-icon danger" @click="handleDelete(s.id)"><DeleteOutlined /></button>
+          </a-tooltip>
+          <a-dropdown :trigger="['click']">
+            <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item @click="handleToggleEnabled(s)">
+                  <CheckCircleOutlined v-if="!isDisabled(s)" style="color: #16a34a; margin-right: 6px" />
+                  <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                  {{ isDisabled(s) ? '启用' : '禁用' }}
+                </a-menu-item>
+                <a-menu-item @click="handleTest(s)">
+                  <ApiOutlined style="margin-right: 6px" /> 测试连接
+                </a-menu-item>
+                <a-menu-item @click="openToolsDrawer(s)">
+                  <ToolOutlined style="margin-right: 6px" /> 查看工具
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
         <div class="card-body">
           <div class="card-tags">
             <span class="tag tag-install" :class="'tag-' + (s.installType?.code || s.installType)">
@@ -73,7 +72,7 @@
             <span class="card-desc">{{ truncateText(s.description, 50) }}</span>
           </a-tooltip>
         </div>
-      </div>
+      </EntityCard>
     </div>
     </a-spin>
 
@@ -359,6 +358,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutli
 import { message, Modal } from 'ant-design-vue'
 import { getMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer, getMcpServerTools, refreshMcpServerTools, toggleMcpTool, setMcpServerEnabled } from '../api/mcp'
 import JsonInput from '../components/JsonInput.vue'
+import EntityCard from '../components/EntityCard.vue'
 import { truncateText } from '../utils/format'
 import { copyToClipboard } from '../utils/clipboard'
 
@@ -697,14 +697,6 @@ defineExpose({ openDialog, search, refresh })
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
-.provider-card {
-  display: flex;
-  flex-direction: column;
-}
-.card-icon {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  position: relative;
-}
 .status-dot {
   position: absolute;
   bottom: -2px;
@@ -720,11 +712,6 @@ defineExpose({ openDialog, search, refresh })
 }
 .status-disabled {
   background: #a3a3a3;
-}
-.card-info h3 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .card-type {
   font-size: 12px;

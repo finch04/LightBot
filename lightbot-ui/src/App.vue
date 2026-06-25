@@ -130,6 +130,12 @@ body {
   box-shadow: var(--shadow-4) !important;
 }
 
+/* 表格表头禁止换行 */
+.ant-table-thead th,
+.ant-table-thead .ant-table-cell {
+  white-space: nowrap !important;
+}
+
 /* 滚动条样式 */
 ::-webkit-scrollbar {
   width: 6px;

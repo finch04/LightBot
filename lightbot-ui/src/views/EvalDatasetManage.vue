@@ -36,33 +36,31 @@
 
     <a-spin :spinning="loading">
     <div class="card-grid">
-      <div
+      <EntityCard
         v-for="item in list"
         :key="item.id"
-        class="card-item"
+        type="dataset"
+        :name="item.name"
         @click="router.push(`/app/eval/datasets/${item.id}`)"
       >
-        <div class="card-top">
-          <div class="card-icon">{{ (item.name || 'D')[0].toUpperCase() }}</div>
-          <div class="card-info">
-            <a-tooltip :title="item.name"><h3>{{ item.name }}</h3></a-tooltip>
-            <span class="card-type" v-if="item.latestVersion">v{{ item.latestVersion }}</span>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip title="编辑">
-              <button class="btn-icon" @click="openDialog(item)"><EditOutlined /></button>
-            </a-tooltip>
-            <a-tooltip title="删除">
-              <button class="btn-icon danger" @click="handleDelete(item.id)"><DeleteOutlined /></button>
-            </a-tooltip>
-          </div>
-        </div>
+        <template #info>
+          <a-tooltip :title="item.name"><h3>{{ item.name }}</h3></a-tooltip>
+          <span class="card-type" v-if="item.latestVersion">v{{ item.latestVersion }}</span>
+        </template>
+        <template #actions>
+          <a-tooltip title="编辑">
+            <button class="btn-icon" @click="openDialog(item)"><EditOutlined /></button>
+          </a-tooltip>
+          <a-tooltip title="删除">
+            <button class="btn-icon danger" @click="handleDelete(item.id)"><DeleteOutlined /></button>
+          </a-tooltip>
+        </template>
         <p class="card-desc">{{ item.description || '暂无描述' }}</p>
-        <div class="card-meta">
+        <template #meta>
           <span class="card-count" v-if="item.itemCount !== undefined">{{ item.itemCount }} 条数据</span>
           <span class="card-time">{{ formatTime(item.createTime) }}</span>
-        </div>
-      </div>
+        </template>
+      </EntityCard>
 
       <div v-if="list.length === 0 && !loading" class="empty-state">
         <DatabaseOutlined class="empty-icon" />
@@ -135,6 +133,7 @@ import {
   SearchOutlined, ReloadOutlined, DatabaseOutlined, ExperimentOutlined, SnippetsOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
+import EntityCard from '../components/EntityCard.vue'
 import {
   getEvalDatasets, createEvalDataset, updateEvalDataset, deleteEvalDataset,
   listEvalDatasetExamples, createFromEvalDatasetExample,
@@ -318,65 +317,10 @@ async function handleCreateExample(key) {
   font-size: 13px;
 }
 .btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-mute);
-}
-.btn-icon:hover { background: var(--color-canvas-soft-2); }
-.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-}
-.card-item {
-  background: #fff;
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.card-item:hover {
-  border-color: var(--color-link);
-  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #0891b2, #0e7490);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.card-info { flex: 1; min-width: 0; }
-.card-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
 }
 .card-type {
   font-size: 12px;
@@ -385,7 +329,6 @@ async function handleCreateExample(key) {
   padding: 2px 8px;
   border-radius: 100px;
 }
-.card-actions { display: flex; gap: 4px; }
 .card-desc {
   font-size: 13px;
   color: var(--color-mute);
@@ -393,11 +336,6 @@ async function handleCreateExample(key) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 .card-count {
   font-size: 12px;

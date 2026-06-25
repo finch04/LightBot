@@ -21,9 +21,7 @@ import org.springframework.util.StringUtils;
 import com.lightbot.service.ToolService;
 
 import java.io.Serializable;
-import java.util.stream.Collectors;
 import java.util.List;
-import java.util.Set;
 
 /**
  * SubAgent 服务实现
@@ -167,20 +165,7 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         }
     }
 
-    /**
-     * 清理悬空工具ID：过滤掉已被删除的工具
-     *
-     * @param toolIds 工具ID列表
-     * @return 过滤后仍存在的工具ID列表
-     */
     private List<String> cleanStaleToolIds(List<String> toolIds) {
-        if (toolIds == null || toolIds.isEmpty()) {
-            return toolIds;
-        }
-        List<Long> ids = toolIds.stream().map(Long::parseLong).toList();
-        Set<String> existing = toolService.listByIds(ids).stream()
-                .map(t -> String.valueOf(t.getId()))
-                .collect(Collectors.toSet());
-        return toolIds.stream().filter(existing::contains).toList();
+        return toolService.cleanStaleToolIds(toolIds);
     }
 }

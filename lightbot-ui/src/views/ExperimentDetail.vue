@@ -365,9 +365,9 @@ const promptVersions = ref([])
 const evaluatorList = ref([])
 
 const resultColumns = [
-  { title: '输入', dataIndex: 'input', key: 'input', width: 200 },
-  { title: '实际输出', dataIndex: 'actualOutput', key: 'actualOutput', width: 200 },
-  { title: '期望输出', dataIndex: 'referenceOutput', key: 'referenceOutput', width: 200 },
+  { title: '输入', dataIndex: 'input', key: 'input', width: 200, ellipsis: true },
+  { title: '实际输出', dataIndex: 'actualOutput', key: 'actualOutput', width: 200, ellipsis: true },
+  { title: '期望输出', dataIndex: 'referenceOutput', key: 'referenceOutput', width: 200, ellipsis: true },
   { title: '评分', dataIndex: 'score', key: 'score', width: 80 },
   { title: '评分理由', dataIndex: 'reason', key: 'reason' },
   { title: '操作', key: 'detailAction', width: 80 },

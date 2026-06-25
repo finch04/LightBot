@@ -28,29 +28,29 @@
 
     <a-spin :spinning="loading">
     <div class="knowledge-grid">
-      <div
+      <EntityCard
         v-for="k in list"
         :key="k.id"
-        class="knowledge-card"
+        type="knowledge"
+        :name="k.name"
         @click="router.push(`/app/knowledge/${k.id}`)"
       >
-        <div class="card-top">
-          <div class="card-icon">{{ (k.name || 'K')[0].toUpperCase() }}</div>
-          <div class="card-info">
-            <a-tooltip :title="k.name">
-              <h3 class="card-title">{{ k.name }}</h3>
-            </a-tooltip>
-            <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
-              <p class="card-desc">{{ truncateText(k.description, 50) }}</p>
-            </a-tooltip>
-            <p v-else class="card-desc">暂无描述</p>
-          </div>
+        <template #info>
+          <a-tooltip :title="k.name">
+            <h3 class="card-title">{{ k.name }}</h3>
+          </a-tooltip>
+          <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+            <p class="card-desc">{{ truncateText(k.description, 50) }}</p>
+          </a-tooltip>
+          <p v-else class="card-desc">暂无描述</p>
+        </template>
+        <template #actions>
           <a-tooltip title="删除知识库">
-            <button class="btn-icon danger" @click.stop="handleDelete(k.id)">
+            <button class="btn-icon danger" @click="handleDelete(k.id)">
               <DeleteOutlined />
             </button>
           </a-tooltip>
-        </div>
+        </template>
         <div class="card-stats">
           <span class="card-stat-item">
             <FileTextOutlined class="card-stat-icon" />
@@ -74,7 +74,7 @@
             </a-tooltip>
           </span>
         </div>
-      </div>
+      </EntityCard>
 
       <div v-if="list.length === 0 && !loading" class="empty-state">
         <DatabaseOutlined class="empty-icon" />
@@ -134,6 +134,7 @@ import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, Apartment
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge } from '../api/knowledge'
 import ModelSelect from '../components/ModelSelect.vue'
+import EntityCard from '../components/EntityCard.vue'
 import { truncateText } from '../utils/format'
 
 const router = useRouter()
@@ -229,24 +230,13 @@ onMounted(loadData)
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.knowledge-card {
-  background: #fff;
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.knowledge-card:hover {
-  border-color: var(--color-link);
-  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
-}
-.card-icon { background: linear-gradient(135deg, #6366f1, #4f46e5); }
 .card-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--color-primary);
   margin-bottom: 6px;
+  width: fit-content;
+  max-width: 100%;
 }
 .card-desc {
   font-size: 13px;
@@ -254,6 +244,8 @@ onMounted(loadData)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: fit-content;
+  max-width: 100%;
 }
 .card-stats {
   display: flex;

@@ -2,49 +2,53 @@
   <div class="subagent-manage">
     <!-- 卡片列表 -->
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
-    <div class="subagent-grid">
-      <div v-for="s in list" :key="s.id" class="subagent-card" @click="openDetail(s)">
-        <div class="card-top">
-          <div class="card-icon">
-            {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
-            <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
-            <span class="status-dot" :class="s.enabled === 1 ? 'status-active' : 'status-disabled'"></span>
-          </div>
-          <div class="card-info">
-            <a-tooltip :title="s.displayName"><h3>{{ s.displayName }}</h3></a-tooltip>
-            <a-tooltip :title="s.name"><span class="card-name">{{ s.name }}</span></a-tooltip>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
-              <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
-            </a-tooltip>
-            <a-dropdown :trigger="['click']">
-              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item @click="handleToggleEnabled(s, s.enabled !== 1)">
-                    <CheckCircleOutlined v-if="s.enabled === 1" style="color: #16a34a; margin-right: 6px" />
-                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
-                    {{ s.enabled === 1 ? '禁用' : '启用' }}
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-        </div>
+    <div class="card-grid">
+      <EntityCard
+        v-for="s in list"
+        :key="s.id"
+        type="subagent"
+        :name="s.displayName"
+        @click="openDetail(s)"
+      >
+        <template #icon>
+          {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
+          <span v-if="s.isBuiltin === 1" class="builtin-badge">内置</span>
+          <span class="status-dot" :class="s.enabled === 1 ? 'status-active' : 'status-disabled'"></span>
+        </template>
+        <template #info>
+          <a-tooltip :title="s.displayName"><h3>{{ s.displayName }}</h3></a-tooltip>
+          <a-tooltip :title="s.name"><span class="card-name">{{ s.name }}</span></a-tooltip>
+        </template>
+        <template #actions>
+          <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
+            <button class="btn-icon danger" @click="handleDelete(s)"><DeleteOutlined /></button>
+          </a-tooltip>
+          <a-dropdown :trigger="['click']">
+            <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item @click="handleToggleEnabled(s, s.enabled !== 1)">
+                  <CheckCircleOutlined v-if="s.enabled === 1" style="color: #16a34a; margin-right: 6px" />
+                  <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                  {{ s.enabled === 1 ? '禁用' : '启用' }}
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
         <a-tooltip v-if="s.description" :title="s.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
           <p class="card-desc">{{ truncateText(s.description, 50) }}</p>
         </a-tooltip>
         <p v-else class="card-desc">暂无描述</p>
-        <div class="card-meta">
+        <template #meta>
           <span class="card-tools" v-if="formatToolIds(s.toolIds)">
             <ToolOutlined /> {{ formatToolIds(s.toolIds) }}
           </span>
           <span class="card-tools" v-else>
             <ToolOutlined /> 无工具
           </span>
-        </div>
-      </div>
+        </template>
+      </EntityCard>
 
       <div v-if="list.length === 0 && !loading" class="empty-state">
         <RobotOutlined class="empty-icon" />
@@ -221,6 +225,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { RobotOutlined, EditOutlined, DeleteOutlined, ToolOutlined, QuestionCircleOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import EntitySelectOption from '../components/EntitySelectOption.vue'
+import EntityCard from '../components/EntityCard.vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
 import { getProvidersWithModels } from '../api/modelProvider'
@@ -473,42 +478,12 @@ defineExpose({ openDialog, search, refresh })
   border-radius: 12px;
   padding: 20px;
 }
-.subagent-grid {
-  display: grid;
+.card-grid {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
 }
-.subagent-card {
-  background: #fff;
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  padding: 16px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.subagent-card:hover {
-  border-color: #f59e0b;
-  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  flex-shrink: 0;
-  position: relative;
+/* SubAgent 专用 hover 色（琥珀色） */
+:deep(.entity-card:hover) {
+  border-color: #f59e0b !important;
 }
 .builtin-badge {
   position: absolute;
@@ -519,6 +494,7 @@ defineExpose({ openDialog, search, refresh })
   background: #0070f3;
   color: #fff;
   border-radius: 4px;
+  z-index: 1;
 }
 .status-dot {
   position: absolute;
@@ -536,19 +512,6 @@ defineExpose({ openDialog, search, refresh })
 .status-disabled {
   background: #a3a3a3;
 }
-.card-info {
-  flex: 1;
-  min-width: 0;
-}
-.card-info h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-primary);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .card-name {
   font-size: 12px;
   color: var(--color-mute);
@@ -557,28 +520,8 @@ defineExpose({ openDialog, search, refresh })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.btn-icon {
-  padding: 4px;
-  background: transparent;
-  border: none;
-  color: var(--color-mute);
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
-}
-.btn-icon:hover {
-  background: #f4f4f5;
-  color: var(--color-primary);
-}
-.btn-icon.danger:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  width: fit-content;
+  max-width: 100%;
 }
 .card-desc {
   font-size: 13px;
@@ -588,11 +531,6 @@ defineExpose({ openDialog, search, refresh })
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .card-tools {
   font-size: 12px;
   color: var(--color-link);
@@ -601,17 +539,16 @@ defineExpose({ openDialog, search, refresh })
   gap: 4px;
 }
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px;
-  color: var(--color-mute);
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px 24px;
+  color: #a1a1aa;
 }
 .empty-icon {
   font-size: 48px;
   color: #d4d4d8;
   margin-bottom: 12px;
+  display: block;
 }
 .empty-state p {
   margin: 0;

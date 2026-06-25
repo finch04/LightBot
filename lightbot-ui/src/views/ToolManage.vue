@@ -41,41 +41,46 @@
 
     <a-spin :spinning="loading" style="min-height: 400px; display: block;">
     <div class="provider-grid">
-      <div v-for="t in list" :key="t.id" class="provider-card" :class="{ 'knowledge-card': (t.toolType?.code || t.toolType) === 'knowledge' }" @click="openDetail(t)">
-        <div class="card-top">
-          <div class="card-icon card-icon--tool">
-            <span v-if="(t.toolType?.code || t.toolType) === 'builtin'" class="type-badge badge-builtin">内置</span>
-            <span v-else-if="(t.toolType?.code || t.toolType) === 'knowledge'" class="type-badge badge-knowledge">知识库</span>
-            <span class="status-dot" :class="isDisabled(t) ? 'status-disabled' : 'status-active'"></span>
-            {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
-          </div>
-          <div class="card-info">
-            <a-tooltip :title="t.displayName || t.name">
-              <h3>{{ t.displayName || t.name }}</h3>
-            </a-tooltip>
-            <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip v-if="(t.toolType?.code || t.toolType) !== 'builtin' && (t.toolType?.code || t.toolType) !== 'knowledge'" title="删除">
-              <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
-            </a-tooltip>
-            <a-dropdown :trigger="['click']">
-              <button class="btn-icon" @click.prevent><MoreOutlined /></button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item v-if="(t.toolType?.code || t.toolType) !== 'knowledge'" @click="handleToggleEnabled(t)">
-                    <CheckCircleOutlined v-if="!isDisabled(t)" style="color: #16a34a; margin-right: 6px" />
-                    <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
-                    {{ isDisabled(t) ? '启用' : '禁用' }}
-                  </a-menu-item>
-                  <a-menu-item @click="openTestDialog(t)">
-                    <PlayCircleOutlined style="margin-right: 6px" /> 测试工具
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-        </div>
+      <EntityCard
+        v-for="t in list"
+        :key="t.id"
+        type="tool"
+        :name="t.displayName || t.name"
+        :class="{ 'knowledge-card': (t.toolType?.code || t.toolType) === 'knowledge' }"
+        @click="openDetail(t)"
+      >
+        <template #icon>
+          <span v-if="(t.toolType?.code || t.toolType) === 'builtin'" class="type-badge badge-builtin">内置</span>
+          <span v-else-if="(t.toolType?.code || t.toolType) === 'knowledge'" class="type-badge badge-knowledge">知识库</span>
+          <span class="status-dot" :class="isDisabled(t) ? 'status-disabled' : 'status-active'"></span>
+          {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
+        </template>
+        <template #info>
+          <a-tooltip :title="t.displayName || t.name">
+            <h3>{{ t.displayName || t.name }}</h3>
+          </a-tooltip>
+          <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
+        </template>
+        <template #actions>
+          <a-tooltip v-if="(t.toolType?.code || t.toolType) !== 'builtin' && (t.toolType?.code || t.toolType) !== 'knowledge'" title="删除">
+            <button class="btn-icon danger" @click="handleDelete(t.id)"><DeleteOutlined /></button>
+          </a-tooltip>
+          <a-dropdown :trigger="['click']">
+            <button class="btn-icon" @click.prevent><MoreOutlined /></button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item v-if="(t.toolType?.code || t.toolType) !== 'knowledge'" @click="handleToggleEnabled(t)">
+                  <CheckCircleOutlined v-if="!isDisabled(t)" style="color: #16a34a; margin-right: 6px" />
+                  <CloseCircleOutlined v-else style="color: #a3a3a3; margin-right: 6px" />
+                  {{ isDisabled(t) ? '启用' : '禁用' }}
+                </a-menu-item>
+                <a-menu-item @click="openTestDialog(t)">
+                  <PlayCircleOutlined style="margin-right: 6px" /> 测试工具
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
         <div class="card-detail">
           <div class="card-tags">
             <span v-if="t.name" class="tag tag-identifier">{{ t.name }}</span>
@@ -86,7 +91,7 @@
             <span class="card-desc">{{ truncateText(t.description, 50) }}</span>
           </a-tooltip>
         </div>
-      </div>
+      </EntityCard>
       <div v-if="list.length === 0 && !loading" class="empty-tip">
         {{ searchText ? '没有匹配的工具' : '暂无工具，点击右上角新增' }}
       </div>
@@ -374,38 +379,29 @@
           <!-- 参数说明 -->
           <div class="detail-section" v-if="detailTool.inputSchema && detailTool.inputSchema !== '{}'">
             <div class="detail-section-header"><UnorderedListOutlined /> 参数说明</div>
-            <table class="detail-params-table">
-              <thead>
-                <tr><th>参数名</th><th>类型</th><th>必填</th><th>说明</th></tr>
-              </thead>
-              <tbody>
-                <tr v-for="p in parseToolParams(detailTool.inputSchema)" :key="p.name">
-                  <td><code>{{ p.name }}</code></td>
-                  <td>{{ p.type }}</td>
-                  <td><span v-if="p.required" class="param-required">是</span><span v-else class="param-optional">否</span></td>
-                  <td>{{ p.desc }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-if="parseToolParams(detailTool.inputSchema).length === 0" class="detail-empty">无可解析的参数</div>
+            <a-table
+              v-if="parseToolParams(detailTool.inputSchema).length > 0"
+              :columns="paramColumns"
+              :data-source="parseToolParams(detailTool.inputSchema)"
+              :pagination="false"
+              size="small"
+              :scroll="{ y: 360 }"
+            />
+            <div v-else class="detail-empty">无可解析的参数</div>
           </div>
 
           <!-- 返回示例 -->
           <div class="detail-section" v-if="hasOutputExample(detailTool)">
             <div class="detail-section-header"><FileTextOutlined /> 返回示例</div>
             <!-- 字段说明表 -->
-            <table v-if="parseOutputSchema(detailTool).length > 0" class="detail-params-table">
-              <thead>
-                <tr><th>字段名</th><th>类型</th><th>说明</th></tr>
-              </thead>
-              <tbody>
-                <tr v-for="f in parseOutputSchema(detailTool)" :key="f.name">
-                  <td><code>{{ f.name }}</code></td>
-                  <td>{{ f.type }}</td>
-                  <td>{{ f.desc }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <a-table
+              v-if="parseOutputSchema(detailTool).length > 0"
+              :columns="outputColumns"
+              :data-source="parseOutputSchema(detailTool)"
+              :pagination="false"
+              size="small"
+              :scroll="{ y: 360 }"
+            />
             <!-- JSON 示例 -->
             <div v-if="formatOutputExample(detailTool)" class="detail-output-example">
               <div class="detail-output-example-title">返回示例 JSON</div>
@@ -452,12 +448,13 @@
 
 <script setup>
 defineProps({ hideHeader: Boolean })
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, h } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, PlayCircleOutlined, TagsOutlined, FileTextOutlined, UnorderedListOutlined, MoreOutlined, CheckCircleOutlined, CloseCircleOutlined, QuestionCircleOutlined, SwapOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getTools, createTool, updateTool, deleteTool, testTool, setToolEnabled } from '../api/tool'
 import { getToolTypes } from '../api/enum'
 import JsonInput from '../components/JsonInput.vue'
+import EntityCard from '../components/EntityCard.vue'
 import { truncateText } from '../utils/format'
 
 function getPopupContainer() {
@@ -820,6 +817,19 @@ function refresh() {
   loadData()
 }
 
+const paramColumns = [
+  { title: '参数名', dataIndex: 'name', width: 140, customRender: ({ text }) => h('code', text) },
+  { title: '类型', dataIndex: 'type', width: 80 },
+  { title: '必填', dataIndex: 'required', width: 60, customRender: ({ text }) => text ? '是' : '否' },
+  { title: '说明', dataIndex: 'desc', ellipsis: true },
+]
+
+const outputColumns = [
+  { title: '字段名', dataIndex: 'name', width: 140, customRender: ({ text }) => h('code', text) },
+  { title: '类型', dataIndex: 'type', width: 80 },
+  { title: '说明', dataIndex: 'desc', ellipsis: true },
+]
+
 defineExpose({ openDialog, search, refresh })
 </script>
 
@@ -829,11 +839,6 @@ defineExpose({ openDialog, search, refresh })
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-}
-.card-icon {
-  background: linear-gradient(135deg, #10b981, #059669);
-  flex-shrink: 0;
-  position: relative;
 }
 .status-dot {
   position: absolute;
@@ -1258,31 +1263,6 @@ defineExpose({ openDialog, search, refresh })
   font-size: 13px;
   color: #a1a1aa;
   font-style: italic;
-}
-.detail-params-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.detail-params-table th {
-  text-align: left;
-  padding: 6px 12px;
-  background: var(--color-canvas-soft-2);
-  color: #52525b;
-  font-weight: 600;
-  border-bottom: 1px solid #e5e5e5;
-}
-.detail-params-table td {
-  padding: 6px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  color: var(--color-primary);
-}
-.detail-params-table code {
-  background: var(--color-canvas-soft-2);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--color-link);
 }
 .detail-output-example {
   margin-top: 12px;

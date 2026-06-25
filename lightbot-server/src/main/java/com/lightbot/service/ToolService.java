@@ -69,4 +69,12 @@ public interface ToolService extends IService<Tool> {
      * @return 示例参数Map
      */
     Map<String, Object> getExampleParams(Long toolId);
+
+    /**
+     * 清理悬空工具ID：过滤掉已被删除的工具
+     *
+     * @param toolIds 工具ID列表（字符串形式）
+     * @return 过滤后仍存在的工具ID列表
+     */
+    List<String> cleanStaleToolIds(List<String> toolIds);
 }

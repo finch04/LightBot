@@ -40,38 +40,42 @@
 
     <a-spin :spinning="loading">
     <div class="agent-grid">
-      <div v-for="a in list" :key="a.id" class="agent-card" @click="router.push(`/app/agents/${a.id}`)">
-        <div class="card-top">
-          <div class="card-icon" :class="{ 'has-avatar': a.avatar }">
-            <img v-if="a.avatar" :src="a.avatar" alt="" class="card-avatar-img" @error="a.avatar = ''" />
-            <span v-else>{{ (a.name || 'A')[0] }}</span>
-          </div>
-          <div class="card-info">
-            <a-tooltip :title="a.name">
-              <h3>{{ a.name }} <span v-if="a.isDefault" class="card-default-tag">默认</span></h3>
-            </a-tooltip>
-            <span class="card-type">{{ agentTypeLabel(a.agentType) }}</span>
-          </div>
-          <div class="card-actions" @click.stop>
-            <a-tooltip v-if="!a.isDefault" title="设为默认">
-              <button class="btn-icon" @click="handleSetDefault(a.id)"><StarOutlined /></button>
-            </a-tooltip>
-            <a-tooltip title="编辑">
-              <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
-            </a-tooltip>
-            <a-tooltip title="删除">
-              <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
-            </a-tooltip>
-          </div>
-        </div>
+      <EntityCard
+        v-for="a in list"
+        :key="a.id"
+        type="agent"
+        :name="a.name"
+        @click="router.push(`/app/agents/${a.id}`)"
+      >
+        <template #icon>
+          <img v-if="a.avatar" :src="a.avatar" alt="" class="card-avatar-img" @error="a.avatar = ''" />
+          <span v-else>{{ (a.name || 'A')[0] }}</span>
+        </template>
+        <template #info>
+          <a-tooltip :title="a.name">
+            <h3>{{ a.name }} <span v-if="a.isDefault" class="card-default-tag">默认</span></h3>
+          </a-tooltip>
+          <span class="card-type" :class="'card-type--' + (a.agentType?.code || a.agentType || 'chat')">{{ agentTypeLabel(a.agentType) }}</span>
+        </template>
+        <template #actions>
+          <a-tooltip v-if="!a.isDefault" title="设为默认">
+            <button class="btn-icon" @click="handleSetDefault(a.id)"><StarOutlined /></button>
+          </a-tooltip>
+          <a-tooltip title="编辑">
+            <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
+          </a-tooltip>
+          <a-tooltip title="删除">
+            <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
+          </a-tooltip>
+        </template>
         <p class="card-desc">{{ a.description || '暂无描述' }}</p>
-        <div class="card-meta">
+        <template #meta>
           <span class="card-status" :class="(a.status?.code || a.status || 'draft').toLowerCase()">
             {{ statusText(a.status?.code || a.status, a.version) }}
           </span>
           <span class="card-time">{{ formatTime(a.createTime) }}</span>
-        </div>
-      </div>
+        </template>
+      </EntityCard>
 
       <div v-if="list.length === 0 && !loading" class="empty-state">
         <RobotOutlined class="empty-icon" />
@@ -146,6 +150,7 @@ import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 import ModelSelect from '../components/ModelSelect.vue'
+import EntityCard from '../components/EntityCard.vue'
 
 const router = useRouter()
 const list = ref([])
@@ -314,34 +319,9 @@ onMounted(async () => {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
-.agent-card {
-  background: #fff;
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.agent-card:hover {
-  border-color: var(--color-link);
-  box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
-}
-.card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #7928ca, #ff0080);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
+/* 头像需要 overflow: hidden 裁剪图片 */
+:deep(.card-icon) {
   overflow: hidden;
-  flex-shrink: 0;
-}
-.card-icon.has-avatar {
-  background: #f4f4f5;
 }
 .card-avatar-img {
   width: 100%;
@@ -349,11 +329,22 @@ onMounted(async () => {
   object-fit: cover;
 }
 .card-type {
-  font-size: 12px;
-  color: var(--color-mute);
-  background: var(--color-canvas-soft-2);
-  padding: 2px 8px;
-  border-radius: 100px;
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+.card-type--chat,
+.card-type--assistant {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+.card-type--workflow {
+  color: #7c3aed;
+  background: #f5f3ff;
 }
 .card-default-tag {
   font-size: 11px;
@@ -370,11 +361,6 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 .card-status {
   font-size: 12px;

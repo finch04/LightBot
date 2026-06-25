@@ -23,6 +23,7 @@ import com.lightbot.mapper.EmbeddingMapper;
 import com.lightbot.mapper.QaPairMapper;
 import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
+import com.lightbot.util.VectorUtil;
 import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.QaPairService;
 import com.lightbot.service.TaskService;
@@ -355,17 +356,8 @@ public class QaPairServiceImpl extends ServiceImpl<QaPairMapper, QaPair>
         return (int) (chineseCount / 1.5 + otherCount / 4.0);
     }
 
-    /**
-     * 将float数组转换为pgvector可识别的字符串格式 "[0.1,0.2,...]"
-     */
     private String toVectorString(float[] vector) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vector.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append(vector[i]);
-        }
-        sb.append("]");
-        return sb.toString();
+        return VectorUtil.toVectorString(vector);
     }
 
     @Override

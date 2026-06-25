@@ -270,10 +270,10 @@ const createForm = reactive({
 })
 
 const columns = [
-  { title: '实验名称', key: 'name', dataIndex: 'name', width: 200 },
-  { title: '评测集', key: 'datasetName', dataIndex: 'datasetName', width: 140 },
-  { title: 'Prompt', key: 'promptKey', dataIndex: 'promptKey', width: 140 },
-  { title: '评估器', key: 'evaluatorName', dataIndex: 'evaluatorName', width: 140 },
+  { title: '实验名称', key: 'name', dataIndex: 'name', width: 200, ellipsis: true },
+  { title: '评测集', key: 'datasetName', dataIndex: 'datasetName', width: 140, ellipsis: true },
+  { title: 'Prompt', key: 'promptKey', dataIndex: 'promptKey', width: 140, ellipsis: true },
+  { title: '评估器', key: 'evaluatorName', dataIndex: 'evaluatorName', width: 140, ellipsis: true },
   { title: '状态', key: 'status', dataIndex: 'status', width: 100 },
   { title: '进度', key: 'progress', dataIndex: 'progress', width: 160 },
   { title: '创建时间', key: 'createTime', dataIndex: 'createTime', width: 180 },
