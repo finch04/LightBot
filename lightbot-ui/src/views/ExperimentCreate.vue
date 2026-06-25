@@ -314,7 +314,7 @@ async function handleCreate() {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   margin-bottom: 24px;
@@ -322,7 +322,7 @@ async function handleCreate() {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -330,21 +330,21 @@ async function handleCreate() {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0;
 }
 .create-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 32px;
   max-width: 800px;
@@ -362,7 +362,7 @@ async function handleCreate() {
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -375,25 +375,25 @@ async function handleCreate() {
 .btn-cancel {
   padding: 10px 20px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 14px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-outline {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn-outline:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-icon {
   width: 28px;
   height: 28px;
@@ -404,13 +404,13 @@ async function handleCreate() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
-.btn-icon:hover { background: #f5f5f5; }
-.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.btn-icon:hover { background: var(--color-canvas-soft-2); }
+.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 .evaluator-config-block {
-  background: #fafafa;
-  border: 1px solid #ebebeb;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 10px;
   padding: 16px 20px;
   margin-bottom: 12px;
@@ -424,6 +424,6 @@ async function handleCreate() {
 .evaluator-config-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 </style>

@@ -582,14 +582,14 @@ watch(drawerVisible, (visible) => {
   border: 1px solid #e4e4e7;
   border-radius: 6px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
 }
 .btn-system-tool:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .system-tool-header {
   display: flex;
@@ -599,7 +599,7 @@ watch(drawerVisible, (visible) => {
 }
 .system-tool-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .btn-help {
   display: flex;
@@ -615,8 +615,8 @@ watch(drawerVisible, (visible) => {
   transition: all 0.15s;
 }
 .btn-help:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .system-tool-item {
   display: flex;
@@ -624,7 +624,7 @@ watch(drawerVisible, (visible) => {
   gap: 12px;
   padding: 16px;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   transition: all 0.15s;
   margin-bottom: 12px;
@@ -668,7 +668,7 @@ watch(drawerVisible, (visible) => {
 .tool-card-name {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -696,10 +696,10 @@ watch(drawerVisible, (visible) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .btn-icon:hover {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 .empty-tip {
   text-align: center;
@@ -719,12 +719,12 @@ watch(drawerVisible, (visible) => {
 }
 .tool-detail-modal .detail-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 8px;
 }
 .tool-detail-modal .detail-value {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .tool-detail-modal .schema-table-wrap {
   border: 1px solid #f0f0f0;
@@ -742,7 +742,7 @@ watch(drawerVisible, (visible) => {
   font-size: 13px;
 }
 .tool-detail-modal .schema-table th {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   font-weight: 500;
   color: #374151;
   white-space: nowrap;
@@ -755,33 +755,33 @@ watch(drawerVisible, (visible) => {
   border-bottom: none;
 }
 .tool-detail-modal .prop-name {
-  color: #0070f3;
+  color: var(--color-link);
   font-weight: 500;
 }
 .tool-detail-modal .prop-type {
-  color: #71717a;
+  color: var(--color-mute);
 }
 .tool-detail-modal .prop-desc {
   color: #52525b;
 }
 .tool-detail-modal .prop-required {
-  color: #71717a;
+  color: var(--color-mute);
 }
 .tool-detail-modal .schema-empty {
   text-align: center;
   padding: 16px;
   color: #a1a1aa;
   font-size: 13px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .example-json {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border: 1px solid #e4e4e7;
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   overflow-x: auto;
   margin: 0;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
@@ -792,7 +792,7 @@ watch(drawerVisible, (visible) => {
 .output-example-title {
   font-size: 12px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 12px 0 6px;
 }
 .output-example-json {
@@ -811,7 +811,7 @@ watch(drawerVisible, (visible) => {
 .test-params-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .test-params-hint {
@@ -827,7 +827,7 @@ watch(drawerVisible, (visible) => {
 .test-params-table th {
   text-align: left;
   padding: 6px 12px;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   color: #52525b;
   font-weight: 600;
   border-bottom: 1px solid #e5e5e5;
@@ -836,16 +836,16 @@ watch(drawerVisible, (visible) => {
 .test-params-table td {
   padding: 6px 12px;
   border-bottom: 1px solid #f0f0f0;
-  color: #171717;
+  color: var(--color-primary);
   word-break: break-word;
   overflow-wrap: break-word;
 }
 .test-params-table code {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .param-required {
   color: #ef4444;
@@ -865,12 +865,12 @@ watch(drawerVisible, (visible) => {
 .test-input-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .btn-text {
   background: none;
   border: none;
-  color: #0070f3;
+  color: var(--color-link);
   font-size: 12px;
   cursor: pointer;
   padding: 2px 6px;
@@ -891,12 +891,12 @@ watch(drawerVisible, (visible) => {
   resize: vertical;
   outline: none;
   transition: border-color 0.2s;
-  background: #fafafa;
-  color: #171717;
+  background: var(--color-canvas-soft);
+  color: var(--color-primary);
   box-sizing: border-box;
 }
 .test-json-input:focus {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #fff;
 }
 .dialog-footer {
@@ -914,19 +914,19 @@ watch(drawerVisible, (visible) => {
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: #171717;
-  color: #171717;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -944,16 +944,16 @@ watch(drawerVisible, (visible) => {
 .test-result-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .test-result-content {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border: 1px solid #e5e5e5;
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -978,7 +978,7 @@ watch(drawerVisible, (visible) => {
 .help-section h4 {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .help-section p {
@@ -987,11 +987,11 @@ watch(drawerVisible, (visible) => {
   line-height: 1.6;
 }
 .help-section code {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .help-steps {
   display: flex;
@@ -1018,18 +1018,18 @@ watch(drawerVisible, (visible) => {
 }
 .help-step b {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .help-step p {
   margin-top: 8px;
 }
 .code-block {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border: 1px solid #e4e4e7;
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   overflow-x: auto;
   margin: 8px 0;
 }
@@ -1053,7 +1053,7 @@ watch(drawerVisible, (visible) => {
   text-align: left;
 }
 .help-table th {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   font-weight: 600;
   color: #374151;
   white-space: nowrap;
@@ -1074,7 +1074,7 @@ watch(drawerVisible, (visible) => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #0070f3;
+  color: var(--color-link);
   cursor: pointer;
   border: none;
   background: none;

@@ -579,7 +579,7 @@
                 style="flex: 1"
                 :disabled="isVersionPreview"
               />
-              <span style="font-size: 13px; color: #71717a; white-space: nowrap;">KB</span>
+              <span style="font-size: 13px; color: var(--color-mute); white-space: nowrap;">KB</span>
               <a-tooltip
                 title="当上下文大小超过该值时，启用摘要功能以优化上下文使用。单位为 KB，默认值为 100KB"
                 overlay-class-name="no-flip-tooltip"
@@ -662,7 +662,7 @@
                 style="flex: 1"
                 :disabled="isVersionPreview"
               />
-              <span style="font-size: 13px; color: #71717a; white-space: nowrap;">Tokens</span>
+              <span style="font-size: 13px; color: var(--color-mute); white-space: nowrap;">Tokens</span>
             </div>
           </a-form-item>
           <a-form-item>
@@ -3549,7 +3549,7 @@ onMounted(async () => {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page--loading {
   overflow: hidden;
@@ -3598,13 +3598,13 @@ onMounted(async () => {
   transition: color 0.2s, background 0.2s;
 }
 .btn-agent-id:hover {
-  color: #0070f3;
+  color: var(--color-link);
   background: #f0f7ff;
 }
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -3613,24 +3613,24 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 .btn-back:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .btn-primary {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -3683,7 +3683,7 @@ onMounted(async () => {
 .publish-modal-tip {
   margin: 0 0 16px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .publish-modal-textarea {
   margin-bottom: 28px;
@@ -3918,7 +3918,7 @@ onMounted(async () => {
 .prompt-var-tip {
   margin-top: 8px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   line-height: 1.6;
 }
 .prompt-var-tip code {
@@ -3936,7 +3936,7 @@ onMounted(async () => {
 }
 .insert-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .var-insert-btn {
   padding: 2px 10px;
@@ -3956,9 +3956,9 @@ onMounted(async () => {
   color: #52525b;
 }
 .preview-toggle-btn.active {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #eff6ff;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .prompt-preview-box {
   margin-top: 10px;
@@ -3970,7 +3970,7 @@ onMounted(async () => {
   padding: 6px 12px;
   background: #f9fafb;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   border-bottom: 1px solid #e4e4e7;
 }
 .prompt-preview-content {
@@ -4001,8 +4001,8 @@ onMounted(async () => {
 .sub-config-card {
   margin: 8px 0 16px;
   padding: 14px 16px;
-  background: #fafafa;
-  border: 1px solid #ebebeb;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 10px;
 }
 .sub-config-card--model {
@@ -4019,12 +4019,12 @@ onMounted(async () => {
   margin: 0 0 4px;
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .sub-config-card-desc {
   margin: 0;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   line-height: 1.5;
 }
 .sub-config-card-desc code {
@@ -4058,8 +4058,8 @@ onMounted(async () => {
   transition: border-color 0.15s, color 0.15s;
 }
 .btn-add-inline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-add-inline--block {
   width: 100%;
@@ -4083,12 +4083,12 @@ onMounted(async () => {
   margin-bottom: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-mute);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   background: #fff;
   border-radius: 6px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
 }
 .list-table-head--4col {
   grid-template-columns: 1fr 1fr 1fr 36px;
@@ -4100,7 +4100,7 @@ onMounted(async () => {
   padding: 6px 8px;
   margin-bottom: 6px;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 .list-table-row:last-child {
@@ -4149,7 +4149,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 10px 20px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 14px;
@@ -4157,8 +4157,8 @@ onMounted(async () => {
   cursor: pointer;
 }
 .btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-icon-sm {
   width: 24px;
@@ -4170,15 +4170,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
 }
 .btn-icon-sm:hover {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 .btn-icon-sm.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
+  color: var(--color-error);
+  background: var(--color-error-soft);
 }
 .prompt-wrapper {
   position: relative;
@@ -4192,7 +4192,7 @@ onMounted(async () => {
   border: none;
   background: rgba(0, 112, 243, 0.1);
   border-radius: 6px;
-  color: #0070f3;
+  color: var(--color-link);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4206,7 +4206,7 @@ onMounted(async () => {
 }
 .btn-ai-icon:disabled {
   color: #a1a1aa;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   cursor: not-allowed;
 }
 .id-field {
@@ -4216,9 +4216,9 @@ onMounted(async () => {
 }
 .id-value {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
   font-family: 'SF Mono', Monaco, Consolas, monospace;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 4px 12px;
   border-radius: 4px;
 }
@@ -4235,12 +4235,12 @@ onMounted(async () => {
   border: 1px solid #e4e4e7;
   border-radius: 6px;
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-ai-sm:hover:not(:disabled) {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #f0f7ff;
 }
 .btn-ai-sm:disabled {
@@ -4319,7 +4319,7 @@ onMounted(async () => {
 }
 .capability-collapse-icon {
   font-size: 10px;
-  color: #71717a;
+  color: var(--color-mute);
   transition: transform 0.2s;
 }
 .capability-grid {
@@ -4340,7 +4340,7 @@ onMounted(async () => {
 .capability-sub-header {
   font-size: 12px;
   font-weight: 500;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 10px;
 }
 .capability-grid-sub-items {
@@ -4392,7 +4392,7 @@ onMounted(async () => {
 }
 .capability-option-status {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   min-width: 20px;
 }
 .capability-number-input {
@@ -4501,7 +4501,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   overflow: visible;
@@ -4553,14 +4553,14 @@ onMounted(async () => {
 .panel-subtitle {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   line-height: 1.5;
   font-weight: normal;
 }
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .non-version-badge {
   font-size: 11px;
@@ -4580,7 +4580,7 @@ onMounted(async () => {
   display: flex;
   gap: 24px;
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
   margin-bottom: 16px;
 }
@@ -4596,7 +4596,7 @@ onMounted(async () => {
 }
 .tool-option-value {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .tool-option-help {
   font-size: 14px;
@@ -4616,7 +4616,7 @@ onMounted(async () => {
 .param-value {
   font-size: 14px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
   min-width: 40px;
   text-align: right;
 }
@@ -4688,7 +4688,7 @@ onMounted(async () => {
 .binding-deleted-detail-hint {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   text-align: right;
 }
 .btn-remove-deleted-bindings {
@@ -4746,7 +4746,7 @@ onMounted(async () => {
   color: #ef4444;
 }
 .knowledge-list {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -4870,7 +4870,7 @@ onMounted(async () => {
 .item-name {
   font-size: 14px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4878,13 +4878,13 @@ onMounted(async () => {
 .item-desc {
   margin-top: 4px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .item-check {
-  color: #0070f3;
+  color: var(--color-link);
   font-size: 16px;
 }
 .empty-tip {
@@ -4976,7 +4976,7 @@ onMounted(async () => {
   padding: 1px 6px;
   border-radius: 100px;
   background: rgba(0, 0, 0, 0.06);
-  color: #71717a;
+  color: var(--color-mute);
 }
 .tool-knowledge-badge {
   font-size: 10px;
@@ -5010,22 +5010,22 @@ onMounted(async () => {
   border-radius: 100px;
   background: #fff;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   transition: all 0.15s;
 }
 .type-filter-btn:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .type-filter-btn.active {
   background: #0070f3;
-  border-color: #0070f3;
+  border-color: var(--color-link);
   color: #fff;
 }
 .agent-tabs {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 0 20px 20px;
 }
@@ -5059,7 +5059,7 @@ onMounted(async () => {
 }
 .binding-tabs {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 16px 20px 20px;
   margin-top: 16px;
@@ -5074,7 +5074,7 @@ onMounted(async () => {
 }
 .selected-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   font-weight: 500;
 }
 .btn-clear {
@@ -5149,7 +5149,7 @@ onMounted(async () => {
 .subagent-item .item-tools {
   margin-top: 4px;
   font-size: 11px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 
 /* 工作流配置样式 */
@@ -5326,7 +5326,7 @@ onMounted(async () => {
 .card-detail-name {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .card-detail-desc {
   font-size: 13px;
@@ -5372,8 +5372,8 @@ onMounted(async () => {
   transition: all 0.15s;
 }
 .card-detail-toggle:hover {
-  border-color: #171717;
-  color: #171717;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .card-detail-toggle.bound {
   background: #fef2f2;
@@ -5402,6 +5402,6 @@ onMounted(async () => {
   margin-top: 10px;
   margin-bottom: 0;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 </style>

@@ -2391,7 +2391,7 @@ function goBack() {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   overflow-x: hidden;
   position: relative;
 }
@@ -2431,7 +2431,7 @@ function goBack() {
 }
 .loading-text {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
   font-weight: 500;
 }
 .workflow-loading-fade-leave-active {
@@ -2560,7 +2560,7 @@ function goBack() {
 .publish-modal-tip {
   margin: 0 0 16px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .publish-modal-textarea {
   margin-bottom: 28px;
@@ -2920,7 +2920,7 @@ function goBack() {
   border-radius: 12px;
   border: 2px dashed #d4d4d8;
   background: rgba(255, 255, 255, 0.95);
-  color: #71717a;
+  color: var(--color-mute);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.15s;
   pointer-events: none;

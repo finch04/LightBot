@@ -991,7 +991,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
   gap: 16px;
   padding: 4px 12px;
   margin-bottom: 8px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border: 1px solid #f0f0f0;
   border-radius: 6px;
   font-size: 13px;
@@ -1098,7 +1098,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 }
 .doc-extract-name {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

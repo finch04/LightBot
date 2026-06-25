@@ -99,7 +99,7 @@ function handleConfirm() {
   background: #fff;
 }
 .tag-add-btn:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 </style>

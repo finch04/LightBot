@@ -37,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.cache.annotation.CacheEvict;
@@ -572,6 +573,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void setDefaultAgent(long agentId) {
         // 1. 校验Agent存在性
         Agent agent = getById(agentId);

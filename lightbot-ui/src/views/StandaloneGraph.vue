@@ -959,7 +959,7 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 
 .page-header {
@@ -973,13 +973,13 @@ onUnmounted(() => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 
 .page-header-actions {
@@ -990,10 +990,10 @@ onUnmounted(() => {
 
 .header-stats {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
   padding: 6px 14px;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 
@@ -1005,7 +1005,7 @@ onUnmounted(() => {
   padding: 4px 12px;
   border-radius: 8px;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
 }
 
 .neo4j-dot {
@@ -1069,7 +1069,7 @@ onUnmounted(() => {
 .sg-canvas-wrapper {
   flex: 1;
   margin: 0 32px 24px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   overflow: hidden;
   position: relative;
@@ -1123,7 +1123,7 @@ onUnmounted(() => {
   margin-bottom: 8px;
 }
 .import-format-pre {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 12px;

@@ -32,12 +32,17 @@
 
         <a-modal v-model:open="showModal" title="文件内容" :footer="null" :width="680"
           :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }" destroyOnClose>
-          <div class="sfr-modal-info-card">
-            <FileTextOutlined class="sfr-modal-info-icon" />
-            <span class="sfr-modal-info-path">{{ data.path }}</span>
-            <span v-if="data.size != null" class="sfr-modal-info-count">{{ formatSize(data.size) }}</span>
+          <div style="display:flex;align-items:center;gap:24px;padding:12px 16px;margin-bottom:20px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:12px;color:#8b5cf6;white-space:nowrap;">文件路径</span>
+              <span style="font-size:13px;font-weight:500;color:#6d28d9;font-family:'Monaco','Menlo',monospace;word-break:break-all;">{{ data.path }}</span>
+            </div>
+            <div v-if="data.size != null" style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+              <span style="font-size:12px;color:#8b5cf6;white-space:nowrap;">文件大小</span>
+              <span style="font-size:14px;font-weight:700;color:#6d28d9;">{{ formatSize(data.size) }}</span>
+            </div>
           </div>
-          <pre class="sfr-modal-content">{{ data.content }}</pre>
+          <pre style="margin:0;padding:16px;background:#1e1e1e;color:#d4d4d4;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word;border-radius:8px;font-family:'Monaco','Menlo',monospace;">{{ data.content }}</pre>
         </a-modal>
       </div>
 
@@ -64,15 +69,22 @@
 
         <a-modal v-model:open="showModal" title="文件列表" :footer="null" :width="720"
           :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }" destroyOnClose>
-          <div class="sfr-modal-info-card">
-            <FolderOpenOutlined class="sfr-modal-info-icon" />
-            <span class="sfr-modal-info-path">{{ data.dirPath }}</span>
-            <span class="sfr-modal-info-count">共 {{ data.total }} 个文件</span>
+          <div style="display:flex;align-items:center;gap:24px;padding:12px 16px;margin-bottom:20px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <FolderOpenOutlined style="font-size:14px;color:#7c3aed;flex-shrink:0;" />
+              <span style="font-size:12px;color:#8b5cf6;white-space:nowrap;">目录路径</span>
+              <span style="font-size:13px;font-weight:500;color:#6d28d9;font-family:'Monaco','Menlo',monospace;word-break:break-all;">{{ data.dirPath }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+              <FileTextOutlined style="font-size:14px;color:#7c3aed;flex-shrink:0;" />
+              <span style="font-size:12px;color:#8b5cf6;white-space:nowrap;">文件总数</span>
+              <span style="font-size:14px;font-weight:700;color:#6d28d9;">{{ data.total }}</span>
+            </div>
           </div>
-          <div class="sfr-modal-file-list">
-            <div v-for="(file, i) in data.files" :key="i" class="sfr-file-item">
-              <FileTextOutlined class="sfr-file-icon" />
-              <span class="sfr-file-name">{{ file }}</span>
+          <div style="border:1px solid #ddd6fe;border-radius:8px;background:#fff;">
+            <div v-for="(file, i) in data.files" :key="i" style="display:flex;align-items:center;gap:6px;padding:4px 12px;color:#374151;">
+              <FileTextOutlined style="font-size:12px;color:#a78bfa;flex-shrink:0;" />
+              <span style="font-size:12px;font-family:'Monaco','Menlo',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ file }}</span>
             </div>
           </div>
         </a-modal>
@@ -278,41 +290,5 @@ function formatSize(n) {
     font-family: 'Monaco', 'Menlo', monospace;
   }
 
-  // ── 弹窗 ──
-  .sfr-modal-info-card {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 14px; margin-bottom: 16px;
-    background: #f5f3ff; border: 1px solid #ddd6fe;
-    border-radius: 8px;
-  }
-  .sfr-modal-info-icon { font-size: 15px; color: #7c3aed; flex-shrink: 0; }
-  .sfr-modal-info-path {
-    font-family: 'Monaco', 'Menlo', monospace;
-    font-size: 12px; color: #6d28d9;
-    flex: 1; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .sfr-modal-info-count {
-    font-size: 12px; color: #8b5cf6; font-weight: 600;
-    white-space: nowrap; flex-shrink: 0;
-    background: #ede9fe; padding: 2px 10px; border-radius: 12px;
-  }
-  .sfr-modal-content {
-    margin: 0; padding: 16px;
-    background: #1e1e1e; color: #d4d4d4;
-    font-size: 13px; line-height: 1.7;
-    white-space: pre-wrap; word-break: break-word;
-    border-radius: 8px;
-    font-family: 'Monaco', 'Menlo', monospace;
-
-    &::-webkit-scrollbar { width: 6px; }
-    &::-webkit-scrollbar-track { background: #2d2d2d; border-radius: 3px; margin: 4px 0; }
-    &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; margin: 4px 0; }
-    &::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
-  }
-  .sfr-modal-file-list {
-    border: 1px solid #ddd6fe; border-radius: 8px;
-    background: #fff;
-  }
 }
 </style>

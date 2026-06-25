@@ -374,7 +374,7 @@ function resetState() {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 14px;
   text-align: center;
 }
@@ -421,7 +421,7 @@ function resetState() {
   justify-content: space-between;
   padding: 10px 16px;
   border-top: 1px solid #ebebeb;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .editor-footer-left {
   display: flex;
@@ -439,7 +439,7 @@ function resetState() {
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
@@ -447,15 +447,15 @@ function resetState() {
   cursor: pointer;
 }
 .btn-outline-sm:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -495,7 +495,7 @@ function resetState() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 .version-info {
@@ -506,7 +506,7 @@ function resetState() {
 .version-tag {
   font-weight: 600;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .version-hash {
   font-size: 12px;
@@ -515,7 +515,7 @@ function resetState() {
 }
 .version-time {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .version-actions {
   display: flex;
@@ -536,10 +536,10 @@ function resetState() {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   padding: 12px;
   border-radius: 6px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   margin: 0;
 }
 </style>

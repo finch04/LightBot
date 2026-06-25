@@ -39,7 +39,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 .publish-modal-tip {
   margin: 0 0 16px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .publish-modal-textarea { margin-bottom: 28px; }
 </style>

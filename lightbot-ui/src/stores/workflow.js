@@ -42,7 +42,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
    * 添加节点
    */
   function addNode(type, position) {
-    const id = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const id = `node_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     const node = {
       id,
       type,

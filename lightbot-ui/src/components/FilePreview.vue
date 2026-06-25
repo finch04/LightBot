@@ -192,14 +192,14 @@ function handleDownload() {
 }
 
 .preview-markdown :deep(code) {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
 }
 
 .preview-markdown :deep(pre) {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 16px;
   border-radius: 8px;
   overflow-x: auto;
@@ -236,7 +236,7 @@ function handleDownload() {
 
 .preview-markdown :deep(th),
 .preview-markdown :deep(td) {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   padding: 8px 12px;
   text-align: left;
 }
@@ -248,7 +248,7 @@ function handleDownload() {
 
 .preview-text {
   flex: 1;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -284,7 +284,7 @@ function handleDownload() {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;

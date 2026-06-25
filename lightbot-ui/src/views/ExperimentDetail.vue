@@ -182,7 +182,7 @@
       :maskClosable="false"
     >
       <div v-if="restartStep === 0">
-        <p style="color: #71717a; margin-bottom: 16px;">选择重新评测方式：</p>
+        <p style="color: var(--color-mute); margin-bottom: 16px;">选择重新评测方式：</p>
         <a-radio-group v-model:value="restartMode" style="display: flex; flex-direction: column; gap: 12px;">
           <a-radio value="direct">
             <div>
@@ -700,7 +700,7 @@ function formatTime(t) {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -716,7 +716,7 @@ function formatTime(t) {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -724,16 +724,16 @@ function formatTime(t) {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .page-header-actions {
   display: flex;
@@ -746,15 +746,15 @@ function formatTime(t) {
   gap: 6px;
   padding: 10px 20px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 
 /* 信息卡片 */
@@ -767,22 +767,22 @@ function formatTime(t) {
 }
 .info-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px 24px;
 }
 .info-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 4px;
 }
 .info-value {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .info-value a {
-  color: #0070f3;
+  color: var(--color-link);
   text-decoration: none;
   cursor: pointer;
   transition: color 0.15s;
@@ -800,7 +800,7 @@ function formatTime(t) {
 }
 .evaluator-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
 }
@@ -813,11 +813,11 @@ function formatTime(t) {
 .evaluator-name {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .evaluator-version {
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
   background: #e8f4ff;
   padding: 2px 8px;
   border-radius: 100px;
@@ -831,11 +831,11 @@ function formatTime(t) {
 .evaluator-score .score-value {
   font-size: 32px;
   font-weight: 700;
-  color: #171717;
+  color: var(--color-primary);
 }
 .evaluator-score .score-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .evaluator-score.score-high .score-value { color: #52c41a; }
 .evaluator-score.score-mid .score-value { color: #faad14; }
@@ -860,7 +860,7 @@ function formatTime(t) {
 
 .cell-preview {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .empty-state {
   text-align: center;
@@ -901,7 +901,7 @@ function formatTime(t) {
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
@@ -910,8 +910,8 @@ function formatTime(t) {
   transition: all 0.15s;
 }
 .btn-outline-sm:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .dialog-footer {
   display: flex;
@@ -921,7 +921,7 @@ function formatTime(t) {
 .dialog-footer-right { display: flex; gap: 8px; }
 .btn-primary-sm {
   padding: 6px 16px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -933,12 +933,12 @@ function formatTime(t) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-icon {
   width: 28px;
   height: 28px;
@@ -949,10 +949,10 @@ function formatTime(t) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
-.btn-icon:hover { background: #f5f5f5; }
-.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.btn-icon:hover { background: var(--color-canvas-soft-2); }
+.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 .evaluator-info-item {
   font-size: 14px;
   line-height: 1.8;
@@ -963,8 +963,8 @@ function formatTime(t) {
   padding-right: 8px;
 }
 .evaluator-config-block {
-  background: #fafafa;
-  border: 1px solid #ebebeb;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 10px;
   padding: 16px 20px;
   margin-bottom: 12px;
@@ -978,7 +978,7 @@ function formatTime(t) {
 .evaluator-config-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .result-detail-scroll {
   max-height: 65vh;
@@ -1000,7 +1000,7 @@ function formatTime(t) {
 }
 .result-detail-value {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
   line-height: 1.8;
   word-break: break-all;
   white-space: pre-wrap;

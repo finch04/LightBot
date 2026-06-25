@@ -210,7 +210,7 @@ onMounted(() => {
 }
 
 .template-item {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
   cursor: pointer;
@@ -218,24 +218,24 @@ onMounted(() => {
 }
 
 .template-item:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
 }
 
 .template-item.selected {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #f0f7ff;
 }
 
 .template-item-name {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 
 .template-item-desc {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -262,21 +262,21 @@ onMounted(() => {
 
 .template-manage-link a {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .template-manage-link a:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 
 /* 右侧模板预览 */
 .template-right {
   flex: 1;
   min-width: 0;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
   padding: 16px;
   overflow-y: auto;
@@ -290,13 +290,13 @@ onMounted(() => {
 .preview-header h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px 0;
 }
 
 .preview-header p {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0;
 }
 
@@ -307,7 +307,7 @@ onMounted(() => {
 .preview-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 
@@ -316,7 +316,7 @@ onMounted(() => {
   font-size: 13px;
   line-height: 1.6;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
 
@@ -333,7 +333,7 @@ onMounted(() => {
   background: #fff;
   padding: 10px;
   border-radius: 6px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   overflow-x: auto;
 }
 
@@ -372,7 +372,7 @@ onMounted(() => {
 
 .template-count {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .template-tip {
   font-size: 12px;
@@ -388,20 +388,20 @@ onMounted(() => {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
 
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;

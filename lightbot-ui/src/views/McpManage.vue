@@ -32,7 +32,9 @@
             {{ (s.name || 'M')[0].toUpperCase() }}
           </div>
           <div class="card-info">
-            <h3>{{ s.name }}</h3>
+            <a-tooltip :title="s.name">
+              <h3>{{ s.name }}</h3>
+            </a-tooltip>
           </div>
           <div class="card-actions" @click.stop>
             <a-tooltip title="删除">
@@ -689,65 +691,6 @@ defineExpose({ openDialog, search, refresh })
 </script>
 
 <style scoped>
-.page {
-  padding: 32px;
-  height: 100vh;
-  overflow-y: auto;
-  background: #fafafa;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-}
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #171717;
-  margin-bottom: 4px;
-}
-.page-desc {
-  font-size: 14px;
-  color: #71717a;
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: #171717;
-  color: #fff;
-  border: none;
-  border-radius: 100px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-primary:hover {
-  background: #27272a;
-}
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.btn-outline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #d9d9d9;
-  border-radius: 100px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
-}
 
 .provider-grid {
   display: grid;
@@ -755,36 +698,11 @@ defineExpose({ openDialog, search, refresh })
   gap: 16px;
 }
 .provider-card {
-  background: #fff;
-  border: 1px solid #ebebeb;
-  border-radius: 12px;
-  padding: 20px;
   display: flex;
   flex-direction: column;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.provider-card:hover {
-  border-color: #d4d4d8;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
 }
 .card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
   position: relative;
 }
 .status-dot {
@@ -803,22 +721,15 @@ defineExpose({ openDialog, search, refresh })
 .status-disabled {
   background: #a3a3a3;
 }
-.card-info {
-  flex: 1;
-  min-width: 0;
-}
 .card-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #171717;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .card-type {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -868,29 +779,6 @@ defineExpose({ openDialog, search, refresh })
   color: #7c3aed;
   border: 1px solid #ede9fe;
 }
-.card-actions {
-  display: flex;
-  gap: 4px;
-}
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #71717a;
-}
-.btn-icon:hover {
-  background: #f5f5f5;
-}
-.btn-icon.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
-}
 .card-body {
   flex: 1;
   display: flex;
@@ -917,19 +805,19 @@ defineExpose({ openDialog, search, refresh })
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: #171717;
-  color: #171717;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -965,8 +853,8 @@ defineExpose({ openDialog, search, refresh })
   transition: all 0.15s;
 }
 .btn-text:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-text:disabled {
   opacity: 0.5;
@@ -993,12 +881,12 @@ defineExpose({ openDialog, search, refresh })
 .tools-server-name {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .tools-count {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -1016,8 +904,8 @@ defineExpose({ openDialog, search, refresh })
   transition: all 0.15s;
 }
 .btn-refresh:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-refresh:disabled {
   opacity: 0.5;
@@ -1056,7 +944,7 @@ defineExpose({ openDialog, search, refresh })
 .tool-name {
   font-size: 14px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
 }
 .tool-desc {
   font-size: 12px;
@@ -1086,8 +974,8 @@ defineExpose({ openDialog, search, refresh })
   transition: all 0.15s;
 }
 .tool-detail-btn:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .tool-detail-modal {
   display: flex;
@@ -1106,7 +994,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-value {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .detail-scroll-body {
   max-height: calc(100vh - 260px);
@@ -1147,7 +1035,7 @@ defineExpose({ openDialog, search, refresh })
   font-size: 13px;
 }
 .schema-table th {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   padding: 10px 12px;
   text-align: left;
   font-weight: 500;
@@ -1158,7 +1046,7 @@ defineExpose({ openDialog, search, refresh })
 .schema-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #f0f0f0;
-  color: #171717;
+  color: var(--color-primary);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -1167,14 +1055,14 @@ defineExpose({ openDialog, search, refresh })
 }
 .prop-name {
   font-weight: 500;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .prop-type {
   color: #7c3aed;
   font-size: 12px;
 }
 .prop-desc {
-  color: #71717a;
+  color: var(--color-mute);
 }
 .prop-required {
   text-align: center;
@@ -1184,7 +1072,7 @@ defineExpose({ openDialog, search, refresh })
   font-size: 13px;
   padding: 16px;
   text-align: center;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .example-wrap {
@@ -1230,7 +1118,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .tools-error-msg {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-top: 8px;
 }
 .help-icon {
@@ -1241,7 +1129,7 @@ defineExpose({ openDialog, search, refresh })
   vertical-align: middle;
 }
 .help-icon:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .guide {
   max-height: 60vh;
@@ -1256,7 +1144,7 @@ defineExpose({ openDialog, search, refresh })
 .guide-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .guide p {
@@ -1274,7 +1162,7 @@ defineExpose({ openDialog, search, refresh })
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -1286,11 +1174,11 @@ defineExpose({ openDialog, search, refresh })
 }
 .guide-step b {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .guide-step p {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-top: 2px;
 }
 .guide-code {
@@ -1303,7 +1191,7 @@ defineExpose({ openDialog, search, refresh })
   line-height: 1.8;
 }
 .guide-code b {
-  color: #171717;
+  color: var(--color-primary);
 }
 .guide-code pre {
   background: #1e1e2e;

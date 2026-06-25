@@ -539,7 +539,7 @@ async function loadPromptsData() {
   min-height: 100vh;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -550,7 +550,7 @@ async function loadPromptsData() {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -558,11 +558,11 @@ async function loadPromptsData() {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .playground-help-icon {
@@ -578,7 +578,7 @@ async function loadPromptsData() {
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .header-actions {
   display: flex;
@@ -590,20 +590,20 @@ async function loadPromptsData() {
   gap: 6px;
   padding: 8px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn-outline:hover:not(:disabled) { border-color: #0070f3; color: #0070f3; }
-.btn-outline:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d9d9d9; color: #71717a; }
+.btn-outline:hover:not(:disabled) { border-color: var(--color-link); color: var(--color-link); }
+.btn-outline:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d9d9d9; color: var(--color-mute); }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -623,10 +623,10 @@ async function loadPromptsData() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
 }
-.btn-icon-sm:hover:not(:disabled) { background: #f5f5f5; }
+.btn-icon-sm:hover:not(:disabled) { background: var(--color-canvas-soft-2); }
 .btn-icon-sm:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-text-xs {
   background: none;
@@ -636,7 +636,7 @@ async function loadPromptsData() {
   font-size: 11px;
   padding: 2px 4px;
 }
-.btn-text-xs:hover { color: #0070f3; }
+.btn-text-xs:hover { color: var(--color-link); }
 
 /* 实例网格 */
 .instances-grid {
@@ -656,7 +656,7 @@ async function loadPromptsData() {
 
 .instance-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -671,12 +671,12 @@ async function loadPromptsData() {
 .instance-title {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .instance-subtitle {
   font-size: 13px;
   font-weight: 400;
-  color: #71717a;
+  color: var(--color-mute);
   margin-left: 4px;
 }
 .instance-actions {
@@ -702,13 +702,13 @@ async function loadPromptsData() {
 .config-section {
   margin-top: 10px;
   padding: 10px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .config-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .model-select-row {
@@ -728,13 +728,13 @@ async function loadPromptsData() {
 }
 .param-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   min-width: 80px;
   flex-shrink: 0;
 }
 .param-value {
   font-size: 12px;
-  color: #171717;
+  color: var(--color-primary);
   min-width: 40px;
   text-align: right;
 }
@@ -771,7 +771,7 @@ async function loadPromptsData() {
 .chat-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .chat-meta {
   font-size: 12px;
@@ -810,7 +810,7 @@ async function loadPromptsData() {
   flex-direction: row-reverse;
 }
 .chat-msg.user .msg-body {
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border-radius: 12px 12px 2px 12px;
   padding: 10px 14px;
@@ -819,8 +819,8 @@ async function loadPromptsData() {
   align-self: flex-start;
 }
 .chat-msg.assistant .msg-body {
-  background: #f5f5f5;
-  color: #171717;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-primary);
   border-radius: 2px 12px 12px 12px;
   padding: 10px 14px;
 }
@@ -859,7 +859,7 @@ async function loadPromptsData() {
   padding: 2px 6px;
   border: none;
   background: transparent;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
   cursor: pointer;
   border-radius: 4px;
@@ -867,7 +867,7 @@ async function loadPromptsData() {
 }
 .btn-text-xs:hover {
   background: #f4f4f5;
-  color: #171717;
+  color: var(--color-primary);
 }
 .cursor {
   animation: blink 1s step-end infinite;

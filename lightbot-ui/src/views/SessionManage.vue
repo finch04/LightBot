@@ -171,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined, PushpinFilled } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
@@ -414,6 +414,11 @@ function formatTokens(tokens) {
 onMounted(() => {
   loadData()
 })
+
+onUnmounted(() => {
+  clearTimeout(searchDebounceTimer)
+  clearTimeout(msgSearchDebounceTimer)
+})
 </script>
 
 <style scoped>
@@ -444,15 +449,15 @@ onMounted(() => {
   gap: 6px;
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
   transition: border-color 0.2s;
 }
 .btn-outline:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-outline:disabled {
   opacity: 0.6;
@@ -517,7 +522,7 @@ onMounted(() => {
 .detail-messages-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .btn-msg-delete {
   display: inline-flex;
@@ -559,7 +564,7 @@ onMounted(() => {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 .detail-msg .msg-checkbox {
   margin-top: 2px;
@@ -578,12 +583,12 @@ onMounted(() => {
 .detail-msg-role {
   font-size: 11px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 4px;
 }
 .detail-msg-content {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
@@ -609,7 +614,7 @@ onMounted(() => {
   transition: color 0.15s;
 }
 .btn-msg-meta:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .meta-json-section {
   margin-top: 16px;
@@ -618,10 +623,10 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .meta-json-content {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 12px;
   border-radius: 6px;
   font-size: 12px;

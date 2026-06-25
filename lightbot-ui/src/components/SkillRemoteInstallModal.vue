@@ -116,7 +116,7 @@
     <div v-if="step === 'confirm'">
       <a-spin :spinning="preparing">
         <div v-if="previews.length > 0">
-          <p style="font-size: 13px; color: #71717a; margin-bottom: 12px">
+          <p style="font-size: 13px; color: var(--color-mute); margin-bottom: 12px">
             以下 {{ previews.length }} 个 Skill 将被安装：
           </p>
           <div v-for="(preview, idx) in previews" :key="idx" class="preview-card" :class="{ 'preview-installed': committing && idx < commitProgress, 'preview-installing': committing && idx === commitProgress }">
@@ -380,7 +380,7 @@ function handleCancel() {
   flex-shrink: 0;
   padding: 0 24px;
   height: 32px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -397,7 +397,7 @@ function handleCancel() {
   line-height: 1.6;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 6px;
 }
 .repo-hint-text a {
@@ -432,7 +432,7 @@ function handleCancel() {
   padding: 8px 12px;
   border-radius: 6px;
 }
-.skill-item:hover { background: #fafafa; }
+.skill-item:hover { background: var(--color-canvas-soft); }
 .skill-name {
   font-weight: 500;
   font-size: 14px;
@@ -441,7 +441,7 @@ function handleCancel() {
 }
 .skill-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -460,17 +460,17 @@ function handleCancel() {
   padding: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .single-skill-name {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .single-skill-meta {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .single-skill-badge {
   margin-top: 8px;
@@ -540,8 +540,8 @@ function handleCancel() {
 }
 .preview-tag {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -562,16 +562,16 @@ function handleCancel() {
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: #171717; color: #171717; }
+.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -600,11 +600,11 @@ function handleCancel() {
 .guide { max-height: 60vh; overflow-y: auto; }
 .guide-section { margin-bottom: 20px; }
 .guide-section:last-child { margin-bottom: 0; }
-.guide-h3 { font-size: 15px; font-weight: 600; color: #171717; margin-bottom: 8px; }
+.guide-h3 { font-size: 15px; font-weight: 600; color: var(--color-primary); margin-bottom: 8px; }
 .guide-section p { font-size: 13px; color: #52525b; line-height: 1.6; margin: 0 0 8px; }
 .guide-section code { font-size: 12px; background: #f4f4f5; padding: 1px 4px; border-radius: 4px; }
 .guide-step { display: flex; gap: 12px; margin-bottom: 12px; }
 .guide-num { width: 22px; height: 22px; border-radius: 50%; background: #fffbeb; color: #b45309; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .guide-step b { display: block; font-size: 13px; margin-bottom: 4px; }
-.guide-step p { margin: 0; font-size: 12px; color: #71717a; }
+.guide-step p { margin: 0; font-size: 12px; color: var(--color-mute); }
 </style>

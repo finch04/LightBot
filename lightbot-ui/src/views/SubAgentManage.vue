@@ -94,7 +94,7 @@
         </a-form-item>
         <a-form-item label="模型配置">
           <a-switch v-model:checked="inheritModel" style="margin-right: 8px" />
-          <span style="font-size: 13px; color: #71717a;">{{ inheritModel ? '继承主 Agent 模型' : '使用独立模型' }}</span>
+          <span style="font-size: 13px; color: var(--color-mute);">{{ inheritModel ? '继承主 Agent 模型' : '使用独立模型' }}</span>
           <a-select
             v-if="!inheritModel"
             v-model:value="form.modelId"
@@ -480,7 +480,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .subagent-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 16px;
   cursor: pointer;
@@ -543,7 +543,7 @@ defineExpose({ openDialog, search, refresh })
 .card-info h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -551,7 +551,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .card-name {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-top: 2px;
   display: block;
   overflow: hidden;
@@ -567,14 +567,14 @@ defineExpose({ openDialog, search, refresh })
   padding: 4px;
   background: transparent;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
 }
 .btn-icon:hover {
   background: #f4f4f5;
-  color: #171717;
+  color: var(--color-primary);
 }
 .btn-icon.danger:hover {
   background: #fee2e2;
@@ -582,7 +582,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .card-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -595,7 +595,7 @@ defineExpose({ openDialog, search, refresh })
 }
 .card-tools {
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -606,7 +606,7 @@ defineExpose({ openDialog, search, refresh })
   align-items: center;
   justify-content: center;
   padding: 48px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .empty-icon {
   font-size: 48px;
@@ -635,21 +635,21 @@ defineExpose({ openDialog, search, refresh })
   width: 100px;
   min-width: 100px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   flex-shrink: 0;
   white-space: nowrap;
 }
 .detail-value {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .detail-prompt {
   margin-top: 8px;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 300px;
@@ -685,15 +685,15 @@ defineExpose({ openDialog, search, refresh })
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: #171717;
-  color: #171717;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .guide {
   max-height: 60vh;
@@ -708,7 +708,7 @@ defineExpose({ openDialog, search, refresh })
 .guide-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .guide-section p {
@@ -749,7 +749,7 @@ defineExpose({ openDialog, search, refresh })
 .guide-step p {
   margin: 0;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 /* 工具下拉选项样式 */
 .tool-option-item {
@@ -773,12 +773,12 @@ defineExpose({ openDialog, search, refresh })
 }
 .tool-option-name {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 .tool-option-tag {
   font-size: 11px;
-  color: #71717a;
+  color: var(--color-mute);
   background: #f4f4f5;
   padding: 1px 6px;
   border-radius: 4px;

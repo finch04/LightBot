@@ -318,7 +318,7 @@ onMounted(loadProfile)
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   margin-bottom: 24px;
@@ -326,12 +326,12 @@ onMounted(loadProfile)
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .content-grid {
   display: grid;
@@ -340,7 +340,7 @@ onMounted(loadProfile)
 }
 .panel {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
 }
@@ -350,14 +350,14 @@ onMounted(loadProfile)
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -374,7 +374,7 @@ onMounted(loadProfile)
 }
 .info-text {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .avatar-upload {
   display: flex;
@@ -434,7 +434,7 @@ onMounted(loadProfile)
 }
 .panel-subtitle {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 4px 0 0;
 }
 .frame-content {
@@ -468,7 +468,7 @@ onMounted(loadProfile)
 }
 .frame-preview-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .frame-options {
   display: flex;
@@ -487,10 +487,10 @@ onMounted(loadProfile)
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .frame-option:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
 }
 .frame-option.active {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
 }
 .option-avatar {
@@ -540,11 +540,11 @@ onMounted(loadProfile)
   overflow: hidden;
 }
 .level-option:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   transform: translateY(-2px);
 }
 .level-option.active {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
   background: rgba(0, 112, 243, 0.02);
 }

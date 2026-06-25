@@ -591,7 +591,7 @@ function scrollToBottom(inst) {
   min-height: 100vh;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -602,7 +602,7 @@ function scrollToBottom(inst) {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -610,11 +610,11 @@ function scrollToBottom(inst) {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -635,7 +635,7 @@ function scrollToBottom(inst) {
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 12px;
 }
 .prompt-tags {
@@ -654,21 +654,21 @@ function scrollToBottom(inst) {
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
-.btn-outline-sm:hover:not(:disabled) { border-color: #0070f3; color: #0070f3; }
-.btn-outline-sm:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d4d4d8; color: #71717a; }
+.btn-outline-sm:hover:not(:disabled) { border-color: var(--color-link); color: var(--color-link); }
+.btn-outline-sm:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d4d4d8; color: var(--color-mute); }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -681,12 +681,12 @@ function scrollToBottom(inst) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-icon-sm {
   width: 28px;
   height: 28px;
@@ -697,10 +697,10 @@ function scrollToBottom(inst) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
 }
-.btn-icon-sm:hover:not(:disabled) { background: #f5f5f5; }
+.btn-icon-sm:hover:not(:disabled) { background: var(--color-canvas-soft-2); }
 .btn-icon-sm:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* 实例网格 */
@@ -722,7 +722,7 @@ function scrollToBottom(inst) {
 
 .instance-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -737,7 +737,7 @@ function scrollToBottom(inst) {
 .instance-title {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .instance-actions {
   display: flex;
@@ -755,13 +755,13 @@ function scrollToBottom(inst) {
 .config-section {
   margin-top: 12px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .config-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .model-select-row {
@@ -781,13 +781,13 @@ function scrollToBottom(inst) {
 }
 .param-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   min-width: 80px;
   flex-shrink: 0;
 }
 .param-value {
   font-size: 12px;
-  color: #171717;
+  color: var(--color-primary);
   min-width: 40px;
   text-align: right;
 }
@@ -824,7 +824,7 @@ function scrollToBottom(inst) {
 .debug-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .debug-help-icon {
   margin-left: 4px;
@@ -834,7 +834,7 @@ function scrollToBottom(inst) {
   vertical-align: middle;
 }
 .debug-help-icon:hover {
-  color: #71717a;
+  color: var(--color-mute);
 }
 .debug-meta {
   font-size: 12px;
@@ -871,13 +871,13 @@ function scrollToBottom(inst) {
 }
 .debug-msg.user {
   align-self: flex-end;
-  background: #f5f5f5;
-  color: #171717;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-primary);
 }
 .debug-msg.assistant {
   align-self: flex-start;
   background: #eff6ff;
-  color: #171717;
+  color: var(--color-primary);
 }
 .debug-footer {
   display: flex;
@@ -905,7 +905,7 @@ function scrollToBottom(inst) {
   padding: 2px 6px;
   border: none;
   background: transparent;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
   cursor: pointer;
   border-radius: 4px;
@@ -913,14 +913,14 @@ function scrollToBottom(inst) {
 }
 .btn-text-xs:hover {
   background: #f4f4f5;
-  color: #171717;
+  color: var(--color-primary);
 }
 .debug-footer .btn-text-xs {
   font-size: 12px;
   color: #a1a1aa;
 }
 .debug-footer .btn-text-xs:hover {
-  color: #171717;
+  color: var(--color-primary);
 }
 .cursor {
   animation: blink 1s step-end infinite;

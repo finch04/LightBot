@@ -13,6 +13,7 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.LlmTraceService;
 import com.lightbot.service.MessageService;
+import com.lightbot.util.MinioUtil;
 import com.lightbot.util.RedisUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     private final MessageService messageService;
     private final LlmTraceService llmTraceService;
     private final RedisUtil redisUtil;
+    private final MinioUtil minioUtil;
 
     private final ObjectMapper objectMapper;
 
@@ -207,7 +209,13 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         messageService.deleteBySessionId(sessionId);
         // 2. 物理删除会话下的所有调用链记录
         llmTraceService.deleteBySessionId(sessionId);
-        // 3. 物理删除会话
+        // 3. 清理会话工作区文件
+        try {
+            minioUtil.deleteByPrefix("sessions/" + sessionId + "/");
+        } catch (Exception e) {
+            log.warn("[Session] 清理工作区文件失败, sessionId={}", sessionId, e);
+        }
+        // 4. 物理删除会话
         removeById(sessionId);
         evictSessionCache(sessionId);
         evictListCache(session.getUserId());

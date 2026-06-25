@@ -65,7 +65,7 @@ function emitChange() {
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .sm-header {
   display: flex;

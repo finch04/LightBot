@@ -47,7 +47,9 @@
             <span v-else>{{ (a.name || 'A')[0] }}</span>
           </div>
           <div class="card-info">
-            <h3>{{ a.name }} <span v-if="a.isDefault" class="card-default-tag">默认</span></h3>
+            <a-tooltip :title="a.name">
+              <h3>{{ a.name }} <span v-if="a.isDefault" class="card-default-tag">默认</span></h3>
+            </a-tooltip>
             <span class="card-type">{{ agentTypeLabel(a.agentType) }}</span>
           </div>
           <div class="card-actions" @click.stop>
@@ -305,66 +307,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page {
-  padding: 32px;
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: #fafafa;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-}
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #171717;
-  margin-bottom: 4px;
-}
-.page-desc {
-  font-size: 14px;
-  color: #71717a;
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: #171717;
-  color: #fff;
-  border: none;
-  border-radius: 100px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-primary:hover {
-  background: #27272a;
-}
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.btn-outline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #d9d9d9;
-  border-radius: 100px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
-}
+.page { overflow-x: hidden; }
 
 .agent-grid {
   display: grid;
@@ -373,21 +316,15 @@ onMounted(async () => {
 }
 .agent-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .agent-card:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
 }
 .card-icon {
   width: 40px;
@@ -411,22 +348,10 @@ onMounted(async () => {
   height: 100%;
   object-fit: cover;
 }
-.card-info {
-  flex: 1;
-  min-width: 0;
-}
-.card-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #171717;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .card-type {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -438,32 +363,9 @@ onMounted(async () => {
   border-radius: 100px;
   font-weight: 500;
 }
-.card-actions {
-  display: flex;
-  gap: 4px;
-}
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #71717a;
-}
-.btn-icon:hover {
-  background: #f5f5f5;
-}
-.btn-icon.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
-}
 .card-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -480,8 +382,8 @@ onMounted(async () => {
   border-radius: 100px;
 }
 .card-status.draft {
-  background: #f5f5f5;
-  color: #71717a;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-mute);
 }
 .card-status.published {
   background: #dcfce7;
@@ -511,7 +413,7 @@ onMounted(async () => {
   display: block;
 }
 .example-desc {
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -538,11 +440,11 @@ onMounted(async () => {
 .example-name {
   font-weight: 500;
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .example-desc-text {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 10px;
   line-height: 1.6;
 }

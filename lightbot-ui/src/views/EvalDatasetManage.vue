@@ -245,7 +245,7 @@ async function handleCreateExample(key) {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -256,12 +256,12 @@ async function handleCreateExample(key) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .page-header-actions {
   display: flex;
@@ -273,7 +273,7 @@ async function handleCreateExample(key) {
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -288,19 +288,19 @@ async function handleCreateExample(key) {
   gap: 6px;
   padding: 10px 20px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary-sm {
   padding: 6px 16px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -312,12 +312,12 @@ async function handleCreateExample(key) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-icon {
   width: 32px;
   height: 32px;
@@ -328,10 +328,10 @@ async function handleCreateExample(key) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
-.btn-icon:hover { background: #f5f5f5; }
-.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.btn-icon:hover { background: var(--color-canvas-soft-2); }
+.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -339,14 +339,14 @@ async function handleCreateExample(key) {
 }
 .card-item {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .card-item:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 .card-top {
@@ -372,7 +372,7 @@ async function handleCreateExample(key) {
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -380,7 +380,7 @@ async function handleCreateExample(key) {
 }
 .card-type {
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
   background: #e8f4ff;
   padding: 2px 8px;
   border-radius: 100px;
@@ -388,7 +388,7 @@ async function handleCreateExample(key) {
 .card-actions { display: flex; gap: 4px; }
 .card-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -401,8 +401,8 @@ async function handleCreateExample(key) {
 }
 .card-count {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -429,7 +429,7 @@ async function handleCreateExample(key) {
 .dialog-footer-right { display: flex; gap: 8px; }
 .example-intro {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 16px;
 }
 .example-list {
@@ -438,8 +438,8 @@ async function handleCreateExample(key) {
   gap: 12px;
 }
 .example-card {
-  background: #fafafa;
-  border: 1px solid #ebebeb;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
 }
@@ -452,11 +452,11 @@ async function handleCreateExample(key) {
 .example-name {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .example-desc-text {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 10px;
   line-height: 1.5;
 }

@@ -386,14 +386,14 @@ function formatTime(t) {
   gap: 6px;
   padding: 8px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
 }
-.btn-refresh:hover:not(:disabled) { border-color: #0070f3; color: #0070f3; }
+.btn-refresh:hover:not(:disabled) { border-color: var(--color-link); color: var(--color-link); }
 .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 .user-cell {
   display: flex;
@@ -427,7 +427,7 @@ function formatTime(t) {
 .user-name-cell {
   font-size: 13px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -446,14 +446,14 @@ function formatTime(t) {
   padding: 4px 6px;
   background: transparent;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
 }
 .btn-icon:hover {
   background: #f4f4f5;
-  color: #171717;
+  color: var(--color-primary);
 }
 .btn-icon.danger:hover {
   background: #fee2e2;
@@ -494,7 +494,7 @@ function formatTime(t) {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .detail-user-info p {
   margin: 4px 0 0;
@@ -514,12 +514,12 @@ function formatTime(t) {
 .detail-label {
   width: 70px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   flex-shrink: 0;
 }
 .detail-value {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .detail-resources {
   margin-bottom: 24px;
@@ -527,7 +527,7 @@ function formatTime(t) {
 .detail-resources h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 12px;
 }
 .resource-empty {
@@ -545,13 +545,13 @@ function formatTime(t) {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
   border: 1px solid #f0f0f0;
 }
 .resource-icon {
   font-size: 16px;
-  color: #0070f3;
+  color: var(--color-link);
   flex-shrink: 0;
 }
 .resource-icon.kb {
@@ -564,7 +564,7 @@ function formatTime(t) {
 .resource-name {
   font-size: 13px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -579,6 +579,6 @@ function formatTime(t) {
 }
 .resource-type {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 </style>

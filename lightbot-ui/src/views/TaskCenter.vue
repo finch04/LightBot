@@ -416,15 +416,15 @@ onUnmounted(() => {
   gap: 6px;
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
   transition: border-color 0.2s;
 }
 .btn-outline:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-outline:disabled {
   opacity: 0.6;
@@ -474,7 +474,7 @@ onUnmounted(() => {
 .json-text {
   margin: 0;
   padding: 8px 10px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border: 1px solid #f0f0f0;
   border-radius: 4px;
   font-family: 'Geist Mono', 'Menlo', monospace;

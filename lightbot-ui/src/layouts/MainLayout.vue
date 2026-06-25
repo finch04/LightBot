@@ -84,7 +84,7 @@
             </a-dropdown>
           </div>
           <div v-if="sessionLoading && sessions.length > 0" class="session-loading-more">
-            <LoadingOutlined spin style="font-size: 12px; color: #71717a" />
+            <LoadingOutlined spin style="font-size: 12px; color: var(--color-mute)" />
           </div>
           <div v-if="sessionHasMore && !sessionLoading" ref="sessionLoadMoreRef" class="session-load-more-sentinel"></div>
           <div v-if="sessions.length === 0 && !sessionLoading" class="session-empty">暂无对话</div>
@@ -507,7 +507,7 @@ watch(sessionLoadMoreRef, (el) => {
 /* ===== 侧边栏 ===== */
 .sidebar {
   width: 260px;
-  background: #171717;
+  background: var(--color-primary);
   color: #a1a1aa;
   display: flex;
   flex-direction: column;
@@ -595,7 +595,7 @@ watch(sessionLoadMoreRef, (el) => {
   justify-content: center;
   color: #a1a1aa;
   font-size: 18px;
-  background: #171717;
+  background: var(--color-primary);
 }
 .sidebar.collapsed .sidebar-logo:hover .logo-unfold-icon {
   display: flex;
@@ -620,7 +620,7 @@ watch(sessionLoadMoreRef, (el) => {
   transition: border-color 0.15s;
 }
 .btn-new-chat:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
 }
 
 /* 导航 */
@@ -670,13 +670,13 @@ watch(sessionLoadMoreRef, (el) => {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #171717;
+  background: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 12px;
   font-weight: 500;
-  color: #71717a;
+  color: var(--color-mute);
   padding: 8px 12px 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -743,7 +743,7 @@ watch(sessionLoadMoreRef, (el) => {
 }
 .session-more {
   opacity: 0;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 14px;
   transition: opacity 0.15s;
   cursor: pointer;
@@ -775,7 +775,7 @@ watch(sessionLoadMoreRef, (el) => {
 /* 用户信息 */
 .sidebar-footer {
   flex-shrink: 0;
-  background: #171717;
+  background: var(--color-primary);
   padding: 12px;
   border-top: 1px solid #27272a;
   margin-top: auto;
@@ -831,10 +831,10 @@ watch(sessionLoadMoreRef, (el) => {
   gap: 8px;
 }
 :deep(.menu-danger) {
-  color: #ee0000 !important;
+  color: var(--color-error) !important;
 }
 :deep(.menu-danger:hover) {
-  background: #f7d4d6 !important;
+  background: var(--color-error-soft) !important;
 }
 :global(.sidebar-user-dropdown .ant-dropdown-menu) {
   min-width: auto;
@@ -851,7 +851,7 @@ watch(sessionLoadMoreRef, (el) => {
 .user-info-name {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .user-info-meta {

@@ -2190,7 +2190,7 @@ onUnmounted(() => {
   padding: 20px 24px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -2201,7 +2201,7 @@ onUnmounted(() => {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -2210,12 +2210,12 @@ onUnmounted(() => {
   margin-bottom: 8px;
 }
 .btn-back:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .title-type-icon {
@@ -2258,7 +2258,7 @@ onUnmounted(() => {
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .kb-stats-bar {
   display: flex;
@@ -2271,12 +2271,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .kb-stat-value {
   font-weight: 600;
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .kb-stat-label {
   color: #a1a1aa;
@@ -2316,7 +2316,7 @@ onUnmounted(() => {
 }
 .panel {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
   min-width: 0;
@@ -2330,7 +2330,7 @@ onUnmounted(() => {
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 .panel-header-actions {
@@ -2351,7 +2351,7 @@ onUnmounted(() => {
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
@@ -2359,15 +2359,15 @@ onUnmounted(() => {
   cursor: pointer;
 }
 .btn-outline-sm:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -2403,7 +2403,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .doc-item:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
 }
 .doc-item :deep(.ant-tooltip-wrapper) {
   flex: 1;
@@ -2425,7 +2425,7 @@ onUnmounted(() => {
 .doc-name {
   display: block;
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2460,13 +2460,13 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 14px;
   transition: background 0.15s, color 0.15s;
 }
 .doc-icon-btn:hover {
   background: #f4f4f5;
-  color: #171717;
+  color: var(--color-primary);
 }
 .doc-icon-btn.danger:hover {
   background: #fef2f2;
@@ -2500,7 +2500,7 @@ onUnmounted(() => {
 }
 .rag-msg.user {
   align-self: flex-end;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 8px 12px;
   border-radius: 8px;
   max-width: 80%;
@@ -2569,14 +2569,14 @@ onUnmounted(() => {
 }
 .rag-input input {
   flex: 1;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 8px 12px;
   font-size: 14px;
   outline: none;
 }
 .rag-input input:focus {
-  border-color: #171717;
+  border-color: var(--color-primary);
 }
 
 /* 示例问题 */
@@ -2598,7 +2598,7 @@ onUnmounted(() => {
   vertical-align: bottom;
 }
 .example-question-text:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .example-questions-hint {
   font-size: 13px;
@@ -2755,7 +2755,7 @@ onUnmounted(() => {
 .doc-modal-action-btn:hover {
   background: #f4f4f5;
   border-color: #d4d4d8;
-  color: #171717;
+  color: var(--color-primary);
 }
 .doc-modal-tabs {
   margin-top: 4px;
@@ -2763,7 +2763,7 @@ onUnmounted(() => {
 .doc-modal-tabs :deep(.ant-tabs-nav) {
   margin: 0;
   padding: 8px 24px 0;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-bottom: 1px solid #ebebeb;
 }
 .doc-modal-tabs :deep(.ant-tabs-content-holder) {
@@ -2795,7 +2795,7 @@ onUnmounted(() => {
 .doc-info-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 10px;
 }
 .doc-info-error {
@@ -2897,8 +2897,8 @@ onUnmounted(() => {
   border-left: 3px solid #a1a1aa;
   padding: 4px 0 4px 16px;
   margin: 12px 0;
-  color: #71717a;
-  background: #fafafa;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft);
 }
 .markdown-content table {
   width: 100%;
@@ -2918,7 +2918,7 @@ onUnmounted(() => {
   color: #27272a;
 }
 .markdown-content tr:hover td {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .markdown-content img {
   max-width: 100%;
@@ -2965,7 +2965,7 @@ onUnmounted(() => {
   background: #a1a1aa;
 }
 .chunk-item {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   background: #fff;
   cursor: pointer;
@@ -2973,7 +2973,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .chunk-item:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
 }
 .chunk-header {
   height: 30px;
@@ -2988,7 +2988,7 @@ onUnmounted(() => {
 .chunk-index {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .chunk-meta {
   font-size: 12px;
@@ -3010,7 +3010,7 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 .chunk-detail-content {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -3071,7 +3071,7 @@ onUnmounted(() => {
 }
 .member-name {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
   font-weight: 500;
 }
 .member-id {
@@ -3093,15 +3093,15 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
 }
 .btn-icon-sm:hover {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 .btn-icon-sm.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
+  color: var(--color-error);
+  background: var(--color-error-soft);
 }
 .add-member-form {
   display: flex;
@@ -3130,7 +3130,7 @@ onUnmounted(() => {
   text-align: center;
 }
 .perm-table th {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   font-weight: 600;
   color: #262626;
 }
@@ -3155,7 +3155,7 @@ onUnmounted(() => {
 .upload-label {
   font-size: 13px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
 }
 .upload-dropzone {
   border: 2px dashed #d4d4d8;
@@ -3166,7 +3166,7 @@ onUnmounted(() => {
   transition: border-color 0.2s;
 }
 .upload-dropzone:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
 }
 .dropzone-text {
   font-size: 14px;
@@ -3195,7 +3195,7 @@ onUnmounted(() => {
 .upload-file-name {
   flex: 1;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3216,7 +3216,7 @@ onUnmounted(() => {
 
 /* OCR 开关 */
 .ocr-section {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
   padding: 12px;
 }
@@ -3303,7 +3303,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   border: 1px solid #e4e4e7;
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   transition: border-color 0.15s, background 0.15s;
 }
 .url-item:hover {
@@ -3359,7 +3359,7 @@ onUnmounted(() => {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 14px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -3413,14 +3413,14 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   word-break: break-all;
 }
 .url-preview-desc {
   margin: 0;
   font-size: 13px;
   color: #52525b;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   padding: 8px 10px;
   border-radius: 6px;
 }
@@ -3455,7 +3455,7 @@ onUnmounted(() => {
   padding: 12px;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -3490,10 +3490,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border: 1px dashed #d4d4d8;
   border-radius: 8px;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 13px;
   margin-top: 8px;
 }
@@ -3514,7 +3514,7 @@ onUnmounted(() => {
   margin-top: -8px;
 }
 .preview-chunks {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -3540,7 +3540,7 @@ onUnmounted(() => {
 .preview-item-header {
   font-size: 12px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 4px;
 }
 .preview-item-content {
@@ -3597,7 +3597,7 @@ onUnmounted(() => {
 }
 .invite-name {
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
   font-weight: 500;
 }
 .invite-username {
@@ -3618,7 +3618,7 @@ onUnmounted(() => {
 }
 .qa-disabled-content {
   text-align: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .qa-disabled-content p {
   font-size: 15px;
@@ -3633,7 +3633,7 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 .dup-detect-hint {
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 13px;
 }
 .dup-detect-actions {

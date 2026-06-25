@@ -34,10 +34,12 @@
         class="knowledge-card"
         @click="router.push(`/app/knowledge/${k.id}`)"
       >
-        <div class="card-header">
+        <div class="card-top">
           <div class="card-icon">{{ (k.name || 'K')[0].toUpperCase() }}</div>
           <div class="card-info">
-            <h3 class="card-title">{{ k.name }}</h3>
+            <a-tooltip :title="k.name">
+              <h3 class="card-title">{{ k.name }}</h3>
+            </a-tooltip>
             <a-tooltip v-if="k.description" :title="k.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
               <p class="card-desc">{{ truncateText(k.description, 50) }}</p>
             </a-tooltip>
@@ -221,66 +223,6 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.page {
-  padding: 32px;
-  height: 100vh;
-  overflow-y: auto;
-  background: #fafafa;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-}
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #171717;
-  margin-bottom: 4px;
-}
-.page-desc {
-  font-size: 14px;
-  color: #71717a;
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: #171717;
-  color: #fff;
-  border: none;
-  border-radius: 100px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-primary:hover {
-  background: #27272a;
-}
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.btn-outline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #d9d9d9;
-  border-radius: 100px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
-}
 
 .knowledge-grid {
   display: grid;
@@ -289,67 +231,26 @@ onMounted(loadData)
 }
 .knowledge-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .knowledge-card:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
 }
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.card-info {
-  flex: 1;
-  min-width: 0;
-}
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #71717a;
-}
-.btn-icon:hover {
-  background: #f5f5f5;
-}
-.btn-icon.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
-}
+.card-icon { background: linear-gradient(135deg, #6366f1, #4f46e5); }
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 6px;
 }
 .card-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -358,7 +259,7 @@ onMounted(loadData)
   display: flex;
   gap: 6px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   align-items: center;
 }
 .card-stat-item {
@@ -428,9 +329,9 @@ onMounted(loadData)
   border-color: #a1a1aa;
 }
 .kb-type-card.active {
-  border-color: #171717;
-  background: #fafafa;
-  box-shadow: 0 0 0 1px #171717;
+  border-color: var(--color-primary);
+  background: var(--color-canvas-soft);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 .kb-type-header {
   display: flex;
@@ -444,16 +345,16 @@ onMounted(loadData)
   transition: color 0.15s;
 }
 .kb-type-card.active .kb-type-icon {
-  color: #171717;
+  color: var(--color-primary);
 }
 .kb-type-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .kb-type-desc {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   line-height: 1.5;
 }
 </style>

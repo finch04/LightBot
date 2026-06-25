@@ -97,7 +97,7 @@
       :footer="null"
       :maskClosable="false"
     >
-      <p style="color: #71717a; margin-bottom: 16px;">
+      <p style="color: var(--color-mute); margin-bottom: 16px;">
         将当前数据集中的所有数据项快照为一个新版本。
       </p>
       <a-form :model="versionForm" :label-col="{ span: 5 }">
@@ -360,7 +360,7 @@ function formatTime(t) {
   padding: 20px 24px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -371,7 +371,7 @@ function formatTime(t) {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -379,16 +379,16 @@ function formatTime(t) {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .header-actions {
   display: flex;
@@ -400,7 +400,7 @@ function formatTime(t) {
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
@@ -408,15 +408,15 @@ function formatTime(t) {
   cursor: pointer;
 }
 .btn-outline-sm:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -429,12 +429,12 @@ function formatTime(t) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-icon-sm {
   width: 28px;
   height: 28px;
@@ -445,12 +445,12 @@ function formatTime(t) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
   flex-shrink: 0;
 }
-.btn-icon-sm:hover { background: #f5f5f5; }
-.btn-icon-sm.danger:hover { color: #ee0000; background: #f7d4d6; }
+.btn-icon-sm:hover { background: var(--color-canvas-soft-2); }
+.btn-icon-sm.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 
 .content-grid {
   display: grid;
@@ -459,7 +459,7 @@ function formatTime(t) {
 }
 .panel {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
   min-width: 0;
@@ -474,7 +474,7 @@ function formatTime(t) {
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0;
 }
 .panel-count {
@@ -507,11 +507,11 @@ function formatTime(t) {
   line-height: 1.6;
 }
 .item-key {
-  color: #71717a;
+  color: var(--color-mute);
   margin-right: 4px;
 }
 .item-val {
-  color: #171717;
+  color: var(--color-primary);
 }
 .item-empty {
   text-align: center;
@@ -555,7 +555,7 @@ function formatTime(t) {
 .version-tag {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .version-meta {
   display: flex;

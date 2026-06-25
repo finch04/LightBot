@@ -128,7 +128,7 @@ function handleClose() {
 <style scoped>
 .doc-char-count {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-right: 8px;
 }
 .doc-modal-tabs :deep(.ant-tabs-nav) {
@@ -146,7 +146,7 @@ function handleClose() {
 .modal-empty {
   padding: 48px 24px;
   text-align: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 14px;
 }
 .text-content-preview {

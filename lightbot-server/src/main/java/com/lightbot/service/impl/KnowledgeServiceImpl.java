@@ -205,15 +205,8 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     @Override
     public void updateStats(Long knowledgeId, int docDelta, int chunkDelta, long tokenDelta) {
-        // 增量更新知识库统计数据
-        Knowledge knowledge = getById(knowledgeId);
-        if (knowledge == null) {
-            return;
-        }
-        knowledge.setDocumentCount(knowledge.getDocumentCount() + docDelta);
-        knowledge.setChunkCount(knowledge.getChunkCount() + chunkDelta);
-        knowledge.setTotalTokens(knowledge.getTotalTokens() + tokenDelta);
-        updateById(knowledge);
+        // 原子递增，避免并发竞态导致计数丢失
+        baseMapper.incrementStats(knowledgeId, docDelta, chunkDelta, tokenDelta);
     }
 
     @Override

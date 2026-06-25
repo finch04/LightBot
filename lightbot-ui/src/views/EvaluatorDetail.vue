@@ -357,7 +357,7 @@ function formatJson(str) {
   padding: 20px 24px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -368,7 +368,7 @@ function formatJson(str) {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -376,16 +376,16 @@ function formatJson(str) {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .header-actions {
   display: flex;
@@ -396,7 +396,7 @@ function formatJson(str) {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -409,12 +409,12 @@ function formatJson(str) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 
 .content-grid {
   display: grid;
@@ -423,7 +423,7 @@ function formatJson(str) {
 }
 .panel {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
   min-width: 0;
@@ -438,7 +438,7 @@ function formatJson(str) {
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0;
 }
 
@@ -460,9 +460,9 @@ function formatJson(str) {
   transition: border-color 0.15s;
   overflow: hidden;
 }
-.version-item:hover { border-color: #0070f3; }
+.version-item:hover { border-color: var(--color-link); }
 .version-item.active {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #f0f7ff;
 }
 .btn-icon {
@@ -475,10 +475,10 @@ function formatJson(str) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   margin-left: auto;
 }
-.btn-icon:hover { background: #f5f5f5; color: #0070f3; }
+.btn-icon:hover { background: var(--color-canvas-soft-2); color: var(--color-link); }
 .version-info {
   display: flex;
   align-items: center;
@@ -488,7 +488,7 @@ function formatJson(str) {
 .version-tag {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .version-meta {
   font-size: 12px;
@@ -518,7 +518,7 @@ function formatJson(str) {
 .result-header {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 16px;
 }
 .result-score {
@@ -534,12 +534,12 @@ function formatJson(str) {
 .result-score.score-low { background: #fee2e2; }
 .score-label {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .score-value {
   font-size: 28px;
   font-weight: 700;
-  color: #171717;
+  color: var(--color-primary);
 }
 .result-reason {
   padding: 12px 16px;
@@ -548,13 +548,13 @@ function formatJson(str) {
 }
 .reason-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 8px;
 }
 .result-reason p {
   margin: 0;
   font-size: 14px;
-  color: #171717;
+  color: var(--color-primary);
   line-height: 1.6;
 }
 
@@ -571,16 +571,16 @@ function formatJson(str) {
 .detail-label {
   font-size: 13px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 8px;
 }
 .detail-pre {
   background: #f9fafb;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
@@ -602,7 +602,7 @@ function formatJson(str) {
 .variable-field-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .variable-hint {
   font-size: 12px;

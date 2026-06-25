@@ -261,7 +261,7 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -273,12 +273,12 @@ onUnmounted(() => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .header-actions {
   display: flex;
@@ -321,7 +321,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -332,13 +332,13 @@ onUnmounted(() => {
 .btn-cancel {
   padding: 8px 16px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: #171717; color: #171717; }
+.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .filter-bar {
   display: flex;
@@ -360,7 +360,7 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .level-btn.active { color: #fff; border-color: transparent; }
 .level-btn.info.active { background: #3b82f6; }
@@ -374,7 +374,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -440,7 +440,7 @@ onUnmounted(() => {
 .logger-cell {
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .message-cell {
   font-family: 'Consolas', 'Monaco', monospace;
@@ -473,7 +473,7 @@ onUnmounted(() => {
   width: 70px;
   font-size: 13px;
   font-weight: 500;
-  color: #71717a;
+  color: var(--color-mute);
   flex-shrink: 0;
 }
 .detail-message {

@@ -356,7 +356,7 @@ watch(() => props.open, (val) => {
 }
 .metric-formula {
   font-family: 'Courier New', monospace;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 4px 8px;
   border-radius: 4px;
   color: #1890ff !important;
@@ -401,7 +401,7 @@ watch(() => props.open, (val) => {
   font-size: 12px;
   font-weight: 600;
   color: #1890ff;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   text-align: center;
 }
 .score-desc {

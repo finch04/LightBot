@@ -237,8 +237,8 @@ onUnmounted(() => {
   color: #52525b;
 }
 .toolbar-btn:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .toolbar-btn:disabled {
   opacity: 0.4;
@@ -246,7 +246,7 @@ onUnmounted(() => {
 }
 .scale-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   min-width: 48px;
   text-align: center;
 }

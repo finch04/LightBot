@@ -271,7 +271,7 @@ defineExpose({
   border-radius: 12px;
   border: 2px dashed #d4d4d8;
   background: rgba(255, 255, 255, 0.95);
-  color: #71717a;
+  color: var(--color-mute);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.15s;
   pointer-events: none;

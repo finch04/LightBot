@@ -192,7 +192,7 @@ function clearWorkflow() {
 .canvas-area {
   flex: 1;
   position: relative;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 
 .canvas-actions {

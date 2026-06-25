@@ -50,7 +50,9 @@
             {{ (t.displayName || t.name || '?')[0].toUpperCase() }}
           </div>
           <div class="card-info">
-            <h3>{{ t.displayName || t.name }}</h3>
+            <a-tooltip :title="t.displayName || t.name">
+              <h3>{{ t.displayName || t.name }}</h3>
+            </a-tooltip>
             <span class="card-type">{{ toolTypeLabels[t.toolType?.code || t.toolType] || t.toolType }}</span>
           </div>
           <div class="card-actions" @click.stop>
@@ -463,7 +465,7 @@ function getPopupContainer() {
 }
 
 const toolTypeLabels = { builtin: '内置', knowledge: '知识库', api: 'API调用' }
-const typeColors = { builtin: '#171717', knowledge: '#7c3aed', api: '#10b981' }
+const typeColors = { builtin: 'var(--color-primary)', knowledge: '#7c3aed', api: '#10b981' }
 
 const list = ref([])
 const loading = ref(false)
@@ -822,100 +824,14 @@ defineExpose({ openDialog, search, refresh })
 </script>
 
 <style scoped>
-.page {
-  padding: 32px;
-  height: 100vh;
-  overflow-y: auto;
-  background: #fafafa;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-}
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #171717;
-  margin-bottom: 4px;
-}
-.page-desc {
-  font-size: 14px;
-  color: #71717a;
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: #171717;
-  color: #fff;
-  border: none;
-  border-radius: 100px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-primary:hover {
-  background: #27272a;
-}
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.btn-outline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #d9d9d9;
-  border-radius: 100px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
-}
 
 .provider-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
-.provider-card {
-  background: #fff;
-  border: 1px solid #ebebeb;
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.provider-card:hover {
-  border-color: #d4d4d8;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
 .card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
   background: linear-gradient(135deg, #10b981, #059669);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
   flex-shrink: 0;
   position: relative;
 }
@@ -935,47 +851,12 @@ defineExpose({ openDialog, search, refresh })
 .status-disabled {
   background: #a3a3a3;
 }
-.card-info {
-  flex: 1;
-  min-width: 0;
-}
-.card-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #171717;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .card-type {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
-}
-.card-actions {
-  display: flex;
-  gap: 4px;
-}
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #71717a;
-}
-.btn-icon:hover {
-  background: #f5f5f5;
-}
-.btn-icon.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
 }
 .card-detail {
   display: flex;
@@ -1045,13 +926,13 @@ defineExpose({ openDialog, search, refresh })
   padding: 8px 0;
   cursor: pointer;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   border-top: 1px dashed #ebebeb;
   user-select: none;
   margin-bottom: 8px;
 }
 .advanced-toggle:hover {
-  color: #171717;
+  color: var(--color-primary);
 }
 .toggle-icon {
   font-size: 10px;
@@ -1122,19 +1003,19 @@ defineExpose({ openDialog, search, refresh })
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: #171717;
-  color: #171717;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1157,7 +1038,7 @@ defineExpose({ openDialog, search, refresh })
 .test-params-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .test-params-hint {
@@ -1173,7 +1054,7 @@ defineExpose({ openDialog, search, refresh })
 .test-params-table th {
   text-align: left;
   padding: 6px 12px;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   color: #52525b;
   font-weight: 600;
   border-bottom: 1px solid #e5e5e5;
@@ -1181,14 +1062,14 @@ defineExpose({ openDialog, search, refresh })
 .test-params-table td {
   padding: 6px 12px;
   border-bottom: 1px solid #f0f0f0;
-  color: #171717;
+  color: var(--color-primary);
 }
 .test-params-table code {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .test-input-header {
   display: flex;
@@ -1199,12 +1080,12 @@ defineExpose({ openDialog, search, refresh })
 .test-input-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .btn-text {
   background: none;
   border: none;
-  color: #0070f3;
+  color: var(--color-link);
   font-size: 12px;
   cursor: pointer;
   padding: 2px 6px;
@@ -1225,27 +1106,27 @@ defineExpose({ openDialog, search, refresh })
   resize: vertical;
   outline: none;
   transition: border-color 0.2s;
-  background: #fafafa;
-  color: #171717;
+  background: var(--color-canvas-soft);
+  color: var(--color-primary);
   box-sizing: border-box;
 }
 .test-json-input:focus {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #fff;
 }
 .test-result-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .test-result-content {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border: 1px solid #e5e5e5;
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   max-height: 400px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -1271,7 +1152,7 @@ defineExpose({ openDialog, search, refresh })
   color: #fff;
 }
 .badge-builtin {
-  background: #171717;
+  background: var(--color-primary);
 }
 .badge-knowledge {
   background: #7c3aed;
@@ -1297,7 +1178,7 @@ defineExpose({ openDialog, search, refresh })
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #0070f3;
+  color: var(--color-link);
   cursor: pointer;
   border: none;
   background: none;
@@ -1330,7 +1211,7 @@ defineExpose({ openDialog, search, refresh })
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 10px;
   padding-bottom: 6px;
   border-bottom: 1px solid #f0f0f0;
@@ -1352,11 +1233,11 @@ defineExpose({ openDialog, search, refresh })
 }
 .detail-info-value {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .detail-info-code {
   font-family: 'SF Mono', Monaco, Consolas, monospace;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
@@ -1386,7 +1267,7 @@ defineExpose({ openDialog, search, refresh })
 .detail-params-table th {
   text-align: left;
   padding: 6px 12px;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   color: #52525b;
   font-weight: 600;
   border-bottom: 1px solid #e5e5e5;
@@ -1394,14 +1275,14 @@ defineExpose({ openDialog, search, refresh })
 .detail-params-table td {
   padding: 6px 12px;
   border-bottom: 1px solid #f0f0f0;
-  color: #171717;
+  color: var(--color-primary);
 }
 .detail-params-table code {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .detail-output-example {
   margin-top: 12px;

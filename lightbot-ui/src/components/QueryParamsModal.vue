@@ -518,12 +518,12 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
   transition: all 0.15s;
 }
 .preset-btn:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .preset-btn.active {
   background: #0070f3;
-  border-color: #0070f3;
+  border-color: var(--color-link);
   color: #fff;
 }
 .field-tip-icon {
@@ -538,7 +538,7 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
@@ -546,15 +546,15 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
   cursor: pointer;
 }
 .btn-outline-sm:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;

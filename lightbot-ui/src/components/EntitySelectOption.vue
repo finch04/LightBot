@@ -60,7 +60,7 @@ const letter = computed(() => (props.name || '?')[0].toUpperCase())
   padding: 0 6px;
   border-radius: 4px;
   background: #f4f4f5;
-  color: #71717a;
+  color: var(--color-mute);
   white-space: nowrap;
   flex-shrink: 0;
 }

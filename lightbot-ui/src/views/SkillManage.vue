@@ -40,7 +40,9 @@
             {{ (s.displayName || s.name || 'S')[0].toUpperCase() }}
           </div>
           <div class="card-info">
-            <h3>{{ s.displayName || s.name }}</h3>
+            <a-tooltip :title="s.displayName || s.name">
+              <h3>{{ s.displayName || s.name }}</h3>
+            </a-tooltip>
           </div>
           <div class="card-actions" @click.stop>
             <a-tooltip v-if="s.isBuiltin !== 1" title="删除">
@@ -443,95 +445,15 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 </script>
 
 <style scoped>
-.page {
-  padding: 32px;
-  height: 100vh;
-  overflow-y: auto;
-  background: #fafafa;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #171717;
-  margin-bottom: 4px;
-}
-.page-desc {
-  font-size: 14px;
-  color: #71717a;
-}
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: #171717;
-  color: #fff;
-  border: none;
-  border-radius: 100px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-primary:hover { background: #27272a; }
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.btn-outline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #d9d9d9;
-  border-radius: 100px;
-  font-size: 14px;
-  cursor: pointer;
-}
-.btn-outline:hover { border-color: #0070f3; color: #0070f3; }
+.page-header { margin-bottom: 24px; }
 
 .provider-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 16px;
 }
-.provider-card {
-  background: #fff;
-  border: 1px solid #ebebeb;
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.provider-card:hover {
-  border-color: #d4d4d8;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
 .card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
   background: linear-gradient(135deg, #ec4899, #db2777);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  flex-shrink: 0;
   position: relative;
 }
 .card-icon--skill {
@@ -581,22 +503,15 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
   max-height: 320px;
   overflow: auto;
 }
-.card-info { flex: 1; min-width: 0; }
 .card-info h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #171717;
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .card-type {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -627,17 +542,8 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 .status-disabled {
   background: #a3a3a3;
 }
-.card-actions { display: flex; gap: 4px; }
-.btn-icon {
-  width: 32px; height: 32px;
-  border: none; background: transparent;
-  border-radius: 6px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: #71717a;
-}
-.btn-icon:hover { background: #f5f5f5; }
 .btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-icon.danger:hover:not(:disabled) { color: #ee0000; background: #f7d4d6; }
+.btn-icon.danger:hover:not(:disabled) { color: var(--color-error); background: var(--color-error-soft); }
 .card-detail {
   display: flex;
   flex-direction: column;
@@ -713,7 +619,7 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 .guide-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .guide-section p {
@@ -748,7 +654,7 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 .guide-step p {
   margin: 0;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 
 .empty-tip {
@@ -771,16 +677,16 @@ defineExpose({ openDialog, search, refresh, openImportModal, openRemoteInstallMo
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: #171717; color: #171717; }
+.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;

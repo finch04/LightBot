@@ -131,7 +131,7 @@ function onDragStart(event, nodeType) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 4px;
   margin-right: 8px;
 }

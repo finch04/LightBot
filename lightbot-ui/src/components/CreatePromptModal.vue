@@ -169,7 +169,7 @@ watch(visible, (val) => {
 
 <style scoped>
 .create-prompt-info {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -177,12 +177,12 @@ watch(visible, (val) => {
 
 .create-prompt-info p {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0;
 }
 
 .config-preview {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   padding: 12px;
   border-radius: 8px;
   margin-top: 12px;
@@ -198,14 +198,14 @@ watch(visible, (val) => {
 
 .preview-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   display: block;
   margin-bottom: 4px;
 }
 
 .preview-value {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 
 .preview-content {
@@ -214,7 +214,7 @@ watch(visible, (val) => {
   background: #fff;
   padding: 8px;
   border-radius: 6px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 100px;
@@ -241,20 +241,20 @@ watch(visible, (val) => {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
 
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 
 .btn-primary-sm {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;

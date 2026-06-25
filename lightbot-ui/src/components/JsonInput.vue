@@ -104,15 +104,15 @@ watch(() => props.modelValue, (val) => {
   border: 1px solid #e4e4e7;
   border-radius: 4px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.15s;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 .json-btn:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
   background: #f0f7ff;
 }
 .json-btn:disabled {

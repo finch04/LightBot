@@ -538,11 +538,17 @@
     <!-- Metadata 弹窗 -->
     <a-modal
       v-model:open="metadataModal.visible"
-      title="Metadata"
       :footer="null"
       width="680px"
       :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }"
     >
+      <template #title>
+        <span>Metadata</span>
+        <button class="raw-modal-meta-btn" @click="copyMetadata" style="margin-left:12px;">
+          <CheckOutlined v-if="metadataModal.copied" style="color:#16a34a;" />
+          <CopyOutlined v-else />
+        </button>
+      </template>
       <pre class="raw-modal-content">{{ metadataModal.json }}</pre>
     </a-modal>
 
@@ -561,7 +567,7 @@
         </div>
         <div v-if="askUserModal.options.length > 0" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
           <button v-for="(opt, i) in askUserModal.options" :key="i" @click="submitAskUserResponse(opt)"
-            style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border:1px solid #d4d4d8;border-radius:10px;font-size:14px;color:#171717;cursor:pointer;transition:all 0.15s;text-align:left;width:100%;"
+            style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border:1px solid #d4d4d8;border-radius:10px;font-size:14px;color:var(--color-primary);cursor:pointer;transition:all 0.15s;text-align:left;width:100%;"
             onmouseover="this.style.borderColor='#0070f3';this.style.background='#f0f7ff'"
             onmouseout="this.style.borderColor='#d4d4d8';this.style.background='#fff'">
             <span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;background:#3b82f6;color:#fff;border-radius:50%;font-size:12px;font-weight:600;flex-shrink:0;">{{ i + 1 }}</span>
@@ -641,7 +647,7 @@ const hasStreamContent = ref(false)
 /** 原始内容弹窗状态 */
 const rawModal = reactive({ visible: false, content: '', title: '', metadata: null })
 /** Metadata 弹窗状态 */
-const metadataModal = reactive({ visible: false, json: '' })
+const metadataModal = reactive({ visible: false, json: '', copied: false })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
 let loadHistoryRequestId = 0
 /** 切换会话时 agent/版本加载中 */
@@ -1610,7 +1616,16 @@ function openMetadataModal() {
   } catch {
     metadataModal.json = typeof raw === 'string' ? raw : JSON.stringify(raw)
   }
+  metadataModal.copied = false
   metadataModal.visible = true
+}
+
+async function copyMetadata() {
+  if (!metadataModal.json) return
+  await copyToClipboard(metadataModal.json)
+  metadataModal.copied = true
+  message.success('Metadata 已复制')
+  setTimeout(() => { metadataModal.copied = false }, 2000)
 }
 
 function handleDeleteMessage(index) {
@@ -1932,18 +1947,18 @@ watch(sessionId, (newVal, oldVal) => {
   margin-bottom: 24px;
   font-size: 15px;
   line-height: 1.7;
-  color: #171717;
+  color: var(--color-primary);
 }
 .welcome-content :deep(h1),
 .welcome-content :deep(h2) {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .welcome-content :deep(p) {
   margin: 0 0 8px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .recommended-questions {
   display: flex;
@@ -1963,8 +1978,8 @@ watch(sessionId, (newVal, oldVal) => {
   transition: all 0.15s;
 }
 .btn-question:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
   background: #f0f7ff;
 }
 .no-default-hint {
@@ -1973,7 +1988,7 @@ watch(sessionId, (newVal, oldVal) => {
   margin-top: 8px;
 }
 .no-default-hint a {
-  color: #0070f3;
+  color: var(--color-link);
   text-decoration: none;
 }
 .no-default-hint a:hover {
@@ -2065,7 +2080,7 @@ watch(sessionId, (newVal, oldVal) => {
 .message-content {
   font-size: 15px;
   line-height: 1.7;
-  color: #171717;
+  color: var(--color-primary);
   word-break: break-word;
 }
 .message.user .message-content {
@@ -2124,7 +2139,7 @@ watch(sessionId, (newVal, oldVal) => {
   color: #ef4444;
 }
 .btn-copy.active {
-  color: #0070f3;
+  color: var(--color-link);
   background: #e8f4ff;
 }
 
@@ -2165,7 +2180,7 @@ watch(sessionId, (newVal, oldVal) => {
   opacity: 1;
 }
 .edit-btn-send:not(:disabled) {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .edit-btn-send:disabled {
   color: #c0c0c0;
@@ -2191,7 +2206,7 @@ watch(sessionId, (newVal, oldVal) => {
   overflow: hidden;
 }
 .reply-preview-text {
-  color: #71717a;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2210,7 +2225,7 @@ watch(sessionId, (newVal, oldVal) => {
   transition: color 0.15s;
 }
 .reply-preview-close:hover {
-  color: #171717;
+  color: var(--color-primary);
 }
 
 /* 引用回复内容展示 */
@@ -2236,7 +2251,7 @@ watch(sessionId, (newVal, oldVal) => {
   overflow: hidden;
 }
 .reply-quote-text {
-  color: #71717a;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2283,7 +2298,7 @@ watch(sessionId, (newVal, oldVal) => {
   margin: 16px 0 8px;
   font-weight: 600;
   line-height: 1.4;
-  color: #171717;
+  color: var(--color-primary);
 }
 .message-content :deep(h1) { font-size: 1.5em; }
 .message-content :deep(h2) { font-size: 1.3em; }
@@ -2302,7 +2317,7 @@ watch(sessionId, (newVal, oldVal) => {
   font-family: 'Geist Mono', 'Menlo', monospace;
 }
 .message-content :deep(pre) {
-  background: #171717;
+  background: var(--color-primary);
   border-radius: 8px;
   padding: 16px;
   overflow-x: auto;
@@ -2372,7 +2387,7 @@ watch(sessionId, (newVal, oldVal) => {
   position: relative;
 }
 .chat-input-shell:focus-within {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.08);
 }
 .chat-input-toolbar {
@@ -2380,7 +2395,7 @@ watch(sessionId, (newVal, oldVal) => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-bottom: 1px solid #f0f0f0;
   position: relative;
 }
@@ -2396,7 +2411,7 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .toolbar-loading-icon {
   font-size: 16px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .chat-toolbar-agent-name {
   flex: 1;
@@ -2499,7 +2514,7 @@ span.agent-menu-icon {
   font-size: 10px;
   padding: 1px 6px;
   background: #f4f4f5;
-  color: #71717a;
+  color: var(--color-mute);
   border-radius: 100px;
   flex-shrink: 0;
 }
@@ -2517,7 +2532,7 @@ span.agent-menu-icon {
   white-space: nowrap;
 }
 .empty-agent-tip a {
-  color: #0070f3;
+  color: var(--color-link);
   font-weight: 500;
 }
 
@@ -2534,7 +2549,7 @@ span.agent-menu-icon {
 }
 .version-option-num {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
 }
 .version-status-tag {
   margin: 0;
@@ -2553,7 +2568,7 @@ span.agent-menu-icon {
   margin-top: 6px;
 }
 .btn-copy.speaking {
-  color: #0070f3;
+  color: var(--color-link);
 }
 
 .input-textarea {
@@ -2564,7 +2579,7 @@ span.agent-menu-icon {
   font-size: 15px;
   line-height: 1.5;
   font-family: inherit;
-  color: #171717;
+  color: var(--color-primary);
   background: transparent;
   max-height: 200px;
   min-height: 36px;
@@ -2603,7 +2618,7 @@ span.agent-menu-icon {
 }
 .btn-attach--uploading {
   background: #eff6ff;
-  color: #0070f3;
+  color: var(--color-link);
   animation: attach-btn-pulse 1s ease-in-out infinite;
 }
 @keyframes attach-btn-pulse {
@@ -2702,7 +2717,7 @@ span.agent-menu-icon {
 }
 .pending-att-count {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   display: block;
   margin-bottom: 6px;
 }
@@ -2757,13 +2772,13 @@ span.agent-menu-icon {
   font-size: 10px;
   padding: 0;
   cursor: pointer;
-  color: #71717a;
+  color: var(--color-mute);
   z-index: 1;
 }
 .att-remove {
   border: none;
   background: transparent;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   padding: 0;
   line-height: 1;
@@ -2867,7 +2882,7 @@ span.agent-menu-icon {
   padding: 10px 12px;
   background: #fffbeb;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2933,7 +2948,7 @@ span.agent-menu-icon {
   font-size: 12px;
 }
 .token-pill-value {
-  color: #171717;
+  color: var(--color-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -3054,7 +3069,7 @@ span.agent-menu-icon {
   width: 14px;
   height: 14px;
   border: 2px solid #e4e4e7;
-  border-top-color: #0070f3;
+  border-top-color: var(--color-link);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

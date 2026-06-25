@@ -105,7 +105,7 @@ defineExpose({
 .markdown-preview-header {
   padding: 8px 16px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
 }
@@ -115,7 +115,7 @@ defineExpose({
   padding: 16px;
   font-size: 14px;
   line-height: 1.75;
-  color: #171717;
+  color: var(--color-primary);
 }
 .markdown-preview-body :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
 .markdown-preview-body :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }

@@ -3,6 +3,8 @@ import { createPinia } from 'pinia'
 import { message } from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 import './styles/code-block-scrollbar.css'
+import './styles/admin-page.css'
+import './styles/provider-card.css'
 
 import App from './App.vue'
 import router from './router'

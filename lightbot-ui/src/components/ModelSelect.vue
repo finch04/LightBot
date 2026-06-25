@@ -247,7 +247,7 @@ watch(() => props.modelType, loadOptions)
   transition: color 0.15s, background 0.15s;
 }
 .suffix-icon-btn:hover {
-  color: #171717;
+  color: var(--color-primary);
   background: #f4f4f5;
 }
 .suffix-icon-btn.disabled {

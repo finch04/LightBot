@@ -165,7 +165,7 @@ onMounted(() => {
 <style scoped>
 .function-config-panel {
   padding: 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
   margin-top: 12px;
 }
@@ -180,7 +180,7 @@ onMounted(() => {
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 
 .panel-content {
@@ -202,7 +202,7 @@ onMounted(() => {
 
 .tool-config-item {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
 }
@@ -222,13 +222,13 @@ onMounted(() => {
 .tool-name {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   display: block;
 }
 
 .tool-desc {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   display: block;
   margin-top: 2px;
   overflow: hidden;
@@ -242,7 +242,7 @@ onMounted(() => {
 
 .config-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-bottom: 4px;
 }
 
@@ -256,11 +256,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
   font-size: 12px;
 }
 
-.btn-icon-sm:hover { background: #f5f5f5; color: #ee0000; }
+.btn-icon-sm:hover { background: var(--color-canvas-soft-2); color: var(--color-error); }
 
 .tool-empty {
   text-align: center;

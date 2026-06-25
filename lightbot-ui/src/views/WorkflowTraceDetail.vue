@@ -782,7 +782,7 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   flex-wrap: wrap;
   gap: 8px 24px;
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
   margin-bottom: 16px;
   align-items: center;
@@ -925,7 +925,7 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   width: 380px;
   min-width: 380px;
   border-left: 1px solid #e8e8e8;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1024,7 +1024,7 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   cursor: pointer;
   transition: background 0.15s;
 }
-.tn-header:hover { background: #fafafa; }
+.tn-header:hover { background: var(--color-canvas-soft); }
 .tn-index {
   width: 24px;
   height: 24px;
@@ -1081,7 +1081,7 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   margin-bottom: 6px;
 }
 .tn-json {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border: 1px solid #e8e8e8;
   border-radius: 6px;
   padding: 10px 12px;
@@ -1094,7 +1094,7 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   word-break: break-all;
 }
 .tn-text-block {
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border: 1px solid #e8e8e8;
   border-radius: 6px;
   padding: 10px 12px;

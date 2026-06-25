@@ -133,5 +133,5 @@ async function handleOk() {
 .help-content ol,
 .help-content ul { padding-left: 20px; margin-bottom: 12px; }
 .help-content li { margin-bottom: 4px; }
-.help-content code { background: #f5f5f5; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.help-content code { background: var(--color-canvas-soft-2); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 </style>

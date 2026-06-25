@@ -145,7 +145,7 @@ watch(activeTab, (tab) => {
 .extensions-page {
   height: 100vh;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   padding: 32px;
   display: flex;
   flex-direction: column;
@@ -157,12 +157,12 @@ watch(activeTab, (tab) => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0;
 }
 .tab-toolbar {
@@ -190,22 +190,22 @@ watch(activeTab, (tab) => {
   gap: 6px;
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
   transition: border-color 0.2s;
 }
 .btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;

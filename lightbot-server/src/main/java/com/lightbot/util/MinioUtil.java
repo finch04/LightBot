@@ -291,6 +291,29 @@ public class MinioUtil {
     }
 
     /**
+     * 删除指定前缀下的所有对象（用于会话工作区清理）
+     *
+     * @param prefix 路径前缀
+     * @return 删除的对象数量
+     */
+    public int deleteByPrefix(String prefix) {
+        try {
+            java.util.List<String> objects = listObjects(prefix);
+            if (objects.isEmpty()) {
+                return 0;
+            }
+            for (String obj : objects) {
+                minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(obj).build());
+            }
+            log.info("[MinIO] 批量删除完成, prefix={}, count={}", prefix, objects.size());
+            return objects.size();
+        } catch (Exception e) {
+            log.error("[MinIO] 批量删除失败, prefix={}", prefix, e);
+            throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
+        }
+    }
+
+    /**
      * 同 bucket 内复制对象
      *
      * @param sourcePath 源路径

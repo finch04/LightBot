@@ -49,7 +49,7 @@ defineProps({
 
 /* ========== Lv 2: 蓝色闪光 ========== */
 .level-tag.level-2 {
-  color: #0070f3;
+  color: var(--color-link);
   background: rgba(0, 112, 243, 0.06);
   border: 1px solid transparent;
   background-clip: padding-box;
@@ -317,7 +317,7 @@ defineProps({
 
 /* 侧边栏暗色主题覆盖 */
 .level-tag.small.level-1 {
-  color: #71717a;
+  color: var(--color-mute);
   background: rgba(255,255,255,0.06);
   border-color: rgba(255,255,255,0.08);
 }

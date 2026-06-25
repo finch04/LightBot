@@ -296,7 +296,7 @@ function handleDelete(id) {
 .page {
   padding: 32px;
   min-height: 100vh;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 
 .page-header {
@@ -309,7 +309,7 @@ function handleDelete(id) {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -318,18 +318,18 @@ function handleDelete(id) {
   margin-bottom: 8px;
 }
 
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 
 .page-header-actions {
@@ -343,7 +343,7 @@ function handleDelete(id) {
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -360,18 +360,18 @@ function handleDelete(id) {
   gap: 6px;
   padding: 10px 20px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
-.btn-outline:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline:hover { border-color: var(--color-link); color: var(--color-link); }
 
 .btn-primary-sm {
   padding: 6px 16px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -385,13 +385,13 @@ function handleDelete(id) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
 
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 
 .btn-icon {
   width: 32px;
@@ -403,11 +403,11 @@ function handleDelete(id) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
 
-.btn-icon:hover { background: #f5f5f5; }
-.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.btn-icon:hover { background: var(--color-canvas-soft-2); }
+.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 
 .template-grid {
   display: grid;
@@ -417,7 +417,7 @@ function handleDelete(id) {
 
 .template-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
@@ -425,7 +425,7 @@ function handleDelete(id) {
 }
 
 .template-card:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   box-shadow: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 
@@ -455,7 +455,7 @@ function handleDelete(id) {
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -464,7 +464,7 @@ function handleDelete(id) {
 
 .card-desc {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -509,13 +509,13 @@ function handleDelete(id) {
 .preview-header h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px 0;
 }
 
 .preview-header p {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0;
 }
 
@@ -528,14 +528,14 @@ function handleDelete(id) {
 .preview-label {
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 
 .preview-editor {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 6px;
 }
 
@@ -548,10 +548,10 @@ function handleDelete(id) {
 .preview-config {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   padding: 10px;
   border-radius: 6px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   overflow-x: auto;
 }
 
@@ -569,14 +569,14 @@ function handleDelete(id) {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 6px;
   border: 1px dashed #d9d9d9;
 }
 
 .hint-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   flex-shrink: 0;
 }
 

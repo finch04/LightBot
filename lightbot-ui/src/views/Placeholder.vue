@@ -18,7 +18,7 @@ const route = useRoute()
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .placeholder-icon {
   font-size: 48px;
@@ -27,11 +27,11 @@ const route = useRoute()
 .placeholder h2 {
   font-size: 20px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .placeholder p {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 </style>

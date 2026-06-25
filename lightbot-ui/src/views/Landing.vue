@@ -502,7 +502,7 @@ onUnmounted(() => {
   transition: color 0.2s, background 0.2s;
 }
 .github-link:hover {
-  color: #0070f3;
+  color: var(--color-link);
   background: rgba(0, 112, 243, 0.06);
 }
 .github-link svg {
@@ -522,9 +522,9 @@ onUnmounted(() => {
   font-family: var(--font-sans);
 }
 .btn-login-header:hover {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: rgba(0, 112, 243, 0.04);
-  color: #0070f3;
+  color: var(--color-link);
 }
 .header-avatar-wrap {
   cursor: pointer;

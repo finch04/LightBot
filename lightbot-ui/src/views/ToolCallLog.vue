@@ -255,7 +255,7 @@ onMounted(() => {
   &:hover { color: #333; }
 }
 .detail-pre {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
   padding: 12px;
   font-size: 13px;

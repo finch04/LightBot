@@ -125,7 +125,7 @@ const shortName = computed(() => {
 }
 .doc-icon {
   font-size: 18px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .doc-name {
   font-size: 10px;
@@ -152,7 +152,7 @@ const shortName = computed(() => {
 }
 .upload-spin {
   font-size: 18px;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .upload-label {
   font-size: 10px;
@@ -183,7 +183,7 @@ const shortName = computed(() => {
   font-size: 10px;
   padding: 0;
   cursor: pointer;
-  color: #71717a;
+  color: var(--color-mute);
   z-index: 2;
   line-height: 1;
 }

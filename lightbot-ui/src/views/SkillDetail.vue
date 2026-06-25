@@ -310,7 +310,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch, h } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, ExportOutlined, DeleteOutlined, ReloadOutlined,
@@ -372,7 +372,7 @@ const TreeNode = {
           // 图标
           node.isDir
             ? h(FolderOutlined, { style: 'font-size: 14px; color: #d4a017; margin-right: 6px' })
-            : h(FileTextOutlined, { style: 'font-size: 14px; color: #71717a; margin-right: 6px' }),
+            : h(FileTextOutlined, { style: 'font-size: 14px; color: var(--color-mute); margin-right: 6px' }),
           // 文件名
           h('span', { class: 'tree-name' }, node.name),
         ]),
@@ -726,13 +726,17 @@ onMounted(() => {
   loadSkill()
   loadOptions()
 })
+
+onUnmounted(() => {
+  if (fileDataUrl.value) URL.revokeObjectURL(fileDataUrl.value)
+})
 </script>
 
 <style scoped>
 .skill-detail-page {
   height: 100vh;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   display: flex;
   flex-direction: column;
 }
@@ -760,7 +764,7 @@ onMounted(() => {
   color: #52525b;
   flex-shrink: 0;
 }
-.btn-back:hover { border-color: #171717; color: #171717; }
+.btn-back:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .header-info {
   flex: 1;
@@ -769,7 +773,7 @@ onMounted(() => {
 .header-title {
   font-size: 20px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px;
 }
 .header-tags {
@@ -840,7 +844,7 @@ onMounted(() => {
 .detail-section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .detail-pre {
@@ -920,7 +924,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 :deep(.tree-node-row:hover) {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 :deep(.tree-selected) {
   background: #eff6ff !important;
@@ -974,7 +978,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 10px 16px;
   border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   flex-shrink: 0;
 }
 .preview-path {
@@ -1002,7 +1006,7 @@ onMounted(() => {
   padding: 16px 20px;
   font-size: 14px;
   line-height: 1.7;
-  color: #171717;
+  color: var(--color-primary);
 }
 .md-rendered :deep(h1),
 .md-rendered :deep(h2),
@@ -1091,7 +1095,7 @@ onMounted(() => {
 .deps-title {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 12px;
 }
 .deps-empty {
@@ -1140,11 +1144,11 @@ onMounted(() => {
 .dep-name {
   font-size: 14px;
   font-weight: 500;
-  color: #171717;
+  color: var(--color-primary);
 }
 .dep-desc {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1168,7 +1172,7 @@ onMounted(() => {
   transition: border-color 0.2s;
   color: #52525b;
 }
-.btn-outline:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-outline.danger:hover { border-color: #ef4444; color: #ef4444; }
 .btn-outline-sm {
   display: inline-flex;
@@ -1182,11 +1186,11 @@ onMounted(() => {
   font-size: 12px;
   color: #52525b;
 }
-.btn-outline-sm:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline-sm:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-outline-sm.danger:hover { border-color: #ef4444; color: #ef4444; }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1199,13 +1203,13 @@ onMounted(() => {
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn-cancel:hover { border-color: #171717; color: #171717; }
+.btn-cancel:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 /* a-descriptions 表头不换行（参考 TaskCenter） */
 :deep(.ant-descriptions-view) {

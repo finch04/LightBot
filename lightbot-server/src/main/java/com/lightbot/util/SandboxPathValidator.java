@@ -16,8 +16,8 @@ public final class SandboxPathValidator {
 
     private SandboxPathValidator() {}
 
-    private static final List<String> READABLE_ROOTS = List.of("skills/", "threads/");
-    private static final List<String> WRITABLE_ROOTS = List.of("threads/");
+    private static final List<String> READABLE_ROOTS = List.of("skills/", "sessions/");
+    private static final List<String> WRITABLE_ROOTS = List.of("sessions/");
     private static final List<String> DRAFT_ROOTS = List.of("skill_drafts/");
 
     /**
@@ -44,7 +44,7 @@ public final class SandboxPathValidator {
     }
 
     /**
-     * 校验路径可读（skills/ 或 threads/）
+     * 校验路径可读（skills/ 或 sessions/）
      */
     public static void checkReadable(String path) {
         String p = normalize(path);
@@ -54,7 +54,7 @@ public final class SandboxPathValidator {
     }
 
     /**
-     * 校验路径可写（仅 threads/）
+     * 校验路径可写（仅 sessions/）
      */
     public static void checkWritable(String path) {
         String p = normalize(path);

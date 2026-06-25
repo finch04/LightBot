@@ -590,7 +590,7 @@ onMounted(async () => {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -609,7 +609,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 10px 20px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 14px;
@@ -618,8 +618,8 @@ onMounted(async () => {
   transition: border-color 0.15s;
 }
 .btn-refresh:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-refresh:disabled {
   opacity: 0.5;
@@ -635,19 +635,19 @@ onMounted(async () => {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .btn-primary {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -666,7 +666,7 @@ onMounted(async () => {
 }
 .provider-card {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -690,7 +690,7 @@ onMounted(async () => {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   display: flex;
   align-items: center;
@@ -705,15 +705,15 @@ onMounted(async () => {
 .card-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .card-type {
   font-size: 12px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -731,14 +731,14 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .btn-icon:hover {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
 }
 .btn-icon.danger:hover {
-  color: #ee0000;
-  background: #f7d4d6;
+  color: var(--color-error);
+  background: var(--color-error-soft);
 }
 .card-detail {
   display: flex;
@@ -756,7 +756,7 @@ onMounted(async () => {
 .btn-link {
   background: none;
   border: none;
-  color: #0070f3;
+  color: var(--color-link);
   cursor: pointer;
   font-size: 13px;
   padding: 0;
@@ -781,11 +781,11 @@ onMounted(async () => {
 }
 .model-count {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .add-model-form {
   background: #f9f9f9;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
@@ -808,7 +808,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 12px;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
 }
 .model-item:hover {
@@ -829,13 +829,13 @@ onMounted(async () => {
 .model-id {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   font-family: monospace;
   max-width: 180px;
 }
 .model-name {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   max-width: 180px;
 }
 .ellipsis {
@@ -845,8 +845,8 @@ onMounted(async () => {
 }
 .model-type-tag {
   font-size: 11px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 1px 6px;
   border-radius: 4px;
   flex-shrink: 0;
@@ -864,7 +864,7 @@ onMounted(async () => {
 .btn-fetch {
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
@@ -872,8 +872,8 @@ onMounted(async () => {
   transition: border-color 0.15s;
 }
 .btn-fetch:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-fetch:disabled {
   opacity: 0.5;
@@ -893,16 +893,16 @@ onMounted(async () => {
   border: none;
   border-bottom: 2px solid transparent;
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   transition: all 0.15s;
 }
 .fetch-tab:hover {
-  color: #171717;
+  color: var(--color-primary);
 }
 .fetch-tab.active {
-  color: #171717;
-  border-bottom-color: #171717;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 500;
 }
 .fetch-tab-count {
@@ -928,17 +928,17 @@ onMounted(async () => {
   background: #fff;
   font-size: 12px;
   cursor: pointer;
-  color: #71717a;
+  color: var(--color-mute);
   transition: all 0.15s;
   white-space: nowrap;
 }
 .type-tab:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .type-tab.active {
-  background: #171717;
-  border-color: #171717;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: #fff;
 }
 .fetch-model-list {
@@ -964,7 +964,7 @@ onMounted(async () => {
   gap: 8px;
   padding: 6px 8px;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
 }
 .fetch-model-item:hover {
@@ -976,12 +976,12 @@ onMounted(async () => {
 .fetch-model-id {
   font-family: monospace;
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 .fetch-model-name {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -990,8 +990,8 @@ onMounted(async () => {
 }
 .fetch-model-type {
   font-size: 11px;
-  color: #71717a;
-  background: #f5f5f5;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
   padding: 1px 6px;
   border-radius: 4px;
   flex-shrink: 0;
@@ -1032,7 +1032,7 @@ onMounted(async () => {
 .btn-check {
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
@@ -1040,8 +1040,8 @@ onMounted(async () => {
   transition: border-color 0.15s;
 }
 .btn-check:hover:not(:disabled) {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-check:disabled {
   opacity: 0.5;
@@ -1050,19 +1050,19 @@ onMounted(async () => {
 .btn-cancel {
   padding: 6px 14px;
   background: #fff;
-  color: #71717a;
+  color: var(--color-mute);
   border: 1px solid #d4d4d8;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
 }
 .btn-cancel:hover {
-  border-color: #171717;
-  color: #171717;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .btn-primary-sm {
   padding: 6px 14px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1086,13 +1086,13 @@ onMounted(async () => {
   padding: 8px 0;
   cursor: pointer;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   user-select: none;
   border-top: 1px dashed #ebebeb;
   margin-top: 4px;
 }
 .advanced-toggle:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .toggle-icon {
   font-size: 10px;

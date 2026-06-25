@@ -23,6 +23,7 @@ import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -360,6 +361,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public UserDTO initAdmin(String username, String password, String nickname) {
         // 1. 系统级校验：仅无用户时允许初始化
         if (hasAnyUser()) {
@@ -373,7 +375,7 @@ public class UserServiceImpl implements UserService {
             throw new BizException(ErrorCode.USERNAME_EXISTS);
         }
 
-        // 3. 创建管理员账号
+        // 3. 创建管理员账号（并发场景下由 uk_user_username 唯一索引兜底防重）
         User admin = new User();
         admin.setUsername(username);
         admin.setPassword(cn.dev33.satoken.secure.BCrypt.hashpw(password, cn.dev33.satoken.secure.BCrypt.gensalt()));
@@ -381,7 +383,11 @@ public class UserServiceImpl implements UserService {
         admin.setEmail("");
         admin.setRole(UserRole.ADMIN);
         admin.setStatus(UserStatus.ACTIVE);
-        userMapper.insert(admin);
+        try {
+            userMapper.insert(admin);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw new BizException(ErrorCode.USERNAME_EXISTS);
+        }
 
         // 4. 自动登录
         StpUtil.login(admin.getId());

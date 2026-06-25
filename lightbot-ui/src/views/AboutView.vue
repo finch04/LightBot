@@ -217,14 +217,14 @@ function petalStyle(i) {
 .about-title {
   font-size: 30px;
   font-weight: 700;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 4px;
   letter-spacing: 0.5px;
 }
 
 .about-desc {
   font-size: 15px;
-  color: #71717a;
+  color: var(--color-mute);
   margin: 0 0 32px;
 }
 
@@ -275,7 +275,7 @@ function petalStyle(i) {
 .about-features h2 {
   font-size: 15px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0 0 12px;
 }
 

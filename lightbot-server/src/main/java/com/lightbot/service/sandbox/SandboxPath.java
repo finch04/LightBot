@@ -13,7 +13,7 @@ public record SandboxPath(PathType type, String relativePath) {
     public enum PathType {
         /** skills/{slug}/xxx（只读） */
         SKILL,
-        /** threads/{sessionId}/xxx（读写） */
+        /** sessions/{sessionId}/threads/xxx（读写） */
         WORKSPACE
     }
 
@@ -31,9 +31,9 @@ public record SandboxPath(PathType type, String relativePath) {
      * 构建工作区路径
      *
      * @param sessionId    会话 ID
-     * @param relativePath 相对路径（如 output.txt）
+     * @param relativePath 相对路径（如 output.txt、data/result.json）
      */
-    public static SandboxPath workspace(Long sessionId, String relativePath) {
+    public static SandboxPath workspace(String sessionId, String relativePath) {
         return new SandboxPath(PathType.WORKSPACE, sessionId + "/" + relativePath);
     }
 
@@ -43,7 +43,7 @@ public record SandboxPath(PathType type, String relativePath) {
     public String toMinioPath() {
         return switch (type) {
             case SKILL -> "skills/" + relativePath;
-            case WORKSPACE -> "threads/" + relativePath;
+            case WORKSPACE -> "sessions/" + relativePath;
         };
     }
 }

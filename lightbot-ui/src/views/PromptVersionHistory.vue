@@ -293,7 +293,7 @@ onMounted(async () => {
 .page {
   padding: 20px 24px;
   min-height: 100vh;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -304,7 +304,7 @@ onMounted(async () => {
 .btn-back {
   background: none;
   border: none;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   font-size: 14px;
   display: flex;
@@ -312,21 +312,21 @@ onMounted(async () => {
   gap: 4px;
   margin-bottom: 8px;
 }
-.btn-back:hover { color: #0070f3; }
+.btn-back:hover { color: var(--color-link); }
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .btn-link {
   background: none;
   border: none;
-  color: #0070f3;
+  color: var(--color-link);
   cursor: pointer;
   font-size: 13px;
   padding: 0;
@@ -337,7 +337,7 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   padding: 8px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -352,23 +352,23 @@ onMounted(async () => {
   gap: 4px;
   padding: 6px 14px;
   background: #fff;
-  color: #171717;
+  color: var(--color-primary);
   border: 1px solid #d4d4d8;
   border-radius: 100px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
-.btn-outline-sm:hover { border-color: #0070f3; color: #0070f3; }
+.btn-outline-sm:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 
 .compare-bar {
   display: flex;
@@ -389,33 +389,33 @@ onMounted(async () => {
 }
 .detail-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
   min-width: 80px;
   flex-shrink: 0;
 }
 .detail-mono {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
-  color: #171717;
+  color: var(--color-primary);
   word-break: break-all;
 }
 .detail-json {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
-  color: #171717;
+  color: var(--color-primary);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
   flex: 1;
-  background: #fafafa;
-  border: 1px solid #ebebeb;
+  background: var(--color-canvas-soft);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 8px 12px;
 }
 .detail-content-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .template-editor {
@@ -444,7 +444,7 @@ onMounted(async () => {
   gap: 16px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .legend-item {
   display: flex;
@@ -467,14 +467,14 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 .compare-info-card {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
 }
 .compare-info-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 .compare-info-meta {
   font-size: 12px;
@@ -487,7 +487,7 @@ onMounted(async () => {
 .compare-section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 .compare-config-grid {
@@ -496,15 +496,15 @@ onMounted(async () => {
   gap: 16px;
 }
 .compare-config-col {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .config-pre {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 12px;
-  color: #171717;
+  color: var(--color-primary);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
@@ -512,7 +512,7 @@ onMounted(async () => {
 
 /* Diff 视图 */
 .diff-view {
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   overflow: hidden;
   font-family: 'SFMono-Regular', Consolas, monospace;
@@ -528,7 +528,7 @@ onMounted(async () => {
   padding: 4px 8px;
   color: #a1a1aa;
   text-align: right;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-right: 1px solid #ebebeb;
 }
 .diff-line-icon {

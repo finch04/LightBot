@@ -385,7 +385,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 
 /* ===== 顶部统计概览 ===== */
@@ -401,7 +401,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 16px;
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
 }
@@ -422,12 +422,12 @@ onUnmounted(() => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #171717;
+  color: var(--color-primary);
   line-height: 1.2;
 }
 .stat-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 
 /* ===== 对话趋势整行 ===== */
@@ -498,7 +498,7 @@ onUnmounted(() => {
 /* ===== 面板通用 ===== */
 .panel {
   background: #fff;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--color-hairline);
   border-radius: 12px;
   padding: 20px;
   height: 100%;
@@ -539,19 +539,19 @@ onUnmounted(() => {
   transition: all 0.15s;
 }
 .trend-quick-btn:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .trend-quick-btn.active {
-  border-color: #0070f3;
+  border-color: var(--color-link);
   background: #eff6ff;
-  color: #0070f3;
+  color: var(--color-link);
   font-weight: 500;
 }
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin: 0;
 }
 .panel-tip {
@@ -618,10 +618,10 @@ onUnmounted(() => {
   padding-top: 12px;
   border-top: 1px solid #f4f4f5;
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .chat-summary b {
-  color: #171717;
+  color: var(--color-primary);
 }
 
 /* ===== 状态条 ===== */
@@ -639,7 +639,7 @@ onUnmounted(() => {
 .status-label {
   width: 56px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   flex-shrink: 0;
 }
 .status-track {
@@ -669,7 +669,7 @@ onUnmounted(() => {
   text-align: right;
   font-size: 13px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 
 /* ===== 最近列表 ===== */
@@ -694,7 +694,7 @@ onUnmounted(() => {
 .recent-item:last-child { border-bottom: none; }
 .recent-name {
   font-size: 13px;
-  color: #171717;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -709,7 +709,7 @@ onUnmounted(() => {
   padding: 1px 8px;
   border-radius: 100px;
 }
-.recent-tag.draft { background: #f4f4f5; color: #71717a; }
+.recent-tag.draft { background: #f4f4f5; color: var(--color-mute); }
 .recent-tag.published { background: #dcfce7; color: #16a34a; }
 .recent-tag.published_editing { background: #dbeafe; color: #2563eb; }
 .recent-tag.archived { background: #fef3c7; color: #d97706; }
@@ -731,12 +731,12 @@ onUnmounted(() => {
 }
 .metric-label {
   font-size: 13px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .metric-value {
   font-size: 16px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
 }
 
 /* ===== 模型指标 ===== */
@@ -755,11 +755,11 @@ onUnmounted(() => {
 .model-metric-value {
   font-size: 24px;
   font-weight: 700;
-  color: #171717;
+  color: var(--color-primary);
 }
 .model-metric-label {
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   margin-top: 4px;
 }
 </style>

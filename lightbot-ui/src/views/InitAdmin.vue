@@ -132,7 +132,7 @@ async function handleInit() {
 .init-wrapper {
   height: 100vh;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -221,7 +221,7 @@ async function handleInit() {
   display: flex;
   align-items: center;
   height: 36px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 0 10px;
   transition: all 0.2s;
@@ -233,7 +233,7 @@ async function handleInit() {
 }
 
 .input-wrapper:focus-within {
-  border-color: #171717;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
 }
 
@@ -263,7 +263,7 @@ async function handleInit() {
   justify-content: center;
   gap: 8px;
   height: 40px;
-  background: #171717;
+  background: var(--color-primary);
   color: #ffffff;
   border: none;
   border-radius: 100px;

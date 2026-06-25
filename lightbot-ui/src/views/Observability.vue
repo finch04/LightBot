@@ -514,7 +514,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import {
   BarChartOutlined,
   ThunderboltOutlined,
@@ -1056,6 +1056,8 @@ onMounted(() => {
   loadTraces(1)
   loadOverview()
 })
+
+onUnmounted(() => clearTimeout(copyTimer))
 </script>
 
 <style scoped>
@@ -1204,13 +1206,13 @@ onMounted(() => {
 .wf-count { font-size: 10px; color: #fa8c16; margin-left: 4px; font-weight: 500; }
 .wf-bar-segment { border-right: 1px solid rgba(255,255,255,0.6); }
 .waterfall-row { cursor: pointer; border-radius: 4px; }
-.waterfall-row:hover { background: #fafafa; }
+.waterfall-row:hover { background: var(--color-canvas-soft); }
 .waterfall-row.wf-active { background: #e6f7ff; }
 
 /* 行内 Span 详情 */
 .span-inline-detail {
   padding: 12px 16px 12px 32px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-left: 3px solid #1890ff;
   margin: 0 0 4px 0;
   border-radius: 0 6px 6px 0;
@@ -1286,7 +1288,7 @@ onMounted(() => {
   gap: 10px 20px;
   margin-bottom: 20px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   border-radius: 8px;
 }
 .info-row { display: flex; align-items: center; gap: 8px; }
@@ -1480,7 +1482,7 @@ onMounted(() => {
 .trace-llm-role {
   font-size: 11px;
   font-weight: 600;
-  color: #71717a;
+  color: var(--color-mute);
   text-transform: uppercase;
   margin-bottom: 4px;
 }
@@ -1507,13 +1509,13 @@ onMounted(() => {
   border: 1px solid #e4e4e7;
   border-radius: 6px;
   font-size: 12px;
-  color: #71717a;
+  color: var(--color-mute);
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-copy:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-copy-sm {
   display: inline-flex;
@@ -1530,7 +1532,7 @@ onMounted(() => {
 }
 .btn-copy-sm:hover {
   background: #f0f0f0;
-  color: #0070f3;
+  color: var(--color-link);
 }
 .sd-section-title-row {
   display: flex;
@@ -1581,7 +1583,7 @@ onMounted(() => {
 }
 
 .detail-pre {
-  background: #f5f5f5;
+  background: var(--color-canvas-soft-2);
   border-radius: 6px;
   padding: 12px;
   font-size: 13px;

@@ -115,7 +115,7 @@ async function handleLogin() {
 .login-wrapper {
   height: 100vh;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -217,7 +217,7 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   height: 36px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 0 10px;
   transition: all 0.2s;
@@ -229,7 +229,7 @@ async function handleLogin() {
 }
 
 .input-wrapper:focus-within {
-  border-color: #171717;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
 }
 
@@ -260,7 +260,7 @@ async function handleLogin() {
   justify-content: center;
   gap: 8px;
   height: 40px;
-  background: #171717;
+  background: var(--color-primary);
   color: #ffffff;
   border: none;
   border-radius: 100px;
@@ -293,7 +293,7 @@ async function handleLogin() {
 }
 
 .form-footer .link {
-  color: #0070f3;
+  color: var(--color-link);
   text-decoration: none;
   margin-left: 4px;
 }
@@ -320,7 +320,7 @@ async function handleLogin() {
 }
 
 .page-footer a:hover {
-  color: #171717;
+  color: var(--color-primary);
 }
 
 .page-footer .divider {

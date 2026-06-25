@@ -485,7 +485,7 @@ onMounted(() => {
   transition: color 0.15s;
 }
 .qa-copy-btn:hover {
-  color: #0070f3;
+  color: var(--color-link);
 }
 .qa-detail-content {
   white-space: pre-wrap;

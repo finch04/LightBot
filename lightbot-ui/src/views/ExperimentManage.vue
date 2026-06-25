@@ -497,7 +497,7 @@ function formatTime(t) {
   padding: 32px;
   height: 100vh;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--color-canvas-soft);
 }
 .page-header {
   display: flex;
@@ -508,12 +508,12 @@ function formatTime(t) {
 .page-title {
   font-size: 24px;
   font-weight: 600;
-  color: #171717;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 .page-desc {
   font-size: 14px;
-  color: #71717a;
+  color: var(--color-mute);
 }
 .page-header-actions {
   display: flex;
@@ -525,7 +525,7 @@ function formatTime(t) {
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -540,19 +540,19 @@ function formatTime(t) {
   gap: 6px;
   padding: 10px 20px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-outline:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 .btn-primary-sm {
   padding: 6px 16px;
-  background: #171717;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 100px;
@@ -564,12 +564,12 @@ function formatTime(t) {
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-hairline);
   border-radius: 100px;
   cursor: pointer;
   font-size: 13px;
 }
-.btn-cancel:hover { border-color: #0070f3; color: #0070f3; }
+.btn-cancel:hover { border-color: var(--color-link); color: var(--color-link); }
 .btn-icon {
   width: 32px;
   height: 32px;
@@ -580,10 +580,10 @@ function formatTime(t) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-mute);
 }
-.btn-icon:hover { background: #f5f5f5; }
-.btn-icon.danger:hover { color: #ee0000; background: #f7d4d6; }
+.btn-icon:hover { background: var(--color-canvas-soft-2); }
+.btn-icon.danger:hover { color: var(--color-error); background: var(--color-error-soft); }
 .table-actions {
   display: flex;
   gap: 4px;
@@ -596,7 +596,7 @@ function formatTime(t) {
 .dialog-footer-right { display: flex; gap: 8px; }
 .evaluator-config-block { border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
 .evaluator-config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.evaluator-config-title { font-size: 13px; font-weight: 600; color: #171717; }
+.evaluator-config-title { font-size: 13px; font-weight: 600; color: var(--color-primary); }
 .evaluator-remove-btn { color: #a1a1aa; cursor: pointer; font-size: 14px; }
 .evaluator-remove-btn:hover { color: #ef4444; }
 </style>
