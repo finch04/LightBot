@@ -81,6 +81,13 @@ public class MessageMiddleware implements ChatMiddleware {
             - 复杂问题可用小标题 + 短列表，避免连续多个大段落
             - 遇到不确定的信息请如实告知
 
+            ## Markdown 格式规范（重要）
+            - 表格必须包含分隔行：表头下方必须有 `| --- |` 分隔行，否则表格无法渲染
+            - 表格每行必须以 `|` 开头和结尾，列之间用 `|` 分隔
+            - **加粗** 和 *斜体* 标记必须成对出现，不要遗漏闭合符号
+            - 列表项之间不要插入空行（否则会被解析为独立段落）
+            - 代码块必须使用 ``` 包裹，不要缩进混用
+
             ## 对话聚焦
             - **只回答当前用户最后一条消息中的问题**；历史消息仅作背景，勿复述无关旧话题
             """;
@@ -100,8 +107,9 @@ public class MessageMiddleware implements ChatMiddleware {
             ## 输出格式
             - 使用 Markdown 格式输出
             - 多个要点时使用列表（- 或 1.）
-            - 数据对比使用表格
+            - 数据对比使用表格，**表头下方必须有 `| --- |` 分隔行**
             - 重点内容使用 **加粗** 标记
+            - 表格每行以 `|` 开头和结尾，加粗/斜体标记必须成对闭合
             """;
 
     @Override
@@ -362,6 +370,11 @@ public class MessageMiddleware implements ChatMiddleware {
 
         // 5. 上下文摘要
         history = summarizeIfNeeded(history, agentConfigMap, agent);
+
+        // 5.1 处理孤立 USER 消息：AI 回复失败或用户主动停止后，DB 会留下没有 ASSISTANT 配对的 USER 消息
+        // 连续 USER 消息会导致 LLM 误判为需要回答多条，在孤立 USER 后插入占位 ASSISTANT 消息
+        // 必须在摘要之后执行，避免占位消息被带入摘要
+        fixOrphanUserMessages(history);
 
         for (Message msg : history) {
             if (msg.getRole() == MessageRole.USER) {
@@ -656,6 +669,41 @@ public class MessageMiddleware implements ChatMiddleware {
         if (msg != null && msg.getRole() == MessageRole.USER) {
             msg.setContent(newContent);
             messageMapper.updateById(msg);
+        }
+    }
+
+    /**
+     * 修复孤立 USER 消息：在没有 ASSISTANT 配对的 USER 消息后插入占位 ASSISTANT 消息，
+     * 避免连续 USER 消息导致 LLM 误判为需要回答多条。
+     * <p>不修改 DB，仅修改传入的 history 列表（用于 LLM 上下文构建）。</p>
+     */
+    private void fixOrphanUserMessages(List<Message> history) {
+        if (history.isEmpty()) {
+            return;
+        }
+        // 1. 从后向前扫描，在连续 USER 之间插入占位 ASSISTANT
+        for (int i = history.size() - 1; i >= 1; i--) {
+            Message cur = history.get(i);
+            Message prev = history.get(i - 1);
+            if (cur.getRole() == MessageRole.USER && prev.getRole() == MessageRole.USER) {
+                Message placeholder = new Message();
+                placeholder.setRole(MessageRole.ASSISTANT);
+                placeholder.setContent("（未完成的回复）");
+                placeholder.setSessionId(cur.getSessionId());
+                placeholder.setCreateTime(cur.getCreateTime().minusSeconds(1));
+                history.add(i, placeholder);
+            }
+        }
+        // 2. 末尾孤立 USER：最后一条是 USER（无论前面是什么），当前消息也是 USER，
+        //    需要在末尾插入占位 ASSISTANT，防止 LLM 看到连续两条 USER
+        if (history.get(history.size() - 1).getRole() == MessageRole.USER) {
+            Message last = history.get(history.size() - 1);
+            Message placeholder = new Message();
+            placeholder.setRole(MessageRole.ASSISTANT);
+            placeholder.setContent("（未完成的回复）");
+            placeholder.setSessionId(last.getSessionId());
+            placeholder.setCreateTime(last.getCreateTime().plusSeconds(1));
+            history.add(placeholder);
         }
     }
 

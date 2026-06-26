@@ -21,6 +21,9 @@ public final class LlmTraceMessageSerializer {
     private LlmTraceMessageSerializer() {
     }
 
+    /** 孤立 USER 占位 ASSISTANT 的标识文本 */
+    private static final String ORPHAN_PLACEHOLDER = "（未完成的回复）";
+
     /**
      * @param messages     实际发给 LLM 的消息列表
      * @param request      本轮对话请求（用于附件 previewUrl 等）
@@ -36,17 +39,25 @@ public final class LlmTraceMessageSerializer {
         List<ChatAttachmentDTO> currentAttachments = request != null && request.getAttachments() != null
                 ? request.getAttachments() : List.of();
         List<Map<String, Object>> result = new ArrayList<>();
-        int userIndexFromEnd = -1;
+        // 定位最后一条 UserMessage：该条及之后为本轮消息，之前为历史消息
+        int lastUserIdx = -1;
         for (int i = messages.size() - 1; i >= 0; i--) {
             if (messages.get(i) instanceof UserMessage) {
-                userIndexFromEnd = i;
+                lastUserIdx = i;
                 break;
             }
         }
         for (int i = 0; i < messages.size(); i++) {
             Message msg = messages.get(i);
-            boolean isCurrentUser = lastUserHasAttachments && i == userIndexFromEnd;
-            result.add(toTraceMessageItem(msg, isCurrentUser ? currentAttachments : List.of()));
+            boolean isCurrentUser = lastUserHasAttachments && i == lastUserIdx;
+            Map<String, Object> item = toTraceMessageItem(msg, isCurrentUser ? currentAttachments : List.of());
+            // 标记消息来源：历史 / 本轮
+            item.put("source", i < lastUserIdx ? "history" : "current");
+            // 标记孤立 USER 占位 ASSISTANT（内容检测，兼容 DB Message 和 Spring AI AssistantMessage）
+            if (ORPHAN_PLACEHOLDER.equals(extractText(msg))) {
+                item.put("orphanPlaceholder", true);
+            }
+            result.add(item);
         }
         return result;
     }

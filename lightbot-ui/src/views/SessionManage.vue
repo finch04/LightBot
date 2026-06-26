@@ -108,6 +108,11 @@
             >
               <template #prefix><SearchOutlined /></template>
             </a-input>
+            <a-tooltip title="刷新消息">
+              <button class="btn-msg-refresh" @click="refreshMessages" :disabled="messagesLoading">
+                <ReloadOutlined :spin="messagesLoading" />
+              </button>
+            </a-tooltip>
           </div>
           <button v-if="selectedMsgKeys.length > 0" class="btn-msg-delete" @click="confirmDeleteMessages">
             <DeleteOutlined /> 删除 ({{ selectedMsgKeys.length }})
@@ -310,6 +315,13 @@ async function loadMessages() {
   } finally {
     messagesLoading.value = false
   }
+}
+
+function refreshMessages() {
+  msgSearchText.value = ''
+  detailPageNum = 1
+  selectedMsgKeys.value = []
+  loadMessages()
 }
 
 async function loadOlderMessages() {
@@ -561,6 +573,28 @@ onUnmounted(() => {
 .btn-msg-delete:hover {
   background: var(--color-error-bg);
   border-color: #dc2626;
+}
+.btn-msg-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-body);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 4px;
+}
+.btn-msg-refresh:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.btn-msg-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .detail-messages-empty {
   text-align: center;

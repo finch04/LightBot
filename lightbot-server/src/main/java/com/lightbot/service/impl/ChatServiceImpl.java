@@ -311,7 +311,7 @@ public class ChatServiceImpl implements ChatService {
                     vo.setSourceType(RagResultType.QA_PAIR);
                     vo.setDocumentName("问答对");
                     Object qaPairId = row.get("id");
-                    vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                    vo.setQaPairId(parseLongObj(qaPairId));
                     String q = (String) row.get("question");
                     String a = (String) row.get("answer");
                     vo.setContentPreview("问题：" + q + "\n答案：" + a);
@@ -325,11 +325,11 @@ public class ChatServiceImpl implements ChatService {
                 Object score = row.get("score");
                 vo.setScore(score != null ? ((Number) score).doubleValue() : null);
                 Object knowledgeId = row.get("knowledge_id");
-                vo.setKnowledgeId(knowledgeId != null ? ((Number) knowledgeId).longValue() : null);
+                vo.setKnowledgeId(parseLongObj(knowledgeId));
                 Object documentId = row.get("document_id");
-                vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
+                vo.setDocumentId(parseLongObj(documentId));
                 Object chunkId = row.get("chunk_id");
-                vo.setChunkId(chunkId != null ? ((Number) chunkId).longValue() : null);
+                vo.setChunkId(parseLongObj(chunkId));
                 return vo;
             }).toList();
             metadataMap.put("ragReferences", refs);
@@ -777,7 +777,7 @@ public class ChatServiceImpl implements ChatService {
                                         vo.setSourceType(RagResultType.QA_PAIR);
                                         vo.setDocumentName("问答对");
                                         Object qaPairId = row.get("id");
-                                        vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                                        vo.setQaPairId(parseLongObj(qaPairId));
                                         String q = (String) row.get("question");
                                         String a = (String) row.get("answer");
                                         vo.setContentPreview("问题：" + q + "\n答案：" + a);
@@ -790,12 +790,9 @@ public class ChatServiceImpl implements ChatService {
                                     }
                                     Object score = row.get("score");
                                     vo.setScore(score != null ? ((Number) score).doubleValue() : null);
-                                    Object knowledgeId = row.get("knowledge_id");
-                                    vo.setKnowledgeId(knowledgeId != null ? ((Number) knowledgeId).longValue() : null);
-                                    Object documentId = row.get("document_id");
-                                    vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
-                                    Object chunkId = row.get("chunk_id");
-                                    vo.setChunkId(chunkId != null ? ((Number) chunkId).longValue() : null);
+                                    vo.setKnowledgeId(parseLongObj(row.get("knowledge_id")));
+                                    vo.setDocumentId(parseLongObj(row.get("document_id")));
+                                    vo.setChunkId(parseLongObj(row.get("chunk_id")));
                                     return vo;
                                 }).toList();
                                 metadataMap.put("ragReferences", refs);
@@ -1166,7 +1163,7 @@ public class ChatServiceImpl implements ChatService {
                             vo.setSourceType(RagResultType.QA_PAIR);
                             vo.setDocumentName("问答对");
                             Object qaPairId = row.get("id");
-                            vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                            vo.setQaPairId(parseLongObj(qaPairId));
                             String q = (String) row.get("question");
                             String a = (String) row.get("answer");
                             vo.setContentPreview("问题：" + q + "\n答案：" + a);
@@ -1180,11 +1177,11 @@ public class ChatServiceImpl implements ChatService {
                         Object score = row.get("score");
                         vo.setScore(score != null ? ((Number) score).doubleValue() : null);
                         Object knowledgeId = row.get("knowledge_id");
-                        vo.setKnowledgeId(knowledgeId != null ? ((Number) knowledgeId).longValue() : null);
+                        vo.setKnowledgeId(parseLongObj(knowledgeId));
                         Object documentId = row.get("document_id");
-                        vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
+                        vo.setDocumentId(parseLongObj(documentId));
                         Object chunkId = row.get("chunk_id");
-                        vo.setChunkId(chunkId != null ? ((Number) chunkId).longValue() : null);
+                        vo.setChunkId(parseLongObj(chunkId));
                         return vo;
                     }).toList();
                     metadataMap.put("ragReferences", refs);
@@ -1303,7 +1300,7 @@ public class ChatServiceImpl implements ChatService {
                 vo.setSourceType(RagResultType.QA_PAIR);
                 vo.setDocumentName("问答对");
                 Object qaPairId = row.get("id");
-                vo.setQaPairId(qaPairId != null ? ((Number) qaPairId).longValue() : null);
+                vo.setQaPairId(parseLongObj(qaPairId));
                 String q = (String) row.get("question");
                 String a = (String) row.get("answer");
                 vo.setContentPreview("问题：" + q + "\n答案：" + a);
@@ -1317,11 +1314,11 @@ public class ChatServiceImpl implements ChatService {
             Object score = row.get("score");
             vo.setScore(score != null ? ((Number) score).doubleValue() : null);
             Object knowledgeId = row.get("knowledge_id");
-            vo.setKnowledgeId(knowledgeId != null ? ((Number) knowledgeId).longValue() : null);
+            vo.setKnowledgeId(parseLongObj(knowledgeId));
             Object documentId = row.get("document_id");
-            vo.setDocumentId(documentId != null ? ((Number) documentId).longValue() : null);
+            vo.setDocumentId(parseLongObj(documentId));
             Object chunkId = row.get("chunk_id");
-            vo.setChunkId(chunkId != null ? ((Number) chunkId).longValue() : null);
+            vo.setChunkId(parseLongObj(chunkId));
             return vo;
         }).toList();
     }
@@ -1605,5 +1602,12 @@ public class ChatServiceImpl implements ChatService {
         if (completionTokens != null) {
             outputTokenHolder[0] += completionTokens;
         }
+    }
+
+    /** 安全地将 Object 转为 Long（兼容 Number 和 String 类型） */
+    private static Long parseLongObj(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n) return n.longValue();
+        try { return Long.parseLong(value.toString()); } catch (NumberFormatException e) { return null; }
     }
 }

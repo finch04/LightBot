@@ -565,6 +565,12 @@
     >
       <template #title>
         <span>{{ rawModal.title }}</span>
+        <a-tooltip title="复制">
+          <button class="raw-modal-meta-btn" @click="copyRawContent" style="margin-left:12px;">
+            <CheckOutlined v-if="rawModal.copied" style="color:#16a34a;" />
+            <CopyOutlined v-else />
+          </button>
+        </a-tooltip>
         <a-tooltip v-if="rawModal.metadata" title="查看 Metadata">
           <button class="raw-modal-meta-btn" @click="openMetadataModal">
             <CodeOutlined />
@@ -702,11 +708,12 @@ const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
 const initialLoadDone = ref(false)
 const currentStatus = ref('')
+const reconnecting = ref(false)
 const lastReplyElapsed = ref(null)
 let sendStartTime = 0
 const hasStreamContent = ref(false)
 /** 原始内容弹窗状态 */
-const rawModal = reactive({ visible: false, content: '', title: '', metadata: null })
+const rawModal = reactive({ visible: false, content: '', title: '', metadata: null, copied: false })
 /** Metadata 弹窗状态 */
 const metadataModal = reactive({ visible: false, json: '', copied: false })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
@@ -1351,8 +1358,9 @@ async function loadOlderMessages() {
   // 新对话时 sessionId 为 null，不应请求
   if (!sessionId.value) return
 
-  const container = messagesRef.value
-  const oldScrollHeight = container?.scrollHeight || 0
+  // 记录 prepend 前的虚拟化器总尺寸
+  const oldTotalSize = virtualizer.value.getTotalSize()
+  const oldScrollTop = messagesRef.value?.scrollTop || 0
 
   loadingOlder.value = true
   try {
@@ -1367,12 +1375,12 @@ async function loadOlderMessages() {
       await enrichMessagesAttachments(olderMessages)
       messages.value = [...olderMessages, ...messages.value]
       hasMoreMessages.value = records.length === 10
-      // 保持滚动位置（虚拟滚动下通过偏移量修正）
+      // 保持滚动位置：prepend 后虚拟化器重新计算所有 item 位置，
+      // 需要用 scrollToOffset 将 scrollTop 加上新增内容的高度
       await nextTick()
-      if (container) {
-        const newScrollHeight = container.scrollHeight
-        container.scrollTop = newScrollHeight - oldScrollHeight
-      }
+      const newTotalSize = virtualizer.value.getTotalSize()
+      const sizeDelta = newTotalSize - oldTotalSize
+      virtualizer.value.scrollToOffset(oldScrollTop + sizeDelta)
     } else {
       hasMoreMessages.value = false
     }
@@ -1619,6 +1627,7 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             hasStreamContent.value = true
             streamSmoother.start()
           }
+          if (reconnecting.value) reconnecting.value = false
           streamSmoother.push(chunk)
         },
         // onStatus: 状态消息
@@ -1768,6 +1777,7 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
           // 10.1 停止平滑缓冲，flush 剩余内容
           streamSmoother.stop()
           currentStreamingMsg = null
+          reconnecting.value = false
           if (assistantMsg) {
             if (!assistantMsg._toolBlockOffsets?.length) {
               assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
@@ -1816,12 +1826,17 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
           })
         },
       },
-      abortController.value?.signal
+      abortController.value?.signal,
+      { maxRetries: 3, retryDelay: 2000, onReconnecting: () => {
+        reconnecting.value = true
+        currentStatus.value = '正在重连...'
+      }}
     )
   } catch (e) {
     // 10.1 异常时停止平滑缓冲，flush 剩余内容
     streamSmoother.stop()
     currentStreamingMsg = null
+    reconnecting.value = false
     // 用户主动中断
     if (e.name === 'AbortError') {
       if (!assistantMsg) {
@@ -1889,6 +1904,14 @@ function openMetadataModal() {
   }
   metadataModal.copied = false
   metadataModal.visible = true
+}
+
+async function copyRawContent() {
+  if (!rawModal.content) return
+  await copyToClipboard(rawModal.content)
+  rawModal.copied = true
+  message.success('已复制')
+  setTimeout(() => { rawModal.copied = false }, 2000)
 }
 
 async function copyMetadata() {

@@ -2,13 +2,16 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import cn.dev33.satoken.stp.StpUtil;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.MessageFeedbackRequest;
 import com.lightbot.dto.MessageFeedbackVO;
 import com.lightbot.dto.RagReferenceVO;
+import com.lightbot.dto.ReconnectRequest;
 import com.lightbot.entity.MessageFeedback;
 import com.lightbot.service.ChatService;
 import com.lightbot.service.MessageFeedbackService;
+import com.lightbot.service.chat.SseEventBuffer;
 import jakarta.validation.Valid;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.service.ChatAttachmentService;
@@ -24,6 +27,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,6 +42,7 @@ public class ChatController {
     private final ChatService chatService;
     private final ChatAttachmentService chatAttachmentService;
     private final MessageFeedbackService messageFeedbackService;
+    private final SseEventBuffer eventBuffer;
 
     /** SSE 超时时间：5分钟（长文本生成可能较慢） */
     private static final long SSE_TIMEOUT = 5 * 60 * 1000L;
@@ -55,13 +60,18 @@ public class ChatController {
      * 流式对话（SSE）
      * <p>使用 SseEmitter 替代 Flux<String>，避免 Spring MVC Reactor Servlet 桥接层的缓冲问题，
      * 确保每个 token 到达时立即刷新到客户端。</p>
-     * <p>支持：心跳保活（SSE 注释行）、事件 ID（用于断线重连）、结构化错误事件。</p>
+     * <p>支持：心跳保活（SSE 注释行）、事件 ID（用于断线重连）、结构化错误事件、事件缓冲（断线恢复）。</p>
      */
     @Operation(summary = "流式对话（SSE）")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@Valid @RequestBody ChatRequest request) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         AtomicInteger eventIdCounter = new AtomicInteger(0);
+
+        // 1.2 事件缓冲：追踪 requestId 和 userId，缓冲每个事件用于断线重连
+        final String[] activeRequestId = {null};
+        final Long[] activeUserId = {null};
+        try { activeUserId[0] = StpUtil.getLoginIdAsLong(); } catch (Exception ignored) {}
 
         // 在 boundedElastic 调度器上订阅 Flux，避免阻塞 Servlet 线程
         Flux<String> flux = chatService.chatStream(request);
@@ -83,12 +93,29 @@ public class ChatController {
                                 // 1.2 每个数据事件携带递增 ID，支持前端断线重连时通过 Last-Event-ID 恢复
                                 String eventId = String.valueOf(eventIdCounter.incrementAndGet());
                                 emitter.send(SseEmitter.event().id(eventId).data(safe));
+
+                                // 1.2 缓冲事件：从第一个 [REQUEST_ID] 事件提取 requestId
+                                if (activeRequestId[0] == null && safe.startsWith("[REQUEST_ID]")) {
+                                    activeRequestId[0] = safe.substring(12);
+                                }
+                                if (activeRequestId[0] != null) {
+                                    eventBuffer.bufferEvent(activeRequestId[0],
+                                            Integer.parseInt(eventId), safe, activeUserId[0]);
+                                }
                             } catch (IOException e) {
                                 log.debug("[Chat] 客户端断开连接: {}", e.getMessage());
                             }
                         },
-                        emitter::completeWithError,
-                        emitter::complete
+                        error -> {
+                            emitter.completeWithError(error);
+                        },
+                        () -> {
+                            // 1.2 标记缓冲完成（[DONE] 已发送）
+                            if (activeRequestId[0] != null) {
+                                eventBuffer.markCompleted(activeRequestId[0]);
+                            }
+                            emitter.complete();
+                        }
                 );
 
         // 清理回调
@@ -96,6 +123,40 @@ public class ChatController {
         emitter.onError(e -> log.warn("[Chat] SSE连接异常: {}", e.getMessage()));
 
         return emitter;
+    }
+
+    /**
+     * SSE 断线重连：获取缓冲事件或完成状态
+     * <p>前端断线后携带 requestId + lastEventId 调用此端点，
+     * 服务端返回缓冲的事件供前端重放，或告知已完成/未找到。</p>
+     */
+    @Operation(summary = "SSE断线重连")
+    @PostMapping("/reconnect")
+    public Result<Map<String, Object>> reconnect(@Valid @RequestBody ReconnectRequest req) {
+        Long userId;
+        try { userId = StpUtil.getLoginIdAsLong(); } catch (Exception e) { return Result.fail(401, "未登录"); }
+
+        SseEventBuffer.ReconnectResult result = eventBuffer.getReconnectData(
+                req.getRequestId(), req.getLastEventId(), userId);
+
+        return switch (result.status()) {
+            case NOT_FOUND -> Result.fail(404, "请求不存在或已过期");
+            case ALREADY_DELIVERED -> Result.ok(Map.of("status", "already_delivered"));
+            case COMPLETED, CANCELLED -> {
+                List<Map<String, Object>> events = result.events().stream()
+                        .map(e -> {
+                            Map<String, Object> m = new LinkedHashMap<>();
+                            m.put("id", e.id());
+                            m.put("data", e.data());
+                            return m;
+                        })
+                        .toList();
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("status", result.status().name().toLowerCase());
+                body.put("events", events);
+                yield Result.ok(body);
+            }
+        };
     }
 
     @Operation(summary = "上传对话附件（图片/视频）")
