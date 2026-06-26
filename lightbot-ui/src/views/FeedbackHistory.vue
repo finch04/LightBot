@@ -109,7 +109,7 @@ function confirmGoToSession(fb) {
     cancelText: '取消',
     onOk() {
       emit('update:open', false)
-      router.push(`/app/chat/${fb.sessionId}?highlight=${fb.messageId}`)
+      router.push(`/app/chat/${fb.sessionId}`)
     },
   })
 }

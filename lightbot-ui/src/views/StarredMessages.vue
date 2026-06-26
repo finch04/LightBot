@@ -106,7 +106,7 @@ function confirmGoToSession(msg) {
     cancelText: '取消',
     onOk() {
       emit('update:open', false)
-      router.push(`/app/chat/${msg.sessionId}?highlight=${msg.id}`)
+      router.push(`/app/chat/${msg.sessionId}`)
     },
   })
 }

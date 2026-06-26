@@ -119,11 +119,11 @@
             <a-checkbox-group v-model:value="selectedMsgKeys" class="msg-checkbox-group">
               <div v-for="(msg, i) in detailMessages" :key="msg.id || i" class="detail-msg" :class="msg.role">
                 <a-checkbox :value="msg.id" class="msg-checkbox" />
-                <div class="msg-body">
+                <div class="msg-body" @click="goToChatMsg(msg)" style="cursor:pointer;">
                   <div class="detail-msg-role">
                     {{ roleLabels[msg.role] || msg.role }}
                     <a-tooltip title="查看元数据">
-                      <button class="btn-msg-meta" @click="openMsgMeta(msg)">
+                      <button class="btn-msg-meta" @click.stop="openMsgMeta(msg)">
                         <CodeOutlined />
                       </button>
                     </a-tooltip>
@@ -365,6 +365,19 @@ function confirmDeleteMessages() {
 
 function goToChat(record) {
   router.push(`/app/chat/${record.id}`)
+}
+
+function goToChatMsg(msg) {
+  if (!detailSession.value?.id) return
+  Modal.confirm({
+    title: '跳转确认',
+    content: '即将离开当前页面并跳转到对应会话，是否继续？',
+    okText: '跳转',
+    cancelText: '取消',
+    onOk() {
+      router.push(`/app/chat/${detailSession.value.id}`)
+    },
+  })
 }
 
 watch(msgSearchText, () => {

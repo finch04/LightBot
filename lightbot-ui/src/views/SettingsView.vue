@@ -2,7 +2,6 @@
   <div class="page">
     <div class="page-header">
       <h1 class="page-title">系统管理</h1>
-      <p class="page-desc">管理系统配置、Landing 页面和用户</p>
     </div>
 
     <a-tabs v-model:activeKey="activeTab" class="settings-tabs">

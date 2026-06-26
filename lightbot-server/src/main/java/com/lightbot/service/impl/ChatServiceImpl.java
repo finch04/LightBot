@@ -55,6 +55,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.lightbot.service.chat.ToolEventGenerator;
 
@@ -96,6 +98,9 @@ public class ChatServiceImpl implements ChatService {
 
     /** SSE 心跳注释行（SSE 协议：以冒号开头的行是注释，客户端应忽略） */
     private static final String HEARTBEAT_PREFIX = ":heartbeat";
+
+    /** 工具执行超时时间（秒）：内置工具 30s、API 工具 60s、MCP 工具 120s，统一取最大值 120s */
+    private static final long TOOL_EXECUTION_TIMEOUT_SECONDS = 120;
 
     @Autowired
     @Qualifier("lightBotExecutor")
@@ -1097,25 +1102,32 @@ public class ChatServiceImpl implements ChatService {
         ToolCallback callback = toolCallbackMap.get(toolName);
         if (callback != null) {
             try {
-                // 流式模式：绑定 Sink 使工具内部的 emit() 实时推送给前端
-                if (eventSink != null) {
-                    ToolEventEmitter.setupSink(eventSink);
+                // 2.1 工具执行超时保护：CompletableFuture 包装 + get(timeout)，防止 MCP 工具卡死
+                Map<String, Object> ctxMap = new java.util.HashMap<>();
+                ctxMap.put("agentId", agentId);
+                ctxMap.put("sessionId", sessionId != null ? sessionId.toString() : "default");
+                ctxMap.put("requestId", requestId);
+                ctxMap.put("parentThreadId", sessionId != null ? sessionId.toString() : "default");
+                if (chatContext != null) {
+                    ctxMap.put("chatContext", chatContext);
                 }
-                try {
-                    Map<String, Object> ctxMap = new java.util.HashMap<>();
-                    ctxMap.put("agentId", agentId);
-                    ctxMap.put("sessionId", sessionId != null ? sessionId.toString() : "default");
-                    ctxMap.put("requestId", requestId);
-                    ctxMap.put("parentThreadId", sessionId != null ? sessionId.toString() : "default");
-                    if (chatContext != null) {
-                        ctxMap.put("chatContext", chatContext);
+                String result = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        // 流式模式：绑定 Sink 使工具内部的 emit() 实时推送给前端
+                        if (eventSink != null) {
+                            ToolEventEmitter.setupSink(eventSink);
+                        }
+                        return callback.call(callArgs, new ToolContext(ctxMap));
+                    } finally {
+                        if (eventSink != null) {
+                            ToolEventEmitter.teardownSink();
+                        }
                     }
-                    return callback.call(callArgs, new ToolContext(ctxMap));
-                } finally {
-                    if (eventSink != null) {
-                        ToolEventEmitter.teardownSink();
-                    }
-                }
+                }, lightBotExecutor).get(TOOL_EXECUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                return result;
+            } catch (TimeoutException e) {
+                log.error("[Chat] 工具执行超时: name={}, timeout={}s", toolName, TOOL_EXECUTION_TIMEOUT_SECONDS);
+                return ToolResultPrefixes.failureJson("工具执行超时（" + TOOL_EXECUTION_TIMEOUT_SECONDS + "秒），请稍后重试");
             } catch (Exception e) {
                 log.error("[Chat] 工具执行异常: name={}, error={}", toolName, e.getMessage(), e);
                 return ToolResultPrefixes.failureJson(ToolResultPrefixes.FAILURE + ": " + e.getMessage());

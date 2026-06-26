@@ -52,7 +52,7 @@
             transform: `translateY(${virtualRow.start}px)`,
           }"
         >
-          <div :class="['message', messages[virtualRow.index]?.role, { 'message-highlight': highlightedMessageId && String(messages[virtualRow.index]?._id || messages[virtualRow.index]?.id) === highlightedMessageId }]">
+          <div :class="['message', messages[virtualRow.index]?.role]">
             <!-- AI 头像 -->
             <div v-if="messages[virtualRow.index]?.role === 'assistant'" class="message-avatar">
               <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="message-avatar-img" />
@@ -316,11 +316,12 @@
               </div>
               <!-- RAG引用列表 -->
               <div v-if="messages[virtualRow.index]?.role === 'assistant' && getMsgRagRefs(messages[virtualRow.index]).length > 0 && !messages[virtualRow.index]._streaming" class="rag-references">
-                <div class="rag-header">
+                <div class="rag-header" @click="toggleRefsSection(messages[virtualRow.index])">
+                  <RightOutlined :class="{ expanded: isRefsSectionExpanded(messages[virtualRow.index]) }" />
                   <FileTextOutlined />
                   <span>参考文献 ({{ getMsgRagRefs(messages[virtualRow.index]).length }})</span>
                 </div>
-                <div class="rag-list">
+                <div v-if="isRefsSectionExpanded(messages[virtualRow.index])" class="rag-list">
                   <div v-for="(ref, ri) in getMsgRagRefs(messages[virtualRow.index])" :key="ri" class="rag-item">
                     <div class="rag-item-header" @click="toggleReference(messages[virtualRow.index], ri)">
                       <RightOutlined :class="{ expanded: isReferenceExpanded(messages[virtualRow.index], ri) }" />
@@ -440,11 +441,6 @@
               <span class="token-pill-value">{{ formatTokenCount(sessionTokenCount) }}</span>
               <span class="token-pill-label">tokens</span>
             </div>
-          </a-tooltip>
-          <a-tooltip title="收藏消息">
-            <button class="btn-toolbar-icon" @click="starredOpen = true">
-              <StarOutlined />
-            </button>
           </a-tooltip>
         </div>
         <!-- 引用回复预览条 -->
@@ -651,8 +647,6 @@
         />
       </div>
     </a-modal>
-
-    <StarredMessages v-model:open="starredOpen" />
   </div>
 </template>
 
@@ -676,7 +670,6 @@ import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
-import StarredMessages from './StarredMessages.vue'
 import { useChatAgents } from '../composables/useChatAgents'
 import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
@@ -781,9 +774,10 @@ const virtualizer = useVirtualizer({
     if (toolCount > 0 || statusCount > 0) {
       size += 60 + toolCount * 32 + statusCount * 24
     }
-    // 参考文献额外占高
+    // 参考文献额外占高（默认展开，记录的为收起状态）
     const refCount = getMsgRagRefs(msg).length
-    if (refCount > 0) size += 40 + refCount * 36
+    if (refCount > 0 && !refsSectionExpandedMap.value.has(index)) size += 40 + refCount * 36
+    else if (refCount > 0) size += 32
     return Math.min(size, 2000)
   },
   overscan: 5,
@@ -876,55 +870,6 @@ function forceScrollToBottom() {
   })
 }
 
-const highlightedMessageId = ref(null)
-
-function findMessageIndex(messageId) {
-  return messages.value.findIndex(m => String(m._id) === String(messageId) || String(m.id) === String(messageId))
-}
-
-function scrollToMessage(messageId) {
-  const idx = findMessageIndex(messageId)
-  if (idx < 0) return
-  virtualizer.value.scrollToIndex(idx, { align: 'center' })
-  highlightedMessageId.value = String(messageId)
-  setTimeout(() => { highlightedMessageId.value = null }, 3000)
-}
-
-/**
- * 深度定位：循环加载更早消息直到目标消息出现，再滚动定位
- */
-async function scrollToMessageDeep(messageId) {
-  // 先检查目标消息是否已在当前列表中
-  if (findMessageIndex(messageId) >= 0) {
-    nextTick(() => scrollToMessage(messageId))
-    return
-  }
-  // 循环加载更早的消息
-  while (hasMoreMessages.value && !streaming.value) {
-    messagePage.value++
-    const res = await getSessionMessages(sessionId.value, {
-      pageNum: messagePage.value,
-      pageSize: 10,
-    })
-    const records = res.data?.records || []
-    if (records.length === 0) {
-      hasMoreMessages.value = false
-      break
-    }
-    const olderMessages = records.reverse().map(m => parseMessage(m))
-    await enrichMessagesAttachments(olderMessages)
-    messages.value = [...olderMessages, ...messages.value]
-    hasMoreMessages.value = records.length === 10
-    // 加载完检查
-    if (findMessageIndex(messageId) >= 0) {
-      nextTick(() => scrollToMessage(messageId))
-      return
-    }
-  }
-  // 找不到也尝试定位（消息可能已不在列表中）
-  nextTick(() => scrollToMessage(messageId))
-}
-
 /**
  * 展开/折叠内容后，将展开的区域滚动到可视区域内
  * @param {number} msgIndex - 消息在列表中的索引
@@ -956,6 +901,8 @@ const abortController = ref(null)
 const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
+// 用于存储每条消息的参考文献区域是否展开，key为消息索引，value为boolean
+const refsSectionExpandedMap = ref(new Map())
 // 消息反馈状态：messageId → "like"/"dislike"
 const messageFeedbackMap = ref(new Map())
 
@@ -1068,6 +1015,29 @@ function toggleReference(msg, index) {
   scrollAfterExpand(msgIndex)
 }
 
+/**
+ * 判断参考文献区域是否展开（默认展开，记录的为收起状态）
+ */
+function isRefsSectionExpanded(msg) {
+  const msgIndex = messages.value.indexOf(msg)
+  return !refsSectionExpandedMap.value.has(msgIndex)
+}
+
+/**
+ * 切换参考文献区域展开状态
+ */
+function toggleRefsSection(msg) {
+  const msgIndex = messages.value.indexOf(msg)
+  const newMap = new Map(refsSectionExpandedMap.value)
+  if (newMap.has(msgIndex)) {
+    newMap.delete(msgIndex)
+  } else {
+    newMap.set(msgIndex, true)
+  }
+  refsSectionExpandedMap.value = newMap
+  scrollAfterExpand(msgIndex)
+}
+
 function toggleReasoningExpand(index) {
   const msg = messages.value[index]
   if (!msg) return
@@ -1092,8 +1062,10 @@ async function handleMessageFeedback(msg, rating) {
     // 服务端返回 null 表示取消，否则更新为实际值
     if (res?.data) {
       messageFeedbackMap.value.set(msgId, res.data.rating)
+      message.success(rating === 'like' ? '已反馈有用' : '已反馈无帮助')
     } else {
       messageFeedbackMap.value.delete(msgId)
+      message.success('已取消反馈')
     }
   } catch {
     // 回滚
@@ -1110,9 +1082,6 @@ const dislikeModalVisible = ref(false)
 const dislikeReason = ref('')
 const dislikeTargetMsg = ref(null)
 
-// 收藏消息弹窗
-const starredOpen = ref(false)
-
 function showDislikeModal(msg) {
   dislikeTargetMsg.value = msg
   dislikeReason.value = ''
@@ -1128,6 +1097,7 @@ async function submitDislikeReason() {
   messageFeedbackMap.value.set(msgId, 'dislike')
   try {
     await submitMessageFeedback(msgId, { rating: 'dislike', reason: dislikeReason.value || null })
+    message.success('已反馈无帮助')
   } catch {
     if (current) {
       messageFeedbackMap.value.set(msgId, current)
@@ -1341,15 +1311,7 @@ async function loadHistory() {
     }
     isNearBottom.value = true
     userScrolledUp.value = false
-
-    // 检测 highlight 参数（从收藏/反馈跳转过来定位到指定消息）
-    const highlightId = route.query.highlight
-    if (highlightId) {
-      router.replace({ path: route.path })
-      await scrollToMessageDeep(highlightId)
-    } else {
-      forceScrollToBottom()
-    }
+    forceScrollToBottom()
 
     // 历史消息中自动弹出未回答的 ask_user 弹窗
     nextTick(() => {
@@ -1524,6 +1486,7 @@ async function toggleStarMessage(index) {
   try {
     await toggleMessageStar(msg._id)
     msg._starred = !msg._starred
+    message.success(msg._starred ? '收藏成功' : '已取消收藏')
   } catch {
     message.error('操作失败')
   }
@@ -2145,6 +2108,7 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
   }
   // 切换对话时清空展开状态
   expandedRefsMap.value = new Map()
+  refsSectionExpandedMap.value = new Map()
   loadHistory()
 })
 
@@ -2287,13 +2251,6 @@ watch(sessionId, (newVal, oldVal) => {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-}
-.message-highlight {
-  animation: highlightFade 3s ease-out;
-}
-@keyframes highlightFade {
-  0% { background: rgba(250, 219, 20, 0.35); border-radius: 10px; }
-  100% { background: transparent; }
 }
 .message-avatar {
   flex-shrink: 0;
@@ -3331,12 +3288,21 @@ span.agent-menu-icon {
   font-size: 13px;
   font-weight: 600;
   color: var(--blue-700);
-  margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.rag-header .anticon:first-child {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.rag-header .anticon:first-child.expanded {
+  transform: rotate(90deg);
 }
 .rag-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 8px;
 }
 .rag-item {
   background: var(--color-canvas);

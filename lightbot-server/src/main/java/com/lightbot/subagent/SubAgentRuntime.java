@@ -27,6 +27,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,6 +49,9 @@ import java.util.Map;
 public class SubAgentRuntime {
 
     private static final int MAX_LOOP_DEPTH = 6;
+
+    /** SubAgent 墙钟超时（秒）：防止单次 LLM 调用或整体执行无限阻塞 */
+    private static final long SUBAGENT_TIMEOUT_SECONDS = 120;
 
     private final ModelFactory modelFactory;
     private final ToolService toolService;
@@ -191,13 +195,18 @@ public class SubAgentRuntime {
                                         "token", subAgent.getName(), text, 0));
                             }
                         }
-                    }).blockLast();
+                    }).blockLast(Duration.ofSeconds(SUBAGENT_TIMEOUT_SECONDS));
                     assistant = lastAssistant.isEmpty() ? null : lastAssistant.get(0);
                 } catch (Exception e) {
-                    log.error("[SubAgent] 模型调用异常: name={}, depth={}, error={}",
-                            subAgent.getName(), depth, e.getMessage(), e);
-                    markFailed(run, e.getMessage(), start);
-                    return new SubAgentResult("SubAgent 执行失败: " + e.getMessage(), threadId, false);
+                    // 3.1 超时检测：blockLast(Duration) 超时抛出的异常包含 "Timeout" 关键字
+                    boolean isTimeout = e.getMessage() != null && e.getMessage().contains("Timeout");
+                    String errorMsg = isTimeout
+                            ? "SubAgent 执行超时（" + SUBAGENT_TIMEOUT_SECONDS + "秒），请稍后重试"
+                            : "SubAgent 执行失败: " + e.getMessage();
+                    log.error("[SubAgent] 模型调用异常: name={}, depth={}, timeout={}, error={}",
+                            subAgent.getName(), depth, isTimeout, e.getMessage(), e);
+                    markFailed(run, errorMsg, start);
+                    return new SubAgentResult(errorMsg, threadId, false);
                 }
 
                 if (assistant == null) {
