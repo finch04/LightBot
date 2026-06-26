@@ -167,6 +167,7 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined, MoreOutlined, LikeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent, cloneAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
+import { formatDate as formatTime } from '../utils/format'
 import FeedbackHistory from './FeedbackHistory.vue'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 import ModelSelect from '../components/ModelSelect.vue'
@@ -297,10 +298,6 @@ function statusText(s, version) {
   return formatAgentStatus(s, version || 0, agentStatusLabels.value)
 }
 
-function formatTime(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleDateString('zh-CN')
-}
 
 async function openExampleModal() {
   try {

@@ -177,6 +177,7 @@ public class SubAgentRuntime {
                 AssistantMessage assistant;
                 try {
                     List<AssistantMessage> lastAssistant = new ArrayList<>();
+                    java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
                     Flux<ChatResponse> flux = chatModel.stream(new Prompt(new ArrayList<>(messages), options));
                     flux.doOnNext(response -> {
                         Generation gen = response.getResult();
@@ -195,16 +196,21 @@ public class SubAgentRuntime {
                                         "token", subAgent.getName(), text, 0));
                             }
                         }
-                    }).blockLast(Duration.ofSeconds(SUBAGENT_TIMEOUT_SECONDS));
+                    }).doOnComplete(() -> completed.set(true))
+                      .take(Duration.ofSeconds(SUBAGENT_TIMEOUT_SECONDS))
+                      .blockLast();
+                    // take(Duration) 超时后正常 onComplete，需通过 completed 标记区分
+                    if (!completed.get()) {
+                        String errorMsg = "SubAgent 执行超时（" + SUBAGENT_TIMEOUT_SECONDS + "秒），请稍后重试";
+                        log.error("[SubAgent] 模型调用超时: name={}, depth={}", subAgent.getName(), depth);
+                        markFailed(run, errorMsg, start);
+                        return new SubAgentResult(errorMsg, threadId, false);
+                    }
                     assistant = lastAssistant.isEmpty() ? null : lastAssistant.get(0);
                 } catch (Exception e) {
-                    // 3.1 超时检测：blockLast(Duration) 超时抛出的异常包含 "Timeout" 关键字
-                    boolean isTimeout = e.getMessage() != null && e.getMessage().contains("Timeout");
-                    String errorMsg = isTimeout
-                            ? "SubAgent 执行超时（" + SUBAGENT_TIMEOUT_SECONDS + "秒），请稍后重试"
-                            : "SubAgent 执行失败: " + e.getMessage();
-                    log.error("[SubAgent] 模型调用异常: name={}, depth={}, timeout={}, error={}",
-                            subAgent.getName(), depth, isTimeout, e.getMessage(), e);
+                    String errorMsg = "SubAgent 执行失败: " + e.getMessage();
+                    log.error("[SubAgent] 模型调用异常: name={}, depth={}, error={}",
+                            subAgent.getName(), depth, e.getMessage(), e);
                     markFailed(run, errorMsg, start);
                     return new SubAgentResult(errorMsg, threadId, false);
                 }

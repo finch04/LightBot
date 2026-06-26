@@ -309,29 +309,14 @@
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, watch, h } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+<script>
+import { ref, h, defineComponent } from 'vue'
 import {
-  ArrowLeftOutlined, ExportOutlined, DeleteOutlined, ReloadOutlined,
-  FileAddOutlined, FolderOutlined, FileTextOutlined, FileOutlined,
-  FolderOpenOutlined, SaveOutlined, RightOutlined, DownOutlined,
-  EyeOutlined, EditOutlined
+  FolderOutlined, FileTextOutlined, RightOutlined, DownOutlined,
 } from '@ant-design/icons-vue'
-import { message, Modal } from 'ant-design-vue'
-import {
-  getSkills, deleteSkill, exportSkillZip,
-  getSkillFiles, readSkillFile, createSkillFile, updateSkillFile, deleteSkillFile
-} from '../api/skill'
-import { getTools } from '../api/tool'
-import { getMcpServers } from '../api/mcp'
-import { getEnabledSkills } from '../api/skill'
-import { truncateText } from '../utils/format'
-import MarkdownPreview from '../components/MarkdownPreview.vue'
 
-// ==================== 文件树节点组件 ====================
-
-const TreeNode = {
+/** 文件树节点组件（模块级定义，避免每次渲染重建） */
+const TreeNode = defineComponent({
   name: 'TreeNode',
   props: {
     node: { type: Object, required: true },
@@ -361,7 +346,6 @@ const TreeNode = {
           style: { paddingLeft: indent + 'px' },
           onClick: handleClick,
         }, [
-          // 展开/折叠箭头
           node.isDir
             ? h('span', { class: 'tree-arrow' }, [
                 expanded.value
@@ -369,14 +353,11 @@ const TreeNode = {
                   : h(RightOutlined, { style: 'font-size: 10px; color: #a1a1aa' })
               ])
             : h('span', { class: 'tree-arrow-placeholder' }),
-          // 图标
           node.isDir
             ? h(FolderOutlined, { style: 'font-size: 14px; color: #d4a017; margin-right: 6px' })
             : h(FileTextOutlined, { style: 'font-size: 14px; color: var(--color-mute); margin-right: 6px' }),
-          // 文件名
           h('span', { class: 'tree-name' }, node.name),
         ]),
-        // 子节点
         node.isDir && expanded.value && node.children
           ? h('div', { class: 'tree-children' },
               node.children.map(child =>
@@ -392,7 +373,27 @@ const TreeNode = {
       ])
     }
   },
-}
+})
+</script>
+
+<script setup>
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  ArrowLeftOutlined, ExportOutlined, DeleteOutlined, ReloadOutlined,
+  FileAddOutlined, FileOutlined, FolderOpenOutlined, SaveOutlined,
+  EyeOutlined, EditOutlined
+} from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import {
+  getSkills, deleteSkill, exportSkillZip,
+  getSkillFiles, readSkillFile, createSkillFile, updateSkillFile, deleteSkillFile
+} from '../api/skill'
+import { getTools } from '../api/tool'
+import { getMcpServers } from '../api/mcp'
+import { getEnabledSkills } from '../api/skill'
+import { truncateText } from '../utils/format'
+import MarkdownPreview from '../components/MarkdownPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -593,6 +594,7 @@ async function handleFileSelect(path) {
       }
       const blob = new Blob([byteArray], { type: mimeType })
       fileSize.value = blob.size
+      if (fileDataUrl.value) URL.revokeObjectURL(fileDataUrl.value)
       fileDataUrl.value = URL.createObjectURL(blob)
     } else {
       // 文本：base64 → utf-8

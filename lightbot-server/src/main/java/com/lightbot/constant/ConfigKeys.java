@@ -73,6 +73,10 @@ public final class ConfigKeys {
         public static final String ENABLE_REASONING = "enableReasoning";
         /** 对话附件内容安全扫描（prompt 注入 + 敏感词） */
         public static final String ENABLE_CONTENT_SECURITY_SCAN = "enableContentSecurityScan";
+        /** 最大上下文消息条数 */
+        public static final String MAX_CONTEXT_MESSAGES = "maxContextMessages";
+        /** 最大上下文消息条数默认值 */
+        public static final int DEFAULT_MAX_CONTEXT_MESSAGES = 20;
     }
 
     /**

@@ -259,7 +259,7 @@ public class ChatServiceImpl implements ChatService {
             }
 
             // 记录工具结果（JSON结果不截断，纯文本限制2000字符）
-            String sseResult = truncateForSse(toolResult);
+            String sseResult = toolEventGenerator.truncateForSse(toolResult);
             Map<String, Object> resEvtSync = new java.util.LinkedHashMap<>();
             resEvtSync.put("type", "tool_result");
             resEvtSync.put("toolName", toolName);
@@ -316,34 +316,7 @@ public class ChatServiceImpl implements ChatService {
     private String buildRagMetadataJson(List<Map<String, Object>> kbResults) {
         try {
             Map<String, Object> metadataMap = new LinkedHashMap<>();
-            List<RagReferenceVO> refs = kbResults.stream().map(row -> {
-                RagReferenceVO vo = new RagReferenceVO();
-                String resultType = (String) row.get("result_type");
-                if (RagResultType.QA_PAIR.equals(resultType)) {
-                    vo.setSourceType(RagResultType.QA_PAIR);
-                    vo.setDocumentName("问答对");
-                    Object qaPairId = row.get("id");
-                    vo.setQaPairId(parseLongObj(qaPairId));
-                    String q = (String) row.get("question");
-                    String a = (String) row.get("answer");
-                    vo.setContentPreview("问题：" + q + "\n答案：" + a);
-                } else {
-                    vo.setSourceType(RagResultType.CHUNK);
-                    vo.setDocumentName((String) row.get("document_name"));
-                    String content = (String) row.get("content");
-                    vo.setContentPreview(content != null && content.length() > 200
-                            ? content.substring(0, 200) + "..." : content);
-                }
-                Object score = row.get("score");
-                vo.setScore(score != null ? ((Number) score).doubleValue() : null);
-                Object knowledgeId = row.get("knowledge_id");
-                vo.setKnowledgeId(parseLongObj(knowledgeId));
-                Object documentId = row.get("document_id");
-                vo.setDocumentId(parseLongObj(documentId));
-                Object chunkId = row.get("chunk_id");
-                vo.setChunkId(parseLongObj(chunkId));
-                return vo;
-            }).toList();
+            List<RagReferenceVO> refs = kbResults.stream().map(this::mapToRagReference).toList();
             metadataMap.put("ragReferences", refs);
             return objectMapper.writeValueAsString(metadataMap);
         } catch (Exception e) {
@@ -787,31 +760,7 @@ public class ChatServiceImpl implements ChatService {
                                 if (!offsets.isEmpty()) metadataMap.put("toolBlockOffsets", offsets);
                             }
                             if (!kbResultsRef.isEmpty()) {
-                                List<RagReferenceVO> refs = kbResultsRef.stream().map(row -> {
-                                    RagReferenceVO vo = new RagReferenceVO();
-                                    String resultType = (String) row.get("result_type");
-                                    if (RagResultType.QA_PAIR.equals(resultType)) {
-                                        vo.setSourceType(RagResultType.QA_PAIR);
-                                        vo.setDocumentName("问答对");
-                                        Object qaPairId = row.get("id");
-                                        vo.setQaPairId(parseLongObj(qaPairId));
-                                        String q = (String) row.get("question");
-                                        String a = (String) row.get("answer");
-                                        vo.setContentPreview("问题：" + q + "\n答案：" + a);
-                                    } else {
-                                        vo.setSourceType(RagResultType.CHUNK);
-                                        vo.setDocumentName((String) row.get("document_name"));
-                                        String content = (String) row.get("content");
-                                        vo.setContentPreview(content != null && content.length() > 200
-                                                ? content.substring(0, 200) + "..." : content);
-                                    }
-                                    Object score = row.get("score");
-                                    vo.setScore(score != null ? ((Number) score).doubleValue() : null);
-                                    vo.setKnowledgeId(parseLongObj(row.get("knowledge_id")));
-                                    vo.setDocumentId(parseLongObj(row.get("document_id")));
-                                    vo.setChunkId(parseLongObj(row.get("chunk_id")));
-                                    return vo;
-                                }).toList();
+                                List<RagReferenceVO> refs = kbResultsRef.stream().map(this::mapToRagReference).toList();
                                 metadataMap.put("ragReferences", refs);
                             }
                             try {
@@ -1015,7 +964,7 @@ public class ChatServiceImpl implements ChatService {
                     resEvt.put("type", "tool_result");
                     resEvt.put("toolName", tcName);
                     if (dnFinal != null) resEvt.put("displayName", dnFinal);
-                    resEvt.put("result", truncateForSse(result));
+                    resEvt.put("result", toolEventGenerator.truncateForSse(result));
                     resEvt.put("contentOffset", toolContentOffset);
                     toolEventsList.add(resEvt);
                     return result;
@@ -1086,7 +1035,7 @@ public class ChatServiceImpl implements ChatService {
             resEvtSeq.put("type", "tool_result");
             resEvtSeq.put("toolName", toolName);
             if (dnSeq != null) resEvtSeq.put("displayName", dnSeq);
-            resEvtSeq.put("result", truncateForSse(toolResult));
+            resEvtSeq.put("result", toolEventGenerator.truncateForSse(toolResult));
             resEvtSeq.put("contentOffset", toolContentOffset);
             toolEventsList.add(resEvtSeq);
             toolResponses.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
@@ -1233,34 +1182,7 @@ public class ChatServiceImpl implements ChatService {
                     }
                 }
                 if (!kbResultsRef.isEmpty()) {
-                    List<RagReferenceVO> refs = kbResultsRef.stream().map(row -> {
-                        RagReferenceVO vo = new RagReferenceVO();
-                        String resultType = (String) row.get("result_type");
-                        if (RagResultType.QA_PAIR.equals(resultType)) {
-                            vo.setSourceType(RagResultType.QA_PAIR);
-                            vo.setDocumentName("问答对");
-                            Object qaPairId = row.get("id");
-                            vo.setQaPairId(parseLongObj(qaPairId));
-                            String q = (String) row.get("question");
-                            String a = (String) row.get("answer");
-                            vo.setContentPreview("问题：" + q + "\n答案：" + a);
-                        } else {
-                            vo.setSourceType(RagResultType.CHUNK);
-                            vo.setDocumentName((String) row.get("document_name"));
-                            String content = (String) row.get("content");
-                            vo.setContentPreview(content != null && content.length() > 200
-                                    ? content.substring(0, 200) + "..." : content);
-                        }
-                        Object score = row.get("score");
-                        vo.setScore(score != null ? ((Number) score).doubleValue() : null);
-                        Object knowledgeId = row.get("knowledge_id");
-                        vo.setKnowledgeId(parseLongObj(knowledgeId));
-                        Object documentId = row.get("document_id");
-                        vo.setDocumentId(parseLongObj(documentId));
-                        Object chunkId = row.get("chunk_id");
-                        vo.setChunkId(parseLongObj(chunkId));
-                        return vo;
-                    }).toList();
+                    List<RagReferenceVO> refs = kbResultsRef.stream().map(this::mapToRagReference).toList();
                     metadataMap.put("ragReferences", refs);
                 }
                 try {
@@ -1370,34 +1292,7 @@ public class ChatServiceImpl implements ChatService {
             return List.of();
         }
         List<Map<String, Object>> searchResults = getRagSearchResults(agent.getId(), question);
-        return searchResults.stream().map(row -> {
-            RagReferenceVO vo = new RagReferenceVO();
-            String resultType = (String) row.get("result_type");
-            if (RagResultType.QA_PAIR.equals(resultType)) {
-                vo.setSourceType(RagResultType.QA_PAIR);
-                vo.setDocumentName("问答对");
-                Object qaPairId = row.get("id");
-                vo.setQaPairId(parseLongObj(qaPairId));
-                String q = (String) row.get("question");
-                String a = (String) row.get("answer");
-                vo.setContentPreview("问题：" + q + "\n答案：" + a);
-            } else {
-                vo.setSourceType(RagResultType.CHUNK);
-                vo.setDocumentName((String) row.get("document_name"));
-                String content = (String) row.get("content");
-                vo.setContentPreview(content != null && content.length() > 200
-                        ? content.substring(0, 200) + "..." : content);
-            }
-            Object score = row.get("score");
-            vo.setScore(score != null ? ((Number) score).doubleValue() : null);
-            Object knowledgeId = row.get("knowledge_id");
-            vo.setKnowledgeId(parseLongObj(knowledgeId));
-            Object documentId = row.get("document_id");
-            vo.setDocumentId(parseLongObj(documentId));
-            Object chunkId = row.get("chunk_id");
-            vo.setChunkId(parseLongObj(chunkId));
-            return vo;
-        }).toList();
+        return searchResults.stream().map(this::mapToRagReference).toList();
     }
 
     private List<Map<String, Object>> getRagSearchResults(Long agentId, String question) {
@@ -1516,7 +1411,7 @@ public class ChatServiceImpl implements ChatService {
 
     private void appendToolCallResult(ChatContext ctx, List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
                                     String toolName, String args, String result, int contentOffset) {
-        String truncated = truncateForSse(result);
+        String truncated = toolEventGenerator.truncateForSse(result);
         if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
             // 1. 先 drain 并推送子代理中间事件（token/tool_call/tool_result）
             if (ctx != null) {
@@ -1583,13 +1478,30 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * SSE 推送时截断工具结果：JSON 结果不截断（前端需解析），纯文本限制 2000 字符
+     * 将 RAG 检索单行结果映射为 RagReferenceVO（QA_PAIR vs CHUNK 分支）
      */
-    private String truncateForSse(String result) {
-        if (result == null) return "";
-        // JSON 结果保持完整，避免截断导致解析失败
-        if (result.startsWith("{") || result.startsWith("[")) return result;
-        return result.length() > 2000 ? result.substring(0, 2000) + "..." : result;
+    private RagReferenceVO mapToRagReference(Map<String, Object> row) {
+        RagReferenceVO vo = new RagReferenceVO();
+        String resultType = (String) row.get("result_type");
+        if (RagResultType.QA_PAIR.equals(resultType)) {
+            vo.setSourceType(RagResultType.QA_PAIR);
+            vo.setDocumentName("问答对");
+            vo.setQaPairId(parseLongObj(row.get("id")));
+            String q = (String) row.get("question");
+            String a = (String) row.get("answer");
+            vo.setContentPreview("问题：" + q + "\n答案：" + a);
+        } else {
+            vo.setSourceType(RagResultType.CHUNK);
+            vo.setDocumentName((String) row.get("document_name"));
+            String content = (String) row.get("content");
+            vo.setContentPreview(content != null && content.length() > 200
+                    ? content.substring(0, 200) + "..." : content);
+        }
+        vo.setScore(row.get("score") != null ? ((Number) row.get("score")).doubleValue() : null);
+        vo.setKnowledgeId(parseLongObj(row.get("knowledge_id")));
+        vo.setDocumentId(parseLongObj(row.get("document_id")));
+        vo.setChunkId(parseLongObj(row.get("chunk_id")));
+        return vo;
     }
 
     private Map<String, String> parseSubagentArgs(String args) {

@@ -360,6 +360,9 @@ async function handleCommit() {
 }
 
 function handleCancel() {
+  if (draftId.value) {
+    cleanupRemoteDraft(draftId.value).catch(() => {})
+  }
   emit('update:open', false)
 }
 </script>

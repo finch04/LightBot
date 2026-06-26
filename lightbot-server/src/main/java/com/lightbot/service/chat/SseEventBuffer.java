@@ -1,15 +1,18 @@
 package com.lightbot.service.chat;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalCause;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * SSE 事件缓冲：为每个请求缓存最近事件，支持断线重连时重放
+ * <p>使用 Caffeine Cache 替代无界 ConcurrentHashMap，自动管理大小上限和过期清理</p>
  *
  * @author finch
  */
@@ -18,9 +21,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SseEventBuffer {
 
     private static final int MAX_EVENTS = 100;
-    private static final long TTL_MS = 5 * 60 * 1000L;
+    private static final int MAX_REQUESTS = 5000;
 
-    private final ConcurrentHashMap<String, RequestContext> buffers = new ConcurrentHashMap<>();
+    private final Cache<String, RequestContext> buffers = Caffeine.newBuilder()
+            .maximumSize(MAX_REQUESTS)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .removalListener((String key, RequestContext ctx, RemovalCause cause) ->
+                    log.debug("[SseEventBuffer] 驱逐: key={}, cause={}", key, cause))
+            .build();
 
     /**
      * 缓冲一个 SSE 事件
@@ -31,7 +39,7 @@ public class SseEventBuffer {
      * @param userId    用户ID（首次调用时设置）
      */
     public void bufferEvent(String requestId, int eventId, String data, Long userId) {
-        RequestContext ctx = buffers.computeIfAbsent(requestId, k -> new RequestContext(userId));
+        RequestContext ctx = buffers.get(requestId, k -> new RequestContext(userId));
         synchronized (ctx.events) {
             if (ctx.events.size() >= MAX_EVENTS) {
                 ctx.events.remove(0);
@@ -43,11 +51,14 @@ public class SseEventBuffer {
 
     /**
      * 标记请求已完成（[DONE] 已发送）
+     * <p>synchronized 与 getReconnectData 使用同一锁，消除竞态窗口</p>
      */
     public void markCompleted(String requestId) {
-        RequestContext ctx = buffers.get(requestId);
+        RequestContext ctx = buffers.getIfPresent(requestId);
         if (ctx != null) {
-            ctx.completed = true;
+            synchronized (ctx.events) {
+                ctx.completed = true;
+            }
         }
     }
 
@@ -60,7 +71,7 @@ public class SseEventBuffer {
      * @return 重连结果
      */
     public ReconnectResult getReconnectData(String requestId, Integer lastEventId, Long userId) {
-        RequestContext ctx = buffers.get(requestId);
+        RequestContext ctx = buffers.getIfPresent(requestId);
         if (ctx == null) {
             return ReconnectResult.notFound();
         }
@@ -85,30 +96,12 @@ public class SseEventBuffer {
         return ReconnectResult.cancelled(filtered);
     }
 
-    /** 定时清理过期缓冲（每分钟） */
-    @Scheduled(fixedRate = 60_000, initialDelay = 60_000)
-    public void cleanup() {
-        long now = System.currentTimeMillis();
-        int removed = 0;
-        var it = buffers.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            if (now - entry.getValue().createdAt > TTL_MS) {
-                it.remove();
-                removed++;
-            }
-        }
-        if (removed > 0) {
-            log.debug("[SseEventBuffer] 清理过期缓冲: removed={}", removed);
-        }
-    }
 
     // ── 内部数据结构 ──
 
     private static class RequestContext {
         final Long userId;
         final List<BufferedEvent> events = new ArrayList<>();
-        final long createdAt = System.currentTimeMillis();
         volatile boolean completed = false;
         volatile int maxEventId = 0;
 

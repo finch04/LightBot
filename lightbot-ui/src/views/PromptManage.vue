@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
@@ -114,6 +114,7 @@ import { message, Modal } from 'ant-design-vue'
 import TagInput from '../components/TagInput.vue'
 import EntityCard from '../components/EntityCard.vue'
 import { getPrompts, createPrompt, updatePrompt, deletePrompt } from '../api/prompt'
+import { useDebouncedWatch } from '../composables/useDebounce'
 
 const router = useRouter()
 const list = ref([])
@@ -124,7 +125,7 @@ const submitting = ref(false)
 const form = reactive({ id: null, promptKey: '', description: '', tags: '' })
 
 onMounted(() => loadData())
-watch(searchText, () => loadData())
+useDebouncedWatch(searchText, () => loadData())
 
 async function loadData() {
   loading.value = true

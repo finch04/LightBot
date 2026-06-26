@@ -502,15 +502,15 @@ onUnmounted(() => {
   gap: 6px;
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #fca5a5;
+  border: 1px solid var(--color-error-soft);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  color: #dc2626;
+  color: var(--color-error);
   transition: all 0.2s;
 }
 .btn-danger-outline:hover {
-  border-color: #dc2626;
+  border-color: var(--color-error);
   background: var(--color-error-bg);
 }
 .session-title-cell {
@@ -562,17 +562,17 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  border: 1px solid #fca5a5;
+  border: 1px solid var(--color-error-soft);
   border-radius: 6px;
   background: transparent;
-  color: #dc2626;
+  color: var(--color-error);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .btn-msg-delete:hover {
   background: var(--color-error-bg);
-  border-color: #dc2626;
+  border-color: var(--color-error);
 }
 .btn-msg-refresh {
   display: inline-flex;

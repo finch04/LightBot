@@ -313,6 +313,7 @@
                       <DeleteOutlined />
                     </button>
                   </a-tooltip>
+                  <span v-if="messages[virtualRow.index]._createTime" class="message-time">发表于 {{ formatTime(messages[virtualRow.index]._createTime) }}</span>
                 </div>
               </div>
               <!-- RAG引用列表 -->
@@ -670,6 +671,7 @@ import { getSessionMessages, getSession, createSession, getSessionTitle, deleteM
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import { copyToClipboard } from '../utils/clipboard'
+import { formatTime } from '../utils/format'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
@@ -1258,6 +1260,7 @@ function parseMessage(m) {
     _replyToContent: null,
     _replyToRole: null,
     _starred: !!m.starred,
+    _createTime: m.createTime || null,
   }
 }
 
@@ -2446,6 +2449,19 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .message.user .message-actions {
   justify-content: flex-end;
+}
+.message-time {
+  font-size: 12px;
+  color: var(--color-mute);
+  white-space: nowrap;
+  opacity: 0.8;
+}
+.message.assistant .message-time {
+  margin-left: auto;
+}
+.message.user .message-time {
+  order: -1;
+  margin-right: auto;
 }
 .btn-copy:hover {
   color: var(--color-body);

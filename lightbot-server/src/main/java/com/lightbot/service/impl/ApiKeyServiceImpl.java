@@ -188,27 +188,11 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         int dailyQuota = apiKey.getDailyQuota();
         if (dailyQuota <= 0) return true;
 
-        // 每日重置
+        // 1. 每日重置 + 原子扣减合并为单条 SQL，消除 TOCTOU 竞态
+        //    CASE WHEN 处理跨天重置：如果 quota_reset_at 不是今天，先重置再扣减
         LocalDate today = LocalDate.now();
-        if (apiKey.getQuotaResetAt() == null || !apiKey.getQuotaResetAt().equals(today)) {
-            lambdaUpdate()
-                    .eq(ApiKey::getId, apiKeyId)
-                    .set(ApiKey::getUsedTokens, 0L)
-                    .set(ApiKey::getQuotaResetAt, today)
-                    .update();
-            apiKey.setUsedTokens(0L);
-            apiKey.setQuotaResetAt(today);
-        }
-
-        if (apiKey.getUsedTokens() + tokenUsage > dailyQuota) {
-            return false;
-        }
-        // 原子累加
-        lambdaUpdate()
-                .eq(ApiKey::getId, apiKeyId)
-                .setSql("used_tokens = used_tokens + " + tokenUsage)
-                .update();
-        return true;
+        int affected = baseMapper.checkAndConsumeQuota(apiKeyId, tokenUsage, dailyQuota, today);
+        return affected > 0;
     }
 
     private ApiKey getByIdAndCheckOwner(Long id, Long userId) {

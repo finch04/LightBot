@@ -232,9 +232,9 @@ onMounted(loadBenchmarks)
 
 <style scoped>
 .eval-benchmarks { display: flex; flex-direction: column; gap: 12px; height: 100%; }
-.eval-desc { color: #999; font-size: 12px; line-height: 1.6; padding: 0 2px; }
+.eval-desc { color: var(--color-mute); font-size: 12px; line-height: 1.6; padding: 0 2px; }
 .benchmarks-toolbar { display: flex; gap: 8px; justify-content: flex-end; }
-.benchmarks-empty { text-align: center; color: #999; padding: 40px 0; }
+.benchmarks-empty { text-align: center; color: var(--color-mute); padding: 40px 0; }
 .benchmark-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .benchmark-card {
   border: 1px solid var(--color-hairline); border-radius: 6px; padding: 12px;
@@ -247,15 +247,15 @@ onMounted(loadBenchmarks)
 .benchmark-card-header { display: flex; justify-content: space-between; align-items: center; }
 .benchmark-card-left { display: flex; align-items: center; gap: 8px; }
 .benchmark-name { font-weight: 500; }
-.benchmark-count { color: #666; font-size: 12px; background: var(--color-canvas-soft-3); padding: 2px 8px; border-radius: 4px; }
+.benchmark-count { color: var(--color-body); font-size: 12px; background: var(--color-canvas-soft-3); padding: 2px 8px; border-radius: 4px; }
 .benchmark-desc { color: #888; font-size: 12px; }
 .benchmark-card-actions { display: flex; gap: 12px; }
-.action-icon { cursor: pointer; color: #666; font-size: 14px; }
-.action-icon:hover { color: #1890ff; }
-.action-danger:hover { color: #ff4d4f; }
+.action-icon { cursor: pointer; color: var(--color-body); font-size: 14px; }
+.action-icon:hover { color: var(--color-link); }
+.action-danger:hover { color: var(--color-error); }
 .preview-summary {
   display: flex; gap: 24px; margin-bottom: 12px; padding: 8px 12px;
-  background: var(--color-canvas-soft-2); border-radius: 6px; font-size: 13px; color: #333;
+  background: var(--color-canvas-soft-2); border-radius: 6px; font-size: 13px; color: var(--color-ink);
 }
 .preview-summary strong { margin-left: 4px; }
 .cell-ellipsis {

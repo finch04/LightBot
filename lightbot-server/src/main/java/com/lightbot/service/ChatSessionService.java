@@ -17,36 +17,40 @@ public interface ChatSessionService extends IService<ChatSession> {
     /**
      * 创建新会话
      *
+     * @param userId  用户ID
      * @param agentId AgentID
      * @return 会话
      */
-    ChatSession createSession(Long agentId);
+    ChatSession createSession(Long userId, Long agentId);
 
     /**
      * 分页查询当前用户的会话列表
      *
+     * @param userId   用户ID
      * @param pageNum  页码
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    Page<ChatSession> listMySessions(int pageNum, int pageSize);
+    Page<ChatSession> listMySessions(Long userId, int pageNum, int pageSize);
 
     /**
      * 分页查询当前用户的会话列表（支持关键词搜索）
      *
+     * @param userId   用户ID
      * @param pageNum  页码
      * @param pageSize 每页数量
      * @param keyword  标题模糊搜索关键词（可为null）
      * @return 分页结果
      */
-    Page<ChatSession> listMySessions(int pageNum, int pageSize, String keyword);
+    Page<ChatSession> listMySessions(Long userId, int pageNum, int pageSize, String keyword);
 
     /**
      * 批量删除会话（物理删除，包含所有消息）
      *
-     * @param ids 会话ID列表
+     * @param userId 用户ID
+     * @param ids    会话ID列表
      */
-    void deleteSessions(List<Long> ids);
+    void deleteSessions(Long userId, List<Long> ids);
 
     /**
      * 获取会话标题（轻量查询，跳过缓存）
@@ -112,9 +116,10 @@ public interface ChatSessionService extends IService<ChatSession> {
     /**
      * 导出会话为 Markdown 或 JSON 格式
      *
+     * @param userId    用户ID
      * @param sessionId 会话ID
      * @param format    格式：markdown 或 json
      * @return 文件内容字符串
      */
-    String exportSession(Long sessionId, String format);
+    String exportSession(Long userId, Long sessionId, String format);
 }

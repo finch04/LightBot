@@ -87,7 +87,7 @@
       </template>
     </a-table>
 
-    <!-- 创建实验弹窗（多步表单） -->
+    <!-- 创建实验弹窗 -->
     <a-modal
       v-model:open="createDialogVisible"
       title="创建实验"
@@ -95,141 +95,20 @@
       :footer="null"
       :maskClosable="false"
     >
-      <!-- 步骤条 -->
-      <a-steps :current="currentStep" size="small" style="margin-bottom: 24px">
-        <a-step title="基本信息" />
-        <a-step title="评测集" />
-        <a-step title="评测对象" />
-        <a-step title="评估器" />
-      </a-steps>
-
-      <!-- Step 1: 基本信息 -->
-      <div v-show="currentStep === 0">
-        <a-form :model="createForm" :label-col="{ span: 5 }">
-          <a-form-item label="实验名称" required>
-            <a-input v-model:value="createForm.name" :maxlength="30" show-count placeholder="如：客服 Prompt v1 vs v2 对比 (不超过30字)" />
-          </a-form-item>
-          <a-form-item label="描述">
-            <a-textarea v-model:value="createForm.description" :rows="3" :maxlength="50" show-count placeholder="实验目的说明 (不超过50字)" />
-          </a-form-item>
-        </a-form>
-      </div>
-
-      <!-- Step 2: 选择评测集 -->
-      <div v-show="currentStep === 1">
-        <a-form :model="createForm" :label-col="{ span: 5 }">
-          <a-form-item label="评测集" required>
-            <a-select
-              v-model:value="createForm.datasetId"
-              placeholder="选择评测集"
-              style="width: 100%"
-              @change="onDatasetChange"
-            >
-              <a-select-option v-for="d in datasetList" :key="d.id" :value="d.id">
-                {{ d.name }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="数据版本" required>
-            <a-select
-              v-model:value="createForm.datasetVersion"
-              placeholder="选择数据版本"
-              style="width: 100%"
-            >
-              <a-select-option v-for="v in datasetVersions" :key="v.version" :value="v.version">
-                {{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-form>
-      </div>
-
-      <!-- Step 3: 配置评测对象 -->
-      <div v-show="currentStep === 2">
-        <a-form :model="createForm" :label-col="{ span: 5 }">
-          <a-form-item label="Prompt Key" required>
-            <a-select
-              v-model:value="createForm.promptKey"
-              placeholder="选择 Prompt"
-              style="width: 100%"
-              @change="onPromptChange"
-            >
-              <a-select-option v-for="p in promptList" :key="p.promptKey" :value="p.promptKey">
-                {{ p.promptKey }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="Prompt 版本" required>
-            <a-select
-              v-model:value="createForm.promptVersion"
-              placeholder="选择版本"
-              style="width: 100%"
-            >
-              <a-select-option v-for="v in promptVersions" :key="v.version" :value="v.version">
-                {{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="变量映射">
-            <a-textarea
-              v-model:value="createForm.variableMapping"
-              :rows="3"
-              placeholder='将评测集字段映射到 Prompt 变量，JSON 格式：{"input":"user_input","expected_output":"reference"}'
-            />
-          </a-form-item>
-        </a-form>
-      </div>
-
-      <!-- Step 4: 配置评估器 -->
-      <div v-show="currentStep === 3">
-        <div v-for="(ev, idx) in createForm.evaluators" :key="idx" class="evaluator-config-block">
-          <div class="evaluator-config-header">
-            <span class="evaluator-config-title">评估器 {{ idx + 1 }}</span>
-            <a-tooltip v-if="createForm.evaluators.length > 1" title="移除">
-              <DeleteOutlined class="evaluator-remove-btn" @click="removeCreateEvaluator(idx)" />
-            </a-tooltip>
-          </div>
-          <a-form :model="ev" :label-col="{ span: 5 }">
-            <a-form-item label="评估器" required>
-              <a-select v-model:value="ev.evaluatorId" placeholder="选择评估器" style="width: 100%" @change="(id) => onCreateEvaluatorChange(idx, id)">
-                <a-select-option v-for="e in evaluatorList" :key="e.id" :value="e.id">{{ e.name }}</a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item label="评估器版本" required>
-              <a-select v-model:value="ev.evaluatorVersion" placeholder="选择版本" style="width: 100%">
-                <a-select-option v-for="v in ev.versions" :key="v.version" :value="v.version">{{ v.version }} {{ v.versionDesc ? '- ' + v.versionDesc : '' }}</a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item label="参数映射">
-              <a-textarea v-model:value="ev.evaluatorParamMapping" :rows="2" placeholder='JSON: {"actual_output":"output","expected_output":"reference"}' />
-            </a-form-item>
-          </a-form>
-        </div>
-        <a-button v-if="createForm.evaluators.length < 5" type="dashed" size="small" block @click="addCreateEvaluator" style="margin-top: 4px;">
-          <PlusOutlined /> 添加评估器
-        </a-button>
-        <div v-if="createForm.evaluators.length >= 5" style="margin-top: 4px; font-size: 12px; color: var(--color-mute); text-align: center;">最多添加5个评估器</div>
-      </div>
-
-      <!-- 底部按钮 -->
-      <div class="dialog-footer">
-        <div>
-          <button v-if="currentStep > 0" class="btn-cancel" @click="currentStep--">上一步</button>
-        </div>
-        <div class="dialog-footer-right">
+      <ExperimentCreateForm
+        ref="createFormRef"
+        @success="onCreateSuccess"
+      >
+        <template #cancel>
           <button class="btn-cancel" @click="createDialogVisible = false">取消</button>
-          <button v-if="currentStep < 3" class="btn-primary-sm" @click="nextStep">下一步</button>
-          <button v-else class="btn-primary-sm" :disabled="submitting" @click="handleCreate">
-            {{ submitting ? '创建中...' : '创建实验' }}
-          </button>
-        </div>
-      </div>
+        </template>
+      </ExperimentCreateForm>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
@@ -237,36 +116,22 @@ import {
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import {
-  getExperiments, createExperiment, stopExperiment, deleteExperiment, restartExperiment,
+  getExperiments, stopExperiment, deleteExperiment, restartExperiment,
 } from '../api/experiment'
-import { getEvalDatasets, getEvalDatasetVersions } from '../api/evalDataset'
-import { getPrompts, getPromptVersions } from '../api/prompt'
-import { getEvaluators, getEvaluatorVersions } from '../api/evaluator'
+import { useDebouncedWatch } from '../composables/useDebounce'
+import { formatTime } from '../utils/format'
+import ExperimentCreateForm from '../components/eval/ExperimentCreateForm.vue'
 
 const router = useRouter()
 const list = ref([])
 const loading = ref(false)
 const searchText = ref('')
 const createDialogVisible = ref(false)
-const submitting = ref(false)
-const currentStep = ref(0)
+const createFormRef = ref(null)
+let loadAbortController = null
 
-// 下拉数据
-const datasetList = ref([])
-const datasetVersions = ref([])
-const promptList = ref([])
-const promptVersions = ref([])
-const evaluatorList = ref([])
-
-const createForm = reactive({
-  name: '',
-  description: '',
-  datasetId: null,
-  datasetVersion: '',
-  promptKey: '',
-  promptVersion: '',
-  variableMapping: '',
-  evaluators: [{ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] }],
+onUnmounted(() => {
+  loadAbortController?.abort()
 })
 
 const columns = [
@@ -282,149 +147,37 @@ const columns = [
 
 onMounted(() => {
   loadData()
-  loadDropdowns()
 })
 
-watch(searchText, () => loadData())
+useDebouncedWatch(searchText, () => loadData())
 
 async function loadData() {
+  loadAbortController?.abort()
+  const controller = new AbortController()
+  loadAbortController = controller
   loading.value = true
   try {
     const params = { pageNum: 1, pageSize: 100 }
     if (searchText.value) params.keyword = searchText.value
     const res = await getExperiments(params)
-    list.value = res.data?.records || []
+    if (!controller.signal.aborted) {
+      list.value = res.data?.records || []
+    }
   } finally {
-    loading.value = false
+    if (!controller.signal.aborted) {
+      loading.value = false
+    }
   }
-}
-
-async function loadDropdowns() {
-  try {
-    const [dsRes, pRes, eRes] = await Promise.all([
-      getEvalDatasets({ pageNum: 1, pageSize: 100 }),
-      getPrompts({ pageNum: 1, pageSize: 100 }),
-      getEvaluators({ pageNum: 1, pageSize: 100 }),
-    ])
-    datasetList.value = dsRes.data?.records || []
-    promptList.value = pRes.data?.records || []
-    evaluatorList.value = eRes.data?.records || []
-  } catch { /* ignore */ }
-}
-
-async function onDatasetChange(id) {
-  createForm.datasetVersion = ''
-  try {
-    const res = await getEvalDatasetVersions(id)
-    datasetVersions.value = res.data || []
-  } catch { datasetVersions.value = [] }
-}
-
-async function onPromptChange(key) {
-  createForm.promptVersion = ''
-  try {
-    const res = await getPromptVersions(key)
-    promptVersions.value = res.data || []
-  } catch { promptVersions.value = [] }
-}
-
-async function onCreateEvaluatorChange(idx, id) {
-  createForm.evaluators[idx].evaluatorVersion = ''
-  try {
-    const res = await getEvaluatorVersions(id)
-    createForm.evaluators[idx].versions = res.data || []
-  } catch { createForm.evaluators[idx].versions = [] }
-}
-
-function addCreateEvaluator() {
-  if (createForm.evaluators.length >= 5) return message.warning('每个实验最多添加5个评估器')
-  createForm.evaluators.push({ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] })
-}
-
-function removeCreateEvaluator(idx) {
-  createForm.evaluators.splice(idx, 1)
 }
 
 function openCreateDialog() {
-  currentStep.value = 0
-  Object.assign(createForm, {
-    name: '', description: '',
-    datasetId: null, datasetVersion: '',
-    promptKey: '', promptVersion: '', variableMapping: '',
-    evaluators: [{ evaluatorId: null, evaluatorVersion: '', evaluatorParamMapping: '', versions: [] }],
-  })
-  datasetVersions.value = []
-  promptVersions.value = []
+  createFormRef.value?.resetForm()
   createDialogVisible.value = true
 }
 
-function nextStep() {
-  if (currentStep.value === 0 && !createForm.name.trim()) return message.warning('请输入实验名称')
-  if (currentStep.value === 1 && (!createForm.datasetId || !createForm.datasetVersion)) return message.warning('请选择评测集和版本')
-  if (currentStep.value === 2 && (!createForm.promptKey || !createForm.promptVersion)) return message.warning('请选择 Prompt 和版本')
-  currentStep.value++
-}
-
-async function handleCreate() {
-  if (createForm.evaluators.length === 0) return message.warning('请至少添加一个评估器')
-  for (let i = 0; i < createForm.evaluators.length; i++) {
-    const ev = createForm.evaluators[i]
-    if (!ev.evaluatorId || !ev.evaluatorVersion) return message.warning(`请选择评估器 ${i + 1} 的评估器和版本`)
-  }
-  submitting.value = true
-  try {
-    let variableMap = []
-    if (createForm.variableMapping.trim()) {
-      try {
-        const parsed = JSON.parse(createForm.variableMapping)
-        variableMap = Object.entries(parsed).map(([promptVariable, datasetColumn]) => ({ promptVariable, datasetColumn }))
-      } catch { return message.warning('变量映射 JSON 格式不正确') }
-    }
-
-    // 查找 datasetVersionId
-    const dsVersion = datasetVersions.value.find(v => v.version === createForm.datasetVersion)
-    if (!dsVersion) return message.warning('评测集版本无效，请重新选择')
-    const datasetVersionId = dsVersion.id
-
-    const evaluationObjectConfig = JSON.stringify({
-      type: 'prompt',
-      config: {
-        promptKey: createForm.promptKey,
-        version: createForm.promptVersion,
-        variableMap,
-      },
-    })
-    const evaluatorConfigArr = createForm.evaluators.map(ev => {
-      let evaluatorParamMap = []
-      if (ev.evaluatorParamMapping?.trim()) {
-        try {
-          const parsed = JSON.parse(ev.evaluatorParamMapping)
-          evaluatorParamMap = Object.entries(parsed).map(([evaluatorVariable, source]) => ({ evaluatorVariable, source }))
-        } catch { throw new Error('评估器参数映射 JSON 格式不正确') }
-      }
-      const evVersion = ev.versions?.find(v => v.version === ev.evaluatorVersion)
-      return {
-        evaluatorVersionId: evVersion?.id ? String(evVersion.id) : '',
-        variableMap: evaluatorParamMap,
-      }
-    })
-    const evaluatorConfig = JSON.stringify(evaluatorConfigArr)
-
-    await createExperiment({
-      name: createForm.name,
-      description: createForm.description,
-      datasetId: createForm.datasetId,
-      datasetVersionId,
-      datasetVersion: createForm.datasetVersion,
-      evaluationObjectConfig,
-      evaluatorConfig,
-    })
-    message.success('实验创建成功')
-    createDialogVisible.value = false
-    loadData()
-  } finally {
-    submitting.value = false
-  }
+function onCreateSuccess() {
+  createDialogVisible.value = false
+  loadData()
 }
 
 function handleStop(id) {
@@ -486,10 +239,6 @@ function progressStatus(s) {
   return 'active'
 }
 
-function formatTime(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleString('zh-CN')
-}
 </script>
 
 <style scoped>
@@ -550,17 +299,6 @@ function formatTime(t) {
   border-color: var(--color-link);
   color: var(--color-link);
 }
-.btn-primary-sm {
-  padding: 6px 16px;
-  background: var(--color-primary);
-  color: #fff;
-  border: none;
-  border-radius: 100px;
-  cursor: pointer;
-  font-size: 13px;
-}
-.btn-primary-sm:hover { background: #27272a; }
-.btn-primary-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-cancel {
   padding: 6px 16px;
   background: transparent;
@@ -588,15 +326,4 @@ function formatTime(t) {
   display: flex;
   gap: 4px;
 }
-.dialog-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 24px;
-}
-.dialog-footer-right { display: flex; gap: 8px; }
-.evaluator-config-block { border: 1px solid var(--color-hairline); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
-.evaluator-config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.evaluator-config-title { font-size: 13px; font-weight: 600; color: var(--color-ink); }
-.evaluator-remove-btn { color: var(--color-mute); cursor: pointer; font-size: 14px; }
-.evaluator-remove-btn:hover { color: #ef4444; }
 </style>

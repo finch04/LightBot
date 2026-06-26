@@ -9,7 +9,7 @@
   >
     <div class="feedback-page">
       <div class="feedback-header">
-        <a-radio-group v-model:value="filterRating" button-style="solid" size="small" @change="loadData">
+        <a-radio-group v-model:value="filterRating" button-style="solid" size="small" @change="onFilterChange">
           <a-radio-button value="">全部</a-radio-button>
           <a-radio-button value="like">
             <LikeOutlined /> 有帮助
@@ -69,6 +69,7 @@ import { useRouter } from 'vue-router'
 import { LikeOutlined, DislikeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { listMessageFeedbacks } from '../api/chat'
+import { formatRelativeTime as formatTime } from '../utils/format'
 
 const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open'])
@@ -83,15 +84,16 @@ const filterRating = ref('')
 
 watch(() => props.open, v => { if (v) loadData() })
 
+function onFilterChange() {
+  pageNum.value = 1
+  loadData()
+}
+
 async function loadData() {
   loading.value = true
   try {
-    const res = await listMessageFeedbacks(pageNum.value, pageSize)
-    let records = res.data?.records || []
-    if (filterRating.value) {
-      records = records.filter(fb => fb.rating === filterRating.value)
-    }
-    feedbacks.value = records
+    const res = await listMessageFeedbacks(pageNum.value, pageSize, filterRating.value)
+    feedbacks.value = res.data?.records || []
     total.value = res.data?.total || 0
   } catch {
     message.error('加载失败')
@@ -119,20 +121,6 @@ function truncateContent(content) {
   return content.length > 200 ? content.slice(0, 200) + '...' : content
 }
 
-function formatTime(time) {
-  if (!time) return ''
-  const date = new Date(time)
-  const now = new Date()
-  const diffMs = now - date
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin}分钟前`
-  const diffHour = Math.floor(diffMin / 60)
-  if (diffHour < 24) return `${diffHour}小时前`
-  const diffDay = Math.floor(diffHour / 24)
-  if (diffDay < 30) return `${diffDay}天前`
-  return date.toLocaleDateString()
-}
 </script>
 
 <style scoped>

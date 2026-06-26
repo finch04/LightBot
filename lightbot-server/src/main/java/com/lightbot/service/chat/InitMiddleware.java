@@ -49,7 +49,7 @@ public class InitMiddleware implements ChatMiddleware {
         }
 
         // 1. 解析会话ID，并在对话中切换智能体时更新会话绑定
-        Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
+        Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId(), ctx.getUserId());
         ctx.setSessionId(sessionId);
         bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId(), ctx.getRequest().getAgentVersionId(), ctx.getRequest().getConfigVersion());
         long t1 = System.currentTimeMillis();
@@ -83,7 +83,7 @@ public class InitMiddleware implements ChatMiddleware {
         } catch (Exception ignored) {
         }
 
-        Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId());
+        Long sessionId = resolveSessionId(ctx.getRequest().getSessionId(), ctx.getRequest().getAgentId(), ctx.getUserId());
         ctx.setSessionId(sessionId);
         bindSessionAgentIfNeeded(sessionId, ctx.getRequest().getAgentId(), ctx.getRequest().getAgentVersionId(), ctx.getRequest().getConfigVersion());
 
@@ -297,11 +297,11 @@ public class InitMiddleware implements ChatMiddleware {
     /**
      * 解析会话ID：有则复用，无则新建
      */
-    private Long resolveSessionId(Long sessionId, Long agentId) {
+    private Long resolveSessionId(Long sessionId, Long agentId, Long userId) {
         if (sessionId != null) {
             return sessionId;
         }
-        return chatSessionService.createSession(agentId).getId();
+        return chatSessionService.createSession(userId, agentId).getId();
     }
 
     /**

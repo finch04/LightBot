@@ -18,6 +18,18 @@
 export function sseFetch(url, { token, method = 'GET', body, onEvent, onDone, onError, signal, maxRetries = 0, retryDelay = 2000 }) {
   let aborted = false
   let retries = 0
+  const internalController = new AbortController()
+
+  // 外部 signal 中止时同步中止内部 controller
+  if (signal) {
+    if (signal.aborted) {
+      internalController.abort(signal.reason)
+    } else {
+      signal.addEventListener('abort', () => internalController.abort(signal.reason), { once: true })
+    }
+  }
+
+  const effectiveSignal = internalController.signal
 
   function buildHeaders() {
     const h = {}
@@ -48,7 +60,7 @@ export function sseFetch(url, { token, method = 'GET', body, onEvent, onDone, on
   }
 
   async function attempt() {
-    const fetchOptions = { method, headers: buildHeaders(), signal }
+    const fetchOptions = { method, headers: buildHeaders(), signal: effectiveSignal }
     if (body) fetchOptions.body = JSON.stringify(body)
     const response = await fetch(url, fetchOptions)
     if (!response.ok) throw new Error(`SSE 请求失败: ${response.status}`)
@@ -88,7 +100,7 @@ export function sseFetch(url, { token, method = 'GET', body, onEvent, onDone, on
         onDone?.()
         return
       } catch (err) {
-        if (err.name === 'AbortError' || signal?.aborted) return
+        if (err.name === 'AbortError' || effectiveSignal.aborted) return
         retries++
         if (retries > maxRetries) {
           onError?.(err)
@@ -105,6 +117,7 @@ export function sseFetch(url, { token, method = 'GET', body, onEvent, onDone, on
   return {
     close() {
       aborted = true
+      internalController.abort()
     }
   }
 }

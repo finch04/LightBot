@@ -184,7 +184,7 @@ async function handleInit() {
 .form-header h2 {
   font-size: 24px;
   font-weight: 600;
-  color: #141414;
+  color: var(--color-ink);
   margin: 0 0 6px;
 }
 
@@ -209,7 +209,7 @@ async function handleInit() {
 .form-label {
   font-size: 14px;
   font-weight: 500;
-  color: #141414;
+  color: var(--color-ink);
 }
 
 .form-label .optional {
@@ -249,7 +249,7 @@ async function handleInit() {
   border: none;
   outline: none;
   font-size: 14px;
-  color: #141414;
+  color: var(--color-ink);
   background: transparent;
 }
 

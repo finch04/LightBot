@@ -1,6 +1,5 @@
 package com.lightbot.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -14,6 +13,7 @@ import com.lightbot.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -35,9 +35,8 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
     private final MessageService messageService;
 
     @Override
-    public MessageFeedback submitFeedback(Long messageId, MessageFeedbackRequest request) {
-        long userId = StpUtil.getLoginIdAsLong();
-
+    @Transactional(rollbackFor = Exception.class)
+    public MessageFeedback submitFeedback(Long messageId, Long userId, MessageFeedbackRequest request) {
         // 1. 查询是否已有反馈
         MessageFeedback existing = getOne(new LambdaQueryWrapper<MessageFeedback>()
                 .eq(MessageFeedback::getUserId, userId)
@@ -72,22 +71,20 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
     }
 
     @Override
-    public MessageFeedback getMyFeedback(Long messageId) {
-        long userId = StpUtil.getLoginIdAsLong();
+    public MessageFeedback getMyFeedback(Long messageId, Long userId) {
         return getOne(new LambdaQueryWrapper<MessageFeedback>()
                 .eq(MessageFeedback::getUserId, userId)
                 .eq(MessageFeedback::getMessageId, messageId));
     }
 
     @Override
-    public Page<MessageFeedbackVO> listMyFeedbacks(int pageNum, int pageSize) {
-        long userId = StpUtil.getLoginIdAsLong();
-
+    public Page<MessageFeedbackVO> listMyFeedbacks(Long userId, int pageNum, int pageSize, String rating) {
         // 1. 分页查询当前用户的反馈
-        Page<MessageFeedback> page = page(new Page<>(pageNum, pageSize),
-                new LambdaQueryWrapper<MessageFeedback>()
-                        .eq(MessageFeedback::getUserId, userId)
-                        .orderByDesc(MessageFeedback::getCreateTime));
+        LambdaQueryWrapper<MessageFeedback> wrapper = new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId)
+                .eq(rating != null && !rating.isEmpty(), MessageFeedback::getRating, rating)
+                .orderByDesc(MessageFeedback::getCreateTime);
+        Page<MessageFeedback> page = page(new Page<>(pageNum, pageSize), wrapper);
 
         // 2. 批量查询关联的消息内容
         List<Long> messageIds = page.getRecords().stream()
@@ -124,11 +121,10 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
     }
 
     @Override
-    public Map<Long, MessageFeedback> batchGetFeedbacks(List<Long> messageIds) {
+    public Map<Long, MessageFeedback> batchGetFeedbacks(Long userId, List<Long> messageIds) {
         if (messageIds == null || messageIds.isEmpty()) {
             return Map.of();
         }
-        long userId = StpUtil.getLoginIdAsLong();
 
         List<MessageFeedback> feedbacks = list(new LambdaQueryWrapper<MessageFeedback>()
                 .eq(MessageFeedback::getUserId, userId)
@@ -139,9 +135,7 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
     }
 
     @Override
-    public Map<String, Object> getFeedbackStats() {
-        long userId = StpUtil.getLoginIdAsLong();
-
+    public Map<String, Object> getFeedbackStats(Long userId) {
         long total = count(new LambdaQueryWrapper<MessageFeedback>()
                 .eq(MessageFeedback::getUserId, userId));
         long likeCount = count(new LambdaQueryWrapper<MessageFeedback>()

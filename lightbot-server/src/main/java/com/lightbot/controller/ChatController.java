@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
@@ -83,7 +84,10 @@ public class ChatController {
 
         // 在 boundedElastic 调度器上订阅 Flux，避免阻塞 Servlet 线程
         Flux<String> flux = chatService.chatStream(request);
-        flux.publishOn(Schedulers.boundedElastic())
+        flux.publishOn(Schedulers.boundedElastic(), 256)
+                .onBackpressureBuffer(512,
+                        dropped -> log.warn("[Chat] SSE 背压丢弃: requestId={}", activeRequestId[0]),
+                        reactor.core.publisher.BufferOverflowStrategy.DROP_OLDEST)
                 .subscribe(
                         chunk -> {
                             try {
@@ -198,32 +202,38 @@ public class ChatController {
     public Result<MessageFeedback> submitMessageFeedback(
             @PathVariable Long messageId,
             @Valid @RequestBody MessageFeedbackRequest request) {
-        return Result.ok(messageFeedbackService.submitFeedback(messageId, request));
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(messageFeedbackService.submitFeedback(messageId, userId, request));
     }
 
     @Operation(summary = "获取当前用户对指定消息的反馈")
     @GetMapping("/messages/{messageId}/feedback")
     public Result<MessageFeedback> getMessageFeedback(@PathVariable Long messageId) {
-        return Result.ok(messageFeedbackService.getMyFeedback(messageId));
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(messageFeedbackService.getMyFeedback(messageId, userId));
     }
 
     @Operation(summary = "获取当前用户的所有反馈记录（分页）")
     @GetMapping("/feedbacks")
     public Result<Page<MessageFeedbackVO>> listMyFeedbacks(
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        return Result.ok(messageFeedbackService.listMyFeedbacks(pageNum, pageSize));
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String rating) {
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(messageFeedbackService.listMyFeedbacks(userId, pageNum, pageSize, rating));
     }
 
     @Operation(summary = "获取当前用户的反馈统计")
     @GetMapping("/feedbacks/stats")
     public Result<Map<String, Object>> getFeedbackStats() {
-        return Result.ok(messageFeedbackService.getFeedbackStats());
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(messageFeedbackService.getFeedbackStats(userId));
     }
 
     @Operation(summary = "批量获取消息反馈状态")
     @PostMapping("/messages/feedbacks/batch")
     public Result<Map<Long, MessageFeedback>> batchGetFeedbacks(@RequestBody List<Long> messageIds) {
-        return Result.ok(messageFeedbackService.batchGetFeedbacks(messageIds));
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(messageFeedbackService.batchGetFeedbacks(userId, messageIds));
     }
 }

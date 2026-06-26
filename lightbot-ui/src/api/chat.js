@@ -247,8 +247,10 @@ export function batchGetMessageFeedbacks(messageIds) {
   return request.post('/chat/messages/feedbacks/batch', messageIds)
 }
 
-export function listMessageFeedbacks(pageNum = 1, pageSize = 20) {
-  return request.get('/chat/feedbacks', { params: { pageNum, pageSize } })
+export function listMessageFeedbacks(pageNum = 1, pageSize = 20, rating = '') {
+  const params = { pageNum, pageSize }
+  if (rating) params.rating = rating
+  return request.get('/chat/feedbacks', { params })
 }
 
 export function getFeedbackStats() {

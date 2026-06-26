@@ -2,6 +2,7 @@ package com.lightbot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
+import cn.dev33.satoken.stp.StpUtil;
 import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.Message;
 import com.lightbot.service.ChatSessionService;
@@ -36,7 +37,8 @@ public class ChatSessionController {
     @Operation(summary = "创建新会话")
     @PostMapping
     public Result<ChatSession> create(@RequestParam(required = false) Long agentId) {
-        return Result.ok(chatSessionService.createSession(agentId));
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(chatSessionService.createSession(userId, agentId));
     }
 
     @Operation(summary = "分页查询当前用户的会话列表")
@@ -45,7 +47,8 @@ public class ChatSessionController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
-        return Result.ok(chatSessionService.listMySessions(pageNum, pageSize, keyword));
+        long userId = StpUtil.getLoginIdAsLong();
+        return Result.ok(chatSessionService.listMySessions(userId, pageNum, pageSize, keyword));
     }
 
     @Operation(summary = "获取会话详情")
@@ -93,7 +96,8 @@ public class ChatSessionController {
     @Operation(summary = "批量删除会话（物理删除，包含所有消息）")
     @DeleteMapping("/batch")
     public Result<Void> deleteBatch(@RequestBody List<Long> ids) {
-        chatSessionService.deleteSessions(ids);
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.deleteSessions(userId, ids);
         return Result.ok();
     }
 
@@ -141,7 +145,8 @@ public class ChatSessionController {
     public ResponseEntity<byte[]> exportSession(
             @PathVariable Long id,
             @RequestParam(defaultValue = "markdown") String format) {
-        String content = chatSessionService.exportSession(id, format);
+        long userId = StpUtil.getLoginIdAsLong();
+        String content = chatSessionService.exportSession(userId, id, format);
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
 
         String ext = "json".equalsIgnoreCase(format) ? "json" : "md";

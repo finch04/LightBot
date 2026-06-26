@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
@@ -141,6 +141,7 @@ import {
   getEvaluators, createEvaluator, updateEvaluator, deleteEvaluator,
   listEvaluatorExamples, createFromEvaluatorExample,
 } from '../api/evaluator'
+import { useDebouncedWatch } from '../composables/useDebounce'
 
 const router = useRouter()
 const list = ref([])
@@ -154,7 +155,7 @@ const examples = ref([])
 const exampleCreating = ref(null)
 
 onMounted(() => loadData())
-watch(searchText, () => loadData())
+useDebouncedWatch(searchText, () => loadData())
 
 async function loadData() {
   loading.value = true

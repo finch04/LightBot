@@ -7,7 +7,7 @@
         placeholder="搜索用户名/昵称..."
         allow-clear
         style="width: 260px"
-        @change="loadUsers"
+        @change="debouncedLoadUsers"
       >
         <template #prefix><SearchOutlined /></template>
       </a-input>
@@ -210,6 +210,13 @@ import {
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { listUsers, adminUpdateUser, adminDeleteUser, getUserDetail, getUserAgents, getUserKnowledges } from '../api/admin'
+import { formatTime } from '../utils/format'
+
+let searchTimer = null
+function debouncedLoadUsers() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => loadUsers(), 300)
+}
 
 const loading = ref(false)
 const userList = ref([])
@@ -362,12 +369,6 @@ async function openDetail(record) {
   })
 }
 
-function formatTime(t) {
-  if (!t) return '-'
-  const d = new Date(t)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 </script>
 
 <style scoped>
@@ -457,7 +458,7 @@ function formatTime(t) {
 }
 .btn-icon.danger:hover {
   background: var(--color-error-bg);
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 /* 详情抽屉 */

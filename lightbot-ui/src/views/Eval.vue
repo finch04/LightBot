@@ -472,6 +472,7 @@ import {
   getExperiments, stopExperiment, deleteExperiment, restartExperiment, createExperiment,
 } from '../api/experiment'
 import { getEvalDatasetVersions } from '../api/evalDataset'
+import { formatTime } from '../utils/format'
 import { getPrompts, getPromptVersions } from '../api/prompt'
 
 const router = useRouter()
@@ -573,7 +574,7 @@ async function loadData(tab = activeTab.value, force = false) {
   const loading = getTabLoading(tab)
   loading.value = true
   try {
-    const params = { pageNum: 1, pageSize: 100 }
+    const params = { pageNum: 1, pageSize: 20 }
     if (searchText.value) params.keyword = searchText.value
     if (tab === 'datasets') {
       const res = await getEvalDatasets(params)
@@ -860,10 +861,6 @@ function progressStatus(s) {
   return 'active'
 }
 
-function formatTime(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleString('zh-CN')
-}
 </script>
 
 <style scoped>

@@ -74,7 +74,7 @@ function petalStyle(i) {
   align-items: center;
   padding: 40px 20px;
   min-height: 100%;
-  background: linear-gradient(135deg, #fdf2f8 0%, #f0f4ff 50%, #f5f3ff 100%);
+  background: linear-gradient(135deg, var(--color-canvas-soft) 0%, var(--color-canvas) 50%, var(--color-canvas-soft-2) 100%);
   overflow: hidden;
 }
 
@@ -124,14 +124,14 @@ function petalStyle(i) {
   z-index: 1;
   width: 100%;
   max-width: 680px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--color-canvas);
   backdrop-filter: blur(12px);
   border-radius: 20px;
   padding: 56px 48px;
   padding-top: 64px;
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.06),
-    0 0 0 1px rgba(255, 255, 255, 0.6);
+    0 0 0 1px var(--color-hairline);
   text-align: center;
   animation: cardIn 0.6s ease-out;
   overflow: visible;
@@ -255,7 +255,7 @@ function petalStyle(i) {
 
 .info-link {
   font-size: 14px;
-  color: #2563eb;
+  color: var(--color-link);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -263,7 +263,7 @@ function petalStyle(i) {
 }
 
 .info-link:hover {
-  color: #1d4ed8;
+  color: var(--color-link-deep);
 }
 
 .about-features {
@@ -301,6 +301,6 @@ function petalStyle(i) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  background: var(--color-primary);
 }
 </style>

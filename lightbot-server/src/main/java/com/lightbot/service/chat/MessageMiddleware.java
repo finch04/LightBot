@@ -301,7 +301,7 @@ public class MessageMiddleware implements ChatMiddleware {
         if (agentConfigMap == null) {
             agentConfigMap = agent != null ? initMiddleware.resolveRuntimeConfigMap(agent, request) : Map.of();
         }
-        int maxContextMessages = 20;
+        int maxContextMessages = ConfigKeys.Agent.DEFAULT_MAX_CONTEXT_MESSAGES;
         if (agentConfigMap.containsKey("maxContextMessages")) {
             Object v = agentConfigMap.get("maxContextMessages");
             maxContextMessages = v instanceof Number ? ((Number) v).intValue() : Integer.parseInt(v.toString());

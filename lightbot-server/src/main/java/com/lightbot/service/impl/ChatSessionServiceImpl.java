@@ -1,6 +1,5 @@
 package com.lightbot.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -18,7 +17,12 @@ import com.lightbot.util.RedisUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,6 +44,8 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     private final LlmTraceService llmTraceService;
     private final RedisUtil redisUtil;
     private final MinioUtil minioUtil;
+    @Qualifier("lightBotExecutor")
+    private final ThreadPoolTaskExecutor lightBotExecutor;
 
     private final ObjectMapper objectMapper;
 
@@ -102,11 +108,8 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
-    public ChatSession createSession(Long agentId) {
-        // 1. 获取当前用户ID
-        long userId = StpUtil.getLoginIdAsLong();
-
-        // 2. agentId为空时查询用户的默认Agent
+    public ChatSession createSession(Long userId, Long agentId) {
+        // 1. agentId为空时查询用户的默认Agent
         Long finalAgentId = agentId;
         if (finalAgentId == null) {
             var defaultAgent = agentService.getDefaultAgent(userId);
@@ -131,8 +134,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
-    public Page<ChatSession> listMySessions(int pageNum, int pageSize) {
-        long userId = StpUtil.getLoginIdAsLong();
+    public Page<ChatSession> listMySessions(Long userId, int pageNum, int pageSize) {
         // 优先读列表缓存
         String listKey = listCacheKey(userId, pageNum, pageSize);
         String cached = redisUtil.get(listKey);
@@ -200,6 +202,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteSession(Long sessionId) {
         ChatSession session = getById(sessionId);
         if (session == null) {
@@ -209,16 +212,23 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         messageService.deleteBySessionId(sessionId);
         // 2. 物理删除会话下的所有调用链记录
         llmTraceService.deleteBySessionId(sessionId);
-        // 3. 清理会话工作区文件
-        try {
-            minioUtil.deleteByPrefix("sessions/" + sessionId + "/");
-        } catch (Exception e) {
-            log.warn("[Session] 清理工作区文件失败, sessionId={}", sessionId, e);
-        }
-        // 4. 物理删除会话
+        // 3. 物理删除会话
         removeById(sessionId);
         evictSessionCache(sessionId);
         evictListCache(session.getUserId());
+        // 4. MinIO 文件清理放在事务提交后，避免事务回滚后文件已删除
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                lightBotExecutor.execute(() -> {
+                    try {
+                        minioUtil.deleteByPrefix("sessions/" + sessionId + "/");
+                    } catch (Exception e) {
+                        log.warn("[Session] 清理工作区文件失败, sessionId={}", sessionId, e);
+                    }
+                });
+            }
+        });
     }
 
     @Override
@@ -239,10 +249,6 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         if (session == null) {
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
         }
-        long userId = StpUtil.getLoginIdAsLong();
-        if (userId != session.getUserId()) {
-            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
-        }
         boolean agentChanged = agentId != null && !agentId.equals(session.getAgentId());
         boolean versionChanged = !java.util.Objects.equals(agentVersionId, session.getAgentVersionId());
         if (!agentChanged && !versionChanged) {
@@ -257,8 +263,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
-    public Page<ChatSession> listMySessions(int pageNum, int pageSize, String keyword) {
-        long userId = StpUtil.getLoginIdAsLong();
+    public Page<ChatSession> listMySessions(Long userId, int pageNum, int pageSize, String keyword) {
         LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<ChatSession>()
                 .eq(ChatSession::getUserId, userId)
                 .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
@@ -269,7 +274,8 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
-    public void deleteSessions(List<Long> ids) {
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteSessions(Long userId, List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return;
         }
@@ -287,7 +293,22 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         for (Long id : ids) {
             evictSessionCache(id);
         }
-        evictListCache(StpUtil.getLoginIdAsLong());
+        evictListCache(userId);
+        // 5. MinIO 文件清理放在事务提交后
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                lightBotExecutor.execute(() -> {
+                    for (Long id : ids) {
+                        try {
+                            minioUtil.deleteByPrefix("sessions/" + id + "/");
+                        } catch (Exception e) {
+                            log.warn("[Session] 清理工作区文件失败, sessionId={}", id, e);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     @Override
@@ -308,14 +329,13 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     }
 
     @Override
-    public String exportSession(Long sessionId, String format) {
+    public String exportSession(Long userId, Long sessionId, String format) {
         // 1. 校验会话归属
         ChatSession session = getById(sessionId);
         if (session == null) {
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
         }
-        long userId = StpUtil.getLoginIdAsLong();
-        if (userId != session.getUserId()) {
+        if (!userId.equals(session.getUserId())) {
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
         }
 

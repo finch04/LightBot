@@ -67,6 +67,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private volatile Map<String, String> displayNameCache;
     private volatile long displayNameCacheTime;
     private static final long DISPLAY_NAME_CACHE_TTL_MS = 5 * 60 * 1000L;
+    private final Object cacheLock = new Object();
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -313,25 +314,31 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     }
 
     /**
-     * 获取 displayName 缓存（TTL 过期自动刷新）
+     * 获取 displayName 缓存（TTL 过期自动刷新，synchronized 防止惊群效应）
      */
     private Map<String, String> getDisplayNameCache() {
         Map<String, String> cached = displayNameCache;
         if (cached != null && System.currentTimeMillis() - displayNameCacheTime < DISPLAY_NAME_CACHE_TTL_MS) {
             return cached;
         }
-        // 缓存过期，重新查询
-        List<Tool> tools = toolService.list(
-                new LambdaQueryWrapper<Tool>().eq(Tool::getStatus, CommonStatus.ACTIVE));
-        Map<String, String> map = new HashMap<>();
-        for (Tool tool : tools) {
-            if (tool.getDisplayName() != null && !tool.getDisplayName().isEmpty()) {
-                map.put(tool.getName(), tool.getDisplayName());
+        synchronized (cacheLock) {
+            // 双重检查：进入锁后再次判断，避免重复重建
+            cached = displayNameCache;
+            if (cached != null && System.currentTimeMillis() - displayNameCacheTime < DISPLAY_NAME_CACHE_TTL_MS) {
+                return cached;
             }
+            List<Tool> tools = toolService.list(
+                    new LambdaQueryWrapper<Tool>().eq(Tool::getStatus, CommonStatus.ACTIVE));
+            Map<String, String> map = new HashMap<>();
+            for (Tool tool : tools) {
+                if (tool.getDisplayName() != null && !tool.getDisplayName().isEmpty()) {
+                    map.put(tool.getName(), tool.getDisplayName());
+                }
+            }
+            displayNameCache = map;
+            displayNameCacheTime = System.currentTimeMillis();
+            return map;
         }
-        displayNameCache = map;
-        displayNameCacheTime = System.currentTimeMillis();
-        return map;
     }
 
     /**

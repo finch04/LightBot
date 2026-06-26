@@ -150,6 +150,7 @@ import { message } from 'ant-design-vue'
 import { LoadingOutlined, FileTextOutlined, EyeOutlined, EyeInvisibleOutlined, HistoryOutlined } from '@ant-design/icons-vue'
 import { getEditableContent, saveDocumentContent, listVersions, getVersionContent, rollbackVersion } from '../../api/documentEdit'
 import MarkdownEditor from './MarkdownEditor.vue'
+import { formatTime } from '../../utils/format'
 
 const props = defineProps({
   open: Boolean,
@@ -312,13 +313,6 @@ async function handleRollback() {
   } finally {
     rollbacking.value = false
   }
-}
-
-function formatTime(time) {
-  if (!time) return '-'
-  const d = new Date(time)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function handleClose() {

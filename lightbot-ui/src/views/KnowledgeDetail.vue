@@ -955,6 +955,7 @@
 <script setup>
 import { ref, reactive, computed, h, nextTick, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { renderMarkdownSync } from '@/utils/markdown_preview'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined, EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
@@ -1524,7 +1525,7 @@ async function fetchSingleUrl(item) {
     item.status = 'success'
     item.title = data.title || '网页内容'
     item.content = data.content || ''
-    item.previewHtml = data.previewHtml || ''
+    item.previewHtml = sanitizeHtml(data.previewHtml || '')
     item.contentLength = data.contentLength || (item.content?.length ?? 0)
     item.description = data.description || ''
     item.suggestedFileName = data.suggestedFileName || ''

@@ -145,6 +145,7 @@ import { SaveOutlined, LockOutlined, UploadOutlined } from '@ant-design/icons-vu
 import { message } from 'ant-design-vue'
 import { getMe, updateProfile, changePassword, updateAvatarFrame, uploadAvatar } from '../api/auth'
 import { useUserStore } from '../stores/user'
+import { formatTime } from '../utils/format'
 import AvatarFrame from '../components/AvatarFrame.vue'
 import LevelTag from '../components/LevelTag.vue'
 
@@ -206,10 +207,6 @@ const roleColor = computed(() => {
   return profileForm.role === 'ADMIN' ? 'red' : 'blue'
 })
 
-function formatTime(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleString('zh-CN')
-}
 
 async function loadProfile() {
   try {

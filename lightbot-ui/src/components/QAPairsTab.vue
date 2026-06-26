@@ -194,6 +194,7 @@ import { SearchOutlined, PlusOutlined, RobotOutlined, EditOutlined, DeleteOutlin
 import { message, Modal } from 'ant-design-vue'
 import { getQAPairs, createQAPair, updateQAPair, deleteQAPair, generateQAPairs, vectorizeQAPair, batchVectorizeQAPairs } from '../api/knowledge'
 import ModelSelect from './ModelSelect.vue'
+import { formatTime } from '../utils/format'
 
 const props = defineProps({
   knowledgeId: { type: [String, Number], required: true },
@@ -375,13 +376,6 @@ function handleTableChange(pag) {
   pagination.value.current = pag.current
   pagination.value.pageSize = pag.pageSize
   loadData()
-}
-
-function formatTime(time) {
-  if (!time) return ''
-  const d = new Date(time)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 async function copyText(text) {

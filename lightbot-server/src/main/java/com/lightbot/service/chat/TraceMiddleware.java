@@ -205,8 +205,7 @@ public class TraceMiddleware implements ChatMiddleware {
      */
     private void persistTrace(ChatContext ctx, String status, long durationMs, String errorMessage) {
         String modelName = ctx.getConfigMap().containsKey("modelId") ? ctx.getConfigMap().get("modelId").toString() : null;
-        long userId = 0;
-        try { userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong(); } catch (Exception ignored) {}
+        long userId = ctx.getUserId() != null ? ctx.getUserId() : 0;
 
         LlmTrace trace = new LlmTrace();
         trace.setRequestId(ctx.getRequestId());

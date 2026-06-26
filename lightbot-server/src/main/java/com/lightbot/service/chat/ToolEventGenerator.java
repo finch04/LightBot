@@ -25,6 +25,23 @@ public class ToolEventGenerator {
     /** 请求 ID 前缀，前端用于复制并在可观测中检索 */
     public static final String REQUEST_ID_PREFIX = "[REQUEST_ID]";
 
+    /** 安全回退 JSON：objectMapper 异常时使用，确保值被正确转义 */
+    private String safeFallbackJson(Map<String, Object> fields) {
+        try {
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+            for (var entry : fields.entrySet()) {
+                if (!first) sb.append(",");
+                sb.append("\"").append(entry.getKey()).append("\":");
+                sb.append(objectMapper.writeValueAsString(entry.getValue()));
+                first = false;
+            }
+            return sb.append("}").toString();
+        } catch (Exception e) {
+            return "{\"type\":\"error\",\"message\":\"事件生成失败\"}";
+        }
+    }
+
     /**
      * 生成工具调用状态事件 JSON
      *
@@ -45,7 +62,7 @@ public class ToolEventGenerator {
             evt.put("contentOffset", contentOffset);
             return objectMapper.writeValueAsString(evt);
         } catch (Exception e) {
-            return "{\"type\":\"tool_call\",\"toolName\":\"" + toolName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "tool_call", "toolName", toolName != null ? toolName : "", "contentOffset", contentOffset));
         }
     }
 
@@ -70,14 +87,14 @@ public class ToolEventGenerator {
             evt.put("contentOffset", contentOffset);
             return objectMapper.writeValueAsString(evt);
         } catch (Exception e) {
-            return "{\"type\":\"tool_result\",\"toolName\":\"" + toolName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "tool_result", "toolName", toolName != null ? toolName : "", "contentOffset", contentOffset));
         }
     }
 
     /**
      * SSE 推送时截断工具结果：JSON 结果不截断（前端需解析），纯文本限制 2000 字符
      */
-    private String truncateForSse(String result) {
+    public String truncateForSse(String result) {
         if (result == null) return "";
         if (result.startsWith("{") || result.startsWith("[")) return result;
         return result.length() > 2000 ? result.substring(0, 2000) + "..." : result;
@@ -93,7 +110,7 @@ public class ToolEventGenerator {
                     "message", message,
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"tool_status\",\"message\":\"" + message + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "tool_status", "message", message != null ? message : "", "contentOffset", contentOffset));
         }
     }
 
@@ -106,7 +123,7 @@ public class ToolEventGenerator {
                     "type", "tool_complete",
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"tool_complete\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "tool_complete", "contentOffset", contentOffset));
         }
     }
 
@@ -120,7 +137,7 @@ public class ToolEventGenerator {
                     "type", "reasoning_content",
                     "content", truncated));
         } catch (Exception e) {
-            return "{\"type\":\"reasoning_content\",\"content\":\"\"}";
+            return safeFallbackJson(Map.of("type", "reasoning_content", "content", ""));
         }
     }
 
@@ -136,7 +153,7 @@ public class ToolEventGenerator {
                     "nodeLabel", nodeLabel != null ? nodeLabel : "",
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"workflow_node_start\",\"nodeId\":\"" + nodeId + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "workflow_node_start", "nodeId", nodeId != null ? nodeId : "", "contentOffset", contentOffset));
         }
     }
 
@@ -155,7 +172,7 @@ public class ToolEventGenerator {
                     "success", success,
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"workflow_node_complete\",\"nodeId\":\"" + nodeId + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "workflow_node_complete", "nodeId", nodeId != null ? nodeId : "", "contentOffset", contentOffset));
         }
     }
 
@@ -168,7 +185,7 @@ public class ToolEventGenerator {
                     "type", "workflow_complete",
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"workflow_complete\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "workflow_complete", "contentOffset", contentOffset));
         }
     }
 
@@ -201,7 +218,7 @@ public class ToolEventGenerator {
                     "task", truncated,
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"subagent_call\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "subagent_call", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
         }
     }
 
@@ -218,7 +235,7 @@ public class ToolEventGenerator {
                     "result", truncated,
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"subagent_result\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "subagent_result", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
         }
     }
 
@@ -233,7 +250,7 @@ public class ToolEventGenerator {
                     "content", token != null ? token : "",
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"subagent_token\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "subagent_token", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
         }
     }
 
@@ -248,7 +265,7 @@ public class ToolEventGenerator {
                     "toolName", toolName != null ? toolName : "",
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"subagent_tool_call\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "subagent_tool_call", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
         }
     }
 
@@ -264,7 +281,7 @@ public class ToolEventGenerator {
                     "content", truncated,
                     "contentOffset", contentOffset));
         } catch (Exception e) {
-            return "{\"type\":\"subagent_tool_result\",\"subagentName\":\"" + subagentName + "\",\"contentOffset\":" + contentOffset + "}";
+            return safeFallbackJson(Map.of("type", "subagent_tool_result", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
         }
     }
 
@@ -281,7 +298,7 @@ public class ToolEventGenerator {
                     "message", message != null ? message : "未知错误",
                     "code", code != null ? code : "UNKNOWN"));
         } catch (Exception e) {
-            return "{\"type\":\"error\",\"message\":\"" + message + "\",\"code\":\"" + code + "\"}";
+            return safeFallbackJson(Map.of("type", "error", "message", message != null ? message : "", "code", code != null ? code : ""));
         }
     }
 
@@ -298,7 +315,7 @@ public class ToolEventGenerator {
                     "scope", scope,
                     "message", message != null ? message : ""));
         } catch (Exception e) {
-            return "{\"type\":\"sensitive_block\",\"scope\":\"" + scope + "\",\"message\":\"\"}";
+            return safeFallbackJson(Map.of("type", "sensitive_block", "scope", scope != null ? scope : "", "message", ""));
         }
     }
 

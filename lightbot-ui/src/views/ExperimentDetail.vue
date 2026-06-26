@@ -332,6 +332,7 @@ import { getTask } from '../api/task'
 import { getEvalDatasets, getEvalDatasetVersions } from '../api/evalDataset'
 import { getPrompts, getPromptVersions } from '../api/prompt'
 import { getEvaluators, getEvaluatorVersions } from '../api/evaluator'
+import { formatTime } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -689,10 +690,6 @@ function truncate(str, len) {
   return str.length > len ? str.substring(0, len) + '...' : str
 }
 
-function formatTime(t) {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN')
-}
 </script>
 
 <style scoped>

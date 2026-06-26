@@ -126,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
@@ -138,6 +138,8 @@ import {
   getEvalDatasets, createEvalDataset, updateEvalDataset, deleteEvalDataset,
   listEvalDatasetExamples, createFromEvalDatasetExample,
 } from '../api/evalDataset'
+import { useDebouncedWatch } from '../composables/useDebounce'
+import { formatDate as formatTime } from '../utils/format'
 
 const router = useRouter()
 const list = ref([])
@@ -151,7 +153,7 @@ const examples = ref([])
 const exampleCreating = ref(null)
 
 onMounted(() => loadData())
-watch(searchText, () => loadData())
+useDebouncedWatch(searchText, () => loadData())
 
 async function loadData() {
   loading.value = true
@@ -211,10 +213,6 @@ function handleDelete(id) {
   })
 }
 
-function formatTime(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleDateString('zh-CN')
-}
 
 async function openExampleModal() {
   exampleModalVisible.value = true

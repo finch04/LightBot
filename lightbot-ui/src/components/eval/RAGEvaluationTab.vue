@@ -125,6 +125,7 @@ import {
 } from '../../api/knowledgeEval'
 import ModelSelect from '../ModelSelect.vue'
 import EvalResultDetailModal from './EvalResultDetailModal.vue'
+import { formatTime } from '../../utils/format'
 
 const props = defineProps({ knowledgeId: { type: String, required: true } })
 
@@ -173,14 +174,6 @@ const resultColumns = [
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 160 },
   { title: '操作', key: 'action', width: 80 },
 ]
-
-function formatTime(time) {
-  if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
-}
 
 function scoreColor(score) {
   if (score >= 0.8) return 'green'

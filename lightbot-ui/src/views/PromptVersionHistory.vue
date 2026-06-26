@@ -178,6 +178,7 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { getPromptVersions } from '../api/prompt'
+import { formatTime } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -271,11 +272,6 @@ function formatConfig(cfg) {
   } catch {
     return cfg
   }
-}
-
-function formatTime(t) {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN')
 }
 
 onMounted(async () => {

@@ -182,6 +182,7 @@ import { ref, watch, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { getEvalResultDetail } from '../../api/knowledgeEval'
+import { formatTime } from '../../utils/format'
 import MarkdownPreview from '../MarkdownPreview.vue'
 
 const props = defineProps({
@@ -250,14 +251,6 @@ function formatDuration(ms) {
   if (!ms) return '-'
   if (ms < 1000) return ms + 'ms'
   return (ms / 1000).toFixed(1) + 's'
-}
-
-function formatTime(time) {
-  if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
 }
 
 async function loadDetails() {

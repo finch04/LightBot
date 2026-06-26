@@ -185,6 +185,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined, ArrowLeftOutlined, HistoryOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
+import { formatDate as formatTime } from '../utils/format'
 import {
   getEvalDataset,
   getEvalDatasetVersions, createEvalDatasetVersion, getEvalDatasetVersionItems,
@@ -349,10 +350,6 @@ function truncate(str, len) {
   return s.length > len ? s.substring(0, len) + '...' : s
 }
 
-function formatTime(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleDateString('zh-CN')
-}
 </script>
 
 <style scoped>

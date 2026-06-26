@@ -466,7 +466,7 @@ onUnmounted(() => {
   align-items: center;
   width: 100%;
   padding: 16px 40px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--color-trans-light);
   backdrop-filter: blur(20px) saturate(1.2);
   position: fixed;
   top: 0;
@@ -942,7 +942,7 @@ onUnmounted(() => {
     -webkit-text-fill-color: transparent;
   }
   .glass-header {
-    background: rgba(0, 0, 0, 0.82);
+    background: var(--color-trans-dark);
     border-bottom-color: rgba(255, 255, 255, 0.06);
   }
   .visual-card {

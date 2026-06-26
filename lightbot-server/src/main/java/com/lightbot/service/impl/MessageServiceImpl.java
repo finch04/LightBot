@@ -17,6 +17,7 @@ import com.lightbot.util.MinioUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteBySessionId(Long sessionId) {
         // 1. 加载会话下所有消息，清理关联的 MinIO 资源
         List<Message> messages = listBySessionId(sessionId);
@@ -71,6 +73,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteMessage(Long messageId, Long sessionId) {
         // 1. 加载消息，清理关联的 MinIO 资源
         Message message = getOne(new LambdaQueryWrapper<Message>()
