@@ -137,7 +137,7 @@ function formatTime(time) {
 
 <style scoped>
 .feedback-page {
-  padding: 16px 0;
+  padding: 16px 8px 16px 0;
 }
 .feedback-header {
   display: flex;

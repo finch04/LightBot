@@ -1,5 +1,8 @@
 <template>
-  <div class="markdown-preview" :class="{ 'no-image-preview': !imagePreview }" ref="containerRef" v-html="renderedHtml" @click="onContainerClick"></div>
+  <div class="markdown-preview" :class="{ 'no-image-preview': !imagePreview }" ref="containerRef" @click="onContainerClick">
+    <div v-html="renderedHtml"></div>
+    <span v-if="!finalized" class="typing-cursor">|</span>
+  </div>
   <ChatMediaPreview v-if="imagePreview" v-model:open="previewOpen" :src="previewSrc" media-type="image" />
 </template>
 
@@ -189,5 +192,18 @@ watch(
 }
 .no-image-preview img:hover {
   transform: none;
+}
+
+/* 10.2 打字光标：流式输出时在末尾闪烁 */
+.typing-cursor {
+  display: inline;
+  animation: typing-cursor-blink 0.8s step-end infinite;
+  color: var(--gray-600);
+  font-weight: 400;
+  margin-left: 1px;
+}
+@keyframes typing-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 </style>

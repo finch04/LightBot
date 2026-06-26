@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.entity.Message;
 import com.lightbot.enums.ErrorCode;
+import com.lightbot.entity.MessageFeedback;
+import com.lightbot.mapper.MessageFeedbackMapper;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.mapper.ToolCallMapper;
 import com.lightbot.service.MessageService;
@@ -34,6 +36,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
     private final MinioUtil minioUtil;
     private final ObjectMapper objectMapper;
     private final ToolCallMapper toolCallMapper;
+    private final MessageFeedbackMapper messageFeedbackMapper;
 
     @Override
     public Page<Message> listBySessionIdPage(Long sessionId, int pageNum, int pageSize) {
@@ -59,8 +62,11 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
         List<Long> messageIds = messages.stream().map(Message::getId).toList();
         if (!messageIds.isEmpty()) {
             toolCallMapper.deleteByMessageIds(messageIds);
+            // 3. 删除关联的反馈记录
+            messageFeedbackMapper.delete(new LambdaQueryWrapper<MessageFeedback>()
+                    .in(MessageFeedback::getMessageId, messageIds));
         }
-        // 3. 删除消息
+        // 4. 删除消息
         remove(new LambdaQueryWrapper<Message>().eq(Message::getSessionId, sessionId));
     }
 
@@ -75,7 +81,10 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
         }
         // 2. 删除关联的 ToolCall 记录
         toolCallMapper.deleteByMessageIds(List.of(messageId));
-        // 3. 删除消息
+        // 3. 删除关联的反馈记录
+        messageFeedbackMapper.delete(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getMessageId, messageId));
+        // 4. 删除消息
         remove(new LambdaQueryWrapper<Message>()
                 .eq(Message::getId, messageId)
                 .eq(Message::getSessionId, sessionId));

@@ -1,5 +1,6 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.lightbot.enums.AgentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
@@ -13,6 +14,7 @@ import lombok.Data;
  * @since 2026-06-25
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Schema(description = "Agent创建/更新请求")
 public class AgentSaveRequest {
 

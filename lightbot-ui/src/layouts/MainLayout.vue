@@ -12,10 +12,6 @@
           </div>
         </div>
         <div v-if="!sidebarCollapsed" class="sidebar-header-actions">
-          <div class="sidebar-toggle" @click="toggleTheme">
-            <BulbFilled v-if="isDark" />
-            <BulbOutlined v-else />
-          </div>
           <div class="sidebar-toggle" @click="toggleSidebar">
             <MenuFoldOutlined />
           </div>
@@ -162,6 +158,14 @@
               <a-menu-item key="logs"><span class="menu-item-content"><FileTextOutlined /><span>日志</span></span></a-menu-item>
               <a-menu-divider />
               <a-menu-item key="about"><span class="menu-item-content"><InfoCircleOutlined /><span>关于</span></span></a-menu-item>
+              <a-menu-item key="theme" @click="toggleTheme">
+                <span class="menu-item-content">
+                  <BulbFilled v-if="isDark" />
+                  <BulbOutlined v-else />
+                  <span>{{ isDark ? '浅色模式' : '深色模式' }}</span>
+                </span>
+              </a-menu-item>
+              <a-menu-divider />
               <a-menu-item key="logout"><span class="menu-item-content"><LogoutOutlined /><span>退出登录</span></span></a-menu-item>
             </a-menu>
           </template>

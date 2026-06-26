@@ -2999,8 +2999,9 @@ async function handleSaveWorkflowBasic() {
 
   saving.value = true
   try {
+    const { userId, ...agentData } = agent
     await updateAgent({
-      ...agent,
+      ...agentData,
       agentType: agent.agentType?.code || agent.agentType,
       recommendedQuestions: JSON.stringify(questions),
     })
@@ -3173,8 +3174,9 @@ async function handleSave(options = {}) {
     const configStr = JSON.stringify(configObj)
 
     // 2. 更新 Agent
+    const { userId, ...agentData2 } = agent
     await updateAgent({
-      ...agent,
+      ...agentData2,
       agentType: agent.agentType?.code || agent.agentType,
       config: configStr,
       recommendedQuestions: JSON.stringify(questions),

@@ -314,6 +314,18 @@ public class ToolEventGenerator {
     }
 
     public String doneWithMetadata(Long userMessageId, Long assistantMessageId, long totalTokens) {
+        return doneWithMetadata(userMessageId, assistantMessageId, totalTokens, null);
+    }
+
+    /**
+     * 生成带消息ID和完整 metadata 的 [DONE] 事件
+     *
+     * @param userMessageId      用户消息ID
+     * @param assistantMessageId AI回复消息ID
+     * @param totalTokens        总Token消耗
+     * @param fullMetadata       持久化metadata JSON（含 ragReferences、reasoningContent 等），可为null
+     */
+    public String doneWithMetadata(Long userMessageId, Long assistantMessageId, long totalTokens, String fullMetadata) {
         try {
             Map<String, Object> meta = new java.util.LinkedHashMap<>();
             if (userMessageId != null) {
@@ -324,6 +336,12 @@ public class ToolEventGenerator {
             }
             if (totalTokens > 0) {
                 meta.put("totalTokens", totalTokens);
+            }
+            // 合并完整 metadata（ragReferences、reasoningContent、requestId 等）
+            if (fullMetadata != null && !fullMetadata.isBlank()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> extra = objectMapper.readValue(fullMetadata, Map.class);
+                meta.putAll(extra);
             }
             if (meta.isEmpty()) {
                 return DONE_PREFIX;

@@ -674,6 +674,7 @@ import { useChatAgents } from '../composables/useChatAgents'
 import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
 import { useAskUser } from '../composables/useAskUser'
+import { useStreamSmoother } from '../composables/useStreamSmoother'
 
 const route = useRoute()
 const router = useRouter()
@@ -815,6 +816,17 @@ function onCapabilityHeightChange(evt) {
 const {
   askUserModal, findAskUserEvent, isAskUserUnanswered, showAskUserModal,
 } = useAskUser({ messages })
+
+// 10.1 流式输出平滑缓冲：消除 token 不均匀到达导致的界面闪烁
+let currentStreamingMsg = null
+const streamSmoother = useStreamSmoother({
+  onFlush: (text) => {
+    if (currentStreamingMsg) {
+      currentStreamingMsg.content += text
+      scrollToBottom()
+    }
+  },
+})
 
 async function submitAskUserResponse(answer) {
   if (!answer?.trim()) return
@@ -1596,17 +1608,18 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             attachRequestId(assistantMsg)
           }
         },
-        // onChunk: 文本内容
+        // onChunk: 文本内容（经 streamSmoother 平滑后写入消息）
         onChunk: (chunk) => {
           if (!pushed) {
             messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
+            currentStreamingMsg = assistantMsg
             attachRequestId(assistantMsg)
             pushed = true
             hasStreamContent.value = true
+            streamSmoother.start()
           }
-          assistantMsg.content += chunk
-          scrollToBottom()
+          streamSmoother.push(chunk)
         },
         // onStatus: 状态消息
         onStatus: (status) => {
@@ -1618,9 +1631,11 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
           if (!pushed) {
             messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: true, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
+            currentStreamingMsg = assistantMsg
             attachRequestId(assistantMsg)
             pushed = true
             hasStreamContent.value = true
+            streamSmoother.start()
           }
           if (event.type === 'tool_complete') {
             const offset = event.contentOffset ?? assistantMsg._currentToolOffset
@@ -1665,17 +1680,18 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             scrollToBottom()
             return
           }
-          // 工作流 LLM 流式输出：逐 token 追加到消息内容
+          // 工作流 LLM 流式输出：经 streamSmoother 平滑后写入消息
           if (event.type === 'workflow_llm_chunk') {
             if (!pushed) {
               messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
               assistantMsg = messages.value[messages.value.length - 1]
+              currentStreamingMsg = assistantMsg
               attachRequestId(assistantMsg)
               pushed = true
               hasStreamContent.value = true
+              streamSmoother.start()
             }
-            assistantMsg.content += (event.content || '')
-            scrollToBottom()
+            streamSmoother.push(event.content || '')
             return
           }
           // 工作流节点执行事件（实时推送，无需等待最终回复）
@@ -1749,6 +1765,9 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
         },
         // onDone: 完成
         onDone: (meta) => {
+          // 10.1 停止平滑缓冲，flush 剩余内容
+          streamSmoother.stop()
+          currentStreamingMsg = null
           if (assistantMsg) {
             if (!assistantMsg._toolBlockOffsets?.length) {
               assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
@@ -1763,6 +1782,14 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             // 累加本次回复的 Token 消耗
             if (meta?.totalTokens) {
               sessionTokenCount.value += meta.totalTokens
+            }
+            // 合并 [DONE] 携带的完整 metadata（ragReferences、reasoningContent、requestId 等）
+            // 确保流式消息与历史消息的 metadata 一致
+            if (meta) {
+              const { assistantMessageId, userMessageId, totalTokens, ...restMeta } = meta
+              if (Object.keys(restMeta).length > 0) {
+                assistantMsg.metadata = { ...(assistantMsg.metadata || {}), ...restMeta }
+              }
             }
           }
           loading.value = false
@@ -1792,6 +1819,9 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
       abortController.value?.signal
     )
   } catch (e) {
+    // 10.1 异常时停止平滑缓冲，flush 剩余内容
+    streamSmoother.stop()
+    currentStreamingMsg = null
     // 用户主动中断
     if (e.name === 'AbortError') {
       if (!assistantMsg) {

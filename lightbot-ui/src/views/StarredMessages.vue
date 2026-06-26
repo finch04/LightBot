@@ -134,7 +134,7 @@ function formatTime(time) {
 
 <style scoped>
 .starred-page {
-  padding: 16px 0;
+  padding: 16px 8px 16px 0;
 }
 .empty-state {
   display: flex;

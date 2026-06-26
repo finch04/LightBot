@@ -443,8 +443,8 @@ public class ChatServiceImpl implements ChatService {
             ctx.getFullReply().setLength(0);
             ctx.getFullReply().append(replyToSave);
 
-            // 2. 返回带消息ID和Token数的 [DONE] 事件
-            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId, totalTokens);
+            // 2. 返回带消息ID、Token数和完整metadata的 [DONE] 事件
+            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId, totalTokens, metadataStr);
         } catch (Exception e) {
             log.error("[Chat] 构建[DONE]事件异常: {}", e.getMessage(), e);
             return DONE_PREFIX;
@@ -500,11 +500,13 @@ public class ChatServiceImpl implements ChatService {
                 .map(msg -> STATUS_PREFIX + toolEventGenerator.toolStatusEvent(msg, 0));
 
         // 1.1 心跳保活：每 15 秒发送 SSE 注释行，防止代理/网关断连
+        // 心跳随主内容流首条数据触发后持续发送，主内容流完成时自动停止（takeUntil）。
+        // 不能直接 mergeWith 无限心跳流，否则 mergeWith 永不 complete，[DONE] 永远发不出去。
         Flux<String> heartbeatFlux = Flux.interval(Duration.ofSeconds(HEARTBEAT_INTERVAL_SECONDS))
                 .map(tick -> HEARTBEAT_PREFIX);
 
         // 主内容流 + 错误事件
-        Flux<String> mainFlux = toolStatusFlux.mergeWith(
+        Flux<String> coreContent = toolStatusFlux.mergeWith(
                 processToolCallsRecursively(ctx, 0, System.currentTimeMillis(), eventSink)
                         .doOnError(e -> {
                             log.error("[Chat] 流式处理异常: {}", e.getMessage(), e);
@@ -513,8 +515,8 @@ public class ChatServiceImpl implements ChatService {
                         })
                         .doFinally(signal -> eventSink.tryEmitComplete()));
 
-        // 合并心跳与主内容流
-        return mainFlux.mergeWith(heartbeatFlux);
+        // 心跳在主内容流完成时停止；mergeWith 取两者都完成的时间点
+        return coreContent.mergeWith(heartbeatFlux.takeUntilOther(coreContent));
     }
 
     /**
