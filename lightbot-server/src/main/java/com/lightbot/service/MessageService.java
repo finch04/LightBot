@@ -57,4 +57,20 @@ public interface MessageService extends IService<Message> {
      * @return 匹配的消息分页列表
      */
     Page<Message> searchBySessionId(Long sessionId, String keyword, int pageNum, int pageSize);
+
+    /**
+     * 切换消息收藏状态
+     *
+     * @param messageId 消息ID
+     */
+    void toggleStar(Long messageId);
+
+    /**
+     * 获取所有收藏消息（跨会话）
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页数量
+     * @return 收藏消息分页列表
+     */
+    Page<Message> listStarred(int pageNum, int pageSize);
 }

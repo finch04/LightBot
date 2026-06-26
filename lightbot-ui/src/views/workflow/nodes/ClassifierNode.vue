@@ -62,7 +62,7 @@ const nodeClass = computed(() => ({
 .classifier-node.debug-fail { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25); }
 .node-header {
   display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-  background: var(--color-warn-bg); border-bottom: 1px solid #fde68a; border-radius: 10px 10px 0 0;
+  background: var(--color-warn-bg); border-bottom: 1px solid var(--color-hairline); border-radius: 10px 10px 0 0;
 }
 .node-icon { color: #f59e0b; font-size: 16px; }
 .node-title { font-size: 14px; font-weight: 600; }
@@ -70,7 +70,7 @@ const nodeClass = computed(() => ({
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 12px 6px 14px; min-height: 36px;
 }
-.branch-row + .branch-row { border-top: 1px dashed #f3f4f6; }
+.branch-row + .branch-row { border-top: 1px dashed var(--color-hairline); }
 .branch-label { font-size: 12px; color: var(--color-text-dark); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .default-row .branch-label { color: var(--color-mute); }
 @keyframes wf-executing {

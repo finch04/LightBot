@@ -56,7 +56,7 @@ const nodeClass = computed(() => ({
   max-width: 200px;
   box-sizing: border-box;
   background: var(--color-canvas);
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--color-hairline-strong);
   border-radius: 12px;
   position: relative;
 }
@@ -64,7 +64,7 @@ const nodeClass = computed(() => ({
 .generic-node.debug-executing { animation: wf-executing 1.2s linear infinite; border-color: var(--color-link); }
 .generic-node.debug-success { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2); }
 .generic-node.debug-fail { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2); }
-.node-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #f3f4f6; border-radius: 10px 10px 0 0; }
+.node-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--color-hairline); border-radius: 10px 10px 0 0; }
 .node-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
 .node-title { font-size: 13px; font-weight: 600; }
 .node-body { padding: 8px 12px 10px; font-size: 12px; }

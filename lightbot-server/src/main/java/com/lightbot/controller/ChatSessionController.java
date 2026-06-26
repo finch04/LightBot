@@ -121,6 +121,21 @@ public class ChatSessionController {
         return Result.ok(messageService.searchBySessionId(id, keyword, pageNum, pageSize));
     }
 
+    @Operation(summary = "切换消息收藏状态")
+    @PutMapping("/messages/{messageId}/star")
+    public Result<Void> toggleStar(@PathVariable Long messageId) {
+        messageService.toggleStar(messageId);
+        return Result.ok();
+    }
+
+    @Operation(summary = "获取所有收藏消息")
+    @GetMapping("/messages/starred")
+    public Result<Page<Message>> listStarred(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.ok(messageService.listStarred(pageNum, pageSize));
+    }
+
     @Operation(summary = "导出会话为 Markdown 或 JSON 文件")
     @GetMapping("/{id}/export")
     public ResponseEntity<byte[]> exportSession(

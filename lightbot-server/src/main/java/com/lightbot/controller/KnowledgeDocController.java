@@ -116,6 +116,12 @@ public class KnowledgeDocController {
         return Result.ok(documentService.ingestDocument(docId, embeddingJson));
     }
 
+    @Operation(summary = "手动同步 URL 文档（重新抓取，内容变更时更新并重新入库）")
+    @PostMapping("/documents/{docId}/sync-url")
+    public Result<Document> syncUrlDocument(@PathVariable Long docId) {
+        return Result.ok(documentService.syncUrlDocument(docId));
+    }
+
     @Operation(summary = "预览分块结果（不入库）")
     @PostMapping("/documents/{docId}/preview-chunks")
     public Result<List<String>> previewChunks(@PathVariable Long docId,

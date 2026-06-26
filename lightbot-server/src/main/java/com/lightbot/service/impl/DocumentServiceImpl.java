@@ -52,7 +52,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 
@@ -691,7 +693,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
     public Document saveUrlDocument(Long knowledgeId, UrlSaveRequest request) {
         // 权限校验：需要DEVELOPER及以上权限
         permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
-        return persistUrlContent(knowledgeId, request.getUrl(), request.getTitle(), request.getContent(), System.currentTimeMillis());
+        return persistUrlContent(knowledgeId, request.getUrl(), request.getTitle(), request.getContent(), System.currentTimeMillis(), request.getSyncConfig());
     }
 
     @Override
@@ -699,13 +701,13 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         // 权限校验：需要DEVELOPER及以上权限
         permissionHelper.checkPermission(knowledgeId, KnowledgeRole.DEVELOPER);
         WebFetchUtil.FetchResult result = webFetchUtil.fetch(url);
-        return persistUrlContent(knowledgeId, url, result.getTitle(), result.getContent(), result.getFetchedAt());
+        return persistUrlContent(knowledgeId, url, result.getTitle(), result.getContent(), result.getFetchedAt(), null);
     }
 
     /**
      * 将 URL 正文持久化为知识库文档
      */
-    private Document persistUrlContent(Long knowledgeId, String url, String title, String content, long fetchedAt) {
+    private Document persistUrlContent(Long knowledgeId, String url, String title, String content, long fetchedAt, String syncConfig) {
         long userId = StpUtil.getLoginIdAsLong();
 
         if (content == null || content.isBlank()) {
@@ -735,6 +737,29 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
         }
 
+        // 构建 metadata JSON
+        Map<String, Object> metadataMap = new HashMap<>();
+        metadataMap.put("sourceUrl", url);
+        metadataMap.put("title", title != null ? title : "");
+        metadataMap.put("fetchedAt", fetchedAt);
+        // 解析 syncConfig 中的 headers 和 syncInterval
+        if (syncConfig != null && !syncConfig.isBlank()) {
+            try {
+                Map<String, Object> configMap = objectMapper.readValue(syncConfig, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                if (configMap.containsKey("headers")) {
+                    metadataMap.put("headers", configMap.get("headers"));
+                }
+                if (configMap.containsKey("syncInterval")) {
+                    metadataMap.put("syncInterval", configMap.get("syncInterval"));
+                }
+            } catch (Exception e) {
+                log.warn("[URL抓取] 解析syncConfig失败: {}", e.getMessage());
+            }
+        }
+        if (!metadataMap.containsKey("syncInterval")) {
+            metadataMap.put("syncInterval", "manual");
+        }
+
         Document doc = new Document();
         doc.setKnowledgeId(knowledgeId);
         doc.setUserId(userId);
@@ -744,9 +769,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
         doc.setFileSize(contentSize);
         doc.setFileHash(contentHash);
         doc.setStatus(DocumentStatus.UPLOADED);
-        String safeTitle = title != null ? title.replace("\"", "\\\"") : "";
-        doc.setMetadata(String.format("{\"sourceUrl\":\"%s\",\"title\":\"%s\",\"fetchedAt\":%d}",
-                url, safeTitle, fetchedAt));
+        try {
+            doc.setMetadata(objectMapper.writeValueAsString(metadataMap));
+        } catch (Exception e) {
+            log.warn("[URL抓取] 序列化metadata失败: {}", e.getMessage());
+            doc.setMetadata("{}");
+        }
         save(doc);
 
         log.info("[URL抓取] 文档创建成功, documentId={}, url={}, contentLength={}", doc.getId(), url, content.length());
@@ -981,6 +1009,110 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
             // 重复检测失败不影响主入库流程
             log.warn("[重复检测] 执行失败, documentId={}", doc.getId(), e);
             return null;
+        }
+    }
+
+    @Override
+    public Document syncUrlDocument(Long documentId) {
+        // 1. 加载文档
+        Document doc = getById(documentId);
+        if (doc == null) {
+            throw new BizException(ErrorCode.DOCUMENT_NOT_FOUND);
+        }
+        String metadata = doc.getMetadata();
+        if (metadata == null || metadata.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "该文档不是 URL 来源，无法同步");
+        }
+
+        // 2. 解析 metadata 中的 sourceUrl 和 headers
+        String sourceUrl;
+        Map<String, String> headers = null;
+        try {
+            Map<String, Object> metaMap = objectMapper.readValue(metadata, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+            sourceUrl = (String) metaMap.get("sourceUrl");
+            if (metaMap.containsKey("headers") && metaMap.get("headers") instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> rawHeaders = (Map<String, Object>) metaMap.get("headers");
+                Map<String, String> parsedHeaders = new HashMap<>();
+                for (Map.Entry<String, Object> entry : rawHeaders.entrySet()) {
+                    parsedHeaders.put(entry.getKey(), String.valueOf(entry.getValue()));
+                }
+                headers = parsedHeaders;
+            }
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "文档 metadata 解析失败");
+        }
+        if (sourceUrl == null || sourceUrl.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "该文档不是 URL 来源，无法同步");
+        }
+
+        // 3. 重新抓取 URL 内容
+        WebFetchUtil.FetchResult result;
+        try {
+            result = webFetchUtil.fetch(sourceUrl, headers);
+        } catch (Exception e) {
+            log.error("[URL同步] 抓取失败: docId={}, url={}, error={}", documentId, sourceUrl, e.getMessage());
+            throw new BizException(ErrorCode.DOCUMENT_URL_NO_CONTENT);
+        }
+        String newContent = result.getContent();
+        if (newContent == null || newContent.isBlank()) {
+            throw new BizException(ErrorCode.DOCUMENT_URL_NO_CONTENT);
+        }
+
+        // 4. 计算新 hash，与旧 hash 对比
+        String newHash = calculateContentHash(newContent);
+        if (newHash.equals(doc.getFileHash())) {
+            log.info("[URL同步] 内容未变更: docId={}, url={}", documentId, sourceUrl);
+            // 仅更新 fetchedAt
+            updateFetchedAt(doc, metadata);
+            return doc;
+        }
+
+        // 5. 内容有变更：上传新内容到 MinIO
+        String filePath = doc.getFilePath();
+        long contentSize = newContent.getBytes(StandardCharsets.UTF_8).length;
+        try (InputStream is = new ByteArrayInputStream(newContent.getBytes(StandardCharsets.UTF_8))) {
+            minioUtil.upload(is, filePath, contentSize, "text/plain");
+        } catch (Exception e) {
+            log.error("[URL同步] MinIO上传失败: docId={}, url={}", documentId, sourceUrl, e);
+            throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+
+        // 6. 清理旧 chunks + vectors
+        embeddingService.deleteByDocumentId(documentId);
+        chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, documentId));
+
+        // 7. 更新文档记录
+        doc.setFileHash(newHash);
+        doc.setFileSize(contentSize);
+        doc.setChunkCount(null);
+        doc.setTokenCount(null);
+        doc.setStatus(DocumentStatus.UPLOADED);
+        doc.setErrorMessage(null);
+        updateFetchedAt(doc, metadata);
+        updateById(doc);
+
+        log.info("[URL同步] 内容已更新: docId={}, url={}, newSize={}", documentId, sourceUrl, contentSize);
+
+        // 8. 异步触发 ingest（复用现有 embeddingJson 配置）
+        String embeddingJson = doc.getEmbeddingJson();
+        if (embeddingJson != null && !embeddingJson.isBlank()) {
+            ingestDocument(documentId, embeddingJson);
+        }
+
+        return doc;
+    }
+
+    /**
+     * 更新 metadata 中的 fetchedAt 时间戳
+     */
+    private void updateFetchedAt(Document doc, String metadata) {
+        try {
+            Map<String, Object> metaMap = objectMapper.readValue(metadata, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+            metaMap.put("fetchedAt", System.currentTimeMillis());
+            doc.setMetadata(objectMapper.writeValueAsString(metaMap));
+        } catch (Exception e) {
+            log.warn("[URL同步] 更新fetchedAt失败: {}", e.getMessage());
         }
     }
 

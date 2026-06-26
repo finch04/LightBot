@@ -58,6 +58,10 @@ export function fetchUrlDocument(knowledgeId, url) {
   })
 }
 
+export function syncUrlDocument(docId) {
+  return request.post(`/knowledge/documents/${docId}/sync-url`)
+}
+
 export function ingestDocument(docId, data) {
   return request.post(`/knowledge/documents/${docId}/ingest`, data)
 }

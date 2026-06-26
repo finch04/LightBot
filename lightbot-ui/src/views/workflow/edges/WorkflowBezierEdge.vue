@@ -38,9 +38,11 @@ const path = computed(() =>
   buildHorizontalBezierPath(props.sourceX, props.sourceY, props.targetX, props.targetY),
 )
 
+const isDark = computed(() => document.documentElement.getAttribute('data-theme') === 'dark')
+
 const edgeStyle = computed(() => ({
   strokeWidth: 2,
-  stroke: props.selected ? '#6366f1' : '#94a3b8',
+  stroke: props.selected ? '#6366f1' : (isDark.value ? '#52525b' : '#94a3b8'),
   ...(props.style || {}),
 }))
 </script>

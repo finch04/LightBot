@@ -178,8 +178,8 @@ function isHighlighted(lineNum) {
 
 <style lang="less" scoped>
 .find-in-doc-result {
-  border: 1px solid #86efac;
-  border-left: 3px solid #22c55e;
+  border: 1px solid var(--green-300);
+  border-left: 3px solid var(--green-500);
   border-radius: 8px;
   overflow: hidden;
   background: var(--color-success-bg);
@@ -193,17 +193,17 @@ function isHighlighted(lineNum) {
 
   .fid-header {
     display: flex; align-items: center; gap: 6px;
-    padding: 8px 10px; border-bottom: 1px solid #86efac;
-    background: var(--color-success-bg); font-size: 12px; font-weight: 600; color: #166534;
-    .fid-header-icon { color: #16a34a; font-size: 14px; }
+    padding: 8px 10px; border-bottom: 1px solid var(--green-300);
+    background: var(--color-success-bg); font-size: 12px; font-weight: 600; color: var(--green-700);
+    .fid-header-icon { color: var(--green-600); font-size: 14px; }
     .fid-header-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .fid-header-info { color: #4ade80; font-weight: 400; white-space: nowrap; }
+    .fid-header-info { color: var(--green-400); font-weight: 400; white-space: nowrap; }
     .fid-detail-btn {
       appearance: none;
-      border: 1px solid #86efac;
+      border: 1px solid var(--green-300);
       border-radius: 6px;
       background: var(--color-canvas);
-      color: #16a34a;
+      color: var(--green-600);
       font-size: 12px;
       padding: 6px 12px;
       cursor: pointer;
@@ -239,7 +239,7 @@ function isHighlighted(lineNum) {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     &:hover { background: var(--color-success-bg); }
     .fid-line-num {
-      color: #86efac; min-width: 32px; text-align: right;
+      color: var(--green-300); min-width: 32px; text-align: right;
       user-select: none; flex-shrink: 0;
     }
     .fid-line-text { color: var(--gray-700); white-space: pre-wrap; word-break: break-word; }
@@ -248,7 +248,7 @@ function isHighlighted(lineNum) {
   .fid-summary { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
 
   .fid-doc-card {
-    padding: 6px 8px; border: 1px solid #bbf7d0;
+    padding: 6px 8px; border: 1px solid var(--green-200);
     border-radius: 6px; background: var(--color-canvas);
     .fid-doc-row {
       display: flex; align-items: center; gap: 8px;
@@ -258,7 +258,7 @@ function isHighlighted(lineNum) {
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .fid-match-tag {
-      font-size: 11px; color: #166534; background: var(--color-success-bg);
+      font-size: 11px; color: var(--green-700); background: var(--color-success-bg);
       border-radius: 4px; padding: 0 6px; white-space: nowrap; flex-shrink: 0;
     }
   }
@@ -281,7 +281,7 @@ function isHighlighted(lineNum) {
     border-radius: 8px;
     margin-bottom: 16px;
     font-size: 13px;
-    color: #166534;
+    color: var(--green-700);
     
     span {
       display: inline-flex;
@@ -291,13 +291,13 @@ function isHighlighted(lineNum) {
       &:not(:last-child)::after {
         content: '·';
         margin-left: 12px;
-        color: #86efac;
+        color: var(--green-300);
       }
     }
   }
   
   .fid-detail-content {
-    border: 1px solid #bbf7d0;
+    border: 1px solid var(--green-200);
     border-radius: 8px;
     overflow: hidden;
     background: var(--color-canvas);
@@ -321,7 +321,7 @@ function isHighlighted(lineNum) {
       }
       
       .fid-detail-line-num {
-        color: #86efac;
+        color: var(--green-300);
         min-width: 45px;
         text-align: right;
         user-select: none;
@@ -356,7 +356,7 @@ function isHighlighted(lineNum) {
       .fid-stat-value {
         font-size: 24px;
         font-weight: 700;
-        color: #16a34a;
+        color: var(--green-600);
       }
       
       .fid-stat-label {
@@ -385,7 +385,7 @@ function isHighlighted(lineNum) {
   }
   
   .fid-detail-doc {
-    border: 1px solid #bbf7d0;
+    border: 1px solid var(--green-200);
     border-radius: 10px;
     overflow: hidden;
     background: var(--color-canvas);
@@ -396,10 +396,10 @@ function isHighlighted(lineNum) {
       gap: 10px;
       padding: 12px 16px;
       background: var(--color-success-bg);
-      border-bottom: 1px solid #bbf7d0;
+      border-bottom: 1px solid var(--green-200);
       
       .fid-doc-icon {
-        color: #16a34a;
+        color: var(--green-600);
         font-size: 16px;
       }
       
@@ -414,7 +414,7 @@ function isHighlighted(lineNum) {
       .fid-doc-count {
         font-size: 12px;
         font-weight: 500;
-        color: #16a34a;
+        color: var(--green-600);
         background: var(--color-success-bg);
         padding: 4px 10px;
         border-radius: 12px;
@@ -435,7 +435,7 @@ function isHighlighted(lineNum) {
       .fid-match-line {
         font-size: 12px;
         font-weight: 500;
-        color: #16a34a;
+        color: var(--green-600);
         margin-bottom: 8px;
       }
       

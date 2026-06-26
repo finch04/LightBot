@@ -36,6 +36,27 @@ const { isDark, themeConfig } = useTheme()
   --color-warning-soft: #ffefcf;
   --color-warning-deep: #ab570a;
 
+  /* 绿色色阶（文档定位） */
+  --green-50: #f0fdf4;
+  --green-100: #dcfce7;
+  --green-200: #bbf7d0;
+  --green-300: #86efac;
+  --green-400: #4ade80;
+  --green-500: #22c55e;
+  --green-600: #16a34a;
+  --green-700: #166534;
+
+  /* 蓝色色阶（参考文献/知识检索） */
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-200: #bfdbfe;
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+  --blue-800: #1e40af;
+
   /* 语义背景色 */
   --color-canvas-soft-3: #f0f0f0;
   --color-warn-bg: #fffbeb;
@@ -146,6 +167,27 @@ const { isDark, themeConfig } = useTheme()
   --color-warning: #f59e0b;
   --color-warning-soft: #3b2f0a;
   --color-warning-deep: #fbbf24;
+
+  /* 绿色色阶 - 深色 */
+  --green-50: #052e16;
+  --green-100: #14532d;
+  --green-200: #166534;
+  --green-300: #16a34a;
+  --green-400: #22c55e;
+  --green-500: #4ade80;
+  --green-600: #86efac;
+  --green-700: #bbf7d0;
+
+  /* 蓝色色阶 - 深色 */
+  --blue-50: #0c1a3d;
+  --blue-100: #1e3a5f;
+  --blue-200: #1e3a5f;
+  --blue-300: #2563eb;
+  --blue-400: #3b82f6;
+  --blue-500: #60a5fa;
+  --blue-600: #93c5fd;
+  --blue-700: #bfdbfe;
+  --blue-800: #dbeafe;
 
   /* 语义背景色 - 深色 */
   --color-canvas-soft-3: #2e2e33;

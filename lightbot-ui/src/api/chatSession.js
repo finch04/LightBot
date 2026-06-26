@@ -56,3 +56,11 @@ export function exportSession(id, format = 'markdown') {
     responseType: 'blob',
   })
 }
+
+export function toggleMessageStar(messageId) {
+  return request.put(`/chat/sessions/messages/${messageId}/star`)
+}
+
+export function getStarredMessages(params = {}) {
+  return request.get('/chat/sessions/messages/starred', { params })
+}

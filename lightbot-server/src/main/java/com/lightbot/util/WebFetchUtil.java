@@ -20,6 +20,7 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -73,13 +74,24 @@ public class WebFetchUtil {
      * @return 抓取结果
      */
     public FetchResult fetch(String url) {
+        return fetch(url, null);
+    }
+
+    /**
+     * 抓取 URL 内容（支持自定义请求头）
+     *
+     * @param url            URL 地址
+     * @param customHeaders  自定义请求头（可为 null）
+     * @return 抓取结果
+     */
+    public FetchResult fetch(String url, Map<String, String> customHeaders) {
         log.info("[WebFetch] 开始抓取: url={}", url);
 
         if (!isValidUrl(url)) {
             throw new IllegalArgumentException("无效的 URL 格式: " + url);
         }
 
-        Document doc = loadDocument(url);
+        Document doc = loadDocument(url, customHeaders);
         String title = extractTitle(doc);
         String description = extractDescription(doc);
         Element mainContent = locateMainContent(doc);
@@ -101,9 +113,9 @@ public class WebFetchUtil {
         return new FetchResult(url, title, content, previewHtml, description);
     }
 
-    private Document loadDocument(String url) {
+    private Document loadDocument(String url, Map<String, String> customHeaders) {
         try {
-            return Jsoup.connect(url)
+            var conn = Jsoup.connect(url)
                     .timeout(TIMEOUT_MS)
                     .userAgent(USER_AGENT)
                     .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -112,8 +124,12 @@ public class WebFetchUtil {
                     .followRedirects(true)
                     .ignoreHttpErrors(true)
                     .ignoreContentType(true)
-                    .maxBodySize(MAX_CONTENT_LENGTH * 4)
-                    .get();
+                    .maxBodySize(MAX_CONTENT_LENGTH * 4);
+            // 叠加用户自定义 headers（覆盖默认值）
+            if (customHeaders != null && !customHeaders.isEmpty()) {
+                customHeaders.forEach(conn::header);
+            }
+            return conn.get();
         } catch (IOException e) {
             log.error("[WebFetch] 抓取失败: url={}, error={}", url, e.getMessage());
             throw new RuntimeException("网页抓取失败: " + e.getMessage());

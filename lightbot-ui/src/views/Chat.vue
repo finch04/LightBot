@@ -266,6 +266,12 @@
                       <CommentOutlined />
                     </button>
                   </a-tooltip>
+                  <a-tooltip :title="messages[virtualRow.index]._starred ? '取消收藏' : '收藏'">
+                    <button class="btn-copy" :class="{ starred: messages[virtualRow.index]._starred }" @click="toggleStarMessage(virtualRow.index)">
+                      <StarFilled v-if="messages[virtualRow.index]._starred" />
+                      <StarOutlined v-else />
+                    </button>
+                  </a-tooltip>
                   <a-tooltip title="删除">
                     <button
                       class="btn-copy btn-delete"
@@ -610,12 +616,12 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled, StarOutlined, StarFilled } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, refreshChatAttachmentPreviews, submitRagFeedback } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
 import { enrichVideoThumbnails } from '../utils/videoThumbnail'
-import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi } from '../api/chatSession'
+import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi, toggleMessageStar } from '../api/chatSession'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import { copyToClipboard } from '../utils/clipboard'
@@ -1098,7 +1104,7 @@ function parseMessage(m) {
   return {
     role,
     content: m.content,
-    metadata: m.metadata,
+    metadata: metadata ?? m.metadata,
     _id: m.id,
     _parentId: m.parentId || null,
     _messageType: m.messageType?.code || m.messageType || 'text',
@@ -1117,6 +1123,7 @@ function parseMessage(m) {
     _replyToMessageId: m.replyToMessageId || null,
     _replyToContent: null,
     _replyToRole: null,
+    _starred: !!m.starred,
   }
 }
 
@@ -1354,6 +1361,17 @@ function cancelReply() {
   replyTo.messageId = null
   replyTo.content = ''
   replyTo.role = ''
+}
+
+async function toggleStarMessage(index) {
+  const msg = messages.value[index]
+  if (!msg?._id) return
+  try {
+    await toggleMessageStar(msg._id)
+    msg._starred = !msg._starred
+  } catch {
+    message.error('操作失败')
+  }
 }
 
 function getReplyToInfo(msg) {
@@ -2226,6 +2244,10 @@ watch(sessionId, (newVal, oldVal) => {
   color: #16a34a;
   opacity: 1;
 }
+.btn-copy.starred {
+  color: #f59e0b;
+  opacity: 1;
+}
 .btn-delete:hover {
   color: #ef4444;
 }
@@ -3050,9 +3072,9 @@ span.agent-menu-icon {
 .rag-references {
   margin-top: 12px;
   padding: 12px;
-  background: var(--main-25, #f0f5ff);
+  background: var(--blue-50);
   border-radius: 8px;
-  border: 1px solid var(--main-200, #bfdbfe);
+  border: 1px solid var(--blue-200);
 }
 .rag-header {
   display: flex;
@@ -3060,7 +3082,7 @@ span.agent-menu-icon {
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--main-700, #1d4ed8);
+  color: var(--blue-700);
   margin-bottom: 8px;
 }
 .rag-list {
@@ -3071,8 +3093,8 @@ span.agent-menu-icon {
 .rag-item {
   background: var(--color-canvas);
   border-radius: 6px;
-  border: 1px solid var(--main-200, #bfdbfe);
-  border-left: 3px solid var(--main-400, #60a5fa);
+  border: 1px solid var(--blue-200);
+  border-left: 3px solid var(--blue-400);
   overflow: hidden;
 }
 .rag-item-header {
@@ -3084,11 +3106,11 @@ span.agent-menu-icon {
   transition: background 0.15s;
 }
 .rag-item-header:hover {
-  background: var(--main-50, #eff6ff);
+  background: var(--blue-50);
 }
 .rag-item-header .anticon {
   font-size: 10px;
-  color: var(--main-400, #60a5fa);
+  color: var(--blue-400);
   transition: transform 0.2s;
 }
 .rag-item-header .anticon.expanded {
@@ -3108,22 +3130,22 @@ span.agent-menu-icon {
 }
 .rag-score {
   font-size: 12px;
-  color: var(--main-600, #2563eb);
+  color: var(--blue-600);
   font-weight: 600;
-  background: var(--main-50, #eff6ff);
-  border: 1px solid var(--main-200, #bfdbfe);
+  background: var(--blue-50);
+  border: 1px solid var(--blue-200);
   border-radius: 4px;
   padding: 1px 6px;
 }
 .rag-nav-btn {
   font-size: 12px;
-  color: var(--main-500, #3b82f6);
+  color: var(--blue-500);
   margin-left: 4px;
   cursor: pointer;
   transition: color 0.2s;
 }
 .rag-nav-btn:hover {
-  color: var(--main-600, #2563eb);
+  color: var(--blue-600);
 }
 .rag-feedback-btns {
   display: inline-flex;
@@ -3145,16 +3167,16 @@ span.agent-menu-icon {
   transition: all 0.2s;
 }
 .rag-fb-btn:hover {
-  color: var(--main-500, #3b82f6);
-  background: var(--main-50, #eff6ff);
+  color: var(--blue-500);
+  background: var(--blue-50);
 }
 .rag-fb-btn.active {
-  color: var(--main-600, #2563eb);
+  color: var(--blue-600);
 }
 .rag-item-content {
   padding: 12px;
   background: var(--gray-25, #fafafa);
-  border-top: 1px solid var(--main-100, #dbeafe);
+  border-top: 1px solid var(--blue-100);
   font-size: 12px;
   color: var(--gray-600);
   line-height: 1.6;

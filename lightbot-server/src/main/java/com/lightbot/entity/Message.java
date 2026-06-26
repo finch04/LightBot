@@ -68,6 +68,10 @@ public class Message {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long replyToMessageId;
 
+    @TableField("starred")
+    @Schema(description = "是否收藏")
+    private Boolean starred;
+
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

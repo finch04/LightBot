@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.common.BizException;
 import com.lightbot.entity.Message;
+import com.lightbot.enums.ErrorCode;
 import com.lightbot.mapper.MessageMapper;
 import com.lightbot.mapper.ToolCallMapper;
 import com.lightbot.service.MessageService;
@@ -85,6 +87,24 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message>
                 new LambdaQueryWrapper<Message>()
                         .eq(Message::getSessionId, sessionId)
                         .like(Message::getContent, keyword)
+                        .orderByDesc(Message::getCreateTime));
+    }
+
+    @Override
+    public void toggleStar(Long messageId) {
+        Message msg = getById(messageId);
+        if (msg == null) {
+            throw new BizException(ErrorCode.MESSAGE_NOT_FOUND);
+        }
+        msg.setStarred(!Boolean.TRUE.equals(msg.getStarred()));
+        updateById(msg);
+    }
+
+    @Override
+    public Page<Message> listStarred(int pageNum, int pageSize) {
+        return page(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getStarred, true)
                         .orderByDesc(Message::getCreateTime));
     }
 

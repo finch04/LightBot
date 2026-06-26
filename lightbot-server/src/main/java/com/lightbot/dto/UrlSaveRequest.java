@@ -21,4 +21,7 @@ public class UrlSaveRequest {
 
     @Schema(description = "网页标题")
     private String title;
+
+    @Schema(description = "同步配置 JSON: {headers:{...}, syncInterval:'daily'|'weekly'|'manual'}")
+    private String syncConfig;
 }

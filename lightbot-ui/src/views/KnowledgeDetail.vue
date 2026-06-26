@@ -103,9 +103,20 @@
               <a-tooltip title="重新入库" v-if="(doc.status?.code || doc.status) === 'completed'">
                 <button class="doc-icon-btn" @click.stop="openIngestModal(doc)"><RedoOutlined /></button>
               </a-tooltip>
+              <a-tooltip v-if="isUrlDocument(doc)" title="同步最新内容">
+                <button class="doc-icon-btn" :disabled="doc._syncing" @click.stop="handleSyncUrl(doc)">
+                  <SyncOutlined :spin="doc._syncing" />
+                </button>
+              </a-tooltip>
               <a-tooltip title="删除">
                 <button class="doc-icon-btn danger" @click.stop="deleteDoc(doc.id)"><DeleteOutlined /></button>
               </a-tooltip>
+              <!-- URL 文档同步信息 -->
+              <span v-if="isUrlDocument(doc)" class="doc-sync-info">
+                <a-tag v-if="getSyncIntervalLabel(doc)" size="small" :color="getSyncIntervalLabel(doc) === '手动' ? 'default' : 'blue'">
+                  {{ getSyncIntervalLabel(doc) }}
+                </a-tag>
+              </span>
             </div>
           </div>
           <div v-if="documents.length === 0" class="doc-empty">
@@ -493,6 +504,28 @@
               {{ urlFetching ? '解析中...' : '解析 URL' }}
             </button>
           </div>
+          <!-- URL 高级配置 -->
+          <a-collapse ghost class="url-advanced-collapse">
+            <a-collapse-panel key="url-advanced" header="高级配置">
+              <a-form-item label="自定义请求头" :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
+                <div v-for="(h, i) in urlHeaders" :key="i" class="url-header-row">
+                  <a-input v-model:value="h.key" placeholder="Header Name" style="width: 35%" size="small" />
+                  <a-input v-model:value="h.value" placeholder="Header Value" style="width: 50%" size="small" />
+                  <DeleteOutlined class="url-header-delete" @click="urlHeaders.splice(i, 1)" />
+                </div>
+                <a-button size="small" type="dashed" @click="urlHeaders.push({ key: '', value: '' })">
+                  + 添加 Header
+                </a-button>
+              </a-form-item>
+              <a-form-item label="自动同步" :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
+                <a-select v-model:value="urlSyncInterval" size="small" style="width: 200px">
+                  <a-select-option value="manual">手动同步</a-select-option>
+                  <a-select-option value="daily">每天同步</a-select-option>
+                  <a-select-option value="weekly">每7天同步</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-collapse-panel>
+          </a-collapse>
         </div>
 
         <!-- URL 列表 -->
@@ -940,7 +973,7 @@ import {
   removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
   fetchUrlDocument, previewUrlDocument, saveUrlDocument, getQueryParams, checkMilvusHealth,
-  refreshKnowledgeStats,
+  refreshKnowledgeStats, syncUrlDocument,
 } from '../api/knowledge'
 import { searchUsers } from '../api/auth'
 import request from '../utils/request'
@@ -1085,6 +1118,8 @@ const urlPreviewVisible = ref(false)
 const urlPreviewItem = ref(null)
 const urlPreviewTab = ref('html')
 const urlSaving = ref(false)
+const urlHeaders = ref([])
+const urlSyncInterval = ref('manual')
 
 // 重复文档检测弹窗
 const dupDetectVisible = ref(false)
@@ -1533,6 +1568,16 @@ async function handleConfirmUrls() {
     return
   }
 
+  // 构建 syncConfig
+  const validHeaders = urlHeaders.value.filter(h => h.key && h.key.trim())
+  const syncConfig = {}
+  if (validHeaders.length > 0) {
+    syncConfig.headers = {}
+    validHeaders.forEach(h => { syncConfig.headers[h.key.trim()] = h.value || '' })
+  }
+  syncConfig.syncInterval = urlSyncInterval.value
+  const syncConfigJson = JSON.stringify(syncConfig)
+
   urlSaving.value = true
   let saved = 0
   const errors = []
@@ -1542,6 +1587,7 @@ async function handleConfirmUrls() {
         url: item.url,
         title: item.title,
         content: item.content,
+        syncConfig: syncConfigJson,
       })
       saved++
     } catch (e) {
@@ -1555,6 +1601,8 @@ async function handleConfirmUrls() {
     uploadVisible.value = false
     urlList.value = []
     urlInput.value = ''
+    urlHeaders.value = []
+    urlSyncInterval.value = 'manual'
     await loadDocuments()
     setTimeout(startDocPoll, 1500)
   }
@@ -1894,6 +1942,35 @@ function deleteDoc(docId) {
       }
     },
   })
+}
+
+function isUrlDocument(doc) {
+  try {
+    const meta = JSON.parse(doc.metadata || '{}')
+    return !!meta.sourceUrl
+  } catch { return false }
+}
+
+function getSyncIntervalLabel(doc) {
+  try {
+    const meta = JSON.parse(doc.metadata || '{}')
+    const interval = meta.syncInterval || 'manual'
+    const labels = { manual: '手动', daily: '每天', weekly: '每7天' }
+    return labels[interval] || '手动'
+  } catch { return '手动' }
+}
+
+async function handleSyncUrl(doc) {
+  doc._syncing = true
+  try {
+    await syncUrlDocument(doc.id)
+    message.success('同步完成')
+    await loadDocuments()
+  } catch {
+    // interceptor已处理错误提示
+  } finally {
+    doc._syncing = false
+  }
 }
 
 // ========== 检索测试 ==========
@@ -3359,6 +3436,44 @@ onUnmounted(() => {
 .url-hint {
   font-size: 12px;
   color: var(--color-mute);
+}
+.url-advanced-collapse {
+  margin-top: 4px;
+}
+.url-advanced-collapse :deep(.ant-collapse-header) {
+  font-size: 13px !important;
+  color: var(--color-mute) !important;
+  padding: 4px 0 !important;
+}
+.url-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.url-header-delete {
+  cursor: pointer;
+  color: var(--color-mute);
+  transition: color 0.15s;
+}
+.url-header-delete:hover {
+  color: #ef4444;
+}
+
+/* 文档同步信息 */
+.doc-sync-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--color-mute);
+}
+.doc-sync-info .ant-tag {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 5px;
+  margin: 0;
 }
 
 /* URL 列表 */

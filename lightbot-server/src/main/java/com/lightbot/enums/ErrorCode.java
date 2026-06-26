@@ -44,6 +44,7 @@ public enum ErrorCode {
 
     // ========== 会话模块 ==========
     SESSION_NOT_FOUND(30010, "会话不存在", HttpStatus.BAD_REQUEST),
+    MESSAGE_NOT_FOUND(30011, "消息不存在", HttpStatus.BAD_REQUEST),
 
     // ========== 模型提供商模块 ==========
     MODEL_PROVIDER_NOT_FOUND(40001, "模型提供商不存在", HttpStatus.BAD_REQUEST),

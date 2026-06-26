@@ -159,4 +159,12 @@ public interface DocumentService extends IService<Document> {
      */
     Document fetchUrlDocument(Long knowledgeId, String url);
 
+    /**
+     * 同步 URL 文档（重新抓取，内容变更时更新并重新入库）
+     *
+     * @param documentId 文档ID
+     * @return 更新后的文档（内容未变更时返回原文档）
+     */
+    Document syncUrlDocument(Long documentId);
+
 }
