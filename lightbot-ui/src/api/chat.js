@@ -101,6 +101,8 @@ function decodeSseTextContent(raw) {
 function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onRequestId, onDone }) {
   const lines = text.split('\n')
   for (const line of lines) {
+    // SSE 注释行（以冒号开头）：客户端应忽略，用于心跳保活
+    if (line.startsWith(':')) continue
     if (line.startsWith('data:')) {
       let content = line.substring(5)
       if (content.startsWith('[DONE]')) {
@@ -121,7 +123,8 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
                 || parsed.type === 'workflow_node_start' || parsed.type === 'workflow_node_complete' || parsed.type === 'workflow_complete' || parsed.type === 'workflow_llm_chunk'
                 || parsed.type === 'sensitive_block'
                 || parsed.type === 'skill_active' || parsed.type === 'subagent_call' || parsed.type === 'subagent_result'
-                || parsed.type === 'subagent_token' || parsed.type === 'subagent_tool_call' || parsed.type === 'subagent_tool_result') {
+                || parsed.type === 'subagent_token' || parsed.type === 'subagent_tool_call' || parsed.type === 'subagent_tool_result'
+                || parsed.type === 'error') {
               onToolEvent?.(parsed)
               continue
             }
@@ -147,8 +150,24 @@ export function getRagReferences(sessionId, agentId, question) {
   })
 }
 
-export function submitRagFeedback(data) {
-  return request.post('/chat/rag-feedback', data)
+export function submitMessageFeedback(messageId, data) {
+  return request.post(`/chat/messages/${messageId}/feedback`, data)
+}
+
+export function getMessageFeedback(messageId) {
+  return request.get(`/chat/messages/${messageId}/feedback`)
+}
+
+export function batchGetMessageFeedbacks(messageIds) {
+  return request.post('/chat/messages/feedbacks/batch', messageIds)
+}
+
+export function listMessageFeedbacks(pageNum = 1, pageSize = 20) {
+  return request.get('/chat/feedbacks', { params: { pageNum, pageSize } })
+}
+
+export function getFeedbackStats() {
+  return request.get('/chat/feedbacks/stats')
 }
 
 export function refreshChatAttachmentPreviews(attachments) {

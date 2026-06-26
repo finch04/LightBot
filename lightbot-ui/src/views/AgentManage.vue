@@ -32,6 +32,11 @@
             <ExperimentOutlined />
           </button>
         </a-tooltip>
+        <a-tooltip title="消息反馈记录">
+          <button class="btn-outline" @click="feedbackOpen = true">
+            <LikeOutlined />
+          </button>
+        </a-tooltip>
         <button class="btn-primary" @click="openDialog()">
           <PlusOutlined /> 新建 Agent
         </button>
@@ -152,15 +157,17 @@
       </div>
     </a-modal>
 
+    <FeedbackHistory v-model:open="feedbackOpen" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined, MoreOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined, MoreOutlined, LikeOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent, cloneAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
+import FeedbackHistory from './FeedbackHistory.vue'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
 import ModelSelect from '../components/ModelSelect.vue'
 import EntityCard from '../components/EntityCard.vue'
@@ -178,6 +185,7 @@ const selectedProviderId = ref(null)
 const exampleModalVisible = ref(false)
 const workflowExamples = ref([])
 const exampleCreating = ref(null)
+const feedbackOpen = ref(false)
 
 function onModelChange({ providerId }) {
   selectedProviderId.value = providerId

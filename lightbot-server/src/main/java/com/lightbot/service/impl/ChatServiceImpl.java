@@ -46,6 +46,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -92,6 +93,9 @@ public class ChatServiceImpl implements ChatService {
     private final ToolEventGenerator toolEventGenerator;
     private final ToolArgsSanitizer toolArgsSanitizer;
     private final RagParamResolver ragParamResolver;
+
+    /** SSE 心跳注释行（SSE 协议：以冒号开头的行是注释，客户端应忽略） */
+    private static final String HEARTBEAT_PREFIX = ":heartbeat";
 
     @Autowired
     @Qualifier("lightBotExecutor")
@@ -470,11 +474,15 @@ public class ChatServiceImpl implements ChatService {
         }
     }
 
+    /** SSE 心跳间隔（秒） */
+    private static final int HEARTBEAT_INTERVAL_SECONDS = 15;
+
     /**
      * 流式核心：递归工具调用循环
      * <p>创建 Sinks.Many 用于工具执行期间的实时状态推送。
      * 工具内部通过 {@code ToolEventEmitter.emit()} 写入 Sink，
      * 此处订阅 Sink 将 tool_status 事件实时发送给前端。</p>
+     * <p>合并心跳 Flux 防止代理/网关断连；doOnError 发送结构化错误事件。</p>
      */
     private Flux<String> streamCore(ChatContext ctx) {
         ctx.setStartTime(System.currentTimeMillis());
@@ -486,9 +494,22 @@ public class ChatServiceImpl implements ChatService {
         Flux<String> toolStatusFlux = eventSink.asFlux()
                 .map(msg -> STATUS_PREFIX + toolEventGenerator.toolStatusEvent(msg, 0));
 
-        return toolStatusFlux.mergeWith(
+        // 1.1 心跳保活：每 15 秒发送 SSE 注释行，防止代理/网关断连
+        Flux<String> heartbeatFlux = Flux.interval(Duration.ofSeconds(HEARTBEAT_INTERVAL_SECONDS))
+                .map(tick -> HEARTBEAT_PREFIX);
+
+        // 主内容流 + 错误事件
+        Flux<String> mainFlux = toolStatusFlux.mergeWith(
                 processToolCallsRecursively(ctx, 0, System.currentTimeMillis(), eventSink)
+                        .doOnError(e -> {
+                            log.error("[Chat] 流式处理异常: {}", e.getMessage(), e);
+                            eventSink.tryEmitNext(STATUS_PREFIX
+                                    + toolEventGenerator.errorEvent(classifyErrorMessage(e), classifyErrorCode(e)));
+                        })
                         .doFinally(signal -> eventSink.tryEmitComplete()));
+
+        // 合并心跳与主内容流
+        return mainFlux.mergeWith(heartbeatFlux);
     }
 
     /**
@@ -1509,6 +1530,49 @@ public class ChatServiceImpl implements ChatService {
             log.warn("[Chat] 解析 SubAgent 参数失败: {}", e.getMessage());
         }
         return out;
+    }
+
+    /**
+     * 分类异常信息为用户友好的错误提示
+     */
+    private String classifyErrorMessage(Throwable e) {
+        String msg = e.getMessage();
+        if (msg == null) msg = e.getClass().getSimpleName();
+        // 网络超时
+        if (msg.contains("timeout") || msg.contains("timed out") || msg.contains("Timeout")) {
+            return "模型响应超时，请稍后重试";
+        }
+        // 限流
+        if (msg.contains("429") || msg.contains("rate") || msg.contains("Rate")) {
+            return "模型请求被限流，请稍后重试";
+        }
+        // 认证失败
+        if (msg.contains("401") || msg.contains("403") || msg.contains("Unauthorized") || msg.contains("Forbidden")) {
+            return "模型认证失败，请检查 API Key 配置";
+        }
+        // Token 超限
+        if (msg.contains("token") && (msg.contains("limit") || msg.contains("exceed") || msg.contains("maximum"))) {
+            return "上下文长度超限，请缩短对话后重试";
+        }
+        // 内容审核
+        if (msg.contains("content_filter") || msg.contains("safety") || msg.contains("blocked")) {
+            return "内容触发安全策略，请调整输入后重试";
+        }
+        return "模型调用异常: " + (msg.length() > 100 ? msg.substring(0, 100) + "..." : msg);
+    }
+
+    /**
+     * 分类异常为错误码
+     */
+    private String classifyErrorCode(Throwable e) {
+        String msg = e.getMessage();
+        if (msg == null) return "UNKNOWN";
+        if (msg.contains("timeout") || msg.contains("timed out") || msg.contains("Timeout")) return "TIMEOUT";
+        if (msg.contains("429") || msg.contains("rate") || msg.contains("Rate")) return "RATE_LIMITED";
+        if (msg.contains("401") || msg.contains("403")) return "AUTH_ERROR";
+        if (msg.contains("token") && (msg.contains("limit") || msg.contains("exceed"))) return "TOKEN_LIMIT";
+        if (msg.contains("content_filter") || msg.contains("safety")) return "CONTENT_FILTER";
+        return "LLM_ERROR";
     }
 
     private void accumulateStreamUsage(ChatResponse response, int[] inputTokenHolder, int[] outputTokenHolder) {

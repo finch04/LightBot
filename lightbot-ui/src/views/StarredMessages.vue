@@ -1,57 +1,65 @@
 <template>
-  <div class="starred-page">
-    <div class="starred-header">
-      <h2>收藏消息</h2>
-    </div>
-
-    <a-spin :spinning="loading">
-      <div v-if="messages.length === 0 && !loading" class="empty-state">
-        <StarOutlined style="font-size: 48px; color: var(--color-mute); margin-bottom: 16px" />
-        <p>暂无收藏消息</p>
-        <p class="empty-hint">在对话中点击消息下方的收藏图标即可收藏</p>
-      </div>
-
-      <div v-else class="starred-list">
-        <div
-          v-for="msg in messages"
-          :key="msg.id"
-          class="starred-item"
-          @click="goToSession(msg.sessionId)"
-        >
-          <div class="starred-item-header">
-            <span class="starred-role" :class="msg.role">
-              {{ msg.role === 'assistant' ? 'AI' : '用户' }}
-            </span>
-            <span class="starred-time">{{ formatTime(msg.createTime) }}</span>
-            <a-tooltip title="取消收藏">
-              <button class="btn-unstar" @click.stop="unstar(msg)">
-                <StarFilled style="color: #f59e0b" />
-              </button>
-            </a-tooltip>
-          </div>
-          <div class="starred-content">{{ truncateContent(msg.content) }}</div>
+  <a-modal
+    :open="open"
+    title="收藏消息"
+    :footer="null"
+    width="760px"
+    :bodyStyle="{ maxHeight: '65vh', overflow: 'auto', padding: '0' }"
+    @update:open="$emit('update:open', $event)"
+  >
+    <div class="starred-page">
+      <a-spin :spinning="loading">
+        <div v-if="messages.length === 0 && !loading" class="empty-state">
+          <StarOutlined style="font-size: 48px; color: var(--color-mute); margin-bottom: 16px" />
+          <p>暂无收藏消息</p>
+          <p class="empty-hint">在对话中点击消息下方的收藏图标即可收藏</p>
         </div>
-      </div>
 
-      <div v-if="total > pageSize" class="starred-pagination">
-        <a-pagination
-          v-model:current="pageNum"
-          :total="total"
-          :page-size="pageSize"
-          show-size-changer={false}
-          @change="loadData"
-        />
-      </div>
-    </a-spin>
-  </div>
+        <div v-else class="starred-list">
+          <div
+            v-for="msg in messages"
+            :key="msg.id"
+            class="starred-item"
+            @click="confirmGoToSession(msg)"
+          >
+            <div class="starred-item-header">
+              <span class="starred-role" :class="msg.role">
+                {{ msg.role === 'assistant' ? 'AI' : '用户' }}
+              </span>
+              <span class="starred-time">{{ formatTime(msg.createTime) }}</span>
+              <a-tooltip title="取消收藏">
+                <button class="btn-unstar" @click.stop="unstar(msg)">
+                  <StarFilled style="color: #f59e0b" />
+                </button>
+              </a-tooltip>
+            </div>
+            <div class="starred-content">{{ truncateContent(msg.content) }}</div>
+          </div>
+        </div>
+
+        <div v-if="total > pageSize" class="starred-pagination">
+          <a-pagination
+            v-model:current="pageNum"
+            :total="total"
+            :page-size="pageSize"
+            :show-size-changer="false"
+            @change="loadData"
+          />
+        </div>
+      </a-spin>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { StarOutlined, StarFilled } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { getStarredMessages, toggleMessageStar } from '../api/chatSession'
+
+const props = defineProps({ open: Boolean })
+const emit = defineEmits(['update:open'])
 
 const router = useRouter()
 const loading = ref(false)
@@ -59,6 +67,8 @@ const messages = ref([])
 const pageNum = ref(1)
 const pageSize = 20
 const total = ref(0)
+
+watch(() => props.open, v => { if (v) loadData() })
 
 async function loadData() {
   loading.value = true
@@ -87,8 +97,18 @@ async function unstar(msg) {
   }
 }
 
-function goToSession(sessionId) {
-  router.push(`/app/chat/${sessionId}`)
+function confirmGoToSession(msg) {
+  if (!msg.sessionId) return
+  Modal.confirm({
+    title: '跳转确认',
+    content: '即将离开当前页面并跳转到对应会话，是否继续？',
+    okText: '跳转',
+    cancelText: '取消',
+    onOk() {
+      emit('update:open', false)
+      router.push(`/app/chat/${msg.sessionId}?highlight=${msg.id}`)
+    },
+  })
 }
 
 function truncateContent(content) {
@@ -110,26 +130,11 @@ function formatTime(time) {
   if (diffDay < 30) return `${diffDay}天前`
   return date.toLocaleDateString()
 }
-
-onMounted(loadData)
 </script>
 
 <style scoped>
 .starred-page {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 24px;
-  height: 100%;
-  overflow-y: auto;
-}
-.starred-header {
-  margin-bottom: 24px;
-}
-.starred-header h2 {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-heading);
-  margin: 0;
+  padding: 16px 0;
 }
 .empty-state {
   display: flex;

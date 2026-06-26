@@ -52,7 +52,7 @@
             transform: `translateY(${virtualRow.start}px)`,
           }"
         >
-          <div :class="['message', messages[virtualRow.index]?.role]">
+          <div :class="['message', messages[virtualRow.index]?.role, { 'message-highlight': highlightedMessageId && String(messages[virtualRow.index]?._id || messages[virtualRow.index]?.id) === highlightedMessageId }]">
             <!-- AI 头像 -->
             <div v-if="messages[virtualRow.index]?.role === 'assistant'" class="message-avatar">
               <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="message-avatar-img" />
@@ -187,9 +187,18 @@
                     <MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
                   </div>
                 </template>
+                <!-- 1.3 结构化错误事件：LLM 调用中断、工具异常等 -->
+                <div v-if="messages[virtualRow.index]._error" class="error-block">
+                  <div class="error-block-header">
+                    <CloseCircleOutlined class="error-block-icon" />
+                    <span class="error-block-title">AI 调用异常</span>
+                    <span class="error-block-code">{{ messages[virtualRow.index]._error.code }}</span>
+                  </div>
+                  <div class="error-block-message">{{ messages[virtualRow.index]._error.message }}</div>
+                </div>
                 <!-- 操作按钮 -->
                 <div
-                  v-if="!messages[virtualRow.index]._streaming && messages[virtualRow.index].content && !messages[virtualRow.index]._sensitiveBlock"
+                  v-if="!messages[virtualRow.index]._streaming && (messages[virtualRow.index].content || messages[virtualRow.index]._error) && !messages[virtualRow.index]._sensitiveBlock"
                   class="message-actions"
                 >
                   <a-tooltip
@@ -266,6 +275,29 @@
                       <CommentOutlined />
                     </button>
                   </a-tooltip>
+                  <!-- 消息反馈：点赞/踩 -->
+                  <template v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._id && !messages[virtualRow.index]._streaming">
+                    <a-tooltip title="有帮助">
+                      <button
+                        class="btn-copy btn-feedback"
+                        :class="{ 'feedback-liked': getMessageFeedbackType(messages[virtualRow.index]) === 'like' }"
+                        @click="handleMessageFeedback(messages[virtualRow.index], 'like')"
+                      >
+                        <LikeFilled v-if="getMessageFeedbackType(messages[virtualRow.index]) === 'like'" />
+                        <LikeOutlined v-else />
+                      </button>
+                    </a-tooltip>
+                    <a-tooltip title="无帮助">
+                      <button
+                        class="btn-copy btn-feedback"
+                        :class="{ 'feedback-disliked': getMessageFeedbackType(messages[virtualRow.index]) === 'dislike' }"
+                        @click="showDislikeModal(messages[virtualRow.index])"
+                      >
+                        <DislikeFilled v-if="getMessageFeedbackType(messages[virtualRow.index]) === 'dislike'" />
+                        <DislikeOutlined v-else />
+                      </button>
+                    </a-tooltip>
+                  </template>
                   <a-tooltip :title="messages[virtualRow.index]._starred ? '取消收藏' : '收藏'">
                     <button class="btn-copy" :class="{ starred: messages[virtualRow.index]._starred }" @click="toggleStarMessage(virtualRow.index)">
                       <StarFilled v-if="messages[virtualRow.index]._starred" />
@@ -295,20 +327,6 @@
                       <a-tag v-if="ref.sourceType === 'qa_pair'" color="success" class="rag-qa-tag">问答对</a-tag>
                       <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
                       <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
-                      <span class="rag-feedback-btns" @click.stop>
-                        <a-tooltip title="有用">
-                          <button class="rag-fb-btn" :class="{ active: getRagFeedbackType(messages[virtualRow.index], ref) === 'positive' }" @click="handleRagFeedback(messages[virtualRow.index], ref, 'positive')">
-                            <LikeFilled v-if="getRagFeedbackType(messages[virtualRow.index], ref) === 'positive'" />
-                            <LikeOutlined v-else />
-                          </button>
-                        </a-tooltip>
-                        <a-tooltip title="无用">
-                          <button class="rag-fb-btn" :class="{ active: getRagFeedbackType(messages[virtualRow.index], ref) === 'negative' }" @click="handleRagFeedback(messages[virtualRow.index], ref, 'negative')">
-                            <DislikeFilled v-if="getRagFeedbackType(messages[virtualRow.index], ref) === 'negative'" />
-                            <DislikeOutlined v-else />
-                          </button>
-                        </a-tooltip>
-                      </span>
                       <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
                         <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
                       </a-tooltip>
@@ -422,6 +440,11 @@
               <span class="token-pill-value">{{ formatTokenCount(sessionTokenCount) }}</span>
               <span class="token-pill-label">tokens</span>
             </div>
+          </a-tooltip>
+          <a-tooltip title="收藏消息">
+            <button class="btn-toolbar-icon" @click="starredOpen = true">
+              <StarOutlined />
+            </button>
           </a-tooltip>
         </div>
         <!-- 引用回复预览条 -->
@@ -609,6 +632,27 @@
         <div style="text-align:right;margin-top:6px;font-size:11px;color:#a1a1aa;">Ctrl+Enter 发送</div>
       </div>
     </a-modal>
+
+    <!-- Dislike 原因弹窗 -->
+    <a-modal
+      v-model:open="dislikeModalVisible"
+      title="反馈原因（可选）"
+      @ok="submitDislikeReason"
+      okText="提交"
+      cancelText="跳过"
+      :maskClosable="false"
+      width="420px"
+    >
+      <div style="padding: 4px 0;">
+        <a-textarea
+          v-model:value="dislikeReason"
+          placeholder="请描述问题所在，帮助我们改进回答质量..."
+          :auto-size="{ minRows: 3, maxRows: 6 }"
+        />
+      </div>
+    </a-modal>
+
+    <StarredMessages v-model:open="starredOpen" />
   </div>
 </template>
 
@@ -616,9 +660,9 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled, StarOutlined, StarFilled } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled, StarOutlined, StarFilled, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { chatStream, refreshChatAttachmentPreviews, submitRagFeedback } from '../api/chat'
+import { chatStream, refreshChatAttachmentPreviews, submitMessageFeedback, getMessageFeedback, batchGetMessageFeedbacks } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
 import { enrichVideoThumbnails } from '../utils/videoThumbnail'
 import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi, toggleMessageStar } from '../api/chatSession'
@@ -632,6 +676,7 @@ import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
+import StarredMessages from './StarredMessages.vue'
 import { useChatAgents } from '../composables/useChatAgents'
 import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
@@ -831,6 +876,55 @@ function forceScrollToBottom() {
   })
 }
 
+const highlightedMessageId = ref(null)
+
+function findMessageIndex(messageId) {
+  return messages.value.findIndex(m => String(m._id) === String(messageId) || String(m.id) === String(messageId))
+}
+
+function scrollToMessage(messageId) {
+  const idx = findMessageIndex(messageId)
+  if (idx < 0) return
+  virtualizer.value.scrollToIndex(idx, { align: 'center' })
+  highlightedMessageId.value = String(messageId)
+  setTimeout(() => { highlightedMessageId.value = null }, 3000)
+}
+
+/**
+ * 深度定位：循环加载更早消息直到目标消息出现，再滚动定位
+ */
+async function scrollToMessageDeep(messageId) {
+  // 先检查目标消息是否已在当前列表中
+  if (findMessageIndex(messageId) >= 0) {
+    nextTick(() => scrollToMessage(messageId))
+    return
+  }
+  // 循环加载更早的消息
+  while (hasMoreMessages.value && !streaming.value) {
+    messagePage.value++
+    const res = await getSessionMessages(sessionId.value, {
+      pageNum: messagePage.value,
+      pageSize: 10,
+    })
+    const records = res.data?.records || []
+    if (records.length === 0) {
+      hasMoreMessages.value = false
+      break
+    }
+    const olderMessages = records.reverse().map(m => parseMessage(m))
+    await enrichMessagesAttachments(olderMessages)
+    messages.value = [...olderMessages, ...messages.value]
+    hasMoreMessages.value = records.length === 10
+    // 加载完检查
+    if (findMessageIndex(messageId) >= 0) {
+      nextTick(() => scrollToMessage(messageId))
+      return
+    }
+  }
+  // 找不到也尝试定位（消息可能已不在列表中）
+  nextTick(() => scrollToMessage(messageId))
+}
+
 /**
  * 展开/折叠内容后，将展开的区域滚动到可视区域内
  * @param {number} msgIndex - 消息在列表中的索引
@@ -862,8 +956,8 @@ const abortController = ref(null)
 const toolEvents = ref([])
 // 用于存储每条消息的展开状态，key为消息索引，value为Set<refIndex>
 const expandedRefsMap = ref(new Map())
-// RAG 反馈状态：key = "messageId-chunkId/qaPairId" → "positive"/"negative"
-const ragFeedbackMap = ref(new Map())
+// 消息反馈状态：messageId → "like"/"dislike"
+const messageFeedbackMap = ref(new Map())
 
 const canSend = computed(() =>
   !loading.value && (input.value.trim().length > 0 || pendingAttachments.value.length > 0))
@@ -980,32 +1074,81 @@ function toggleReasoningExpand(index) {
   msg._reasoningExpanded = !msg._reasoningExpanded
 }
 
-function getRagFeedbackKey(msg, ref) {
-  const targetId = ref.sourceType === 'qa_pair' ? ref.qaPairId : ref.chunkId
-  return `${msg._id || msg.id}-${targetId}`
+function getMessageFeedbackType(msg) {
+  return messageFeedbackMap.value.get(msg._id || msg.id) || null
 }
 
-function getRagFeedbackType(msg, ref) {
-  return ragFeedbackMap.value.get(getRagFeedbackKey(msg, ref)) || null
-}
-
-async function handleRagFeedback(msg, ref, feedbackType) {
-  const key = getRagFeedbackKey(msg, ref)
-  const current = ragFeedbackMap.value.get(key)
-  // 点击已选中的反馈则取消
-  if (current === feedbackType) {
-    ragFeedbackMap.value.delete(key)
+async function handleMessageFeedback(msg, rating) {
+  const msgId = msg._id || msg.id
+  const current = messageFeedbackMap.value.get(msgId)
+  // 乐观更新
+  if (current === rating) {
+    messageFeedbackMap.value.delete(msgId)
   } else {
-    ragFeedbackMap.value.set(key, feedbackType)
+    messageFeedbackMap.value.set(msgId, rating)
   }
   try {
-    await submitRagFeedback({
-      messageId: msg._id || msg.id,
-      chunkId: ref.chunkId || null,
-      qaPairId: ref.qaPairId || null,
-      sourceType: ref.sourceType || 'chunk',
-      feedbackType,
-    })
+    const res = await submitMessageFeedback(msgId, { rating })
+    // 服务端返回 null 表示取消，否则更新为实际值
+    if (res?.data) {
+      messageFeedbackMap.value.set(msgId, res.data.rating)
+    } else {
+      messageFeedbackMap.value.delete(msgId)
+    }
+  } catch {
+    // 回滚
+    if (current) {
+      messageFeedbackMap.value.set(msgId, current)
+    } else {
+      messageFeedbackMap.value.delete(msgId)
+    }
+  }
+}
+
+// dislike 原因弹窗
+const dislikeModalVisible = ref(false)
+const dislikeReason = ref('')
+const dislikeTargetMsg = ref(null)
+
+// 收藏消息弹窗
+const starredOpen = ref(false)
+
+function showDislikeModal(msg) {
+  dislikeTargetMsg.value = msg
+  dislikeReason.value = ''
+  dislikeModalVisible.value = true
+}
+
+async function submitDislikeReason() {
+  const msg = dislikeTargetMsg.value
+  if (!msg) return
+  dislikeModalVisible.value = false
+  const msgId = msg._id || msg.id
+  const current = messageFeedbackMap.value.get(msgId)
+  messageFeedbackMap.value.set(msgId, 'dislike')
+  try {
+    await submitMessageFeedback(msgId, { rating: 'dislike', reason: dislikeReason.value || null })
+  } catch {
+    if (current) {
+      messageFeedbackMap.value.set(msgId, current)
+    } else {
+      messageFeedbackMap.value.delete(msgId)
+    }
+  }
+}
+
+async function loadBatchFeedbacks(msgs) {
+  const ids = msgs.filter(m => m.role === 'assistant' && m._id).map(m => m._id)
+  if (ids.length === 0) return
+  try {
+    const res = await batchGetMessageFeedbacks(ids)
+    if (res?.data) {
+      const map = new Map(messageFeedbackMap.value)
+      for (const [msgId, fb] of Object.entries(res.data)) {
+        if (fb?.rating) map.set(msgId, fb.rating)
+      }
+      messageFeedbackMap.value = map
+    }
   } catch {
     // interceptor handled
   }
@@ -1179,6 +1322,9 @@ async function loadHistory() {
     messages.value = parsed
     hasMoreMessages.value = records.length === 10
 
+    // 批量加载消息反馈状态
+    loadBatchFeedbacks(parsed)
+
     // 从会话中恢复 agentId 和 agentVersionId
     const session = sessionRes.data
     sessionTokenCount.value = session?.totalTokens || 0
@@ -1195,7 +1341,16 @@ async function loadHistory() {
     }
     isNearBottom.value = true
     userScrolledUp.value = false
-    forceScrollToBottom()
+
+    // 检测 highlight 参数（从收藏/反馈跳转过来定位到指定消息）
+    const highlightId = route.query.highlight
+    if (highlightId) {
+      router.replace({ path: route.path })
+      await scrollToMessageDeep(highlightId)
+    } else {
+      forceScrollToBottom()
+    }
+
     // 历史消息中自动弹出未回答的 ask_user 弹窗
     nextTick(() => {
       for (let i = messages.value.length - 1; i >= 0; i--) {
@@ -1528,6 +1683,23 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             currentStatus.value = ''
             lastReplyElapsed.value = Date.now() - sendStartTime
             abortController.value = null
+            return
+          }
+          // 1.3 结构化错误事件：LLM 调用中断、工具异常等
+          if (event.type === 'error') {
+            assistantMsg._error = {
+              message: event.message || '未知错误',
+              code: event.code || 'UNKNOWN',
+            }
+            assistantMsg._streaming = false
+            assistantMsg._toolsDone = true
+            loading.value = false
+            streaming.value = false
+            hasStreamContent.value = false
+            currentStatus.value = ''
+            lastReplyElapsed.value = Date.now() - sendStartTime
+            abortController.value = null
+            scrollToBottom()
             return
           }
           // 工作流 LLM 流式输出：逐 token 追加到消息内容
@@ -2116,6 +2288,13 @@ watch(sessionId, (newVal, oldVal) => {
   gap: 10px;
   align-items: flex-start;
 }
+.message-highlight {
+  animation: highlightFade 3s ease-out;
+}
+@keyframes highlightFade {
+  0% { background: rgba(250, 219, 20, 0.35); border-radius: 10px; }
+  100% { background: transparent; }
+}
 .message-avatar {
   flex-shrink: 0;
   width: 32px;
@@ -2250,6 +2429,17 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .btn-delete:hover {
   color: #ef4444;
+}
+.btn-feedback:hover {
+  color: var(--blue-500);
+}
+.btn-feedback.feedback-liked {
+  color: #16a34a;
+  opacity: 1;
+}
+.btn-feedback.feedback-disliked {
+  color: #ef4444;
+  opacity: 1;
 }
 .btn-copy.active {
   color: var(--color-link);
@@ -2569,6 +2759,25 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .btn-agent:hover {
   background: var(--color-hairline);
+}
+.btn-toolbar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--color-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-toolbar-icon:hover {
+  background: var(--color-canvas-soft-2);
+  color: var(--color-ink);
 }
 .btn-agent-avatar {
   width: 36px;
@@ -3038,6 +3247,45 @@ span.agent-menu-icon {
 .sensitive-block-text {
   flex: 1;
 }
+
+/* 1.3 结构化错误事件 */
+.error-block {
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-soft);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  animation: fadeIn 0.3s ease;
+}
+.error-block-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.error-block-icon {
+  color: #ef4444;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.error-block-title {
+  font-weight: 600;
+  color: #991b1b;
+}
+.error-block-code {
+  margin-left: auto;
+  font-size: 12px;
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+.error-block-message {
+  color: #991b1b;
+}
+
 .input-hint {
   text-align: center;
   font-size: 12px;
@@ -3145,32 +3393,6 @@ span.agent-menu-icon {
   transition: color 0.2s;
 }
 .rag-nav-btn:hover {
-  color: var(--blue-600);
-}
-.rag-feedback-btns {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 6px;
-}
-.rag-fb-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
-  color: var(--gray-400, #9ca3af);
-  font-size: 12px;
-  transition: all 0.2s;
-}
-.rag-fb-btn:hover {
-  color: var(--blue-500);
-  background: var(--blue-50);
-}
-.rag-fb-btn.active {
   color: var(--blue-600);
 }
 .rag-item-content {

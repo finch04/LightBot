@@ -3,6 +3,9 @@
     <div class="page-header">
       <h2>会话管理</h2>
       <div class="page-header-right">
+        <button class="btn-outline" @click="starredOpen = true">
+          <StarOutlined /> 收藏消息
+        </button>
         <a-input
           v-model:value="searchText"
           placeholder="搜索会话名称..."
@@ -167,16 +170,19 @@
         <pre class="meta-json-content">{{ formatMetaJson(metaModalMsg.metadata) }}</pre>
       </div>
     </a-modal>
+
+    <StarredMessages v-model:open="starredOpen" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined, PushpinFilled } from '@ant-design/icons-vue'
+import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined, PushpinFilled, StarOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
 import { formatTime } from '../utils/format'
+import StarredMessages from './StarredMessages.vue'
 
 const router = useRouter()
 
@@ -184,6 +190,8 @@ const loading = ref(false)
 const sessions = ref([])
 const searchText = ref('')
 const selectedRowKeys = ref([])
+
+const starredOpen = ref(false)
 
 const detailVisible = ref(false)
 const detailSession = ref(null)

@@ -1,0 +1,156 @@
+package com.lightbot.service.impl;
+
+import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lightbot.dto.MessageFeedbackRequest;
+import com.lightbot.dto.MessageFeedbackVO;
+import com.lightbot.entity.Message;
+import com.lightbot.entity.MessageFeedback;
+import com.lightbot.mapper.MessageFeedbackMapper;
+import com.lightbot.service.MessageFeedbackService;
+import com.lightbot.service.MessageService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * 消息反馈服务实现类
+ *
+ * @author finch
+ * @since 2026-06-26
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMapper, MessageFeedback>
+        implements MessageFeedbackService {
+
+    private final MessageService messageService;
+
+    @Override
+    public MessageFeedback submitFeedback(Long messageId, MessageFeedbackRequest request) {
+        long userId = StpUtil.getLoginIdAsLong();
+
+        // 1. 查询是否已有反馈
+        MessageFeedback existing = getOne(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId)
+                .eq(MessageFeedback::getMessageId, messageId));
+
+        // 2. toggle 逻辑：同类型删、不同类型切、无则建
+        if (existing != null) {
+            if (existing.getRating().equals(request.getRating())) {
+                // 同类型 → 删除（取消反馈）
+                removeById(existing.getId());
+                log.info("[消息反馈] 取消反馈, userId={}, messageId={}, rating={}", userId, messageId, request.getRating());
+                return null;
+            } else {
+                // 不同类型 → 切换
+                existing.setRating(request.getRating());
+                existing.setReason(request.getReason());
+                updateById(existing);
+                log.info("[消息反馈] 切换反馈, userId={}, messageId={}, rating={}", userId, messageId, request.getRating());
+                return existing;
+            }
+        }
+
+        // 3. 无则新建
+        MessageFeedback feedback = new MessageFeedback();
+        feedback.setMessageId(messageId);
+        feedback.setUserId(userId);
+        feedback.setRating(request.getRating());
+        feedback.setReason(request.getReason());
+        save(feedback);
+        log.info("[消息反馈] 新增反馈, userId={}, messageId={}, rating={}", userId, messageId, request.getRating());
+        return feedback;
+    }
+
+    @Override
+    public MessageFeedback getMyFeedback(Long messageId) {
+        long userId = StpUtil.getLoginIdAsLong();
+        return getOne(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId)
+                .eq(MessageFeedback::getMessageId, messageId));
+    }
+
+    @Override
+    public Page<MessageFeedbackVO> listMyFeedbacks(int pageNum, int pageSize) {
+        long userId = StpUtil.getLoginIdAsLong();
+
+        // 1. 分页查询当前用户的反馈
+        Page<MessageFeedback> page = page(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<MessageFeedback>()
+                        .eq(MessageFeedback::getUserId, userId)
+                        .orderByDesc(MessageFeedback::getCreateTime));
+
+        // 2. 批量查询关联的消息内容
+        List<Long> messageIds = page.getRecords().stream()
+                .map(MessageFeedback::getMessageId)
+                .collect(Collectors.toList());
+
+        Map<Long, Message> messageMap = new HashMap<>();
+        if (!messageIds.isEmpty()) {
+            List<Message> messages = messageService.listByIds(messageIds);
+            messageMap = messages.stream()
+                    .collect(Collectors.toMap(Message::getId, m -> m));
+        }
+
+        // 3. 组装 VO
+        Page<MessageFeedbackVO> voPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
+        Map<Long, Message> finalMessageMap = messageMap;
+        List<MessageFeedbackVO> voList = page.getRecords().stream().map(fb -> {
+            MessageFeedbackVO vo = new MessageFeedbackVO();
+            vo.setId(fb.getId());
+            vo.setMessageId(fb.getMessageId());
+            vo.setRating(fb.getRating());
+            vo.setReason(fb.getReason());
+            vo.setCreateTime(fb.getCreateTime());
+            Message msg = finalMessageMap.get(fb.getMessageId());
+            if (msg != null) {
+                vo.setMessageContent(msg.getContent());
+                vo.setSessionId(msg.getSessionId());
+            }
+            return vo;
+        }).collect(Collectors.toList());
+        voPage.setRecords(voList);
+
+        return voPage;
+    }
+
+    @Override
+    public Map<Long, MessageFeedback> batchGetFeedbacks(List<Long> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return Map.of();
+        }
+        long userId = StpUtil.getLoginIdAsLong();
+
+        List<MessageFeedback> feedbacks = list(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId)
+                .in(MessageFeedback::getMessageId, messageIds));
+
+        return feedbacks.stream()
+                .collect(Collectors.toMap(MessageFeedback::getMessageId, fb -> fb));
+    }
+
+    @Override
+    public Map<String, Object> getFeedbackStats() {
+        long userId = StpUtil.getLoginIdAsLong();
+
+        long total = count(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId));
+        long likeCount = count(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId)
+                .eq(MessageFeedback::getRating, "like"));
+        long dislikeCount = count(new LambdaQueryWrapper<MessageFeedback>()
+                .eq(MessageFeedback::getUserId, userId)
+                .eq(MessageFeedback::getRating, "dislike"));
+
+        return Map.of("total", total, "likeCount", likeCount, "dislikeCount", dislikeCount);
+    }
+}

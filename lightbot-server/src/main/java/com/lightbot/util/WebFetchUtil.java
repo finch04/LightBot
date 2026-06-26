@@ -88,7 +88,7 @@ public class WebFetchUtil {
         log.info("[WebFetch] 开始抓取: url={}", url);
 
         if (!isValidUrl(url)) {
-            throw new IllegalArgumentException("无效的 URL 格式: " + url);
+            throw new BizException(ErrorCode.DOCUMENT_URL_INVALID, url);
         }
 
         Document doc = loadDocument(url, customHeaders);

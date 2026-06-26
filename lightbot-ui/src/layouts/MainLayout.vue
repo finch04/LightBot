@@ -265,7 +265,6 @@ const navItems = [
   { path: '/app/eval', label: '评测', icon: markRaw(ExperimentOutlined) },
   { path: '/app/dashboard', label: 'Dashboard', icon: markRaw(DashboardOutlined) },
   { path: '/app/observability', label: '可观测', icon: markRaw(EyeOutlined) },
-  { path: '/app/starred', label: '收藏', icon: markRaw(StarOutlined) },
 ]
 
 function isActive(path) {

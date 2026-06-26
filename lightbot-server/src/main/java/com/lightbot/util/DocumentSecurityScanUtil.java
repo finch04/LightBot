@@ -114,7 +114,9 @@ public class DocumentSecurityScanUtil {
             try {
                 JsonNode node = objectMapper.readTree(knowledge.getConfig());
                 if (node.has("scanModelProviderId") && !node.get("scanModelProviderId").isNull()) {
-                    providerId = node.get("scanModelProviderId").asLong();
+                    JsonNode pidNode = node.get("scanModelProviderId");
+                    // 兼容数字和字符串两种类型（前端可能以字符串存储避免精度丢失）
+                    providerId = pidNode.isTextual() ? Long.parseLong(pidNode.asText()) : pidNode.asLong();
                 }
                 if (node.has("scanModelId") && !node.get("scanModelId").isNull()) {
                     modelId = node.get("scanModelId").asText();
@@ -134,8 +136,21 @@ public class DocumentSecurityScanUtil {
         } else if (defaultConfig.getModelId() != null && !defaultConfig.getModelId().isBlank()) {
             options.put("modelId", defaultConfig.getModelId());
         }
-        ChatOptions chatOptions = modelFactory.buildChatOptions(providerId, options);
-        ChatModel chatModel = modelFactory.getChatModel(providerId);
+        ChatOptions chatOptions;
+        ChatModel chatModel;
+        try {
+            chatOptions = modelFactory.buildChatOptions(providerId, options);
+            chatModel = modelFactory.getChatModel(providerId);
+        } catch (BizException e) {
+            // 将模型提供商相关异常转换为更明确的扫描模型配置异常
+            if (e.getCode() == ErrorCode.MODEL_PROVIDER_NOT_FOUND.getCode()) {
+                throw new BizException(ErrorCode.DOCUMENT_SCAN_MODEL_ERROR);
+            }
+            throw e;
+        } catch (Exception e) {
+            log.error("[DocumentSecurityScan] 创建扫描模型失败, providerId={}", providerId, e);
+            throw new BizException(ErrorCode.DOCUMENT_SCAN_MODEL_ERROR);
+        }
 
         List<org.springframework.ai.chat.messages.Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(SCAN_SYSTEM_PROMPT));

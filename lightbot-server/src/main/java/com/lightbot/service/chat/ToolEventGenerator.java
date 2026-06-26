@@ -269,6 +269,23 @@ public class ToolEventGenerator {
     }
 
     /**
+     * 流式错误事件：LLM 调用中断、工具执行异常等
+     *
+     * @param message 用户友好的错误提示
+     * @param code    错误码（LLM_ERROR / TOOL_ERROR / TIMEOUT 等）
+     */
+    public String errorEvent(String message, String code) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "type", "error",
+                    "message", message != null ? message : "未知错误",
+                    "code", code != null ? code : "UNKNOWN"));
+        } catch (Exception e) {
+            return "{\"type\":\"error\",\"message\":\"" + message + "\",\"code\":\"" + code + "\"}";
+        }
+    }
+
+    /**
      * 敏感词拦截事件
      *
      * @param scope   拦截范围：user_input / ai_output

@@ -1480,29 +1480,23 @@ async function handleFetchUrls() {
 
   // 3. 安全警告弹窗：检测内网地址并提示用户
   const internalUrls = pendingItems.filter(item => isInternalUrl(item.url))
-  const urlListHtml = pendingItems.map(item =>
-    `<div style="word-break:break-all;padding:2px 0;font-size:13px">${item.url}</div>`
-  ).join('')
-
-  const warningParts = ['即将访问以上 URL 获取网页内容，请确认链接来源可信。']
-  if (internalUrls.length > 0) {
-    warningParts.push(
-      `<span style="color:#ff4d4f;font-weight:600">检测到 ${internalUrls.length} 个内网/本地地址，可能涉及内网资源访问风险，请务必确认。</span>`
-    )
-  }
 
   const confirmed = await new Promise(resolve => {
     Modal.confirm({
       title: 'URL 安全确认',
-      content: h => h('div', [
+      content: h('div', [
         h('div', {
           style: 'max-height:200px;overflow-y:auto;background:#fafafa;border-radius:6px;padding:8px 12px;margin-bottom:12px',
-          innerHTML: urlListHtml,
-        }),
-        ...warningParts.map(text => h('div', {
-          style: 'margin-bottom:6px;line-height:1.6',
-          innerHTML: text,
-        })),
+        }, pendingItems.map(item =>
+          h('div', { style: 'word-break:break-all;padding:2px 0;font-size:13px' }, item.url)
+        )),
+        h('div', { style: 'margin-bottom:6px;line-height:1.6' }, '即将访问以上 URL 获取网页内容，请确认链接来源可信。'),
+        ...(internalUrls.length > 0 ? [
+          h('div', { style: 'margin-bottom:6px;line-height:1.6' }, [
+            h('span', { style: 'color:#ff4d4f;font-weight:600' },
+              `检测到 ${internalUrls.length} 个内网/本地地址，可能涉及内网资源访问风险，请务必确认。`)
+          ])
+        ] : []),
       ]),
       okText: '确认解析',
       cancelText: '取消',
@@ -1801,11 +1795,11 @@ async function handleEdit() {
   if (editForm.contentScanEnabled && !editForm.scanModel) return message.warning('请选择安全扫描模型')
   editSubmitting.value = true
   try {
-    // 解析扫描模型
+    // 解析扫描模型（providerId 保持字符串，避免 Long 精度丢失）
     let scanModelProviderId = null, scanModelId = null
     if (editForm.scanModel) {
       const [pid, mid] = editForm.scanModel.split(':')
-      scanModelProviderId = pid ? Number(pid) : null
+      scanModelProviderId = pid || null
       scanModelId = mid || null
     }
     const config = JSON.stringify({
@@ -2562,6 +2556,7 @@ onUnmounted(() => {
 .doc-name {
   display: block;
   font-size: 14px;
+  line-height: 1.5;
   color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;

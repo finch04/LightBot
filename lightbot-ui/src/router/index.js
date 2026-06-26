@@ -211,11 +211,6 @@ const routes = [
         name: 'About',
         component: () => import('../views/AboutView.vue'),
       },
-      {
-        path: 'starred',
-        name: 'Starred',
-        component: () => import('../views/StarredMessages.vue'),
-      },
     ],
   },
 ]
