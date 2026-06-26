@@ -55,11 +55,33 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
             throw new IllegalArgumentException("脚本内容不能为空");
         }
 
+        // 读取超时配置：优先 nodeData.timeout，否则使用默认值
+        long timeoutMs = SCRIPT_TIMEOUT_MS;
+        Object timeoutObj = nodeData.get("timeout");
+        if (timeoutObj instanceof Number n) {
+            timeoutMs = Math.max(1000, n.longValue() * 1000);
+        } else if (timeoutObj != null) {
+            try {
+                timeoutMs = Math.max(1000, Long.parseLong(timeoutObj.toString()) * 1000);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
         // 委托统一沙盒执行
         String lang = language.isBlank() ? "javascript" : language;
-        CodeExecResult result = sandboxService.executeCode(script, lang, params, SCRIPT_TIMEOUT_MS);
+        CodeExecResult result = sandboxService.executeCode(script, lang, params, timeoutMs);
 
         if (!result.isSuccess()) {
+            // 失败策略：defaultValue 则返回默认输出，否则抛异常
+            String errorStrategy = stringVal(nodeData.get("errorStrategy"));
+            if ("defaultValue".equals(errorStrategy)) {
+                Map<String, Object> defaultOutputs = parseDefaultOutput(nodeData);
+                context.getVariables().putAll(defaultOutputs);
+                return NodeExecutionResult.builder()
+                        .nextNodeId(resolveNextNodeId(context))
+                        .outputs(defaultOutputs)
+                        .build();
+            }
             throw new IllegalArgumentException("脚本执行失败: " + result.getError());
         }
 
@@ -72,6 +94,32 @@ public class ScriptNodeProcessor extends AbstractFlowNodeProcessor implements No
                 .nextNodeId(resolveNextNodeId(context))
                 .outputs(outputs)
                 .build();
+    }
+
+    /**
+     * 解析默认输出 JSON（失败策略为 defaultValue 时使用）
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseDefaultOutput(Map<String, Object> nodeData) {
+        Map<String, Object> outputs = new HashMap<>();
+        Object defaultOutputObj = nodeData.get("defaultOutput");
+        if (defaultOutputObj instanceof String s && !s.isBlank()) {
+            try {
+                Object parsed = objectMapper.readValue(s, Object.class);
+                if (parsed instanceof Map<?, ?> map) {
+                    map.forEach((k, v) -> outputs.put(String.valueOf(k), v));
+                } else {
+                    outputs.put("result", parsed);
+                }
+            } catch (Exception e) {
+                log.warn("[ScriptNodeProcessor] 默认输出JSON解析失败: {}", e.getMessage());
+                outputs.put("result", s);
+            }
+        }
+        if (outputs.isEmpty()) {
+            outputs.put("result", "");
+        }
+        return outputs;
     }
 
     @SuppressWarnings("unchecked")

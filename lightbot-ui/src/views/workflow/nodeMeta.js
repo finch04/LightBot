@@ -99,6 +99,7 @@ export function getDefaultNodeData(type) {
       sysPrompt: '',
       temperature: 0.7,
       enableStreaming: true,
+      timeout: 120,
       short_memory: { ...SHORT_MEMORY_DEFAULT }
     },
     condition: {
@@ -115,9 +116,10 @@ export function getDefaultNodeData(type) {
       overrideConfig: false,
       knowledgeBaseTopK: null,
       knowledgeBaseThreshold: null,
-      inputVariable: '{{input}}'
+      inputVariable: '{{input}}',
+      timeout: 30
     },
-    tool: { label: '工具调用', toolId: null, toolName: '' },
+    tool: { label: '工具调用', toolId: null, toolName: '', timeout: 30 },
     api: {
       label: 'HTTP API',
       url: '',
@@ -148,6 +150,7 @@ export function getDefaultNodeData(type) {
       modelName: '',
       conditions: [{ id: createConditionId(), subject: '' }],
       mode_switch: 'efficient',
+      timeout: 60,
       short_memory: { ...SHORT_MEMORY_DEFAULT },
       instruction: ''
     },
@@ -179,11 +182,12 @@ export function getDefaultNodeData(type) {
         { key: 'history_list', value: '{{history_list}}' },
       ],
       outputParams: [{ key: 'result', type: 'String' }],
+      timeout: 15,
       retryConfig: { enabled: false, maxAttempts: 3, delayMs: 1000 },
       errorStrategy: 'defaultValue',
       defaultOutput: '{"result":""}',
     },
-    mcp: { label: 'MCP', mcpServerId: null, mcpServerName: '', toolName: '', inputParams: '{}' },
+    mcp: { label: 'MCP', mcpServerId: null, mcpServerName: '', toolName: '', inputParams: '{}', timeout: 60 },
     input: {
       label: '流程输入',
       outputParams: [{ key: 'query', type: 'String', defaultValue: '' }]
@@ -212,6 +216,7 @@ export function getDefaultNodeData(type) {
         { key: 'city', type: 'String', required: true, desc: '城市' },
         { key: 'date', type: 'String', required: true, desc: '日期' }
       ],
+      timeout: 30,
       short_memory: { ...SHORT_MEMORY_DEFAULT }
     },
     app_component: {

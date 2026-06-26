@@ -74,6 +74,9 @@
         <a-switch v-model:checked="node.data.enableStreaming" @change="emitSync" />
       </a-form-item>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="300" :placeholder="'默认120'" @change="emitSync" />
+      </a-form-item>
     </template>
 
     <!-- 意图分类 -->
@@ -118,6 +121,9 @@
         </a-select>
       </a-form-item>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="300" :placeholder="'默认60'" @change="emitSync" />
+      </a-form-item>
       <a-form-item label="提示词（额外约束）">
         <a-textarea v-model:value="node.data.instruction" :rows="3" placeholder="为意图识别提供额外要求" @change="emitSync" />
       </a-form-item>
@@ -213,6 +219,9 @@
         <a-switch v-model:checked="node.data.overrideConfig" @change="onOverrideToggle" />
         <div class="field-hint">关闭时沿用知识库默认 TopK / 阈值；开启后可在此节点单独调整</div>
       </a-form-item>
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="120" :placeholder="'默认30'" @change="emitSync" />
+      </a-form-item>
     </template>
 
     <!-- 工具 -->
@@ -236,6 +245,9 @@
             <EntitySelectOption type="tool" :name="t.displayName || t.name" :tag="getToolTypeLabel(t.toolType)" :desc="t.description" />
           </a-select-option>
         </a-select>
+      </a-form-item>
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="120" :placeholder="'默认30'" @change="emitSync" />
       </a-form-item>
     </template>
 
@@ -325,6 +337,9 @@
         <a-button type="dashed" block size="small" class="param-add-btn" @click="addExtractParam"><PlusOutlined /> 添加参数</a-button>
       </a-form-item>
       <ShortMemoryForm v-model="node.data.short_memory" :disabled="readonly" @update:model-value="emitSync" />
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="120" :placeholder="'默认30'" @change="emitSync" />
+      </a-form-item>
     </template>
 
     <!-- 应用组件 -->
@@ -516,6 +531,9 @@
           <PlusOutlined /> 添加出参
         </a-button>
       </div>
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="60" :placeholder="'默认15'" @change="emitSync" />
+      </a-form-item>
       <a-form-item>
         <template #label>
           <ConfigFieldLabel label="启用重试" :tip="hint('script', 'retryEnabled')" />
@@ -628,6 +646,9 @@
       </a-form-item>
       <a-form-item label="输入参数 JSON">
         <JsonInput v-model="mcpInputParamsJson" :rows="4" placeholder='{"chat_id":"oc_xxx","text":"{{query}}"}' />
+      </a-form-item>
+      <a-form-item label="超时(秒)">
+        <a-input-number v-model:value="node.data.timeout" :min="1" :max="120" :placeholder="'默认60'" @change="emitSync" />
       </a-form-item>
     </template>
   </a-form>

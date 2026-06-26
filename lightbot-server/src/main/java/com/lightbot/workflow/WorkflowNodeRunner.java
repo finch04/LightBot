@@ -63,7 +63,10 @@ public class WorkflowNodeRunner {
         NodeExecutionResult nodeResult = null;
 
         try {
-            nodeResult = processor.execute(context);
+            // 带超时 + 重试的节点执行
+            nodeResult = NodeTimeoutRetryHelper.executeWithTimeoutAndRetry(
+                    nodeId, node.getType(), node.getData(),
+                    () -> processor.execute(context));
             if (nodeResult.getOutputs() != null) {
                 context.getNodeOutputs().put(nodeId, nodeResult.getOutputs());
                 context.getVariables().putAll(nodeResult.getOutputs());

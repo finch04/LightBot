@@ -180,7 +180,10 @@ public class WorkflowExecutorService {
                 log.info("[WorkflowExecutorService] 执行节点: nodeId={}, type={}",
                         executingNodeId, node.getType());
 
-                nodeResult = processor.execute(context);
+                // 带超时 + 重试的节点执行
+                nodeResult = NodeTimeoutRetryHelper.executeWithTimeoutAndRetry(
+                        executingNodeId, node.getType(), node.getData(),
+                        () -> processor.execute(context));
 
                 if (nodeResult.getOutputs() != null) {
                     context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
@@ -605,7 +608,10 @@ public class WorkflowExecutorService {
 
             try {
                 NodeProcessor processor = registry.getProcessor(node.getType());
-                nodeResult = processor.execute(context);
+                // 带超时 + 重试的节点执行
+                nodeResult = NodeTimeoutRetryHelper.executeWithTimeoutAndRetry(
+                        executingNodeId, node.getType(), node.getData(),
+                        () -> processor.execute(context));
 
                 if (nodeResult.getOutputs() != null) {
                     context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
@@ -720,7 +726,10 @@ public class WorkflowExecutorService {
 
         try {
             NodeProcessor processor = registry.getProcessor(node.getType());
-            nodeResult = processor.execute(context);
+            // 带超时 + 重试的节点执行
+            nodeResult = NodeTimeoutRetryHelper.executeWithTimeoutAndRetry(
+                    nodeId, node.getType(), node.getData(),
+                    () -> processor.execute(context));
             if (nodeResult.getOutputs() != null) {
                 context.getNodeOutputs().put(nodeId, nodeResult.getOutputs());
                 context.getVariables().putAll(nodeResult.getOutputs());

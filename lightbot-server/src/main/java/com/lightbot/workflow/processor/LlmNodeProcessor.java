@@ -47,8 +47,8 @@ public class LlmNodeProcessor implements NodeProcessor {
 
     private final ModelFactory modelFactory;
 
-    /** LLM 调用超时时间（秒） */
-    private static final int LLM_TIMEOUT_SECONDS = 120;
+    /** LLM 调用默认超时时间（秒） */
+    private static final int DEFAULT_LLM_TIMEOUT_SECONDS = 120;
 
     @Override
     public NodeType getType() {
@@ -62,6 +62,18 @@ public class LlmNodeProcessor implements NodeProcessor {
         Map<String, Object> nodeData = context.getCurrentNodeData();
         if (nodeData == null) {
             nodeData = new HashMap<>();
+        }
+
+        // 读取超时配置：优先 nodeData.timeout，否则使用默认值
+        int llmTimeoutSeconds = DEFAULT_LLM_TIMEOUT_SECONDS;
+        Object timeoutObj = nodeData.get("timeout");
+        if (timeoutObj instanceof Number n) {
+            llmTimeoutSeconds = Math.max(1, n.intValue());
+        } else if (timeoutObj != null) {
+            try {
+                llmTimeoutSeconds = Math.max(1, Integer.parseInt(timeoutObj.toString()));
+            } catch (NumberFormatException ignored) {
+            }
         }
 
         // 2. 获取提供商 ID 与具体模型名
@@ -113,9 +125,9 @@ public class LlmNodeProcessor implements NodeProcessor {
         int[] tokenUsage = {0, 0};
         String llmOutput;
         if (useStream) {
-            llmOutput = callStream(chatModel, messages, chatOptions, streamCallback, tokenUsage);
+            llmOutput = callStream(chatModel, messages, chatOptions, streamCallback, tokenUsage, llmTimeoutSeconds);
         } else {
-            llmOutput = callSync(chatModel, messages, chatOptions, tokenUsage);
+            llmOutput = callSync(chatModel, messages, chatOptions, tokenUsage, llmTimeoutSeconds);
         }
 
         // 7. 获取下一个节点
@@ -242,20 +254,21 @@ public class LlmNodeProcessor implements NodeProcessor {
     /**
      * 同步调用 LLM（带超时保护）
      */
-    private String callSync(ChatModel chatModel, List<Message> messages, ChatOptions chatOptions, int[] tokenUsage) {
+    private String callSync(ChatModel chatModel, List<Message> messages, ChatOptions chatOptions,
+                            int[] tokenUsage, int timeoutSeconds) {
         try {
             ChatResponse response = CompletableFuture.supplyAsync(() ->
                             LlmTraceContext.callWithoutTrace(() ->
                                     chatModel.call(new Prompt(messages, chatOptions))))
-                    .orTimeout(LLM_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                    .orTimeout(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
                     .join();
             accumulateUsage(response, tokenUsage);
             return response.getResult().getOutput().getText();
         } catch (java.util.concurrent.CompletionException e) {
             if (e.getCause() instanceof TimeoutException) {
-                log.error("[LlmNodeProcessor] LLM同步调用超时: timeout={}s", LLM_TIMEOUT_SECONDS);
+                log.error("[LlmNodeProcessor] LLM同步调用超时: timeout={}s", timeoutSeconds);
                 throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
-                        "LLM调用超时（" + LLM_TIMEOUT_SECONDS + "秒），请检查模型服务状态");
+                        "LLM调用超时（" + timeoutSeconds + "秒），请检查模型服务状态");
             }
             throw e;
         }
@@ -265,12 +278,13 @@ public class LlmNodeProcessor implements NodeProcessor {
      * 流式调用 LLM，逐 token 回调（带超时保护）
      */
     private String callStream(ChatModel chatModel, List<Message> messages,
-                              ChatOptions chatOptions, Consumer<String> onChunk, int[] tokenUsage) {
+                              ChatOptions chatOptions, Consumer<String> onChunk,
+                              int[] tokenUsage, int timeoutSeconds) {
         StringBuilder full = new StringBuilder();
         try {
             chatModel.stream(new Prompt(messages, chatOptions))
                     .doOnError(e -> log.error("[LlmNodeProcessor] 流式调用异常: {}", e.getMessage(), e))
-                    .timeout(Duration.ofSeconds(LLM_TIMEOUT_SECONDS))
+                    .timeout(Duration.ofSeconds(timeoutSeconds))
                     .toStream()
                     .forEach(response -> {
                         accumulateUsage(response, tokenUsage);
@@ -285,9 +299,9 @@ public class LlmNodeProcessor implements NodeProcessor {
                     });
         } catch (Exception e) {
             if (isTimeoutException(e)) {
-                log.error("[LlmNodeProcessor] LLM流式调用超时: timeout={}s", LLM_TIMEOUT_SECONDS);
+                log.error("[LlmNodeProcessor] LLM流式调用超时: timeout={}s", timeoutSeconds);
                 throw new BizException(ErrorCode.BAD_REQUEST.getCode(),
-                        "LLM调用超时（" + LLM_TIMEOUT_SECONDS + "秒），请检查模型服务状态");
+                        "LLM调用超时（" + timeoutSeconds + "秒），请检查模型服务状态");
             }
             throw e;
         }
