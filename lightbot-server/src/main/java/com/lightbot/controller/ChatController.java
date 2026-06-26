@@ -9,6 +9,7 @@ import com.lightbot.dto.MessageFeedbackVO;
 import com.lightbot.dto.RagReferenceVO;
 import com.lightbot.dto.ReconnectRequest;
 import com.lightbot.entity.MessageFeedback;
+import com.lightbot.interceptor.ApiKeyAuthInterceptor;
 import com.lightbot.service.ChatService;
 import com.lightbot.service.MessageFeedbackService;
 import com.lightbot.service.chat.SseEventBuffer;
@@ -64,7 +65,14 @@ public class ChatController {
      */
     @Operation(summary = "流式对话（SSE）")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatStream(@Valid @RequestBody ChatRequest request) {
+    public SseEmitter chatStream(@Valid @RequestBody ChatRequest request,
+                                 jakarta.servlet.http.HttpServletRequest httpRequest) {
+        // 注入 API Key ID（如有），用于 Token 配额扣减
+        Object apiKeyAttr = httpRequest.getAttribute(ApiKeyAuthInterceptor.ATTR_API_KEY_ENTITY);
+        if (apiKeyAttr instanceof com.lightbot.entity.ApiKey apiKey) {
+            request.setApiKeyId(apiKey.getId());
+        }
+
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         AtomicInteger eventIdCounter = new AtomicInteger(0);
 

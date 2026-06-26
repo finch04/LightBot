@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -91,6 +92,7 @@ public class ChatServiceImpl implements ChatService {
     private final MimoChatClient mimoChatClient;
     private final ModelProviderService modelProviderService;
     private final TokenBudgetService tokenBudgetService;
+    private final ApiKeyService apiKeyService;
     private final ObjectMapper objectMapper;
     private final ToolEventGenerator toolEventGenerator;
     private final ToolArgsSanitizer toolArgsSanitizer;
@@ -101,6 +103,11 @@ public class ChatServiceImpl implements ChatService {
 
     /** 工具执行超时时间（秒）：内置工具 30s、API 工具 60s、MCP 工具 120s，统一取最大值 120s */
     private static final long TOOL_EXECUTION_TIMEOUT_SECONDS = 120;
+
+    /** 工具调用上下文裁剪阈值（字符数），超出时压缩早期工具调用轮次，约 15K tokens */
+    private static final int MAX_TOOL_CONTEXT_CHARS = 60000;
+    /** 裁剪时保留最近 N 轮工具调用，确保 LLM 有足够上下文 */
+    private static final int TOOL_ROUNDS_TO_KEEP = 2;
 
     @Autowired
     @Qualifier("lightBotExecutor")
@@ -141,6 +148,11 @@ public class ChatServiceImpl implements ChatService {
         // 3.0 记录 Token 消耗
         if (ctx.getUserId() != null) {
             tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
+        }
+        // 3.0.1 API Key 配额扣减
+        Long apiKeyId = ctx.getRequest().getApiKeyId();
+        if (apiKeyId != null) {
+            apiKeyService.checkAndConsumeQuota(apiKeyId, totalTokens);
         }
 
         // 3.1 批量写入工具调用记录
@@ -418,6 +430,11 @@ public class ChatServiceImpl implements ChatService {
             // 0. 记录 Token 消耗到预算服务
             if (ctx.getUserId() != null) {
                 tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
+            }
+            // 0.1 API Key 配额扣减
+            Long apiKeyId = ctx.getRequest().getApiKeyId();
+            if (apiKeyId != null) {
+                apiKeyService.checkAndConsumeQuota(apiKeyId, totalTokens);
             }
 
             // 1. 持久化 AI 回复
@@ -829,6 +846,7 @@ public class ChatServiceImpl implements ChatService {
                         return toolEventFlux;
                     }
 
+                    trimToolCallContext(messages);
                     return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart, eventSink));
                 });
     }
@@ -1092,7 +1110,66 @@ public class ChatServiceImpl implements ChatService {
                 .concatWith(Flux.concat(toolResultEvents))
                 .concatWith(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCompleteEvent(resultContentOffset)))
                 .concatWith(afterTool);
+        trimToolCallContext(messages);
         return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, System.currentTimeMillis(), eventSink));
+    }
+
+    /**
+     * 工具调用上下文裁剪：当消息列表总字符数超过阈值时，压缩早期工具调用轮次为摘要消息，
+     * 防止多轮工具调用撑爆上下文窗口。
+     *
+     * @param messages 消息列表（会被原地修改）
+     */
+    private void trimToolCallContext(List<org.springframework.ai.chat.messages.Message> messages) {
+        // 1. 估算总字符数
+        int totalChars = 0;
+        for (var msg : messages) {
+            String text = msg.getText();
+            if (text != null) totalChars += text.length();
+        }
+        if (totalChars <= MAX_TOOL_CONTEXT_CHARS) return;
+
+        // 2. 收集工具调用轮次边界：每轮 = [AssistantMessage(hasToolCalls), ToolResponseMessage]
+        List<int[]> rounds = new ArrayList<>();
+        for (int i = 0; i < messages.size() - 1; i++) {
+            var cur = messages.get(i);
+            if (cur instanceof AssistantMessage am && am.hasToolCalls()) {
+                var next = messages.get(i + 1);
+                String nextType = next.getClass().getSimpleName();
+                if ("ToolResponseMessage".equals(nextType)) {
+                    rounds.add(new int[]{i, i + 1});
+                    i++; // 跳过 ToolResponseMessage
+                }
+            }
+        }
+
+        if (rounds.size() <= TOOL_ROUNDS_TO_KEEP) return;
+
+        // 3. 计算需压缩的轮次
+        int compressUpTo = rounds.size() - TOOL_ROUNDS_TO_KEEP;
+        int removeStart = rounds.get(0)[0];
+        int removeEnd = rounds.get(compressUpTo - 1)[1];
+
+        // 4. 统计被压缩的工具数量
+        int toolCount = 0;
+        for (int r = 0; r < compressUpTo; r++) {
+            var am = (AssistantMessage) messages.get(rounds.get(r)[0]);
+            toolCount += am.getToolCalls().size();
+        }
+
+        // 5. 替换为摘要消息
+        String summary = "[已省略第 1-" + compressUpTo + " 轮工具调用详情，共执行 "
+                + toolCount + " 个工具，上下文已压缩]";
+        List<org.springframework.ai.chat.messages.Message> trimmed = new ArrayList<>(messages);
+        for (int i = removeEnd; i >= removeStart; i--) {
+            trimmed.remove(i);
+        }
+        trimmed.add(removeStart, new SystemMessage(summary));
+        messages.clear();
+        messages.addAll(trimmed);
+
+        log.info("[Chat][ContextTrim] 压缩了 {} 轮工具调用（{} 个工具），消息字符 {} → ~{}",
+                compressUpTo, toolCount, totalChars, totalChars - (removeEnd - removeStart + 1) * 500);
     }
 
     private String executeToolCallback(Map<String, ToolCallback> toolCallbackMap, String toolName,

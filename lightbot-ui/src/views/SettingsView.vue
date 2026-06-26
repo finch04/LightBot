@@ -407,6 +407,18 @@
                 </a-tag>
               </div>
               <div class="apikey-card-row">
+                <span class="apikey-card-label">限流</span>
+                <span>{{ key.rateLimit || 60 }} 次/分钟</span>
+              </div>
+              <div class="apikey-card-row">
+                <span class="apikey-card-label">Token配额</span>
+                <span>{{ formatToken(key.dailyQuota) }} / 日{{ key.usedTokens > 0 ? '（已用 ' + formatToken(key.usedTokens) + '）' : '' }}</span>
+              </div>
+              <div class="apikey-card-row" v-if="key.agentIds && key.agentIds.length > 0">
+                <span class="apikey-card-label">绑定Agent</span>
+                <span>{{ key.agentIds.length }} 个</span>
+              </div>
+              <div class="apikey-card-row">
                 <span class="apikey-card-label">过期时间</span>
                 <span>{{ key.expiresAt || '永不过期' }}</span>
               </div>
@@ -445,7 +457,7 @@
       ok-text="创建"
       cancel-text="取消"
     >
-      <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }">
+      <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 17 }">
         <a-form-item label="名称" required>
           <a-input v-model:value="apiKeyForm.name" placeholder="如：生产环境API" :maxlength="64" />
         </a-form-item>
@@ -454,6 +466,19 @@
             <a-select-option value="chat">仅对话</a-select-option>
             <a-select-option value="full">完全访问</a-select-option>
           </a-select>
+        </a-form-item>
+        <a-form-item label="每分钟限流">
+          <a-input-number v-model:value="apiKeyForm.rateLimit" :min="1" :max="10000" style="width: 100%" placeholder="60" />
+        </a-form-item>
+        <a-form-item label="每日Token配额">
+          <a-input-number v-model:value="apiKeyForm.dailyQuota" :min="0" :max="100000000" :step="10000" style="width: 100%" placeholder="100000" />
+        </a-form-item>
+        <a-form-item label="绑定Agent">
+          <AgentSelect
+            v-model:value="apiKeyForm.agentIds"
+            mode="multiple"
+            placeholder="不选择则可访问全部Agent"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -502,6 +527,7 @@ import {
 import { getLandingConfig, updateLandingConfig } from '../api/landing'
 import { getTokenBudgetConfig, updateTokenBudgetConfig, getTokenBudgetStats, getTokenBudgetRanking } from '../api/tokenBudget'
 import { listApiKeys, createApiKey, toggleApiKey, deleteApiKey } from '../api/apiKey'
+import AgentSelect from '../components/AgentSelect.vue'
 import ModelSelect from '../components/ModelSelect.vue'
 import UserManage from './UserManage.vue'
 import { copyToClipboard } from '../utils/clipboard'
@@ -784,16 +810,19 @@ const apiKeyCreateVisible = ref(false)
 const apiKeyCreateLoading = ref(false)
 const apiKeySecretVisible = ref(false)
 const apiKeyCreatedSecret = ref('')
-const apiKeyForm = reactive({ name: '', permissions: 'chat' })
+const apiKeyForm = reactive({ name: '', permissions: 'chat', rateLimit: 60, dailyQuota: 100000, agentIds: [] })
 
 async function loadApiKeys() {
   const res = await listApiKeys()
   apiKeyList.value = res.data || []
 }
 
-function showCreateApiKey() {
+async function showCreateApiKey() {
   apiKeyForm.name = ''
   apiKeyForm.permissions = 'chat'
+  apiKeyForm.rateLimit = 60
+  apiKeyForm.dailyQuota = 100000
+  apiKeyForm.agentIds = []
   apiKeyCreateVisible.value = true
 }
 
@@ -804,6 +833,9 @@ async function handleCreateApiKey() {
     const res = await createApiKey({
       name: apiKeyForm.name.trim(),
       permissions: apiKeyForm.permissions,
+      rateLimit: apiKeyForm.rateLimit,
+      dailyQuota: apiKeyForm.dailyQuota,
+      agentIds: apiKeyForm.agentIds.length > 0 ? apiKeyForm.agentIds : null,
     })
     const data = res.data || {}
     apiKeyCreatedSecret.value = data.secret

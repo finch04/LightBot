@@ -1,6 +1,7 @@
 package com.lightbot.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.ApiKeyPermission;
@@ -8,7 +9,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import org.apache.ibatis.type.JdbcType;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * API Key 表
@@ -46,6 +49,26 @@ public class ApiKey {
     @TableField("permissions")
     @Schema(description = "权限范围")
     private ApiKeyPermission permissions;
+
+    @TableField(value = "agent_ids", typeHandler = JacksonTypeHandler.class)
+    @Schema(description = "绑定的Agent ID列表，null表示全部")
+    private List<String> agentIds;
+
+    @TableField("rate_limit")
+    @Schema(description = "每分钟调用上限，默认60")
+    private Integer rateLimit;
+
+    @TableField("daily_quota")
+    @Schema(description = "每日Token配额，默认100000")
+    private Integer dailyQuota;
+
+    @TableField("used_tokens")
+    @Schema(description = "当日已用Token数")
+    private Long usedTokens;
+
+    @TableField("quota_reset_at")
+    @Schema(description = "配额重置日期")
+    private LocalDate quotaResetAt;
 
     @TableField("is_enabled")
     @Schema(description = "是否启用")

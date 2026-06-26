@@ -317,10 +317,14 @@
               :class="{
                 'ask-user-trigger': m._askUserRole === 'trigger',
                 'ask-user-response': m._askUserRole === 'response',
+                'mi-msg-history': m.source === 'history',
               }"
             >
               <div class="mi-msg-head">
                 <a-tag size="small" :color="roleTagColor(m.role)">{{ roleLabel(m.role) }}</a-tag>
+                <a-tag v-if="m.source === 'history'" size="small" color="default">历史</a-tag>
+                <a-tag v-else size="small" color="blue">本轮</a-tag>
+                <a-tag v-if="m.orphanPlaceholder" size="small" color="orange">未完成回复</a-tag>
                 <span v-if="m._askUserRole === 'trigger'" class="ask-user-badge trigger-badge">ask_user 触发</span>
                 <span v-if="m._askUserRole === 'response'" class="ask-user-badge response-badge">ask_user 回复</span>
                 <button v-if="m.content" class="btn-copy-sm" @click="copyToClipboard(m.content, 'mi_msg_' + mi)">
@@ -1386,6 +1390,9 @@ onUnmounted(() => clearTimeout(copyTimer))
 .mi-msg.ask-user-trigger,
 .mi-msg.ask-user-response {
   border-bottom-color: transparent;
+}
+.mi-msg-history {
+  opacity: 0.75;
 }
 .mi-msg-head {
   display: flex;

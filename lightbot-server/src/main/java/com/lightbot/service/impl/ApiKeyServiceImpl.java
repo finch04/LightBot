@@ -1,6 +1,7 @@
 package com.lightbot.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.entity.ApiKey;
 import com.lightbot.enums.ApiKeyPermission;
@@ -8,15 +9,19 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.common.BizException;
 import com.lightbot.mapper.ApiKeyMapper;
 import com.lightbot.service.ApiKeyService;
+import com.lightbot.util.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * API Key 服务实现
@@ -30,9 +35,15 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         implements ApiKeyService {
 
     private static final String KEY_PREFIX = "lbkey_";
+    private static final String RATE_LIMIT_KEY_PREFIX = "lightbot:apikey:rate:";
+
+    @Autowired
+    private RedisUtil redisUtil;
 
     @Override
-    public Map<String, Object> createApiKey(Long userId, String name, String permissions, String expiresAt) {
+    public Map<String, Object> createApiKey(Long userId, String name, String permissions,
+                                             String expiresAt, List<String> agentIds,
+                                             Integer rateLimit, Integer dailyQuota) {
         // 1. 生成密钥
         String rawKey = KEY_PREFIX + UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         String keyHash = sha256(rawKey);
@@ -45,6 +56,10 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         apiKey.setKeyPrefix(keyPrefix);
         apiKey.setKeyHash(keyHash);
         apiKey.setPermissions(ApiKeyPermission.valueOf(permissions != null ? permissions.toUpperCase() : "CHAT"));
+        apiKey.setAgentIds(agentIds != null && !agentIds.isEmpty() ? agentIds : null);
+        apiKey.setRateLimit(rateLimit != null ? rateLimit : 60);
+        apiKey.setDailyQuota(dailyQuota != null ? dailyQuota : 100000);
+        apiKey.setUsedTokens(0L);
         apiKey.setIsEnabled(1);
         if (expiresAt != null && !expiresAt.isBlank()) {
             apiKey.setExpiresAt(LocalDateTime.parse(expiresAt, DateTimeFormatter.ISO_LOCAL_DATE_TIME));
@@ -52,7 +67,8 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         save(apiKey);
 
         // 3. 返回实体 + 完整密钥（仅此一次）
-        log.info("[API Key] 创建成功 userId=[{}], name=[{}]", userId, name);
+        log.info("[API Key] 创建成功 userId=[{}], name=[{}], rateLimit=[{}], dailyQuota=[{}]",
+                userId, name, apiKey.getRateLimit(), apiKey.getDailyQuota());
         Map<String, Object> result = new HashMap<>();
         result.put("apiKey", apiKey);
         result.put("secret", rawKey);
@@ -104,6 +120,12 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
 
     @Override
     public Long authenticate(String rawKey) {
+        ApiKey apiKey = authenticateWithDetails(rawKey);
+        return apiKey != null ? apiKey.getUserId() : null;
+    }
+
+    @Override
+    public ApiKey authenticateWithDetails(String rawKey) {
         if (rawKey == null || !rawKey.startsWith(KEY_PREFIX)) {
             return null;
         }
@@ -120,7 +142,73 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         }
         // 异步更新最近使用时间
         baseMapper.updateLastUsedAt(apiKey.getId());
-        return apiKey.getUserId();
+        return apiKey;
+    }
+
+    /**
+     * 检查 API Key 是否有权访问指定 Agent
+     *
+     * @param apiKey  API Key 实体
+     * @param agentId 目标 Agent ID
+     * @return true=允许访问（agentIds 为空或包含目标 ID）
+     */
+    public boolean checkAgentScope(ApiKey apiKey, String agentId) {
+        if (agentId == null || agentId.isBlank()) return true;
+        List<String> allowed = apiKey.getAgentIds();
+        return allowed == null || allowed.isEmpty() || allowed.contains(agentId);
+    }
+
+    /**
+     * 检查 API Key 请求频率限制（Redis 滑动窗口）
+     *
+     * @param apiKeyId API Key ID
+     * @param rateLimit 每分钟最大请求数
+     * @return true=允许，false=超限
+     */
+    public boolean checkRateLimit(Long apiKeyId, int rateLimit) {
+        String key = RATE_LIMIT_KEY_PREFIX + apiKeyId + ":" + (System.currentTimeMillis() / 60000);
+        try {
+            long count = redisUtil.increment(key);
+            if (count == 1) {
+                redisUtil.set(key, String.valueOf(count), 120);
+            }
+            return count <= rateLimit;
+        } catch (Exception e) {
+            // Redis 不可用时放行
+            log.warn("[API Key] Redis 限流检查失败，放行: {}", e.getMessage());
+            return true;
+        }
+    }
+
+    @Override
+    public boolean checkAndConsumeQuota(Long apiKeyId, long tokenUsage) {
+        ApiKey apiKey = getById(apiKeyId);
+        if (apiKey == null) return true;
+
+        int dailyQuota = apiKey.getDailyQuota();
+        if (dailyQuota <= 0) return true;
+
+        // 每日重置
+        LocalDate today = LocalDate.now();
+        if (apiKey.getQuotaResetAt() == null || !apiKey.getQuotaResetAt().equals(today)) {
+            lambdaUpdate()
+                    .eq(ApiKey::getId, apiKeyId)
+                    .set(ApiKey::getUsedTokens, 0L)
+                    .set(ApiKey::getQuotaResetAt, today)
+                    .update();
+            apiKey.setUsedTokens(0L);
+            apiKey.setQuotaResetAt(today);
+        }
+
+        if (apiKey.getUsedTokens() + tokenUsage > dailyQuota) {
+            return false;
+        }
+        // 原子累加
+        lambdaUpdate()
+                .eq(ApiKey::getId, apiKeyId)
+                .setSql("used_tokens = used_tokens + " + tokenUsage)
+                .update();
+        return true;
     }
 
     private ApiKey getByIdAndCheckOwner(Long id, Long userId) {

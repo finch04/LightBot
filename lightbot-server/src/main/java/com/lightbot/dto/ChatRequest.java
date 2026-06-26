@@ -52,4 +52,9 @@ public class ChatRequest {
      * 引用回复：引用某条历史消息进行回复
      */
     private Long replyToMessageId;
+
+    /**
+     * API Key ID（由拦截器注入，不从前端传入）
+     */
+    private transient Long apiKeyId;
 }

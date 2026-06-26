@@ -52,7 +52,7 @@
             transform: `translateY(${virtualRow.start}px)`,
           }"
         >
-          <div :class="['message', messages[virtualRow.index]?.role]">
+          <div :class="['message', messages[virtualRow.index]?.role, { 'message-highlight': highlightMessageId === messages[virtualRow.index]?._id }]">
             <!-- AI 头像 -->
             <div v-if="messages[virtualRow.index]?.role === 'assistant'" class="message-avatar">
               <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" alt="" class="message-avatar-img" />
@@ -83,14 +83,15 @@
               </div>
               <div v-else class="message-content-wrapper" :class="{ 'user-message-stack': messages[virtualRow.index]?.role === 'user' }">
                 <!-- 引用回复内容 -->
-                <div v-if="messages[virtualRow.index]?.role === 'user' && getReplyToInfo(messages[virtualRow.index])" class="reply-quote">
-                  <div class="reply-quote-bar"></div>
-                  <a-tooltip :title="getReplyToInfo(messages[virtualRow.index]).content" placement="topLeft" :mouseEnterDelay="0.3" :overlay-style="{ maxWidth: '520px' }">
+                <a-tooltip v-if="getReplyToInfo(messages[virtualRow.index])" :title="getReplyToInfo(messages[virtualRow.index]).content" placement="topLeft" :overlay-style="{ maxWidth: '480px' }">
+                  <div class="reply-quote" :class="{ clickable: hasReplyTarget(messages[virtualRow.index]) }" @click.stop="scrollToMessage(messages[virtualRow.index]._replyToMessageId)">
+                    <div class="reply-quote-bar"></div>
                     <div class="reply-quote-content">
+                      <span class="reply-quote-role">{{ getReplyToInfo(messages[virtualRow.index]).role === 'assistant' ? 'AI' : '你' }}</span>
                       <span class="reply-quote-text">{{ getReplyToInfo(messages[virtualRow.index]).content }}</span>
                     </div>
-                  </a-tooltip>
-                </div>
+                  </div>
+                </a-tooltip>
                 <!-- 用户附件 -->
                 <div
                   v-if="messages[virtualRow.index]?.role === 'user' && getMsgAttachments(messages[virtualRow.index]).length && !messages[virtualRow.index]._sensitiveBlock"
@@ -703,6 +704,7 @@ const editingMessageId = ref(null)
 const editContent = ref('')
 const editInputRef = ref(null)
 const replyTo = reactive({ active: false, messageId: null, content: '', role: '' })
+const highlightMessageId = ref(null)
 const messagePage = ref(1)
 const hasMoreMessages = ref(false)
 const loadingOlder = ref(false)
@@ -773,7 +775,7 @@ const virtualizer = useVirtualizer({
   estimateSize: (index) => {
     const msg = messages.value[index]
     if (!msg) return 80
-    if (msg.role === 'user') return 60
+    if (msg.role === 'user') return msg._replyToMessageId ? 90 : 60
     const len = msg.content?.length || 0
     let size = Math.max(80, Math.min(600, Math.ceil(len / 40) * 22 + 60))
     // 工具事件额外占高：每个 tool_call/tool_result 约 32px，tool_status 约 24px
@@ -1524,6 +1526,25 @@ function getReplyToInfo(msg) {
     return { content: (refMsg.content || '').slice(0, 100), role: refMsg.role }
   }
   return null
+}
+
+/** 引用目标是否在已加载的消息列表中（控制是否可点击跳转） */
+function hasReplyTarget(msg) {
+  if (!msg?._replyToMessageId) return false
+  return messages.value.some(m => m._id === msg._replyToMessageId)
+}
+
+/** 滚动到被引用的消息并高亮闪烁 */
+function scrollToMessage(messageId) {
+  if (!messageId) return
+  const idx = messages.value.findIndex(m => m._id === messageId)
+  if (idx < 0) return
+  virtualizer.value.scrollToIndex(idx, { align: 'center' })
+  // 延迟高亮，等虚拟滚动渲染完成
+  setTimeout(() => {
+    highlightMessageId.value = messageId
+    setTimeout(() => { highlightMessageId.value = null }, 2000)
+  }, 100)
 }
 
 async function submitEdit() {
@@ -2552,6 +2573,13 @@ watch(sessionId, (newVal, oldVal) => {
   border-radius: 8px;
   border-left: 3px solid #0070f3;
   align-self: stretch;
+  transition: background 0.15s;
+}
+.reply-quote.clickable {
+  cursor: pointer;
+}
+.reply-quote.clickable:hover {
+  background: rgba(0, 112, 243, 0.12);
 }
 .reply-quote-bar {
   display: none;
@@ -2563,14 +2591,28 @@ watch(sessionId, (newVal, oldVal) => {
   line-height: 1.4;
   overflow: hidden;
 }
+.reply-quote-role {
+  color: var(--color-link);
+  font-weight: 500;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
 .reply-quote-text {
   color: var(--color-mute);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
+  display: inline;
   max-width: 100%;
-  vertical-align: bottom;
+}
+/* 引用跳转高亮 */
+.message-highlight {
+  animation: reply-highlight-flash 2s ease-out;
+}
+@keyframes reply-highlight-flash {
+  0% { background: rgba(0, 112, 243, 0.18); }
+  30% { background: rgba(0, 112, 243, 0.12); }
+  100% { background: transparent; }
 }
 
 /* 原始内容弹窗 */

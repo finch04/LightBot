@@ -32,14 +32,22 @@ public class ApiKeyController {
         return Result.ok(apiKeyService.listByUserId(userId));
     }
 
+    @SuppressWarnings("unchecked")
     @PostMapping
     @Operation(summary = "创建API Key")
-    public Result<Map<String, Object>> create(@RequestBody Map<String, String> body) {
+    public Result<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
         long userId = cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
-        String name = body.get("name");
-        String permissions = body.get("permissions");
-        String expiresAt = body.get("expiresAt");
-        return Result.ok(apiKeyService.createApiKey(userId, name, permissions, expiresAt));
+        String name = (String) body.get("name");
+        String permissions = (String) body.get("permissions");
+        String expiresAt = (String) body.get("expiresAt");
+        List<String> agentIds = body.get("agentIds") instanceof List
+                ? (List<String>) body.get("agentIds") : null;
+        Integer rateLimit = body.get("rateLimit") instanceof Number
+                ? ((Number) body.get("rateLimit")).intValue() : null;
+        Integer dailyQuota = body.get("dailyQuota") instanceof Number
+                ? ((Number) body.get("dailyQuota")).intValue() : null;
+        return Result.ok(apiKeyService.createApiKey(userId, name, permissions,
+                expiresAt, agentIds, rateLimit, dailyQuota));
     }
 
     @PatchMapping("/{id}/toggle")

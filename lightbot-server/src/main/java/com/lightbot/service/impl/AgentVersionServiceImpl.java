@@ -1107,6 +1107,8 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         try {
             return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
+            String preview = json.length() > 200 ? json.substring(0, 200) + "..." : json;
+            log.warn("[AgentVersion] 配置JSON解析失败，已降级为空配置: {}", preview, e);
             return new HashMap<>();
         }
     }

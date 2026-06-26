@@ -21,9 +21,14 @@ public interface ApiKeyService extends IService<ApiKey> {
      * @param name        Key名称
      * @param permissions 权限范围
      * @param expiresAt   过期时间（null=永不过期）
+     * @param agentIds    绑定的Agent ID列表（null=全部）
+     * @param rateLimit   每分钟调用上限（null=默认60）
+     * @param dailyQuota  每日Token配额（null=默认100000）
      * @return {apiKey: ApiKey实体（不含hash）, secret: 完整密钥（仅此一次返回）}
      */
-    Map<String, Object> createApiKey(Long userId, String name, String permissions, String expiresAt);
+    Map<String, Object> createApiKey(Long userId, String name, String permissions,
+                                     String expiresAt, List<String> agentIds,
+                                     Integer rateLimit, Integer dailyQuota);
 
     /**
      * 查询用户的 API Key 列表
@@ -54,4 +59,21 @@ public interface ApiKeyService extends IService<ApiKey> {
      * @return 用户ID，验证失败返回null
      */
     Long authenticate(String rawKey);
+
+    /**
+     * 验证 API Key 并返回完整实体（含限流/作用域信息）
+     *
+     * @param rawKey 完整密钥（lbkey_xxx）
+     * @return ApiKey 实体，验证失败返回null
+     */
+    ApiKey authenticateWithDetails(String rawKey);
+
+    /**
+     * 检查并扣减每日 Token 配额
+     *
+     * @param apiKeyId   API Key ID
+     * @param tokenUsage 本次消耗的 Token 数
+     * @return true=配额充足，false=超配额
+     */
+    boolean checkAndConsumeQuota(Long apiKeyId, long tokenUsage);
 }

@@ -25,12 +25,15 @@ import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.stereotype.Component;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 内置工具 — 知识库检索
@@ -55,26 +58,19 @@ public class QueryKnowledgeTool {
     private final EmbeddingModel embeddingModel;
     private final RagParamResolver ragParamResolver;
     private final ObjectMapper objectMapper;
+    private final com.lightbot.service.QueryRewriteService queryRewriteService;
 
     @Autowired
     @Qualifier("lightBotExecutor")
     private Executor lightBotExecutor;
 
-    /** 搜索结果缓存 TTL（毫秒） */
-    private static final long CACHE_TTL_MS = 5 * 60 * 1000L;
-
     /**
-     * 按请求ID存储的搜索结果（跨线程安全，带 TTL 自动过期）
+     * 按请求ID存储的搜索结果（跨线程安全，Caffeine 自动过期 + 容量限制）
      * <p>工具在 lightBotExecutor 线程池执行，无法用 ThreadLocal 传递结果给主线程，
-     * 改用 ConcurrentHashMap 以 requestId 为 key 存储</p>
+     * 改用 Caffeine Cache 以 requestId 为 key 存储</p>
      */
-    private static final ConcurrentHashMap<String, TimedEntry> SEARCH_RESULTS_MAP = new ConcurrentHashMap<>();
-
-    private record TimedEntry(List<Map<String, Object>> data, long createdAt) {
-        boolean isExpired() {
-            return System.currentTimeMillis() - createdAt > CACHE_TTL_MS;
-        }
-    }
+    private static final Cache<String, List<Map<String, Object>>> SEARCH_RESULTS_CACHE =
+            Caffeine.newBuilder().maximumSize(1000).expireAfterWrite(5, TimeUnit.MINUTES).build();
 
     @Tool(name = "query_knowledge",
           description = "搜索当前对话智能体绑定的知识库，获取与问题相关的文档内容。当用户问题涉及特定领域知识、需要查找文档资料时调用此工具。只需传入 question，不要传入 agentId。")
@@ -102,12 +98,24 @@ public class QueryKnowledgeTool {
         }
 
         try {
-            // 2. 向量化问题
+            // 2. 查询改写（可选）：将模糊/短查询改写为更适合检索的形式
+            String effectiveQuery = question;
+            if (isQueryRewriteEnabled(knowledgeIds)) {
+                ToolEventEmitter.emit("正在改写查询...");
+                String rewritten = queryRewriteService.rewrite(question);
+                if (!rewritten.equals(question)) {
+                    log.info("[Tool:query_knowledge] 查询已改写: {} → {}", question, rewritten);
+                    effectiveQuery = rewritten;
+                }
+            }
+            final String searchQuery = effectiveQuery;
+
+            // 3. 向量化问题
             ToolEventEmitter.emit("正在向量化查询问题...");
-            float[] queryVector = embedText(question);
+            float[] queryVector = embedText(searchQuery);
             log.info("[Tool:query_knowledge] 问题向量化完成: dimension={}", queryVector.length);
 
-            // 3. 并行检索多个知识库（阈值过滤下沉到SQL层）
+            // 4. 并行检索多个知识库（阈值过滤下沉到SQL层）
             List<CompletableFuture<List<Map<String, Object>>>> futures = knowledgeIds.stream()
                     .map(knowledgeId -> CompletableFuture.supplyAsync(() -> {
                         try {
@@ -130,7 +138,7 @@ public class QueryKnowledgeTool {
                             ToolEventEmitter.emit("正在检索知识库「" + kbName + "」的文档块...");
                             CompletableFuture<List<Map<String, Object>>> chunkFuture = CompletableFuture.supplyAsync(() -> {
                                 try {
-                                    Map<String, Object> searchParams = buildSearchParams(knowledge, question);
+                                    Map<String, Object> searchParams = buildSearchParams(knowledge, searchQuery);
                                     return embeddingService.searchSimilarSql(knowledgeId, queryVector, topK, threshold, searchParams);
                                 } catch (Exception e) {
                                     log.warn("[Tool:query_knowledge] Chunk检索失败: knowledgeId={}", knowledgeId);
@@ -198,7 +206,7 @@ public class QueryKnowledgeTool {
                     }, lightBotExecutor))
                     .toList();
 
-            // 4. 合并结果，检查是否有 QA 优先命中
+            // 5. 合并结果，检查是否有 QA 优先命中
             List<Map<String, Object>> allResults = new ArrayList<>();
             Map<String, Object> qaPriorityHit = null;
             for (CompletableFuture<List<Map<String, Object>>> future : futures) {
@@ -211,14 +219,14 @@ public class QueryKnowledgeTool {
                 }
             }
 
-            // 4.1 QA 优先命中：返回 JSON（含 qa_answer）
+            // 5.1 QA 优先命中：返回 JSON（含 qa_answer）
             if (qaPriorityHit != null) {
                 String qaAnswer = (String) qaPriorityHit.get("answer");
                 String qaQuestion = (String) qaPriorityHit.get("question");
                 double qaScore = ((Number) qaPriorityHit.get("score")).doubleValue();
                 ToolEventEmitter.emit("命中高匹配问答对（相似度 " + String.format("%.2f", qaScore) + "），直接返回标准答案");
                 if (requestId != null) {
-                    SEARCH_RESULTS_MAP.put(requestId, new TimedEntry(List.of(qaPriorityHit), System.currentTimeMillis()));
+                    SEARCH_RESULTS_CACHE.put(requestId, List.of(qaPriorityHit));
                 }
                 log.info("[Tool:query_knowledge] QA优先返回: question={}, score={}", qaQuestion, qaScore);
                 Map<String, Object> output = new java.util.LinkedHashMap<>();
@@ -228,9 +236,9 @@ public class QueryKnowledgeTool {
                 return objectMapper.writeValueAsString(output);
             }
 
-            // 4.2 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
+            // 5.2 按 requestId 存储原始结果，供 ChatService 读取并持久化到消息 metadata
             if (requestId != null) {
-                SEARCH_RESULTS_MAP.put(requestId, new TimedEntry(allResults, System.currentTimeMillis()));
+                SEARCH_RESULTS_CACHE.put(requestId, allResults);
             }
 
             ToolEventEmitter.emit("共找到 " + allResults.size() + " 条相关内容");
@@ -245,7 +253,7 @@ public class QueryKnowledgeTool {
                 return objectMapper.writeValueAsString(empty);
             }
 
-            // 5. 构建 JSON 返回
+            // 6. 构建 JSON 返回
             Map<String, Object> output = new java.util.LinkedHashMap<>();
             output.put("total", allResults.size());
             output.put("qa_answer", null);
@@ -354,6 +362,18 @@ public class QueryKnowledgeTool {
         }
     }
 
+    /**
+     * 检查是否启用查询改写：任一绑定知识库开启即启用
+     */
+    private boolean isQueryRewriteEnabled(List<Long> knowledgeIds) {
+        for (Long knowledgeId : knowledgeIds) {
+            Knowledge knowledge = knowledgeService.getById(knowledgeId);
+            if (knowledge == null) continue;
+            Map<String, Object> qp = parseQueryParams(knowledge);
+            if (Boolean.TRUE.equals(qp.get("query_rewrite"))) return true;
+        }
+        return false;
+    }
 
     /**
      * 按 requestId 获取工具执行期间的搜索结果（跨线程安全）
@@ -363,11 +383,11 @@ public class QueryKnowledgeTool {
      */
     public static List<Map<String, Object>> getSearchResults(String requestId) {
         if (requestId == null) return List.of();
-        TimedEntry entry = SEARCH_RESULTS_MAP.remove(requestId);
-        if (entry == null || entry.isExpired()) {
-            return List.of();
+        List<Map<String, Object>> data = SEARCH_RESULTS_CACHE.getIfPresent(requestId);
+        if (data != null) {
+            SEARCH_RESULTS_CACHE.invalidate(requestId);
         }
-        return entry.data();
+        return data != null ? data : List.of();
     }
 
     @SuppressWarnings("unchecked")

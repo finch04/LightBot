@@ -61,6 +61,17 @@
         <a-input-number v-model:value="form.similarity_threshold" :min="0" :max="1" :step="0.05" style="width: 100%" />
       </a-form-item>
 
+      <!-- 查询改写 -->
+      <a-form-item>
+        <template #label>
+          <span>查询改写</span>
+          <a-tooltip title="启用后，检索前会用大模型将用户问题改写为更适合向量检索的查询。对短查询、模糊查询、代词引用等场景有明显提升，但会增加约 200-500ms 延迟">
+            <QuestionCircleOutlined class="field-tip-icon" />
+          </a-tooltip>
+        </template>
+        <a-switch v-model:checked="form.query_rewrite" />
+      </a-form-item>
+
       <!-- Milvus hybrid 模式专属参数 -->
       <template v-if="isMilvus && form.search_mode === 'hybrid'">
         <a-form-item>
@@ -334,6 +345,7 @@ const pgDefaults = {
   search_mode: 'vector',
   final_top_k: 5,
   similarity_threshold: 0.5,
+  query_rewrite: false,
   vector_weight: 0.7,
   keyword_weight: 0.3,
   use_reranker: false,
@@ -356,6 +368,7 @@ const milvusDefaults = {
   search_mode: 'vector',
   final_top_k: 10,
   similarity_threshold: 0.0,
+  query_rewrite: false,
   vector_weight: 0.7,
   bm25_weight: 0.3,
   bm25_top_k: 30,
