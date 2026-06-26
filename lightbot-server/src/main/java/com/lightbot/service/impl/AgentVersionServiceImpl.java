@@ -822,6 +822,33 @@ public class AgentVersionServiceImpl implements AgentVersionService {
     }
 
     @Override
+    public void cloneWorkflowDraft(Long sourceAgentId, Long targetAgentId) {
+        // 1. 获取源Agent草稿
+        AgentVersion sourceDraft = getDraftRow(sourceAgentId);
+        if (sourceDraft == null || sourceDraft.getConfig() == null || sourceDraft.getConfig().isBlank()) {
+            return;
+        }
+        Map<String, Object> sourceSnap = parseJsonMap(sourceDraft.getConfig());
+        // 2. 提取工作流图（节点/边/全局配置），非工作流类型直接跳过
+        Map<String, Object> graph = extractWorkflowGraphFromSnap(sourceSnap);
+        if (graph == null || graph.isEmpty()) {
+            return;
+        }
+        // 3. 获取目标Agent草稿，将源工作流图写入
+        AgentVersion targetDraft = getDraftRow(targetAgentId);
+        if (targetDraft == null) {
+            return;
+        }
+        Map<String, Object> targetSnap = new HashMap<>();
+        targetSnap.put("kind", KIND_WORKFLOW);
+        targetSnap.put("graph", graph);
+        targetDraft.setConfig(writeJson(targetSnap));
+        targetDraft.setNodeCount(countNodesInMap(graph));
+        targetDraft.setEdgeCount(countEdgesInMap(graph));
+        agentVersionMapper.updateById(targetDraft);
+    }
+
+    @Override
     public void initDraftWithWorkflow(Agent agent, Map<String, Object> workflowSnapshot) {
         if (agent.getId() == null) {
             return;

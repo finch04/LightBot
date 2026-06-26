@@ -2431,8 +2431,16 @@ onUnmounted(() => {
   background: #27272a;
 }
 .btn-primary-sm:disabled {
-  background: #d4d4d8;
+  background: var(--color-hairline-strong);
+  color: var(--color-mute);
   cursor: not-allowed;
+}
+:global([data-theme="dark"]) .btn-primary-sm {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+:global([data-theme="dark"]) .btn-primary-sm:hover:not(:disabled) {
+  background: #3f3f46;
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .doc-list {
@@ -2626,6 +2634,8 @@ onUnmounted(() => {
   padding: 8px 12px;
   font-size: 14px;
   outline: none;
+  color: var(--color-ink);
+  background: var(--color-canvas);
 }
 .rag-input input:focus {
   border-color: var(--color-ink);
@@ -2768,13 +2778,17 @@ onUnmounted(() => {
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
   background: var(--color-canvas);
+  --markmap-text-color: var(--color-ink);
+  --markmap-circle-open-bg: var(--color-canvas);
+  --markmap-code-bg: var(--color-canvas-soft-2);
+  --markmap-code-color: var(--color-ink);
 }
-.mindmap-svg :deep(text) {
-  fill: var(--color-ink) !important;
-}
-.mindmap-svg :deep(line),
-.mindmap-svg :deep(path) {
+.mindmap-svg :deep(.markmap-link) {
   stroke: var(--color-mute) !important;
+}
+.mindmap-svg :deep(.markmap-node > circle) {
+  stroke: var(--color-mute) !important;
+  fill: var(--color-canvas) !important;
 }
 .mindmap-actions {
   display: flex;

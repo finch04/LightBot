@@ -125,7 +125,7 @@
               </div>
             </AvatarFrame>
             <span class="sidebar-text user-name">{{ userStore.user?.username || userStore.user?.nickname || '用户' }}</span>
-            <LevelTag :level="userStore.user?.level" size="small" />
+            <LevelTag v-show="!sidebarCollapsed" :level="userStore.user?.level" size="small" />
             <a-badge
               v-if="taskBadgeCount"
               :count="taskBadgeCount"

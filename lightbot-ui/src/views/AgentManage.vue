@@ -58,18 +58,25 @@
           <span class="card-type" :class="'card-type--' + (a.agentType?.code || a.agentType || 'chat')">{{ agentTypeLabel(a.agentType) }}</span>
         </template>
         <template #actions>
-          <a-tooltip v-if="!a.isDefault" title="设为默认">
-            <button class="btn-icon" @click="handleSetDefault(a.id)"><StarOutlined /></button>
-          </a-tooltip>
           <a-tooltip title="编辑">
-            <button class="btn-icon" @click="openDialog(a)"><EditOutlined /></button>
+            <button class="btn-icon" @click.stop="openDialog(a)"><EditOutlined /></button>
           </a-tooltip>
-          <a-tooltip title="复制">
-            <button class="btn-icon" @click="handleClone(a.id)"><CopyOutlined /></button>
-          </a-tooltip>
-          <a-tooltip title="删除">
-            <button class="btn-icon danger" @click="handleDelete(a.id)"><DeleteOutlined /></button>
-          </a-tooltip>
+          <a-dropdown :trigger="['click']">
+            <button class="btn-icon" @click.stop.prevent><MoreOutlined /></button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item v-if="!a.isDefault" @click="handleSetDefault(a.id)">
+                  <StarOutlined style="margin-right: 6px" /> 设为默认
+                </a-menu-item>
+                <a-menu-item @click="handleClone(a.id)">
+                  <CopyOutlined style="margin-right: 6px" /> 复制
+                </a-menu-item>
+                <a-menu-item @click="handleDelete(a.id)" class="menu-danger">
+                  <DeleteOutlined style="margin-right: 6px" /> 删除
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </template>
         <a-tooltip v-if="a.description" :title="a.description" placement="top" :overlay-style="{ maxWidth: '400px' }">
           <p class="card-desc">{{ a.description }}</p>
@@ -151,7 +158,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, RobotOutlined, SearchOutlined, ReloadOutlined, StarOutlined, ExperimentOutlined, MoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getAgents, createAgent, updateAgent, deleteAgent, cloneAgent, setDefaultAgent, listWorkflowExamples, createFromWorkflowExample } from '../api/agent'
 import { loadAgentStatusLabels, formatAgentStatus } from '../utils/agentStatus'
@@ -329,6 +336,13 @@ onMounted(async () => {
 
 <style scoped>
 .page { overflow-x: hidden; }
+
+:deep(.menu-danger) {
+  color: var(--color-error) !important;
+}
+:deep(.menu-danger:hover) {
+  background: var(--color-error-soft) !important;
+}
 
 .agent-grid {
   display: grid;

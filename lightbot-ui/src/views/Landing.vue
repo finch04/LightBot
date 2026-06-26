@@ -929,4 +929,57 @@ onUnmounted(() => {
     width: 100%;
   }
 }
+
+/* 深色模式适配 */
+:global([data-theme="dark"]) {
+  .landing-container {
+    background: linear-gradient(180deg, #0a1628 0%, var(--color-canvas) 40%, #0d1117 100%);
+  }
+  .title {
+    background: linear-gradient(135deg, #e4e4e7 10%, #60a5fa 55%, #3b82f6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .glass-header {
+    background: rgba(0, 0, 0, 0.82);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+  .visual-card {
+    background: linear-gradient(165deg, #1a1a2e, #16213e);
+    border-color: var(--color-hairline);
+    box-shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.3), var(--shadow-4);
+  }
+  .visual-glow {
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.08), transparent 80%);
+  }
+  .feature-desc-area {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border-color: rgba(99, 102, 241, 0.12);
+  }
+  .orb { opacity: 0.15; }
+  .grid-mesh {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  }
+  .footer {
+    border-top-color: rgba(255, 255, 255, 0.06);
+    background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.1));
+  }
+  .button-base.primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    box-shadow: 0 8px 24px -4px rgba(59, 130, 246, 0.4);
+  }
+  .button-base.primary:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  }
+  .github-link {
+    color: var(--color-mute);
+  }
+  .github-link:hover {
+    color: var(--color-link);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
 </style>

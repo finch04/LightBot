@@ -5325,7 +5325,7 @@ onMounted(async () => {
 }
 .sync-overlay-text {
   font-size: 14px;
-  color: var(--color-body);
+  color: #fff;
   font-weight: 500;
 }
 

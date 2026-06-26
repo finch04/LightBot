@@ -348,6 +348,20 @@ public class MinioUtil {
     }
 
     /**
+     * 健康检查：验证 MinIO 连接和 Bucket 是否可用
+     *
+     * @return true=可用
+     */
+    public boolean checkHealth() {
+        try {
+            return minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+        } catch (Exception e) {
+            log.error("[MinIO] 健康检查失败", e);
+            return false;
+        }
+    }
+
+    /**
      * 获取对象元数据
      *
      * @param filePath 文件路径

@@ -108,6 +108,15 @@ public interface AgentVersionService {
     void initDraftWithWorkflow(Agent agent, Map<String, Object> workflowSnapshot);
 
     /**
+     * 克隆工作流草稿：将源Agent草稿中的工作流图（节点/边/全局配置）复制到目标Agent草稿
+     * <p>仅工作流型Agent需要此操作，对话型Agent的草稿由 initDraftOnCreate 自行处理</p>
+     *
+     * @param sourceAgentId 源Agent ID
+     * @param targetAgentId 目标Agent ID（已有空草稿）
+     */
+    void cloneWorkflowDraft(Long sourceAgentId, Long targetAgentId);
+
+    /**
      * 从 agent.config 迁移历史版本数据（一次性）
      */
     void migrateLegacyIfNeeded(Agent agent);

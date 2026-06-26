@@ -184,7 +184,7 @@ async function handleLogin() {
 .form-header h2 {
   font-size: 24px;
   font-weight: 600;
-  color: #141414;
+  color: var(--color-ink);
   margin: 0 0 6px;
 }
 
@@ -210,7 +210,7 @@ async function handleLogin() {
 .form-label {
   font-size: 14px;
   font-weight: 500;
-  color: #141414;
+  color: var(--color-ink);
 }
 
 .input-wrapper {
@@ -230,7 +230,7 @@ async function handleLogin() {
 
 .input-wrapper:focus-within {
   border-color: var(--color-ink);
-  box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
+  box-shadow: 0 0 0 2px var(--dark-10);
 }
 
 .input-icon {
@@ -245,7 +245,7 @@ async function handleLogin() {
   border: none;
   outline: none;
   font-size: 14px;
-  color: #141414;
+  color: var(--color-ink);
   background: transparent;
 }
 

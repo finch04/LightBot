@@ -87,6 +87,42 @@ const { isDark, themeConfig } = useTheme()
   --shadow-3: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 8px -8px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
   --shadow-4: 0px 2px 2px rgba(0,0,0,0.04), 0px 8px 16px -4px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.08);
   --shadow-5: 0px 1px 1px rgba(0,0,0,0.02), 0px 8px 16px -4px rgba(0,0,0,0.04), 0px 24px 32px -8px rgba(0,0,0,0.06), inset 0 0 0 1px rgba(0,0,0,0.08);
+
+  /* 灰色色阶 */
+  --gray-0: #ffffff;
+  --gray-10: #fbfcfc;
+  --gray-25: #f8fafa;
+  --gray-50: #f5f7f7;
+  --gray-100: #eff2f2;
+  --gray-200: #e4e6e6;
+  --gray-300: #d7d9d9;
+  --gray-400: #bdbfbf;
+  --gray-500: #979999;
+  --gray-600: #697070;
+  --gray-700: #4c4d4d;
+  --gray-800: #323333;
+  --gray-900: #1e1f1f;
+  --gray-1000: #151616;
+
+  /* 透明度系统 */
+  --light-85: rgba(255, 255, 255, 0.85);
+  --dark-85: rgba(0, 0, 0, 0.85);
+  --dark-70: rgba(0, 0, 0, 0.7);
+  --dark-50: rgba(0, 0, 0, 0.5);
+  --dark-25: rgba(0, 0, 0, 0.25);
+  --dark-10: rgba(0, 0, 0, 0.1);
+
+  /* Ant Design 兼容变量 */
+  --color-bg-container: var(--gray-0);
+  --color-bg-elevated: var(--gray-10);
+  --color-text-secondary: var(--dark-70);
+  --color-trans-light: var(--light-85);
+  --color-trans-dark: var(--dark-85);
+
+  /* 思维导图/知识图谱 — 浅色模式用默认深色 */
+  --mindmap-text: #1e293b;
+  --mindmap-stroke: #e2e8f0;
+  --kg-canvas-bg: var(--color-canvas);
 }
 
 /* 深色模式 CSS 变量覆盖 */
@@ -130,6 +166,42 @@ const { isDark, themeConfig } = useTheme()
   --color-border-green: #166534;
   --color-border-blue: #1e3a5f;
 
+  /* 灰色色阶反转 */
+  --gray-0: #030303;
+  --gray-10: #080808;
+  --gray-25: #0c0d0d;
+  --gray-50: #151616;
+  --gray-100: #1e1f1f;
+  --gray-200: #4c4d4d;
+  --gray-300: #697070;
+  --gray-400: #979999;
+  --gray-500: #bdbfbf;
+  --gray-600: #d7d9d9;
+  --gray-700: #e4e6e6;
+  --gray-800: #eef0f0;
+  --gray-900: #eff2f2;
+  --gray-1000: #f5f7f7;
+
+  /* 透明度反转 */
+  --light-85: rgba(0, 0, 0, 0.85);
+  --dark-85: rgba(255, 255, 255, 0.85);
+  --dark-70: rgba(255, 255, 255, 0.7);
+  --dark-50: rgba(255, 255, 255, 0.5);
+  --dark-25: rgba(255, 255, 255, 0.25);
+  --dark-10: rgba(255, 255, 255, 0.1);
+
+  /* Ant Design 兼容变量 - 深色 */
+  --color-bg-container: #1f1f1f;
+  --color-bg-elevated: #262626;
+  --color-text-secondary: rgba(255, 255, 255, 0.65);
+  --color-trans-light: rgba(0, 0, 0, 0.85);
+  --color-trans-dark: rgba(255, 255, 255, 0.85);
+
+  /* 思维导图/知识图谱深色适配 */
+  --mindmap-text: #fff;
+  --mindmap-stroke: #555;
+  --kg-canvas-bg: #000;
+
   --shadow-1: 0 0 0 1px rgba(255,255,255,0.08);
   --shadow-2: 0px 1px 1px rgba(0,0,0,0.2), 0px 2px 2px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.06);
   --shadow-3: 0px 2px 2px rgba(0,0,0,0.2), 0px 8px 8px -8px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.06);
@@ -172,19 +244,15 @@ body {
 }
 
 [data-theme="dark"] .ant-btn-primary {
-  border-color: #444 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
 [data-theme="dark"] .ant-btn-primary:hover {
   background: #3f3f46 !important;
-  border-color: #555 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
 }
 
 .ant-btn-primary:disabled,
 .ant-btn-primary.ant-btn-disabled {
-  background: #171717 !important;
-  border-color: #171717 !important;
-  color: rgba(255, 255, 255, 0.5) !important;
-  opacity: 0.65;
   box-shadow: none !important;
   text-shadow: none !important;
 }
@@ -247,220 +315,17 @@ body {
   background: #52525b;
 }
 
-/* ===== 深色模式全局适配 ===== */
+/* ===== 深色模式：自定义组件适配 ===== */
+/* Ant Design 组件由 darkAlgorithm 自动处理，仅保留自定义组件覆盖 */
 
-/* 输入框、选择器、文本域 */
-[data-theme="dark"] .ant-input,
-[data-theme="dark"] .ant-input-affix-wrapper,
-[data-theme="dark"] .ant-select-selector,
-[data-theme="dark"] .ant-picker,
-[data-theme="dark"] .ant-input-textarea textarea {
-  background: #1a1a1a !important;
-  color: #e4e4e7 !important;
-  border-color: #333 !important;
-}
-[data-theme="dark"] .ant-input::placeholder,
-[data-theme="dark"] .ant-input-textarea textarea::placeholder {
-  color: #52525b !important;
-}
-[data-theme="dark"] .ant-input-affix-wrapper:hover,
-[data-theme="dark"] .ant-input:hover,
-[data-theme="dark"] .ant-select-selector:hover,
-[data-theme="dark"] .ant-picker:hover {
-  border-color: #4f46e5 !important;
-}
-[data-theme="dark"] .ant-input:focus,
-[data-theme="dark"] .ant-input-affix-wrapper-focused,
-[data-theme="dark"] .ant-select-focused .ant-select-selector {
-  border-color: #6366f1 !important;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
-}
-
-/* 下拉面板 */
-[data-theme="dark"] .ant-select-dropdown,
-[data-theme="dark"] .ant-picker-dropdown .ant-picker-panel-container,
-[data-theme="dark"] .ant-dropdown-menu {
-  background: #222 !important;
-  border-color: #333 !important;
-}
-[data-theme="dark"] .ant-select-item {
-  color: #e4e4e7 !important;
-}
-[data-theme="dark"] .ant-select-item-option-active {
-  background: #2a2a2e !important;
-}
-[data-theme="dark"] .ant-select-item-option-selected {
-  background: #27272a !important;
-}
-
-/* 弹窗、抽屉 */
-[data-theme="dark"] .ant-modal-content,
-[data-theme="dark"] .ant-drawer-content {
-  background: #1a1a1a !important;
-}
-[data-theme="dark"] .ant-modal-header,
-[data-theme="dark"] .ant-drawer-header {
-  background: #1a1a1a !important;
-}
-[data-theme="dark"] .ant-modal-title,
-[data-theme="dark"] .ant-drawer-title {
-  color: #e4e4e7 !important;
-}
-[data-theme="dark"] .ant-modal-close-x,
-[data-theme="dark"] .ant-drawer-close {
-  color: #71717a !important;
-}
-
-/* 表格 */
-[data-theme="dark"] .ant-table {
-  background: #1a1a1a !important;
-  color: #e4e4e7 !important;
-}
-[data-theme="dark"] .ant-table-thead > tr > th,
-[data-theme="dark"] .ant-table-thead .ant-table-cell {
-  background: #222 !important;
-  color: #a1a1aa !important;
-  border-bottom-color: #2e2e33 !important;
-}
-[data-theme="dark"] .ant-table-tbody > tr > td {
-  border-bottom-color: #2e2e33 !important;
-  color: #e4e4e7 !important;
-}
-[data-theme="dark"] .ant-table-tbody > tr:hover > td {
-  background: #222 !important;
-}
-[data-theme="dark"] .ant-table-tbody > tr.ant-table-row:hover > td {
-  background: #222 !important;
-}
-
-/* 分页 */
-[data-theme="dark"] .ant-pagination-item {
-  background: #1a1a1a !important;
-  border-color: #333 !important;
-}
-[data-theme="dark"] .ant-pagination-item a {
-  color: #e4e4e7 !important;
-}
-[data-theme="dark"] .ant-pagination-item-active {
-  border-color: #6366f1 !important;
-}
-
-/* 标签 */
-[data-theme="dark"] .ant-tag {
-  background: #222 !important;
-  border-color: #333 !important;
-  color: #a1a1aa !important;
-}
-
-/* Tabs */
-[data-theme="dark"] .ant-tabs-tab {
-  color: #71717a !important;
-}
-[data-theme="dark"] .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #e4e4e7 !important;
-}
-
-/* Tooltip / Popover */
-[data-theme="dark"] .ant-tooltip-inner,
-[data-theme="dark"] .ant-popover-inner {
-  background: #2a2a2e !important;
-  color: #e4e4e7 !important;
-}
-
-/* 卡片容器 (通用模式) */
-[data-theme="dark"] .ant-card {
-  background: #1a1a1a !important;
-  border-color: #2e2e33 !important;
-  color: #e4e4e7 !important;
-}
-
-/* 描述列表 */
-[data-theme="dark"] .ant-descriptions-item-label,
-[data-theme="dark"] .ant-descriptions-title {
-  color: #a1a1aa !important;
-}
-[data-theme="dark"] .ant-descriptions-item-content {
-  color: #e4e4e7 !important;
-}
-
-/* 徽章 */
-[data-theme="dark"] .ant-badge-status-text {
-  color: #e4e4e7 !important;
-}
-
-/* 菜单 */
-[data-theme="dark"] .ant-menu {
-  background: transparent !important;
-}
-[data-theme="dark"] .ant-menu-item {
-  color: #a1a1aa !important;
-}
-[data-theme="dark"] .ant-menu-item-selected {
-  color: #e4e4e7 !important;
-  background: #222 !important;
-}
-
-/* Switch */
-[data-theme="dark"] .ant-switch {
-  background: #3f3f46 !important;
-}
-
-/* Empty */
-[data-theme="dark"] .ant-empty-description {
-  color: #71717a !important;
-}
-
-/* Dropdown */
-[data-theme="dark"] .ant-dropdown {
-  background: #222 !important;
-}
-[data-theme="dark"] .ant-dropdown-menu-item {
-  color: #e4e4e7 !important;
-}
-[data-theme="dark"] .ant-dropdown-menu-item:hover {
-  background: #2a2a2e !important;
-}
-
-/* 气泡确认框 */
-[data-theme="dark"] .ant-popconfirm .ant-popover-inner {
-  background: #222 !important;
-}
-
-/* Alert */
-[data-theme="dark"] .ant-alert {
-  background: #222 !important;
-  border-color: #333 !important;
-}
-[data-theme="dark"] .ant-alert-message {
-  color: #e4e4e7 !important;
-}
-
-/* Skeleton */
-[data-theme="dark"] .ant-skeleton-content .ant-skeleton-title,
-[data-theme="dark"] .ant-skeleton-content .ant-skeleton-paragraph > li {
-  background: linear-gradient(90deg, #222 25%, #2a2a2e 37%, #222 63%) !important;
-}
-
-/* Progress */
-[data-theme="dark"] .ant-progress-text {
-  color: #a1a1aa !important;
-}
-
-/* 工具调用分组组件 */
 [data-theme="dark"] .tool-calls-group {
-  background: #222 !important;
-  border-color: #333 !important;
+  background: var(--color-bg-elevated) !important;
+  border-color: var(--color-hairline) !important;
 }
 
-/* 工具结果组件 - 深色适配 */
-[data-theme="dark"] .search-docs-result,
-[data-theme="dark"] .web-search-result,
-[data-theme="dark"] .sandbox-file-result {
-  background: transparent !important;
-}
 [data-theme="dark"] .search-docs-result *,
 [data-theme="dark"] .web-search-result *,
 [data-theme="dark"] .sandbox-file-result * {
-  border-color: #333 !important;
+  border-color: var(--color-hairline) !important;
 }
 </style>

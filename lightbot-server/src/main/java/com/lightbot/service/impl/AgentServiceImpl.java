@@ -166,8 +166,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         clone.setVersion(0);
         save(clone);
 
-        // 4. 初始化草稿版本快照
+        // 4. 初始化草稿版本快照（initDraftOnCreate 对工作流型创建空图）
         agentVersionService.initDraftOnCreate(clone);
+
+        // 5. 工作流型Agent：从源Agent草稿复制工作流图（节点/边/全局配置），覆盖上面创建的空图
+        if (source.getAgentType() == AgentType.WORKFLOW) {
+            agentVersionService.cloneWorkflowDraft(source.getId(), clone.getId());
+        }
 
         log.info("[Agent] 克隆成功: sourceId={}, cloneId={}, name={}", id, clone.getId(), cloneName);
         return clone;

@@ -390,7 +390,7 @@ function handleCancel() {
   white-space: nowrap;
 }
 .btn-fetch:hover:not(:disabled) { background: #27272a; }
-.btn-fetch:disabled { background: #d4d4d8; cursor: not-allowed; }
+.btn-fetch:disabled { background: var(--color-hairline-strong); color: var(--color-mute); cursor: not-allowed; }
 .repo-hint-text {
   font-size: 12px;
   color: var(--color-mute);
@@ -580,7 +580,7 @@ function handleCancel() {
   cursor: pointer;
 }
 .btn-primary-sm:hover:not(:disabled) { background: #27272a; }
-.btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
+.btn-primary-sm:disabled { background: var(--color-hairline-strong); color: var(--color-mute); cursor: not-allowed; }
 .search-help-icon {
   color: var(--color-mute);
   cursor: pointer;

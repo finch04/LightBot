@@ -2182,9 +2182,6 @@ watch(sessionId, (newVal, oldVal) => {
   text-align: left;
   max-width: 80%;
 }
-[data-theme="dark"] .message.user .message-content {
-  background: #27272a;
-}
 /* 用户消息气泡内紧凑样式 */
 .message.user .message-content :deep(.markdown-preview p) {
   margin: 0;
@@ -2254,9 +2251,6 @@ watch(sessionId, (newVal, oldVal) => {
   border-radius: 12px 12px 2px 12px;
   padding: 10px 16px;
 }
-[data-theme="dark"] .edit-message-box {
-  background: #27272a;
-}
 .edit-message-box :deep(textarea) {
   background: transparent;
   border: none;
@@ -2294,9 +2288,6 @@ watch(sessionId, (newVal, oldVal) => {
   background: var(--color-canvas-soft-2);
   border-radius: 8px;
   border-left: 3px solid #0070f3;
-}
-[data-theme="dark"] .reply-preview-bar {
-  background: #27272a;
 }
 .reply-preview-content {
   flex: 1;
@@ -2416,9 +2407,6 @@ watch(sessionId, (newVal, oldVal) => {
   font-size: 13px;
   font-family: 'Geist Mono', 'Menlo', monospace;
 }
-[data-theme="dark"] .message-content :deep(code) {
-  background: #27272a;
-}
 .message-content :deep(pre) {
   background: #171717;
   border-radius: 8px;
@@ -2505,7 +2493,7 @@ watch(sessionId, (newVal, oldVal) => {
 .toolbar-loading-mask {
   position: absolute;
   inset: 0;
-  background: rgba(24, 24, 27, 0.7);
+  background: rgba(255, 255, 255, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2945,9 +2933,6 @@ span.agent-menu-icon {
   border-radius: 8px;
   overflow: hidden;
 }
-[data-theme="dark"] .reasoning-panel {
-  border-color: #3b2f0a;
-}
 .reasoning-header {
   display: flex;
   align-items: center;
@@ -2962,13 +2947,6 @@ span.agent-menu-icon {
 }
 .reasoning-header:hover {
   background: var(--color-warn-bg-deep);
-}
-[data-theme="dark"] .reasoning-header {
-  background: #3b2f0a;
-  color: #fbbf24;
-}
-[data-theme="dark"] .reasoning-header:hover {
-  background: #422006;
 }
 .reasoning-icon {
   color: #eab308;
@@ -3001,9 +2979,6 @@ span.agent-menu-icon {
   word-break: break-word;
   max-height: 300px;
   overflow-y: auto;
-}
-[data-theme="dark"] .reasoning-content {
-  background: #27272a;
 }
 
 /* 敏感词拦截提示 */
@@ -3236,5 +3211,33 @@ span.agent-menu-icon {
   display: block;
   white-space: pre-line;
   line-height: 1.5;
+}
+[data-theme="dark"] .toolbar-loading-mask {
+  background: rgba(24, 24, 27, 0.7);
+}
+[data-theme="dark"] .message.user .message-content {
+  background: #27272a;
+}
+[data-theme="dark"] .edit-message-box {
+  background: #27272a;
+}
+[data-theme="dark"] .reply-preview-bar {
+  background: #27272a;
+}
+[data-theme="dark"] .message-content code {
+  background: #27272a;
+}
+[data-theme="dark"] .reasoning-panel {
+  border-color: #3b2f0a;
+}
+[data-theme="dark"] .reasoning-header {
+  background: #3b2f0a;
+  color: #fbbf24;
+}
+[data-theme="dark"] .reasoning-header:hover {
+  background: #422006;
+}
+[data-theme="dark"] .reasoning-content {
+  background: #27272a;
 }
 </style>

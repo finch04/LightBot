@@ -89,9 +89,9 @@
   background: #27272a;
 }
 [data-theme="dark"] .btn-primary-sm {
-  border: 1px solid #444;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 [data-theme="dark"] .btn-primary-sm:hover {
   background: #3f3f46;
-  border-color: #555;
+  border-color: rgba(255, 255, 255, 0.25);
 }

@@ -163,6 +163,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             }
 
             // 1.1 知识库工具自动注入：当 Agent 绑定了知识库时，自动加载 type=knowledge 的工具
+            // 排除已被 Agent 手动绑定的工具（mergedToolIds），避免重复注册
             List<Long> knowledgeIds = ctx != null && ctx.getVersionKnowledgeIds() != null
                     ? ctx.getVersionKnowledgeIds() : agentService.getKnowledgeIds(agent.getId());
             if (!knowledgeIds.isEmpty()) {
@@ -171,10 +172,15 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                                 .eq(Tool::getToolType, ToolType.KNOWLEDGE)
                                 .eq(Tool::getStatus, CommonStatus.ACTIVE));
                 if (!knowledgeTools.isEmpty()) {
-                    List<String> kbToolNames = knowledgeTools.stream().map(Tool::getName).toList();
-                    allCallbacks.addAll(toolService.resolveToolCallbacks(kbToolNames));
-                    log.info("[Chat] 自动注入知识库工具: agentId={}, knowledgeBases={}, tools={}",
-                            agent.getId(), knowledgeIds.size(), kbToolNames);
+                    List<Tool> autoInjectTools = knowledgeTools.stream()
+                            .filter(t -> !mergedToolIds.contains(t.getId()))
+                            .toList();
+                    if (!autoInjectTools.isEmpty()) {
+                        List<String> kbToolNames = autoInjectTools.stream().map(Tool::getName).toList();
+                        allCallbacks.addAll(toolService.resolveToolCallbacks(kbToolNames));
+                        log.info("[Chat] 自动注入知识库工具: agentId={}, knowledgeBases={}, tools={}",
+                                agent.getId(), knowledgeIds.size(), kbToolNames);
+                    }
                 }
             }
 
@@ -230,8 +236,11 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                 }
             }
 
-            if (!allCallbacks.isEmpty()) {
-                toolBuilder.toolCallbacks(allCallbacks);
+            // 去重：同名工具只保留第一个（如 Agent 手动绑定了 query_knowledge，自动注入不再重复）
+            List<ToolCallback> dedupedCallbacks = dedupCallbacks(allCallbacks);
+
+            if (!dedupedCallbacks.isEmpty()) {
+                toolBuilder.toolCallbacks(dedupedCallbacks);
                 // toolContext 传递 agentId 和 sessionId
                 Long sessionId = ctx != null ? ctx.getSessionId() : null;
                 toolBuilder.toolContext(Map.of("agentId", agent.getId(), "sessionId", sessionId));
@@ -242,6 +251,29 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         }
 
         return toolBuilder.build();
+    }
+
+    /**
+     * 工具回调去重：同名工具只保留第一个
+     */
+    private List<ToolCallback> dedupCallbacks(List<ToolCallback> callbacks) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<ToolCallback> result = new ArrayList<>();
+        for (ToolCallback cb : callbacks) {
+            String name = cb.getToolDefinition().name();
+            if (seen.add(name)) {
+                result.add(cb);
+            }
+        }
+        if (seen.size() < callbacks.size()) {
+            log.warn("[Chat] 工具去重: 原始={}, 去重后={}, 重复工具={}",
+                    callbacks.size(), result.size(),
+                    callbacks.stream().map(cb -> cb.getToolDefinition().name())
+                            .collect(Collectors.groupingBy(n -> n, Collectors.counting()))
+                            .entrySet().stream().filter(e -> e.getValue() > 1)
+                            .map(Map.Entry::getKey).toList());
+        }
+        return result;
     }
 
     /**

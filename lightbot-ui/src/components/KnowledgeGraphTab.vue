@@ -270,6 +270,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick, h } from 'vue'
 import { Graph } from '@antv/g6'
+import { useTheme } from '../composables/useTheme'
 import {
   SearchOutlined, RobotOutlined, DeleteOutlined, CompressOutlined, LoadingOutlined, RedoOutlined, ClearOutlined, QuestionCircleOutlined
 } from '@ant-design/icons-vue'
@@ -280,6 +281,13 @@ import {
 } from '../api/knowledge'
 import ModelSelect from './ModelSelect.vue'
 import JsonInput from './JsonInput.vue'
+
+const { isDark } = useTheme()
+
+const graphColors = computed(() => isDark.value
+  ? { labelFill: '#ffffff', edgeLabel: '#d1d5db', edgeStroke: '#555', edgeArrow: '#555' }
+  : { labelFill: '#1e293b', edgeLabel: '#6b7280', edgeStroke: '#d1d5db', edgeArrow: '#d1d5db' }
+)
 
 const props = defineProps({
   knowledgeId: { type: [String, Number], required: true },
@@ -512,7 +520,7 @@ function renderGraph(subgraph, seq) {
       type: 'circle',
       style: {
         labelText: (d) => d.data.label,
-        labelFill: '#ffffff',
+        labelFill: graphColors.value.labelFill,
         labelWordWrap: true,
         labelMaxWidth: '300%',
         size: (d) => {
@@ -548,13 +556,13 @@ function renderGraph(subgraph, seq) {
           return [{ x: mx + (-dy / len) * offset, y: my + (dx / len) * offset }]
         },
         labelText: (d) => d.data.label || '',
-        labelFill: '#d1d5db',
+        labelFill: graphColors.value.edgeLabel,
         labelFontSize: 10,
-        stroke: '#555',
+        stroke: graphColors.value.edgeStroke,
         lineWidth: 1,
         endArrow: true,
         endArrowSize: 6,
-        endArrowFill: '#555'
+        endArrowFill: graphColors.value.edgeArrow
       }
     },
     behaviors: [
@@ -950,6 +958,13 @@ onUnmounted(() => {
 watch(() => [props.knowledgeId, props.documentId], () => {
   loadGraphData()
 })
+
+// 切换主题时重新渲染图谱颜色
+watch(isDark, () => {
+  if (graphInstance && graphReady.value) {
+    loadGraphData()
+  }
+})
 </script>
 
 <style scoped>
@@ -1030,7 +1045,7 @@ watch(() => [props.knowledgeId, props.documentId], () => {
 .kg-canvas {
   width: 100%;
   height: 100%;
-  background: #000;
+  background: var(--kg-canvas-bg);
 }
 
 .kg-empty {

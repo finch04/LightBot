@@ -213,7 +213,7 @@ async function handleRegister() {
 
 .form-header p {
   font-size: 14px;
-  color: #888888;
+  color: var(--color-mute);
   margin: 0;
 }
 
@@ -253,7 +253,7 @@ async function handleRegister() {
 
 .optional {
   font-weight: 400;
-  color: #888888;
+  color: var(--color-mute);
   font-size: 12px;
 }
 
@@ -274,7 +274,7 @@ async function handleRegister() {
 
 .input-wrapper:focus-within {
   border-color: var(--color-ink);
-  box-shadow: 0 0 0 2px rgba(23, 23, 23, 0.08);
+  box-shadow: 0 0 0 2px var(--dark-10);
 }
 
 .input-icon {
@@ -333,7 +333,7 @@ async function handleRegister() {
   margin-top: 14px;
   text-align: center;
   font-size: 14px;
-  color: #888888;
+  color: var(--color-mute);
 }
 
 .form-footer .link {

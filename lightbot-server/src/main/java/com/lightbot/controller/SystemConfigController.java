@@ -145,17 +145,16 @@ public class SystemConfigController {
         // 3. MinIO
         start = System.currentTimeMillis();
         try {
-            minioUtil.statObject("health-check-probe");
-            components.put("minio", Map.of("status", "UP", "responseTime", System.currentTimeMillis() - start + "ms"));
-        } catch (Exception e) {
-            // statObject 对不存在的文件会抛异常，但能连接说明服务正常
-            String msg = e.getMessage();
-            if (msg != null && (msg.contains("does not exist") || msg.contains("NoSuchKey") || msg.contains("not found"))) {
+            boolean up = minioUtil.checkHealth();
+            if (up) {
                 components.put("minio", Map.of("status", "UP", "responseTime", System.currentTimeMillis() - start + "ms"));
             } else {
-                components.put("minio", Map.of("status", "DOWN", "error", msg));
+                components.put("minio", Map.of("status", "DOWN", "error", "Bucket does not exist"));
                 allUp = false;
             }
+        } catch (Exception e) {
+            components.put("minio", Map.of("status", "DOWN", "error", e.getMessage()));
+            allUp = false;
         }
 
         result.put("status", allUp ? "UP" : "DEGRADED");

@@ -612,7 +612,7 @@ async function loadPromptsData() {
   cursor: pointer;
 }
 .btn-primary-sm:hover:not(:disabled) { background: #27272a; }
-.btn-primary-sm:disabled { background: #d4d4d8; cursor: not-allowed; }
+.btn-primary-sm:disabled { background: var(--color-hairline-strong); color: var(--color-mute); cursor: not-allowed; }
 .btn-icon-sm {
   width: 28px;
   height: 28px;
