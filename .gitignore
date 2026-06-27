@@ -37,3 +37,6 @@ docs/
 
 # CodeGraph
 .codegraph/
+
+# changelog
+CHANGELOG.md

@@ -1072,7 +1072,7 @@ graph LR
         WFDebug["Workflow 调试"]
     end
 
-    subgraph Phase4["v1.5 生产"]
+    subgraph Phase4["v2.0 生产"]
         MultiTenant["多租户"]
         APIKey["API Key 管理"]
         Docker["Docker 部署"]
