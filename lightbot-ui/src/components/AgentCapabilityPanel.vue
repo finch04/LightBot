@@ -126,6 +126,7 @@ function getSubagentSteps(callIndex) {
 
 <style lang="less" scoped>
 .capability-panel {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;

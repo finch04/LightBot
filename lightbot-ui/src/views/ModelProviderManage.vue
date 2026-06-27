@@ -51,11 +51,12 @@
 
     <!-- 新增/编辑弹窗 -->
     <a-modal v-model:open="dialogVisible" :title="form.id ? '编辑提供商' : '新增提供商'" :width="480" :footer="null" :maskClosable="false">
-      <a-form :model="form" :label-col="{ span: 6 }">
-        <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="如：通义千问" :maxlength="30" show-count />
-        </a-form-item>
-        <a-form-item label="类型" required>
+      <div class="provider-form-scroll">
+        <a-form :model="form" :label-col="{ span: 6 }">
+          <a-form-item label="名称" required>
+            <a-input v-model:value="form.name" placeholder="如：通义千问" :maxlength="30" show-count />
+          </a-form-item>
+          <a-form-item label="类型" required>
           <a-select v-model:value="form.type" style="width: 100%" placeholder="选择提供商类型">
             <a-select-option v-for="t in providerTypes" :key="t.value" :value="t.value">
               {{ t.label }}
@@ -68,9 +69,9 @@
         <a-form-item label="Base URL">
           <a-input v-model:value="form.baseUrl" placeholder="可选" />
         </a-form-item>
-        <a-form-item label="提供商预设" v-if="form.type === 'OPENAI'">
-          <button type="button" class="btn-preset" @click="applyVolcengineAgentPlanPreset">火山 AgentPlan</button>
-          <div class="form-hint">自动填充 OpenAI 兼容路径和默认模型</div>
+        <a-form-item label="提供商预设">
+          <button type="button" class="btn-preset-entry" @click="openPresetModal">选择预设</button>
+          <div class="form-hint">从后端维护的预设中选择，一键覆盖基础配置</div>
         </a-form-item>
         <a-form-item label="默认模型">
           <a-input v-model:value="form.defaultModelId" :placeholder="defaultModelPlaceholder" />
@@ -85,7 +86,7 @@
         <template v-if="showAdvanced">
           <a-form-item label="请求路径">
             <a-input v-model:value="form.completionsPath" placeholder="默认 /v1/chat/completions" />
-            <div class="form-hint">OpenAI Chat Completions 路径，如火山 AgentPlan 填 /chat/completions</div>
+            <div class="form-hint">OpenAI Chat Completions 路径</div>
           </a-form-item>
           <a-form-item label="模型列表URL">
             <a-input v-model:value="form.modelsEndpoint" placeholder="为空时使用默认地址" />
@@ -100,7 +101,8 @@
             <div class="form-hint">JSON 格式的扩展配置</div>
           </a-form-item>
         </template>
-      </a-form>
+        </a-form>
+      </div>
       <div class="dialog-footer">
         <button class="btn-check" :disabled="checking" @click="handleCheck">
           {{ checking ? '检查中...' : '检查连通性' }}
@@ -111,6 +113,49 @@
             {{ submitting ? '提交中...' : '确定' }}
           </button>
         </div>
+      </div>
+    </a-modal>
+
+    <!-- 提供商预设弹窗 -->
+    <a-modal v-model:open="presetModalVisible" title="选择提供商预设" :width="760" :footer="null" :maskClosable="true">
+      <div class="preset-modal-desc">参考 Yuxi 预设库维护的 OpenAI-compatible 提供商模板，应用后会覆盖当前基础配置。</div>
+      <div class="preset-list">
+        <button
+          v-for="preset in providerPresets"
+          :key="preset.code"
+          type="button"
+          :class="['preset-card', { active: selectedPresetCode === preset.code }]"
+          @click="selectedPresetCode = preset.code"
+        >
+          <div class="preset-card-header">
+            <div class="preset-logo-box">
+              <img
+                v-if="preset.logo"
+                :src="preset.logo"
+                :alt="preset.name"
+                :class="['preset-logo', { wide: preset.logo.startsWith('data:image') }]"
+              />
+              <div v-else class="preset-logo-fallback">{{ preset.name?.[0] }}</div>
+            </div>
+            <div class="preset-card-title-wrap">
+              <div class="preset-card-title" :title="preset.name">{{ preset.name }}</div>
+              <div class="preset-card-subtitle" :title="preset.defaultModelId || '需自行选择模型'">
+                {{ preset.defaultModelId || '需自行选择模型' }}
+              </div>
+            </div>
+            <span class="preset-type-tag">{{ preset.type?.desc || preset.type }}</span>
+          </div>
+          <div class="preset-card-desc" :title="preset.description">{{ preset.description }}</div>
+          <div class="preset-card-meta">
+            <span class="preset-meta-label">Base URL</span>
+            <span class="preset-meta-value" :title="preset.baseUrl">{{ preset.baseUrl }}</span>
+          </div>
+        </button>
+        <div v-if="providerPresets.length === 0" class="preset-empty">暂无可用预设</div>
+      </div>
+      <div class="preset-modal-footer">
+        <button class="btn-cancel" @click="presetModalVisible = false">取消</button>
+        <button v-if="selectedPreset" class="btn-primary-sm" @click="applySelectedPreset">应用预设</button>
       </div>
     </a-modal>
 
@@ -245,7 +290,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus, getProviderDefaultModel } from '../api/modelProvider'
+import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus, getProviderDefaultModel, getModelProviderPresets } from '../api/modelProvider'
 import { getModelProviderTypes, getModelTypes } from '../api/enum'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 import JsonInput from '../components/JsonInput.vue'
@@ -260,6 +305,9 @@ const refreshing = ref(false)
 const form = reactive({ id: null, name: '', type: '', apiKey: '', baseUrl: '', defaultModelId: '', completionsPath: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}', config: '{}' })
 const providerDefaultModelId = ref('')
 const showAdvanced = ref(false)
+const presetModalVisible = ref(false)
+const providerPresets = ref([])
+const selectedPresetCode = ref('')
 
 // 模型管理
 const modelModalVisible = ref(false)
@@ -328,6 +376,7 @@ const existingTypeTabs = computed(() => {
 })
 
 const currentFetchTabs = computed(() => fetchTab.value === 'available' ? fetchTypeTabsCache.value : existingTypeTabs.value)
+const selectedPreset = computed(() => providerPresets.value.find(p => p.code === selectedPresetCode.value))
 const defaultModelPlaceholder = computed(() => providerDefaultModelId.value
     ? `不填则默认为${providerDefaultModelId.value}模型`
     : '不填则使用默认模型')
@@ -365,6 +414,15 @@ async function loadModelTypes() {
 async function loadData() {
   const res = await getModelProviders({ pageNum: 1, pageSize: 50 })
   list.value = res.data.records || []
+}
+
+async function loadProviderPresets() {
+  try {
+    const res = await getModelProviderPresets()
+    providerPresets.value = res.data || []
+  } catch {
+    providerPresets.value = []
+  }
 }
 
 async function loadProviderDefaultModel(type) {
@@ -451,16 +509,27 @@ function openDialog(row) {
   loadProviderDefaultModel(form.type)
 }
 
-function applyVolcengineAgentPlanPreset() {
+function openPresetModal() {
+  selectedPresetCode.value = providerPresets.value[0]?.code || ''
+  presetModalVisible.value = true
+}
+
+function applySelectedPreset() {
+  const preset = selectedPreset.value
+  if (!preset) return
   Object.assign(form, {
-    name: form.name || '火山 AgentPlan',
-    type: 'OPENAI',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
-    defaultModelId: 'ark-code-latest',
-    completionsPath: '/chat/completions',
-    modelsEndpoint: 'https://ark.cn-beijing.volces.com/api/coding/v3/models',
+    name: form.name || preset.name || '',
+    type: preset.type?.code || preset.type || form.type,
+    baseUrl: preset.baseUrl || '',
+    defaultModelId: preset.defaultModelId || '',
+    completionsPath: preset.completionsPath || '',
+    modelsEndpoint: preset.modelsEndpoint || '',
+    headersJson: preset.headersJson || '{}',
+    extraJson: preset.extraJson || '{}',
   })
   showAdvanced.value = true
+  presetModalVisible.value = false
+  loadProviderDefaultModel(form.type)
 }
 
 async function handleSubmit() {
@@ -672,7 +741,7 @@ watch(() => form.type, (type) => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadProviderTypes(), loadModelTypes()])
+  await Promise.all([loadProviderTypes(), loadModelTypes(), loadProviderPresets()])
   await loadData()
 })
 </script>
@@ -1108,6 +1177,24 @@ onMounted(async () => {
   align-items: center;
 }
 
+/* 提供商表单滚动区 */
+.provider-form-scroll {
+  max-height: min(68vh, 620px);
+  overflow-y: auto;
+  padding-right: 12px;
+  margin-right: -4px;
+}
+.provider-form-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.provider-form-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-hairline-strong);
+  border-radius: 3px;
+}
+.provider-form-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* 弹窗底部 */
 .dialog-footer {
   display: flex;
@@ -1193,8 +1280,8 @@ onMounted(async () => {
 .toggle-icon.expanded {
   transform: rotate(180deg);
 }
-.btn-preset {
-  padding: 6px 12px;
+.btn-preset-entry {
+  padding: 6px 14px;
   background: var(--color-canvas);
   color: var(--color-link);
   border: 1px solid var(--color-hairline);
@@ -1202,9 +1289,176 @@ onMounted(async () => {
   font-size: 13px;
   cursor: pointer;
 }
-.btn-preset:hover {
+.btn-preset-entry:hover {
   border-color: var(--color-link);
 }
+.preset-modal-desc {
+  margin-bottom: 14px;
+  color: var(--color-mute);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.preset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding: 2px 14px 2px 2px;
+  margin-right: -6px;
+}
+.preset-list::-webkit-scrollbar {
+  width: 6px;
+}
+.preset-list::-webkit-scrollbar-thumb {
+  background: var(--color-hairline-strong);
+  border-radius: 3px;
+}
+.preset-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-height: 150px;
+  padding: 16px;
+  background: linear-gradient(45deg, var(--color-canvas) 0%, var(--color-canvas-soft) 100%);
+  border: 1px solid var(--color-hairline);
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.preset-card:hover {
+  border-color: var(--color-link);
+  background: linear-gradient(45deg, var(--color-canvas) 0%, rgba(37, 99, 235, 0.06) 100%);
+}
+.preset-card.active {
+  border-color: var(--color-link);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+  background: linear-gradient(45deg, var(--color-canvas) 0%, rgba(37, 99, 235, 0.08) 100%);
+}
+.preset-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.preset-logo-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 7px;
+  background: var(--color-canvas-soft-2);
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.preset-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.preset-logo.wide {
+  width: 32px;
+  height: 20px;
+}
+.preset-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-ink);
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.preset-card-title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.preset-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-card-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-mute);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-type-tag {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2);
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.preset-card-desc {
+  min-height: 36px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-mute);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.preset-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  min-width: 0;
+  font-size: 12px;
+}
+.preset-meta-label {
+  flex-shrink: 0;
+  color: var(--color-mute);
+}
+.preset-meta-value {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-ink);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-empty {
+  grid-column: 1 / -1;
+  padding: 32px;
+  text-align: center;
+  color: var(--color-mute);
+  font-size: 13px;
+}
+.preset-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--color-hairline);
+}
+
 
 .form-hint {
   font-size: 12px;

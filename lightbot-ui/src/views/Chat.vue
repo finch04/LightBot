@@ -141,7 +141,9 @@
                 <!-- 有工具事件：按 offset 位置插入工具块 -->
                 <template v-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0 && getToolBlockOffsets(messages[virtualRow.index]).length > 0">
                   <template v-for="(segment, si) in splitContentByOffsets(messages[virtualRow.index])" :key="si">
-                    <div v-if="segment.type === 'text'" class="message-content"><MarkdownPreview :content="segment.text" :finalized="!messages[virtualRow.index]._streaming" /></div>
+                    <div v-if="segment.type === 'text'" class="message-content">
+                      <MarkdownPreview :content="segment.text" :finalized="isSegmentFinalized(messages[virtualRow.index], segment, si)" />
+                    </div>
                     <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
                       <AgentCapabilityPanel
                         v-if="getCapabilityEventsForOffset(messages[virtualRow.index], segment.offset).length > 0"
@@ -224,7 +226,10 @@
                       <SoundOutlined />
                     </button>
                   </a-tooltip>
-                  <a-tooltip :title="messages[virtualRow.index]._copied ? '已复制' : '复制'">
+                  <a-tooltip
+                    v-if="!isBackendErrorMessage(messages[virtualRow.index])"
+                    :title="messages[virtualRow.index]._copied ? '已复制' : '复制'"
+                  >
                     <button
                       class="btn-copy"
                       :class="{ copied: messages[virtualRow.index]._copied }"
@@ -240,7 +245,7 @@
                     </button>
                   </a-tooltip>
                   <a-tooltip
-                    v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._requestId"
+                    v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._requestId && !isBackendErrorMessage(messages[virtualRow.index])"
                     :title="messages[virtualRow.index]._requestIdCopied ? '已复制' : '复制 Request ID'"
                   >
                     <button
@@ -253,7 +258,7 @@
                     </button>
                   </a-tooltip>
                   <a-tooltip
-                    v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._id"
+                    v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._id && !isBackendErrorMessage(messages[virtualRow.index])"
                     :title="messages[virtualRow.index]._msgIdCopied ? '已复制' : '复制 Message ID'"
                   >
                     <button
@@ -265,7 +270,7 @@
                       <TagOutlined v-else />
                     </button>
                   </a-tooltip>
-                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant'" title="查看原始内容">
+                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant' && !isBackendErrorMessage(messages[virtualRow.index])" title="查看原始内容">
                     <button
                       class="btn-copy"
                       @click="openRawModal(virtualRow.index)"
@@ -281,7 +286,7 @@
                       <EditOutlined />
                     </button>
                   </a-tooltip>
-                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant'" title="引用回复">
+                  <a-tooltip v-if="messages[virtualRow.index].role === 'assistant' && !isBackendErrorMessage(messages[virtualRow.index])" title="引用回复">
                     <button class="btn-copy" @click="startReply(virtualRow.index)">
                       <CommentOutlined />
                     </button>
@@ -309,7 +314,7 @@
                       </button>
                     </a-tooltip>
                   </template>
-                  <a-tooltip :title="messages[virtualRow.index]._starred ? '取消收藏' : '收藏'">
+                  <a-tooltip v-if="!isBackendErrorMessage(messages[virtualRow.index])" :title="messages[virtualRow.index]._starred ? '取消收藏' : '收藏'">
                     <button class="btn-copy" :class="{ starred: messages[virtualRow.index]._starred }" @click="toggleStarMessage(virtualRow.index)">
                       <StarFilled v-if="messages[virtualRow.index]._starred" />
                       <StarOutlined v-else />
@@ -843,11 +848,18 @@ let currentStreamingMsg = null
 const streamSmoother = useStreamSmoother({
   onFlush: (text) => {
     if (currentStreamingMsg) {
+      clearErrorRetry(currentStreamingMsg)
       currentStreamingMsg.content += text
       scrollToBottom()
     }
   },
 })
+
+function clearErrorRetry(msg) {
+  if (msg?._errorRetry) {
+    msg._errorRetry = null
+  }
+}
 
 async function submitAskUserResponse(answer) {
   if (!answer?.trim()) return
@@ -1275,6 +1287,10 @@ function parseMessage(m) {
 }
 
 /** 仅最后一条助手回复可重新生成（其后无用户新消息） */
+function isBackendErrorMessage(msg) {
+  return msg?.role === 'assistant' && !!msg._error
+}
+
 function canRegenerate(index) {
   if (loading.value || streaming.value) return false
   const msg = messages.value[index]
@@ -1686,6 +1702,7 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             return
           }
           if (event.type === 'reasoning_content') {
+            clearErrorRetry(assistantMsg)
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
             assistantMsg._reasoningDone = true
             scrollToBottom()
@@ -1747,6 +1764,7 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
               hasStreamContent.value = true
               streamSmoother.start()
             }
+            clearErrorRetry(assistantMsg)
             streamSmoother.push(event.content || '')
             return
           }
@@ -1769,6 +1787,8 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             scrollToBottom()
             return
           }
+
+          streamSmoother.flush()
 
           const offset = event.contentOffset ?? assistantMsg.content.length
           if (event.contentOffset == null) {
@@ -2115,6 +2135,14 @@ function splitContentByOffsets(msg) {
   return segments
 }
 
+function isSegmentFinalized(msg, segment, index) {
+  if (!msg?._streaming) return true
+  if (segment.type !== 'text') return true
+  const segments = splitContentByOffsets(msg)
+  const lastTextIndex = [...segments].map((s, i) => ({ s, i })).reverse().find(item => item.s.type === 'text')?.i
+  return index !== lastTextIndex
+}
+
 function formatElapsed(ms) {
   if (ms < 1000) return `耗时 ${ms}ms`
   return `耗时 ${(ms / 1000).toFixed(1)}s`
@@ -2380,6 +2408,10 @@ watch(sessionId, (newVal, oldVal) => {
 .message-body {
   min-width: 0;
 }
+.message.assistant .message-body {
+  flex: 1;
+  width: 100%;
+}
 .message.user .message-body {
   text-align: right;
   width: 100%;
@@ -2407,6 +2439,7 @@ watch(sessionId, (newVal, oldVal) => {
 }
 .message-content-wrapper {
   position: relative;
+  width: 100%;
 }
 /* 用户消息：附件在上、气泡在下，整体靠右与头像侧对齐 */
 .message.user .message-content-wrapper.user-message-stack {
@@ -3242,17 +3275,21 @@ span.agent-menu-icon {
 /* 工具块内联容器 */
 .tool-block-inline {
   margin: 8px 0;
+  width: 100%;
 }
 .capability-block-inline {
   margin-top: 8px;
+  width: 100%;
 }
 
 .workflow-block-inline {
   margin: 8px 0;
+  width: 100%;
 }
 
 /* 深度思考面板 */
 .reasoning-panel {
+  width: 100%;
   margin-bottom: 8px;
   border: 1px solid var(--color-warn-bg-deep);
   border-radius: 8px;

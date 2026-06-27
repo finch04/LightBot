@@ -295,8 +295,19 @@ body {
 
 .ant-btn-primary:disabled,
 .ant-btn-primary.ant-btn-disabled {
+  background: var(--color-canvas-soft-2) !important;
+  border-color: var(--color-hairline) !important;
+  color: var(--dark-25) !important;
   box-shadow: none !important;
   text-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
+[data-theme="dark"] .ant-btn-primary:disabled,
+[data-theme="dark"] .ant-btn-primary.ant-btn-disabled {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.35) !important;
 }
 
 .ant-btn-default {

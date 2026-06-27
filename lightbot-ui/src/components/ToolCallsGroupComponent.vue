@@ -220,6 +220,7 @@ function toggleResult(index) {
 
 <style lang="less" scoped>
 .tool-calls-group {
+  width: 100%;
   margin-top: 8px;
   padding: 10px 12px;
   background: var(--color-canvas-soft);

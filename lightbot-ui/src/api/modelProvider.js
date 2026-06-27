@@ -28,6 +28,10 @@ export function getProviderModelCapabilities(id) {
   return request.get(`/model-providers/${id}/model-capabilities`)
 }
 
+export function getModelProviderPresets() {
+  return request.get('/model-providers/presets')
+}
+
 export function getProviderDefaultModel(type) {
   return request.get('/model-providers/default-model', { params: { type } })
 }

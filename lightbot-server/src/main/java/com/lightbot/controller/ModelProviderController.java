@@ -112,6 +112,12 @@ public class ModelProviderController {
         return Result.ok();
     }
 
+    @Operation(summary = "获取模型提供商预设")
+    @GetMapping("/presets")
+    public Result<List<com.lightbot.dto.ModelProviderPresetVO>> listPresets() {
+        return Result.ok(modelProviderService.listPresets());
+    }
+
     @Operation(summary = "获取所有提供商及其模型（按类型过滤）")
     @GetMapping("/with-models")
     public Result<List<ProviderWithModelsVO>> listWithModels(

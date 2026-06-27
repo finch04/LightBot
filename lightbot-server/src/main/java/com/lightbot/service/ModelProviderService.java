@@ -2,6 +2,7 @@ package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lightbot.dto.ModelProviderPresetVO;
 import com.lightbot.dto.ModelProviderRequest;
 import com.lightbot.entity.ModelProvider;
 
@@ -61,4 +62,11 @@ public interface ModelProviderService extends IService<ModelProvider> {
      * @return 启用的提供商列表
      */
     List<ModelProvider> listAllActive();
+
+    /**
+     * 查询模型提供商预设列表
+     *
+     * @return 预设列表
+     */
+    List<ModelProviderPresetVO> listPresets();
 }
