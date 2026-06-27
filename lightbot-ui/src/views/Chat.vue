@@ -188,6 +188,16 @@
                     <MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
                   </div>
                 </template>
+                <!-- 1.3 模型重试提示 -->
+                <div v-if="messages[virtualRow.index]._errorRetry" class="error-retry-block">
+                  <div class="error-retry-header">
+                    <LoadingOutlined v-if="messages[virtualRow.index]._streaming" class="error-retry-icon" spin />
+                    <WarningOutlined v-else class="error-retry-icon" />
+                    <span class="error-retry-title">AI 连接异常，正在重试</span>
+                    <span class="error-retry-count">{{ messages[virtualRow.index]._errorRetry.attempt }}/{{ messages[virtualRow.index]._errorRetry.maxRetries }}</span>
+                  </div>
+                  <div class="error-retry-message">{{ messages[virtualRow.index]._errorRetry.message }}</div>
+                </div>
                 <!-- 1.3 结构化错误事件：LLM 调用中断、工具异常等 -->
                 <div v-if="messages[virtualRow.index]._error" class="error-block">
                   <div class="error-block-header">
@@ -1696,12 +1706,25 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
             abortController.value = null
             return
           }
+          // 1.3 模型调用重试事件：保留流式状态，只更新专门提示块
+          if (event.type === 'error_retry') {
+            assistantMsg._errorRetry = {
+              message: event.message || 'AI连接异常，正在重试中',
+              code: event.code || 'LLM_ERROR',
+              attempt: event.attempt || 1,
+              maxRetries: event.maxRetries || event.attempt || 1,
+            }
+            currentStatus.value = assistantMsg._errorRetry.message
+            scrollToBottom()
+            return
+          }
           // 1.3 结构化错误事件：LLM 调用中断、工具异常等
           if (event.type === 'error') {
             assistantMsg._error = {
               message: event.message || '未知错误',
               code: event.code || 'UNKNOWN',
             }
+            assistantMsg._errorRetry = null
             assistantMsg._streaming = false
             assistantMsg._toolsDone = true
             loading.value = false
@@ -1874,7 +1897,10 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
         messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: true })
         assistantMsg = messages.value[messages.value.length - 1]
       }
-      assistantMsg.content = 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误')
+      assistantMsg._error = {
+        message: 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误'),
+        code: 'REQUEST_ERROR',
+      }
       assistantMsg._streaming = false
       assistantMsg._toolsDone = true
     }
@@ -3314,6 +3340,44 @@ span.agent-menu-icon {
 }
 .sensitive-block-text {
   flex: 1;
+}
+
+.error-retry-block {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  animation: fadeIn 0.3s ease;
+}
+.error-retry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.error-retry-icon {
+  color: #d97706;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.error-retry-title {
+  font-weight: 600;
+  color: #92400e;
+}
+.error-retry-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.14);
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+.error-retry-message {
+  color: #92400e;
 }
 
 /* 1.3 结构化错误事件 */

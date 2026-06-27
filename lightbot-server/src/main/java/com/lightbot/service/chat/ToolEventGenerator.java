@@ -303,6 +303,34 @@ public class ToolEventGenerator {
     }
 
     /**
+     * 模型调用重试事件
+     *
+     * @param message    用户可见提示
+     * @param code       错误码
+     * @param attempt    当前重试次数
+     * @param maxRetries 最大重试次数
+     * @return SSE 状态事件 JSON
+     */
+    public String errorRetryEvent(String message, String code, int attempt, int maxRetries) {
+        try {
+            Map<String, Object> evt = new java.util.LinkedHashMap<>();
+            evt.put("type", "error_retry");
+            evt.put("message", message != null ? message : "AI连接异常，正在重试中 " + attempt + "/" + maxRetries);
+            evt.put("code", code != null ? code : "LLM_ERROR");
+            evt.put("attempt", attempt);
+            evt.put("maxRetries", maxRetries);
+            return objectMapper.writeValueAsString(evt);
+        } catch (Exception e) {
+            return safeFallbackJson(Map.of(
+                    "type", "error_retry",
+                    "message", message != null ? message : "",
+                    "code", code != null ? code : "",
+                    "attempt", attempt,
+                    "maxRetries", maxRetries));
+        }
+    }
+
+    /**
      * 敏感词拦截事件
      *
      * @param scope   拦截范围：user_input / ai_output

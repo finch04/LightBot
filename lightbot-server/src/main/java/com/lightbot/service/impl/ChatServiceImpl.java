@@ -396,8 +396,13 @@ public class ChatServiceImpl implements ChatService {
      * Trace 记录、标题生成等后置操作仍由 TraceMiddleware.doOnComplete 处理。</p>
      */
     private String buildDoneEvent(ChatContext ctx) {
+        long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
+        if (ctx.isStreamFailed()) {
+            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), null, totalTokens,
+                    buildStreamFailureMetadata(ctx));
+        }
+
         try {
-            long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
             Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
 
             // 0. 记录 Token 消耗到预算服务
@@ -439,6 +444,27 @@ public class ChatServiceImpl implements ChatService {
             log.error("[Chat] 构建[DONE]事件异常: {}", e.getMessage(), e);
             return DONE_PREFIX;
         }
+    }
+
+    private String buildStreamFailureMetadata(ChatContext ctx) {
+        try {
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("error", Map.of(
+                    "message", ctx.getStreamErrorMessage() != null ? ctx.getStreamErrorMessage() : "未知错误",
+                    "code", ctx.getStreamErrorCode() != null ? ctx.getStreamErrorCode() : "UNKNOWN"));
+            if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
+                meta.put("requestId", ctx.getRequestId());
+            }
+            return objectMapper.writeValueAsString(meta);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void markStreamFailure(ChatContext ctx, Throwable e) {
+        ctx.setStreamFailed(true);
+        ctx.setStreamErrorMessage(classifyErrorMessage(e));
+        ctx.setStreamErrorCode(classifyErrorCode(e));
     }
 
     /**
@@ -487,7 +513,9 @@ public class ChatServiceImpl implements ChatService {
 
         Sinks.Many<String> eventSink = Sinks.many().multicast().onBackpressureBuffer();
         Flux<String> toolStatusFlux = eventSink.asFlux()
-                .map(msg -> STATUS_PREFIX + toolEventGenerator.toolStatusEvent(msg, 0));
+                .map(msg -> msg != null && msg.startsWith(STATUS_PREFIX)
+                        ? msg
+                        : STATUS_PREFIX + toolEventGenerator.toolStatusEvent(msg, 0));
 
         // 1.1 心跳保活：每 15 秒发送 SSE 注释行，防止代理/网关断连
         // 心跳随主内容流首条数据触发后持续发送，主内容流完成时自动停止（takeUntil）。
@@ -495,15 +523,16 @@ public class ChatServiceImpl implements ChatService {
         Flux<String> heartbeatFlux = Flux.interval(Duration.ofSeconds(HEARTBEAT_INTERVAL_SECONDS))
                 .map(tick -> HEARTBEAT_PREFIX);
 
-        // 主内容流 + 错误事件
-        Flux<String> coreContent = toolStatusFlux.mergeWith(
-                processToolCallsRecursively(ctx, 0, System.currentTimeMillis(), eventSink)
-                        .doOnError(e -> {
-                            log.error("[Chat] 流式处理异常: {}", e.getMessage(), e);
-                            eventSink.tryEmitNext(STATUS_PREFIX
-                                    + toolEventGenerator.errorEvent(classifyErrorMessage(e), classifyErrorCode(e)));
-                        })
-                        .doFinally(signal -> eventSink.tryEmitComplete()));
+        Flux<String> modelFlux = processToolCallsRecursively(ctx, 0, System.currentTimeMillis(), eventSink)
+                .onErrorResume(e -> {
+                    log.error("[Chat] 流式处理异常: {}", e.getMessage(), e);
+                    markStreamFailure(ctx, e);
+                    return Flux.just(STATUS_PREFIX
+                            + toolEventGenerator.errorEvent(ctx.getStreamErrorMessage(), ctx.getStreamErrorCode()));
+                })
+                .doFinally(signal -> eventSink.tryEmitComplete());
+
+        Flux<String> coreContent = toolStatusFlux.mergeWith(modelFlux);
 
         // 心跳在主内容流完成时停止；mergeWith 取两者都完成的时间点
         return coreContent.mergeWith(heartbeatFlux.takeUntilOther(coreContent));
@@ -560,7 +589,7 @@ public class ChatServiceImpl implements ChatService {
         Prompt prompt = new Prompt(new ArrayList<>(messages), toolOptions);
         boolean[] llmSpanAdded = {false};
 
-        return chatModel.stream(prompt)
+        return streamModelWithRetry(ctx, chatModel, prompt, depth, eventSink)
                 .concatMap(response -> {
                     Generation gen = response.getResult();
                     AssistantMessage assistantMsg = (gen != null) ? gen.getOutput() : null;
@@ -801,6 +830,43 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
+     * 流式模型调用重试
+     *
+     * @param ctx       对话上下文
+     * @param chatModel 模型实例
+     * @param prompt    模型输入
+     * @param depth     工具调用轮次
+     * @param eventSink SSE 事件通道
+     * @return 模型流式响应
+     */
+    private Flux<ChatResponse> streamModelWithRetry(ChatContext ctx, ChatModel chatModel, Prompt prompt,
+                                                     int depth, Sinks.Many<String> eventSink) {
+        int retryTimes = resolveModelRetryTimes(ctx.getConfigMap());
+        return streamModelAttempt(ctx, chatModel, prompt, depth, eventSink, 0, retryTimes);
+    }
+
+    private Flux<ChatResponse> streamModelAttempt(ChatContext ctx, ChatModel chatModel, Prompt prompt,
+                                                   int depth, Sinks.Many<String> eventSink,
+                                                   int attempt, int retryTimes) {
+        boolean[] receivedResponse = {false};
+        return chatModel.stream(prompt)
+                .doOnNext(response -> receivedResponse[0] = true)
+                .onErrorResume(e -> {
+                    if (!receivedResponse[0] && attempt < retryTimes) {
+                        int retryNo = attempt + 1;
+                        long delayMs = (long) Math.pow(2, attempt) * 1000;
+                        log.warn("[Chat] 流式模型调用失败，第{}次重试，等待{}ms: depth={}, error={}", retryNo, delayMs, depth, e.getMessage());
+                        eventSink.tryEmitNext(STATUS_PREFIX + toolEventGenerator.errorRetryEvent(
+                                "AI连接异常，正在重试中 " + retryNo + "/" + retryTimes,
+                                classifyErrorCode(e), retryNo, retryTimes));
+                        return Mono.delay(Duration.ofMillis(delayMs))
+                                .thenMany(streamModelAttempt(ctx, chatModel, prompt, depth, eventSink, attempt + 1, retryTimes));
+                    }
+                    return Flux.error(e);
+                });
+    }
+
+    /**
      * 非流式 LLM 轮次：call() 获取完整回复后一次性输出
      */
     private Flux<String> processBlockingRound(ChatContext ctx, int depth, long llmCallStart,
@@ -839,15 +905,20 @@ public class ChatServiceImpl implements ChatService {
             } catch (Exception e) {
                 lastException = e;
                 if (attempt < retryTimes) {
+                    int retryNo = attempt + 1;
                     long delayMs = (long) Math.pow(2, attempt) * 1000;
-                    log.warn("[Chat] 非流式模型调用失败，第{}次重试，等待{}ms: depth={}, error={}", attempt + 1, delayMs, depth, e.getMessage());
+                    log.warn("[Chat] 非流式模型调用失败，第{}次重试，等待{}ms: depth={}, error={}", retryNo, delayMs, depth, e.getMessage());
+                    eventSink.tryEmitNext(STATUS_PREFIX + toolEventGenerator.errorRetryEvent(
+                            "AI连接异常，正在重试中 " + retryNo + "/" + retryTimes,
+                            classifyErrorCode(e), retryNo, retryTimes));
                     try { Thread.sleep(delayMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
                 }
             }
         }
         if (response == null) {
-            log.error("[Chat] 非流式模型调用最终失败: depth={}", depth, lastException);
-            return Flux.just("\n[模型调用失败，请稍后重试]");
+            markStreamFailure(ctx, lastException);
+            return Flux.just(STATUS_PREFIX + toolEventGenerator.errorEvent(
+                    ctx.getStreamErrorMessage(), ctx.getStreamErrorCode()));
         }
         accumulateStreamUsage(response, inputTokenHolder, outputTokenHolder);
 
@@ -1536,6 +1607,9 @@ public class ChatServiceImpl implements ChatService {
      * 分类异常信息为用户友好的错误提示
      */
     private String classifyErrorMessage(Throwable e) {
+        if (e == null) {
+            return "模型调用异常: 未知错误";
+        }
         String msg = e.getMessage();
         if (msg == null) msg = e.getClass().getSimpleName();
         // 网络超时
@@ -1565,6 +1639,9 @@ public class ChatServiceImpl implements ChatService {
      * 分类异常为错误码
      */
     private String classifyErrorCode(Throwable e) {
+        if (e == null) {
+            return "UNKNOWN";
+        }
         String msg = e.getMessage();
         if (msg == null) return "UNKNOWN";
         if (msg.contains("timeout") || msg.contains("timed out") || msg.contains("Timeout")) return "TIMEOUT";

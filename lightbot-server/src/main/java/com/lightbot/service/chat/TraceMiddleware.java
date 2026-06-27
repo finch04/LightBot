@@ -82,11 +82,6 @@ public class TraceMiddleware implements ChatMiddleware {
                         Map<String, Object> llmInputAttrs = new java.util.LinkedHashMap<>();
                         llmInputAttrs.put("messageCount", messageList.size());
                         llmInputAttrs.put("messages", messageList);
-                        ctx.getMessages().stream()
-                                .filter(org.springframework.ai.chat.messages.SystemMessage.class::isInstance)
-                                .map(org.springframework.ai.chat.messages.SystemMessage.class::cast)
-                                .findFirst()
-                                .ifPresent(sm -> llmInputAttrs.put("systemPrompt", sm.getText()));
 
                         // 请求配置（model、temperature、topP、maxTokens 等）
                         if (ctx.getConfigMap() != null && !ctx.getConfigMap().isEmpty()) {
@@ -120,7 +115,8 @@ public class TraceMiddleware implements ChatMiddleware {
                     }
 
                     // 5. 构建Trace并异步写库
-                    persistTrace(ctx, "completed", tEnd - ctx.getStartTime(), null);
+                    String traceStatus = ctx.isStreamFailed() ? "failed" : "completed";
+                    persistTrace(ctx, traceStatus, tEnd - ctx.getStartTime(), ctx.getStreamErrorMessage());
                 })
                 .doOnError(e -> {
                     long tErr = System.currentTimeMillis();

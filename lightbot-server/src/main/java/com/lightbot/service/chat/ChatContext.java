@@ -96,6 +96,13 @@ public class ChatContext {
     private List<LlmTraceSpan> spans;
     private long startTime;
 
+    /** 流式模型调用是否最终失败 */
+    private boolean streamFailed;
+    /** 流式模型调用最终失败提示 */
+    private String streamErrorMessage;
+    /** 流式模型调用最终失败错误码 */
+    private String streamErrorCode;
+
     /** 流式敏感词过滤状态（按累积全文过滤，避免分片漏拦） */
     private SensitiveWordFilter.StreamState sensitiveStreamState;
 

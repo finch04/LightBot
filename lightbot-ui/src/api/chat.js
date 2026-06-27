@@ -207,7 +207,7 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
                 || parsed.type === 'sensitive_block'
                 || parsed.type === 'skill_active' || parsed.type === 'subagent_call' || parsed.type === 'subagent_result'
                 || parsed.type === 'subagent_token' || parsed.type === 'subagent_tool_call' || parsed.type === 'subagent_tool_result'
-                || parsed.type === 'error') {
+                || parsed.type === 'error' || parsed.type === 'error_retry') {
               onToolEvent?.(parsed)
               if (currentEventId) { onEventId?.(currentEventId); currentEventId = null }
               continue

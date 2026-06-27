@@ -382,8 +382,6 @@ public class MessageMiddleware implements ChatMiddleware {
                 messages.add(buildUserMessageForAttachments(msg.getContent(), histAttachments));
             } else if (msg.getRole() == MessageRole.ASSISTANT) {
                 messages.add(new AssistantMessage(msg.getContent()));
-            } else if (msg.getRole() == MessageRole.SYSTEM && msg.getContent() != null && !msg.getContent().isBlank()) {
-                messages.add(new SystemMessage(msg.getContent()));
             }
         }
 
