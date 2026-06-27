@@ -22,101 +22,128 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * OpenAI 模型处理器
- * <p>同时兼容 DeepSeek 等 OpenAI 兼容 API</p>
+ * DeepSeek 模型处理器
+ * <p>基于 OpenAI 兼容协议接入 DeepSeek 对话模型</p>
  *
  * @author finch
- * @since 2026-05-19
+ * @since 2026-06-27
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OpenAIModelHandler implements ModelProviderHandler {
+public class DeepSeekModelHandler implements ModelProviderHandler {
 
     private final ObjectMapper objectMapper;
 
+    /** DeepSeek 默认 baseUrl */
+    private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
+
+    /**
+     * 获取模型提供商类型
+     *
+     * @return DeepSeek 提供商类型
+     */
     @Override
     public ModelProviderType getProviderType() {
-        return ModelProviderType.OPENAI;
+        return ModelProviderType.DEEPSEEK;
     }
 
+    /**
+     * 创建 DeepSeek ChatModel
+     *
+     * @param provider 模型提供商配置
+     * @return ChatModel 实例
+     */
     @Override
     public ChatModel createChatModel(ModelProvider provider) {
         return createChatModel(provider, getCheapestModel());
     }
 
+    /**
+     * 创建指定默认模型的 DeepSeek ChatModel
+     *
+     * @param provider 模型提供商配置
+     * @param defaultModelId 默认模型ID
+     * @return ChatModel 实例
+     */
     @Override
     public ChatModel createChatModel(ModelProvider provider, String defaultModelId) {
-        OpenAiApi.Builder apiBuilder = OpenAiApi.builder()
-                .apiKey(provider.getApiKey());
-        if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
-            apiBuilder.baseUrl(provider.getBaseUrl());
-        }
-        String completionsPath = resolveCompletionsPath(provider);
-        if (completionsPath != null) {
-            apiBuilder.completionsPath(completionsPath);
-        }
-        OpenAiApi api = apiBuilder.build();
+        OpenAiApi api = OpenAiApi.builder()
+                .apiKey(provider.getApiKey())
+                .baseUrl(resolveBaseUrl(provider))
+                .build();
         return OpenAiChatModel.builder()
                 .openAiApi(api)
                 .defaultOptions(OpenAiChatOptions.builder().model(defaultModelId).streamUsage(true).build())
                 .build();
     }
 
+    /**
+     * 构建 DeepSeek 调用参数
+     *
+     * @param provider 模型提供商配置
+     * @param config Agent 模型配置
+     * @return ChatOptions 实例
+     */
     @Override
     public ChatOptions buildChatOptions(ModelProvider provider, Map<String, Object> config) {
         OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
 
-        // modelId 未配置时使用默认模型
-        String modelId = config.containsKey("modelId") ? config.get("modelId").toString() : getCheapestModel();
+        String modelId = config.containsKey(ConfigKeys.Agent.MODEL_ID)
+                ? config.get(ConfigKeys.Agent.MODEL_ID).toString() : getCheapestModel();
         builder.model(modelId);
 
-        if (config.containsKey("temperature")) {
-            builder.temperature(toDouble(config.get("temperature")));
+        if (config.containsKey(ConfigKeys.Agent.TEMPERATURE)) {
+            builder.temperature(toDouble(config.get(ConfigKeys.Agent.TEMPERATURE)));
         }
-        if (config.containsKey("topP")) {
-            builder.topP(toDouble(config.get("topP")));
+        if (config.containsKey(ConfigKeys.Agent.TOP_P)) {
+            builder.topP(toDouble(config.get(ConfigKeys.Agent.TOP_P)));
         }
-        if (config.containsKey("maxTokens")) {
-            builder.maxTokens(toInt(config.get("maxTokens")));
+        if (config.containsKey(ConfigKeys.Agent.MAX_TOKENS)) {
+            builder.maxTokens(toInt(config.get(ConfigKeys.Agent.MAX_TOKENS)));
         }
-        if (config.containsKey("presencePenalty")) {
-            builder.presencePenalty(toDouble(config.get("presencePenalty")));
+        if (config.containsKey(ConfigKeys.Agent.PRESENCE_PENALTY)) {
+            builder.presencePenalty(toDouble(config.get(ConfigKeys.Agent.PRESENCE_PENALTY)));
         }
-        if (config.containsKey("frequencyPenalty")) {
-            builder.frequencyPenalty(toDouble(config.get("frequencyPenalty")));
+        if (config.containsKey(ConfigKeys.Agent.FREQUENCY_PENALTY)) {
+            builder.frequencyPenalty(toDouble(config.get(ConfigKeys.Agent.FREQUENCY_PENALTY)));
         }
 
         OpenAiStreamUsageSupport.enableStreamUsage(builder);
-
         return builder.build();
     }
 
+    /**
+     * 获取 DeepSeek 默认低成本模型
+     *
+     * @return 默认模型ID
+     */
     @Override
     public String getCheapestModel() {
-        return "gpt-4o-mini";
+        return "deepseek-chat";
     }
 
+    /**
+     * 获取 DeepSeek 参数配置字段
+     *
+     * @return 配置字段列表
+     */
     @Override
     public List<ConfigField> getConfigFields() {
         List<ConfigField> fields = new ArrayList<>();
         fields.add(ConfigField.builder()
-                .key("modelId")
+                .key(ConfigKeys.Agent.MODEL_ID)
                 .label("模型")
                 .type("select")
                 .options(List.of(
-                        ConfigField.Option.builder().value("gpt-4o-mini").label("GPT-4o Mini（视觉）").build(),
-                        ConfigField.Option.builder().value("gpt-4o").label("GPT-4o（视觉）").build(),
-                        ConfigField.Option.builder().value("gpt-4-turbo").label("GPT-4 Turbo（视觉）").build(),
-                        ConfigField.Option.builder().value("gpt-4-vision-preview").label("GPT-4 Vision Preview").build(),
-                        ConfigField.Option.builder().value("gpt-4").label("GPT-4").build(),
-                        ConfigField.Option.builder().value("gpt-3.5-turbo").label("GPT-3.5 Turbo").build()
+                        ConfigField.Option.builder().value("deepseek-chat").label("DeepSeek Chat").build(),
+                        ConfigField.Option.builder().value("deepseek-reasoner").label("DeepSeek Reasoner").build()
                 ))
-                .defaultValue("gpt-4o-mini")
-                .hint("多模态请选用 gpt-4o / gpt-4o-mini / gpt-4-turbo 等视觉模型")
+                .defaultValue("deepseek-chat")
+                .hint("常规对话选 deepseek-chat，需要推理能力选 deepseek-reasoner")
                 .build());
         fields.add(ConfigField.builder()
-                .key("temperature")
+                .key(ConfigKeys.Agent.TEMPERATURE)
                 .label("温度")
                 .type("slider")
                 .min(0.0).max(2.0).step(0.1)
@@ -124,7 +151,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                 .hint("值越高回答越随机创造性，值越低回答越确定")
                 .build());
         fields.add(ConfigField.builder()
-                .key("topP")
+                .key(ConfigKeys.Agent.TOP_P)
                 .label("核采样")
                 .type("slider")
                 .min(0.0).max(1.0).step(0.05)
@@ -132,7 +159,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                 .hint("控制词汇选择的多样性")
                 .build());
         fields.add(ConfigField.builder()
-                .key("maxTokens")
+                .key(ConfigKeys.Agent.MAX_TOKENS)
                 .label("最大 Token")
                 .type("number")
                 .min(256.0).max(8192.0).step(256.0)
@@ -140,7 +167,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                 .hint("单次回答的最大长度")
                 .build());
         fields.add(ConfigField.builder()
-                .key("presencePenalty")
+                .key(ConfigKeys.Agent.PRESENCE_PENALTY)
                 .label("存在惩罚")
                 .type("slider")
                 .min(-2.0).max(2.0).step(0.1)
@@ -148,7 +175,7 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                 .hint("正值降低重复话题的概率")
                 .build());
         fields.add(ConfigField.builder()
-                .key("frequencyPenalty")
+                .key(ConfigKeys.Agent.FREQUENCY_PENALTY)
                 .label("频率惩罚")
                 .type("slider")
                 .min(-2.0).max(2.0).step(0.1)
@@ -158,18 +185,33 @@ public class OpenAIModelHandler implements ModelProviderHandler {
         return fields;
     }
 
+    /**
+     * 获取 DeepSeek 模型能力字段
+     *
+     * @return 能力字段列表
+     */
     @Override
     public List<ConfigField> getModelCapabilities() {
-        return AgentCapabilityConfigFields.openAiFields();
+        return List.of(ConfigField.builder()
+                .key(ConfigKeys.Agent.ENABLE_REASONING)
+                .label("深度思考")
+                .type("switch")
+                .defaultValue(false)
+                .hint("选择 deepseek-reasoner 模型时开启，用于标记该 Agent 使用推理模型")
+                .build());
     }
 
+    /**
+     * 拉取 DeepSeek 可用模型列表
+     *
+     * @param provider 模型提供商配置
+     * @return 模型列表
+     */
     @Override
     public List<FetchedModel> fetchModels(ModelProvider provider) {
-        // 1. 优先使用 modelsEndpoint，否则使用默认地址
         String url = resolveModelsEndpoint(provider);
 
         try {
-            // 2. 构建 RestClient，添加额外请求头
             RestClient.Builder clientBuilder = RestClient.builder()
                     .defaultHeader("Authorization", "Bearer " + provider.getApiKey());
             addExtraHeaders(clientBuilder, provider.getHeadersJson());
@@ -180,23 +222,25 @@ public class OpenAIModelHandler implements ModelProviderHandler {
                     .retrieve()
                     .body(Map.class);
 
-            // 3. 解析响应，提取模型ID
             List<Map<String, Object>> data = (List<Map<String, Object>>) response.get("data");
-            if (data == null) return List.of();
-
+            if (data == null) {
+                return List.of(FetchedModel.of("deepseek-chat"), FetchedModel.of("deepseek-reasoner"));
+            }
             return data.stream()
                     .map(m -> FetchedModel.of(m.get("id").toString()))
                     .sorted(Comparator.comparing(FetchedModel::getModelId))
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.warn("[OpenAIHandler] 拉取模型列表失败: url={}, error={}", url, e.getMessage());
+            log.warn("[DeepSeekHandler] 拉取模型列表失败: url={}, error={}", url, e.getMessage());
             throw new RuntimeException("拉取模型列表失败: " + e.getMessage());
         }
     }
 
     /**
      * 解析模型列表获取地址
-     * <p>优先使用 modelsEndpoint，否则基于 baseUrl 构建默认地址</p>
+     *
+     * @param provider 提供商实体
+     * @return 模型列表地址
      */
     private String resolveModelsEndpoint(ModelProvider provider) {
         if (provider.getModelsEndpoint() != null && !provider.getModelsEndpoint().isBlank()) {
@@ -207,6 +251,9 @@ public class OpenAIModelHandler implements ModelProviderHandler {
 
     /**
      * 添加额外请求头
+     *
+     * @param builder 请求客户端构建器
+     * @param headersJson 请求头 JSON
      */
     private void addExtraHeaders(RestClient.Builder builder, String headersJson) {
         if (headersJson == null || headersJson.isBlank()) {
@@ -216,60 +263,43 @@ public class OpenAIModelHandler implements ModelProviderHandler {
             Map<String, String> headers = objectMapper.readValue(headersJson, new TypeReference<>() {});
             headers.forEach(builder::defaultHeader);
         } catch (Exception e) {
-            log.warn("[OpenAIHandler] 解析额外请求头失败: {}", e.getMessage());
+            log.warn("[DeepSeekHandler] 解析额外请求头失败: {}", e.getMessage());
         }
     }
 
+    /**
+     * 解析 DeepSeek API 地址
+     *
+     * @param provider 模型提供商配置
+     * @return API 地址
+     */
     private String resolveBaseUrl(ModelProvider provider) {
         if (provider.getBaseUrl() != null && !provider.getBaseUrl().isBlank()) {
             String url = provider.getBaseUrl().replaceAll("/+$", "");
-            // 如果已包含 /v1 结尾，去掉避免重复
             if (url.endsWith("/v1")) {
                 url = url.substring(0, url.length() - 3);
             }
             return url;
         }
-        return "https://api.openai.com";
+        return DEFAULT_BASE_URL;
     }
 
     /**
-     * 解析 Chat Completions 请求路径
+     * 转换为 double 类型
      *
-     * @param provider 提供商实体
-     * @return 请求路径
+     * @param val 原始值
+     * @return double 值
      */
-    private String resolveCompletionsPath(ModelProvider provider) {
-        Map<String, Object> config = parseProviderConfig(provider.getConfig());
-        Object value = config.get(ConfigKeys.Agent.COMPLETIONS_PATH);
-        if (value == null || value.toString().isBlank()) {
-            return null;
-        }
-        String path = value.toString().trim();
-        return path.startsWith("/") ? path : "/" + path;
-    }
-
-    /**
-     * 解析提供商配置
-     *
-     * @param config 配置 JSON
-     * @return 配置 Map
-     */
-    private Map<String, Object> parseProviderConfig(String config) {
-        if (config == null || config.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(config, new TypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("[OpenAIHandler] 解析提供商配置失败: {}", e.getMessage());
-            return Map.of();
-        }
-    }
-
     private double toDouble(Object val) {
         return val instanceof Number ? ((Number) val).doubleValue() : Double.parseDouble(val.toString());
     }
 
+    /**
+     * 转换为 int 类型
+     *
+     * @param val 原始值
+     * @return int 值
+     */
     private int toInt(Object val) {
         return val instanceof Number ? ((Number) val).intValue() : Integer.parseInt(val.toString());
     }

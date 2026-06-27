@@ -19,4 +19,10 @@ public class ModelProviderCheckRequest {
     private String apiKey;
 
     private String baseUrl;
+
+    /** 默认模型ID */
+    private String modelId;
+
+    /** Chat Completions 请求路径 */
+    private String completionsPath;
 }

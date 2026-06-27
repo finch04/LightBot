@@ -36,6 +36,8 @@ public class DefaultProviderInitializer implements ApplicationRunner {
     private static final Map<ModelProviderType, String[]> DEFAULT_PROVIDERS = Map.of(
             ModelProviderType.OPENAI, new String[]{"OpenAI", "https://api.openai.com"},
             ModelProviderType.DASHSCOPE, new String[]{"通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+            ModelProviderType.DEEPSEEK, new String[]{"DeepSeek", "https://api.deepseek.com"},
+            ModelProviderType.OLLAMA, new String[]{"Ollama", "http://localhost:11434"},
             ModelProviderType.MIMO, new String[]{"小米MiMo", "https://api.xiaomimimo.com/v1"}
     );
 

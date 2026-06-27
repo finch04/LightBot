@@ -253,7 +253,7 @@ mvn spring-boot:run
 
 # 方式二：打包后运行
 mvn clean package -DskipTests
-java -jar target/lightbot-server-0.1.0-SNAPSHOT.jar
+java -jar target/lightbot-server-1.5.0.jar
 ```
 
 启动成功后会看到：

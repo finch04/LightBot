@@ -80,6 +80,12 @@ public class ModelProviderController {
         return Result.ok(modelFactory.getModelCapabilities(id));
     }
 
+    @Operation(summary = "获取提供商类型的默认模型")
+    @GetMapping("/default-model")
+    public Result<String> getDefaultModelId(@RequestParam com.lightbot.enums.ModelProviderType type) {
+        return Result.ok(modelFactory.getDefaultModelId(type));
+    }
+
     @Operation(summary = "检查模型提供商连通性（已保存的提供商）")
     @GetMapping("/{id}/check")
     public Result<String> checkConnectivity(@PathVariable Long id) {
@@ -89,7 +95,8 @@ public class ModelProviderController {
     @Operation(summary = "检查模型提供商连通性（表单实时数据）")
     @PostMapping("/check")
     public Result<String> checkConnectivityByForm(@Valid @RequestBody ModelProviderCheckRequest request) {
-        return Result.ok(modelFactory.checkConnectivityByForm(request.getType(), request.getApiKey(), request.getBaseUrl()));
+        return Result.ok(modelFactory.checkConnectivityByForm(request.getType(), request.getApiKey(), request.getBaseUrl(),
+                request.getModelId(), request.getCompletionsPath()));
     }
 
     @Operation(summary = "联网拉取提供商下的可用模型列表")

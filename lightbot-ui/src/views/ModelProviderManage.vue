@@ -68,6 +68,14 @@
         <a-form-item label="Base URL">
           <a-input v-model:value="form.baseUrl" placeholder="可选" />
         </a-form-item>
+        <a-form-item label="提供商预设" v-if="form.type === 'OPENAI'">
+          <button type="button" class="btn-preset" @click="applyVolcengineAgentPlanPreset">火山 AgentPlan</button>
+          <div class="form-hint">自动填充 OpenAI 兼容路径和默认模型</div>
+        </a-form-item>
+        <a-form-item label="默认模型">
+          <a-input v-model:value="form.defaultModelId" :placeholder="defaultModelPlaceholder" />
+          <div class="form-hint">用于连通性检查和未指定模型时的兜底模型</div>
+        </a-form-item>
 
         <!-- 高级选项 -->
         <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
@@ -75,6 +83,10 @@
           <DownOutlined :class="['toggle-icon', { expanded: showAdvanced }]" />
         </div>
         <template v-if="showAdvanced">
+          <a-form-item label="请求路径">
+            <a-input v-model:value="form.completionsPath" placeholder="默认 /v1/chat/completions" />
+            <div class="form-hint">OpenAI Chat Completions 路径，如火山 AgentPlan 填 /chat/completions</div>
+          </a-form-item>
           <a-form-item label="模型列表URL">
             <a-input v-model:value="form.modelsEndpoint" placeholder="为空时使用默认地址" />
             <div class="form-hint">自定义获取模型列表的接口地址</div>
@@ -230,10 +242,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus } from '../api/modelProvider'
+import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus, getProviderDefaultModel } from '../api/modelProvider'
 import { getModelProviderTypes, getModelTypes } from '../api/enum'
 import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 import JsonInput from '../components/JsonInput.vue'
@@ -245,7 +257,8 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const checking = ref(false)
 const refreshing = ref(false)
-const form = reactive({ id: null, name: '', type: '', apiKey: '', baseUrl: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}' })
+const form = reactive({ id: null, name: '', type: '', apiKey: '', baseUrl: '', defaultModelId: '', completionsPath: '', modelsEndpoint: '', headersJson: '{}', extraJson: '{}', config: '{}' })
+const providerDefaultModelId = ref('')
 const showAdvanced = ref(false)
 
 // 模型管理
@@ -315,6 +328,9 @@ const existingTypeTabs = computed(() => {
 })
 
 const currentFetchTabs = computed(() => fetchTab.value === 'available' ? fetchTypeTabsCache.value : existingTypeTabs.value)
+const defaultModelPlaceholder = computed(() => providerDefaultModelId.value
+    ? `不填则默认为${providerDefaultModelId.value}模型`
+    : '不填则使用默认模型')
 
 function selectAllFiltered() {
   selectedFetchedModels.value = filteredFetchedModels.value.map(m => m.modelId)
@@ -351,6 +367,54 @@ async function loadData() {
   list.value = res.data.records || []
 }
 
+async function loadProviderDefaultModel(type) {
+  providerDefaultModelId.value = ''
+  if (!type) return
+  try {
+    const res = await getProviderDefaultModel(type)
+    providerDefaultModelId.value = res.data || ''
+  } catch {
+    providerDefaultModelId.value = ''
+  }
+}
+
+function parseJsonObject(str) {
+  if (!str || !str.trim()) return {}
+  try {
+    const parsed = JSON.parse(str)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function getDefaultModelId(config) {
+  return parseJsonObject(config).modelId || ''
+}
+
+function getCompletionsPath(config) {
+  return parseJsonObject(config).completionsPath || ''
+}
+
+function buildProviderPayload() {
+  const config = parseJsonObject(form.config)
+  if (form.defaultModelId?.trim()) {
+    config.modelId = form.defaultModelId.trim()
+  } else {
+    delete config.modelId
+  }
+  if (form.completionsPath?.trim()) {
+    config.completionsPath = form.completionsPath.trim()
+  } else {
+    delete config.completionsPath
+  }
+  const { completionsPath, ...payload } = form
+  return {
+    ...payload,
+    config: JSON.stringify(config),
+  }
+}
+
 function openDialog(row) {
   if (row) {
     Object.assign(form, {
@@ -359,9 +423,12 @@ function openDialog(row) {
       type: row.type?.code || row.type,
       apiKey: row.apiKey || '',
       baseUrl: row.baseUrl || '',
+      defaultModelId: getDefaultModelId(row.config),
+      completionsPath: getCompletionsPath(row.config),
       modelsEndpoint: row.modelsEndpoint || '',
       headersJson: row.headersJson || '{}',
       extraJson: row.extraJson || '{}',
+      config: row.config || '{}',
     })
     showAdvanced.value = false
   } else {
@@ -371,13 +438,29 @@ function openDialog(row) {
       type: resolveDefaultProviderType(),
       apiKey: '',
       baseUrl: '',
+      defaultModelId: '',
+      completionsPath: '',
       modelsEndpoint: '',
       headersJson: '{}',
       extraJson: '{}',
+      config: '{}',
     })
     showAdvanced.value = false
   }
   dialogVisible.value = true
+  loadProviderDefaultModel(form.type)
+}
+
+function applyVolcengineAgentPlanPreset() {
+  Object.assign(form, {
+    name: form.name || '火山 AgentPlan',
+    type: 'OPENAI',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    defaultModelId: 'ark-code-latest',
+    completionsPath: '/chat/completions',
+    modelsEndpoint: 'https://ark.cn-beijing.volces.com/api/coding/v3/models',
+  })
+  showAdvanced.value = true
 }
 
 async function handleSubmit() {
@@ -386,11 +469,12 @@ async function handleSubmit() {
   if (form.extraJson && !isValidJson(form.extraJson)) return message.warning('扩展配置 JSON 格式不正确')
   submitting.value = true
   try {
+    const payload = buildProviderPayload()
     if (form.id) {
-      await updateModelProvider(form)
+      await updateModelProvider(payload)
       message.success('更新成功')
     } else {
-      await createModelProvider(form)
+      await createModelProvider(payload)
       message.success('创建成功')
     }
     dialogVisible.value = false
@@ -427,7 +511,7 @@ async function handleToggleStatus(provider, checked) {
 }
 
 async function handleCheck() {
-  if (!form.apiKey?.trim() && form.type !== 'ollama') {
+  if (!form.apiKey?.trim() && form.type?.toUpperCase() !== 'OLLAMA') {
     message.warning('请先填写 API Key')
     return
   }
@@ -437,6 +521,8 @@ async function handleCheck() {
       type: form.type,
       apiKey: form.apiKey,
       baseUrl: form.baseUrl,
+      completionsPath: form.completionsPath,
+      modelId: form.defaultModelId?.trim(),
     })
     message.success(res.data || '连接成功')
   } catch (e) {
@@ -578,6 +664,12 @@ async function handleRefreshCache() {
     refreshing.value = false
   }
 }
+
+watch(() => form.type, (type) => {
+  if (dialogVisible.value) {
+    loadProviderDefaultModel(type)
+  }
+})
 
 onMounted(async () => {
   await Promise.all([loadProviderTypes(), loadModelTypes()])
@@ -1101,6 +1193,19 @@ onMounted(async () => {
 .toggle-icon.expanded {
   transform: rotate(180deg);
 }
+.btn-preset {
+  padding: 6px 12px;
+  background: var(--color-canvas);
+  color: var(--color-link);
+  border: 1px solid var(--color-hairline);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-preset:hover {
+  border-color: var(--color-link);
+}
+
 .form-hint {
   font-size: 12px;
   color: var(--color-mute);

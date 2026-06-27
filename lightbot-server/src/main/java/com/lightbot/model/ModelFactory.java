@@ -1,6 +1,8 @@
 package com.lightbot.model;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelProviderType;
@@ -41,6 +43,7 @@ public class ModelFactory {
     private final ModelProviderService modelProviderService;
     private final ModelProviderCacheUtil cacheUtil;
     private final SystemConfigService systemConfigService;
+    private final ObjectMapper objectMapper;
 
     private static final String CONNECTIVITY_CHECK_PROMPT = "你好，请回复OK";
 
@@ -171,7 +174,12 @@ public class ModelFactory {
         Long actualId = resolveProviderIdOrDefault(providerId);
         ModelProvider provider = resolveProvider(actualId);
         ModelProviderHandler handler = getHandler(provider.getType());
-        return handler.buildChatOptions(provider, config);
+        Map<String, Object> effectiveConfig = new HashMap<>(config);
+        Object modelId = effectiveConfig.get("modelId");
+        if (modelId == null || modelId.toString().isBlank()) {
+            effectiveConfig.put("modelId", resolveModelId(provider, handler));
+        }
+        return handler.buildChatOptions(provider, effectiveConfig);
     }
 
     /**
@@ -198,6 +206,16 @@ public class ModelFactory {
         ModelProvider provider = resolveProvider(actualId);
         ModelProviderHandler handler = getHandler(provider.getType());
         return handler.getModelCapabilities();
+    }
+
+    /**
+     * 获取指定提供商类型的代码默认模型
+     *
+     * @param type 提供商类型
+     * @return 默认模型ID
+     */
+    public String getDefaultModelId(ModelProviderType type) {
+        return getHandler(type).getCheapestModel();
     }
 
     /**
@@ -234,7 +252,7 @@ public class ModelFactory {
         invalidateCache(providerId);
 
         // 3. 发送简单请求测试连通性
-        return doCheckConnectivity(provider);
+        return doCheckConnectivity(provider, null);
     }
 
     /**
@@ -243,17 +261,22 @@ public class ModelFactory {
      * @param type    提供商类型
      * @param apiKey  API密钥
      * @param baseUrl 基础地址
+     * @param modelId 默认模型ID
+     * @param completionsPath Chat Completions 请求路径
      * @return 检查结果消息
      */
-    public String checkConnectivityByForm(ModelProviderType type, String apiKey, String baseUrl) {
+    public String checkConnectivityByForm(ModelProviderType type, String apiKey, String baseUrl, String modelId, String completionsPath) {
         // 1. 构建临时提供商对象
         ModelProvider provider = new ModelProvider();
         provider.setType(type);
         provider.setApiKey(apiKey);
         provider.setBaseUrl(baseUrl);
+        if (completionsPath != null && !completionsPath.isBlank()) {
+            provider.setConfig(buildConnectivityConfig(completionsPath));
+        }
 
         // 2. 使用表单数据测试连通性
-        return doCheckConnectivity(provider);
+        return doCheckConnectivity(provider, modelId);
     }
 
     /**
@@ -276,20 +299,35 @@ public class ModelFactory {
         return t -> seen.putIfAbsent(keyExtractor.apply(t), Boolean.TRUE) == null;
     }
 
-    private String doCheckConnectivity(ModelProvider provider) {
+    private String doCheckConnectivity(ModelProvider provider, String modelId) {
         try {
             ModelProviderHandler handler = getHandler(provider.getType());
-            ChatModel chatModel = handler.createChatModel(provider);
-            // 使用最便宜的模型进行连通性检查，避免消耗高价值配额
-            ChatOptions options = handler.buildChatOptions(provider, Map.of("modelId", handler.getCheapestModel()));
+            String checkModelId = resolveCheckModelId(provider, handler, modelId);
+            ChatModel chatModel = handler.createChatModel(provider, checkModelId);
+            ChatOptions options = handler.buildChatOptions(provider, Map.of("modelId", checkModelId));
             ChatResponse response = LlmTraceContext.callWithoutTrace(() ->
                     chatModel.call(new Prompt(new UserMessage(CONNECTIVITY_CHECK_PROMPT), options)));
-            log.info("[ModelFactory] 连通性检查通过: type={}, model={}", provider.getType(), handler.getCheapestModel());
+            log.info("[ModelFactory] 连通性检查通过: type={}, model={}", provider.getType(), checkModelId);
             return "连接成功，API Key 有效";
         } catch (Exception e) {
             log.warn("[ModelFactory] 连通性检查失败: type={}, error={}", provider.getType(), e.getMessage());
             throw new BizException(ErrorCode.MODEL_PROVIDER_CHECK_FAILED, e.getMessage());
         }
+    }
+
+    /**
+     * 解析连通性检查模型ID
+     *
+     * @param provider 提供商实体
+     * @param handler 模型处理器
+     * @param modelId 表单传入模型ID
+     * @return 模型ID
+     */
+    private String resolveCheckModelId(ModelProvider provider, ModelProviderHandler handler, String modelId) {
+        if (modelId != null && !modelId.isBlank()) {
+            return modelId.trim();
+        }
+        return resolveModelId(provider, handler);
     }
 
     /**
@@ -345,7 +383,22 @@ public class ModelFactory {
             return;
         }
         ModelProvider provider = resolveProvider(providerId);
-        config.put("modelId", getHandler(provider.getType()).getCheapestModel());
+        ModelProviderHandler handler = getHandler(provider.getType());
+        config.put("modelId", resolveModelId(provider, handler));
+    }
+
+    /**
+     * 构建连通性检查临时配置
+     *
+     * @param completionsPath Chat Completions 请求路径
+     * @return 配置 JSON
+     */
+    private String buildConnectivityConfig(String completionsPath) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(ConfigKeys.Agent.COMPLETIONS_PATH, completionsPath.trim()));
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.INTERNAL_ERROR, e);
+        }
     }
 
     private ModelProviderHandler getHandler(ModelProviderType type) {

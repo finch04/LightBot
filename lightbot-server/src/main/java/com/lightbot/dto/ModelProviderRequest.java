@@ -26,6 +26,9 @@ public class ModelProviderRequest {
 
     private String baseUrl;
 
+    /** 默认模型ID */
+    private String defaultModelId;
+
     /** 模型列表获取地址（为空时使用默认地址） */
     private String modelsEndpoint;
 
