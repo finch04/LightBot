@@ -929,10 +929,10 @@ onUnmounted(() => {
   background: var(--color-canvas-soft-2);
 }
 :deep(.tree-selected) {
-  background: #eff6ff !important;
+  background: rgba(0, 112, 243, 0.10) !important;
 }
 :deep(.tree-selected .tree-name) {
-  color: #1d4ed8;
+  color: var(--color-link);
   font-weight: 500;
 }
 :deep(.tree-dir) {
@@ -955,9 +955,12 @@ onUnmounted(() => {
 }
 :deep(.tree-name) {
   font-size: 13px;
-  color: #333;
+  color: var(--color-ink);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+:global([data-theme="dark"]) :deep(.tree-name) {
+  color: #f4f4f5;
 }
 :deep(.tree-children) {
   /* 子节点缩进由 depth * 20px 控制 */

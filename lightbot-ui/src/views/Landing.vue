@@ -942,7 +942,7 @@ onUnmounted(() => {
     -webkit-text-fill-color: transparent;
   }
   .glass-header {
-    background: var(--color-trans-dark);
+    background: rgba(8, 8, 10, 0.88);
     border-bottom-color: rgba(255, 255, 255, 0.06);
   }
   .visual-card {
