@@ -24,6 +24,8 @@ public class PythonEngine implements CodeEngine {
 
     private static final long DEFAULT_TIMEOUT_MS = 5000;
     private static final int MAX_OUTPUT_LENGTH = 10000;
+    private static final String RESULT_START_MARKER = "__SANDBOX_RESULT_START__";
+    private static final String RESULT_END_MARKER = "__SANDBOX_RESULT_END__";
 
     /** 危险 import 黑名单 */
     private static final Pattern BLOCKED_IMPORTS = Pattern.compile(
@@ -105,9 +107,13 @@ public class PythonEngine implements CodeEngine {
 
         try {
             // 5. 启动子进程
-            ProcessBuilder pb = new ProcessBuilder(pythonCmd, tempFile.getAbsolutePath());
+            ProcessBuilder pb = new ProcessBuilder(pythonCmd, "-X", "utf8", tempFile.getAbsolutePath());
             pb.redirectErrorStream(false);
-            pb.environment().clear(); // 清空环境变量，防止信息泄露
+            Map<String, String> env = pb.environment();
+            env.clear();
+            env.put("PYTHONUTF8", "1");
+            env.put("PYTHONIOENCODING", "utf-8");
+            env.put("PYTHONUNBUFFERED", "1");
 
             Process process = pb.start();
 
@@ -128,7 +134,7 @@ public class PythonEngine implements CodeEngine {
             }
 
             int exitCode = process.exitValue();
-            String output = truncateOutput(stdout);
+            String output = truncateOutput(stripReturnValueBlock(stdout));
             String errorOutput = truncateOutput(stderr);
 
             if (exitCode == 0) {
@@ -178,6 +184,9 @@ public class PythonEngine implements CodeEngine {
     private String wrapCode(String code, Map<String, Object> params) {
         StringBuilder sb = new StringBuilder();
         sb.append("import json, sys\n");
+        sb.append("if hasattr(sys.stdout, 'reconfigure'):\n");
+        sb.append("    sys.stdout.reconfigure(encoding='utf-8')\n");
+        sb.append("    sys.stderr.reconfigure(encoding='utf-8')\n");
 
         // 注入 params
         sb.append("params = ");
@@ -195,12 +204,12 @@ public class PythonEngine implements CodeEngine {
         sb.append("try:\n");
         sb.append("    _result = main()\n");
         sb.append("    if _result is not None:\n");
-        sb.append("        print('__SANDBOX_RESULT_START__')\n");
+        sb.append("        print('" + RESULT_START_MARKER + "')\n");
         sb.append("        if isinstance(_result, (dict, list)):\n");
         sb.append("            print(json.dumps(_result, ensure_ascii=False))\n");
         sb.append("        else:\n");
         sb.append("            print(_result)\n");
-        sb.append("        print('__SANDBOX_RESULT_END__')\n");
+        sb.append("        print('" + RESULT_END_MARKER + "')\n");
         sb.append("except NameError:\n");
         sb.append("    pass\n");
         sb.append("except Exception as e:\n");
@@ -215,15 +224,31 @@ public class PythonEngine implements CodeEngine {
      */
     private String parseReturnValue(String stdout) {
         if (stdout == null) return null;
-        String startMarker = "__SANDBOX_RESULT_START__";
-        String endMarker = "__SANDBOX_RESULT_END__";
-        int startIdx = stdout.indexOf(startMarker);
-        int endIdx = stdout.indexOf(endMarker);
+        int startIdx = stdout.indexOf(RESULT_START_MARKER);
+        int endIdx = stdout.indexOf(RESULT_END_MARKER);
         if (startIdx >= 0 && endIdx > startIdx) {
-            String value = stdout.substring(startIdx + startMarker.length(), endIdx).trim();
+            String value = stdout.substring(startIdx + RESULT_START_MARKER.length(), endIdx).trim();
             return truncateOutput(value);
         }
         return null;
+    }
+
+    /**
+     * 从标准输出中剔除返回值标记块，避免 output 与 returnValue 重复展示。
+     */
+    private String stripReturnValueBlock(String stdout) {
+        if (stdout == null) return null;
+        int startIdx = stdout.indexOf(RESULT_START_MARKER);
+        int endIdx = stdout.indexOf(RESULT_END_MARKER);
+        if (startIdx < 0 || endIdx <= startIdx) {
+            return stdout;
+        }
+        int blockEndIdx = endIdx + RESULT_END_MARKER.length();
+        String before = stdout.substring(0, startIdx).stripTrailing();
+        String after = stdout.substring(blockEndIdx).stripLeading();
+        if (before.isEmpty()) return after;
+        if (after.isEmpty()) return before;
+        return before + System.lineSeparator() + after;
     }
 
     private String findPython() {
