@@ -64,3 +64,11 @@ export function toggleMessageStar(messageId) {
 export function getStarredMessages(params = {}) {
   return request.get('/chat/sessions/messages/starred', { params })
 }
+
+export function getSessionAttachments(id) {
+  return request.get(`/chat/sessions/${id}/attachments`)
+}
+
+export function removeSessionAttachment(sessionId, attachmentId) {
+  return request.delete(`/chat/sessions/${sessionId}/attachments/${attachmentId}`)
+}

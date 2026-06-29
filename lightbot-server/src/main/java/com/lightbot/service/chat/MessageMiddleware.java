@@ -223,7 +223,10 @@ public class MessageMiddleware implements ChatMiddleware {
         }
         try {
             String metadata = objectMapper.writeValueAsString(Map.of("attachments", attachments));
-            return saveMessage(sessionId, MessageRole.USER, content, metadata, 0, messageType, parentId, replyToMessageId);
+            Long msgId = saveMessage(sessionId, MessageRole.USER, content, metadata, 0, messageType, parentId, replyToMessageId);
+            // 同步追加附件到会话级上下文
+            chatSessionService.appendSessionAttachments(sessionId, attachments, "user_upload");
+            return msgId;
         } catch (Exception e) {
             return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId, replyToMessageId);
         }

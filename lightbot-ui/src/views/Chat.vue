@@ -1,5 +1,32 @@
 <template>
   <div class="chat-container">
+    <!-- 顶部栏 -->
+    <div v-if="sessionId" class="chat-topbar">
+      <div class="chat-topbar-left">
+        <div v-if="!titleEditing" class="chat-topbar-title" @click="startTitleEdit">
+          {{ sessionTitle || '新对话' }}
+          <EditOutlined class="chat-topbar-title-icon" />
+        </div>
+        <div v-else class="chat-topbar-title-edit">
+          <a-input
+            ref="titleInputRef"
+            v-model:value="titleEditValue"
+            size="small"
+            :maxlength="50"
+            @press-enter="confirmTitleEdit"
+            @blur="confirmTitleEdit"
+            @keydown.esc="cancelTitleEdit"
+          />
+        </div>
+      </div>
+      <div class="chat-topbar-right">
+        <a-badge :count="sessionFileCount" :overflow-count="99" :number-style="{ fontSize: '10px', boxShadow: 'none' }">
+          <button class="btn-topbar-file" @click="openFileDrawer" title="会话文件">
+            <FolderOpenOutlined />
+          </button>
+        </a-badge>
+      </div>
+    </div>
     <!-- 消息列表 -->
     <div class="chat-messages" ref="messagesRef">
       <!-- 欢迎状态（新对话 + 无消息） -->
@@ -341,13 +368,20 @@
                 <div v-if="isRefsSectionExpanded(messages[virtualRow.index])" class="rag-list">
                   <div v-for="(ref, ri) in getMsgRagRefs(messages[virtualRow.index])" :key="ri" class="rag-item">
                     <div class="rag-item-header" @click="toggleReference(messages[virtualRow.index], ri)">
-                      <RightOutlined :class="{ expanded: isReferenceExpanded(messages[virtualRow.index], ri) }" />
-                      <a-tag v-if="ref.sourceType === 'qa_pair'" color="success" class="rag-qa-tag">问答对</a-tag>
-                      <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
-                      <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
-                      <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
-                        <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
-                      </a-tooltip>
+                      <div class="rag-title-left">
+                        <RightOutlined :class="{ expanded: isReferenceExpanded(messages[virtualRow.index], ri) }" />
+                        <template v-if="ref.sourceType === 'qa_pair'">
+                          <a-tag color="success" class="rag-qa-tag">问答对</a-tag>
+                          <span class="rag-doc-name">{{ getRagQaQuestion(ref) }}</span>
+                        </template>
+                        <span v-else class="rag-doc-name">{{ ref.documentName }}</span>
+                      </div>
+                      <div class="rag-title-right">
+                        <span class="rag-score">{{ (ref.score * 100).toFixed(1) }}%</span>
+                        <a-tooltip v-if="ref.knowledgeId" title="查看知识库">
+                          <LinkOutlined class="rag-nav-btn" @click.stop="goToKnowledge(ref.knowledgeId, ref.documentId)" />
+                        </a-tooltip>
+                      </div>
                     </div>
                     <div v-if="isReferenceExpanded(messages[virtualRow.index], ri)" class="rag-item-content">
                       {{ ref.contentPreview }}
@@ -657,9 +691,12 @@
       v-model:open="dislikeModalVisible"
       title="反馈原因（可选）"
       @ok="submitDislikeReason"
+      @cancel="skipDislikeReason"
       okText="提交"
       cancelText="跳过"
       :maskClosable="false"
+      :closable="false"
+      :keyboard="false"
       width="420px"
     >
       <div style="padding: 4px 0;">
@@ -671,18 +708,62 @@
       </div>
     </a-modal>
   </div>
+
+  <!-- 会话文件列表抽屉 -->
+  <a-drawer
+    v-model:open="fileDrawerOpen"
+    title="会话文件"
+    :width="520"
+    :mask-closable="true"
+    @afterOpenChange="onFileDrawerOpened"
+  >
+    <div v-if="fileDrawerLoading" class="file-drawer-loading">
+      <LoadingOutlined spin class="file-drawer-loading-icon" />
+    </div>
+    <div v-else-if="sessionAttachments.length === 0" class="file-drawer-empty">
+      <FileTextOutlined class="file-drawer-empty-icon" />
+      <p>暂无文件</p>
+      <p class="file-drawer-empty-hint">上传附件或让 AI 生成文件后会出现在这里</p>
+    </div>
+    <div v-else class="file-drawer-list">
+      <div v-if="userUploads.length > 0" class="file-drawer-section">
+        <div class="file-drawer-section-title">用户上传 ({{ userUploads.length }})</div>
+        <div class="file-drawer-grid">
+          <ChatAttachmentTile
+            v-for="(att, i) in userUploads"
+            :key="att.id || i"
+            :att="att"
+            :thumb-url="getAttThumbUrl(att)"
+            @preview="openSessionFilePreview"
+          />
+        </div>
+      </div>
+      <div v-if="aiFiles.length > 0" class="file-drawer-section">
+        <div class="file-drawer-section-title">AI 生成 ({{ aiFiles.length }})</div>
+        <div class="file-drawer-grid">
+          <ChatAttachmentTile
+            v-for="(att, i) in aiFiles"
+            :key="att.id || i"
+            :att="att"
+            :thumb-url="getAttThumbUrl(att)"
+            @preview="openSessionFilePreview"
+          />
+        </div>
+      </div>
+    </div>
+  </a-drawer>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, provide } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useRoute, useRouter } from 'vue-router'
-import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled, StarOutlined, StarFilled, CloseCircleOutlined } from '@ant-design/icons-vue'
+import { SendOutlined, CopyOutlined, CheckOutlined, RobotOutlined, FileTextOutlined, RightOutlined, LinkOutlined, PauseCircleOutlined, LoadingOutlined, CheckCircleOutlined, BulbOutlined, WarningOutlined, PaperClipOutlined, AudioOutlined, CloseOutlined, PlayCircleOutlined, EyeOutlined, SoundOutlined, ReloadOutlined, NumberOutlined, TagOutlined, DeleteOutlined, QuestionCircleOutlined, CodeOutlined, EditOutlined, CommentOutlined, ThunderboltOutlined, LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled, StarOutlined, StarFilled, CloseCircleOutlined, FolderOpenOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { chatStream, refreshChatAttachmentPreviews, submitMessageFeedback, getMessageFeedback, batchGetMessageFeedbacks } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
 import { enrichVideoThumbnails } from '../utils/videoThumbnail'
-import { getSessionMessages, getSession, createSession, getSessionTitle, deleteMessage as deleteMessageApi, toggleMessageStar } from '../api/chatSession'
+import { getSessionMessages, getSession, createSession, getSessionTitle, updateSessionTitle, deleteMessage as deleteMessageApi, toggleMessageStar, getSessionAttachments } from '../api/chatSession'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import { copyToClipboard } from '../utils/clipboard'
@@ -754,6 +835,18 @@ const attachmentPreviewOpen = ref(false)
 const attachmentPreviewAtt = ref(null)
 const voiceListening = ref(false)
 const speakingMsgKey = ref(null)
+
+// ===== 顶部栏 & 文件抽屉 =====
+const sessionTitle = ref('')
+const titleEditing = ref(false)
+const titleEditValue = ref('')
+const titleInputRef = ref(null)
+const sessionAttachments = ref([])
+const fileDrawerOpen = ref(false)
+const fileDrawerLoading = ref(false)
+const sessionFileCount = computed(() => sessionAttachments.value.length)
+const userUploads = computed(() => sessionAttachments.value.filter(a => a.source === 'user_upload'))
+const aiFiles = computed(() => sessionAttachments.value.filter(a => a.source === 'ai_generated'))
 
 // Agent 管理（chatCapabilities 在此 composable 内部创建）
 const {
@@ -1035,6 +1128,14 @@ function getMsgRagRefs(msg) {
   }
 }
 
+function getRagQaQuestion(ref) {
+  if (!ref || ref.sourceType !== 'qa_pair') return ''
+  if (ref.question) return ref.question
+  const content = ref.contentPreview || ''
+  const match = content.match(/^问题：([^\n]*)/)
+  return match?.[1] || ref.documentName || '问答对'
+}
+
 /**
  * 判断某个引用是否展开
  */
@@ -1134,6 +1235,14 @@ function showDislikeModal(msg) {
 }
 
 async function submitDislikeReason() {
+  await submitDislikeFeedback(dislikeReason.value || null)
+}
+
+async function skipDislikeReason() {
+  await submitDislikeFeedback(null)
+}
+
+async function submitDislikeFeedback(reason) {
   const msg = dislikeTargetMsg.value
   if (!msg) return
   dislikeModalVisible.value = false
@@ -1141,7 +1250,7 @@ async function submitDislikeReason() {
   const current = messageFeedbackMap.value.get(msgId)
   messageFeedbackMap.value.set(msgId, 'dislike')
   try {
-    await submitMessageFeedback(msgId, { rating: 'dislike', reason: dislikeReason.value || null })
+    await submitMessageFeedback(msgId, { rating: 'dislike', reason })
     message.success('已反馈无帮助')
   } catch {
     if (current) {
@@ -1308,6 +1417,7 @@ async function loadHistory() {
     currentAgent.value = null
     lastReplyElapsed.value = null
     sessionTokenCount.value = 0
+    sessionTitle.value = ''
     switchingSession.value = false
     return
   }
@@ -1347,6 +1457,7 @@ async function loadHistory() {
 
     // 从会话中恢复 agentId 和 agentVersionId
     const session = sessionRes.data
+    sessionTitle.value = session?.title || '新对话'
     sessionTokenCount.value = session?.totalTokens || 0
     if (session?.agentId) {
       selectedAgentId.value = session.agentId
@@ -2153,6 +2264,76 @@ function goToKnowledge(knowledgeId, documentId) {
   router.push({ path: `/app/knowledge/${knowledgeId}`, query })
 }
 
+// ===== 顶部栏标题编辑 =====
+function startTitleEdit() {
+  titleEditValue.value = sessionTitle.value || '新对话'
+  titleEditing.value = true
+  nextTick(() => {
+    const el = titleInputRef.value
+    if (el) {
+      const input = el.$el ? el.$el.querySelector('input') : el
+      if (input) { input.focus(); input.select() }
+    }
+  })
+}
+
+async function confirmTitleEdit() {
+  titleEditing.value = false
+  const newTitle = titleEditValue.value.trim()
+  if (!newTitle || newTitle === sessionTitle.value) return
+  sessionTitle.value = newTitle
+  if (sessionId.value) {
+    try {
+      await updateSessionTitle(sessionId.value, newTitle)
+      window.dispatchEvent(new CustomEvent('session-title-updated'))
+    } catch { /* ignore */ }
+  }
+}
+
+function cancelTitleEdit() {
+  titleEditing.value = false
+  titleEditValue.value = ''
+}
+
+// ===== 文件抽屉 =====
+function openFileDrawer() {
+  fileDrawerOpen.value = true
+}
+
+async function onFileDrawerOpened(open) {
+  if (!open || !sessionId.value) return
+  await loadSessionFiles()
+}
+
+async function loadSessionFiles() {
+  if (!sessionId.value) return
+  fileDrawerLoading.value = true
+  try {
+    const res = await getSessionAttachments(sessionId.value)
+    sessionAttachments.value = res.data || []
+    const needRefresh = sessionAttachments.value.filter(a => a.objectKey)
+    if (needRefresh.length > 0) {
+      try {
+        const refreshed = await refreshChatAttachmentPreviews(needRefresh)
+        const refreshedByKey = new Map((refreshed.data || []).map(a => [a.objectKey, a]))
+        sessionAttachments.value = sessionAttachments.value.map(a => {
+          const r = refreshedByKey.get(a.objectKey)
+          return r ? { ...a, ...r } : a
+        })
+      } catch { /* ignore */ }
+    }
+  } catch {
+    sessionAttachments.value = []
+  } finally {
+    fileDrawerLoading.value = false
+  }
+}
+
+function openSessionFilePreview(att) {
+  attachmentPreviewAtt.value = att
+  attachmentPreviewOpen.value = true
+}
+
 // scrollToBottom 已在虚拟滚动区域定义
 
 /** 轮询等待会话标题生成完成（轻量接口，跳过缓存） */
@@ -2170,6 +2351,7 @@ function pollSessionTitle(sid) {
       if (title && title !== '新对话') {
         clearInterval(pollTitleTimer)
         pollTitleTimer = null
+        sessionTitle.value = title
         window.dispatchEvent(new CustomEvent('session-title-updated'))
       }
     } catch {
@@ -2266,6 +2448,100 @@ watch(sessionId, (newVal, oldVal) => {
   flex-direction: column;
   height: 100vh;
   background: var(--color-canvas);
+}
+
+/* ===== 顶部栏 ===== */
+.chat-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 32px;
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-canvas-soft);
+  flex-shrink: 0;
+  gap: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.chat-topbar-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.chat-topbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.chat-topbar-title:hover {
+  background: var(--color-canvas-soft-2);
+  border-color: var(--color-hairline);
+}
+
+.chat-topbar-title-icon {
+  font-size: 12px;
+  color: var(--color-mute);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.chat-topbar-title:hover .chat-topbar-title-icon {
+  opacity: 1;
+}
+
+.chat-topbar-title-edit {
+  flex: 1;
+  max-width: 320px;
+}
+
+.chat-topbar-title-edit :deep(input) {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.chat-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-topbar-file {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-canvas-soft-2);
+  color: var(--color-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-topbar-file:hover {
+  background: var(--color-hairline);
+  color: var(--color-ink);
 }
 
 /* ===== 消息列表 ===== */
@@ -3526,7 +3802,8 @@ span.agent-menu-icon {
 .rag-item-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   padding: 8px 12px;
   cursor: pointer;
   transition: background 0.15s;
@@ -3541,6 +3818,20 @@ span.agent-menu-icon {
 }
 .rag-item-header .anticon.expanded {
   transform: rotate(90deg);
+}
+.rag-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.rag-title-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .rag-doc-name {
   flex: 1;
@@ -3661,5 +3952,64 @@ span.agent-menu-icon {
 }
 [data-theme="dark"] .reasoning-content {
   background: #27272a;
+}
+
+/* ===== 文件抽屉 ===== */
+.file-drawer-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+}
+
+.file-drawer-loading-icon {
+  font-size: 24px;
+  color: var(--color-mute);
+}
+
+.file-drawer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--color-mute);
+}
+
+.file-drawer-empty-icon {
+  font-size: 48px;
+  color: var(--color-hairline-strong);
+  margin-bottom: 16px;
+}
+
+.file-drawer-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.file-drawer-empty-hint {
+  font-size: 12px !important;
+  color: var(--color-mute) !important;
+  margin-top: 8px !important;
+}
+
+.file-drawer-section {
+  margin-bottom: 24px;
+}
+
+.file-drawer-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-body);
+  margin-bottom: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.file-drawer-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 </style>

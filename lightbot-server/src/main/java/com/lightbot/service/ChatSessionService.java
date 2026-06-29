@@ -122,4 +122,29 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @return 文件内容字符串
      */
     String exportSession(Long userId, Long sessionId, String format);
+
+    /**
+     * 批量追加附件到会话上下文（JSONB 去重）
+     *
+     * @param sessionId   会话ID
+     * @param attachments 附件列表
+     * @param source      来源：user_upload / ai_generated
+     */
+    void appendSessionAttachments(Long sessionId, List<com.lightbot.dto.ChatAttachmentDTO> attachments, String source);
+
+    /**
+     * 获取会话附件列表（持久化附件 + AI 生成文件）
+     *
+     * @param sessionId 会话ID
+     * @return 附件列表
+     */
+    List<com.lightbot.dto.SessionAttachmentVO> getSessionAttachments(Long sessionId);
+
+    /**
+     * 从会话附件列表中移除一个附件
+     *
+     * @param sessionId    会话ID
+     * @param attachmentId 附件ID
+     */
+    void removeSessionAttachment(Long sessionId, String attachmentId);
 }

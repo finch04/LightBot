@@ -140,6 +140,19 @@ public class ChatSessionController {
         return Result.ok(messageService.listStarred(pageNum, pageSize));
     }
 
+    @Operation(summary = "获取会话附件列表（用户上传 + AI 生成文件）")
+    @GetMapping("/{id}/attachments")
+    public Result<List<com.lightbot.dto.SessionAttachmentVO>> getAttachments(@PathVariable Long id) {
+        return Result.ok(chatSessionService.getSessionAttachments(id));
+    }
+
+    @Operation(summary = "移除会话附件")
+    @DeleteMapping("/{id}/attachments/{attachmentId}")
+    public Result<Void> removeAttachment(@PathVariable Long id, @PathVariable String attachmentId) {
+        chatSessionService.removeSessionAttachment(id, attachmentId);
+        return Result.ok();
+    }
+
     @Operation(summary = "导出会话为 Markdown 或 JSON 文件")
     @GetMapping("/{id}/export")
     public ResponseEntity<byte[]> exportSession(
