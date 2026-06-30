@@ -371,7 +371,7 @@ async function onVersionChange(inst, version) {
 }
 
 function getInstModelValue(inst) {
-  if (inst.providerId && inst.modelId) return `${String(inst.providerId)}:${String(inst.modelId)}`
+  if (inst.providerId && inst.modelId) return `${String(inst.providerId)}|${String(inst.modelId)}`
   return undefined
 }
 

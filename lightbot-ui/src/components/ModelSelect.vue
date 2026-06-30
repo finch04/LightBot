@@ -139,7 +139,7 @@ async function loadOptions() {
     for (const p of providers) {
       for (const m of (p.models || [])) {
         opts.push({
-          value: `${String(p.id)}:${String(m.modelId)}`,
+          value: `${String(p.id)}|${String(m.modelId)}`,
           label: `${p.name}:${m.modelId}`,
           providerId: String(p.id),
           modelId: String(m.modelId),
@@ -159,7 +159,7 @@ function handleUpdate(val) {
   checkStatus.value = null
   emit('update:modelValue', val)
   if (val) {
-    const [providerId, modelId] = val.split(':')
+    const [providerId, modelId] = val.split('|')
     emit('change', { providerId, modelId })
   } else {
     emit('change', { providerId: null, modelId: null })
@@ -168,7 +168,7 @@ function handleUpdate(val) {
 
 async function handleCheck() {
   if (!props.modelValue) return
-  const [providerId] = props.modelValue.split(':')
+  const [providerId] = props.modelValue.split('|')
   checking.value = true
   checkStatus.value = null
   try {

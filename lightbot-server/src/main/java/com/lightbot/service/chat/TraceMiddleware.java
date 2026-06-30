@@ -107,7 +107,8 @@ public class TraceMiddleware implements ChatMiddleware {
                     if (ctx.getReasoningContent().length() > 0) {
                         ctx.getSpans().add(LlmTraceSpan.of("reasoning", null, "ai_reasoning",
                                 ctx.getStartTime(), tEnd - ctx.getStartTime(), "OK",
-                                Map.of("content", ctx.getReasoningContent().toString())));
+                                Map.of("content", com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(
+                                        ctx.getReasoningContent().toString()))));
                     }
 
                     // 5. 构建Trace并异步写库
@@ -321,7 +322,8 @@ public class TraceMiddleware implements ChatMiddleware {
             }
             // 追加 reasoningContent
             if (ctx.getReasoningContent().length() > 0) {
-                meta.put("reasoningContent", ctx.getReasoningContent().toString());
+                meta.put("reasoningContent", com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(
+                        ctx.getReasoningContent().toString()));
             }
             // 追加 sensitiveBlock 标记（AI 输出被拦截时）
             if (ctx.getSensitiveStreamState() != null && ctx.getSensitiveStreamState().isBlocked()) {

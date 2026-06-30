@@ -7,6 +7,7 @@ import com.lightbot.constant.ToolResultPrefixes;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.RagReferenceVO;
 import com.lightbot.util.ChatDocumentMessageUtil;
+import com.lightbot.util.InlineThinkingStreamParser;
 import com.lightbot.util.RagParamResolver;
 import com.lightbot.util.SensitiveWordFilter;
 import com.lightbot.util.ToolArgsSanitizer;
@@ -201,16 +202,23 @@ public class ChatServiceImpl implements ChatService {
             if (gen != null && gen.getOutput() != null && gen.getOutput().getMetadata() != null) {
                 Object reasoningObj = gen.getOutput().getMetadata().get("reasoningContent");
                 if (reasoningObj != null && !reasoningObj.toString().isBlank()) {
-                    ctx.getReasoningContent().append(reasoningObj.toString());
+                    ctx.appendReasoningContent(reasoningObj.toString());
                 }
             }
 
             // 无工具调用 → 直接返回结果
             if (assistantMsg == null || !assistantMsg.hasToolCalls()) {
                 String text = (assistantMsg != null) ? assistantMsg.getText() : "";
-                String stripped = stripThinkingTags(text);
+                // 如果 metadata 没有 reasoningContent，尝试解析 inline thinking 标签
+                if (ctx.getReasoningContent().length() == 0 && text != null && !text.isEmpty()) {
+                    InlineThinkingStreamParser.ParseResult parsed = InlineThinkingStreamParser.parseComplete(text);
+                    if (!parsed.reasoningDelta().isEmpty()) {
+                        ctx.appendReasoningContent(parsed.reasoningDelta());
+                    }
+                    text = parsed.contentDelta();
+                }
                 String filtered = SensitiveWordFilter.filterAiOutput(
-                        stripped, ctx.getConfigMap(), agent.getId(), ctx.getSessionId()).text();
+                        text != null ? text : "", ctx.getConfigMap(), agent.getId(), ctx.getSessionId()).text();
                 fullReply.append(filtered);
                 return fullReply.toString();
             }
@@ -361,7 +369,8 @@ public class ChatServiceImpl implements ChatService {
 
             // 3. 添加reasoningContent
             if (ctx.getReasoningContent().length() > 0) {
-                meta.put("reasoningContent", ctx.getReasoningContent().toString());
+                meta.put("reasoningContent", com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(
+                        ctx.getReasoningContent().toString()));
             }
 
             // 4. 添加requestId
@@ -499,7 +508,8 @@ public class ChatServiceImpl implements ChatService {
                 meta.putAll(existing);
             }
             if (ctx.getReasoningContent().length() > 0) {
-                meta.put("reasoningContent", ctx.getReasoningContent().toString());
+                meta.put("reasoningContent", com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(
+                        ctx.getReasoningContent().toString()));
             }
             if (ctx.getSensitiveStreamState() != null && ctx.getSensitiveStreamState().isBlocked()) {
                 meta.put("sensitiveBlock", "ai_output");
@@ -622,35 +632,66 @@ public class ChatServiceImpl implements ChatService {
                         String text = (assistantMsg != null) ? assistantMsg.getText() : "";
                         if (text == null) text = "";
 
-                        // 过滤 thinking/reasoning 内容
+                        // metadata reasoning（MiMo 等）；正文原样透传，inline thinking 由前端解析
                         if (gen != null && gen.getOutput() != null) {
                             var metadata = gen.getOutput().getMetadata();
                             if (metadata != null) {
                                 Object reasoningObj = metadata.get("reasoningContent");
                                 if (reasoningObj != null && !reasoningObj.toString().isBlank()) {
-                                    String reasoning = reasoningObj.toString();
-                                    reasoningContent.append(reasoning);
-                                    return Flux.just(STATUS_PREFIX + toolEventGenerator.reasoningEvent(reasoning));
+                                    String reasoning = ctx.appendReasoningContent(reasoningObj.toString());
+                                    if (!reasoning.isEmpty()) {
+                                        return Flux.just(STATUS_PREFIX + toolEventGenerator.reasoningEvent(reasoning));
+                                    }
+                                    return Flux.empty();
                                 }
                             }
                         }
 
-                        String stripped = stripThinkingTags(text);
-                        if (stripped.isEmpty()) return Flux.empty();
-                        String delta = ctx.getSensitiveStreamState() != null
-                                ? ctx.getSensitiveStreamState().processChunk(stripped)
-                                : SensitiveWordFilter.filterAiOutput(stripped, ctx.getConfigMap(), agent.getId(), ctx.getSessionId()).text();
-                        // AI 输出命中 block 策略：中断正常文本流，发送 sensitive_block 事件
+                        if (text.isEmpty()) {
+                            return Flux.empty();
+                        }
+                        // 解析 inline thinking 标签（Ollama deepseek-r1 等）
+                        InlineThinkingStreamParser.ParseResult parsed = ctx.inlineThinkingParser.feed(text);
+                        String reasoningDelta = parsed.reasoningDelta();
+                        String contentDelta = parsed.contentDelta();
+
+                        // 发送 reasoning 内容（如果有）
+                        if (!reasoningDelta.isEmpty()) {
+                            String reasoning = ctx.appendReasoningContent(reasoningDelta);
+                            if (!reasoning.isEmpty()) {
+                                return Flux.just(
+                                        STATUS_PREFIX + toolEventGenerator.reasoningEvent(reasoning),
+                                        contentDelta);
+                            }
+                        }
+
+                        // Spring AI 流式返回的 text 可能是累积内容，需计算增量避免重复
+                        String delta;
+                        if (ctx.getSensitiveStreamState() != null) {
+                            delta = ctx.getSensitiveStreamState().processChunk(contentDelta);
+                        } else {
+                            // 无敏感词过滤：计算相对于已累积内容的增量
+                            String alreadyEmitted = ctx.getFullReply().toString();
+                            if (contentDelta.startsWith(alreadyEmitted) && contentDelta.length() > alreadyEmitted.length()) {
+                                delta = contentDelta.substring(alreadyEmitted.length());
+                            } else if (!alreadyEmitted.isEmpty() && contentDelta.length() <= alreadyEmitted.length()) {
+                                // contentDelta 未增长或更短（可能是空白 chunk），忽略
+                                delta = "";
+                            } else {
+                                // fallback：按原文处理
+                                delta = contentDelta;
+                            }
+                            delta = SensitiveWordFilter.filterAiOutput(delta, ctx.getConfigMap(), agent.getId(), ctx.getSessionId()).text();
+                        }
                         if (ctx.getSensitiveStreamState() != null && ctx.getSensitiveStreamState().isBlocked()) {
-                            fullReply.setLength(0);
-                            fullReply.append(SensitiveWordFilter.AI_BLOCK_MESSAGE);
+                            ctx.getFullReply().setLength(0);
+                            ctx.getFullReply().append(SensitiveWordFilter.AI_BLOCK_MESSAGE);
                             return Flux.just(STATUS_PREFIX + toolEventGenerator.sensitiveBlockEvent("ai_output", SensitiveWordFilter.AI_BLOCK_MESSAGE));
                         }
                         if (delta.isEmpty()) {
                             return Flux.empty();
                         }
-
-                        fullReply.append(delta);
+                        ctx.getFullReply().append(delta);
                         if (!llmSpanAdded[0]) {
                             spans.add(LlmTraceSpan.of(llmSpanId, "s1", "llm_call", llmCallStart,
                                     System.currentTimeMillis() - llmCallStart, "OK",
@@ -973,12 +1014,17 @@ public class ChatServiceImpl implements ChatService {
             if (text == null) {
                 text = "";
             }
-            String stripped = stripThinkingTags(text);
-            if (stripped.isEmpty()) {
+            // 解析 inline thinking 标签（Ollama deepseek-r1 等）
+            InlineThinkingStreamParser.ParseResult parsed = InlineThinkingStreamParser.parseComplete(text);
+            if (!parsed.reasoningDelta().isEmpty()) {
+                ctx.appendReasoningContent(parsed.reasoningDelta());
+            }
+            String contentToFilter = parsed.contentDelta();
+            if (contentToFilter.isEmpty() && parsed.reasoningDelta().isEmpty()) {
                 return Flux.empty();
             }
             SensitiveWordFilter.FilterResult filtered = SensitiveWordFilter.filterAiOutput(
-                    stripped, configMap, agent.getId(), ctx.getSessionId());
+                    contentToFilter, configMap, agent.getId(), ctx.getSessionId());
             if (filtered.blocked()) {
                 fullReply.setLength(0);
                 fullReply.append(filtered.text());
@@ -988,6 +1034,13 @@ public class ChatServiceImpl implements ChatService {
                                 "inputTokens", inputTokenHolder[0], "outputTokens", outputTokenHolder[0],
                                 "streamOutput", false)));
                 return Flux.just(STATUS_PREFIX + toolEventGenerator.sensitiveBlockEvent("ai_output", filtered.text()));
+            }
+            // 如果有 reasoning 内容，发送 reasoning_content 事件
+            String reasoningSaved = ctx.getReasoningContent().toString();
+            if (!reasoningSaved.isEmpty()) {
+                return Flux.just(
+                        STATUS_PREFIX + toolEventGenerator.reasoningEvent(reasoningSaved),
+                        filtered.text());
             }
             fullReply.append(filtered.text());
             spans.add(LlmTraceSpan.of(llmSpanId, "s1", "llm_call", llmCallStart,
@@ -1370,16 +1423,6 @@ public class ChatServiceImpl implements ChatService {
             return b;
         }
         return Boolean.parseBoolean(val.toString());
-    }
-
-    /**
-     * 仅过滤thinking标签内容
-     */
-    private String stripThinkingTags(String text) {
-        if (text == null || text.isEmpty()) return text;
-        text = text.replaceAll("<think>[\\s\\S]*?</think>", "").trim();
-        text = text.replaceAll("<thinking>[\\s\\S]*?</thinking>", "").trim();
-        return text;
     }
 
     private float[] embedText(String text) {

@@ -110,6 +110,9 @@ public class ChatContext {
     /** 流式敏感词过滤状态（按累积全文过滤，避免分片漏拦） */
     private SensitiveWordFilter.StreamState sensitiveStreamState;
 
+    /** 流式 inline thinking 标签解析（Ollama 等模型） */
+    com.lightbot.util.InlineThinkingStreamParser inlineThinkingParser;
+
     /** 待持久化的工具调用记录（assistant 消息保存后批量写入，关联 messageId） */
     private List<ToolCall> pendingToolCalls;
 
@@ -163,6 +166,31 @@ public class ChatContext {
     }
 
     /**
+     * 追加思考内容（入库前清理 NUL 等 PostgreSQL 非法字符）
+     *
+     * @param chunk 思考片段
+     * @return 实际追加的清理后文本，未追加则返回空串
+     */
+    public String appendReasoningContent(String chunk) {
+        if (chunk == null || chunk.isEmpty()) {
+            return "";
+        }
+        String cleaned = com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(chunk);
+        if (cleaned.isEmpty()) {
+            return "";
+        }
+        // Ollama 等模型在开标签后常带 leading \n，首段去掉避免前端空行
+        if (reasoningContent.isEmpty()) {
+            cleaned = cleaned.stripLeading();
+            if (cleaned.isEmpty()) {
+                return "";
+            }
+        }
+        reasoningContent.append(cleaned);
+        return cleaned;
+    }
+
+    /**
      * 工厂方法：创建上下文并初始化所有累加器
      */
     public static ChatContext of(ChatRequest request) {
@@ -180,6 +208,7 @@ public class ChatContext {
         ctx.pendingToolCalls = new ArrayList<>();
         ctx.activatedSkills = new LinkedHashSet<>();
         ctx.subAgentEventQueue = new ConcurrentLinkedQueue<>();
+        ctx.inlineThinkingParser = new com.lightbot.util.InlineThinkingStreamParser();
         return ctx;
     }
 }

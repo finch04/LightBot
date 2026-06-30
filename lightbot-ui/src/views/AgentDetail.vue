@@ -2375,11 +2375,11 @@ const avatarUrl = computed(() => {
   return agent.avatar
 })
 
-/** ModelSelect 复合值 */
+/** ModelSelect 复合值（使用 | 分隔避免与 Ollama 模型 ID 中的 : 冲突） */
 const modelSelectValue = computed(() => {
   const pid = agentConfig.providerId
   const mid = agentConfig.modelId
-  if (pid && mid) return `${String(pid)}:${String(mid)}`
+  if (pid && mid) return `${String(pid)}|${String(mid)}`
   return null
 })
 

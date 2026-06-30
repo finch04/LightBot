@@ -357,9 +357,9 @@ function openEditDialog(record) {
     enabled: record.enabled === 1
   })
   if (record.modelId && record.llmModel) {
-    modelSelectValue.value = `${String(record.modelId)}:${String(record.llmModel)}`
+    modelSelectValue.value = `${String(record.modelId)}|${String(record.llmModel)}`
   } else if (record.modelId) {
-    modelSelectValue.value = `${String(record.modelId)}:`
+    modelSelectValue.value = `${String(record.modelId)}|`
   }
   dialogVisible.value = true
 }

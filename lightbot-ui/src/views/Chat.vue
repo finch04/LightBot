@@ -183,7 +183,7 @@
                   <template v-for="(segment, si) in splitContentByOffsets(messages[virtualRow.index])" :key="si">
                     <div v-if="segment.type === 'text'" class="message-content">
                       <MentionTextRenderer
-                        v-if="messages[virtualRow.index].role === 'user' && getMsgMentions(messages[virtualRow.index]).length"
+                        v-if="shouldRenderMentions(messages[virtualRow.index], segment.text)"
                         :content="segment.text"
                         :mentions="getMsgMentions(messages[virtualRow.index])"
                         :finalized="isSegmentFinalized(messages[virtualRow.index], segment, si)"
@@ -213,7 +213,7 @@
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock">
                   <div v-if="messages[virtualRow.index].content && messages[virtualRow.index].content !== '[附件]'" class="message-content">
                     <MentionTextRenderer
-                      v-if="getMsgMentions(messages[virtualRow.index]).length || contentHasMentionTokens(messages[virtualRow.index].content)"
+                      v-if="shouldRenderMentions(messages[virtualRow.index], messages[virtualRow.index].content)"
                       :content="messages[virtualRow.index].content"
                       :mentions="getMsgMentions(messages[virtualRow.index])"
                       :finalized="!messages[virtualRow.index]._streaming"
@@ -797,6 +797,7 @@ import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
 import { useAskUser } from '../composables/useAskUser'
 import { useStreamSmoother } from '../composables/useStreamSmoother'
+import { parseInlineThinkingComplete, hasInlineThinkingTags } from '../utils/inlineThinking'
 
 const route = useRoute()
 const router = useRouter()
@@ -1302,6 +1303,13 @@ function contentHasMentionTokens(content) {
   return /@(knowledge|subagent|skill|tool):\d+/.test(content || '')
 }
 
+/** 用户消息是否应渲染 mention 高亮 */
+function shouldRenderMentions(msg, content) {
+  if (!msg || msg.role !== 'user') return false
+  const text = content ?? msg.content ?? ''
+  return getMsgMentions(msg).length > 0 || contentHasMentionTokens(text)
+}
+
 function getMsgAttachments(msg) {
   return msg._attachments || []
 }
@@ -1365,10 +1373,26 @@ function parseMessage(m) {
     if (metadata.toolBlockOffsets) {
       toolBlockOffsets = metadata.toolBlockOffsets.map(o => Number(o))
     }
-    if (metadata.reasoningContent) reasoningContent = metadata.reasoningContent
+    if (metadata.reasoningContent) reasoningContent = metadata.reasoningContent.replace(/^\s+/, '')
     if (metadata.sensitiveBlock) sensitiveBlock = metadata.sensitiveBlock
     if (metadata.requestId) requestId = metadata.requestId
     attachments = parseAttachmentsFromMetadata(metadata)
+  }
+
+  // Ollama 等：正文含 <think> 时由前端解析深度思考（兼容旧 metadata 与纯正文两种落库）
+  // Ollama 等：正文含 thinking 时由前端解析深度思考（兼容旧 metadata 与纯正文两种落库）
+  // 注：后端已将 thinking 标签内容提取到 metadata.reasoningContent，此处作为 fallback
+  let displayContent = m.content || ''
+  if (hasInlineThinkingTags(displayContent)) {
+    const parsed = parseInlineThinkingComplete(displayContent)
+    if (parsed.reasoningDelta) {
+      // 智能选择：如果已有 metadata.reasoningContent，取更长的那个
+      const parsedReasoning = parsed.reasoningDelta.replace(/^\s+/, '')
+      if (!reasoningContent || parsedReasoning.length > reasoningContent.length) {
+        reasoningContent = parsedReasoning
+      }
+    }
+    displayContent = parsed.contentDelta
   }
 
   // 规范化 toolEvents 中的 contentOffset 为数字类型
@@ -1384,7 +1408,7 @@ function parseMessage(m) {
 
   return {
     role,
-    content: m.content,
+    content: displayContent,
     metadata: metadata ?? m.metadata,
     _id: m.id,
     _parentId: m.parentId || null,
@@ -1511,6 +1535,10 @@ async function loadHistory() {
     if (reqId === loadHistoryRequestId) {
       loadingHistory.value = false
       switchingSession.value = false
+      // 强制虚拟列表重新计算，确保索引与实际消息数组同步
+      nextTick(() => {
+        virtualizer.value.measure()
+      })
     }
   }
 }
@@ -1640,7 +1668,12 @@ function isLastUserMessage(index) {
 
 function startEdit(index) {
   const msg = messages.value[index]
-  if (!msg || loading.value) return
+  if (!msg) return
+  if (loading.value) {
+    console.warn('[startEdit] 无法编辑：对话正在加载中')
+    return
+  }
+  // 确保使用最新的消息 ID（流式完成后 loadHistory 会替换为后端真实 ID）
   editingMessageId.value = msg._id || `local-${index}`
   editContent.value = msg.content || ''
   nextTick(() => {
@@ -1723,8 +1756,24 @@ async function submitEdit() {
   const newText = editContent.value.trim()
   if (!newText || loading.value) return
 
-  const editIdx = messages.value.findIndex(m => m._id === editingMessageId.value)
-  if (editIdx < 0) return
+  // 尝试通过 ID 查找消息，如果找不到则尝试通过 local- 前缀解析索引
+  let editIdx = messages.value.findIndex(m => m._id === editingMessageId.value)
+  if (editIdx < 0 && editingMessageId.value?.startsWith('local-')) {
+    const idxFromLocal = parseInt(editingMessageId.value.replace('local-', ''))
+    if (!isNaN(idxFromLocal) && idxFromLocal < messages.value.length) {
+      // 验证该索引位置是用户消息
+      const msgAtIdx = messages.value[idxFromLocal]
+      if (msgAtIdx?.role === 'user') {
+        editIdx = idxFromLocal
+      }
+    }
+  }
+  if (editIdx < 0) {
+    console.error('[submitEdit] 找不到要编辑的消息:', editingMessageId.value)
+    editingMessageId.value = null
+    editContent.value = ''
+    return
+  }
 
   const msg = messages.value[editIdx]
   msg.content = newText
@@ -1901,6 +1950,7 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             return
           }
           if (event.type === 'reasoning_content') {
+            ensureAssistantMessage()
             clearErrorRetry(assistantMsg)
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
             assistantMsg._reasoningDone = true
@@ -1952,7 +2002,7 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             scrollToBottom()
             return
           }
-          // 工作流 LLM 流式输出：经 streamSmoother 平滑后写入消息
+          // 工作流 LLM 流式输出
           if (event.type === 'workflow_llm_chunk') {
             if (!pushed) {
               messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
@@ -2058,6 +2108,7 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             assistantMsg._streaming = false
             assistantMsg._toolsDone = true
             assistantMsg._toolExpanded = false
+            assistantMsg._reasoningDone = true
             // 后端 [DONE] 事件携带消息ID，直接赋值（无需刷新）
             if (meta?.assistantMessageId) {
               assistantMsg._id = meta.assistantMessageId
@@ -2072,6 +2123,9 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
               const { assistantMessageId, userMessageId, totalTokens, ...restMeta } = meta
               if (Object.keys(restMeta).length > 0) {
                 assistantMsg.metadata = { ...(assistantMsg.metadata || {}), ...restMeta }
+              }
+              if (restMeta.reasoningContent && !assistantMsg._reasoningContent) {
+                assistantMsg._reasoningContent = String(restMeta.reasoningContent).replace(/^\s+/, '')
               }
             }
           }
@@ -4084,6 +4138,37 @@ span.agent-menu-icon {
 [data-theme="dark"] .message.user .message-content {
   background: #27272a;
 }
+
+[data-theme="dark"] .message.user .message-content .mention-chip-knowledge {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.28);
+}
+
+[data-theme="dark"] .message.user .message-content .mention-chip-subagent {
+  background: rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, 0.28);
+}
+
+[data-theme="dark"] .message.user .message-content .mention-chip-skill {
+  background: rgba(168, 85, 247, 0.28);
+  color: #d8b4fe;
+  box-shadow: inset 0 0 0 1px rgba(216, 180, 254, 0.28);
+}
+
+[data-theme="dark"] .message.user .message-content .mention-chip-tool {
+  background: rgba(59, 130, 246, 0.28);
+  color: #93c5fd;
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.28);
+}
+
+[data-theme="dark"] .message.user .message-content .mention-chip-invalid {
+  background: rgba(239, 68, 68, 0.24);
+  color: #fca5a5;
+  box-shadow: inset 0 0 0 1px rgba(252, 165, 165, 0.28);
+}
+
 [data-theme="dark"] .edit-message-box {
   background: #27272a;
 }
@@ -4105,6 +4190,10 @@ span.agent-menu-icon {
 }
 [data-theme="dark"] .reasoning-content {
   background: #27272a;
+}
+
+[data-theme="dark"] .chat-input-shell:focus-within {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 /* ===== 文件抽屉 ===== */
