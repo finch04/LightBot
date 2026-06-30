@@ -69,14 +69,8 @@ public class MessageMiddleware implements ChatMiddleware {
     private final MinioUtil minioUtil;
     private final ObjectMapper objectMapper;
 
-    /** 平台统一回复约束（追加到所有 Agent 系统提示词后） */
+    /** 平台统一回复约束（不含工具相关，工具能力由 Provider 决定后按需追加） */
     private static final String PLATFORM_REPLY_CONSTRAINTS = """
-
-            ## 知识库检索后如何回答（重要）
-            - 调用 query_knowledge 等检索工具后，**用自己的话概括、总结**检索结果，禁止大段照搬原文
-            - 只提炼与**当前用户问题**直接相关的要点；可简要说明来源，无需粘贴全文
-            - 检索内容较多时：先给 1–2 句结论，再用 3–5 条短列表列要点
-            - 可在文末补充：「如需了解【某主题】的更多细节，可以继续问我」
 
             ## 篇幅与表达
             - 简单、明确的问题：1–3 句话直接回答，避免客套空话和重复铺垫
@@ -95,6 +89,16 @@ public class MessageMiddleware implements ChatMiddleware {
             - **只回答当前用户最后一条消息中的问题**；历史消息仅作背景，勿复述无关旧话题
             """;
 
+    /** 模型支持 API 工具调用时追加：知识库检索回答规范 */
+    private static final String PLATFORM_TOOL_KNOWLEDGE_HINT = """
+
+            ## 知识库检索后如何回答（重要）
+            - 调用 query_knowledge 等检索工具后，**用自己的话概括、总结**检索结果，禁止大段照搬原文
+            - 只提炼与**当前用户问题**直接相关的要点；可简要说明来源，无需粘贴全文
+            - 检索内容较多时：先给 1–2 句结论，再用 3–5 条短列表列要点
+            - 可在文末补充：「如需了解【某主题】的更多细节，可以继续问我」
+            """;
+
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是 LightBot 智能助手。请根据用户的提问，利用可用的工具来提供准确、清晰的回答。
 
@@ -106,6 +110,22 @@ public class MessageMiddleware implements ChatMiddleware {
             ## 回答规范
             - 使用中文回答
             - 优先简洁、准确、可读
+
+            ## 输出格式
+            - 使用 Markdown 格式输出
+            - 多个要点时使用列表（- 或 1.）
+            - 数据对比使用表格，**表头下方必须有 `| --- |` 分隔行**
+            - 重点内容使用 **加粗** 标记
+            - 表格每行以 `|` 开头和结尾，加粗/斜体标记必须成对闭合
+            """;
+
+    private static final String DEFAULT_SYSTEM_PROMPT_NO_TOOLS = """
+            你是 LightBot 智能助手。请根据用户的提问提供准确、清晰的回答。
+
+            ## 回答规范
+            - 使用中文回答
+            - 优先简洁、准确、可读
+            - 遇到不确定的信息请如实告知
 
             ## 输出格式
             - 使用 Markdown 格式输出
@@ -347,13 +367,19 @@ public class MessageMiddleware implements ChatMiddleware {
             maxContextMessages = v instanceof Number ? ((Number) v).intValue() : Integer.parseInt(v.toString());
         }
 
-        // 2. 系统提示词：优先使用Agent的systemPrompt（放在最前面确保最高优先级）
-        String systemPrompt = (agent != null && agent.getSystemPrompt() != null && !agent.getSystemPrompt().isBlank())
-                ? "# 核心指令（最高优先级，以下所有规则不得覆盖此处内容）\n\n" + agent.getSystemPrompt()
-                : DEFAULT_SYSTEM_PROMPT;
+        Long providerId = ctx != null ? ctx.getProviderId() : providerResolver.resolveFromConfig(agentConfigMap);
+        boolean apiToolsEnabled = modelFactory.supportsApiToolCalling(providerId, agentConfigMap);
 
-        // 3. 如果Agent绑定了工具或Skill，追加工具使用引导到系统提示词
-        if (agent != null) {
+        // 2. 系统提示词：优先使用Agent的systemPrompt（放在最前面确保最高优先级）
+        String systemPrompt;
+        if (agent != null && agent.getSystemPrompt() != null && !agent.getSystemPrompt().isBlank()) {
+            systemPrompt = "# 核心指令（最高优先级，以下所有规则不得覆盖此处内容）\n\n" + agent.getSystemPrompt();
+        } else {
+            systemPrompt = apiToolsEnabled ? DEFAULT_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT_NO_TOOLS;
+        }
+
+        // 3. 若当前模型支持 API 工具调用，追加工具使用引导
+        if (agent != null && apiToolsEnabled) {
             // 3.1 工具引导：合并 Agent 自身绑定的工具 + Skill 引入的额外工具
             // 优先使用版本快照中的绑定 ID，避免暂存/发布混淆
             List<Long> baseToolIds = ctx != null && ctx.getVersionToolIds() != null
@@ -385,6 +411,9 @@ public class MessageMiddleware implements ChatMiddleware {
                 ? request.getBizParams() : Map.of();
         Map<String, Object> varValues = PromptTemplateUtil.mergeVariableValues(promptVarDefs, bizParams);
         systemPrompt = PromptTemplateUtil.render(systemPrompt, varValues);
+        if (apiToolsEnabled) {
+            systemPrompt = systemPrompt + PLATFORM_TOOL_KNOWLEDGE_HINT;
+        }
         systemPrompt = systemPrompt + PLATFORM_REPLY_CONSTRAINTS;
 
         messages.add(new org.springframework.ai.chat.messages.SystemMessage(systemPrompt));

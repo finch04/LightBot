@@ -10,6 +10,21 @@
       @select="onPickerSelect"
       @hover="onPickerHover"
     />
+    <a-tooltip
+      v-model:open="chipTooltip.open"
+      placement="top"
+      :mouse-enter-delay="0.2"
+      destroy-tooltip-on-hide
+    >
+      <template #title>
+        <div class="mention-tooltip-title">{{ chipTooltip.title }}</div>
+        <div v-if="chipTooltip.sub" class="mention-tooltip-sub">{{ chipTooltip.sub }}</div>
+      </template>
+      <span
+        class="mention-input-tooltip-anchor"
+        :style="chipTooltip.anchorStyle"
+      />
+    </a-tooltip>
     <div
       ref="editorRef"
       class="mention-editor"
@@ -23,6 +38,8 @@
       @compositionend="onCompositionEnd"
       @blur="onBlur"
       @click="onEditorClick"
+      @mouseover="onEditorMouseover"
+      @mouseout="onEditorMouseout"
     />
   </div>
 </template>
@@ -31,6 +48,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import ChatMentionPicker from './ChatMentionPicker.vue'
 import { useChatMentions } from '../composables/useChatMentions'
+import { getMentionChipClass, getMentionTooltip } from '../utils/mentionDisplay'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -72,6 +90,14 @@ defineExpose({
 const text = ref('')
 const lastEmittedText = ref('')
 let composing = false
+let chipTooltipTimer = null
+
+const chipTooltip = ref({
+  open: false,
+  title: '',
+  sub: '',
+  anchorStyle: { position: 'fixed', left: '0px', top: '0px', width: '0px', height: '0px', pointerEvents: 'none' },
+})
 
 onMounted(() => {
   if (props.modelValue) {
@@ -83,6 +109,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocMousedown, true)
+  hideChipTooltip(true)
 })
 
 watch(() => props.modelValue, (val) => {
@@ -101,11 +128,14 @@ function escapeAttr(s) {
 }
 
 function tokenToChipHtml(m) {
+  const valid = m.valid !== false
   const name = escapeHtml(m.name || m.token)
   const token = escapeAttr(m.token)
   const type = escapeAttr(m.type || '')
   const id = escapeAttr(String(m.resourceId ?? ''))
-  return `<span class="mention-chip" contenteditable="false" data-mention-token="${token}" data-mention-type="${type}" data-mention-id="${id}" data-mention-name="${name}">@${name}</span>`
+  const chipClass = escapeAttr(getMentionChipClass(m.type, valid))
+  const displayName = valid ? name : `${name}（已失效）`
+  return `<span class="mention-chip ${chipClass}" contenteditable="false" data-mention-token="${token}" data-mention-type="${type}" data-mention-id="${id}" data-mention-name="${name}">@${displayName}</span>`
 }
 
 /**
@@ -131,7 +161,8 @@ function renderFromText(rawText) {
     const token = m[0]
     const opt = findOptionByToken(token)
     const name = opt?.name || token
-    html += tokenToChipHtml({ type, resourceId, name, token })
+    const valid = !!opt
+    html += tokenToChipHtml({ type, resourceId, name, token, valid })
     mentions.value.push({ type, resourceId, name, token })
     lastIdx = m.index + m[0].length
   }
@@ -259,6 +290,7 @@ function onCompositionEnd() {
 }
 
 function onBlur() {
+  hideChipTooltip(true)
   setTimeout(() => {
     if (!editorEl()?.matches(':focus-within')) closePicker()
   }, 150)
@@ -289,14 +321,61 @@ function detectMentionAtCursor() {
     picker.value.open = true
     picker.value.query = detected.query
     picker.value.activeIndex = 0
-    picker.value.caretRect = getCaretRect(sel)
+    picker.value.range = { atOffset: detected.atOffset, query: detected.query }
+    picker.value.caretRect = getMentionAnchorRect(detected.atOffset)
     document.addEventListener('mousedown', onDocMousedown, true)
   } else if (picker.value.open) {
     closePicker()
   }
 }
 
-/** 获取光标视觉坐标（@ 符号位置），用于浮层 fixed 定位 */
+/** 获取 @ 符号在视口中的位置（弹窗锚点） */
+function getMentionAnchorRect(atOffset) {
+  const el = editorEl()
+  if (!el || atOffset == null || atOffset < 0) {
+    return getCaretRect(window.getSelection())
+  }
+
+  let consumed = 0
+  let anchorNode = null
+  let anchorOffset = 0
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_ALL, null)
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent.length
+      if (consumed + len > atOffset) {
+        anchorNode = node
+        anchorOffset = atOffset - consumed
+        break
+      }
+      consumed += len
+    } else if (node.nodeType === Node.ELEMENT_NODE && node.classList?.contains('mention-chip')) {
+      const token = node.dataset.mentionToken || ''
+      if (consumed + token.length > atOffset) {
+        break
+      }
+      consumed += token.length
+    }
+  }
+
+  if (!anchorNode) {
+    return getCaretRect(window.getSelection())
+  }
+
+  const range = document.createRange()
+  range.setStart(anchorNode, anchorOffset)
+  range.setEnd(anchorNode, Math.min(anchorOffset + 1, anchorNode.textContent.length))
+  let rect = range.getBoundingClientRect()
+  if (rect.width === 0 && rect.height === 0) {
+    const rects = range.getClientRects()
+    if (rects.length > 0) rect = rects[0]
+  }
+  return { left: rect.left, top: rect.top, bottom: rect.bottom }
+}
+
+/** 获取光标视觉坐标 */
 function getCaretRect(sel) {
   const r = sel.getRangeAt(0).cloneRange()
   let rect = r.getBoundingClientRect()
@@ -410,7 +489,7 @@ function onPickerSelect(item) {
 
 function createChipElement(m) {
   const chip = document.createElement('span')
-  chip.className = 'mention-chip'
+  chip.className = `mention-chip ${getMentionChipClass(m.type, true)}`
   chip.contentEditable = 'false'
   chip.dataset.mentionToken = m.token
   chip.dataset.mentionType = m.type
@@ -418,6 +497,54 @@ function createChipElement(m) {
   chip.dataset.mentionName = m.name || m.token
   chip.textContent = '@' + (m.name || m.token)
   return chip
+}
+
+function onEditorMouseover(e) {
+  const chip = e.target?.closest?.('.mention-chip')
+  if (!chip || !editorEl()?.contains(chip)) return
+  if (chipTooltipTimer) {
+    clearTimeout(chipTooltipTimer)
+    chipTooltipTimer = null
+  }
+  const type = chip.dataset.mentionType || ''
+  const name = chip.dataset.mentionName || chip.dataset.mentionToken || ''
+  const token = chip.dataset.mentionToken || ''
+  const valid = !chip.classList.contains('mention-chip-invalid')
+  const tooltip = getMentionTooltip(type, name, token, valid)
+  const rect = chip.getBoundingClientRect()
+  chipTooltip.value = {
+    open: true,
+    title: tooltip.title,
+    sub: tooltip.sub,
+    anchorStyle: {
+      position: 'fixed',
+      left: `${rect.left}px`,
+      top: `${rect.top}px`,
+      width: `${Math.max(rect.width, 1)}px`,
+      height: `${Math.max(rect.height, 1)}px`,
+      pointerEvents: 'none',
+    },
+  }
+}
+
+function onEditorMouseout(e) {
+  const chip = e.target?.closest?.('.mention-chip')
+  const related = e.relatedTarget
+  if (chip && related && chip.contains(related)) return
+  if (related?.closest?.('.ant-tooltip')) return
+  hideChipTooltip()
+}
+
+function hideChipTooltip(immediate = false) {
+  if (chipTooltipTimer) clearTimeout(chipTooltipTimer)
+  if (immediate) {
+    chipTooltip.value.open = false
+    return
+  }
+  chipTooltipTimer = setTimeout(() => {
+    chipTooltip.value.open = false
+    chipTooltipTimer = null
+  }, 80)
 }
 
 function onPickerHover(idx) {
@@ -472,17 +599,18 @@ function resetEditor(newText) {
   padding: 6px 10px;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-color, #111);
+  color: var(--color-ink);
   background: transparent;
   border: none;
   outline: none;
   resize: none;
   word-break: break-word;
   white-space: pre-wrap;
+  caret-color: var(--color-ink);
 
   &:empty::before {
     content: attr(data-placeholder);
-    color: var(--text-color-secondary, #9ca3af);
+    color: var(--color-mute);
     pointer-events: none;
   }
 
@@ -496,14 +624,71 @@ function resetEditor(newText) {
   align-items: center;
   padding: 1px 6px;
   margin: 0 2px;
-  background: var(--primary-color-bg, rgba(59, 130, 246, 0.12));
-  color: var(--primary-color, #3b82f6);
   border-radius: 4px;
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.4;
   user-select: none;
   cursor: default;
   vertical-align: baseline;
   white-space: nowrap;
+  background: rgba(59, 130, 246, 0.14);
+  color: #2563eb;
+}
+
+:deep(.mention-chip-knowledge) {
+  background: rgba(16, 185, 129, 0.16);
+  color: #059669;
+}
+
+:deep(.mention-chip-subagent) {
+  background: rgba(245, 158, 11, 0.16);
+  color: #d97706;
+}
+
+:deep(.mention-chip-skill) {
+  background: rgba(168, 85, 247, 0.16);
+  color: #9333ea;
+}
+
+:deep(.mention-chip-tool) {
+  background: rgba(59, 130, 246, 0.16);
+  color: #2563eb;
+}
+
+.mention-input-tooltip-anchor {
+  position: fixed;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mention-tooltip-title {
+  font-weight: 500;
+}
+
+.mention-tooltip-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+:global([data-theme="dark"]) .mention-editor :deep(.mention-chip-knowledge) {
+  background: rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
+}
+
+:global([data-theme="dark"]) .mention-editor :deep(.mention-chip-subagent) {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+}
+
+:global([data-theme="dark"]) .mention-editor :deep(.mention-chip-skill) {
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
+}
+
+:global([data-theme="dark"]) .mention-editor :deep(.mention-chip-tool) {
+  background: rgba(59, 130, 246, 0.22);
+  color: #93c5fd;
 }
 </style>

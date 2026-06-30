@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 public class OllamaModelHandler implements ModelProviderHandler {
 
     private final ObjectMapper objectMapper;
+    private final OllamaCapabilityUtil ollamaCapabilityUtil;
 
     /** Ollama 默认本地服务地址 */
     private static final String DEFAULT_BASE_URL = "http://localhost:11434";
@@ -177,6 +179,59 @@ public class OllamaModelHandler implements ModelProviderHandler {
     public List<ConfigField> getModelCapabilities() {
         // Ollama 通过 OpenAI 兼容接口支持视觉模型（如 llama3.2-vision 等）
         return AgentCapabilityConfigFields.openAiFields();
+    }
+
+    /**
+     * 按 Ollama /api/show capabilities 判断当前模型是否支持 tools（非全 Provider 一刀切）。
+     */
+    @Override
+    public boolean supportsApiToolCalling(ModelProvider provider, Map<String, Object> config) {
+        String modelId = resolveModelIdFromConfig(config);
+        return ollamaCapabilityUtil.supportsTools(provider, modelId);
+    }
+
+    /**
+     * 不支持 tools 的模型剔除 API tools 参数，避免 400。
+     */
+    @Override
+    public ToolCallingChatOptions adaptToolCallingOptions(ModelProvider provider,
+                                                          Map<String, Object> config,
+                                                          ToolCallingChatOptions options) {
+        if (options == null || supportsApiToolCalling(provider, config)) {
+            return options;
+        }
+        var callbacks = options.getToolCallbacks();
+        if (callbacks == null || callbacks.isEmpty()) {
+            return options;
+        }
+        log.warn("[OllamaHandler] 模型 {} 不支持 tools（capabilities 无 tools），已剔除 {} 个工具的 API 注册",
+                resolveModelIdFromConfig(config), callbacks.size());
+        ToolCallingChatOptions.Builder builder = ToolCallingChatOptions.builder();
+        if (options.getModel() != null) {
+            builder.model(options.getModel());
+        }
+        if (options.getTemperature() != null) {
+            builder.temperature(options.getTemperature());
+        }
+        if (options.getTopP() != null) {
+            builder.topP(options.getTopP());
+        }
+        if (options.getMaxTokens() != null) {
+            builder.maxTokens(options.getMaxTokens());
+        }
+        ToolCallingChatOptions adapted = builder.build();
+        adapted.setInternalToolExecutionEnabled(options.getInternalToolExecutionEnabled());
+        return adapted;
+    }
+
+    private String resolveModelIdFromConfig(Map<String, Object> config) {
+        if (config != null && config.containsKey(ConfigKeys.Agent.MODEL_ID)) {
+            Object modelId = config.get(ConfigKeys.Agent.MODEL_ID);
+            if (modelId != null && !modelId.toString().isBlank()) {
+                return modelId.toString();
+            }
+        }
+        return getCheapestModel();
     }
 
     /**

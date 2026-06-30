@@ -174,6 +174,7 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
         }
         try {
             trace.setReplyContent(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getReplyContent()));
+            trace.setDisplayContent(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getDisplayContent()));
             trace.setErrorMessage(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getErrorMessage()));
             trace.setSpans(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getSpans()));
             save(trace);

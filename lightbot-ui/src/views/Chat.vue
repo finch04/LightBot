@@ -797,7 +797,6 @@ import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
 import { useAskUser } from '../composables/useAskUser'
 import { useStreamSmoother } from '../composables/useStreamSmoother'
-import { parseInlineThinkingComplete, hasInlineThinkingTags } from '../utils/inlineThinking'
 
 const route = useRoute()
 const router = useRouter()
@@ -1379,22 +1378,6 @@ function parseMessage(m) {
     attachments = parseAttachmentsFromMetadata(metadata)
   }
 
-  // Ollama 等：正文含 <think> 时由前端解析深度思考（兼容旧 metadata 与纯正文两种落库）
-  // Ollama 等：正文含 thinking 时由前端解析深度思考（兼容旧 metadata 与纯正文两种落库）
-  // 注：后端已将 thinking 标签内容提取到 metadata.reasoningContent，此处作为 fallback
-  let displayContent = m.content || ''
-  if (hasInlineThinkingTags(displayContent)) {
-    const parsed = parseInlineThinkingComplete(displayContent)
-    if (parsed.reasoningDelta) {
-      // 智能选择：如果已有 metadata.reasoningContent，取更长的那个
-      const parsedReasoning = parsed.reasoningDelta.replace(/^\s+/, '')
-      if (!reasoningContent || parsedReasoning.length > reasoningContent.length) {
-        reasoningContent = parsedReasoning
-      }
-    }
-    displayContent = parsed.contentDelta
-  }
-
   // 规范化 toolEvents 中的 contentOffset 为数字类型
   if (toolEvents.length > 0) {
     toolEvents = toolEvents.map(e => ({
@@ -1408,7 +1391,7 @@ function parseMessage(m) {
 
   return {
     role,
-    content: displayContent,
+    content: m.content,
     metadata: metadata ?? m.metadata,
     _id: m.id,
     _parentId: m.parentId || null,
@@ -1914,8 +1897,9 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             attachRequestId(assistantMsg)
           }
         },
-        // onChunk: 文本内容（经 streamSmoother 平滑后写入消息）
+        // onChunk: 正文 chunk（深度思考由后端 reasoning_content 事件推送）
         onChunk: (chunk) => {
+          if (reconnecting.value) reconnecting.value = false
           if (!pushed) {
             messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
             assistantMsg = messages.value[messages.value.length - 1]
@@ -1925,7 +1909,6 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             hasStreamContent.value = true
             streamSmoother.start()
           }
-          if (reconnecting.value) reconnecting.value = false
           streamSmoother.push(chunk)
         },
         // onStatus: 状态消息
@@ -1950,10 +1933,18 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             return
           }
           if (event.type === 'reasoning_content') {
-            ensureAssistantMessage()
+            if (!pushed) {
+              messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
+              assistantMsg = messages.value[messages.value.length - 1]
+              currentStreamingMsg = assistantMsg
+              attachRequestId(assistantMsg)
+              pushed = true
+              hasStreamContent.value = true
+              streamSmoother.start()
+            }
             clearErrorRetry(assistantMsg)
             assistantMsg._reasoningContent = (assistantMsg._reasoningContent || '') + event.content
-            assistantMsg._reasoningDone = true
+            assistantMsg._reasoningDone = false
             scrollToBottom()
             scrollReasoningToBottom()
             return
@@ -2004,6 +1995,7 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
           }
           // 工作流 LLM 流式输出
           if (event.type === 'workflow_llm_chunk') {
+            clearErrorRetry(assistantMsg)
             if (!pushed) {
               messages.value.push({ role: 'assistant', content: '', _streaming: true, _toolsDone: false, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: false })
               assistantMsg = messages.value[messages.value.length - 1]
@@ -2013,7 +2005,6 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
               hasStreamContent.value = true
               streamSmoother.start()
             }
-            clearErrorRetry(assistantMsg)
             streamSmoother.push(event.content || '')
             return
           }
@@ -2097,18 +2088,17 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
         onDone: (meta) => {
           // 用户主动停止时由 AbortError catch 收尾，避免与中断逻辑竞态
           if (userStoppedStream.value) return
-          // 10.1 停止平滑缓冲，flush 剩余内容
           streamSmoother.stop()
           currentStreamingMsg = null
           reconnecting.value = false
           if (assistantMsg) {
+            assistantMsg._reasoningDone = true
             if (!assistantMsg._toolBlockOffsets?.length) {
               assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
             }
             assistantMsg._streaming = false
             assistantMsg._toolsDone = true
             assistantMsg._toolExpanded = false
-            assistantMsg._reasoningDone = true
             // 后端 [DONE] 事件携带消息ID，直接赋值（无需刷新）
             if (meta?.assistantMessageId) {
               assistantMsg._id = meta.assistantMessageId

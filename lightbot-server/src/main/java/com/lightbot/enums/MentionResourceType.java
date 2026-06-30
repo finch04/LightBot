@@ -17,7 +17,7 @@ import lombok.Getter;
 public enum MentionResourceType implements EnumDisplay {
 
     KNOWLEDGE("knowledge", "知识库"),
-    SUBAGENT("subagent", "子智能体"),
+    SUBAGENT("subagent", "SubAgents"),
     SKILL("skill", "Skill"),
     TOOL("tool", "工具"),
     MCP("mcp", "MCP");

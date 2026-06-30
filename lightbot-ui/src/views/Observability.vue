@@ -359,10 +359,16 @@
           </a-button>
         </div>
 
-        <!-- AI完整回复 -->
+        <!-- AI完整回复（模型原始输出，含深度思考） -->
         <div v-if="detailTrace.replyContent" class="reply-section">
-          <h4>AI回复内容</h4>
+          <h4>AI完整回复</h4>
           <div class="reply-content-box">{{ detailTrace.replyContent }}</div>
+        </div>
+
+        <!-- 用户对话页可见正文 -->
+        <div v-if="detailTrace.displayContent" class="reply-section">
+          <h4>最终展示内容</h4>
+          <div class="reply-content-box display-content-box">{{ detailTrace.displayContent }}</div>
         </div>
 
         <!-- 瀑布图 -->

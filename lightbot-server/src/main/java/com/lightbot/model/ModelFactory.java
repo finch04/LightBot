@@ -18,6 +18,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -180,6 +181,34 @@ public class ModelFactory {
             effectiveConfig.put("modelId", resolveModelId(provider, handler));
         }
         return handler.buildChatOptions(provider, effectiveConfig);
+    }
+
+    /**
+     * 按提供商能力调整 ToolCallingChatOptions（委托各 Handler 处理 API 约束）
+     *
+     * @param provider 模型提供商
+     * @param config   Agent 配置
+     * @param options  已组装的工具调用选项
+     * @return 可安全发往模型 API 的选项
+     */
+    public ToolCallingChatOptions adaptToolCallingOptions(ModelProvider provider,
+                                                          Map<String, Object> config,
+                                                          ToolCallingChatOptions options) {
+        if (provider == null || options == null) {
+            return options;
+        }
+        return getHandler(provider.getType()).adaptToolCallingOptions(provider, config, options);
+    }
+
+    /**
+     * 当前 Provider + 模型是否支持 API 工具调用
+     */
+    public boolean supportsApiToolCalling(Long providerId, Map<String, Object> config) {
+        if (providerId == null || providerId <= 0) {
+            return true;
+        }
+        ModelProvider provider = resolveProvider(providerId);
+        return getHandler(provider.getType()).supportsApiToolCalling(provider, config);
     }
 
     /**

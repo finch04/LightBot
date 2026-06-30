@@ -4,6 +4,7 @@ import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
 import java.util.List;
 import java.util.Map;
@@ -84,4 +85,27 @@ public interface ModelProviderHandler {
      * @return 模型ID
      */
     String getCheapestModel();
+
+    /**
+     * 当前 Provider + 模型是否支持向 API 传递 tools 并执行标准 tool_calls。
+     * <p>默认 true；Ollama 等按模型 capabilities 判断。</p>
+     */
+    default boolean supportsApiToolCalling(ModelProvider provider, Map<String, Object> config) {
+        return true;
+    }
+
+    /**
+     * 按提供商/模型能力调整 ToolCallingChatOptions，使其符合底层 API 约束。
+     * <p>默认原样返回；各 Handler 可覆写（如 Ollama 剔除 tools 参数避免 400）。</p>
+     *
+     * @param provider 提供商实体
+     * @param config   Agent config
+     * @param options  已组装的工具调用选项
+     * @return 可安全发往模型 API 的选项
+     */
+    default ToolCallingChatOptions adaptToolCallingOptions(ModelProvider provider,
+                                                           Map<String, Object> config,
+                                                           ToolCallingChatOptions options) {
+        return options;
+    }
 }

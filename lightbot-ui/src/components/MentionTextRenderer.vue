@@ -1,10 +1,26 @@
 <template>
-  <MarkdownPreview :content="renderedContent" :finalized="finalized" />
+  <div class="mention-text-renderer">
+    <template v-for="(part, idx) in parts" :key="idx">
+      <a-tooltip v-if="part.type === 'mention'" placement="top">
+        <template #title>
+          <div class="mention-tooltip-title">{{ part.tooltipTitle }}</div>
+          <div v-if="part.tooltipSub" class="mention-tooltip-sub">{{ part.tooltipSub }}</div>
+        </template>
+        <span
+          class="mention-chip"
+          :class="part.chipClass"
+          :data-mention-type="part.mentionType"
+          :data-mention-token="part.token"
+        >@{{ part.name }}</span>
+      </a-tooltip>
+      <span v-else class="mention-plain">{{ part.text }}</span>
+    </template>
+  </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import MarkdownPreview from './MarkdownPreview.vue'
+import { getMentionChipClass, getMentionTooltip } from '@/utils/mentionDisplay'
 
 const MENTION_TOKEN_RE = /@(knowledge|subagent|skill|tool):(\d+)/g
 
@@ -16,74 +32,137 @@ const props = defineProps({
   finalized: { type: Boolean, default: true },
 })
 
-/**
- * 把 @type:id token 替换为 chip span，让 MarkdownPreview 渲染为可点击的 chip。
- * mentions 快照缺失时降级展示 @name（已失效），避免裸露 token。
- */
-const renderedContent = computed(() => {
-  if (!props.content) return ''
+const parts = computed(() => {
+  const content = props.content || ''
+  if (!content) return []
 
   const map = new Map()
   for (const m of props.mentions || []) {
     if (m?.token) map.set(m.token, m)
   }
 
-  return props.content.replace(MENTION_TOKEN_RE, (token) => {
+  const result = []
+  let lastIndex = 0
+  const re = new RegExp(MENTION_TOKEN_RE.source, 'g')
+  let match
+  while ((match = re.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      result.push({ type: 'text', text: content.slice(lastIndex, match.index) })
+    }
+    const token = match[0]
+    const mentionType = match[1]
     const m = map.get(token)
-    const type = m?.type || token.split(':')[0].slice(1) || 'unknown'
+    const valid = !!m
     const name = m?.name || token
-    const label = m ? escapeHtml(name) : escapeHtml(name) + '（已失效）'
-    const cls = m ? `mention-chip mention-chip-${escapeAttr(type)}` : 'mention-chip mention-chip-invalid'
-    return `<span class="${cls}" data-mention-type="${escapeAttr(type)}" data-mention-token="${escapeAttr(token)}">@${label}</span>`
-  })
+    const tooltip = getMentionTooltip(mentionType, m?.name || name, token, valid)
+    result.push({
+      type: 'mention',
+      token,
+      mentionType,
+      name: valid ? name : `${name}（已失效）`,
+      chipClass: getMentionChipClass(mentionType, valid),
+      tooltipTitle: tooltip.title,
+      tooltipSub: tooltip.sub,
+    })
+    lastIndex = match.index + token.length
+  }
+  if (lastIndex < content.length) {
+    result.push({ type: 'text', text: content.slice(lastIndex) })
+  }
+  return result
 })
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
-}
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/"/g, '&quot;')
-}
 </script>
 
 <style lang="less">
-.markdown-preview :deep(.mention-chip) {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  margin: 0 2px;
-  background: rgba(59, 130, 246, 0.12);
-  color: #3b82f6;
-  border-radius: 4px;
-  font-size: 0.92em;
-  line-height: 1.4;
-  user-select: none;
-  white-space: nowrap;
+.mention-text-renderer {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
-.markdown-preview :deep(.mention-chip-knowledge) {
-  background: rgba(16, 185, 129, 0.12);
+.mention-plain {
+  white-space: pre-wrap;
+}
+
+.mention-text-renderer .mention-chip {
+  display: inline;
+  padding: 1px 6px;
+  margin: 0 1px;
+  border-radius: 4px;
+  font-size: 0.92em;
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: default;
+  white-space: nowrap;
+  background: rgba(59, 130, 246, 0.14);
+  color: #2563eb;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.mention-text-renderer .mention-chip-knowledge {
+  background: rgba(16, 185, 129, 0.16);
   color: #059669;
 }
 
-.markdown-preview :deep(.mention-chip-subagent) {
-  background: rgba(245, 158, 11, 0.12);
+.mention-text-renderer .mention-chip-subagent {
+  background: rgba(245, 158, 11, 0.16);
   color: #d97706;
 }
 
-.markdown-preview :deep(.mention-chip-skill) {
-  background: rgba(168, 85, 247, 0.12);
+.mention-text-renderer .mention-chip-skill {
+  background: rgba(168, 85, 247, 0.16);
   color: #9333ea;
 }
 
-.markdown-preview :deep(.mention-chip-tool) {
-  background: rgba(59, 130, 246, 0.12);
+.mention-text-renderer .mention-chip-tool {
+  background: rgba(59, 130, 246, 0.16);
   color: #2563eb;
 }
 
-.markdown-preview :deep(.mention-chip-invalid) {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+.mention-text-renderer .mention-chip-invalid {
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
   text-decoration: line-through;
+}
+
+[data-theme="dark"] .mention-text-renderer .mention-chip-knowledge {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.28);
+}
+
+[data-theme="dark"] .mention-text-renderer .mention-chip-subagent {
+  background: rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, 0.28);
+}
+
+[data-theme="dark"] .mention-text-renderer .mention-chip-skill {
+  background: rgba(168, 85, 247, 0.28);
+  color: #d8b4fe;
+  box-shadow: inset 0 0 0 1px rgba(216, 180, 254, 0.28);
+}
+
+[data-theme="dark"] .mention-text-renderer .mention-chip-tool {
+  background: rgba(59, 130, 246, 0.28);
+  color: #93c5fd;
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.28);
+}
+
+[data-theme="dark"] .mention-text-renderer .mention-chip-invalid {
+  background: rgba(239, 68, 68, 0.24);
+  color: #fca5a5;
+  box-shadow: inset 0 0 0 1px rgba(252, 165, 165, 0.28);
+}
+
+.mention-tooltip-title {
+  font-weight: 500;
+}
+
+.mention-tooltip-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.85;
 }
 </style>

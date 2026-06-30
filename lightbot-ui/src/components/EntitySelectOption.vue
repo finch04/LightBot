@@ -51,6 +51,7 @@ const letter = computed(() => (props.name || '?')[0].toUpperCase())
 }
 .entity-select-name {
   font-weight: 500;
+  color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -126,12 +126,9 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         }
 
         // MiMo 联网搜索使用内置 web_search，不与 Agent 自定义工具混用
-        boolean mimoWebSearch = false;
-        if (providerId != null) {
-            ModelProvider provider = modelProviderService.getById(providerId);
-            mimoWebSearch = provider != null && provider.getType() == ModelProviderType.MIMO
-                    && Boolean.TRUE.equals(configMap.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH));
-        }
+        ModelProvider provider = providerId != null ? modelProviderService.getById(providerId) : null;
+        boolean mimoWebSearch = provider != null && provider.getType() == ModelProviderType.MIMO
+                && Boolean.TRUE.equals(configMap.get(ConfigKeys.Agent.ENABLE_WEB_SEARCH));
 
         if (agent != null && !mimoWebSearch) {
             List<ToolCallback> allCallbacks = new java.util.ArrayList<>();
@@ -285,14 +282,16 @@ public class ToolPrepMiddleware implements ChatMiddleware {
         }
 
         ToolCallingChatOptions options = toolBuilder.build();
-        ModelProvider dashScopeProvider = providerId != null ? modelProviderService.getById(providerId) : null;
-        if (dashScopeProvider != null && dashScopeProvider.getType() == ModelProviderType.DASHSCOPE
-                && !DashScopeModelSupport.isCompatibleMode(dashScopeProvider.getBaseUrl())) {
+        if (provider != null && provider.getType() == ModelProviderType.DASHSCOPE
+                && !DashScopeModelSupport.isCompatibleMode(provider.getBaseUrl())) {
             options = DashScopeModelSupport.buildNativeChatOptions(
                     modelId, configMap, options.getToolCallbacks(), options.getToolContext());
             if (DashScopeModelSupport.requiresMultimodalApi(modelId)) {
                 log.info("[Chat] DashScope multimodal-generation 路由: modelId={}", modelId);
             }
+        }
+        if (provider != null) {
+            options = modelFactory.adaptToolCallingOptions(provider, configMap, options);
         }
         return options;
     }

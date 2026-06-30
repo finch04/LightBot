@@ -86,8 +86,12 @@ public class LlmTrace {
     private String spans;
 
     @TableField("reply_content")
-    @Schema(description = "AI完整回复内容")
+    @Schema(description = "AI完整回复内容（模型原始输出，含深度思考标签，不做删改）")
     private String replyContent;
+
+    @TableField("display_content")
+    @Schema(description = "最终展示内容（用户对话页可见正文，已剥离思考标签）")
+    private String displayContent;
 
     @TableField("error_message")
     @Schema(description = "错误信息")

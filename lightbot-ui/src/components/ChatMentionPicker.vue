@@ -2,6 +2,7 @@
   <Teleport to="body">
     <div
       v-if="visible"
+      ref="pickerRef"
       class="mention-picker"
       :style="pickerStyle"
       @mousedown.prevent
@@ -16,7 +17,7 @@
             :key="group.type"
             class="mention-group"
           >
-            <div class="mention-group-label">{{ group.label }}</div>
+            <div class="mention-group-label">{{ groupLabel(group) }}</div>
             <div
               v-for="(item, ii) in group.items"
               :key="item.token"
@@ -43,6 +44,7 @@
 <script setup>
 import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import EntitySelectOption from './EntitySelectOption.vue'
+import { MENTION_TYPE_LABELS } from '../utils/mentionDisplay'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -56,52 +58,12 @@ const props = defineProps({
 
 defineEmits(['select', 'hover'])
 
+const pickerRef = ref(null)
 const pos = ref({ left: 0, top: 0, width: 320 })
 const PICKER_WIDTH = 320
 const PICKER_MAX_HEIGHT = 280
+const GAP = 6
 
-// 浮层显示/光标变化时基于 caretRect 计算坐标
-watch(
-  () => [props.visible, props.caretRect],
-  async ([v]) => {
-    if (!v) return
-    await nextTick()
-    updatePos()
-    window.addEventListener('scroll', updatePos, true)
-    window.addEventListener('resize', updatePos)
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(() => {
-  window.removeEventListener('scroll', updatePos, true)
-  window.removeEventListener('resize', updatePos)
-})
-
-function updatePos() {
-  const cr = props.caretRect
-  if (!cr) return
-  // 上弹优先：浮层底部贴近光标顶部，留 6px 间隙
-  let top = cr.top - 6 - PICKER_MAX_HEIGHT
-  // 上方空间不足：改为下弹，浮层顶部贴近光标底部
-  if (top < 8) top = cr.bottom + 6
-  // 左对齐 @ 符号
-  let left = cr.left
-  // 右边界保护
-  if (left + PICKER_WIDTH > window.innerWidth - 8) {
-    left = window.innerWidth - PICKER_WIDTH - 8
-  }
-  pos.value = { left, top, width: PICKER_WIDTH }
-}
-
-const pickerStyle = computed(() => ({
-  left: `${pos.value.left}px`,
-  top: `${pos.value.top}px`,
-  width: `${pos.value.width}px`,
-}))
-
-
-// 按本地 query 过滤候选（前端即时响应，避免每次按键都打后端）
 const visibleGroups = computed(() => {
   const q = (props.query || '').trim().toLowerCase()
   if (!q) return props.groups
@@ -116,9 +78,68 @@ const visibleGroups = computed(() => {
     .filter(g => g.items.length > 0)
 })
 
-const filteredItems = computed(() => {
-  return visibleGroups.value.flatMap(g => g.items)
+const filteredItems = computed(() => visibleGroups.value.flatMap(g => g.items))
+
+async function scheduleUpdatePos() {
+  await nextTick()
+  updatePos()
+  await nextTick()
+  updatePos()
+}
+
+// 浮层显示/内容变化时基于 caretRect 与真实高度重新定位
+watch(
+  () => [props.visible, props.caretRect, props.query, props.loading, filteredItems.value.length],
+  async ([visible]) => {
+    if (!visible) {
+      window.removeEventListener('scroll', updatePos, true)
+      window.removeEventListener('resize', updatePos)
+      return
+    }
+    await scheduleUpdatePos()
+    window.addEventListener('scroll', updatePos, true)
+    window.addEventListener('resize', updatePos)
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', updatePos, true)
+  window.removeEventListener('resize', updatePos)
 })
+
+function updatePos() {
+  const cr = props.caretRect
+  if (!cr) return
+
+  const el = pickerRef.value
+  const pickerHeight = el
+    ? Math.min(el.getBoundingClientRect().height, PICKER_MAX_HEIGHT)
+    : 0
+
+  // 上弹优先：弹窗底边贴近 @ 符号顶边（用真实高度，避免内容少时浮空）
+  let top = cr.top - GAP - (pickerHeight || 48)
+  if (top < 8) {
+    top = cr.bottom + GAP
+  }
+
+  let left = cr.left
+  if (left + PICKER_WIDTH > window.innerWidth - 8) {
+    left = window.innerWidth - PICKER_WIDTH - 8
+  }
+  if (left < 8) left = 8
+  pos.value = { left, top, width: PICKER_WIDTH }
+}
+
+const pickerStyle = computed(() => ({
+  left: `${pos.value.left}px`,
+  top: `${pos.value.top}px`,
+  width: `${pos.value.width}px`,
+}))
+
+function groupLabel(group) {
+  return MENTION_TYPE_LABELS[group?.type] || group?.label || group?.type || ''
+}
 
 // 计算 (groupIdx, itemIdx) 在扁平列表中的全局索引
 function flatIndex(gi, ii) {
@@ -142,40 +163,49 @@ defineExpose({
   z-index: 1050;
   max-height: 280px;
   overflow-y: auto;
-  background: var(--bg-color, #fff);
-  border: 1.5px solid #1f1f1f;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-hairline-strong);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-4);
   font-size: 13px;
+  color: var(--color-ink);
 }
 
 .mention-empty {
   padding: 12px;
   text-align: center;
-  color: var(--text-color-secondary, #999);
+  color: var(--color-mute);
 }
 
 .mention-group-label {
   padding: 6px 12px 4px;
   font-size: 11px;
-  color: var(--text-color-secondary, #999);
+  color: var(--color-mute);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
 }
 
 .mention-item {
   padding: 7px 12px;
   cursor: pointer;
   transition: background-color 0.15s;
+  color: var(--color-ink);
 
   &:hover, &.active {
-    background: var(--bg-color-hover, #f3f4f6);
+    background: var(--color-canvas-soft-3);
   }
 
   &.disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }
+}
+
+.mention-item .entity-select-name {
+  color: var(--color-ink);
+}
+
+.mention-item .entity-select-desc {
+  color: var(--color-mute);
 }
 </style>

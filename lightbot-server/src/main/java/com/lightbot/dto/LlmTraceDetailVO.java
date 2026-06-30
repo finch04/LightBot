@@ -65,8 +65,11 @@ public class LlmTraceDetailVO {
     @Schema(description = "调用链Span列表（已解析为对象）")
     private List<LlmTraceSpan> spans;
 
-    @Schema(description = "AI完整回复内容")
+    @Schema(description = "AI完整回复内容（模型原始输出，含深度思考标签，不做删改）")
     private String replyContent;
+
+    @Schema(description = "最终展示内容（用户对话页可见正文，已剥离思考标签）")
+    private String displayContent;
 
     @Schema(description = "错误信息")
     private String errorMessage;

@@ -806,7 +806,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         }
         return MentionGroupVO.builder()
                 .type(MentionResourceType.SUBAGENT)
-                .label("子智能体")
+                .label("SubAgents")
                 .items(items)
                 .build();
     }

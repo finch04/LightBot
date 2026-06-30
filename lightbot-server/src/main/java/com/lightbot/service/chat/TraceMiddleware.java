@@ -56,8 +56,6 @@ public class TraceMiddleware implements ChatMiddleware {
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
         return next.proceed(ctx)
                 .doOnComplete(() -> {
-                    // 消息持久化已在 ChatServiceImpl.buildDoneEvent 中完成（[DONE] 之前），
-                    // 此处仅做 Trace 记录等后置清理。
                     long tEnd = System.currentTimeMillis();
 
                     // 标题生成已移至 ChatServiceImpl.buildDoneEvent（助手消息落库后），避免 doOnComplete 早于持久化导致消息数不足
@@ -104,6 +102,7 @@ public class TraceMiddleware implements ChatMiddleware {
                     }
 
                     // 4. 追加AI思考内容到spans
+                    ctx.finalizeInlineThinking();
                     if (ctx.getReasoningContent().length() > 0) {
                         ctx.getSpans().add(LlmTraceSpan.of("reasoning", null, "ai_reasoning",
                                 ctx.getStartTime(), tEnd - ctx.getStartTime(), "OK",
@@ -117,6 +116,7 @@ public class TraceMiddleware implements ChatMiddleware {
                 })
                 .doOnError(e -> {
                     long tErr = System.currentTimeMillis();
+                    ctx.finalizeInlineThinking();
                     log.error("[Chat] 流式对话异常: sessionId={}, error={}", ctx.getSessionId(), e.getMessage(), e);
                     persistTrace(ctx, "failed", tErr - ctx.getStartTime(), e.getMessage());
                 });
@@ -214,13 +214,16 @@ public class TraceMiddleware implements ChatMiddleware {
         trace.setTotalTokens(ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0]);
         trace.setToolCallCount(ctx.getToolCallCountHolder()[0]);
         trace.setTotalDurationMs(durationMs);
-        // 如果 fullReply 为空但有 reasoning 内容，将 reasoning 作为回复内容记录
-        String replyContent = ctx.getFullReply().toString();
-        if (replyContent.isBlank() && ctx.getReasoningContent().length() > 0) {
-            replyContent = ctx.getReasoningContent().toString();
+        ctx.finalizeInlineThinking();
+        // 完整回复：模型原始输出，仅做数据库非法字符清理
+        String completeReply = ctx.buildTraceCompleteReply();
+        if (completeReply.isBlank()) {
+            completeReply = ctx.getFullReply().toString();
         }
-        // 数据库安全清理（非法字符），敏感词已在流式/非流式过程中过滤
-        trace.setReplyContent(com.lightbot.util.TextNormalizeUtil.sanitizeForAiMessage(replyContent, 0));
+        trace.setReplyContent(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(completeReply));
+        // 最终展示：与用户对话页正文一致（剥离 thinking 后）
+        trace.setDisplayContent(com.lightbot.util.TextNormalizeUtil.sanitizeForAiMessage(
+                ctx.getFullReply().toString(), 0));
         trace.setErrorMessage(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(errorMessage));
         try {
             trace.setSpans(objectMapper.writeValueAsString(ctx.getSpans()));

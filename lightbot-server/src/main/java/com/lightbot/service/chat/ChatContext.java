@@ -113,6 +113,21 @@ public class ChatContext {
     /** 流式 inline thinking 标签解析（Ollama 等模型） */
     com.lightbot.util.InlineThinkingStreamParser inlineThinkingParser;
 
+    /** 流式 getText() 快照，用于从累积文本中提取增量 */
+    private String streamTextSnapshot = "";
+
+    /** 模型原始流式输出（未剥离标签），入库前兜底解析用（每轮 LLM 调用重置） */
+    private StringBuilder rawLlmStreamText = new StringBuilder();
+
+    /** Trace 用：整轮对话模型原始输出累积（含 thinking 标签，不重置、不删改） */
+    private StringBuilder traceCompleteReply = new StringBuilder();
+
+    /** Trace 用：metadata 通道的原始 reasoning 累积（MiMo 等，与正文分通道时不合并删改） */
+    private StringBuilder traceMetadataReasoning = new StringBuilder();
+
+    /** inline thinking 是否已完成最终解析（Trace 与入库共用，避免重复解析） */
+    private boolean inlineThinkingFinalized;
+
     /** 待持久化的工具调用记录（assistant 消息保存后批量写入，关联 messageId） */
     private List<ToolCall> pendingToolCalls;
 
@@ -179,15 +194,58 @@ public class ChatContext {
         if (cleaned.isEmpty()) {
             return "";
         }
-        // Ollama 等模型在开标签后常带 leading \n，首段去掉避免前端空行
-        if (reasoningContent.isEmpty()) {
-            cleaned = cleaned.stripLeading();
-            if (cleaned.isEmpty()) {
-                return "";
-            }
-        }
         reasoningContent.append(cleaned);
         return cleaned;
+    }
+
+    /**
+     * 流式结束后最终解析 thinking 标签并规范化 reasoning / 正文（Trace 与入库前调用）。
+     */
+    public void finalizeInlineThinking() {
+        if (inlineThinkingFinalized) {
+            return;
+        }
+        if (inlineThinkingParser == null) {
+            inlineThinkingFinalized = true;
+            return;
+        }
+
+        com.lightbot.util.InlineThinkingStreamParser.ParseResult tail = inlineThinkingParser.flush();
+        if (!tail.reasoningDelta().isEmpty()) {
+            appendReasoningContent(tail.reasoningDelta());
+        }
+        if (!tail.contentDelta().isEmpty()) {
+            fullReply.append(tail.contentDelta());
+        }
+
+        String raw = getRawLlmStreamText().toString();
+        String reply = fullReply.toString();
+        String source = com.lightbot.util.InlineThinkingStreamParser.containsThinkingTags(raw) ? raw
+                : com.lightbot.util.InlineThinkingStreamParser.containsThinkingTags(reply) ? reply : null;
+        if (source != null) {
+            com.lightbot.util.InlineThinkingStreamParser.ParseResult parsed =
+                    com.lightbot.util.InlineThinkingStreamParser.parseComplete(source);
+            reasoningContent.setLength(0);
+            if (!parsed.reasoningDelta().isEmpty()) {
+                appendReasoningContent(parsed.reasoningDelta());
+            }
+            fullReply.setLength(0);
+            fullReply.append(parsed.contentDelta());
+        }
+
+        if (reasoningContent.length() > 0) {
+            String normalized = com.lightbot.util.InlineThinkingStreamParser.normalizeReasoningText(
+                    reasoningContent.toString());
+            reasoningContent.setLength(0);
+            reasoningContent.append(normalized);
+        }
+        if (fullReply.length() > 0) {
+            String normalized = com.lightbot.util.InlineThinkingStreamParser.normalizeContentText(
+                    fullReply.toString());
+            fullReply.setLength(0);
+            fullReply.append(normalized);
+        }
+        inlineThinkingFinalized = true;
     }
 
     /**
@@ -209,6 +267,118 @@ public class ChatContext {
         ctx.activatedSkills = new LinkedHashSet<>();
         ctx.subAgentEventQueue = new ConcurrentLinkedQueue<>();
         ctx.inlineThinkingParser = new com.lightbot.util.InlineThinkingStreamParser();
+        ctx.rawLlmStreamText = new StringBuilder();
+        ctx.traceCompleteReply = new StringBuilder();
+        ctx.traceMetadataReasoning = new StringBuilder();
         return ctx;
+    }
+
+    /**
+     * 追加 Trace 完整回复（模型原始输出，不做标签剥离或换行规范化）。
+     */
+    public void appendTraceCompleteReply(String delta) {
+        if (delta == null || delta.isEmpty()) {
+            return;
+        }
+        if (traceCompleteReply == null) {
+            traceCompleteReply = new StringBuilder();
+        }
+        traceCompleteReply.append(delta);
+    }
+
+    /**
+     * 追加 Trace 用 metadata reasoning 原始片段（MiMo 等分通道 reasoning）。
+     */
+    public void appendTraceMetadataReasoning(String chunk) {
+        if (chunk == null || chunk.isEmpty()) {
+            return;
+        }
+        if (traceMetadataReasoning == null) {
+            traceMetadataReasoning = new StringBuilder();
+        }
+        traceMetadataReasoning.append(chunk);
+    }
+
+    /**
+     * 构建 Trace 的 AI 完整回复：优先流式原文（含 thinking 标签）；metadata reasoning 与正文分通道时按序拼接。
+     */
+    public String buildTraceCompleteReply() {
+        String rawText = traceCompleteReply != null ? traceCompleteReply.toString() : "";
+        String metaReasoning = traceMetadataReasoning != null ? traceMetadataReasoning.toString() : "";
+        if (!metaReasoning.isEmpty() && !rawText.isEmpty()) {
+            return metaReasoning + rawText;
+        }
+        if (!rawText.isEmpty()) {
+            return rawText;
+        }
+        return metaReasoning;
+    }
+
+    /**
+     * 获取流式 inline thinking 标签解析器（Ollama 等模型）
+     */
+    public com.lightbot.util.InlineThinkingStreamParser getInlineThinkingParser() {
+        return inlineThinkingParser;
+    }
+
+    /**
+     * 新一轮 LLM 流式调用前重置文本快照与 inline thinking 解析器。
+     */
+    public void resetStreamTextTracking() {
+        streamTextSnapshot = "";
+        inlineThinkingParser = new com.lightbot.util.InlineThinkingStreamParser();
+        if (rawLlmStreamText == null) {
+            rawLlmStreamText = new StringBuilder();
+        } else {
+            rawLlmStreamText.setLength(0);
+        }
+    }
+
+    /**
+     * 追加模型原始流式文本（含 thinking 标签，供入库前兜底解析）。
+     */
+    public void appendRawLlmStreamText(String delta) {
+        if (delta == null || delta.isEmpty()) {
+            return;
+        }
+        if (rawLlmStreamText == null) {
+            rawLlmStreamText = new StringBuilder();
+        }
+        rawLlmStreamText.append(delta);
+        appendTraceCompleteReply(delta);
+    }
+
+    /**
+     * 获取模型原始流式输出累积
+     */
+    public StringBuilder getRawLlmStreamText() {
+        if (rawLlmStreamText == null) {
+            rawLlmStreamText = new StringBuilder();
+        }
+        return rawLlmStreamText;
+    }
+
+    /**
+     * 从流式 getText() 提取增量（兼容增量片段与累积全文两种模式）。
+     *
+     * @param currentText 当前 chunk 的 getText() 返回值
+     * @return 相对上一 chunk 的新增文本
+     */
+    public String consumeStreamTextDelta(String currentText) {
+        if (currentText == null || currentText.isEmpty()) {
+            return "";
+        }
+        if (!streamTextSnapshot.isEmpty()
+                && currentText.startsWith(streamTextSnapshot)
+                && currentText.length() > streamTextSnapshot.length()) {
+            String delta = currentText.substring(streamTextSnapshot.length());
+            streamTextSnapshot = currentText;
+            return delta;
+        }
+        if (currentText.equals(streamTextSnapshot)) {
+            return "";
+        }
+        streamTextSnapshot = streamTextSnapshot + currentText;
+        return currentText;
     }
 }

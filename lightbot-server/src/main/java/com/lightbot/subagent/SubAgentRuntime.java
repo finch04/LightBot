@@ -337,6 +337,9 @@ public class SubAgentRuntime {
         }
         ToolCallingChatOptions options = builder.build();
         options.setInternalToolExecutionEnabled(false);
+        if (provider != null) {
+            options = modelFactory.adaptToolCallingOptions(provider, configMap, options);
+        }
         return options;
     }
 
