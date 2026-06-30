@@ -7,6 +7,7 @@ import com.lightbot.constant.ChatAttachmentConstants;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.ChatAttachmentDTO;
+import com.lightbot.dto.ChatMentionDTO;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
@@ -42,6 +43,7 @@ import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -130,7 +132,8 @@ public class MessageMiddleware implements ChatMiddleware {
             if (replyToId != null) {
                 validateReplyToMessage(replyToId, ctx.getSessionId());
             }
-            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), askUserParentId, replyToId);
+            Long userMsgId = saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), askUserParentId, replyToId,
+                    ctx.getRequest().getMentions(), ctx.getRequest().getAgentVersionId());
             ctx.setUserMessageId(userMsgId);
             if (askUserParentId != null) {
                 ctx.setUserMessageParentId(askUserParentId);
@@ -150,7 +153,8 @@ public class MessageMiddleware implements ChatMiddleware {
     public void prepare(ChatContext ctx) {
         validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
         String userText = resolveUserText(ctx.getRequest());
-        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), null);
+        saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), null, null,
+                ctx.getRequest().getMentions(), ctx.getRequest().getAgentVersionId());
         List<org.springframework.ai.chat.messages.Message> messages = buildMessages(
                 ctx.getSessionId(), userText, ctx.getAgent(), ctx.getRequest(), ctx.getConfigMap(), ctx);
         ctx.setMessages(messages);
@@ -207,29 +211,58 @@ public class MessageMiddleware implements ChatMiddleware {
         throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "消息不能为空");
     }
 
-    private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments, Long parentId) {
-        return saveUserMessage(sessionId, content, attachments, parentId, null);
-    }
-
     private Long saveUserMessage(Long sessionId, String content, List<ChatAttachmentDTO> attachments,
-                                 Long parentId, Long replyToMessageId) {
+                                 Long parentId, Long replyToMessageId,
+                                 List<ChatMentionDTO> mentions, Long agentVersionId) {
         // 检测是否有图片附件 → messageType 为 MULTIMODAL_IMAGE
         boolean hasImage = attachments != null && attachments.stream()
                 .anyMatch(att -> "image".equals(att.getType()));
         MessageType messageType = hasImage ? MessageType.MULTIMODAL_IMAGE : MessageType.TEXT;
 
-        if (attachments == null || attachments.isEmpty()) {
+        boolean hasAttachments = attachments != null && !attachments.isEmpty();
+        boolean hasMentions = mentions != null && !mentions.isEmpty();
+
+        // 无附件无 mention：metadata 为 null
+        if (!hasAttachments && !hasMentions) {
             return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId, replyToMessageId);
         }
         try {
-            String metadata = objectMapper.writeValueAsString(Map.of("attachments", attachments));
+            Map<String, Object> metaMap = new LinkedHashMap<>();
+            if (hasAttachments) {
+                metaMap.put("attachments", attachments);
+            }
+            if (hasMentions) {
+                metaMap.put("mentions", buildMentionSnapshots(mentions, agentVersionId));
+            }
+            String metadata = objectMapper.writeValueAsString(metaMap);
             Long msgId = saveMessage(sessionId, MessageRole.USER, content, metadata, 0, messageType, parentId, replyToMessageId);
             // 同步追加附件到会话级上下文
-            chatSessionService.appendSessionAttachments(sessionId, attachments, "user_upload");
+            if (hasAttachments) {
+                chatSessionService.appendSessionAttachments(sessionId, attachments, "user_upload");
+            }
             return msgId;
         } catch (Exception e) {
             return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId, replyToMessageId);
         }
+    }
+
+    /**
+     * 构建 mention 持久化快照：保留 type/resourceId/name/token/agentVersionId，
+     * 供历史消息回显使用（不依赖实时资源列表，资源失效也能展示 token）
+     */
+    private List<Map<String, Object>> buildMentionSnapshots(List<ChatMentionDTO> mentions, Long agentVersionId) {
+        String avIdStr = agentVersionId != null ? agentVersionId.toString() : null;
+        List<Map<String, Object>> snapshots = new ArrayList<>(mentions.size());
+        for (ChatMentionDTO m : mentions) {
+            Map<String, Object> snap = new LinkedHashMap<>();
+            snap.put("type", m.getType() != null ? m.getType().getCode() : null);
+            snap.put("resourceId", m.getResourceId());
+            snap.put("name", m.getName());
+            snap.put("token", m.getToken());
+            snap.put("agentVersionId", avIdStr);
+            snapshots.add(snap);
+        }
+        return snapshots;
     }
 
     /**

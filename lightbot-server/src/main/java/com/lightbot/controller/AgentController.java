@@ -6,6 +6,7 @@ import com.lightbot.common.Result;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.AgentPublishRequest;
 import com.lightbot.dto.AgentSaveRequest;
+import com.lightbot.dto.MentionOptionsVO;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.dto.WorkflowExampleVO;
 import com.lightbot.entity.Agent;
@@ -93,6 +94,15 @@ public class AgentController {
     @GetMapping("/{id}")
     public Result<Agent> getById(@PathVariable Long id) {
         return Result.ok(agentService.getById(id));
+    }
+
+    @Operation(summary = "获取Agent的mention候选资源")
+    @GetMapping("/{id}/mention-options")
+    public Result<MentionOptionsVO> getMentionOptions(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long agentVersionId,
+            @RequestParam(required = false) String types) {
+        return Result.ok(agentService.getMentionOptions(id, agentVersionId, types));
     }
 
     @Operation(summary = "更新Agent绑定的知识库")

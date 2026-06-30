@@ -31,7 +31,7 @@ public class ModelProviderCacheUtil {
     /** Redis key前缀 */
     private static final String CACHE_PREFIX = "lightbot:model_provider:";
     private static final String ALL_PROVIDERS_KEY = CACHE_PREFIX + "all";
-    private static final Duration CACHE_TTL = Duration.ofHours(2);
+    private static final Duration CACHE_TTL = Duration.ofHours(12);
 
     /**
      * 获取所有模型提供商

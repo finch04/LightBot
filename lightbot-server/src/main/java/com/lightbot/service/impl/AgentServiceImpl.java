@@ -28,9 +28,17 @@ import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.WorkflowExampleTemplates;
 import com.lightbot.dto.WorkflowExampleVO;
+import com.lightbot.dto.MentionGroupVO;
+import com.lightbot.dto.MentionOptionsVO;
+import com.lightbot.dto.MentionResourceDTO;
 import com.lightbot.enums.AgentType;
+import com.lightbot.enums.CommonStatus;
+import com.lightbot.enums.MentionResourceType;
 import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.ChatSessionService;
+import com.lightbot.service.KnowledgeService;
+import com.lightbot.service.SkillService;
+import com.lightbot.service.SubAgentService;
 import com.lightbot.config.RedisCacheConfig;
 import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +82,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final AgentVersionService agentVersionService;
     private final ObjectProvider<ChatSessionService> chatSessionServiceProvider;
     private final ProviderResolver providerResolver;
+    private final KnowledgeService knowledgeService;
+    private final SkillService skillService;
+    private final SubAgentService subAgentService;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
             你是一个AI助手提示词生成专家。根据用户提供的Agent名称和描述，生成一段专业的系统提示词。
@@ -686,5 +697,182 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         } catch (Exception e) {
             log.warn("[Agent删除] {}清理失败, 跳过: {}", label, e.getMessage());
         }
+    }
+
+    @Override
+    public MentionOptionsVO getMentionOptions(Long agentId, Long agentVersionId, String types) {
+        // 1. 解析绑定 ID：agentVersionId 非空优先走版本快照，payload 缺失时 fallback 到 agent 表当前绑定。
+        // 草稿版本的 agent_version.config 可能未同步最新绑定（updateKnowledgeBindings 等只写 agent.config），
+        // 因此必须 fallback，否则候选会误返回空。
+        List<Long> knowledgeIds = null;
+        List<Long> subAgentIds = null;
+        List<Long> skillIds = null;
+        List<Long> toolIds = null;
+        if (agentVersionId != null) {
+            Map<String, Object> payload = agentVersionService.loadVersionPayloadById(agentVersionId);
+            knowledgeIds = parseLongListFromPayload(payload, "knowledgeIds");
+            subAgentIds = parseLongListFromPayload(payload, "subAgentIds");
+            skillIds = parseLongListFromPayload(payload, "skillIds");
+            toolIds = parseLongListFromPayload(payload, "toolIds");
+        }
+        if (knowledgeIds == null) knowledgeIds = getKnowledgeIds(agentId);
+        if (subAgentIds == null) subAgentIds = getSubAgentIds(agentId);
+        if (skillIds == null) skillIds = getSkillIds(agentId);
+        if (toolIds == null) toolIds = getToolIds(agentId);
+
+        // 2. 确定返回类型集合：默认知识库/子智能体/Skill/工具四类
+        java.util.Set<MentionResourceType> typeSet = parseTypes(types);
+
+        // 3. 按类型分组构建候选
+        List<MentionGroupVO> groups = new java.util.ArrayList<>();
+        if (typeSet.contains(MentionResourceType.KNOWLEDGE)) {
+            groups.add(buildKnowledgeGroup(knowledgeIds));
+        }
+        if (typeSet.contains(MentionResourceType.SUBAGENT)) {
+            groups.add(buildSubAgentGroup(subAgentIds));
+        }
+        if (typeSet.contains(MentionResourceType.SKILL)) {
+            groups.add(buildSkillGroup(skillIds));
+        }
+        if (typeSet.contains(MentionResourceType.TOOL)) {
+            groups.add(buildToolGroup(toolIds));
+        }
+
+        return MentionOptionsVO.builder()
+                .agentId(agentId == null ? null : agentId.toString())
+                .agentVersionId(agentVersionId == null ? null : agentVersionId.toString())
+                .groups(groups)
+                .build();
+    }
+
+    private java.util.Set<MentionResourceType> parseTypes(String types) {
+        if (types == null || types.isBlank()) {
+            return java.util.EnumSet.of(MentionResourceType.KNOWLEDGE, MentionResourceType.SUBAGENT,
+                    MentionResourceType.SKILL, MentionResourceType.TOOL);
+        }
+        java.util.Set<MentionResourceType> set = java.util.EnumSet.noneOf(MentionResourceType.class);
+        for (String t : types.split(",")) {
+            String trimmed = t.trim();
+            if (trimmed.isEmpty()) continue;
+            try {
+                set.add(MentionResourceType.fromValue(trimmed));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return set.isEmpty()
+                ? java.util.EnumSet.of(MentionResourceType.KNOWLEDGE, MentionResourceType.SUBAGENT,
+                        MentionResourceType.SKILL, MentionResourceType.TOOL)
+                : set;
+    }
+
+    private MentionGroupVO buildKnowledgeGroup(List<Long> knowledgeIds) {
+        List<MentionResourceDTO> items = new java.util.ArrayList<>();
+        if (knowledgeIds != null && !knowledgeIds.isEmpty()) {
+            for (com.lightbot.entity.Knowledge k : knowledgeService.listByIds(knowledgeIds)) {
+                boolean enabled = k.getStatus() == CommonStatus.ACTIVE;
+                items.add(MentionResourceDTO.builder()
+                        .type(MentionResourceType.KNOWLEDGE)
+                        .resourceId(String.valueOf(k.getId()))
+                        .name(k.getName())
+                        .description(k.getDescription())
+                        .token("@knowledge:" + k.getId())
+                        .enabled(enabled)
+                        .disabledReason(enabled ? null : "知识库已禁用或删除")
+                        .build());
+            }
+        }
+        return MentionGroupVO.builder()
+                .type(MentionResourceType.KNOWLEDGE)
+                .label("知识库")
+                .items(items)
+                .build();
+    }
+
+    private MentionGroupVO buildSubAgentGroup(List<Long> subAgentIds) {
+        List<MentionResourceDTO> items = new java.util.ArrayList<>();
+        if (subAgentIds != null && !subAgentIds.isEmpty()) {
+            for (com.lightbot.entity.SubAgent s : subAgentService.listByIds(subAgentIds)) {
+                boolean enabled = Integer.valueOf(1).equals(s.getEnabled());
+                items.add(MentionResourceDTO.builder()
+                        .type(MentionResourceType.SUBAGENT)
+                        .resourceId(String.valueOf(s.getId()))
+                        .name(s.getDisplayName() != null && !s.getDisplayName().isBlank() ? s.getDisplayName() : s.getName())
+                        .description(s.getDescription())
+                        .token("@subagent:" + s.getId())
+                        .enabled(enabled)
+                        .disabledReason(enabled ? null : "子智能体已禁用")
+                        .build());
+            }
+        }
+        return MentionGroupVO.builder()
+                .type(MentionResourceType.SUBAGENT)
+                .label("子智能体")
+                .items(items)
+                .build();
+    }
+
+    private MentionGroupVO buildSkillGroup(List<Long> skillIds) {
+        List<MentionResourceDTO> items = new java.util.ArrayList<>();
+        if (skillIds != null && !skillIds.isEmpty()) {
+            for (com.lightbot.entity.Skill s : skillService.listByIds(skillIds)) {
+                boolean enabled = s.getStatus() == CommonStatus.ACTIVE;
+                items.add(MentionResourceDTO.builder()
+                        .type(MentionResourceType.SKILL)
+                        .resourceId(String.valueOf(s.getId()))
+                        .name(s.getDisplayName() != null && !s.getDisplayName().isBlank() ? s.getDisplayName() : s.getName())
+                        .description(s.getDescription())
+                        .token("@skill:" + s.getId())
+                        .enabled(enabled)
+                        .disabledReason(enabled ? null : "Skill已禁用或删除")
+                        .build());
+            }
+        }
+        return MentionGroupVO.builder()
+                .type(MentionResourceType.SKILL)
+                .label("Skill")
+                .items(items)
+                .build();
+    }
+
+    private MentionGroupVO buildToolGroup(List<Long> toolIds) {
+        List<MentionResourceDTO> items = new java.util.ArrayList<>();
+        if (toolIds != null && !toolIds.isEmpty()) {
+            for (com.lightbot.entity.Tool t : toolService.listByIds(toolIds)) {
+                boolean enabled = t.getStatus() == CommonStatus.ACTIVE;
+                items.add(MentionResourceDTO.builder()
+                        .type(MentionResourceType.TOOL)
+                        .resourceId(String.valueOf(t.getId()))
+                        .name(t.getDisplayName() != null && !t.getDisplayName().isBlank() ? t.getDisplayName() : t.getName())
+                        .description(t.getDescription())
+                        .token("@tool:" + t.getId())
+                        .enabled(enabled)
+                        .disabledReason(enabled ? null : "工具已禁用或删除")
+                        .build());
+            }
+        }
+        return MentionGroupVO.builder()
+                .type(MentionResourceType.TOOL)
+                .label("工具")
+                .items(items)
+                .build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Long> parseLongListFromPayload(Map<String, Object> payload, String key) {
+        if (payload == null) return null;
+        Object raw = payload.get(key);
+        if (!(raw instanceof List<?> list) || list.isEmpty()) return null;
+        List<Long> ids = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Number n) {
+                ids.add(n.longValue());
+            } else if (item != null && !String.valueOf(item).isBlank()) {
+                try {
+                    ids.add(Long.parseLong(String.valueOf(item).trim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return ids.isEmpty() ? null : ids;
     }
 }

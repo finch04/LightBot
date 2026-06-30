@@ -83,6 +83,7 @@ public class ChatServiceImpl implements ChatService {
 
     // 中间件
     private final InitMiddleware initMiddleware;
+    private final MentionMiddleware mentionMiddleware;
     private final UserSensitiveMiddleware userSensitiveMiddleware;
     private final WorkflowMiddleware workflowMiddleware;
     private final SkillPrepMiddleware skillPrepMiddleware;
@@ -119,6 +120,7 @@ public class ChatServiceImpl implements ChatService {
         ChatContext ctx = ChatContext.of(request);
         ctx.setRequestId(String.valueOf(System.nanoTime()));
         initMiddleware.init(ctx);
+        mentionMiddleware.prepare(ctx);
         Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
         SensitiveWordFilter.FilterResult userCheck = SensitiveWordFilter.checkUserInput(
                 request.getMessage(), ctx.getConfigMap(), agentId, ctx.getSessionId());
@@ -379,9 +381,9 @@ public class ChatServiceImpl implements ChatService {
         ChatContext ctx = ChatContext.of(request);
         ctx.setRequestId(String.valueOf(System.nanoTime()));
 
-        // Init → 用户敏感词 → Workflow → SkillPrep → Message → ToolPrep → Trace → [core]
+        // Init → Mention → 用户敏感词 → Workflow → SkillPrep → Message → ToolPrep → Trace → [core]
         List<ChatMiddleware> middlewares = List.of(
-                initMiddleware, userSensitiveMiddleware, workflowMiddleware,
+                initMiddleware, mentionMiddleware, userSensitiveMiddleware, workflowMiddleware,
                 skillPrepMiddleware, messageMiddleware, toolPrepMiddleware, traceMiddleware);
         ChatServiceCore core = this::streamCore;
 

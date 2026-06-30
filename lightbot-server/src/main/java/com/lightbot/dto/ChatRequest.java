@@ -54,6 +54,11 @@ public class ChatRequest {
     private Long replyToMessageId;
 
     /**
+     * 本轮用户 @ 提及的资源，后端校验后用于收窄检索/委派范围
+     */
+    private List<ChatMentionDTO> mentions;
+
+    /**
      * API Key ID（由拦截器注入，不从前端传入）
      */
     private transient Long apiKeyId;

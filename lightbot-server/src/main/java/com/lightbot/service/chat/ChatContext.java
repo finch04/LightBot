@@ -44,6 +44,10 @@ public class ChatContext {
     private List<Long> versionSubAgentIds;
     private List<Long> versionSkillIds;
 
+    // ===== MentionMiddleware 构建 =====
+    /** 本轮 @ 提及的资源范围（null 表示无 mention） */
+    private MentionScope mentionScope;
+
     // ===== MessageMiddleware 构建 =====
     private List<org.springframework.ai.chat.messages.Message> messages;
 

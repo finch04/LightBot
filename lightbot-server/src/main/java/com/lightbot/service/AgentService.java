@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.AgentSaveRequest;
+import com.lightbot.dto.MentionOptionsVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.McpServer;
 import com.lightbot.entity.Tool;
@@ -236,4 +237,14 @@ public interface AgentService extends IService<Agent> {
      * @return Agent列表
      */
     List<Agent> listByUserId(Long userId);
+
+    /**
+     * 获取 Agent 当前可用的 mention 候选资源（按版本快照或当前绑定聚合）
+     *
+     * @param agentId        Agent ID
+     * @param agentVersionId Agent 版本快照 ID，为空则按当前激活版本/暂存
+     * @param types          限定返回的资源类型（逗号分隔），为空返回全部一期类型
+     * @return 分组候选资源
+     */
+    MentionOptionsVO getMentionOptions(Long agentId, Long agentVersionId, String types);
 }

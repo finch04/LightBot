@@ -3,10 +3,12 @@
     <!-- 顶部栏 -->
     <div v-if="sessionId" class="chat-topbar">
       <div class="chat-topbar-left">
-        <div v-if="!titleEditing" class="chat-topbar-title" @click="startTitleEdit">
-          {{ sessionTitle || '新对话' }}
-          <EditOutlined class="chat-topbar-title-icon" />
-        </div>
+        <a-tooltip v-if="!titleEditing" title="修改标题">
+          <div class="chat-topbar-title" @click="startTitleEdit">
+            {{ sessionTitle || '新对话' }}
+            <EditOutlined class="chat-topbar-title-icon" />
+          </div>
+        </a-tooltip>
         <div v-else class="chat-topbar-title-edit">
           <a-input
             ref="titleInputRef"
@@ -17,14 +19,25 @@
             @blur="confirmTitleEdit"
             @keydown.esc="cancelTitleEdit"
           />
+          <a-tooltip title="取消">
+            <button
+              class="btn-title-cancel"
+              @mousedown.prevent
+              @click="cancelTitleEdit"
+            >
+              <CloseOutlined />
+            </button>
+          </a-tooltip>
         </div>
       </div>
       <div class="chat-topbar-right">
-        <a-badge :count="sessionFileCount" :overflow-count="99" :number-style="{ fontSize: '10px', boxShadow: 'none' }">
-          <button class="btn-topbar-file" @click="openFileDrawer" title="会话文件">
-            <FolderOpenOutlined />
-          </button>
-        </a-badge>
+        <a-tooltip title="会话文件">
+          <a-badge :count="sessionFileCount" :overflow-count="99" :number-style="{ fontSize: '10px', boxShadow: 'none' }">
+            <button class="btn-topbar-file" @click="openFileDrawer">
+              <FolderOpenOutlined />
+            </button>
+          </a-badge>
+        </a-tooltip>
       </div>
     </div>
     <!-- 消息列表 -->
@@ -214,7 +227,13 @@
                 <!-- 无工具事件：正常渲染 -->
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock">
                   <div v-if="messages[virtualRow.index].content && messages[virtualRow.index].content !== '[附件]'" class="message-content">
-                    <MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
+                    <MentionTextRenderer
+                      v-if="getMsgMentions(messages[virtualRow.index]).length"
+                      :content="messages[virtualRow.index].content"
+                      :mentions="getMsgMentions(messages[virtualRow.index])"
+                      :finalized="!messages[virtualRow.index]._streaming"
+                    />
+                    <MarkdownPreview v-else :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" />
                   </div>
                 </template>
                 <!-- 1.3 模型重试提示 -->
@@ -532,15 +551,14 @@
               <PaperClipOutlined v-else />
             </button>
           </a-tooltip>
-          <textarea
+          <ChatMentionInput
             ref="inputRef"
             v-model="input"
-            class="input-textarea"
-            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-            rows="1"
-            spellcheck="false"
-            @keydown="handleKeydown"
-            @input="autoResize"
+            :agent-id="selectedAgentId"
+            :agent-version-id="selectedAgentVersionId"
+            :disabled="loading"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行, @ 提及资源)"
+            @send="sendMessage"
           />
           <div class="chat-input-actions">
             <div v-if="voiceListening" class="voice-listening-indicator">
@@ -717,6 +735,18 @@
     :mask-closable="true"
     @afterOpenChange="onFileDrawerOpened"
   >
+    <template #extra>
+      <a-tooltip title="刷新">
+        <button
+          class="btn-drawer-refresh"
+          :class="{ refreshing: fileDrawerLoading }"
+          :disabled="fileDrawerLoading"
+          @click="refreshSessionFiles"
+        >
+          <ReloadOutlined :spin="fileDrawerLoading" />
+        </button>
+      </a-tooltip>
+    </template>
     <div v-if="fileDrawerLoading" class="file-drawer-loading">
       <LoadingOutlined spin class="file-drawer-loading-icon" />
     </div>
@@ -775,6 +805,8 @@ import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
+import ChatMentionInput from '../components/ChatMentionInput.vue'
+import MentionTextRenderer from '../components/MentionTextRenderer.vue'
 import { useChatAgents } from '../composables/useChatAgents'
 import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
@@ -844,6 +876,7 @@ const titleInputRef = ref(null)
 const sessionAttachments = ref([])
 const fileDrawerOpen = ref(false)
 const fileDrawerLoading = ref(false)
+const fileDrawerLoadedOnce = ref(false)
 const sessionFileCount = computed(() => sessionAttachments.value.length)
 const userUploads = computed(() => sessionAttachments.value.filter(a => a.source === 'user_upload'))
 const aiFiles = computed(() => sessionAttachments.value.filter(a => a.source === 'ai_generated'))
@@ -1052,37 +1085,6 @@ const userInitial = computed(() => {
   return name[0].toUpperCase()
 })
 
-function handleKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    sendMessage()
-    return
-  }
-  // 上下键翻阅输入历史（仅在光标位于首尾时触发）
-  const ta = inputRef.value
-  if (!ta || inputHistory.value.length === 0) return
-  if (e.key === 'ArrowUp' && ta.selectionStart === 0 && ta.selectionEnd === 0) {
-    e.preventDefault()
-    const idx = historyIndex.value < 0
-      ? inputHistory.value.length - 1
-      : Math.max(0, historyIndex.value - 1)
-    historyIndex.value = idx
-    input.value = inputHistory.value[idx]
-    nextTick(() => { ta.selectionStart = ta.selectionEnd = 0 })
-  } else if (e.key === 'ArrowDown' && historyIndex.value >= 0) {
-    e.preventDefault()
-    const idx = historyIndex.value + 1
-    if (idx >= inputHistory.value.length) {
-      historyIndex.value = -1
-      input.value = ''
-    } else {
-      historyIndex.value = idx
-      input.value = inputHistory.value[idx]
-    }
-    nextTick(() => { ta.selectionStart = ta.selectionEnd = ta.value.length })
-  }
-}
-
 function handleChatKeydown(e) {
   // Ctrl+/ — 聚焦输入框
   if (e.ctrlKey && e.code === 'Slash') {
@@ -1107,11 +1109,8 @@ function handleEditKeydown(e) {
 }
 
 function autoResize() {
-  const el = inputRef.value
-  if (el) {
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px'
-  }
+  // ChatMentionInput 使用 contenteditable，由 CSS 控制高度（min-height/max-height + overflow-y），
+  // 不再需要 JS 手动调整。保留空函数避免破坏 useVoiceIO 等调用方。
 }
 
 
@@ -1288,6 +1287,18 @@ function parseAttachmentsFromMetadata(metadata) {
   }
 }
 
+/** 从 msg.metadata 或 msg._mentions 提取 mention 快照（用于历史 chip 回显） */
+function getMsgMentions(msg) {
+  if (!msg) return []
+  if (Array.isArray(msg._mentions) && msg._mentions.length) return msg._mentions
+  try {
+    const meta = typeof msg.metadata === 'string' ? safeJsonParse(msg.metadata) : msg.metadata
+    return Array.isArray(meta?.mentions) ? meta.mentions : []
+  } catch {
+    return []
+  }
+}
+
 function getMsgAttachments(msg) {
   return msg._attachments || []
 }
@@ -1427,6 +1438,8 @@ async function loadHistory() {
   messages.value = []
   initialLoadDone.value = false
   lastReplyElapsed.value = null
+  sessionAttachments.value = []
+  fileDrawerLoadedOnce.value = false
   input.value = ''
   inputHistory.value = []
   historyIndex.value = -1
@@ -1544,11 +1557,19 @@ async function sendMessage() {
     return
   }
 
+  // 从 ChatMentionInput 提取结构化 mentions（在重置 input 之前）
+  const mentionInputComp = inputRef.value
+  const sentMentions = mentionInputComp?.getMentions?.() || undefined
+
   const displayContent = text || (attachments.length ? '[附件]' : '')
   const sentAttachments = attachments.map(a => ({ ...a }))
   await enrichVideoThumbnails(sentAttachments)
 
   const userMsg = { role: 'user', content: displayContent, _attachments: sentAttachments }
+  // 携带 mention 快照（用于前端 chip 渲染，后端 message.metadata 也会持久化一份）
+  if (sentMentions?.length) {
+    userMsg._mentions = sentMentions
+  }
   // 携带引用回复信息（用于前端渲染引用摘要）
   const currentReplyToId = replyTo.active ? replyTo.messageId : null
   const currentReplyToContent = replyTo.active ? replyTo.content : ''
@@ -1565,6 +1586,8 @@ async function sendMessage() {
   }
   historyIndex.value = -1
   input.value = ''
+  // 清空 ChatMentionInput 中的 chip（input 清空会触发 watch 重置 innerHTML，mentions 也需手动清）
+  mentionInputComp?.clear?.()
   pendingAttachments.value = []
   cancelReply()
   autoResize()
@@ -1575,6 +1598,7 @@ async function sendMessage() {
   await runChatStream({
     message: text,
     attachments: sentAttachments,
+    mentions: sentMentions,
     regenerate: false,
     replyToMessageId: currentReplyToId,
   })
@@ -1717,7 +1741,7 @@ async function submitEdit() {
   })
 }
 
-async function runChatStream({ message, attachments, regenerate, editMessageId: editMsgId, replyToMessageId: replyMsgId }) {
+async function runChatStream({ message, attachments, mentions, regenerate, editMessageId: editMsgId, replyToMessageId: replyMsgId }) {
   loading.value = true
   streaming.value = true
   hasStreamContent.value = false
@@ -1757,6 +1781,12 @@ async function runChatStream({ message, attachments, regenerate, editMessageId: 
       regenerate: regenerate || undefined,
       editMessageId: editMsgId || undefined,
       replyToMessageId: replyMsgId || undefined,
+      mentions: mentions?.length ? mentions.map(m => ({
+        type: m.type,
+        resourceId: String(m.resourceId),
+        name: m.name,
+        token: m.token,
+      })) : undefined,
       attachments: attachments?.length ? attachments.map(a => ({
         id: a.id,
         type: a.type,
@@ -2297,12 +2327,20 @@ function cancelTitleEdit() {
 
 // ===== 文件抽屉 =====
 function openFileDrawer() {
+  // 首次打开提前置 loading，避免抽屉展开动画期间闪烁空状态
+  if (!fileDrawerLoadedOnce.value) {
+    fileDrawerLoading.value = true
+  }
   fileDrawerOpen.value = true
 }
 
 async function onFileDrawerOpened(open) {
   if (!open || !sessionId.value) return
   await loadSessionFiles()
+}
+
+function refreshSessionFiles() {
+  loadSessionFiles()
 }
 
 async function loadSessionFiles() {
@@ -2322,6 +2360,7 @@ async function loadSessionFiles() {
         })
       } catch { /* ignore */ }
     }
+    fileDrawerLoadedOnce.value = true
   } catch {
     sessionAttachments.value = []
   } finally {
@@ -2460,8 +2499,6 @@ watch(sessionId, (newVal, oldVal) => {
   background: var(--color-canvas-soft);
   flex-shrink: 0;
   gap: 16px;
-  max-width: 800px;
-  margin: 0 auto;
   width: 100%;
 }
 
@@ -2509,12 +2546,37 @@ watch(sessionId, (newVal, oldVal) => {
 
 .chat-topbar-title-edit {
   flex: 1;
-  max-width: 320px;
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chat-topbar-title-edit :deep(input) {
   font-size: 15px;
   font-weight: 600;
+}
+
+.btn-title-cancel {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-title-cancel:hover {
+  background: var(--color-canvas-soft-2);
+  color: var(--color-error);
+  border-color: var(--color-hairline-strong);
 }
 
 .chat-topbar-right {
@@ -3964,6 +4026,32 @@ span.agent-menu-icon {
 
 .file-drawer-loading-icon {
   font-size: 24px;
+  color: var(--color-mute);
+}
+
+.btn-drawer-refresh {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-drawer-refresh:hover:not(.refreshing) {
+  background: var(--color-canvas-soft-2);
+  color: var(--color-ink);
+  border-color: var(--color-hairline-strong);
+}
+
+.btn-drawer-refresh.refreshing {
+  cursor: not-allowed;
   color: var(--color-mute);
 }
 
