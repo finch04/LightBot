@@ -175,13 +175,8 @@ public class OllamaModelHandler implements ModelProviderHandler {
      */
     @Override
     public List<ConfigField> getModelCapabilities() {
-        return List.of(ConfigField.builder()
-                .key(ConfigKeys.Agent.ENABLE_AUDIO_INPUT)
-                .label("音频输入")
-                .type("switch")
-                .defaultValue(false)
-                .hint("对话页显示语音输入按钮，使用浏览器语音识别将语音转为文字后发送")
-                .build());
+        // Ollama 通过 OpenAI 兼容接口支持视觉模型（如 llama3.2-vision 等）
+        return AgentCapabilityConfigFields.openAiFields();
     }
 
     /**

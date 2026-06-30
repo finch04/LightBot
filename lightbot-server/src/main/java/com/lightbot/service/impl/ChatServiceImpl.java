@@ -102,8 +102,8 @@ public class ChatServiceImpl implements ChatService {
     /** SSE 心跳注释行（SSE 协议：以冒号开头的行是注释，客户端应忽略） */
     private static final String HEARTBEAT_PREFIX = ":heartbeat";
 
-    /** 工具执行超时时间（秒）：内置工具 30s、API 工具 60s、MCP 工具 120s，统一取最大值 120s */
-    private static final long TOOL_EXECUTION_TIMEOUT_SECONDS = 120;
+    /** 工具执行超时时间（秒），与 {@link com.lightbot.constant.ChatConstants#TOOL_EXECUTION_TIMEOUT_SECONDS} 一致 */
+    private static final long TOOL_EXECUTION_TIMEOUT_SECONDS = com.lightbot.constant.ChatConstants.TOOL_EXECUTION_TIMEOUT_SECONDS;
 
     /** 工具调用上下文裁剪阈值（字符数），超出时压缩早期工具调用轮次，约 15K tokens */
     private static final int MAX_TOOL_CONTEXT_CHARS = 60000;
@@ -395,7 +395,7 @@ public class ChatServiceImpl implements ChatService {
     /**
      * 构建 [DONE] 事件：先持久化 AI 回复，再返回带消息ID的完成标记
      * <p>此方法在 Mono.fromCallable 中执行（Flux 最后一个元素），此时流式内容已全部累加。
-     * Trace 记录、标题生成等后置操作仍由 TraceMiddleware.doOnComplete 处理。</p>
+     * Trace 记录等后置操作由 TraceMiddleware.doOnComplete 处理；标题生成在本方法助手消息落库后触发。</p>
      */
     private String buildDoneEvent(ChatContext ctx) {
         long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
@@ -418,8 +418,11 @@ public class ChatServiceImpl implements ChatService {
             }
 
             // 1. 持久化 AI 回复
-            String replyToSave = SensitiveWordFilter.filterAiOutput(
-                    ctx.getFullReply().toString(), ctx.getConfigMap(), agentId, ctx.getSessionId()).text();
+            // 注意：流式链路中 fullReply 已在过程中通过 SensitiveWordFilter 过滤（processChunk/filterAiOutput）
+            // 此处直接使用，避免重复过滤导致内容不一致（替换策略下多次替换会改变内容）
+            String fullReplyText = ctx.getFullReply().toString();
+            // 仅做数据库安全清理（非法字符），不做敏感词二次过滤
+            String replyToSave = com.lightbot.util.TextNormalizeUtil.sanitizeForAiMessage(fullReplyText, 0);
             String metadataStr = buildPersistMetadata(ctx);
             Long assistantMessageId = messageMiddleware.saveMessage(
                     ctx.getSessionId(), MessageRole.ASSISTANT,
@@ -439,6 +442,9 @@ public class ChatServiceImpl implements ChatService {
             }
             ctx.getFullReply().setLength(0);
             ctx.getFullReply().append(replyToSave);
+
+            // 1.2 助手消息已落库，异步生成会话标题（须晚于 TraceMiddleware.doOnComplete）
+            scheduleTitleGeneration(ctx);
 
             // 2. 返回带消息ID、Token数和完整metadata的 [DONE] 事件
             return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId, totalTokens, metadataStr);
@@ -467,6 +473,17 @@ public class ChatServiceImpl implements ChatService {
         ctx.setStreamFailed(true);
         ctx.setStreamErrorMessage(classifyErrorMessage(e));
         ctx.setStreamErrorCode(classifyErrorCode(e));
+    }
+
+    /**
+     * 异步生成会话标题：在 user + assistant 均已持久化后调度
+     */
+    private void scheduleTitleGeneration(ChatContext ctx) {
+        if (ctx.getSessionId() == null) {
+            return;
+        }
+        taskExecutor.execute(() -> traceMiddleware.generateTitle(
+                ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
     }
 
     /**
@@ -851,6 +868,8 @@ public class ChatServiceImpl implements ChatService {
     private Flux<ChatResponse> streamModelAttempt(ChatContext ctx, ChatModel chatModel, Prompt prompt,
                                                    int depth, Sinks.Many<String> eventSink,
                                                    int attempt, int retryTimes) {
+        // 记录本轮尝试前 fullReply 的长度，用于失败时回滚
+        int fullReplyLengthBefore = ctx.getFullReply().length();
         boolean[] receivedResponse = {false};
         return chatModel.stream(prompt)
                 .doOnNext(response -> receivedResponse[0] = true)
@@ -862,6 +881,16 @@ public class ChatServiceImpl implements ChatService {
                         eventSink.tryEmitNext(STATUS_PREFIX + toolEventGenerator.errorRetryEvent(
                                 "AI连接异常，正在重试中 " + retryNo + "/" + retryTimes,
                                 classifyErrorCode(e), retryNo, retryTimes));
+                        // 重试前回滚 fullReply 到本轮尝试前的状态，避免内容重复累积
+                        if (ctx.getFullReply().length() > fullReplyLengthBefore) {
+                            ctx.getFullReply().setLength(fullReplyLengthBefore);
+                        }
+                        // 重置 SensitiveStreamState，避免增量过滤状态混乱
+                        if (ctx.getSensitiveStreamState() != null) {
+                            Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
+                            ctx.setSensitiveStreamState(new SensitiveWordFilter.StreamState(
+                                    ctx.getConfigMap(), agentId, ctx.getSessionId()));
+                        }
                         return Mono.delay(Duration.ofMillis(delayMs))
                                 .thenMany(streamModelAttempt(ctx, chatModel, prompt, depth, eventSink, attempt + 1, retryTimes));
                     }

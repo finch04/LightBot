@@ -217,6 +217,7 @@ import EntitySelectOption from '../components/EntitySelectOption.vue'
 import EntityCard from '../components/EntityCard.vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
+import { getProvidersWithModels } from '../api/modelProvider'
 import ModelSelect from '../components/ModelSelect.vue'
 import { truncateText } from '../utils/format'
 import { getToolTypeLabel } from '../utils/bindingTheme'
@@ -253,6 +254,7 @@ const currentDetail = ref(null)
 
 const toolList = ref([])
 const staleToolOptions = ref([])
+const providerList = ref([])
 
 const toolOptions = computed(() => {
   return toolList.value.map(t => ({
@@ -265,9 +267,19 @@ const toolOptions = computed(() => {
 
 const allToolOptions = computed(() => [...toolOptions.value, ...staleToolOptions.value])
 
+// 提供商ID到名称的映射
+const providerNameMap = computed(() => {
+  const map = {}
+  for (const p of providerList.value) {
+    map[String(p.id)] = p.name
+  }
+  return map
+})
+
 onMounted(() => {
   loadList()
   loadToolList()
+  loadProviders()
 })
 
 async function loadList() {
@@ -288,6 +300,15 @@ async function loadToolList() {
     toolList.value = res.data?.records || []
   } catch (e) {
     console.error('[SubAgentManage] 加载工具列表失败:', e)
+  }
+}
+
+async function loadProviders() {
+  try {
+    const res = await getProvidersWithModels('llm')
+    providerList.value = res.data || []
+  } catch (e) {
+    console.error('[SubAgentManage] 加载提供商列表失败:', e)
   }
 }
 
@@ -351,8 +372,9 @@ function onModelSelectChange({ providerId, modelId }) {
 function formatModelLabel(record) {
   if (!record?.modelId) return '继承主 Agent'
   const pid = String(record.modelId)
+  const providerName = providerNameMap.value[pid] || pid
   const model = record.llmModel || '默认模型'
-  return `${pid}:${model}`
+  return `${providerName}:${model}`
 }
 
 /** 解析JSON数组为字符串列表，兼容数组和JSON字符串输入 */
@@ -447,8 +469,12 @@ async function handleToggleEnabled(record, enabled) {
   }
 }
 
-function openDetail(record) {
+async function openDetail(record) {
   currentDetail.value = record
+  // 确保提供商列表已加载，以便正确显示模型提供商名称
+  if (providerList.value.length === 0) {
+    await loadProviders()
+  }
   detailVisible.value = true
 }
 

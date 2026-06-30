@@ -120,9 +120,12 @@ public class MessageMiddleware implements ChatMiddleware {
         validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
         String userText = resolveUserText(ctx.getRequest());
         if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
-            deleteLastAssistantMessage(ctx.getSessionId());
-            // 编辑重发：更新用户消息内容
-            if (ctx.getRequest().getEditMessageId() != null) {
+            // 编辑重发时不删除之前的AI回复（那是针对旧问题的有效回答）
+            // 只有纯"重新生成"（无编辑消息ID）时才删除之前不完整的AI回复
+            if (ctx.getRequest().getEditMessageId() == null) {
+                deleteLastAssistantMessage(ctx.getSessionId());
+            } else {
+                // 编辑重发：仅更新用户消息内容
                 updateUserMessageContent(ctx.getRequest().getEditMessageId(), userText);
             }
         } else {
@@ -672,11 +675,11 @@ public class MessageMiddleware implements ChatMiddleware {
         Message msg = new Message();
         msg.setSessionId(sessionId);
         msg.setRole(role);
-        msg.setContent(content);
+        msg.setContent(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(content));
         msg.setContentType(ContentType.TEXT);
         msg.setMessageType(messageType != null ? messageType : MessageType.TEXT);
         msg.setTokenCount(tokenCount);
-        msg.setMetadata(metadata);
+        msg.setMetadata(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(metadata));
         msg.setParentId(parentId);
         msg.setReplyToMessageId(replyToMessageId);
         messageMapper.insert(msg);

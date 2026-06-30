@@ -23,8 +23,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.core.task.TaskExecutor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -46,7 +44,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TraceMiddleware implements ChatMiddleware {
 
-    private final ThreadPoolTaskExecutor taskExecutor;
     private final LlmTraceService llmTraceService;
     private final ProviderResolver providerResolver;
     private final ModelFactory modelFactory;
@@ -63,10 +60,9 @@ public class TraceMiddleware implements ChatMiddleware {
                     // 此处仅做 Trace 记录等后置清理。
                     long tEnd = System.currentTimeMillis();
 
-                    // 1. 异步生成标题
-                    taskExecutor.execute(() -> generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
+                    // 标题生成已移至 ChatServiceImpl.buildDoneEvent（助手消息落库后），避免 doOnComplete 早于持久化导致消息数不足
 
-                    // 2. 记录本轮用户输入（含附件，便于 Trace 排查）
+                    // 1. 记录本轮用户输入（含附件，便于 Trace 排查）
                     recordUserInputSpan(ctx);
 
                     // 2.1 记录 ask_user 父子关联
@@ -222,8 +218,9 @@ public class TraceMiddleware implements ChatMiddleware {
         if (replyContent.isBlank() && ctx.getReasoningContent().length() > 0) {
             replyContent = ctx.getReasoningContent().toString();
         }
-        trace.setReplyContent(replyContent);
-        trace.setErrorMessage(errorMessage);
+        // 数据库安全清理（非法字符），敏感词已在流式/非流式过程中过滤
+        trace.setReplyContent(com.lightbot.util.TextNormalizeUtil.sanitizeForAiMessage(replyContent, 0));
+        trace.setErrorMessage(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(errorMessage));
         try {
             trace.setSpans(objectMapper.writeValueAsString(ctx.getSpans()));
         } catch (Exception ex) {

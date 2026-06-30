@@ -1,7 +1,7 @@
 <template>
   <div class="model-select-wrapper" :style="wrapperStyle">
     <a-select
-      :value="displayValue"
+      :value="modelValue"
       @update:value="handleUpdate"
       :placeholder="placeholder || '选择模型'"
       :disabled="disabled"
@@ -11,6 +11,7 @@
       :loading="loading"
       allow-clear
       :dropdownMatchSelectWidth="false"
+      option-label-prop="label"
       @search="onSearch"
     >
       <template #dropdownRender="{ menuNode }">
@@ -19,7 +20,7 @@
         </div>
         <component :is="menuNode" />
       </template>
-      <a-select-option v-for="opt in filteredOptions" :key="opt.value" :value="opt.value">
+      <a-select-option v-for="opt in filteredOptions" :key="opt.value" :value="opt.value" :label="opt.label">
         <a-tooltip :title="opt.modelId" placement="topLeft" :overlayStyle="{ maxWidth: '360px' }">
           <span class="model-option-label">{{ opt.label }}</span>
         </a-tooltip>
@@ -73,16 +74,6 @@ const wrapperStyle = computed(() => {
   if (!props.style) return { width: '100%' }
   if (typeof props.style === 'string') return { width: props.style }
   return { width: '100%', ...props.style }
-})
-
-const displayValue = computed(() => {
-  if (!props.modelValue) return undefined
-  // 确保 value 中的 providerId 和 modelId 都是字符串，与 options 格式一致
-  const parts = props.modelValue.split(':')
-  if (parts.length === 2) {
-    return `${String(parts[0])}:${String(parts[1])}`
-  }
-  return props.modelValue
 })
 
 // 防抖搜索：支持模型提供商名称、模型名称

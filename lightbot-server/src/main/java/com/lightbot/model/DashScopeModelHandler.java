@@ -85,9 +85,12 @@ public class DashScopeModelHandler implements ModelProviderHandler {
                 apiBuilder.baseUrl(baseUrl);
             }
             DashScopeApi api = apiBuilder.build();
+            DashScopeChatOptions.DashScopeChatOptionsBuilder defaultOptions =
+                    DashScopeChatOptions.builder().withModel(defaultModelId);
+            DashScopeModelSupport.applyMultimodalRouting(defaultOptions, defaultModelId);
             return DashScopeChatModel.builder()
                     .dashScopeApi(api)
-                    .defaultOptions(DashScopeChatOptions.builder().withModel(defaultModelId).build())
+                    .defaultOptions(defaultOptions.build())
                     .build();
         }
     }
@@ -133,6 +136,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
             if (config.containsKey("repetitionPenalty")) {
                 builder.withRepetitionPenalty(toDouble(config.get("repetitionPenalty")));
             }
+            DashScopeModelSupport.applyMultimodalRouting(builder, modelId);
             return builder.build();
         }
     }
@@ -273,6 +277,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
         // 对话模型
         for (String id : List.of("qwen-turbo", "qwen-plus", "qwen-max", "qwen-long",
                 "qwen-turbo-latest", "qwen-plus-latest", "qwen-max-latest",
+                "qwen3.5-plus", "qwen3.6-flash", "qwen3.6-flash-2026-04-16", "qwen3.6-plus",
                 "qwen-vl-max", "qwen-vl-plus", "qwen2-vl-72b-instruct", "qwen2.5-vl-72b-instruct")) {
             if (!existing.contains(id)) list.add(FetchedModel.of(id));
         }

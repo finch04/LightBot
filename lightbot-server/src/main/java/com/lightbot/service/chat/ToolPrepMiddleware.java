@@ -9,6 +9,7 @@ import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.enums.ToolType;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.DashScopeModelSupport;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.AgentService;
@@ -283,7 +284,17 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             }
         }
 
-        return toolBuilder.build();
+        ToolCallingChatOptions options = toolBuilder.build();
+        ModelProvider dashScopeProvider = providerId != null ? modelProviderService.getById(providerId) : null;
+        if (dashScopeProvider != null && dashScopeProvider.getType() == ModelProviderType.DASHSCOPE
+                && !DashScopeModelSupport.isCompatibleMode(dashScopeProvider.getBaseUrl())) {
+            options = DashScopeModelSupport.buildNativeChatOptions(
+                    modelId, configMap, options.getToolCallbacks(), options.getToolContext());
+            if (DashScopeModelSupport.requiresMultimodalApi(modelId)) {
+                log.info("[Chat] DashScope multimodal-generation 路由: modelId={}", modelId);
+            }
+        }
+        return options;
     }
 
     /**

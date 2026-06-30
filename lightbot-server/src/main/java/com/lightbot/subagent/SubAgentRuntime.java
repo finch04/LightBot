@@ -2,16 +2,22 @@ package com.lightbot.subagent;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.constant.ChatConstants;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.constant.ToolResultPrefixes;
 import com.lightbot.entity.SubAgent;
 import com.lightbot.entity.SubAgentRun;
 import com.lightbot.mapper.SubAgentRunMapper;
 import com.lightbot.model.ModelFactory;
+import com.lightbot.model.DashScopeModelSupport;
 import com.lightbot.model.ProviderResolver;
+import com.lightbot.entity.ModelProvider;
+import com.lightbot.enums.ModelProviderType;
+import com.lightbot.service.ModelProviderService;
 import com.lightbot.service.ToolService;
 import com.lightbot.service.chat.ChatContext;
 import com.lightbot.service.chat.ToolEventGenerator;
+import com.lightbot.util.TextNormalizeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -50,10 +56,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SubAgentRuntime {
 
+    private final ModelProviderService modelProviderService;
     private static final int MAX_LOOP_DEPTH = 6;
-
-    /** SubAgent 墙钟超时（秒）：防止单次 LLM 调用或整体执行无限阻塞 */
-    private static final long SUBAGENT_TIMEOUT_SECONDS = 120;
 
     private final ModelFactory modelFactory;
     private final ToolService toolService;
@@ -111,6 +115,7 @@ public class SubAgentRuntime {
         }
 
         long start = System.currentTimeMillis();
+        long deadlineMs = start + ChatConstants.TOOL_EXECUTION_TIMEOUT_SECONDS * 1000L;
         log.info("[SubAgent] 委派开始: name={}, threadId={}, taskLen={}",
                 subAgent.getName(), threadId, taskDescription != null ? taskDescription.length() : 0);
 
@@ -164,18 +169,25 @@ public class SubAgentRuntime {
 
             // 7. 构造 ChatOptions（继承主 Agent 的 modelId/temperature 等 + 注入子工具集）
             ToolCallingChatOptions options = buildSubAgentChatOptions(
-                    resolved.configMap(), toolCallbacks, subAgent, requestId);
+                    resolved.providerId(), resolved.configMap(), toolCallbacks, subAgent, requestId);
 
             // 8. 流式工具循环：直至模型返回不含 tool_call 的纯文本，或达到深度上限
             String reply = "";
             int toolCallCount = 0;
             for (int depth = 0; depth < MAX_LOOP_DEPTH; depth++) {
+                long remainingMs = deadlineMs - System.currentTimeMillis();
+                if (remainingMs <= 0) {
+                    String timeoutMsg = "SubAgent 执行超时（" + ChatConstants.TOOL_EXECUTION_TIMEOUT_SECONDS + "秒），请稍后重试";
+                    emitSubAgentError(chatContext, subAgent, timeoutMsg, "TIMEOUT");
+                    markFailed(run, timeoutMsg, start);
+                    return new SubAgentResult(timeoutMsg, threadId, continued);
+                }
                 StringBuilder replyBuilder = new StringBuilder();
                 AssistantMessage assistant;
                 try {
                     assistant = streamLlmWithRetry(
                             chatModel, new Prompt(new ArrayList<>(messages), options),
-                            subAgent, chatContext, modelRetryTimes, replyBuilder, depth);
+                            subAgent, chatContext, modelRetryTimes, replyBuilder, depth, deadlineMs);
                 } catch (Exception e) {
                     String errorMsg = classifyErrorMessage(e);
                     log.error("[SubAgent] 模型调用失败: name={}, depth={}, error={}",
@@ -236,7 +248,8 @@ public class SubAgentRuntime {
 
             // 10. 更新运行记录为完成
             String finalReply = reply.isBlank()
-                    ? "（SubAgent " + subAgent.getName() + " 未返回有效内容）" : reply;
+                    ? "（SubAgent " + subAgent.getName() + " 未返回有效内容）"
+                    : TextNormalizeUtil.sanitizeForAiMessage(reply, 0);
             long cost = System.currentTimeMillis() - start;
             run.setReply(finalReply);
             run.setStatus("completed");
@@ -279,14 +292,32 @@ public class SubAgentRuntime {
     /**
      * 构建 SubAgent ChatOptions：继承 modelId/temperature 等，并注入子工具集
      */
-    private ToolCallingChatOptions buildSubAgentChatOptions(Map<String, Object> configMap,
+    private ToolCallingChatOptions buildSubAgentChatOptions(Long providerId,
+                                                             Map<String, Object> configMap,
                                                              List<ToolCallback> toolCallbacks,
                                                              SubAgent subAgent, String requestId) {
+        String modelId = configMap != null && configMap.get("modelId") != null
+                ? configMap.get("modelId").toString() : null;
+        Map<String, Object> toolContext = null;
+        if (!toolCallbacks.isEmpty()) {
+            toolContext = Map.of(
+                    "subAgentId", subAgent.getId(),
+                    "subAgentName", subAgent.getName(),
+                    "requestId", requestId != null ? requestId : "");
+        }
+
+        ModelProvider provider = providerId != null ? modelProviderService.getById(providerId) : null;
+        if (provider != null && provider.getType() == ModelProviderType.DASHSCOPE
+                && !DashScopeModelSupport.isCompatibleMode(provider.getBaseUrl())) {
+            return DashScopeModelSupport.buildNativeChatOptions(
+                    modelId, configMap, toolCallbacks, toolContext);
+        }
+
         ToolCallingChatOptions.Builder builder = ToolCallingChatOptions.builder();
+        if (modelId != null) {
+            builder.model(modelId);
+        }
         if (configMap != null) {
-            if (configMap.containsKey("modelId") && configMap.get("modelId") != null) {
-                builder.model(configMap.get("modelId").toString());
-            }
             if (configMap.containsKey("temperature")) {
                 Object v = configMap.get("temperature");
                 builder.temperature(v instanceof Number n ? n.doubleValue() : Double.parseDouble(v.toString()));
@@ -302,10 +333,7 @@ public class SubAgentRuntime {
         }
         if (!toolCallbacks.isEmpty()) {
             builder.toolCallbacks(toolCallbacks);
-            builder.toolContext(Map.of(
-                    "subAgentId", subAgent.getId(),
-                    "subAgentName", subAgent.getName(),
-                    "requestId", requestId != null ? requestId : ""));
+            builder.toolContext(toolContext);
         }
         ToolCallingChatOptions options = builder.build();
         options.setInternalToolExecutionEnabled(false);
@@ -317,16 +345,23 @@ public class SubAgentRuntime {
      */
     private AssistantMessage streamLlmWithRetry(ChatModel chatModel, Prompt prompt, SubAgent subAgent,
                                                  ChatContext chatContext, int retryTimes,
-                                                 StringBuilder replyBuilder, int depth) throws Exception {
+                                                 StringBuilder replyBuilder, int depth, long deadlineMs) throws Exception {
         Exception lastError = null;
         for (int attempt = 0; attempt <= retryTimes; attempt++) {
+            long remainingMs = deadlineMs - System.currentTimeMillis();
+            if (remainingMs <= 0) {
+                throw new RuntimeException("SubAgent 执行超时（" + ChatConstants.TOOL_EXECUTION_TIMEOUT_SECONDS + "秒），请稍后重试");
+            }
             try {
-                return streamLlmOnce(chatModel, prompt, subAgent, chatContext, replyBuilder);
+                return streamLlmOnce(chatModel, prompt, subAgent, chatContext, replyBuilder, remainingMs);
             } catch (Exception e) {
                 lastError = e;
                 if (attempt < retryTimes) {
                     int retryNo = attempt + 1;
-                    long delayMs = (long) Math.pow(2, attempt) * 1000;
+                    long delayMs = Math.min((long) Math.pow(2, attempt) * 1000, Math.max(0, deadlineMs - System.currentTimeMillis()));
+                    if (delayMs <= 0) {
+                        throw new RuntimeException("SubAgent 执行超时（" + ChatConstants.TOOL_EXECUTION_TIMEOUT_SECONDS + "秒），请稍后重试");
+                    }
                     log.warn("[SubAgent] 模型调用失败，第{}次重试，等待{}ms: name={}, depth={}, error={}",
                             retryNo, delayMs, subAgent.getName(), depth, e.getMessage());
                     emitSubAgentErrorRetry(chatContext, subAgent,
@@ -339,9 +374,9 @@ public class SubAgentRuntime {
         throw lastError != null ? lastError : new RuntimeException("SubAgent 模型调用失败");
     }
 
-    /** 单次流式 LLM 调用 */
+    /** 单次流式 LLM 调用（受整体墙钟预算约束，与主 Agent 工具超时一致） */
     private AssistantMessage streamLlmOnce(ChatModel chatModel, Prompt prompt, SubAgent subAgent,
-                                          ChatContext chatContext, StringBuilder replyBuilder) {
+                                          ChatContext chatContext, StringBuilder replyBuilder, long remainingMs) {
         List<AssistantMessage> lastAssistant = new ArrayList<>();
         java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
         Flux<ChatResponse> flux = chatModel.stream(prompt);
@@ -362,10 +397,10 @@ public class SubAgentRuntime {
                 }
             }
         }).doOnComplete(() -> completed.set(true))
-          .take(Duration.ofSeconds(SUBAGENT_TIMEOUT_SECONDS))
+          .take(Duration.ofMillis(Math.max(1, remainingMs)))
           .blockLast();
         if (!completed.get()) {
-            throw new RuntimeException("SubAgent 执行超时（" + SUBAGENT_TIMEOUT_SECONDS + "秒），请稍后重试");
+            throw new RuntimeException("SubAgent 执行超时（" + ChatConstants.TOOL_EXECUTION_TIMEOUT_SECONDS + "秒），请稍后重试");
         }
         return lastAssistant.isEmpty() ? null : lastAssistant.get(0);
     }

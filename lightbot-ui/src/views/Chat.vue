@@ -1788,6 +1788,8 @@ function finalizeAbortedStream(assistantMsg, pushed) {
   lastReplyElapsed.value = Date.now() - sendStartTime
   abortController.value = null
   userStoppedStream.value = false
+  // 后端可能在流中断后仍落库并生成标题，继续轮询
+  pollSessionTitle(sessionId.value)
 
   if (isNearBottom.value) {
     nextTick(() => {
@@ -2126,6 +2128,7 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
     hasStreamContent.value = false
     currentStatus.value = ''
     abortController.value = null
+    pollSessionTitle(sessionId.value)
   }
 }
 
@@ -2451,11 +2454,19 @@ function openSessionFilePreview(att) {
 let pollTitleTimer = null
 function pollSessionTitle(sid) {
   if (!sid) return
+  // 已有自定义标题时无需轮询
+  if (sessionTitle.value && sessionTitle.value !== '新对话') return
   if (pollTitleTimer) clearInterval(pollTitleTimer)
   let count = 0
-  const maxRetries = 8
+  const maxRetries = 15
   const interval = 2000
   pollTitleTimer = setInterval(async () => {
+    // 轮询期间用户可能手动改了标题
+    if (sessionTitle.value && sessionTitle.value !== '新对话') {
+      clearInterval(pollTitleTimer)
+      pollTitleTimer = null
+      return
+    }
     try {
       const res = await getSessionTitle(sid)
       const title = res.data
@@ -2464,6 +2475,7 @@ function pollSessionTitle(sid) {
         pollTitleTimer = null
         sessionTitle.value = title
         window.dispatchEvent(new CustomEvent('session-title-updated'))
+        return
       }
     } catch {
       // ignore

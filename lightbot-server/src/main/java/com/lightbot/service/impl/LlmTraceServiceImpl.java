@@ -173,6 +173,9 @@ public class LlmTraceServiceImpl extends ServiceImpl<LlmTraceMapper, LlmTrace>
             return;
         }
         try {
+            trace.setReplyContent(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getReplyContent()));
+            trace.setErrorMessage(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getErrorMessage()));
+            trace.setSpans(com.lightbot.util.TextNormalizeUtil.sanitizeForDatabase(trace.getSpans()));
             save(trace);
         } catch (Exception e) {
             log.error("[LLMTrace] 异步写入调用链失败, requestId={}", trace.getRequestId(), e);
