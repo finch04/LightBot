@@ -120,7 +120,7 @@ function renderFromText(rawText) {
     el.innerHTML = ''
     return
   }
-  const tokenRe = /@(knowledge|subagent|skill):(\d+)/g
+  const tokenRe = /@(knowledge|subagent|skill|tool):(\d+)/g
   let lastIdx = 0
   let html = ''
   let m

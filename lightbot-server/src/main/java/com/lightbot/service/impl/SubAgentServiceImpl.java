@@ -65,7 +65,8 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         subAgent.setDescription(request.getDescription());
         subAgent.setSystemPrompt(request.getSystemPrompt());
         subAgent.setToolIds(toJson(request.getToolIds()));
-        subAgent.setModelId(request.getModelId());
+        subAgent.setModelId(request.resolveProviderId());
+        subAgent.setLlmModel(request.getLlmModel());
         subAgent.setEnabled(request.getEnabled() != null ? (request.getEnabled() ? 1 : 0) : 1);
         subAgent.setIsBuiltin(0);
         save(subAgent);
@@ -97,7 +98,8 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         subAgent.setDescription(request.getDescription());
         subAgent.setSystemPrompt(request.getSystemPrompt());
         subAgent.setToolIds(toJson(request.getToolIds()));
-        subAgent.setModelId(request.getModelId());
+        subAgent.setModelId(request.resolveProviderId());
+        subAgent.setLlmModel(request.getLlmModel());
         if (request.getEnabled() != null) {
             subAgent.setEnabled(request.getEnabled() ? 1 : 0);
         }

@@ -348,6 +348,44 @@ public class ToolEventGenerator {
     }
 
     /**
+     * SubAgent 流式错误事件
+     */
+    public String subagentErrorEvent(String subagentName, String displayName, String message, String code, int contentOffset) {
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "type", "subagent_error",
+                    "subagentName", subagentName != null ? subagentName : "",
+                    "displayName", displayName != null ? displayName : subagentName,
+                    "message", message != null ? message : "SubAgent 执行失败",
+                    "code", code != null ? code : "UNKNOWN",
+                    "contentOffset", contentOffset));
+        } catch (Exception e) {
+            return safeFallbackJson(Map.of("type", "subagent_error", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
+        }
+    }
+
+    /**
+     * SubAgent 模型重试事件
+     */
+    public String subagentErrorRetryEvent(String subagentName, String displayName, String message, String code,
+                                          int attempt, int maxRetries, int contentOffset) {
+        try {
+            Map<String, Object> evt = new java.util.LinkedHashMap<>();
+            evt.put("type", "subagent_error_retry");
+            evt.put("subagentName", subagentName != null ? subagentName : "");
+            evt.put("displayName", displayName != null ? displayName : subagentName);
+            evt.put("message", message != null ? message : "SubAgent 连接异常，正在重试");
+            evt.put("code", code != null ? code : "LLM_ERROR");
+            evt.put("attempt", attempt);
+            evt.put("maxRetries", maxRetries);
+            evt.put("contentOffset", contentOffset);
+            return objectMapper.writeValueAsString(evt);
+        } catch (Exception e) {
+            return safeFallbackJson(Map.of("type", "subagent_error_retry", "subagentName", subagentName != null ? subagentName : "", "contentOffset", contentOffset));
+        }
+    }
+
+    /**
      * 生成带消息ID的 [DONE] 事件
      * <p>格式：[DONE]{"userMessageId":"...","assistantMessageId":"..."}</p>
      *

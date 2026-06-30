@@ -47,6 +47,17 @@
               </span>
             </div>
           </div>
+          <!-- 子代理错误 / 重试 -->
+          <div v-if="getSubagentErrorRetry(i)" class="cap-subagent-error-retry">
+            <LoadingOutlined spin class="cap-step-icon" />
+            <span>{{ getSubagentErrorRetry(i).message }}</span>
+            <span class="cap-retry-count">{{ getSubagentErrorRetry(i).attempt }}/{{ getSubagentErrorRetry(i).maxRetries }}</span>
+          </div>
+          <div v-if="getSubagentError(i)" class="cap-subagent-error">
+            <CloseCircleOutlined class="cap-step-icon error" />
+            <span>{{ getSubagentError(i).message }}</span>
+            <span v-if="getSubagentError(i).code" class="cap-error-code">{{ getSubagentError(i).code }}</span>
+          </div>
           <!-- 最终结果 -->
           <div v-if="getSubagentResult(i)" class="cap-result">
             <span class="cap-label">执行结果</span>
@@ -60,7 +71,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
-import { ThunderboltOutlined, RobotOutlined, LoadingOutlined, RightOutlined, CodeOutlined, CheckCircleOutlined } from '@ant-design/icons-vue'
+import { ThunderboltOutlined, RobotOutlined, LoadingOutlined, RightOutlined, CodeOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   events: { type: Array, default: () => [] },
@@ -92,7 +103,7 @@ function syncExpanded() {
 watch(() => props.events?.length, syncExpanded, { immediate: true })
 
 function hasSubagentResult(callIndex) {
-  return !!getSubagentResult(callIndex)
+  return !!getSubagentResult(callIndex) || !!getSubagentError(callIndex)
 }
 
 function getSubagentResult(callIndex) {
@@ -103,7 +114,7 @@ function getSubagentResult(callIndex) {
   const resultEvt = props.events.find(
     e => e.type === 'subagent_result'
       && e.subagentName === name
-      && e.contentOffset === offset
+      && e.contentOffset == offset
   )
   return resultEvt?.result || null
 }
@@ -119,8 +130,29 @@ function getSubagentSteps(callIndex) {
   return props.events.filter(
     e => (e.type === 'subagent_tool_call' || e.type === 'subagent_tool_result' || e.type === 'subagent_token')
       && e.subagentName === name
-      && e.contentOffset === offset
+      && e.contentOffset == offset
   )
+}
+
+function getSubagentError(callIndex) {
+  const call = props.events[callIndex]
+  if (!call || call.type !== 'subagent_call') return null
+  const name = call.subagentName
+  const offset = call.contentOffset
+  return props.events.find(
+    e => e.type === 'subagent_error' && e.subagentName === name && e.contentOffset == offset
+  ) || null
+}
+
+function getSubagentErrorRetry(callIndex) {
+  const call = props.events[callIndex]
+  if (!call || call.type !== 'subagent_call') return null
+  const name = call.subagentName
+  const offset = call.contentOffset
+  const retries = props.events.filter(
+    e => e.type === 'subagent_error_retry' && e.subagentName === name && e.contentOffset == offset
+  )
+  return retries.length ? retries[retries.length - 1] : null
 }
 </script>
 
@@ -290,5 +322,48 @@ function getSubagentSteps(callIndex) {
   font-size: 12px;
   line-height: 1.6;
   word-break: break-word;
+}
+
+.cap-subagent-error-retry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(251, 191, 36, 0.15);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #b45309;
+}
+
+.cap-subagent-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.cap-error-code {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-mute);
+  flex-shrink: 0;
+}
+
+.cap-retry-count {
+  font-size: 11px;
+  color: var(--color-mute);
+  margin-left: auto;
+}
+
+.cap-step-icon.error {
+  color: #ef4444;
 }
 </style>

@@ -98,25 +98,14 @@
         </a-form-item>
         <a-form-item label="模型配置">
           <a-switch v-model:checked="inheritModel" style="margin-right: 8px" />
-          <span style="font-size: 13px; color: var(--color-mute);">{{ inheritModel ? '继承主 Agent 模型' : '使用独立模型' }}</span>
-          <a-select
+          <span style="font-size: 13px; color: var(--color-mute);">{{ inheritModel ? '继承主 Agent 模型（含版本快照）' : '使用独立模型' }}</span>
+          <ModelSelect
             v-if="!inheritModel"
-            v-model:value="form.modelId"
-            placeholder="请选择模型"
-            allow-clear
-            show-search
-            style="margin-top: 8px; width: 100%"
-            :filter-option="(input, option) => option.label?.toLowerCase().includes(input.toLowerCase())"
-          >
-            <a-select-option
-              v-for="p in providerOptions"
-              :key="p.id"
-              :value="p.id"
-              :label="p.name"
-            >
-              {{ p.name }}
-            </a-select-option>
-          </a-select>
+            v-model="modelSelectValue"
+            placeholder="选择模型"
+            style="margin-top: 8px"
+            @change="onModelSelectChange"
+          />
         </a-form-item>
         <a-form-item label="是否启用">
           <a-switch v-model:checked="form.enabled" />
@@ -187,9 +176,9 @@
           <span class="detail-label">模型配置</span>
           <span class="detail-value">
             <a-tag v-if="currentDetail?.modelId" color="blue">
-              {{ providerNameMap[String(currentDetail.modelId)] || currentDetail.modelId }}
+              {{ formatModelLabel(currentDetail) }}
             </a-tag>
-            <span v-else style="color: #999;">继承主 Agent</span>
+            <span v-else style="color: #999;">继承主 Agent（含版本快照）</span>
           </span>
         </div>
         <div class="detail-row">
@@ -228,7 +217,7 @@ import EntitySelectOption from '../components/EntitySelectOption.vue'
 import EntityCard from '../components/EntityCard.vue'
 import { getSubAgents, createSubAgent, updateSubAgent, deleteSubAgent, setSubAgentEnabled } from '../api/subagent'
 import { getTools } from '../api/tool'
-import { getProvidersWithModels } from '../api/modelProvider'
+import ModelSelect from '../components/ModelSelect.vue'
 import { truncateText } from '../utils/format'
 import { getToolTypeLabel } from '../utils/bindingTheme'
 
@@ -252,19 +241,12 @@ const form = reactive({
   description: '',
   systemPrompt: '',
   toolIds: [],
-  modelId: null,
+  providerId: null,
+  llmModel: null,
   enabled: true
 })
 
-// 模型提供商列表（用于表单下拉和详情展示）
-const providerOptions = ref([])
-const providerNameMap = computed(() => {
-  const map = {}
-  for (const p of providerOptions.value) {
-    map[String(p.id)] = p.name
-  }
-  return map
-})
+const modelSelectValue = ref(null)
 
 const detailVisible = ref(false)
 const currentDetail = ref(null)
@@ -286,17 +268,7 @@ const allToolOptions = computed(() => [...toolOptions.value, ...staleToolOptions
 onMounted(() => {
   loadList()
   loadToolList()
-  loadProviderNames()
 })
-
-async function loadProviderNames() {
-  try {
-    const res = await getProvidersWithModels('llm')
-    providerOptions.value = res.data || []
-  } catch (e) {
-    console.error('[SubAgentManage] 加载模型提供商列表失败:', e)
-  }
-}
 
 async function loadList() {
   loading.value = true
@@ -332,14 +304,16 @@ function refresh() {
 function openDialog() {
   editingId.value = null
   inheritModel.value = true
+  modelSelectValue.value = null
   staleToolOptions.value = []
-  Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', toolIds: [], modelId: null, enabled: true })
+  Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', toolIds: [], providerId: null, llmModel: null, enabled: true })
   dialogVisible.value = true
 }
 
 function openEditDialog(record) {
   editingId.value = record.id
   inheritModel.value = !record.modelId
+  modelSelectValue.value = null
   staleToolOptions.value = []
 
   // 解析已绑定的工具ID
@@ -357,10 +331,28 @@ function openEditDialog(record) {
     description: record.description,
     systemPrompt: record.systemPrompt,
     toolIds: selectedIds,
-    modelId: record.modelId ? String(record.modelId) : null,
+    providerId: record.modelId ? String(record.modelId) : null,
+    llmModel: record.llmModel || null,
     enabled: record.enabled === 1
   })
+  if (record.modelId && record.llmModel) {
+    modelSelectValue.value = `${String(record.modelId)}:${String(record.llmModel)}`
+  } else if (record.modelId) {
+    modelSelectValue.value = `${String(record.modelId)}:`
+  }
   dialogVisible.value = true
+}
+
+function onModelSelectChange({ providerId, modelId }) {
+  form.providerId = providerId || null
+  form.llmModel = modelId || null
+}
+
+function formatModelLabel(record) {
+  if (!record?.modelId) return '继承主 Agent'
+  const pid = String(record.modelId)
+  const model = record.llmModel || '默认模型'
+  return `${pid}:${model}`
 }
 
 /** 解析JSON数组为字符串列表，兼容数组和JSON字符串输入 */
@@ -394,6 +386,10 @@ async function handleSave() {
 }
 
 async function doSave() {
+  if (!inheritModel.value && !form.providerId) {
+    message.warning('请选择独立模型，或开启继承主 Agent 模型')
+    return
+  }
   try {
     const data = {
       name: form.name,
@@ -401,7 +397,8 @@ async function doSave() {
       description: form.description,
       systemPrompt: form.systemPrompt,
       toolIds: form.toolIds,
-      modelId: inheritModel.value ? null : (form.modelId || null),
+      providerId: inheritModel.value ? null : (form.providerId || null),
+      llmModel: inheritModel.value ? null : (form.llmModel || null),
       enabled: form.enabled
     }
     if (editingId.value) {

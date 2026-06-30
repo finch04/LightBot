@@ -47,9 +47,13 @@ public class SubAgent {
     private String toolIds;
 
     @TableField("model_id")
-    @Schema(description = "可选的模型覆盖")
+    @Schema(description = "可选的 Provider ID 覆盖，null 表示继承主 Agent")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long modelId;
+
+    @TableField("llm_model")
+    @Schema(description = "可选的模型名称覆盖（如 gpt-4o），与 model_id 配合")
+    private String llmModel;
 
     @TableField("enabled")
     @Schema(description = "是否启用")

@@ -217,7 +217,7 @@
     </a-modal>
 
     <!-- 联网拉取弹窗 -->
-    <a-modal v-model:open="fetchModalVisible" :title="`${currentProvider?.name || ''} - 联网拉取`" :width="560" :footer="null" :maskClosable="false">
+    <a-modal v-model:open="fetchModalVisible" :title="`${currentProvider?.name || ''} - 联网拉取`" :width="760" :footer="null" :maskClosable="false">
       <div class="fetch-tabs">
         <button :class="['fetch-tab', { active: fetchTab === 'available' }]" @click="fetchTab = 'available'">
           可添加 <span class="fetch-tab-count">{{ fetchedModels.length }}</span>
@@ -227,9 +227,14 @@
         </button>
       </div>
 
-      <!-- 搜索 + 类型筛选 -->
+      <!-- 搜索 + 类型筛选：上下布局，避免类型 Tab 挤压搜索框 -->
       <div class="fetch-filter-bar">
-        <a-input v-model:value="fetchSearchText" placeholder="搜索模型..." allow-clear size="small" style="flex: 1">
+        <a-input
+          v-model:value="fetchSearchText"
+          class="fetch-search-input"
+          placeholder="搜索模型 ID 或名称..."
+          allow-clear
+        >
           <template #prefix><SearchOutlined /></template>
         </a-input>
         <div class="fetch-type-tabs">
@@ -333,7 +338,9 @@ const filteredFetchedModels = computed(() => {
   }
   if (fetchSearchText.value) {
     const keyword = fetchSearchText.value.toLowerCase()
-    result = result.filter(m => m.modelId.toLowerCase().includes(keyword))
+    result = result.filter(m =>
+      m.modelId.toLowerCase().includes(keyword) || (m.name || '').toLowerCase().includes(keyword)
+    )
   }
   return result
 })
@@ -1073,13 +1080,17 @@ onMounted(async () => {
 }
 .fetch-filter-bar {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   margin-bottom: 12px;
+}
+.fetch-search-input {
+  width: 100%;
 }
 .fetch-type-tabs {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .type-tab {

@@ -514,6 +514,7 @@ public class ChatServiceImpl implements ChatService {
                 ctx.getConfigMap(), agentId, ctx.getSessionId()));
 
         Sinks.Many<String> eventSink = Sinks.many().multicast().onBackpressureBuffer();
+        ctx.setRealtimeStatusEmitter(json -> eventSink.tryEmitNext(STATUS_PREFIX + json));
         Flux<String> toolStatusFlux = eventSink.asFlux()
                 .map(msg -> msg != null && msg.startsWith(STATUS_PREFIX)
                         ? msg
@@ -1468,7 +1469,12 @@ public class ChatServiceImpl implements ChatService {
             evt.put("task", task);
             evt.put("contentOffset", contentOffset);
             toolEventsList.add(evt);
-            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentCallEvent(subName, displayName, task, contentOffset)));
+            if (ctx != null) {
+                ctx.setSubAgentContentOffset(contentOffset);
+                ctx.emitRealtimeStatus(toolEventGenerator.subagentCallEvent(subName, displayName, task, contentOffset));
+            } else {
+                statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentCallEvent(subName, displayName, task, contentOffset)));
+            }
             return;
         }
         String dn = getToolDisplayName(ctx, toolName);
@@ -1479,46 +1485,23 @@ public class ChatServiceImpl implements ChatService {
         callEvt.put("args", args);
         callEvt.put("contentOffset", contentOffset);
         toolEventsList.add(callEvt);
-        statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.toolCallEvent(toolName, dn, args, contentOffset)));
+        String callJson = toolEventGenerator.toolCallEvent(toolName, dn, args, contentOffset);
+        if (ctx != null && ctx.getRealtimeStatusEmitter() != null) {
+            ctx.emitRealtimeStatus(callJson);
+        } else {
+            statusFluxes.add(Flux.just(STATUS_PREFIX + callJson));
+        }
     }
 
     private void appendToolCallResult(ChatContext ctx, List<Map<String, Object>> toolEventsList, List<Flux<String>> statusFluxes,
                                     String toolName, String args, String result, int contentOffset) {
         String truncated = toolEventGenerator.truncateForSse(result);
         if (DelegateSubAgentTool.TOOL_NAME.equals(toolName)) {
-            // 1. 先 drain 并推送子代理中间事件（token/tool_call/tool_result）
+            // 1. 消费队列中尚未处理的子代理中间事件（实时路径下队列通常已空）
             if (ctx != null) {
                 List<ChatContext.SubAgentEvent> subEvents = ctx.drainSubAgentEvents();
                 for (ChatContext.SubAgentEvent se : subEvents) {
-                    switch (se.type()) {
-                        case "token" -> {
-                            Map<String, Object> tokenEvt = new HashMap<>();
-                            tokenEvt.put("type", "subagent_token");
-                            tokenEvt.put("subagentName", se.subagentName());
-                            tokenEvt.put("content", se.content());
-                            tokenEvt.put("contentOffset", contentOffset);
-                            toolEventsList.add(tokenEvt);
-                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentTokenEvent(se.subagentName(), se.content(), contentOffset)));
-                        }
-                        case "tool_call" -> {
-                            Map<String, Object> tcEvt = new HashMap<>();
-                            tcEvt.put("type", "subagent_tool_call");
-                            tcEvt.put("subagentName", se.subagentName());
-                            tcEvt.put("toolName", se.content());
-                            tcEvt.put("contentOffset", contentOffset);
-                            toolEventsList.add(tcEvt);
-                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentToolCallEvent(se.subagentName(), se.content(), contentOffset)));
-                        }
-                        case "tool_result" -> {
-                            Map<String, Object> trEvt = new HashMap<>();
-                            trEvt.put("type", "subagent_tool_result");
-                            trEvt.put("subagentName", se.subagentName());
-                            trEvt.put("content", se.content());
-                            trEvt.put("contentOffset", contentOffset);
-                            toolEventsList.add(trEvt);
-                            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentToolResultEvent(se.subagentName(), se.content(), contentOffset)));
-                        }
-                    }
+                    appendSubAgentStreamEvent(ctx, toolEventsList, statusFluxes, se, contentOffset);
                 }
             }
             // 2. 推送 subagent_result 事件
@@ -1532,7 +1515,15 @@ public class ChatServiceImpl implements ChatService {
             evt.put("result", truncated);
             evt.put("contentOffset", contentOffset);
             toolEventsList.add(evt);
-            statusFluxes.add(Flux.just(STATUS_PREFIX + toolEventGenerator.subagentResultEvent(subName, displayName, truncated, contentOffset)));
+            String resultJson = toolEventGenerator.subagentResultEvent(subName, displayName, truncated, contentOffset);
+            if (ctx != null && ctx.getRealtimeStatusEmitter() != null) {
+                ctx.emitRealtimeStatus(resultJson);
+            } else {
+                statusFluxes.add(Flux.just(STATUS_PREFIX + resultJson));
+            }
+            if (ctx != null) {
+                ctx.setSubAgentContentOffset(null);
+            }
             return;
         }
         String dn = getToolDisplayName(ctx, toolName);
@@ -1575,6 +1566,48 @@ public class ChatServiceImpl implements ChatService {
         vo.setDocumentId(parseLongObj(row.get("document_id")));
         vo.setChunkId(parseLongObj(row.get("chunk_id")));
         return vo;
+    }
+
+    /**
+     * 追加并推送单条 SubAgent 流式中间事件
+     */
+    private void appendSubAgentStreamEvent(ChatContext ctx, List<Map<String, Object>> toolEventsList,
+                                           List<Flux<String>> statusFluxes,
+                                           ChatContext.SubAgentEvent se, int contentOffset) {
+        String json;
+        Map<String, Object> evt = new HashMap<>();
+        switch (se.type()) {
+            case "token" -> {
+                evt.put("type", "subagent_token");
+                evt.put("subagentName", se.subagentName());
+                evt.put("content", se.content());
+                evt.put("contentOffset", contentOffset);
+                json = toolEventGenerator.subagentTokenEvent(se.subagentName(), se.content(), contentOffset);
+            }
+            case "tool_call" -> {
+                evt.put("type", "subagent_tool_call");
+                evt.put("subagentName", se.subagentName());
+                evt.put("toolName", se.content());
+                evt.put("contentOffset", contentOffset);
+                json = toolEventGenerator.subagentToolCallEvent(se.subagentName(), se.content(), contentOffset);
+            }
+            case "tool_result" -> {
+                evt.put("type", "subagent_tool_result");
+                evt.put("subagentName", se.subagentName());
+                evt.put("content", se.content());
+                evt.put("contentOffset", contentOffset);
+                json = toolEventGenerator.subagentToolResultEvent(se.subagentName(), se.content(), contentOffset);
+            }
+            default -> {
+                return;
+            }
+        }
+        toolEventsList.add(evt);
+        if (ctx != null && ctx.getRealtimeStatusEmitter() != null) {
+            ctx.emitRealtimeStatus(json);
+        } else {
+            statusFluxes.add(Flux.just(STATUS_PREFIX + json));
+        }
     }
 
     private Map<String, String> parseSubagentArgs(String args) {

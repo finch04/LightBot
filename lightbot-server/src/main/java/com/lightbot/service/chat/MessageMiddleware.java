@@ -8,6 +8,7 @@ import com.lightbot.constant.ConfigKeys;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.dto.ChatMentionDTO;
+import com.lightbot.dto.ChatMentionDTO;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
@@ -432,8 +433,30 @@ public class MessageMiddleware implements ChatMiddleware {
             }
         }
         List<ChatAttachmentDTO> attachments = request != null ? request.getAttachments() : null;
-        messages.add(buildUserMessageForAttachments(effectiveUserMessage, attachments));
+        messages.add(buildUserMessageForAttachments(
+                appendMentionHintIfNeeded(effectiveUserMessage, ctx), attachments));
         return messages;
+    }
+
+    /**
+     * 用户 @ 了资源时，在用户消息前追加优先使用提示，帮助模型理解意图
+     */
+    private String appendMentionHintIfNeeded(String userMessage, ChatContext ctx) {
+        if (ctx == null || ctx.getMentionScope() == null) {
+            return userMessage;
+        }
+        List<ChatMentionDTO> raw = ctx.getMentionScope().getRawMentions();
+        if (raw == null || raw.isEmpty()) {
+            return userMessage;
+        }
+        StringBuilder hint = new StringBuilder("[用户在本轮明确 @ 指定了以下资源，请优先使用：");
+        for (ChatMentionDTO m : raw) {
+            if (m.getType() == null) continue;
+            String label = m.getName() != null && !m.getName().isBlank() ? m.getName() : m.getToken();
+            hint.append("\n- ").append(m.getType().getDesc()).append("：").append(label);
+        }
+        hint.append("]\n\n");
+        return hint + userMessage;
     }
 
     /**

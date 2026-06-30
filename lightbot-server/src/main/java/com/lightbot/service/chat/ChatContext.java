@@ -116,6 +116,23 @@ public class ChatContext {
     // ===== 子代理流式事件队列 =====
     private Queue<SubAgentEvent> subAgentEventQueue;
 
+    /** 当前 SubAgent 委派对应的 contentOffset（主 Agent 回复中的插入位置） */
+    private Integer subAgentContentOffset;
+
+    /** 流式模式下实时推送 [STATUS] JSON 到 SSE（由 ChatServiceImpl 注入） */
+    private java.util.function.Consumer<String> realtimeStatusEmitter;
+
+    /**
+     * 实时推送结构化状态事件 JSON（不含 [STATUS] 前缀）
+     *
+     * @param statusJson 状态事件 JSON
+     */
+    public void emitRealtimeStatus(String statusJson) {
+        if (realtimeStatusEmitter != null && statusJson != null && !statusJson.isBlank()) {
+            realtimeStatusEmitter.accept(statusJson);
+        }
+    }
+
     /**
      * 子代理流式事件（token/tool_call/tool_result）
      */

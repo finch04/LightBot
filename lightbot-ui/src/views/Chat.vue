@@ -178,11 +178,17 @@
                     :is-streaming="!!messages[virtualRow.index]._streaming"
                   />
                 </div>
-                <!-- 有工具事件：按 offset 位置插入工具块 -->
-                <template v-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0 && getToolBlockOffsets(messages[virtualRow.index]).length > 0">
+                <!-- 有工具事件：按 offset 分段渲染，工具块在对应位置插入，后续文本在其下方 -->
+                <template v-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0">
                   <template v-for="(segment, si) in splitContentByOffsets(messages[virtualRow.index])" :key="si">
                     <div v-if="segment.type === 'text'" class="message-content">
-                      <MarkdownPreview :content="segment.text" :finalized="isSegmentFinalized(messages[virtualRow.index], segment, si)" />
+                      <MentionTextRenderer
+                        v-if="messages[virtualRow.index].role === 'user' && getMsgMentions(messages[virtualRow.index]).length"
+                        :content="segment.text"
+                        :mentions="getMsgMentions(messages[virtualRow.index])"
+                        :finalized="isSegmentFinalized(messages[virtualRow.index], segment, si)"
+                      />
+                      <MarkdownPreview v-else :content="segment.text" :finalized="isSegmentFinalized(messages[virtualRow.index], segment, si)" />
                     </div>
                     <div v-else-if="segment.type === 'tool'" class="tool-block-inline">
                       <AgentCapabilityPanel
@@ -203,32 +209,11 @@
                     </div>
                   </template>
                 </template>
-                <!-- 有工具事件但 offset 尚未到达 -->
-                <template v-else-if="!messages[virtualRow.index]._sensitiveBlock && messages[virtualRow.index]._toolEvents?.length > 0">
-                  <div v-if="messages[virtualRow.index].content" class="message-content"><MarkdownPreview :content="messages[virtualRow.index].content" :finalized="!messages[virtualRow.index]._streaming" /></div>
-                  <div class="tool-block-inline">
-                    <AgentCapabilityPanel
-                      v-if="getInlineCapabilityEvents(messages[virtualRow.index]).length > 0"
-                      :events="getInlineCapabilityEvents(messages[virtualRow.index])"
-                      :is-done="messages[virtualRow.index]._toolsDone"
-                      :default-expanded="true"
-                      @heightChange="onCapabilityHeightChange"
-                    />
-                    <ToolCallsGroupComponent
-                      v-if="getPureToolEvents(messages[virtualRow.index]._toolEvents).length > 0"
-                      :tool-events="getPureToolEvents(messages[virtualRow.index]._toolEvents)"
-                      :is-done="messages[virtualRow.index]._toolsDone"
-                      :default-expanded="true"
-                      :message-index="virtualRow.index"
-                      @heightChange="onCapabilityHeightChange"
-                    />
-                  </div>
-                </template>
                 <!-- 无工具事件：正常渲染 -->
                 <template v-else-if="!messages[virtualRow.index]._sensitiveBlock">
                   <div v-if="messages[virtualRow.index].content && messages[virtualRow.index].content !== '[附件]'" class="message-content">
                     <MentionTextRenderer
-                      v-if="getMsgMentions(messages[virtualRow.index]).length"
+                      v-if="getMsgMentions(messages[virtualRow.index]).length || contentHasMentionTokens(messages[virtualRow.index].content)"
                       :content="messages[virtualRow.index].content"
                       :mentions="getMsgMentions(messages[virtualRow.index])"
                       :finalized="!messages[virtualRow.index]._streaming"
@@ -850,6 +835,10 @@ const rawModal = reactive({ visible: false, content: '', title: '', metadata: nu
 const metadataModal = reactive({ visible: false, json: '', copied: false })
 /** 竞态保护：每次 loadHistory 递增，过期请求不写入状态 */
 let loadHistoryRequestId = 0
+/** 流式进行中触发的 loadHistory 请求，待 streaming 结束后补执行 */
+let pendingHistoryReload = false
+/** 用户主动点击停止（区分正常 [DONE] 与 AbortError） */
+const userStoppedStream = ref(false)
 /** 切换会话时 agent/版本加载中 */
 const switchingSession = ref(false)
 
@@ -1290,13 +1279,27 @@ function parseAttachmentsFromMetadata(metadata) {
 /** 从 msg.metadata 或 msg._mentions 提取 mention 快照（用于历史 chip 回显） */
 function getMsgMentions(msg) {
   if (!msg) return []
-  if (Array.isArray(msg._mentions) && msg._mentions.length) return msg._mentions
-  try {
-    const meta = typeof msg.metadata === 'string' ? safeJsonParse(msg.metadata) : msg.metadata
-    return Array.isArray(meta?.mentions) ? meta.mentions : []
-  } catch {
-    return []
-  }
+  const raw = (Array.isArray(msg._mentions) && msg._mentions.length)
+    ? msg._mentions
+    : (() => {
+      try {
+        const meta = typeof msg.metadata === 'string' ? safeJsonParse(msg.metadata) : msg.metadata
+        return Array.isArray(meta?.mentions) ? meta.mentions : []
+      } catch {
+        return []
+      }
+    })()
+  return raw.map(m => ({
+    type: m.type,
+    resourceId: m.resourceId != null ? String(m.resourceId) : '',
+    name: m.name || m.token || '',
+    token: m.token || `@${m.type}:${m.resourceId}`,
+  }))
+}
+
+/** 消息文本是否含 @type:id token（含 tool） */
+function contentHasMentionTokens(content) {
+  return /@(knowledge|subagent|skill|tool):\d+/.test(content || '')
 }
 
 function getMsgAttachments(msg) {
@@ -1387,6 +1390,7 @@ function parseMessage(m) {
     _parentId: m.parentId || null,
     _messageType: m.messageType?.code || m.messageType || 'text',
     _attachments: attachments,
+    _mentions: Array.isArray(metadata?.mentions) ? metadata.mentions : [],
     _toolEvents: toolEvents,
     _workflowEvents: workflowEvents,
     _toolBlockOffsets: toolBlockOffsets,
@@ -1420,7 +1424,11 @@ function canRegenerate(index) {
 
 async function loadHistory() {
   // 流式对话进行中不加载历史，避免替换 messages 数组破坏 stream 闭包引用
-  if (streaming.value) return
+  if (streaming.value) {
+    pendingHistoryReload = true
+    return
+  }
+  pendingHistoryReload = false
 
   if (!sessionId.value) {
     messages.value = []
@@ -1434,8 +1442,7 @@ async function loadHistory() {
   }
   // 竞态保护：递增请求 ID
   const reqId = ++loadHistoryRequestId
-  // 切换对话时先清空旧内容，避免旧消息在加载期间残留
-  messages.value = []
+  // 切换对话时显示加载态；保留当前 messages 直到新数据返回，避免列表闪空
   initialLoadDone.value = false
   lastReplyElapsed.value = null
   sessionAttachments.value = []
@@ -1619,6 +1626,7 @@ async function regenerateReply(assistantIndex) {
   await runChatStream({
     message: userMsg.content === '[附件]' ? '' : (userMsg.content || ''),
     attachments: userMsg._attachments || [],
+    mentions: getMsgMentions(userMsg).length ? getMsgMentions(userMsg) : undefined,
     regenerate: true,
   })
 }
@@ -1739,6 +1747,54 @@ async function submitEdit() {
     regenerate: true,
     editMessageId: msg._id || null,
   })
+}
+
+function finalizeAbortedStream(assistantMsg, pushed) {
+  streamSmoother.stop()
+  currentStreamingMsg = null
+  reconnecting.value = false
+
+  if (!pushed) {
+    messages.value.push({
+      role: 'assistant',
+      content: '*AI 输出已终止*',
+      _streaming: false,
+      _toolsDone: true,
+      _toolEvents: [],
+      _workflowEvents: [],
+      _toolBlockOffsets: [],
+      _toolBlocksDone: [],
+      _toolExpanded: false,
+      _reasoningContent: '',
+      _reasoningExpanded: true,
+      _reasoningDone: true,
+    })
+  } else if (assistantMsg) {
+    if (!assistantMsg._toolBlockOffsets?.length) {
+      assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
+    }
+    if (!assistantMsg.content?.includes('AI 输出已终止')) {
+      assistantMsg.content = (assistantMsg.content || '') + (assistantMsg.content ? '\n\n' : '') + '*AI 输出已终止*'
+    }
+    assistantMsg._streaming = false
+    assistantMsg._toolsDone = true
+    assistantMsg._toolExpanded = false
+  }
+
+  loading.value = false
+  streaming.value = false
+  hasStreamContent.value = false
+  currentStatus.value = ''
+  lastReplyElapsed.value = Date.now() - sendStartTime
+  abortController.value = null
+  userStoppedStream.value = false
+
+  if (isNearBottom.value) {
+    nextTick(() => {
+      const el = messagesRef.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  }
 }
 
 async function runChatStream({ message, attachments, mentions, regenerate, editMessageId: editMsgId, replyToMessageId: replyMsgId }) {
@@ -1943,7 +1999,8 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             return
           }
           if (event.type === 'subagent_call' || event.type === 'subagent_result'
-              || event.type === 'subagent_token' || event.type === 'subagent_tool_call' || event.type === 'subagent_tool_result') {
+              || event.type === 'subagent_token' || event.type === 'subagent_tool_call' || event.type === 'subagent_tool_result'
+              || event.type === 'subagent_error' || event.type === 'subagent_error_retry') {
             assistantMsg._toolEvents.push(event)
             if (event.type === 'subagent_call') {
               assistantMsg._toolExpanded = true
@@ -1954,6 +2011,10 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
               currentStatus.value = `SubAgent 调用工具: ${event.toolName || ''}`
             } else if (event.type === 'subagent_token') {
               currentStatus.value = `SubAgent 输出中...`
+            } else if (event.type === 'subagent_error_retry') {
+              currentStatus.value = event.message || `SubAgent 重试 ${event.attempt}/${event.maxRetries}`
+            } else if (event.type === 'subagent_error') {
+              currentStatus.value = event.message || 'SubAgent 执行失败'
             }
             hasStreamContent.value = true
             scrollToBottom()
@@ -1982,6 +2043,8 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
         },
         // onDone: 完成
         onDone: (meta) => {
+          // 用户主动停止时由 AbortError catch 收尾，避免与中断逻辑竞态
+          if (userStoppedStream.value) return
           // 10.1 停止平滑缓冲，flush 剩余内容
           streamSmoother.stop()
           currentStreamingMsg = null
@@ -2041,30 +2104,23 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
       }}
     )
   } catch (e) {
-    // 10.1 异常时停止平滑缓冲，flush 剩余内容
+    reconnecting.value = false
+    if (e.name === 'AbortError') {
+      finalizeAbortedStream(assistantMsg, pushed)
+      return
+    }
     streamSmoother.stop()
     currentStreamingMsg = null
-    reconnecting.value = false
-    // 用户主动中断
-    if (e.name === 'AbortError') {
-      if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: true })
-        assistantMsg = messages.value[messages.value.length - 1]
-      }
-      assistantMsg.content += '\n\n*AI 输出已终止*'
-      assistantMsg._streaming = false
-    } else {
-      if (!assistantMsg) {
-        messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: true })
-        assistantMsg = messages.value[messages.value.length - 1]
-      }
-      assistantMsg._error = {
-        message: 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误'),
-        code: 'REQUEST_ERROR',
-      }
-      assistantMsg._streaming = false
-      assistantMsg._toolsDone = true
+    if (!assistantMsg) {
+      messages.value.push({ role: 'assistant', content: '', _streaming: false, _toolsDone: true, _toolEvents: [], _workflowEvents: [], _toolBlockOffsets: [], _toolBlocksDone: [], _toolExpanded: false, _reasoningContent: '', _reasoningExpanded: true, _reasoningDone: true })
+      assistantMsg = messages.value[messages.value.length - 1]
     }
+    assistantMsg._error = {
+      message: 'AI 大模型调用失败，请检查模型配置是否正确。\n\n错误详情：' + (e.message || '未知错误'),
+      code: 'REQUEST_ERROR',
+    }
+    assistantMsg._streaming = false
+    assistantMsg._toolsDone = true
     loading.value = false
     streaming.value = false
     hasStreamContent.value = false
@@ -2161,6 +2217,7 @@ function handleDeleteMessage(index) {
 
 function stopGenerating() {
   if (abortController.value) {
+    userStoppedStream.value = true
     abortController.value.abort()
     abortController.value = null
   }
@@ -2176,7 +2233,7 @@ function registerToolBlockOffset(msg, offset) {
   }
 }
 
-const CAPABILITY_EVENT_TYPES = new Set(['skill_active', 'subagent_call', 'subagent_result', 'subagent_token', 'subagent_tool_call', 'subagent_tool_result'])
+const CAPABILITY_EVENT_TYPES = new Set(['skill_active', 'subagent_call', 'subagent_result', 'subagent_token', 'subagent_tool_call', 'subagent_tool_result', 'subagent_error', 'subagent_error_retry'])
 
 function getCapabilityEvents(msg) {
   return (msg._toolEvents || []).filter(e => CAPABILITY_EVENT_TYPES.has(e.type))
@@ -2187,7 +2244,9 @@ function getTopCapabilityEvents(msg) {
 }
 
 function getCapabilityEventsForOffset(msg, offset) {
-  // 使用宽松相等，兼容数字和字符串类型的 offset
+  if (offset == -1) {
+    return getCapabilityEvents(msg).filter(e => e.type !== 'skill_active')
+  }
   return getCapabilityEvents(msg).filter(e => e.type !== 'skill_active' && e.contentOffset == offset)
 }
 
@@ -2214,7 +2273,9 @@ function getToolBlockOffsets(msg) {
 
 function getToolEventsForOffset(msg, offset) {
   const events = msg._toolEvents || []
-  // 使用宽松相等，兼容数字和字符串类型的 offset
+  if (offset == -1) {
+    return events.filter(e => e.contentOffset == null)
+  }
   const matched = events.filter(e => e.contentOffset == offset)
   if (matched.length > 0) return matched
   const offsets = getToolBlockOffsets(msg)
@@ -2225,7 +2286,10 @@ function getToolEventsForOffset(msg, offset) {
 }
 
 function isToolBlockDone(msg, offset) {
-  // 兼容数字和字符串类型的 offset 比较
+  if (offset == -1) {
+    if (!msg._streaming) return true
+    return (msg._toolEvents || []).some(e => e.type === 'tool_result' || e.type === 'subagent_result')
+  }
   if (msg._toolBlocksDone?.some(o => o == offset)) return true
   if (!msg._streaming) return true
   const atOffset = getToolEventsForOffset(msg, offset)
@@ -2259,7 +2323,15 @@ function applyToolMetadata(msg, meta) {
 function splitContentByOffsets(msg) {
   const content = msg.content || ''
   const offsets = getToolBlockOffsets(msg)
-  if (offsets.length === 0) return [{ type: 'text', text: content }]
+  if (offsets.length === 0) {
+    if ((msg._toolEvents || []).length > 0) {
+      return [
+        { type: 'tool', offset: -1 },
+        ...(content ? [{ type: 'text', text: content }] : []),
+      ]
+    }
+    return [{ type: 'text', text: content }]
+  }
 
   const segments = []
   let lastIdx = 0
@@ -2268,7 +2340,7 @@ function splitContentByOffsets(msg) {
       segments.push({ type: 'text', text: content.substring(lastIdx, offset) })
     }
     segments.push({ type: 'tool', offset })
-    lastIdx = offset
+    lastIdx = Math.max(lastIdx, offset)
   }
   if (lastIdx < content.length) {
     segments.push({ type: 'text', text: content.substring(lastIdx) })
@@ -2455,6 +2527,7 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
   }
   // 流式对话进行中，中断当前流
   if (streaming.value && abortController.value) {
+    userStoppedStream.value = true
     abortController.value.abort()
     abortController.value = null
   }
@@ -2462,6 +2535,12 @@ watch(() => route.params.sessionId, (newVal, oldVal) => {
   expandedRefsMap.value = new Map()
   refsSectionExpandedMap.value = new Map()
   loadHistory()
+})
+
+watch(streaming, (isStreaming) => {
+  if (!isStreaming && pendingHistoryReload) {
+    loadHistory()
+  }
 })
 
 // 切换 Agent 时更新欢迎语

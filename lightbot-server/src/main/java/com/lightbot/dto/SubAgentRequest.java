@@ -43,9 +43,21 @@ public class SubAgentRequest {
     @Schema(description = "绑定工具ID列表")
     private List<String> toolIds;
 
-    @Schema(description = "可选的模型ID")
+    @Schema(description = "可选的 Provider ID 覆盖，null 表示继承主 Agent")
+    private Long providerId;
+
+    @Schema(description = "可选的模型名称覆盖（如 gpt-4o）")
+    private String llmModel;
+
+    /** @deprecated 兼容旧字段，等同于 providerId */
+    @Schema(description = "可选的 Provider ID（兼容旧字段）")
     private Long modelId;
 
     @Schema(description = "是否启用")
     private Boolean enabled;
+
+    /** 解析有效的 Provider ID：优先 providerId，fallback modelId */
+    public Long resolveProviderId() {
+        return providerId != null ? providerId : modelId;
+    }
 }

@@ -170,13 +170,10 @@ public class DelegateSubAgentTool {
             if (target == null) {
                 return "未在当前 Agent 绑定列表中找到子智能体: " + subName + "，可选: " + byName.keySet();
             }
-            Long providerId = null;
             String requestId = null;
             String parentThreadId = null;
             ChatContext chatContext = null;
             if (toolContext != null && toolContext.getContext() != null) {
-                Object pid = toolContext.getContext().get("providerId");
-                if (pid instanceof Number n) providerId = n.longValue();
                 Object rid = toolContext.getContext().get("requestId");
                 if (rid != null) requestId = rid.toString();
                 Object ptid = toolContext.getContext().get("parentThreadId");
@@ -184,7 +181,8 @@ public class DelegateSubAgentTool {
                 Object cctx = toolContext.getContext().get("chatContext");
                 if (cctx instanceof ChatContext cc) chatContext = cc;
             }
-            SubAgentRuntime.SubAgentResult result = runtime.run(target, task, providerId, requestId, threadId, parentThreadId, chatContext);
+            SubAgentRuntime.SubAgentResult result = runtime.run(
+                    target, task, requestId, threadId, parentThreadId, chatContext);
             // 返回 JSON 格式结果，包含 thread_id 供主 Agent 后续续跑
             try {
                 Map<String, Object> out = new HashMap<>();

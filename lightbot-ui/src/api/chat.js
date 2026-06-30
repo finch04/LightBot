@@ -82,8 +82,8 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
         processSseLines(complete, { ...trackingCallbacks, onDone: fireDone })
       }
     } catch (err) {
+      // 用户主动停止：不触发 onDone，由 Chat.vue 统一处理中断收尾
       if (err.name === 'AbortError') {
-        fireDone()
         throw err
       }
       throw err
@@ -95,7 +95,7 @@ export async function chatStream(data, { onChunk, onStatus, onMetadata, onToolEv
       await attempt()
       return
     } catch (err) {
-      if (err.name === 'AbortError') return
+      if (err.name === 'AbortError') throw err
       retries++
       if (retries > maxRetries || signal?.aborted) {
         throw err
@@ -207,6 +207,7 @@ function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEvent, onR
                 || parsed.type === 'sensitive_block'
                 || parsed.type === 'skill_active' || parsed.type === 'subagent_call' || parsed.type === 'subagent_result'
                 || parsed.type === 'subagent_token' || parsed.type === 'subagent_tool_call' || parsed.type === 'subagent_tool_result'
+                || parsed.type === 'subagent_error' || parsed.type === 'subagent_error_retry'
                 || parsed.type === 'error' || parsed.type === 'error_retry') {
               onToolEvent?.(parsed)
               if (currentEventId) { onEventId?.(currentEventId); currentEventId = null }
