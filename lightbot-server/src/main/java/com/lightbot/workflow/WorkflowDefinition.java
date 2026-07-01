@@ -1,5 +1,7 @@
 package com.lightbot.workflow;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.lightbot.enums.NodeType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,6 +20,7 @@ import java.util.Map;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class WorkflowDefinition {
 
     /**
@@ -65,6 +68,7 @@ public class WorkflowDefinition {
      *
      * @return 开始节点 ID
      */
+    @JsonIgnore
     public String getStartNodeId() {
         return nodes.stream()
                 .filter(n -> n.getType() == NodeType.START)
