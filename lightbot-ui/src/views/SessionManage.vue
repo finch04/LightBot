@@ -456,9 +456,10 @@ onUnmounted(() => {
 
 <style scoped>
 .session-manage {
-  padding: 24px;
+  padding: 24px calc(24px + var(--scroll-content-gap)) 24px 24px;
   height: 100%;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .page-header {
   display: flex;

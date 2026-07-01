@@ -877,10 +877,12 @@ async function handleDeleteApiKey(key) {
 
 <style scoped>
 .page {
-  padding: 32px;
+  padding: var(--space-xl);
+  padding-right: calc(var(--space-xl) + var(--scroll-content-gap));
   height: 100vh;
   overflow-y: auto;
   background: var(--color-canvas-soft);
+  scrollbar-gutter: stable;
 }
 .settings-tabs {
   margin-bottom: 24px;

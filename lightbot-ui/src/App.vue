@@ -90,6 +90,7 @@ const { isDark, themeConfig } = useTheme()
   /* Spacing */
   --space-xxs: 4px;
   --space-xs: 8px;
+  --scroll-content-gap: var(--space-xs);
   --space-sm: 12px;
   --space-md: 16px;
   --space-lg: 24px;
@@ -366,6 +367,27 @@ body {
 
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
+}
+
+/* 垂直滚动区域：内容与滚动条保持统一间距 */
+.scroll-area-y,
+.tab-content,
+.guide,
+.log-table-body,
+.detail-scroll-body,
+.dialog-scroll-body,
+.fetch-model-list,
+.model-list {
+  scrollbar-gutter: stable;
+}
+
+.scroll-area-y,
+.tab-content,
+.guide,
+.log-table-body,
+.fetch-model-list,
+.model-list {
+  padding-right: var(--scroll-content-gap);
 }
 
 /* ===== 深色模式：自定义组件适配 ===== */

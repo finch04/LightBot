@@ -50,7 +50,7 @@
         </button>
       </div>
     </div>
-    <div class="tab-content">
+    <div class="tab-content scroll-area-y">
       <McpManage v-show="activeTab === 'mcp'" ref="mcpRef" hide-header />
       <SkillManage v-show="activeTab === 'skills'" ref="skillRef" hide-header />
       <ToolManage v-show="activeTab === 'tools'" ref="toolRef" hide-header />
@@ -235,7 +235,6 @@ watch(activeTab, (tab) => {
 }
 .tab-content {
   flex: 1;
-  overflow-y: auto;
   min-height: 0;
 }
 .tab-content :deep(.page) {

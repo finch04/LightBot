@@ -138,7 +138,27 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         save(session);
         // 新建会话后清除列表缓存
         evictListCache(userId);
+        // 预创建 MinIO 会话目录占位（inputs / outputs / workspace）
+        ensureSessionDirs(session.getId());
         return session;
+    }
+
+    /**
+     * 预创建会话级 MinIO 目录占位对象，确保文件树结构与上传路径立即可用。
+     */
+    private void ensureSessionDirs(Long sessionId) {
+        try {
+            String root = SessionStoragePath.sessionRoot(sessionId);
+            for (String dir : List.of(SessionStoragePath.INPUTS_DIR,
+                    SessionStoragePath.OUTPUTS_DIR, SessionStoragePath.WORKSPACE_DIR)) {
+                String keep = root + dir + "/.keep";
+                if (!minioUtil.exists(keep)) {
+                    minioUtil.uploadString("", keep, "text/plain");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Session] 预创建会话目录失败: sessionId={}, error={}", sessionId, e.getMessage());
+        }
     }
 
     @Override
@@ -459,6 +479,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         if (attachments == null || attachments.isEmpty()) {
             return;
         }
+        // 1. 先将附件迁移到 sessions/{sessionId}/inputs/ 下（处理会话创建前上传到 temp 的情况）
+        relocateAttachmentsToSession(sessionId, attachments);
+        // 2. 构建索引 VO 并注册
         List<SessionAttachmentVO> vos = new ArrayList<>();
         for (com.lightbot.dto.ChatAttachmentDTO att : attachments) {
             SessionAttachmentVO vo = new SessionAttachmentVO();
@@ -475,6 +498,69 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             vos.add(vo);
         }
         registerSessionAttachments(sessionId, vos);
+    }
+
+    @Override
+    public void relocateAttachmentsToSession(Long sessionId, List<com.lightbot.dto.ChatAttachmentDTO> attachments) {
+        if (attachments == null || attachments.isEmpty() || sessionId == null) {
+            return;
+        }
+        String sessionRoot = SessionStoragePath.sessionRoot(sessionId);
+        String inputsPrefix = sessionRoot + SessionStoragePath.INPUTS_DIR + "/";
+        for (com.lightbot.dto.ChatAttachmentDTO att : attachments) {
+            if (att == null || att.getObjectKey() == null || att.getObjectKey().isBlank()) {
+                continue;
+            }
+            String key = att.getObjectKey();
+            // 已在 inputs/ 下：无需迁移
+            if (key.startsWith(inputsPrefix)) {
+                continue;
+            }
+            // 计算扩展名：优先从 objectKey 取，其次按 mime/type 推断
+            String ext = extractExtension(key, att.getMimeType(), att.getType());
+            String newKey = SessionStoragePath.inputObjectKey(sessionId, att.getId(), ext);
+            try {
+                // 仅当目标对象不存在时复制（避免重复发送时重复复制）
+                if (!minioUtil.exists(newKey)) {
+                    minioUtil.copyObject(key, newKey);
+                }
+                att.setObjectKey(newKey);
+                try {
+                    String mime = att.getMimeType() != null ? att.getMimeType() : "application/octet-stream";
+                    att.setPreviewUrl(minioUtil.getPresignedUrl(newKey, mime));
+                } catch (Exception ignored) {
+                }
+            } catch (Exception e) {
+                log.warn("[ChatSession] 迁移附件失败: from={}, to={}, error={}", key, newKey, e.getMessage());
+            }
+        }
+    }
+
+    private static String extractExtension(String objectKey, String mime, String type) {
+        if (objectKey != null) {
+            int slash = objectKey.lastIndexOf('/');
+            String name = slash >= 0 ? objectKey.substring(slash + 1) : objectKey;
+            int dot = name.lastIndexOf('.');
+            if (dot > 0) {
+                return name.substring(dot);
+            }
+        }
+        if (mime != null) {
+            String e = switch (mime) {
+                case "image/png" -> ".png";
+                case "image/webp" -> ".webp";
+                case "image/gif" -> ".gif";
+                case "video/mp4" -> ".mp4";
+                case "video/webm" -> ".webm";
+                case "video/quicktime" -> ".mov";
+                case "text/plain" -> ".txt";
+                case "text/markdown" -> ".md";
+                case "application/pdf" -> ".pdf";
+                default -> ".bin";
+            };
+            return e;
+        }
+        return ".bin";
     }
 
     @Override

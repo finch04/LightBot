@@ -587,11 +587,12 @@ function scrollToBottom(inst) {
 
 <style scoped>
 .page {
-  padding: 20px 24px;
+  padding: 20px calc(24px + var(--scroll-content-gap)) 20px 24px;
   min-height: 100vh;
   height: 100vh;
   overflow-y: auto;
   background: var(--color-canvas-soft);
+  scrollbar-gutter: stable;
 }
 .page-header {
   display: flex;

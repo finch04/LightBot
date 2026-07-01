@@ -3564,10 +3564,12 @@ onMounted(async () => {
 <style scoped>
 .page {
   position: relative;
-  padding: 32px;
+  padding: var(--space-xl);
+  padding-right: calc(var(--space-xl) + var(--scroll-content-gap));
   height: 100vh;
   overflow-y: auto;
   background: var(--color-canvas-soft);
+  scrollbar-gutter: stable;
 }
 .page--loading {
   overflow: hidden;
@@ -4461,6 +4463,7 @@ onMounted(async () => {
   min-height: 0;
   overflow-y: auto;
   max-height: calc(100vh - 280px);
+  scrollbar-gutter: stable;
 }
 .panel--config-unified {
   padding: 0;

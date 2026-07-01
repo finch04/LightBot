@@ -129,6 +129,15 @@ public interface ChatSessionService extends IService<ChatSession> {
     void appendSessionAttachments(Long sessionId, List<com.lightbot.dto.ChatAttachmentDTO> attachments, String source);
 
     /**
+     * 将附件从临时区/旧路径迁移到 sessions/{sessionId}/inputs/ 下（原地变更 DTO 的 objectKey/previewUrl）。
+     * <p>用于「会话尚未创建时先上传、发送消息创建会话后再落盘」的场景。</p>
+     *
+     * @param sessionId    会话 ID
+     * @param attachments  附件列表（会被原地修改 objectKey/previewUrl）
+     */
+    void relocateAttachmentsToSession(Long sessionId, List<com.lightbot.dto.ChatAttachmentDTO> attachments);
+
+    /**
      * 注册会话附件（AI 工具产出等，按 objectKey 去重）
      */
     void registerSessionAttachments(Long sessionId, List<com.lightbot.dto.SessionAttachmentVO> attachments);

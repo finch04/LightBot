@@ -486,7 +486,7 @@ defineExpose({ open, getQaEnabled: () => form.qa_enabled })
 .scroll-body {
   max-height: 60vh;
   overflow-y: auto;
-  padding: 24px 24px 24px 16px;
+  padding: 24px calc(24px + var(--scroll-content-gap, 8px)) 24px 16px;
   scrollbar-gutter: stable;
 }
 .scroll-body::-webkit-scrollbar {

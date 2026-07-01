@@ -71,9 +71,12 @@ public class SessionFileServiceImpl implements SessionFileService {
         // 4. 构建 attachments 索引 map（按 objectKey 索引）
         Map<String, SessionAttachmentVO> index = buildAttachmentIndex(sessionId);
 
-        // 5. 转换 + enrich + 排序（目录优先，名称字典序）
+        // 5. 转换 + enrich + 排序（目录优先，名称字典序），过滤 .keep 占位
         List<SessionFileEntryVO> entries = new ArrayList<>();
         for (MinioUtil.MinioDirEntry raw : rawEntries) {
+            if (".keep".equals(raw.name)) {
+                continue;
+            }
             entries.add(toEntry(root, normalized, raw, index));
         }
         entries.sort(Comparator

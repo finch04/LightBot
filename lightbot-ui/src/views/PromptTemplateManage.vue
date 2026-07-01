@@ -298,9 +298,11 @@ function handleDelete(id) {
 
 <style scoped>
 .page {
-  padding: 32px;
+  padding: var(--space-xl);
+  padding-right: calc(var(--space-xl) + var(--scroll-content-gap));
   min-height: 100vh;
   background: var(--color-canvas-soft);
+  scrollbar-gutter: stable;
 }
 
 .page-header {

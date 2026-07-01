@@ -251,6 +251,10 @@ public class MessageMiddleware implements ChatMiddleware {
             return saveMessage(sessionId, MessageRole.USER, content, null, 0, messageType, parentId, replyToMessageId);
         }
         try {
+            // 先将附件迁移到 sessions/{sessionId}/inputs/ 下，确保消息 metadata 与索引都引用会话内路径
+            if (hasAttachments) {
+                chatSessionService.relocateAttachmentsToSession(sessionId, attachments);
+            }
             Map<String, Object> metaMap = new LinkedHashMap<>();
             if (hasAttachments) {
                 metaMap.put("attachments", attachments);

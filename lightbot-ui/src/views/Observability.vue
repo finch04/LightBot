@@ -1438,7 +1438,8 @@ onUnmounted(() => clearTimeout(copyTimer))
 .modal-scroll-body {
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: var(--scroll-content-gap, 8px);
+  scrollbar-gutter: stable;
 }
 
 /* 请求配置 */

@@ -1004,8 +1004,9 @@ defineExpose({ openDialog, search, refresh })
 .detail-scroll-body {
   max-height: calc(100vh - 260px);
   overflow-y: auto;
-  padding-right: 8px;
+  padding-right: var(--scroll-content-gap, 8px);
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 .detail-scroll-body::-webkit-scrollbar {
   width: 5px;

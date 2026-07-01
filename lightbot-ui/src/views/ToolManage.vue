@@ -962,7 +962,8 @@ defineExpose({ openDialog, search, refresh })
 .dialog-scroll-body {
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 8px;
+  padding-right: var(--scroll-content-gap, 8px);
+  scrollbar-gutter: stable;
 }
 .tooltip-example-title {
   margin-top: 8px;

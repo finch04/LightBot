@@ -123,7 +123,17 @@ function fileIcon(entry) {
 
 function onSelect(keys, info) {
   const node = info?.node?.dataRef
-  if (node && !node.directory) {
+  if (!node) return
+  if (node.directory) {
+    // 点击文件夹名称：切换展开/收起
+    const key = node.path
+    const idx = expandedKeys.value.indexOf(key)
+    if (idx >= 0) {
+      expandedKeys.value = expandedKeys.value.filter(k => k !== key)
+    } else {
+      expandedKeys.value = [...expandedKeys.value, key]
+    }
+  } else {
     emit('select', node)
   }
 }

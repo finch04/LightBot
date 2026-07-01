@@ -42,7 +42,7 @@
       </div>
     </div>
 
-    <div class="tab-content">
+    <div class="tab-content scroll-area-y">
       <!-- 评测集 Tab -->
       <div v-show="activeTab === 'datasets'" style="min-height: 400px;">
         <a-spin :spinning="datasetsLoading" style="min-height: 400px; display: block;">
@@ -908,7 +908,6 @@ function progressStatus(s) {
 }
 .tab-content {
   flex: 1;
-  overflow-y: auto;
   min-height: 0;
 }
 
