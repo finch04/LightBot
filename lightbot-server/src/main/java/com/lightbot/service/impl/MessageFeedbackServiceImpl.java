@@ -5,9 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.dto.MessageFeedbackRequest;
 import com.lightbot.dto.MessageFeedbackVO;
+import com.lightbot.entity.Agent;
+import com.lightbot.entity.AgentVersion;
+import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.Message;
 import com.lightbot.entity.MessageFeedback;
+import com.lightbot.mapper.AgentVersionMapper;
 import com.lightbot.mapper.MessageFeedbackMapper;
+import com.lightbot.service.AgentService;
+import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.MessageFeedbackService;
 import com.lightbot.service.MessageService;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +22,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +42,9 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
         implements MessageFeedbackService {
 
     private final MessageService messageService;
+    private final ChatSessionService chatSessionService;
+    private final AgentService agentService;
+    private final AgentVersionMapper agentVersionMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -59,14 +71,16 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
             }
         }
 
-        // 3. 无则新建
+        // 3. 无则新建，快照所属 Agent 与版本
         MessageFeedback feedback = new MessageFeedback();
         feedback.setMessageId(messageId);
         feedback.setUserId(userId);
         feedback.setRating(request.getRating());
         feedback.setReason(request.getReason());
+        applyAgentSnapshot(feedback, messageId);
         save(feedback);
-        log.info("[消息反馈] 新增反馈, userId={}, messageId={}, rating={}", userId, messageId, request.getRating());
+        log.info("[消息反馈] 新增反馈, userId={}, messageId={}, rating={}, agentId={}",
+                userId, messageId, request.getRating(), feedback.getAgentId());
         return feedback;
     }
 
@@ -86,21 +100,55 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
                 .orderByDesc(MessageFeedback::getCreateTime);
         Page<MessageFeedback> page = page(new Page<>(pageNum, pageSize), wrapper);
 
-        // 2. 批量查询关联的消息内容
+        // 2. 批量查询关联的消息与会话
         List<Long> messageIds = page.getRecords().stream()
                 .map(MessageFeedback::getMessageId)
                 .collect(Collectors.toList());
 
         Map<Long, Message> messageMap = new HashMap<>();
+        Map<Long, ChatSession> sessionMap = new HashMap<>();
         if (!messageIds.isEmpty()) {
             List<Message> messages = messageService.listByIds(messageIds);
             messageMap = messages.stream()
                     .collect(Collectors.toMap(Message::getId, m -> m));
+            Set<Long> sessionIds = messages.stream()
+                    .map(Message::getSessionId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!sessionIds.isEmpty()) {
+                sessionMap = chatSessionService.listByIds(sessionIds).stream()
+                        .collect(Collectors.toMap(ChatSession::getId, s -> s));
+            }
         }
 
-        // 3. 组装 VO
-        Page<MessageFeedbackVO> voPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
+        // 3. 批量查询 Agent 名称
+        Set<Long> agentIds = new HashSet<>();
+        for (MessageFeedback fb : page.getRecords()) {
+            if (fb.getAgentId() != null) {
+                agentIds.add(fb.getAgentId());
+            }
+        }
+        Map<Long, ChatSession> finalSessionMap = sessionMap;
         Map<Long, Message> finalMessageMap = messageMap;
+        for (MessageFeedback fb : page.getRecords()) {
+            if (fb.getAgentId() != null) {
+                continue;
+            }
+            Message msg = finalMessageMap.get(fb.getMessageId());
+            if (msg == null) {
+                continue;
+            }
+            ChatSession session = finalSessionMap.get(msg.getSessionId());
+            if (session != null && session.getAgentId() != null) {
+                agentIds.add(session.getAgentId());
+            }
+        }
+        Map<Long, Agent> agentMap = agentIds.isEmpty() ? Map.of()
+                : agentService.listByIds(agentIds).stream()
+                .collect(Collectors.toMap(Agent::getId, a -> a));
+
+        // 4. 组装 VO
+        Page<MessageFeedbackVO> voPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
         List<MessageFeedbackVO> voList = page.getRecords().stream().map(fb -> {
             MessageFeedbackVO vo = new MessageFeedbackVO();
             vo.setId(fb.getId());
@@ -108,10 +156,30 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
             vo.setRating(fb.getRating());
             vo.setReason(fb.getReason());
             vo.setCreateTime(fb.getCreateTime());
+
+            Long agentId = fb.getAgentId();
+            Integer agentVersion = fb.getAgentVersion();
             Message msg = finalMessageMap.get(fb.getMessageId());
             if (msg != null) {
                 vo.setMessageContent(msg.getContent());
                 vo.setSessionId(msg.getSessionId());
+            }
+            if (agentId == null && msg != null) {
+                ChatSession session = finalSessionMap.get(msg.getSessionId());
+                if (session != null) {
+                    agentId = session.getAgentId();
+                    if (agentVersion == null) {
+                        agentVersion = resolveVersionNumber(session);
+                    }
+                }
+            }
+            vo.setAgentId(agentId);
+            vo.setAgentVersion(agentVersion);
+            if (agentId != null) {
+                Agent agent = agentMap.get(agentId);
+                if (agent != null) {
+                    vo.setAgentName(agent.getName());
+                }
             }
             return vo;
         }).collect(Collectors.toList());
@@ -146,5 +214,30 @@ public class MessageFeedbackServiceImpl extends ServiceImpl<MessageFeedbackMappe
                 .eq(MessageFeedback::getRating, "dislike"));
 
         return Map.of("total", total, "likeCount", likeCount, "dislikeCount", dislikeCount);
+    }
+
+    /** 从消息所属会话快照 Agent 与版本 */
+    private void applyAgentSnapshot(MessageFeedback feedback, Long messageId) {
+        Message msg = messageService.getById(messageId);
+        if (msg == null || msg.getSessionId() == null) {
+            return;
+        }
+        ChatSession session = chatSessionService.getById(msg.getSessionId());
+        if (session == null || session.getAgentId() == null) {
+            return;
+        }
+        feedback.setAgentId(session.getAgentId());
+        feedback.setAgentVersion(resolveVersionNumber(session));
+    }
+
+    private Integer resolveVersionNumber(ChatSession session) {
+        if (session.getAgentVersionId() != null) {
+            AgentVersion versionRow = agentVersionMapper.selectById(session.getAgentVersionId());
+            if (versionRow != null && versionRow.getVersion() != null) {
+                return versionRow.getVersion();
+            }
+        }
+        Agent agent = agentService.getById(session.getAgentId());
+        return agent != null ? agent.getVersion() : null;
     }
 }

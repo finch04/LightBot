@@ -35,16 +35,42 @@
             @click="confirmGoToSession(fb)"
           >
             <div class="feedback-item-header">
-              <a-tag :color="fb.rating === 'like' ? 'success' : 'error'" class="feedback-tag">
-                <LikeOutlined v-if="fb.rating === 'like'" />
-                <DislikeOutlined v-else />
-                {{ fb.rating === 'like' ? '有帮助' : '无帮助' }}
-              </a-tag>
+              <div class="feedback-item-meta">
+                <a-tag :color="fb.rating === 'like' ? 'success' : 'error'" class="feedback-tag">
+                  <LikeOutlined v-if="fb.rating === 'like'" />
+                  <DislikeOutlined v-else />
+                  {{ fb.rating === 'like' ? '有帮助' : '无帮助' }}
+                </a-tag>
+                <span v-if="fb.agentName" class="feedback-agent">
+                  {{ fb.agentName }}
+                  <span v-if="fb.agentVersion != null" class="feedback-agent-version">
+                    {{ formatAgentVersion(fb.agentVersion) }}
+                  </span>
+                </span>
+              </div>
               <span class="feedback-time">{{ formatTime(fb.createTime) }}</span>
             </div>
-            <div class="feedback-content">{{ truncateContent(fb.messageContent) }}</div>
-            <div v-if="fb.reason" class="feedback-reason">
-              <span class="reason-label">原因：</span>{{ fb.reason }}
+            <a-tooltip
+              v-if="isContentTruncated(fb.messageContent)"
+              :title="fb.messageContent"
+              placement="topLeft"
+              :overlay-style="{ maxWidth: '520px' }"
+              overlay-class-name="feedback-content-tooltip"
+              @click.stop
+            >
+              <div class="feedback-content feedback-content--truncated">{{ previewContent(fb.messageContent) }}</div>
+            </a-tooltip>
+            <div v-else class="feedback-content">{{ fb.messageContent }}</div>
+            <div
+              v-if="fb.rating === 'dislike' && fb.reason"
+              class="feedback-reason-block"
+              @click.stop
+            >
+              <div class="feedback-reason-head">
+                <CommentOutlined class="feedback-reason-icon" />
+                <span class="feedback-reason-title">无帮助原因</span>
+              </div>
+              <div class="feedback-reason-text">{{ fb.reason }}</div>
             </div>
           </div>
         </div>
@@ -66,7 +92,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { LikeOutlined, DislikeOutlined } from '@ant-design/icons-vue'
+import { LikeOutlined, DislikeOutlined, CommentOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { listMessageFeedbacks } from '../api/chat'
 import { formatRelativeTime as formatTime } from '../utils/format'
@@ -116,9 +142,21 @@ function confirmGoToSession(fb) {
   })
 }
 
-function truncateContent(content) {
+const CONTENT_PREVIEW_MAX = 200
+
+function isContentTruncated(content) {
+  return Boolean(content && content.length > CONTENT_PREVIEW_MAX)
+}
+
+function previewContent(content) {
   if (!content) return ''
-  return content.length > 200 ? content.slice(0, 200) + '...' : content
+  if (!isContentTruncated(content)) return content
+  return content.slice(0, CONTENT_PREVIEW_MAX) + '…'
+}
+
+function formatAgentVersion(version) {
+  if (version == null) return ''
+  return version === 0 ? '草稿' : `v${version}`
 }
 
 </script>
@@ -165,9 +203,25 @@ function truncateContent(content) {
 }
 .feedback-item-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 8px;
+}
+.feedback-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.feedback-agent {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.feedback-agent-version {
+  margin-left: 4px;
+  color: var(--color-mute);
 }
 .feedback-tag {
   display: inline-flex;
@@ -185,21 +239,53 @@ function truncateContent(content) {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.feedback-reason {
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: var(--color-bg-elevated);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
+.feedback-content--truncated {
+  cursor: help;
 }
-.reason-label {
-  font-weight: 500;
-  color: var(--color-body);
+.feedback-reason-block {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  border-left: 3px solid #ef4444;
+  background: var(--color-error-bg, #fef2f2);
+}
+.feedback-reason-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.feedback-reason-icon {
+  font-size: 13px;
+  color: #dc2626;
+}
+.feedback-reason-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+  letter-spacing: 0.02em;
+}
+.feedback-reason-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #7f1d1d;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .feedback-pagination {
   display: flex;
   justify-content: center;
   margin-top: 24px;
+}
+</style>
+
+<style>
+.feedback-content-tooltip .ant-tooltip-inner {
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
 }
 </style>

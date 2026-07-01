@@ -38,6 +38,16 @@ public class MessageFeedbackVO {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long sessionId;
 
+    @Schema(description = "所属Agent ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long agentId;
+
+    @Schema(description = "Agent名称")
+    private String agentName;
+
+    @Schema(description = "Agent版本号（0=草稿）")
+    private Integer agentVersion;
+
     @Schema(description = "创建时间")
     private LocalDateTime createTime;
 }

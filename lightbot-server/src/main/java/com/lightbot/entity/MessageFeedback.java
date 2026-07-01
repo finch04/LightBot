@@ -34,6 +34,15 @@ public class MessageFeedback {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
+    @TableField("agent_id")
+    @Schema(description = "所属Agent ID（反馈提交时快照）")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long agentId;
+
+    @TableField("agent_version")
+    @Schema(description = "Agent版本号（反馈提交时快照，0=草稿）")
+    private Integer agentVersion;
+
     @TableField("rating")
     @Schema(description = "评分：like/dislike")
     private String rating;

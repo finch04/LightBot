@@ -139,19 +139,25 @@
       :width="640"
       :footer="null"
       :maskClosable="false"
+      class="example-workflow-modal"
+      :body-style="{ padding: 0, overflow: 'hidden' }"
     >
-      <div class="example-desc">选择一个内置示例，快速创建工作流 Agent 并学习各节点的使用方式</div>
-      <div class="example-list">
-        <div v-for="ex in workflowExamples" :key="ex.key" class="example-card">
-          <div class="example-card-header">
-            <span class="example-name">{{ ex.name }}</span>
-            <a-button type="primary" size="small" :loading="exampleCreating === ex.key" @click="handleCreateExample(ex.key)">
-              生成
-            </a-button>
-          </div>
-          <div class="example-desc-text">{{ ex.description }}</div>
-          <div class="example-tags">
-            <a-tag v-for="tag in ex.nodeTypeTags" :key="tag" color="blue">{{ tag }}</a-tag>
+      <div class="example-modal-body">
+        <div class="example-desc">选择一个内置示例，快速创建工作流 Agent 并学习各节点的使用方式</div>
+        <div class="example-list-scroll">
+          <div class="example-list">
+            <div v-for="ex in workflowExamples" :key="ex.key" class="example-card">
+              <div class="example-card-header">
+                <span class="example-name">{{ ex.name }}</span>
+                <a-button type="primary" size="small" :loading="exampleCreating === ex.key" @click="handleCreateExample(ex.key)">
+                  生成
+                </a-button>
+              </div>
+              <div class="example-desc-text">{{ ex.description }}</div>
+              <div class="example-tags">
+                <a-tag v-for="tag in ex.nodeTypeTags" :key="tag" color="blue">{{ tag }}</a-tag>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -436,14 +442,30 @@ onMounted(async () => {
   display: block;
 }
 .example-desc {
+  flex-shrink: 0;
   color: var(--color-mute);
   font-size: 13px;
-  margin-bottom: 16px;
+  padding: 0 24px 16px;
+  margin-bottom: 0;
+}
+.example-modal-body {
+  display: flex;
+  flex-direction: column;
+  max-height: 65vh;
+}
+.example-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 20px 24px;
+  margin-right: 8px;
+  scrollbar-gutter: stable;
 }
 .example-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding-right: 8px;
 }
 .example-card {
   border: 1px solid var(--color-hairline);

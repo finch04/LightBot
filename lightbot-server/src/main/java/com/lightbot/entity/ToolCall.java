@@ -32,10 +32,6 @@ public class ToolCall {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long messageId;
 
-    @TableField("tool_call_id")
-    @Schema(description = "工具调用ID（用于关联）")
-    private String toolCallId;
-
     @TableField("tool_name")
     @Schema(description = "工具名称")
     private String toolName;
