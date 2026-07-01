@@ -1,5 +1,6 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -7,6 +8,7 @@ import lombok.Data;
  * 对话附件（上传后引用）
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Schema(description = "对话附件")
 public class ChatAttachmentDTO {
 

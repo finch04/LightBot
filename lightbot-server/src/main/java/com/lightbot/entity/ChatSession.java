@@ -57,6 +57,10 @@ public class ChatSession {
     @Schema(description = "会话上下文")
     private String context;
 
+    @TableField(value = "attachments", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "会话附件索引 JSON 数组")
+    private String attachments;
+
     @TableField("message_count")
     @Schema(description = "消息数量")
     private Integer messageCount;

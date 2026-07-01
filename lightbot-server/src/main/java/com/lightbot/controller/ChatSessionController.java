@@ -7,6 +7,7 @@ import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.Message;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.MessageService;
+import com.lightbot.service.SessionFileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class ChatSessionController {
 
     private final ChatSessionService chatSessionService;
     private final MessageService messageService;
+    private final SessionFileService sessionFileService;
 
     @Operation(summary = "创建新会话")
     @PostMapping
@@ -140,15 +142,60 @@ public class ChatSessionController {
         return Result.ok(messageService.listStarred(pageNum, pageSize));
     }
 
-    @Operation(summary = "获取会话附件列表（用户上传 + AI 生成文件）")
+    @Operation(summary = "获取会话附件列表")
     @GetMapping("/{id}/attachments")
     public Result<List<com.lightbot.dto.SessionAttachmentVO>> getAttachments(@PathVariable Long id) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensureOwnedByUser(id, userId);
         return Result.ok(chatSessionService.getSessionAttachments(id));
+    }
+
+    @Operation(summary = "获取会话文件树（懒加载单层）")
+    @GetMapping("/{id}/files/tree")
+    public Result<com.lightbot.dto.SessionFileTreeResponseVO> getFileTree(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "") String path) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensureOwnedByUser(id, userId);
+        return Result.ok(sessionFileService.listDirectory(id, path));
+    }
+
+    @Operation(summary = "获取会话文件内容/预览信息")
+    @GetMapping("/{id}/files/content")
+    public Result<com.lightbot.dto.SessionFileContentVO> getFileContent(
+            @PathVariable Long id,
+            @RequestParam String path) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensureOwnedByUser(id, userId);
+        return Result.ok(sessionFileService.readContent(id, path));
+    }
+
+    @Operation(summary = "获取会话文件下载 URL")
+    @GetMapping("/{id}/files/download")
+    public Result<String> getFileDownloadUrl(
+            @PathVariable Long id,
+            @RequestParam String path) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensureOwnedByUser(id, userId);
+        return Result.ok(sessionFileService.getDownloadUrl(id, path));
+    }
+
+    @Operation(summary = "删除会话文件")
+    @DeleteMapping("/{id}/files")
+    public Result<Void> deleteFile(
+            @PathVariable Long id,
+            @RequestParam String path) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensureOwnedByUser(id, userId);
+        sessionFileService.deleteFile(id, path);
+        return Result.ok();
     }
 
     @Operation(summary = "移除会话附件")
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     public Result<Void> removeAttachment(@PathVariable Long id, @PathVariable String attachmentId) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensureOwnedByUser(id, userId);
         chatSessionService.removeSessionAttachment(id, attachmentId);
         return Result.ok();
     }

@@ -32,11 +32,9 @@
       </div>
       <div class="chat-topbar-right">
         <a-tooltip title="会话文件">
-          <a-badge :count="sessionFileCount" :overflow-count="99" :number-style="{ fontSize: '10px', boxShadow: 'none' }">
-            <button class="btn-topbar-file" @click="openFileDrawer">
-              <FolderOpenOutlined />
-            </button>
-          </a-badge>
+          <button class="btn-topbar-file" @click="openFileDrawer">
+            <FolderOpenOutlined />
+          </button>
         </a-tooltip>
       </div>
     </div>
@@ -716,7 +714,7 @@
   <a-drawer
     v-model:open="fileDrawerOpen"
     title="会话文件"
-    :width="520"
+    :width="760"
     :mask-closable="true"
     @afterOpenChange="onFileDrawerOpened"
   >
@@ -732,38 +730,21 @@
         </button>
       </a-tooltip>
     </template>
-    <div v-if="fileDrawerLoading" class="file-drawer-loading">
-      <LoadingOutlined spin class="file-drawer-loading-icon" />
+    <div class="file-drawer-stats">
+      共 {{ fileStats.total }} 个文件，用户上传 {{ fileStats.userUpload }} 个，AI 生成 {{ fileStats.aiGenerated }} 个
     </div>
-    <div v-else-if="sessionAttachments.length === 0" class="file-drawer-empty">
-      <FileTextOutlined class="file-drawer-empty-icon" />
-      <p>暂无文件</p>
-      <p class="file-drawer-empty-hint">上传附件或让 AI 生成文件后会出现在这里</p>
-    </div>
-    <div v-else class="file-drawer-list">
-      <div v-if="userUploads.length > 0" class="file-drawer-section">
-        <div class="file-drawer-section-title">用户上传 ({{ userUploads.length }})</div>
-        <div class="file-drawer-grid">
-          <ChatAttachmentTile
-            v-for="(att, i) in userUploads"
-            :key="att.id || i"
-            :att="att"
-            :thumb-url="getAttThumbUrl(att)"
-            @preview="openSessionFilePreview"
-          />
-        </div>
+    <div class="file-drawer-split">
+      <div class="file-drawer-tree">
+        <SessionFileTree
+          ref="sessionFileTreeRef"
+          :session-id="sessionId"
+          :refresh-tick="fileTreeRefreshTick"
+          @select="onFileSelect"
+          @refreshed="onFileTreeRefreshed"
+        />
       </div>
-      <div v-if="aiFiles.length > 0" class="file-drawer-section">
-        <div class="file-drawer-section-title">AI 生成 ({{ aiFiles.length }})</div>
-        <div class="file-drawer-grid">
-          <ChatAttachmentTile
-            v-for="(att, i) in aiFiles"
-            :key="att.id || i"
-            :att="att"
-            :thumb-url="getAttThumbUrl(att)"
-            @preview="openSessionFilePreview"
-          />
-        </div>
+      <div class="file-drawer-preview">
+        <SessionFilePreview :session-id="sessionId" :file="selectedFile" />
       </div>
     </div>
   </a-drawer>
@@ -778,7 +759,7 @@ import { message, Modal } from 'ant-design-vue'
 import { chatStream, refreshChatAttachmentPreviews, submitMessageFeedback, getMessageFeedback, batchGetMessageFeedbacks } from '../api/chat'
 import { validatePendingAttachmentMix } from '../utils/chatAttachment'
 import { enrichVideoThumbnails } from '../utils/videoThumbnail'
-import { getSessionMessages, getSession, createSession, getSessionTitle, updateSessionTitle, deleteMessage as deleteMessageApi, toggleMessageStar, getSessionAttachments } from '../api/chatSession'
+import { getSessionMessages, getSession, createSession, getSessionTitle, updateSessionTitle, deleteMessage as deleteMessageApi, toggleMessageStar } from '../api/chatSession'
 import { useUserStore } from '../stores/user'
 import { safeJsonParse } from '../utils/request'
 import { copyToClipboard } from '../utils/clipboard'
@@ -789,6 +770,8 @@ import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupCompone
 import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
+import SessionFileTree from '../components/SessionFileTree.vue'
+import SessionFilePreview from '../components/SessionFilePreview.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
 import ChatMentionInput from '../components/ChatMentionInput.vue'
 import MentionTextRenderer from '../components/MentionTextRenderer.vue'
@@ -862,13 +845,13 @@ const sessionTitle = ref('')
 const titleEditing = ref(false)
 const titleEditValue = ref('')
 const titleInputRef = ref(null)
-const sessionAttachments = ref([])
 const fileDrawerOpen = ref(false)
 const fileDrawerLoading = ref(false)
 const fileDrawerLoadedOnce = ref(false)
-const sessionFileCount = computed(() => sessionAttachments.value.length)
-const userUploads = computed(() => sessionAttachments.value.filter(a => a.source === 'user_upload'))
-const aiFiles = computed(() => sessionAttachments.value.filter(a => a.source === 'ai_generated'))
+const fileStats = reactive({ total: 0, userUpload: 0, aiGenerated: 0 })
+const fileTreeRefreshTick = ref(0)
+const selectedFile = ref(null)
+const sessionFileTreeRef = ref(null)
 
 // Agent 管理（chatCapabilities 在此 composable 内部创建）
 const {
@@ -1452,8 +1435,9 @@ async function loadHistory() {
   // 切换对话时显示加载态；保留当前 messages 直到新数据返回，避免列表闪空
   initialLoadDone.value = false
   lastReplyElapsed.value = null
-  sessionAttachments.value = []
   fileDrawerLoadedOnce.value = false
+  selectedFile.value = null
+  fileStats.total = 0; fileStats.userUpload = 0; fileStats.aiGenerated = 0
   input.value = ''
   inputHistory.value = []
   historyIndex.value = -1
@@ -2466,25 +2450,24 @@ async function loadSessionFiles() {
   if (!sessionId.value) return
   fileDrawerLoading.value = true
   try {
-    const res = await getSessionAttachments(sessionId.value)
-    sessionAttachments.value = res.data || []
-    const needRefresh = sessionAttachments.value.filter(a => a.objectKey)
-    if (needRefresh.length > 0) {
-      try {
-        const refreshed = await refreshChatAttachmentPreviews(needRefresh)
-        const refreshedByKey = new Map((refreshed.data || []).map(a => [a.objectKey, a]))
-        sessionAttachments.value = sessionAttachments.value.map(a => {
-          const r = refreshedByKey.get(a.objectKey)
-          return r ? { ...a, ...r } : a
-        })
-      } catch { /* ignore */ }
-    }
+    // 触发树组件刷新；统计由 onFileTreeRefreshed 回写
+    fileTreeRefreshTick.value++
     fileDrawerLoadedOnce.value = true
-  } catch {
-    sessionAttachments.value = []
   } finally {
     fileDrawerLoading.value = false
   }
+}
+
+function onFileTreeRefreshed(stats) {
+  if (stats) {
+    fileStats.total = stats.total || 0
+    fileStats.userUpload = stats.userUpload || 0
+    fileStats.aiGenerated = stats.aiGenerated || 0
+  }
+}
+
+function onFileSelect(file) {
+  selectedFile.value = file
 }
 
 function openSessionFilePreview(att) {
@@ -4252,22 +4235,33 @@ span.agent-menu-icon {
   margin-top: 8px !important;
 }
 
-.file-drawer-section {
-  margin-bottom: 24px;
-}
-
-.file-drawer-section-title {
+.file-drawer-stats {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--color-body);
-  margin-bottom: 12px;
-  padding-bottom: 4px;
+  color: var(--color-mute);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--color-hairline);
+  line-height: 1.5;
 }
 
-.file-drawer-grid {
+.file-drawer-split {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
+  height: calc(100vh - 160px);
+  min-height: 360px;
+}
+.file-drawer-tree {
+  flex: 0 0 300px;
+  border-right: 1px solid var(--color-hairline);
+  padding-right: 12px;
+  overflow: auto;
+}
+.file-drawer-preview {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-canvas);
 }
 </style>

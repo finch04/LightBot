@@ -12,8 +12,11 @@ import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.LlmTraceService;
 import com.lightbot.service.MessageService;
+import com.lightbot.dto.SessionAttachmentVO;
+import com.lightbot.enums.SessionAttachmentSource;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.RedisUtil;
+import com.lightbot.util.SessionStoragePath;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +29,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * 对话会话服务实现类
@@ -445,11 +452,34 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         return sb.toString();
     }
 
-    // ==================== 会话附件管理 ====================
+    // ==================== 会话附件管理（chat_session.attachments JSONB） ====================
 
     @Override
     public void appendSessionAttachments(Long sessionId, List<com.lightbot.dto.ChatAttachmentDTO> attachments, String source) {
         if (attachments == null || attachments.isEmpty()) {
+            return;
+        }
+        List<SessionAttachmentVO> vos = new ArrayList<>();
+        for (com.lightbot.dto.ChatAttachmentDTO att : attachments) {
+            SessionAttachmentVO vo = new SessionAttachmentVO();
+            vo.setId(att.getId());
+            vo.setType(att.getType());
+            vo.setMimeType(att.getMimeType());
+            vo.setObjectKey(att.getObjectKey());
+            vo.setPreviewUrl(att.getPreviewUrl());
+            vo.setFileName(att.getFileName());
+            vo.setParsedText(att.getParsedText());
+            vo.setParsedTextTruncated(att.getParsedTextTruncated());
+            vo.setSource(source != null ? source : SessionAttachmentSource.USER_UPLOAD.getCode());
+            vo.setCreatedAt(LocalDateTime.now().toString());
+            vos.add(vo);
+        }
+        registerSessionAttachments(sessionId, vos);
+    }
+
+    @Override
+    public void registerSessionAttachments(Long sessionId, List<SessionAttachmentVO> attachments) {
+        if (sessionId == null || attachments == null || attachments.isEmpty()) {
             return;
         }
         ChatSession session = getById(sessionId);
@@ -457,75 +487,88 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             return;
         }
         try {
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(
-                    session.getContext() != null && !session.getContext().isEmpty()
-                            ? session.getContext() : "{}");
-            com.fasterxml.jackson.databind.node.ArrayNode existingAtts;
-            if (root.has("attachments") && root.get("attachments").isArray()) {
-                existingAtts = (com.fasterxml.jackson.databind.node.ArrayNode) root.get("attachments");
-            } else {
-                existingAtts = objectMapper.createArrayNode();
-            }
-            // 按 objectKey 去重
-            java.util.Set<String> existingKeys = new java.util.HashSet<>();
-            for (com.fasterxml.jackson.databind.JsonNode att : existingAtts) {
-                if (att.has("objectKey")) {
-                    existingKeys.add(att.get("objectKey").asText());
+            ensureAttachmentsMigrated(session);
+            com.fasterxml.jackson.databind.node.ArrayNode arr = readAttachmentsArray(session);
+            Set<String> existingKeys = new HashSet<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : arr) {
+                if (node.has("objectKey")) {
+                    existingKeys.add(node.get("objectKey").asText());
                 }
             }
-            com.fasterxml.jackson.databind.node.ObjectNode wrapped = (com.fasterxml.jackson.databind.node.ObjectNode) root;
-            for (com.lightbot.dto.ChatAttachmentDTO att : attachments) {
-                if (att.getObjectKey() != null && !existingKeys.contains(att.getObjectKey())) {
-                    com.fasterxml.jackson.databind.node.ObjectNode node = objectMapper.valueToTree(att);
-                    node.put("source", source);
-                    node.put("createdAt", java.time.LocalDateTime.now().toString());
-                    existingAtts.add(node);
-                    existingKeys.add(att.getObjectKey());
+            for (SessionAttachmentVO att : attachments) {
+                if (att.getObjectKey() == null || att.getObjectKey().isBlank()) {
+                    continue;
                 }
+                if (existingKeys.contains(att.getObjectKey())) {
+                    continue;
+                }
+                if (att.getId() == null || att.getId().isBlank()) {
+                    att.setId(java.util.UUID.randomUUID().toString().replace("-", ""));
+                }
+                if (att.getCreatedAt() == null) {
+                    att.setCreatedAt(LocalDateTime.now().toString());
+                }
+                arr.add(objectMapper.valueToTree(att));
+                existingKeys.add(att.getObjectKey());
             }
-            wrapped.set("attachments", existingAtts);
-            session.setContext(objectMapper.writeValueAsString(wrapped));
+            session.setAttachments(objectMapper.writeValueAsString(arr));
             updateById(session);
             evictSessionCache(sessionId);
         } catch (Exception e) {
-            log.warn("[ChatSession] 追加附件到会话上下文失败: sessionId={}", sessionId, e);
+            log.warn("[ChatSession] 注册附件失败: sessionId={}", sessionId, e);
         }
     }
 
     @Override
-    public List<com.lightbot.dto.SessionAttachmentVO> getSessionAttachments(Long sessionId) {
-        List<com.lightbot.dto.SessionAttachmentVO> result = new ArrayList<>();
+    public List<SessionAttachmentVO> getSessionAttachments(Long sessionId) {
         ChatSession session = getById(sessionId);
         if (session == null) {
+            return List.of();
+        }
+        try {
+            ensureAttachmentsMigrated(session);
+            List<SessionAttachmentVO> result = parseAttachments(session.getAttachments());
+            refreshAttachmentPreviews(result);
+            result.sort(Comparator.comparing(SessionAttachmentVO::getCreatedAt,
+                    Comparator.nullsLast(String::compareTo)).reversed());
             return result;
+        } catch (Exception e) {
+            log.warn("[ChatSession] 解析会话附件失败: sessionId={}", sessionId, e);
+            return List.of();
         }
-        // 1. 从 session.context.attachments 读取已持久化的附件
-        if (session.getContext() != null && !session.getContext().isEmpty()) {
-            try {
-                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(session.getContext());
-                if (root.has("attachments") && root.get("attachments").isArray()) {
-                    for (com.fasterxml.jackson.databind.JsonNode node : root.get("attachments")) {
-                        result.add(objectMapper.convertValue(node, com.lightbot.dto.SessionAttachmentVO.class));
-                    }
+    }
+
+    @Override
+    public void ensureOwnedByUser(Long sessionId, Long userId) {
+        ChatSession session = getById(sessionId);
+        if (session == null || !userId.equals(session.getUserId())) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+    }
+
+    @Override
+    public void removeSessionAttachmentByObjectKey(Long sessionId, String objectKey) {
+        if (sessionId == null || objectKey == null || objectKey.isBlank()) {
+            return;
+        }
+        ChatSession session = getById(sessionId);
+        if (session == null) {
+            return;
+        }
+        try {
+            ensureAttachmentsMigrated(session);
+            com.fasterxml.jackson.databind.node.ArrayNode arr = readAttachmentsArray(session);
+            for (int i = arr.size() - 1; i >= 0; i--) {
+                if (objectKey.equals(arr.get(i).path("objectKey").asText(null))) {
+                    arr.remove(i);
                 }
-            } catch (Exception e) {
-                log.warn("[ChatSession] 解析会话附件失败: sessionId={}", sessionId, e);
             }
+            session.setAttachments(objectMapper.writeValueAsString(arr));
+            updateById(session);
+            evictSessionCache(sessionId);
+        } catch (Exception e) {
+            log.warn("[ChatSession] 按 objectKey 移除附件失败: sessionId={}, objectKey={}", sessionId, objectKey, e);
         }
-        // 2. 收集 AI 生成文件（从最近消息的 toolEvents 中提取）
-        List<com.lightbot.dto.SessionAttachmentVO> aiFiles = collectAiGeneratedFiles(sessionId);
-        java.util.Set<String> existingKeys = result.stream()
-                .map(com.lightbot.dto.SessionAttachmentVO::getObjectKey)
-                .filter(k -> k != null)
-                .collect(java.util.stream.Collectors.toSet());
-        for (com.lightbot.dto.SessionAttachmentVO ai : aiFiles) {
-            if (ai.getObjectKey() == null || !existingKeys.contains(ai.getObjectKey())) {
-                result.add(ai);
-            }
-        }
-        // 3. 刷新 previewUrl
-        refreshAttachmentPreviews(result);
-        return result;
     }
 
     @Override
@@ -535,20 +578,15 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             return;
         }
         try {
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(
-                    session.getContext() != null && !session.getContext().isEmpty()
-                            ? session.getContext() : "{}");
-            if (!root.has("attachments") || !root.get("attachments").isArray()) {
-                return;
-            }
-            com.fasterxml.jackson.databind.node.ArrayNode arr = (com.fasterxml.jackson.databind.node.ArrayNode) root.get("attachments");
+            ensureAttachmentsMigrated(session);
+            com.fasterxml.jackson.databind.node.ArrayNode arr = readAttachmentsArray(session);
             for (int i = 0; i < arr.size(); i++) {
                 if (attachmentId.equals(arr.get(i).path("id").asText())) {
                     arr.remove(i);
                     break;
                 }
             }
-            session.setContext(objectMapper.writeValueAsString(root));
+            session.setAttachments(objectMapper.writeValueAsString(arr));
             updateById(session);
             evictSessionCache(sessionId);
         } catch (Exception e) {
@@ -556,78 +594,57 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         }
     }
 
-    /**
-     * 从最近消息的 toolEvents 中提取 AI 生成文件
-     */
-    private List<com.lightbot.dto.SessionAttachmentVO> collectAiGeneratedFiles(Long sessionId) {
-        List<com.lightbot.dto.SessionAttachmentVO> files = new ArrayList<>();
-        List<com.lightbot.entity.Message> messages = messageService.listBySessionId(sessionId);
-        int startIdx = Math.max(0, messages.size() - 50);
-        for (int i = startIdx; i < messages.size(); i++) {
-            com.lightbot.entity.Message msg = messages.get(i);
-            if (msg.getRole() != com.lightbot.enums.MessageRole.ASSISTANT) {
-                continue;
-            }
-            if (msg.getMetadata() == null || msg.getMetadata().isBlank()) {
-                continue;
-            }
-            try {
-                com.fasterxml.jackson.databind.JsonNode meta = objectMapper.readTree(msg.getMetadata());
-                com.fasterxml.jackson.databind.JsonNode toolEvents = meta.get("toolEvents");
-                if (toolEvents == null || !toolEvents.isArray()) {
-                    continue;
-                }
-                for (com.fasterxml.jackson.databind.JsonNode event : toolEvents) {
-                    String toolName = event.path("toolName").asText("");
-                    if (!"subagent_result".equals(toolName) && !"deliver_file".equals(toolName)) {
-                        continue;
-                    }
-                    String result = event.path("result").asText(null);
-                    if (result == null || result.isBlank()) {
-                        continue;
-                    }
-                    extractDeliveredFiles(result, files);
-                }
-            } catch (Exception ignored) {
-            }
+    /** 从 context.attachments 迁移到 attachments 列（一次性） */
+    private void ensureAttachmentsMigrated(ChatSession session) throws Exception {
+        if (session.getAttachments() != null && !session.getAttachments().isBlank()
+                && !"[]".equals(session.getAttachments().trim())) {
+            return;
         }
-        return files;
-    }
-
-    /**
-     * 从 subagent_result / deliver_file 结果中提取文件信息
-     */
-    private void extractDeliveredFiles(String result, List<com.lightbot.dto.SessionAttachmentVO> files) {
-        try {
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(result);
-            com.fasterxml.jackson.databind.JsonNode fileList = root.has("files") ? root.get("files") : root;
-            if (fileList.isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode f : fileList) {
-                    com.lightbot.dto.SessionAttachmentVO vo = new com.lightbot.dto.SessionAttachmentVO();
-                    vo.setId(f.has("id") ? f.get("id").asText() : java.util.UUID.randomUUID().toString());
-                    vo.setFileName(f.has("fileName") ? f.get("fileName").asText() :
-                            f.has("name") ? f.get("name").asText() : "未命名文件");
-                    vo.setType(f.has("type") ? f.get("type").asText() : "document");
-                    vo.setMimeType(f.has("mimeType") ? f.get("mimeType").asText() : null);
-                    vo.setObjectKey(f.has("objectKey") ? f.get("objectKey").asText() : null);
-                    if (f.has("previewUrl")) {
-                        vo.setPreviewUrl(f.get("previewUrl").asText());
-                    }
-                    vo.setSource("ai_generated");
-                    vo.setCreatedAt(f.has("createdAt") ? f.get("createdAt").asText() :
-                            java.time.LocalDateTime.now().toString());
-                    files.add(vo);
-                }
+        if (session.getContext() == null || session.getContext().isBlank()) {
+            if (session.getAttachments() == null) {
+                session.setAttachments("[]");
             }
-        } catch (Exception ignored) {
+            return;
+        }
+        com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(session.getContext());
+        if (root.has("attachments") && root.get("attachments").isArray() && !root.get("attachments").isEmpty()) {
+            session.setAttachments(objectMapper.writeValueAsString(root.get("attachments")));
+            updateById(session);
+            evictSessionCache(session.getId());
+        } else if (session.getAttachments() == null) {
+            session.setAttachments("[]");
         }
     }
 
-    /**
-     * 刷新附件列表中的预览 URL
-     */
-    private void refreshAttachmentPreviews(List<com.lightbot.dto.SessionAttachmentVO> attachments) {
-        for (com.lightbot.dto.SessionAttachmentVO att : attachments) {
+    private com.fasterxml.jackson.databind.node.ArrayNode readAttachmentsArray(ChatSession session) throws Exception {
+        String json = session.getAttachments();
+        if (json == null || json.isBlank()) {
+            return objectMapper.createArrayNode();
+        }
+        com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(json);
+        if (node.isArray()) {
+            return (com.fasterxml.jackson.databind.node.ArrayNode) node;
+        }
+        return objectMapper.createArrayNode();
+    }
+
+    private List<SessionAttachmentVO> parseAttachments(String json) throws Exception {
+        if (json == null || json.isBlank()) {
+            return new ArrayList<>();
+        }
+        com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(json);
+        if (!node.isArray()) {
+            return new ArrayList<>();
+        }
+        List<SessionAttachmentVO> list = new ArrayList<>();
+        for (com.fasterxml.jackson.databind.JsonNode item : node) {
+            list.add(objectMapper.convertValue(item, SessionAttachmentVO.class));
+        }
+        return list;
+    }
+
+    private void refreshAttachmentPreviews(List<SessionAttachmentVO> attachments) {
+        for (SessionAttachmentVO att : attachments) {
             if (att.getObjectKey() != null && !att.getObjectKey().isBlank()) {
                 try {
                     att.setPreviewUrl(minioUtil.getPresignedUrl(att.getObjectKey()));

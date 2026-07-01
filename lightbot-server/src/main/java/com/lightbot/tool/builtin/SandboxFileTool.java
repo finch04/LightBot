@@ -86,12 +86,14 @@ public class SandboxFileTool {
     }
 
     @Tool(name = "sandbox_write_file",
-          description = "写入文件到当前会话工作区。路径传相对路径如 output.txt 或 data/result.json，系统自动归属到当前会话。" +
-                  "禁止写入 skills/ 路径（只读），否则会报错。" +
-                  "如需创建子目录，直接在路径中包含即可，如 data/result.json")
+          description = "写入文件到当前会话。两种写入区域：" +
+                  "1) 工作区（默认，临时/中间文件）: 直接传相对路径如 output.txt 或 data/result.json。" +
+                  "2) AI 产出区（用于交付给用户的最终文件）: 路径以 outputs/ 开头，如 outputs/files/report.pdf，" +
+                  "可配合 present_artifacts 工具交付。" +
+                  "禁止写入 skills/ 路径（只读）。如需创建子目录，直接在路径中包含即可。")
     @SystemTool(displayName = "写入沙盒文件", tags = {"file", "sandbox", "write"})
     public String writeFile(
-            @ToolParam(description = "相对路径，如 output.txt 或 data/result.json。不要传 skills/ 开头的路径")
+            @ToolParam(description = "相对路径。工作区文件如 output.txt；交付文件以 outputs/ 开头如 outputs/files/report.pdf。不要传 skills/ 开头的路径")
             @ToolParamMeta(example = "output.txt") String path,
             @ToolParam(description = "文件内容")
             @ToolParamMeta(example = "Hello World") String content,
@@ -117,7 +119,7 @@ public class SandboxFileTool {
     }
 
     /**
-     * 解析路径：skills/ 开头走 Skill 路径，其余自动归属到当前会话工作区
+     * 解析路径：skills/ 开头走 Skill 路径，outputs/ 开头走 AI 产出区，其余自动归属到当前会话工作区
      */
     private SandboxPath resolvePath(String path, ToolContext toolContext) {
         String normalized = path.replace("\\", "/");
@@ -132,8 +134,13 @@ public class SandboxFileTool {
             }
             return new SandboxPath(SandboxPath.PathType.SKILL, relative);
         }
-        // 工作区路径：自动注入 sessionId
         String sessionId = extractSessionId(toolContext);
+        // AI 产出区：outputs/...（读写，用于交付物）
+        if (normalized.startsWith("outputs/")) {
+            String relative = normalized.substring("outputs/".length());
+            return SandboxPath.output(sessionId, relative);
+        }
+        // 工作区路径：自动注入 sessionId
         return SandboxPath.workspace(sessionId, normalized);
     }
 

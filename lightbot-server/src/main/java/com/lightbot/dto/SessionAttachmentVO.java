@@ -1,6 +1,8 @@
 package com.lightbot.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -39,8 +41,18 @@ public class SessionAttachmentVO {
     @Schema(description = "解析文本是否因超长被截断")
     private Boolean parsedTextTruncated;
 
-    @Schema(description = "来源：user_upload / ai_generated")
+    @Schema(description = "来源：user_upload / ai_image / ai_sandbox / ai_deliver")
     private String source;
+
+    @Schema(description = "沙盒相对路径（outputs 或工作区相对路径）")
+    private String relativePath;
+
+    @Schema(description = "产生该文件的工具名")
+    private String toolName;
+
+    @Schema(description = "关联消息 ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long messageId;
 
     @Schema(description = "加入会话时间")
     private String createdAt;

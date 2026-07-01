@@ -291,6 +291,74 @@ public class MinioUtil {
     }
 
     /**
+     * 非递归列出指定目录前缀下的「直接子条目」（模拟目录结构）。
+     * <p>MinIO 无真实目录概念，这里通过 {@code recursive=false} 列举并按 {@code /} 聚合。</p>
+     *
+     * @param directoryPrefix 目录前缀，必须以 {@code /} 结尾（如 {@code sessions/123/inputs/}）
+     * @return 直接子条目列表（包含目录与文件）
+     */
+    public java.util.List<MinioDirEntry> listDirectoryEntries(String directoryPrefix) {
+        try {
+            java.util.List<MinioDirEntry> result = new java.util.ArrayList<>();
+            var items = minioClient.listObjects(
+                    ListObjectsArgs.builder().bucket(bucket).prefix(directoryPrefix).recursive(false).build());
+            for (var item : items) {
+                io.minio.messages.Item obj = item.get();
+                String objectName = obj.objectName();
+                boolean isDir = obj.isDir();
+                // 目录条目：objectName 形如 sessions/123/inputs/，name 取最后一段非空
+                // 文件条目：objectName 形如 sessions/123/inputs/abc.png
+                String name = extractLastSegment(objectName, isDir);
+                if (name == null || name.isEmpty()) {
+                    continue;
+                }
+                MinioDirEntry entry = new MinioDirEntry();
+                entry.name = name;
+                entry.objectName = isDir ? stripTrailingSlash(objectName) : objectName;
+                entry.directory = isDir;
+                entry.size = isDir ? 0L : obj.size();
+                entry.lastModified = isDir ? null : java.time.OffsetDateTime.now().toString();
+                try {
+                    if (!isDir) {
+                        entry.lastModified = obj.lastModified() != null ? obj.lastModified().toString() : null;
+                    }
+                } catch (Exception ignored) {
+                }
+                result.add(entry);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("[MinIO] 列举目录失败, prefix={}", directoryPrefix, e);
+            throw new BizException(ErrorCode.FILE_DOWNLOAD_FAILED);
+        }
+    }
+
+    private static String extractLastSegment(String objectName, boolean isDir) {
+        String s = objectName;
+        if (isDir) {
+            s = stripTrailingSlash(s);
+        }
+        int idx = s.lastIndexOf('/');
+        return idx >= 0 ? s.substring(idx + 1) : s;
+    }
+
+    private static String stripTrailingSlash(String s) {
+        while (s.endsWith("/")) {
+            s = s.substring(0, s.length() - 1);
+        }
+        return s;
+    }
+
+    /** MinIO 目录条目（非递归列举结果） */
+    public static class MinioDirEntry {
+        public String name;
+        public String objectName;
+        public boolean directory;
+        public long size;
+        public String lastModified;
+    }
+
+    /**
      * 删除指定前缀下的所有对象（用于会话工作区清理）
      *
      * @param prefix 路径前缀

@@ -124,27 +124,38 @@ public interface ChatSessionService extends IService<ChatSession> {
     String exportSession(Long userId, Long sessionId, String format);
 
     /**
-     * 批量追加附件到会话上下文（JSONB 去重）
-     *
-     * @param sessionId   会话ID
-     * @param attachments 附件列表
-     * @param source      来源：user_upload / ai_generated
+     * 批量追加用户上传附件到会话 attachments 索引
      */
     void appendSessionAttachments(Long sessionId, List<com.lightbot.dto.ChatAttachmentDTO> attachments, String source);
 
     /**
-     * 获取会话附件列表（持久化附件 + AI 生成文件）
-     *
-     * @param sessionId 会话ID
-     * @return 附件列表
+     * 注册会话附件（AI 工具产出等，按 objectKey 去重）
+     */
+    void registerSessionAttachments(Long sessionId, List<com.lightbot.dto.SessionAttachmentVO> attachments);
+
+    /**
+     * 获取会话附件列表
      */
     List<com.lightbot.dto.SessionAttachmentVO> getSessionAttachments(Long sessionId);
 
     /**
-     * 从会话附件列表中移除一个附件
+     * 校验会话归属当前用户，不属于抛 SESSION_NOT_FOUND。
      *
-     * @param sessionId    会话ID
-     * @param attachmentId 附件ID
+     * @param sessionId 会话 ID
+     * @param userId    当前用户 ID
+     */
+    void ensureOwnedByUser(Long sessionId, Long userId);
+
+    /**
+     * 按 objectKey 移除会话附件索引条目（删除 MinIO 文件后同步用）。
+     *
+     * @param sessionId 会话 ID
+     * @param objectKey MinIO objectKey
+     */
+    void removeSessionAttachmentByObjectKey(Long sessionId, String objectKey);
+
+    /**
+     * 从会话附件列表中移除一个附件
      */
     void removeSessionAttachment(Long sessionId, String attachmentId);
 }

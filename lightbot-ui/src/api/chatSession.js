@@ -72,3 +72,19 @@ export function getSessionAttachments(id) {
 export function removeSessionAttachment(sessionId, attachmentId) {
   return request.delete(`/chat/sessions/${sessionId}/attachments/${attachmentId}`)
 }
+
+export function getSessionFileTree(sessionId, path = '') {
+  return request.get(`/chat/sessions/${sessionId}/files/tree`, { params: { path } })
+}
+
+export function getSessionFileContent(sessionId, path) {
+  return request.get(`/chat/sessions/${sessionId}/files/content`, { params: { path } })
+}
+
+export function getSessionFileDownloadUrl(sessionId, path) {
+  return request.get(`/chat/sessions/${sessionId}/files/download`, { params: { path } })
+}
+
+export function deleteSessionFile(sessionId, path) {
+  return request.delete(`/chat/sessions/${sessionId}/files`, { params: { path } })
+}

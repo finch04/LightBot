@@ -11,6 +11,7 @@ import com.lightbot.service.ChatAttachmentService;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
 import com.lightbot.util.ChatContentSecurityScanUtil;
 import com.lightbot.util.MinioUtil;
+import com.lightbot.util.SessionStoragePath;
 import com.lightbot.util.TikaUtil;
 import com.lightbot.workflow.WorkflowConfigParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -123,8 +124,14 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
                                                 Long agentId, Long sessionId, String parsedText,
                                                 boolean parsedTruncated) {
         String attachmentId = UUID.randomUUID().toString().replace("-", "");
-        String sessionPart = sessionId != null ? String.valueOf(sessionId) : "temp";
-        String objectKey = "chat/" + agentId + "/" + sessionPart + "/" + attachmentId + extensionFromMime(mime, type);
+        String objectKey;
+        if (SessionStoragePath.isSessionScoped(sessionId)) {
+            objectKey = SessionStoragePath.inputObjectKey(sessionId, attachmentId,
+                    extensionFromMime(mime, type));
+        } else {
+            String sessionPart = "temp";
+            objectKey = "chat/" + agentId + "/" + sessionPart + "/" + attachmentId + extensionFromMime(mime, type);
+        }
 
         try {
             minioUtil.upload(new ByteArrayInputStream(bytes), objectKey, bytes.length, mime);

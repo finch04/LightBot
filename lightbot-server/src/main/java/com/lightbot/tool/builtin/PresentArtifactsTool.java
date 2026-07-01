@@ -42,9 +42,9 @@ public class PresentArtifactsTool {
     private final ObjectMapper objectMapper;
 
     @Tool(name = "present_artifacts",
-          description = "将工作区中生成的文件交付给用户。传入文件路径列表（相对路径如 output/report.pdf），" +
+          description = "将 outputs/ 目录下生成的文件交付给用户。传入文件路径列表（必须以 outputs/ 开头，如 outputs/files/report.pdf），" +
                   "系统会验证文件存在并生成下载链接，前端将展示为文件卡片（支持图片预览、文档下载）。" +
-                  "仅支持工作区文件，不支持 Skill 只读文件。")
+                  "仅支持 outputs/ 目录下文件，不支持 Skill 只读文件和工作区临时文件。")
     public String presentArtifacts(
             @ToolParam(description = "文件路径列表，使用相对路径如 [\"output/report.pdf\", \"data/chart.png\"]")
             @ToolParamMeta(example = "[\"output/report.pdf\"]") List<String> filepaths,
@@ -78,14 +78,21 @@ public class PresentArtifactsTool {
                     continue;
                 }
 
-                // 2. 构建工作区路径并验证存在
-                SandboxPath sandboxPath = SandboxPath.workspace(sessionId, normalized);
+                // 2. 仅允许 outputs/ 下的文件作为交付物（对齐 Yuxi present_artifacts）
+                if (!normalized.startsWith("outputs/")) {
+                    errors.add(normalized + "（仅 outputs/ 目录下的文件可交付，请先用 sandbox_write_file 写入到 outputs/ 下）");
+                    continue;
+                }
+
+                // 3. 构建 outputs 路径并验证存在
+                String outputsRelative = normalized.substring("outputs/".length());
+                SandboxPath sandboxPath = SandboxPath.output(sessionId, outputsRelative);
                 if (!sandboxFs.fileExists(sandboxPath)) {
                     errors.add(normalized + "（文件不存在）");
                     continue;
                 }
 
-                // 3. 生成预签名 URL
+                // 4. 生成预签名 URL
                 String minioPath = sandboxPath.toMinioPath();
                 String presignedUrl = minioUtil.getPresignedUrl(minioPath);
 

@@ -6,11 +6,13 @@ import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.annotation.SystemTool;
 import com.lightbot.tool.annotation.ToolParamMeta;
 import com.lightbot.util.MinioUtil;
+import com.lightbot.util.SessionStoragePath;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -54,7 +56,8 @@ public class ImageGenTool {
             @ToolParam(description = "图片描述（英文效果更佳）")
             @ToolParamMeta(example = "a beautiful sunset over the ocean") String prompt,
             @ToolParam(description = "负面提示词，描述不希望出现的元素（可选）")
-            @ToolParamMeta(example = "blurry, low quality", required = false) String negativePrompt) {
+            @ToolParamMeta(example = "blurry, low quality", required = false) String negativePrompt,
+            ToolContext toolContext) {
         log.info("[Tool:image_generation] 生成图片: prompt={}", prompt);
 
         if (apiKey == null || apiKey.isBlank()) {
@@ -113,7 +116,11 @@ public class ImageGenTool {
             // 3. 上传到 MinIO
             ToolEventEmitter.emit("正在保存到对象存储...");
 
-            String filePath = "generated/images/" + UUID.randomUUID().toString().replace("-", "") + ".jpg";
+            String fileId = UUID.randomUUID().toString().replace("-", "");
+            Long sessionId = extractSessionId(toolContext);
+            String filePath = SessionStoragePath.isSessionScoped(sessionId)
+                    ? SessionStoragePath.outputImageObjectKey(sessionId, fileId)
+                    : "generated/images/" + fileId + ".jpg";
             minioUtil.upload(new ByteArrayInputStream(imageResponse.body()), filePath,
                     imageResponse.body().length, "image/jpeg");
 
@@ -130,6 +137,22 @@ public class ImageGenTool {
         } catch (Exception e) {
             log.error("[Tool:image_generation] 生成异常: prompt={}, error={}", prompt, e.getMessage());
             return "图片生成过程中发生错误: " + e.getMessage();
+        }
+    }
+
+    private Long extractSessionId(ToolContext toolContext) {
+        if (toolContext == null || toolContext.getContext() == null) {
+            return null;
+        }
+        Object sid = toolContext.getContext().get("sessionId");
+        if (sid == null) {
+            return null;
+        }
+        try {
+            long id = Long.parseLong(String.valueOf(sid));
+            return id > 0 ? id : null;
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 }

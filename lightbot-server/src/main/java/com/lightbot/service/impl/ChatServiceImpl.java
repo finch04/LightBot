@@ -99,6 +99,7 @@ public class ChatServiceImpl implements ChatService {
     private final ToolEventGenerator toolEventGenerator;
     private final ToolArgsSanitizer toolArgsSanitizer;
     private final RagParamResolver ragParamResolver;
+    private final SessionAttachmentRegistrar sessionAttachmentRegistrar;
 
     /** SSE 心跳注释行（SSE 协议：以冒号开头的行是注释，客户端应忽略） */
     private static final String HEARTBEAT_PREFIX = ":heartbeat";
@@ -1287,6 +1288,9 @@ public class ChatServiceImpl implements ChatService {
                         }
                     }
                 }, lightBotExecutor).get(TOOL_EXECUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!ToolResultPrefixes.isError(result)) {
+                    sessionAttachmentRegistrar.registerFromToolResult(sessionId, toolName, result);
+                }
                 return result;
             } catch (TimeoutException e) {
                 log.error("[Chat] 工具执行超时: name={}, timeout={}s", toolName, TOOL_EXECUTION_TIMEOUT_SECONDS);
