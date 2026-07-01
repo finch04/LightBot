@@ -35,3 +35,7 @@ export function testWorkflow(agentId, data) {
 export function testWorkflowNode(agentId, data) {
   return request.post(`/agents/${agentId}/workflow/test-node`, data)
 }
+
+export function resumeWorkflow(agentId, data) {
+  return request.post(`/agents/${agentId}/workflow/resume`, data)
+}

@@ -58,8 +58,14 @@
       当前节点：<strong>{{ getNodeTitleById(testCurrentNodeId) }}</strong>
     </div>
     <div v-if="testResult">
-      <h4>输出结果</h4>
-      <pre class="test-output">{{ testResult.output || '（无输出）' }}</pre>
+      <WorkflowConfirmForm
+        v-if="testPendingConfirm?.confirmForm"
+        :confirm-form="testPendingConfirm.confirmForm"
+        :submitting="testRunning || testAnimating"
+        @submit="formData => $emit('resume', formData)"
+      />
+      <h4 v-if="!testPendingConfirm">输出结果</h4>
+      <pre v-if="!testPendingConfirm" class="test-output">{{ testResult.output || '（无输出）' }}</pre>
       <div class="result-tab-header">
         <h4 :class="{ active: resultTab === 'trace' }" @click="resultTab = 'trace'">节点轨迹</h4>
         <h4 :class="{ active: resultTab === 'variables' }" @click="resultTab = 'variables'">
@@ -161,6 +167,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import WorkflowConfirmForm from '../../../../components/WorkflowConfirmForm.vue'
 
 const props = defineProps({
   testMode: String,
@@ -170,12 +177,13 @@ const props = defineProps({
   testAnimating: Boolean,
   testMessages: { type: Array, default: () => [] },
   testResult: { type: Object, default: null },
+  testPendingConfirm: { type: Object, default: null },
   testCurrentNodeId: [String, Number],
   getNodeTitleById: { type: Function, required: true },
 })
 
 defineEmits([
-  'close', 'run', 'clear-conversation',
+  'close', 'run', 'resume', 'clear-conversation',
   'update:testMode', 'update:testInput', 'update:testUseDraft',
 ])
 
@@ -321,7 +329,7 @@ function getNodeTypeName(type) {
     start: '开始', end: '结束', llm: '大模型', condition: '条件判断',
     retrieval: '知识检索', tool: '工具调用', classifier: '意图分类',
     api: 'API', loop: '循环', variable: '变量', batch: '批处理',
-    script: '脚本', mcp: 'MCP', input: '输入', output: '输出',
+    script: '脚本', mcp: 'MCP', input: '输入', confirm: '人工确认', output: '输出',
     variable_handle: '变量处理', parameter_extractor: '参数提取',
     app_component: '应用组件', code: '代码',
     loop_start: '迭代开始', loop_end: '迭代结束',

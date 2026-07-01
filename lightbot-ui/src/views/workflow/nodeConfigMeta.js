@@ -184,6 +184,10 @@ export const FIELD_HINTS = {
   input: {
     outputParams: '流程开始时暴露给下游的参数，query 为常用默认项',
   },
+  confirm: {
+    message: '暂停时展示给操作者的说明，如审批要求、补录指引',
+    formFields: '确认表单字段；提交后各字段 key 写入流程变量，下游可用 {{key}} 引用',
+  },
   output: {
     output: '最终输出模板，可引用上游节点输出变量',
     streamSwitch: '是否以流式方式返回给前端',
@@ -304,6 +308,33 @@ export const NODE_EXAMPLES = {
     example: {
       label: '流程输入',
       outputParams: [{ key: 'query', type: 'String', defaultValue: '' }],
+    },
+  },
+  confirm: {
+    title: '人工确认节点',
+    summary:
+      '流程执行到此节点时会暂停（SUSPENDED），操作者在测试抽屉或对话页填写表单并确认后继续。' +
+      '表单各字段的 key 会写入流程变量，下游节点可通过 {{confirmed}}、{{remark}} 等引用。' +
+      '适用于审批通过/驳回、信息补录、质检复核等人机协同场景。',
+    example: {
+      label: '审批确认',
+      message: '请核对生成内容是否符合规范，确认是否通过审批',
+      formFields: [
+        {
+          key: 'confirmed',
+          label: '是否通过',
+          type: 'select',
+          required: true,
+          options: ['是', '否'],
+        },
+        {
+          key: 'remark',
+          label: '审批备注',
+          type: 'textarea',
+          required: false,
+          defaultValue: '',
+        },
+      ],
     },
   },
   output: {

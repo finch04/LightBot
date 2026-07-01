@@ -26,4 +26,13 @@ public class WorkflowTestResultVO {
 
     @Schema(description = "执行完成后的变量快照")
     private Map<String, Object> variables;
+
+    @Schema(description = "是否因人工确认节点挂起")
+    private Boolean suspended;
+
+    @Schema(description = "挂起运行 ID（恢复时使用）")
+    private String runId;
+
+    @Schema(description = "人工确认表单（message + formFields）")
+    private Map<String, Object> confirmForm;
 }

@@ -260,7 +260,7 @@ const nodeSteps = computed(() => {
       step.success = e.success
       step.outputs = e.outputs
       step.nextNodeId = e.nextNodeId
-      step.status = e.success === false ? 'failed' : 'done'
+      step.status = e.success === false ? 'failed' : (e.suspended ? 'suspended' : 'done')
       if (e.isContainer != null) step.isContainer = e.isContainer
       runningByNodeId.delete(e.nodeId)
       if (e.stepIndex != null) stepByIndex.set(e.stepIndex, step)
@@ -347,6 +347,7 @@ function getNodeTypeName(type) {
     script: '脚本',
     mcp: 'MCP',
     input: '输入',
+    confirm: '人工确认',
     output: '输出',
     variable_handle: '变量处理',
     parameter_extractor: '参数提取',

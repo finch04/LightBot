@@ -186,9 +186,11 @@
     :test-messages="testMessages"
     :test-result="testResult"
     :test-current-node-id="testCurrentNodeId"
+    :test-pending-confirm="testPendingConfirm"
     :get-node-title-by-id="getNodeTitleById"
     @close="onTestDrawerClose"
     @run="runWorkflowTest"
+    @resume="resumeWorkflowTest"
     @clear-conversation="clearTestConversation"
   />
 
@@ -216,7 +218,8 @@ import {
   listWorkflowVersions,
   getWorkflowVersionDetail,
   restoreWorkflowVersion,
-  testWorkflow
+  testWorkflow,
+  resumeWorkflow
 } from '../api/workflow'
 import NodeSingleTestDrawer from '../views/workflow/components/NodeSingleTestDrawer.vue'
 import NodeExampleModal from '../views/workflow/components/NodeExampleModal.vue'
@@ -351,6 +354,7 @@ const testRunning = ref(false)
 const testAnimating = ref(false)
 const testCurrentNodeId = ref(null)
 const testResult = ref(null)
+const testPendingConfirm = ref(null)
 const versionVisible = ref(false)
 const publishModalVisible = ref(false)
 const publishDescription = ref('')
@@ -2310,6 +2314,7 @@ function formatWorkflowLayout() {
 function clearTestConversation() {
   testMessages.value = []
   testResult.value = null
+  testPendingConfirm.value = null
 }
 
 function onTestDrawerClose() {
@@ -2338,6 +2343,7 @@ async function runWorkflowTest() {
   testVisible.value = true
   testRunning.value = true
   testResult.value = null
+  testPendingConfirm.value = null
   testCurrentNodeId.value = null
   clearNodeDebugStatus()
   try {
@@ -2355,6 +2361,15 @@ async function runWorkflowTest() {
     }
     const res = await testWorkflow(agentId, payload)
     testResult.value = res.data
+    if (res.data?.suspended) {
+      testPendingConfirm.value = {
+        runId: res.data.runId,
+        confirmForm: res.data.confirmForm,
+      }
+      await animateWorkflowTest(res.data?.nodeEvents || [])
+      message.info('工作流已暂停，请填写确认表单后继续')
+      return
+    }
     if (testMode.value === 'conversation' && res.data?.output) {
       testMessages.value.push({ role: 'assistant', content: res.data.output })
     }
@@ -2370,6 +2385,42 @@ async function runWorkflowTest() {
     }
     notification.error({ message: '测试失败', description: e.message })
     clearNodeDebugStatus()
+  } finally {
+    testRunning.value = false
+  }
+}
+
+async function resumeWorkflowTest(formData) {
+  if (!testPendingConfirm.value?.runId) return
+  testRunning.value = true
+  try {
+    const res = await resumeWorkflow(agentId, {
+      runId: testPendingConfirm.value.runId,
+      formData,
+    })
+    const prevEvents = testResult.value?.nodeEvents || []
+    testResult.value = {
+      ...res.data,
+      nodeEvents: [...prevEvents, ...(res.data?.nodeEvents || [])],
+      variables: res.data?.variables || testResult.value?.variables,
+    }
+    if (res.data?.suspended) {
+      testPendingConfirm.value = {
+        runId: res.data.runId,
+        confirmForm: res.data.confirmForm,
+      }
+      await animateWorkflowTest(res.data?.nodeEvents || [])
+      message.info('工作流再次暂停，请继续确认')
+      return
+    }
+    testPendingConfirm.value = null
+    if (testMode.value === 'conversation' && res.data?.output) {
+      testMessages.value.push({ role: 'assistant', content: res.data.output })
+    }
+    await animateWorkflowTest(res.data?.nodeEvents || [])
+    message.success('工作流执行完成')
+  } catch (e) {
+    notification.error({ message: '恢复执行失败', description: e.message })
   } finally {
     testRunning.value = false
   }

@@ -2,6 +2,8 @@ package com.lightbot.service;
 
 import com.lightbot.dto.WorkflowGraphDTO;
 import com.lightbot.dto.WorkflowNodeTestRequest;
+import com.lightbot.dto.WorkflowResumeRequest;
+import com.lightbot.dto.WorkflowResumeRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.dto.WorkflowVersionVO;
@@ -53,6 +55,11 @@ public interface WorkflowConfigService {
      * 调试运行
      */
     WorkflowTestResultVO testRun(Long agentId, WorkflowTestRequest request);
+
+    /**
+     * 人工确认后恢复工作流
+     */
+    WorkflowTestResultVO resumeWorkflow(Long agentId, WorkflowResumeRequest request);
 
     /**
      * 单节点调试运行

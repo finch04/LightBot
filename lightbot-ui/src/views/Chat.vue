@@ -173,9 +173,15 @@
                 <div v-if="messages[virtualRow.index]?._workflowEvents?.length > 0 && !messages[virtualRow.index]._sensitiveBlock" class="workflow-block-inline">
                   <WorkflowNodesGroupComponent
                     :workflow-events="messages[virtualRow.index]._workflowEvents"
-                    :is-done="!messages[virtualRow.index]._streaming"
-                    :default-expanded="!!messages[virtualRow.index]._streaming"
+                    :is-done="!messages[virtualRow.index]._streaming && !messages[virtualRow.index]._workflowConfirmPending"
+                    :default-expanded="!!messages[virtualRow.index]._streaming || !!messages[virtualRow.index]._workflowConfirmPending"
                     :is-streaming="!!messages[virtualRow.index]._streaming"
+                  />
+                  <WorkflowConfirmForm
+                    v-if="messages[virtualRow.index]._workflowConfirmPending?.confirmForm"
+                    :confirm-form="messages[virtualRow.index]._workflowConfirmPending.confirmForm"
+                    :submitting="loading"
+                    @submit="formData => submitWorkflowConfirm(messages[virtualRow.index], formData)"
                   />
                 </div>
                 <!-- 有工具事件：按 offset 分段渲染，工具块在对应位置插入，后续文本在其下方 -->
@@ -780,6 +786,8 @@ import { formatTime } from '../utils/format'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import ToolCallsGroupComponent from '../components/ToolCallsGroupComponent.vue'
 import WorkflowNodesGroupComponent from '../components/WorkflowNodesGroupComponent.vue'
+import WorkflowConfirmForm from '../components/WorkflowConfirmForm.vue'
+import { resumeWorkflow } from '../api/workflow'
 import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
@@ -1616,6 +1624,41 @@ async function loadOlderMessages() {
 }
 
 
+async function submitWorkflowConfirm(msg, formData) {
+  const pending = msg?._workflowConfirmPending
+  if (!pending?.runId || !selectedAgentId.value) return
+  loading.value = true
+  try {
+    const res = await resumeWorkflow(selectedAgentId.value, {
+      runId: pending.runId,
+      formData,
+    })
+    const data = res.data || {}
+    msg._workflowConfirmPending = null
+    if (!msg._workflowEvents) msg._workflowEvents = []
+    if (data.nodeEvents?.length) {
+      msg._workflowEvents.push(...data.nodeEvents)
+    }
+    if (data.suspended) {
+      msg._workflowConfirmPending = {
+        runId: data.runId,
+        confirmForm: data.confirmForm,
+      }
+      currentStatus.value = '工作流已暂停，等待确认'
+      return
+    }
+    if (data.output) {
+      msg.content = msg.content ? `${msg.content}\n${data.output}` : data.output
+    }
+    currentStatus.value = ''
+    scrollToBottom()
+  } catch (e) {
+    message.error(e.message || '恢复工作流失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 async function sendMessage() {
   const text = input.value.trim()
   const attachments = [...pendingAttachments.value]
@@ -2099,11 +2142,24 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             return
           }
           // 工作流节点执行事件（实时推送，无需等待最终回复）
-          if (event.type === 'workflow_node_start' || event.type === 'workflow_node_complete' || event.type === 'workflow_complete') {
+          if (event.type === 'workflow_node_start' || event.type === 'workflow_node_complete' || event.type === 'workflow_complete' || event.type === 'workflow_confirm_required' || event.type === 'workflow_suspended') {
             if (!assistantMsg._workflowEvents) assistantMsg._workflowEvents = []
-            assistantMsg._workflowEvents.push(event)
+            if (event.type !== 'workflow_confirm_required') {
+              assistantMsg._workflowEvents.push(event)
+            }
             hasStreamContent.value = true
-            if (event.type === 'workflow_node_start') {
+            if (event.type === 'workflow_confirm_required') {
+              assistantMsg._workflowConfirmPending = {
+                runId: event.runId,
+                confirmForm: event.confirmForm,
+              }
+              assistantMsg._workflowEvents.push(event)
+              currentStatus.value = '等待人工确认'
+            } else if (event.type === 'workflow_suspended') {
+              assistantMsg._streaming = false
+              assistantMsg._toolsDone = true
+              currentStatus.value = '工作流已暂停，等待确认'
+            } else if (event.type === 'workflow_node_start') {
               currentStatus.value = `正在执行: ${event.nodeLabel || event.nodeType || '节点'}`
             } else if (event.type === 'workflow_node_complete') {
               const label = event.nodeLabel || event.nodeType || '节点'

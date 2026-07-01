@@ -117,6 +117,18 @@ public class WorkflowMiddleware implements ChatMiddleware {
 
                 Map<String, Object> metadataMap = new LinkedHashMap<>();
                 metadataMap.put("workflowEvents", workflowEvents);
+                boolean workflowSuspended = workflowEvents.stream()
+                        .anyMatch(e -> "workflow_suspended".equals(e.get("type")));
+                if (workflowSuspended) {
+                    metadataMap.put("workflowSuspended", true);
+                    for (int i = workflowEvents.size() - 1; i >= 0; i--) {
+                        Map<String, Object> ev = workflowEvents.get(i);
+                        if ("workflow_suspended".equals(ev.get("type")) && ev.get("runId") != null) {
+                            metadataMap.put("workflowRunId", ev.get("runId"));
+                            break;
+                        }
+                    }
+                }
                 if (ctx.getRequestId() != null && !ctx.getRequestId().isBlank()) {
                     metadataMap.put("requestId", ctx.getRequestId());
                 }
@@ -502,6 +514,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
             case "mcp" -> List.of("mcpServerId", "mcpServerName", "serverName", "toolName");
             case "parameter_extractor" -> List.of("inputVariable", "extractParams", "instruction", "model", "modelId");
             case "input" -> List.of("outputParams", "output_params");
+            case "confirm" -> List.of("message", "formFields", "form_fields");
             case "output" -> List.of("output");
             case "app_component" -> List.of("componentCode", "componentType");
             case "batch" -> List.of("concurrentSize");

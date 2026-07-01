@@ -45,4 +45,14 @@ public class NodeExecutionResult {
      * 链路追踪专用数据（不进入工作流变量，仅供 trace 记录）
      */
     private Map<String, Object> traceData;
+
+    /**
+     * 是否挂起等待人工确认（HITL）
+     */
+    private boolean suspended;
+
+    /**
+     * 挂起时的表单/提示信息（供前端渲染）
+     */
+    private Map<String, Object> suspendPayload;
 }

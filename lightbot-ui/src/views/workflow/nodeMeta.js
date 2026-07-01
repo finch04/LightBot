@@ -2,7 +2,7 @@ import {
   RobotOutlined, ForkOutlined, BookOutlined, ToolOutlined, PlayCircleOutlined,
   StopOutlined, ApiOutlined, SyncOutlined, EditOutlined, TagsOutlined,
   ClusterOutlined, CodeOutlined, CloudServerOutlined, ImportOutlined,
-  ExportOutlined, FunctionOutlined, FilterOutlined, AppstoreOutlined
+  ExportOutlined, FunctionOutlined, FilterOutlined, AppstoreOutlined, PauseCircleOutlined
 } from '@ant-design/icons-vue'
 
 export const SHORT_MEMORY_DEFAULT = {
@@ -31,6 +31,7 @@ export const NODE_META = {
   script: { title: '脚本', color: '#64748b', icon: CodeOutlined, desc: 'JS/Python 脚本处理变量' },
   mcp: { title: 'MCP', color: '#6366f1', icon: CloudServerOutlined, desc: '调用 MCP 工具' },
   input: { title: '流程输入', color: '#0d9488', icon: ImportOutlined, desc: '在流程中补充输入参数' },
+  confirm: { title: '人工确认', color: '#f97316', icon: PauseCircleOutlined, desc: '暂停流程，等待人工填写并确认' },
   output: { title: '流程输出', color: '#0891b2', icon: ExportOutlined, desc: '输出流程中间结果' },
   variable_handle: { title: '变量处理', color: '#db2777', icon: FunctionOutlined, desc: '对变量进行模板/分组处理' },
   parameter_extractor: { title: '参数提取', color: '#e11d48', icon: FilterOutlined, desc: '从文本提取结构化参数' },
@@ -40,7 +41,7 @@ export const NODE_META = {
 /** 节点库分组（细致分类） */
 export const NODE_LIBRARY_GROUPS = [
   { key: 'core', title: '核心能力', types: ['llm', 'retrieval', 'condition'] },
-  { key: 'io', title: '流程交互', types: ['input', 'output'] },
+  { key: 'io', title: '流程交互', types: ['input', 'confirm', 'output'] },
   { key: 'variable', title: '变量与参数', types: ['variable', 'variable_handle', 'parameter_extractor'] },
   { key: 'logic', title: '逻辑控制', types: ['classifier', 'loop', 'batch'] },
   { key: 'integration', title: '集成调用', types: ['tool', 'api', 'mcp', 'app_component', 'script'] }
@@ -191,6 +192,14 @@ export function getDefaultNodeData(type) {
     input: {
       label: '流程输入',
       outputParams: [{ key: 'query', type: 'String', defaultValue: '' }]
+    },
+    confirm: {
+      label: '人工确认',
+      message: '请确认以下信息后继续执行',
+      formFields: [
+        { key: 'confirmed', label: '是否通过', type: 'select', required: true, options: ['是', '否'] },
+        { key: 'remark', label: '备注', type: 'textarea', required: false, defaultValue: '' },
+      ],
     },
     output: {
       label: '流程输出',

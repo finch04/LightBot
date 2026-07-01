@@ -3,6 +3,7 @@ package com.lightbot.controller;
 import com.lightbot.common.Result;
 import com.lightbot.dto.WorkflowGraphDTO;
 import com.lightbot.dto.WorkflowNodeTestRequest;
+import com.lightbot.dto.WorkflowResumeRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.dto.WorkflowVersionVO;
@@ -79,6 +80,14 @@ public class AgentWorkflowController {
             @PathVariable Long agentId,
             @RequestBody @Valid WorkflowTestRequest request) {
         return Result.ok(workflowConfigService.testRun(agentId, request));
+    }
+
+    @Operation(summary = "人工确认后恢复工作流")
+    @PostMapping("/resume")
+    public Result<WorkflowTestResultVO> resume(
+            @PathVariable Long agentId,
+            @RequestBody @Valid WorkflowResumeRequest request) {
+        return Result.ok(workflowConfigService.resumeWorkflow(agentId, request));
     }
 
     @Operation(summary = "单节点调试运行")

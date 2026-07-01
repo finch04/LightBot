@@ -37,7 +37,8 @@ public enum NodeType {
     OUTPUT("output", "流程输出"),
     VARIABLE_HANDLE("variable_handle", "变量处理"),
     PARAMETER_EXTRACTOR("parameter_extractor", "参数提取"),
-    APP_COMPONENT("app_component", "应用组件");
+    APP_COMPONENT("app_component", "应用组件"),
+    CONFIRM("confirm", "人工确认");
 
     @EnumValue
     private final String code;

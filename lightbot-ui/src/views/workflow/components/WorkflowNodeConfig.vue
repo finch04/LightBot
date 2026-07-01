@@ -273,6 +273,45 @@
       </div>
     </template>
 
+    <!-- 人工确认 -->
+    <template v-if="node.type === 'confirm'">
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="确认提示语" :tip="hint('confirm', 'message')" />
+        </template>
+        <a-textarea v-model:value="node.data.message" :rows="2" placeholder="展示给操作者的说明文字" @change="emitSync" />
+      </a-form-item>
+      <div class="config-section">
+        <div class="config-section-title">
+          <ConfigFieldLabel label="确认表单字段" :tip="hint('confirm', 'formFields')" />
+        </div>
+        <div v-for="(field, idx) in node.data.formFields" :key="idx" class="param-row confirm-field-row">
+          <a-input v-model:value="field.key" placeholder="变量 key" @change="emitSync" />
+          <a-input v-model:value="field.label" placeholder="显示标签" @change="emitSync" />
+          <a-select v-model:value="field.type" style="width: 110px" @change="emitSync">
+            <a-select-option value="text">文本</a-select-option>
+            <a-select-option value="textarea">多行</a-select-option>
+            <a-select-option value="number">数字</a-select-option>
+            <a-select-option value="select">选项</a-select-option>
+          </a-select>
+          <a-switch v-model:checked="field.required" checked-children="必填" un-checked-children="选填" @change="emitSync" />
+          <a-button type="text" danger @click="removeConfirmField(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <div v-for="(field, idx) in node.data.formFields" :key="'opt-' + idx">
+          <a-input
+            v-if="field.type === 'select'"
+            :value="formatSelectOptions(field.options)"
+            placeholder="选项，逗号分隔，如：是,否"
+            class="confirm-options-input"
+            @update:value="val => setSelectOptions(field, val)"
+          />
+        </div>
+        <a-button type="dashed" block size="small" class="param-add-btn" @click="addConfirmField">
+          <PlusOutlined /> 添加字段
+        </a-button>
+      </div>
+    </template>
+
     <!-- 流程输出 -->
     <template v-if="node.type === 'output'">
       <a-form-item label="输出内容" required>
@@ -1090,6 +1129,27 @@ function removeOutputParam(idx) {
   emitSync()
 }
 
+function addConfirmField() {
+  if (!props.node.data.formFields) props.node.data.formFields = []
+  props.node.data.formFields.push({ key: '', label: '', type: 'text', required: false, defaultValue: '' })
+  emitSync()
+}
+
+function removeConfirmField(idx) {
+  props.node.data.formFields?.splice(idx, 1)
+  emitSync()
+}
+
+function formatSelectOptions(options) {
+  if (!Array.isArray(options)) return ''
+  return options.join(',')
+}
+
+function setSelectOptions(field, val) {
+  field.options = (val || '').split(',').map(s => s.trim()).filter(Boolean)
+  emitSync()
+}
+
 function addExtractParam() {
   if (!props.node.data.extractParams) props.node.data.extractParams = []
   props.node.data.extractParams.push({ key: '', type: 'String', required: true, desc: '' })
@@ -1230,7 +1290,12 @@ function removeGroupVar(idx) {
 }
 .builtin-var-tag code { font-size: 11px; color: var(--color-link); }
 .builtin-var-tag .copy-icon { font-size: 10px; color: var(--color-mute); }
-.config-section { margin-bottom: 16px; }
+.confirm-field-row {
+  flex-wrap: wrap;
+}
+.confirm-options-input {
+  margin: -4px 0 10px 0;
+}
 .config-section-title { margin-bottom: 8px; font-size: 13px; font-weight: 500; color: rgba(0, 0, 0, 0.88); }
 .param-add-btn { margin-top: 8px; margin-bottom: 16px; }
 .config-readonly {

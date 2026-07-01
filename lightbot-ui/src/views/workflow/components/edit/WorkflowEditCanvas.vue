@@ -81,6 +81,7 @@
       <template #node-script="props"><GenericWorkflowNode v-bind="props" node-type="script" /></template>
       <template #node-mcp="props"><GenericWorkflowNode v-bind="props" node-type="mcp" summary-key="mcpServerName" /></template>
       <template #node-input="props"><GenericWorkflowNode v-bind="props" node-type="input" /></template>
+      <template #node-confirm="props"><GenericWorkflowNode v-bind="props" node-type="confirm" summary-key="message" /></template>
       <template #node-output="props"><GenericWorkflowNode v-bind="props" node-type="output" summary-key="output" /></template>
       <template #node-variable_handle="props"><GenericWorkflowNode v-bind="props" node-type="variable_handle" /></template>
       <template #node-parameter_extractor="props"><GenericWorkflowNode v-bind="props" node-type="parameter_extractor" /></template>

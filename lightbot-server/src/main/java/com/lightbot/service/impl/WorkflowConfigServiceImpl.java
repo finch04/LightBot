@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.dto.WorkflowGraphDTO;
 import com.lightbot.dto.WorkflowNodeTestRequest;
+import com.lightbot.dto.WorkflowResumeRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
 import com.lightbot.dto.WorkflowVersionVO;
@@ -107,6 +108,13 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
                 agent, definition, request.getInput(), events, initialVariables);
         result.setUsedDraft(usedDraft);
         return result;
+    }
+
+    @Override
+    public WorkflowTestResultVO resumeWorkflow(Long agentId, WorkflowResumeRequest request) {
+        requireAgent(agentId);
+        Map<String, Object> formData = request.getFormData() != null ? request.getFormData() : Map.of();
+        return workflowExecutorService.resumeAfterConfirm(agentId, request.getRunId(), formData);
     }
 
     @Override

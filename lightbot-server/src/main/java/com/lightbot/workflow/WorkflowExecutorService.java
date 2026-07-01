@@ -8,6 +8,7 @@ import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.MessageService;
+import com.lightbot.util.WorkflowRunStateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,6 +41,7 @@ public class WorkflowExecutorService {
     private final AgentVersionService agentVersionService;
     private final MessageService messageService;
     private final ObjectMapper objectMapper;
+    private final WorkflowRunStateUtil workflowRunStateUtil;
     private static final Pattern VAR_PATTERN = Pattern.compile("\\{\\{([^}]+)}}");
 
     /**
@@ -136,10 +139,138 @@ public class WorkflowExecutorService {
             return "工作流缺少开始节点";
         }
 
-        StringBuilder result = new StringBuilder();
-        int stepIndex = 0;
+        LoopOutcome outcome = runExecutionLoop(
+                agent, workflow, context, currentNodeId, 0,
+                new StringBuilder(), workflowEvents, onEvent, serializeWorkflow(workflow));
 
-        // 4. 执行 DAG 链路
+        if (outcome.isSuspended()) {
+            return outcome.getSuspendedMessage();
+        }
+
+        emitWorkflowEvent(workflowEvents, onEvent, Map.of("type", "workflow_complete", "contentOffset", 0));
+
+        if (context.getVariables().containsKey("result")) {
+            return String.valueOf(context.getVariables().get("result"));
+        }
+        return outcome.getStreamResult();
+    }
+
+    /**
+     * 人工确认后恢复执行
+     *
+     * @param agentId  Agent ID
+     * @param runId    挂起运行 ID
+     * @param formData 确认表单数据
+     * @return 调试/恢复结果
+     */
+    public WorkflowTestResultVO resumeAfterConfirm(Long agentId, String runId, Map<String, Object> formData) {
+        WorkflowSuspendedRun suspended = workflowRunStateUtil.getSuspended(runId);
+        if (suspended == null) {
+            throw new IllegalArgumentException("挂起的运行不存在或已过期: " + runId);
+        }
+        if (!agentId.equals(suspended.getAgentId())) {
+            throw new IllegalArgumentException("运行实例与 Agent 不匹配");
+        }
+
+        Agent agent = agentService.getById(agentId);
+        if (agent == null) {
+            throw new IllegalArgumentException("Agent不存在: " + agentId);
+        }
+
+        WorkflowDefinition workflow = deserializeWorkflow(suspended.getWorkflowGraphJson());
+        if (workflow == null) {
+            throw new IllegalStateException("无法恢复工作流定义");
+        }
+
+        // 1. 合并确认表单到变量池
+        NodeExecutionContext context = NodeExecutionContext.builder()
+                .agentId(agentId)
+                .sessionId(suspended.getSessionId())
+                .userInput(suspended.getUserInput())
+                .agent(agent)
+                .workflow(workflow)
+                .variables(new LinkedHashMap<>(suspended.getVariables()))
+                .nodeOutputs(new LinkedHashMap<>(suspended.getNodeOutputs()))
+                .build();
+
+        Map<String, Object> confirmOutputs = new LinkedHashMap<>();
+        if (formData != null) {
+            confirmOutputs.putAll(formData);
+            context.getVariables().putAll(formData);
+        }
+        if (suspended.getSuspendNodeId() != null) {
+            context.getNodeOutputs().put(suspended.getSuspendNodeId(), confirmOutputs);
+        }
+
+        workflowRunStateUtil.deleteSuspended(runId);
+
+        List<Map<String, Object>> events = suspended.getWorkflowEvents() != null
+                ? new ArrayList<>(suspended.getWorkflowEvents()) : new ArrayList<>();
+
+        LoopOutcome outcome = runExecutionLoop(
+                agent, workflow, context,
+                suspended.getNextNodeId(),
+                suspended.getStepIndex(),
+                new StringBuilder(),
+                events,
+                null,
+                suspended.getWorkflowGraphJson());
+
+        WorkflowTestResultVO.WorkflowTestResultVOBuilder builder = WorkflowTestResultVO.builder()
+                .nodeEvents(events)
+                .variables(new LinkedHashMap<>(context.getVariables()))
+                .suspended(outcome.isSuspended());
+
+        if (outcome.isSuspended()) {
+            builder.runId(outcome.getRunId())
+                    .confirmForm(outcome.getConfirmForm())
+                    .output(outcome.getSuspendedMessage());
+        } else {
+            emitWorkflowEvent(events, null, Map.of("type", "workflow_complete", "contentOffset", 0));
+            String output = context.getVariables().containsKey("result")
+                    ? String.valueOf(context.getVariables().get("result"))
+                    : outcome.getStreamResult();
+            builder.output(output);
+        }
+        return builder.build();
+    }
+
+    private String serializeWorkflow(WorkflowDefinition workflow) {
+        try {
+            return objectMapper.writeValueAsString(workflow);
+        } catch (Exception e) {
+            log.warn("[WorkflowExecutorService] 序列化工作流失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private WorkflowDefinition deserializeWorkflow(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, WorkflowDefinition.class);
+        } catch (Exception e) {
+            log.warn("[WorkflowExecutorService] 反序列化工作流失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从指定节点继续执行 DAG，遇到 confirm 节点会挂起
+     */
+    private LoopOutcome runExecutionLoop(Agent agent,
+                                         WorkflowDefinition workflow,
+                                         NodeExecutionContext context,
+                                         String currentNodeId,
+                                         int startStepIndex,
+                                         StringBuilder result,
+                                         List<Map<String, Object>> workflowEvents,
+                                         Consumer<Map<String, Object>> onEvent,
+                                         String workflowGraphJson) {
+        Long agentId = agent.getId();
+        int stepIndex = startStepIndex;
+
         while (currentNodeId != null) {
             stepIndex++;
             WorkflowNode node = workflow.getNode(currentNodeId);
@@ -148,7 +279,6 @@ public class WorkflowExecutorService {
                 break;
             }
 
-            // 设置当前节点信息
             context.setCurrentNodeId(currentNodeId);
             context.setCurrentNodeData(node.getData());
 
@@ -180,10 +310,50 @@ public class WorkflowExecutorService {
                 log.info("[WorkflowExecutorService] 执行节点: nodeId={}, type={}",
                         executingNodeId, node.getType());
 
-                // 带超时 + 重试的节点执行
                 nodeResult = NodeTimeoutRetryHelper.executeWithTimeoutAndRetry(
                         executingNodeId, node.getType(), node.getData(),
                         () -> processor.execute(context));
+
+                if (nodeResult.isSuspended()) {
+                    String runId = UUID.randomUUID().toString().replace("-", "");
+
+                    Map<String, Object> confirmEvent = new LinkedHashMap<>();
+                    confirmEvent.put("type", "workflow_confirm_required");
+                    confirmEvent.put("runId", runId);
+                    confirmEvent.put("nodeId", executingNodeId);
+                    confirmEvent.put("nodeLabel", nodeLabel);
+                    confirmEvent.put("confirmForm", nodeResult.getSuspendPayload());
+                    emitWorkflowEvent(workflowEvents, onEvent, confirmEvent);
+
+                    Map<String, Object> completeEvent = buildCompleteEvent(
+                            executingNodeId, nodeTypeCode, nodeLabel, true,
+                            "等待人工确认", stepIndex, nodeStartMs, nodeResult, node, null);
+                    completeEvent.put("suspended", true);
+                    emitWorkflowEvent(workflowEvents, onEvent, completeEvent);
+
+                    Map<String, Object> suspendedEvent = new LinkedHashMap<>();
+                    suspendedEvent.put("type", "workflow_suspended");
+                    suspendedEvent.put("runId", runId);
+                    suspendedEvent.put("contentOffset", 0);
+                    emitWorkflowEvent(workflowEvents, onEvent, suspendedEvent);
+
+                    WorkflowSuspendedRun suspended = WorkflowSuspendedRun.builder()
+                            .runId(runId)
+                            .agentId(agentId)
+                            .sessionId(context.getSessionId())
+                            .userInput(context.getUserInput())
+                            .workflowGraphJson(workflowGraphJson)
+                            .variables(new LinkedHashMap<>(context.getVariables()))
+                            .nodeOutputs(new LinkedHashMap<>(context.getNodeOutputs()))
+                            .suspendNodeId(executingNodeId)
+                            .nextNodeId(nodeResult.getNextNodeId())
+                            .stepIndex(stepIndex)
+                            .workflowEvents(workflowEvents != null ? new ArrayList<>(workflowEvents) : new ArrayList<>())
+                            .build();
+                    workflowRunStateUtil.saveSuspended(suspended);
+
+                    return LoopOutcome.suspended(runId, nodeResult.getSuspendPayload(), result.toString());
+                }
 
                 if (nodeResult.getOutputs() != null) {
                     context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
@@ -208,53 +378,102 @@ public class WorkflowExecutorService {
                 nextNodeId = null;
             }
 
-            Map<String, Object> completeEvent = new HashMap<>();
-            completeEvent.put("type", "workflow_node_complete");
-            completeEvent.put("nodeId", executingNodeId);
-            completeEvent.put("nodeType", nodeTypeCode);
-            completeEvent.put("nodeLabel", nodeLabel);
-            completeEvent.put("message", completeMessage);
-            completeEvent.put("success", nodeSuccess);
-            completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
-            completeEvent.put("stepIndex", stepIndex);
-            completeEvent.put("contentOffset", 0);
-            if (nextNodeId != null) {
-                completeEvent.put("nextNodeId", nextNodeId);
-            }
-            // 循环/批处理容器节点：标记为容器，前端可据此折叠展示内部子节点
-            if (node.getType() == NodeType.LOOP || node.getType() == NodeType.BATCH) {
-                completeEvent.put("isContainer", true);
-            }
-            String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
-            if (detail != null && !detail.isBlank()) {
-                completeEvent.put("detail", detail);
-            }
-            if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
-                Map<String, Object> outputSummary = summarizeMap(nodeResult.getOutputs(), 10);
-                // LLM 节点：llmOutput 即消息正文，从出参中移除避免对话页重复展示
-                if ("llm".equals(nodeTypeCode)) {
-                    outputSummary.remove("llmOutput");
-                }
-                if (!outputSummary.isEmpty()) {
-                    completeEvent.put("outputs", outputSummary);
-                }
-            }
-            // traceData 独立存放，不混入 outputs（避免 Chat 页组件误将其作为执行结果展示）
-            if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
-                completeEvent.put("traceData", nodeResult.getTraceData());
-            }
+            Map<String, Object> completeEvent = buildCompleteEvent(
+                    executingNodeId, nodeTypeCode, nodeLabel, nodeSuccess,
+                    completeMessage, stepIndex, nodeStartMs, nodeResult, node, nextNodeId);
             emitWorkflowEvent(workflowEvents, onEvent, completeEvent);
 
             currentNodeId = nextNodeId;
         }
 
-        emitWorkflowEvent(workflowEvents, onEvent, Map.of("type", "workflow_complete", "contentOffset", 0));
+        return LoopOutcome.completed(result.toString());
+    }
 
-        // 5. 返回结果：优先取 END 节点写入的 result 出参，而非所有节点 streamContent 拼接
-        if (context.getVariables().containsKey("result")) {
-            return String.valueOf(context.getVariables().get("result"));
+    private Map<String, Object> buildCompleteEvent(String executingNodeId,
+                                                   String nodeTypeCode,
+                                                   String nodeLabel,
+                                                   boolean nodeSuccess,
+                                                   String completeMessage,
+                                                   int stepIndex,
+                                                   long nodeStartMs,
+                                                   NodeExecutionResult nodeResult,
+                                                   WorkflowNode node,
+                                                   String nextNodeId) {
+        Map<String, Object> completeEvent = new HashMap<>();
+        completeEvent.put("type", "workflow_node_complete");
+        completeEvent.put("nodeId", executingNodeId);
+        completeEvent.put("nodeType", nodeTypeCode);
+        completeEvent.put("nodeLabel", nodeLabel);
+        completeEvent.put("message", completeMessage);
+        completeEvent.put("success", nodeSuccess);
+        completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
+        completeEvent.put("stepIndex", stepIndex);
+        completeEvent.put("contentOffset", 0);
+        if (nextNodeId != null) {
+            completeEvent.put("nextNodeId", nextNodeId);
         }
-        return result.toString();
+        if (node != null && (node.getType() == NodeType.LOOP || node.getType() == NodeType.BATCH)) {
+            completeEvent.put("isContainer", true);
+        }
+        String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
+        if (detail != null && !detail.isBlank()) {
+            completeEvent.put("detail", detail);
+        }
+        if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
+            Map<String, Object> outputSummary = summarizeMap(nodeResult.getOutputs(), 10);
+            if ("llm".equals(nodeTypeCode)) {
+                outputSummary.remove("llmOutput");
+            }
+            if (!outputSummary.isEmpty()) {
+                completeEvent.put("outputs", outputSummary);
+            }
+        }
+        if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
+            completeEvent.put("traceData", nodeResult.getTraceData());
+        }
+        return completeEvent;
+    }
+
+    private static final class LoopOutcome {
+        private final boolean suspended;
+        private final String runId;
+        private final Map<String, Object> confirmForm;
+        private final String streamResult;
+
+        private LoopOutcome(boolean suspended, String runId, Map<String, Object> confirmForm, String streamResult) {
+            this.suspended = suspended;
+            this.runId = runId;
+            this.confirmForm = confirmForm;
+            this.streamResult = streamResult;
+        }
+
+        static LoopOutcome suspended(String runId, Map<String, Object> confirmForm, String streamResult) {
+            return new LoopOutcome(true, runId, confirmForm, streamResult);
+        }
+
+        static LoopOutcome completed(String streamResult) {
+            return new LoopOutcome(false, null, null, streamResult);
+        }
+
+        boolean isSuspended() {
+            return suspended;
+        }
+
+        String getRunId() {
+            return runId;
+        }
+
+        Map<String, Object> getConfirmForm() {
+            return confirmForm;
+        }
+
+        String getStreamResult() {
+            return streamResult != null ? streamResult : "";
+        }
+
+        String getSuspendedMessage() {
+            return "工作流已暂停，等待人工确认后继续";
+        }
     }
 
     /**
@@ -572,113 +791,30 @@ public class WorkflowExecutorService {
             return WorkflowTestResultVO.builder().output("工作流缺少开始节点").nodeEvents(workflowEvents).variables(context.getVariables()).build();
         }
 
-        StringBuilder result = new StringBuilder();
-        int stepIndex = 0;
+        String workflowJson = serializeWorkflow(workflow);
+        LoopOutcome outcome = runExecutionLoop(
+                agent, workflow, context, currentNodeId, 0,
+                new StringBuilder(), workflowEvents, null, workflowJson);
 
-        while (currentNodeId != null) {
-            stepIndex++;
-            WorkflowNode node = workflow.getNode(currentNodeId);
-            if (node == null) break;
+        WorkflowTestResultVO.WorkflowTestResultVOBuilder builder = WorkflowTestResultVO.builder()
+                .nodeEvents(workflowEvents)
+                .variables(new LinkedHashMap<>(context.getVariables()))
+                .suspended(outcome.isSuspended());
 
-            context.setCurrentNodeId(currentNodeId);
-            context.setCurrentNodeData(node.getData());
-
-            String nodeLabel = resolveNodeLabel(node);
-            String nodeTypeCode = node.getType() != null ? node.getType().getCode() : "";
-            final String executingNodeId = currentNodeId;
-
-            long nodeStartMs = System.currentTimeMillis();
-            Map<String, Object> startEvent = new LinkedHashMap<>();
-            startEvent.put("type", "workflow_node_start");
-            startEvent.put("nodeId", executingNodeId);
-            startEvent.put("nodeType", nodeTypeCode);
-            startEvent.put("nodeLabel", nodeLabel);
-            startEvent.put("stepIndex", stepIndex);
-            startEvent.put("contentOffset", 0);
-            Map<String, Object> inputPreview = buildNodeInputPreview(node, context);
-            if (!inputPreview.isEmpty()) {
-                startEvent.put("input", inputPreview);
-            }
-            emitWorkflowEvent(workflowEvents, null, startEvent);
-
-            boolean nodeSuccess = true;
-            String completeMessage = "执行完成";
-            String nextNodeId = null;
-            NodeExecutionResult nodeResult = null;
-
-            try {
-                NodeProcessor processor = registry.getProcessor(node.getType());
-                // 带超时 + 重试的节点执行
-                nodeResult = NodeTimeoutRetryHelper.executeWithTimeoutAndRetry(
-                        executingNodeId, node.getType(), node.getData(),
-                        () -> processor.execute(context));
-
-                if (nodeResult.getOutputs() != null) {
-                    context.getNodeOutputs().put(executingNodeId, nodeResult.getOutputs());
-                    context.getVariables().putAll(nodeResult.getOutputs());
-                }
-                if (nodeResult.getStreamContent() != null) {
-                    result.append(nodeResult.getStreamContent());
-                }
-                if (nodeResult.isFinished() || node.getType() == NodeType.END) {
-                    nextNodeId = null;
-                } else {
-                    nextNodeId = nodeResult.getNextNodeId();
-                }
-            } catch (Exception e) {
-                nodeSuccess = false;
-                completeMessage = "执行失败: " + e.getMessage();
-                nextNodeId = null;
-            }
-
-            Map<String, Object> completeEvent = new HashMap<>();
-            completeEvent.put("type", "workflow_node_complete");
-            completeEvent.put("nodeId", executingNodeId);
-            completeEvent.put("nodeType", nodeTypeCode);
-            completeEvent.put("nodeLabel", nodeLabel);
-            completeEvent.put("message", completeMessage);
-            completeEvent.put("success", nodeSuccess);
-            completeEvent.put("durationMs", System.currentTimeMillis() - nodeStartMs);
-            completeEvent.put("stepIndex", stepIndex);
-            completeEvent.put("contentOffset", 0);
-            if (nextNodeId != null) {
-                completeEvent.put("nextNodeId", nextNodeId);
-            }
-            if (node.getType() == NodeType.LOOP || node.getType() == NodeType.BATCH) {
-                completeEvent.put("isContainer", true);
-            }
-            String detail = buildNodeDetail(node, nodeResult, nodeSuccess, completeMessage, nodeTypeCode);
-            if (detail != null && !detail.isBlank()) {
-                completeEvent.put("detail", detail);
-            }
-            if (nodeResult != null && nodeResult.getOutputs() != null && !nodeResult.getOutputs().isEmpty()) {
-                Map<String, Object> outputSummary = summarizeMap(nodeResult.getOutputs(), 10);
-                if ("llm".equals(nodeTypeCode)) {
-                    outputSummary.remove("llmOutput");
-                }
-                if (!outputSummary.isEmpty()) {
-                    completeEvent.put("outputs", outputSummary);
-                }
-            }
-            if (nodeResult != null && nodeResult.getTraceData() != null && !nodeResult.getTraceData().isEmpty()) {
-                completeEvent.put("traceData", nodeResult.getTraceData());
-            }
-            emitWorkflowEvent(workflowEvents, null, completeEvent);
-
-            currentNodeId = nextNodeId;
+        if (outcome.isSuspended()) {
+            builder.runId(outcome.getRunId())
+                    .confirmForm(outcome.getConfirmForm())
+                    .output(outcome.getSuspendedMessage());
+            return builder.build();
         }
 
         emitWorkflowEvent(workflowEvents, null, Map.of("type", "workflow_complete", "contentOffset", 0));
 
         String output = context.getVariables().containsKey("result")
                 ? String.valueOf(context.getVariables().get("result"))
-                : result.toString();
+                : outcome.getStreamResult();
 
-        return WorkflowTestResultVO.builder()
-                .output(output)
-                .nodeEvents(workflowEvents)
-                .variables(new LinkedHashMap<>(context.getVariables()))
-                .build();
+        return builder.output(output).build();
     }
 
     /**
@@ -692,6 +828,9 @@ public class WorkflowExecutorService {
         }
         if (node.getType() == NodeType.START || node.getType() == NodeType.END) {
             throw new IllegalArgumentException("开始/结束节点不支持单节点测试");
+        }
+        if (node.getType() == NodeType.CONFIRM) {
+            throw new IllegalArgumentException("人工确认节点不支持单节点测试，请使用全流调试");
         }
 
         NodeExecutionContext context = NodeExecutionContext.builder()
