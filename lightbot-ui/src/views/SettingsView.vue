@@ -28,10 +28,10 @@
           <a-form :label-col="{ span: 6 }">
             <a-form-item label="模型">
               <ModelSelect
-                v-model="chatValue"
+                v-model:provider-id="chatProviderId"
+                v-model:model-id="chatModelId"
                 model-type="llm"
                 placeholder="选择对话模型"
-                @change="(m) => onModelChange('chat', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -59,10 +59,10 @@
           <a-form :label-col="{ span: 6 }">
             <a-form-item label="模型">
               <ModelSelect
-                v-model="embeddingValue"
+                v-model:provider-id="embeddingProviderId"
+                v-model:model-id="embeddingModelId"
                 model-type="embedding"
                 placeholder="选择向量模型"
-                @change="(m) => onModelChange('embedding', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -90,10 +90,10 @@
           <a-form :label-col="{ span: 6 }">
             <a-form-item label="模型">
               <ModelSelect
-                v-model="rerankValue"
+                v-model:provider-id="rerankProviderId"
+                v-model:model-id="rerankModelId"
                 model-type="rerank"
                 placeholder="选择重排模型"
-                @change="(m) => onModelChange('rerank', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -121,10 +121,10 @@
           <a-form :label-col="{ span: 6 }">
             <a-form-item label="模型">
               <ModelSelect
-                v-model="ttsValue"
+                v-model:provider-id="ttsProviderId"
+                v-model:model-id="ttsModelId"
                 model-type="tts"
                 placeholder="选择 TTS 模型"
-                @change="(m) => onModelChange('tts', m)"
               />
             </a-form-item>
             <a-form-item :wrapper-col="{ offset: 6 }">
@@ -540,17 +540,6 @@ const modelLoading = ref(false)
 const landingLoading = ref(false)
 const loadedTabs = new Set()
 
-const chatValue = ref(null)
-const embeddingValue = ref(null)
-const ttsValue = ref(null)
-const rerankValue = ref(null)
-
-const chatSaving = ref(false)
-const embeddingSaving = ref(false)
-const ttsSaving = ref(false)
-const rerankSaving = ref(false)
-
-// 缓存 providerId:modelId 用于保存
 const chatProviderId = ref(null)
 const chatModelId = ref(null)
 const embeddingProviderId = ref(null)
@@ -609,18 +598,14 @@ async function loadTabData(tab) {
   }
 }
 
+const chatSaving = ref(false)
+const embeddingSaving = ref(false)
+const ttsSaving = ref(false)
+const rerankSaving = ref(false)
+
 function applyModelConfig(kind, cfg) {
   const pid = cfg?.providerId ? String(cfg.providerId) : null
   const mid = cfg?.modelId ? String(cfg.modelId) : null
-  if (kind === 'chat') { chatProviderId.value = pid; chatModelId.value = mid; if (pid && mid) chatValue.value = `${pid}:${mid}` }
-  else if (kind === 'embedding') { embeddingProviderId.value = pid; embeddingModelId.value = mid; if (pid && mid) embeddingValue.value = `${pid}:${mid}` }
-  else if (kind === 'rerank') { rerankProviderId.value = pid; rerankModelId.value = mid; if (pid && mid) rerankValue.value = `${pid}:${mid}` }
-  else if (kind === 'tts') { ttsProviderId.value = pid; ttsModelId.value = mid; if (pid && mid) ttsValue.value = `${pid}:${mid}` }
-}
-
-function onModelChange(kind, { providerId, modelId }) {
-  const pid = providerId ? String(providerId) : providerId
-  const mid = modelId ? String(modelId) : modelId
   if (kind === 'chat') { chatProviderId.value = pid; chatModelId.value = mid }
   else if (kind === 'embedding') { embeddingProviderId.value = pid; embeddingModelId.value = mid }
   else if (kind === 'rerank') { rerankProviderId.value = pid; rerankModelId.value = mid }

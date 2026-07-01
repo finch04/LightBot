@@ -747,7 +747,12 @@
           </div>
         </a-form-item>
         <a-form-item v-if="editForm.contentScanEnabled" label="扫描模型" required>
-          <ModelSelect v-model="editForm.scanModel" model-type="llm" placeholder="选择安全扫描模型" />
+          <ModelSelect
+            v-model:provider-id="editScanProviderId"
+            v-model:model-id="editScanModelId"
+            model-type="llm"
+            placeholder="选择安全扫描模型"
+          />
         </a-form-item>
         <a-form-item label="重复检测">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -980,6 +985,7 @@ import {
 import { searchUsers } from '../api/auth'
 import request from '../utils/request'
 import { getProvidersWithModels } from '../api/modelProvider'
+import { findModelSelectValueByModelId } from '../utils/modelSelect'
 import ModelSelect from '../components/ModelSelect.vue'
 import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
@@ -1150,6 +1156,8 @@ const ingestForm = reactive({
 const editVisible = ref(false)
 const editSubmitting = ref(false)
 const selectedEmbeddingModelId = ref(null)
+const editScanProviderId = ref(null)
+const editScanModelId = ref(null)
 const editForm = reactive({
   name: '',
   description: '',
@@ -1158,7 +1166,6 @@ const editForm = reactive({
   autoGenerateQuestions: false,
   graphEnabled: false,
   contentScanEnabled: false,
-  scanModel: '',
   duplicateDetectionEnabled: false,
   duplicateThreshold: 0.8,
 })
@@ -1750,25 +1757,17 @@ async function openEditDialog() {
     config = typeof k.config === 'string' ? JSON.parse(k.config) : (k.config || {})
   } catch { config = {} }
 
-  // 解析当前 embeddingModel 对应的 providerId，构造复合值
+  // 解析当前 embeddingModel 对应的复合值（仅存 modelId，需反查 provider）
   let embeddingComposite = null
   if (k.embeddingModel) {
     try {
       const provRes = await getProvidersWithModels('embedding')
-      for (const p of (provRes.data || [])) {
-        if ((p.models || []).some(m => m.modelId === k.embeddingModel)) {
-          embeddingComposite = `${String(p.id)}:${k.embeddingModel}`
-          break
-        }
-      }
+      embeddingComposite = findModelSelectValueByModelId(provRes.data || [], k.embeddingModel)
     } catch { /* ignore */ }
   }
 
-  // 解析扫描模型复合值
-  let scanModelComposite = ''
-  if (config.scanModelProviderId && config.scanModelId) {
-    scanModelComposite = `${config.scanModelProviderId}:${config.scanModelId}`
-  }
+  editScanProviderId.value = config.scanModelProviderId ? String(config.scanModelProviderId) : null
+  editScanModelId.value = config.scanModelId || null
 
   selectedEmbeddingModelId.value = k.embeddingModel || null
   Object.assign(editForm, {
@@ -1779,7 +1778,6 @@ async function openEditDialog() {
     autoGenerateQuestions: config.autoGenerateQuestions ?? false,
     graphEnabled: k.graphEnabled ?? false,
     contentScanEnabled: config.contentScanEnabled ?? false,
-    scanModel: scanModelComposite,
     duplicateDetectionEnabled: config.duplicateDetectionEnabled ?? false,
     duplicateThreshold: config.duplicateThreshold ?? 0.8,
   })
@@ -1796,22 +1794,17 @@ async function openEditDialog() {
 async function handleEdit() {
   if (!editForm.name.trim()) return message.warning('请输入名称')
   if (!editForm.embeddingModel) return message.warning('请选择 Embed 模型')
-  if (editForm.contentScanEnabled && !editForm.scanModel) return message.warning('请选择安全扫描模型')
+  if (editForm.contentScanEnabled && (!editScanProviderId.value || !editScanModelId.value)) {
+    return message.warning('请选择安全扫描模型')
+  }
   editSubmitting.value = true
   try {
-    // 解析扫描模型（providerId 保持字符串，避免 Long 精度丢失）
-    let scanModelProviderId = null, scanModelId = null
-    if (editForm.scanModel) {
-      const [pid, mid] = editForm.scanModel.split(':')
-      scanModelProviderId = pid || null
-      scanModelId = mid || null
-    }
     const config = JSON.stringify({
       defaultChunkSize: editForm.chunkSize,
       autoGenerateQuestions: editForm.autoGenerateQuestions,
       contentScanEnabled: editForm.contentScanEnabled,
-      scanModelProviderId,
-      scanModelId,
+      scanModelProviderId: editScanProviderId.value,
+      scanModelId: editScanModelId.value,
       duplicateDetectionEnabled: editForm.duplicateDetectionEnabled,
       duplicateThreshold: editForm.duplicateThreshold,
     })

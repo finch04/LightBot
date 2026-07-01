@@ -35,10 +35,10 @@
           <div class="eval-model-item">
             <label class="eval-model-label">答案生成模型{{ selectedBenchmarkHasGoldAnswer ? '（可选）' : '' }}</label>
             <ModelSelect
-              v-model="answerProviderId"
+              v-model:provider-id="selectedAnswer.providerId"
+              v-model:model-id="selectedAnswer.modelId"
               model-type="llm"
               placeholder="不选则仅评估检索质量"
-              @change="onAnswerModelChange"
             />
           </div>
         </a-col>
@@ -46,10 +46,10 @@
           <div class="eval-model-item">
             <label class="eval-model-label">答案评判模型{{ selectedBenchmarkHasGoldAnswer ? '（可选）' : '' }}</label>
             <ModelSelect
-              v-model="judgeProviderId"
+              v-model:provider-id="selectedJudge.providerId"
+              v-model:model-id="selectedJudge.modelId"
               model-type="llm"
               placeholder="不选则仅评估检索质量"
-              @change="onJudgeModelChange"
             />
           </div>
         </a-col>
@@ -134,19 +134,8 @@ const benchmarks = ref([])
 const benchmarksLoading = ref(false)
 const selectedBenchmarkId = ref(null)
 
-// 模型选择（复合值 "providerId:modelId"）
-const answerProviderId = ref(null)
-const judgeProviderId = ref(null)
 const selectedAnswer = ref({ providerId: null, modelId: null })
 const selectedJudge = ref({ providerId: null, modelId: null })
-
-function onAnswerModelChange({ providerId, modelId }) {
-  selectedAnswer.value = { providerId, modelId }
-}
-
-function onJudgeModelChange({ providerId, modelId }) {
-  selectedJudge.value = { providerId, modelId }
-}
 
 // 运行
 const runLoading = ref(false)
@@ -220,8 +209,8 @@ async function loadResults() {
 async function handleRun() {
   if (!selectedBenchmarkId.value) return message.warning('请先选择评估基准')
   // 两个模型必须同时选或同时不选
-  const hasAnswer = !!answerProviderId.value
-  const hasJudge = !!judgeProviderId.value
+  const hasAnswer = !!selectedAnswer.value.providerId
+  const hasJudge = !!selectedJudge.value.providerId
   if (hasAnswer !== hasJudge) {
     return message.warning('生成模型和评判模型必须同时选择或同时不选')
   }

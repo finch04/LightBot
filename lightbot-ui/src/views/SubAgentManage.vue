@@ -101,10 +101,10 @@
           <span style="font-size: 13px; color: var(--color-mute);">{{ inheritModel ? '继承主 Agent 模型（含版本快照）' : '使用独立模型' }}</span>
           <ModelSelect
             v-if="!inheritModel"
-            v-model="modelSelectValue"
+            v-model:provider-id="form.providerId"
+            v-model:model-id="form.llmModel"
             placeholder="选择模型"
             style="margin-top: 8px"
-            @change="onModelSelectChange"
           />
         </a-form-item>
         <a-form-item label="是否启用">
@@ -247,8 +247,6 @@ const form = reactive({
   enabled: true
 })
 
-const modelSelectValue = ref(null)
-
 const detailVisible = ref(false)
 const currentDetail = ref(null)
 
@@ -325,7 +323,6 @@ function refresh() {
 function openDialog() {
   editingId.value = null
   inheritModel.value = true
-  modelSelectValue.value = null
   staleToolOptions.value = []
   Object.assign(form, { name: '', displayName: '', description: '', systemPrompt: '', toolIds: [], providerId: null, llmModel: null, enabled: true })
   dialogVisible.value = true
@@ -334,7 +331,6 @@ function openDialog() {
 function openEditDialog(record) {
   editingId.value = record.id
   inheritModel.value = !record.modelId
-  modelSelectValue.value = null
   staleToolOptions.value = []
 
   // 解析已绑定的工具ID
@@ -356,17 +352,7 @@ function openEditDialog(record) {
     llmModel: record.llmModel || null,
     enabled: record.enabled === 1
   })
-  if (record.modelId && record.llmModel) {
-    modelSelectValue.value = `${String(record.modelId)}|${String(record.llmModel)}`
-  } else if (record.modelId) {
-    modelSelectValue.value = `${String(record.modelId)}|`
-  }
   dialogVisible.value = true
-}
-
-function onModelSelectChange({ providerId, modelId }) {
-  form.providerId = providerId || null
-  form.llmModel = modelId || null
 }
 
 function formatModelLabel(record) {

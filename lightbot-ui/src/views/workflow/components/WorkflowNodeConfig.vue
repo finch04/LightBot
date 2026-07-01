@@ -39,9 +39,10 @@
           <ConfigFieldLabel label="模型" :tip="hint('llm', 'modelId')" />
         </template>
         <ModelSelect
-          :model-value="nodeModelSelectValue"
+          v-model:provider-id="node.data.providerId"
+          v-model:model-id="node.data.modelId"
           :disabled="readonly"
-          @change="onNodeModelChange"
+          @change="emitSync"
         />
       </a-form-item>
       <a-form-item>
@@ -89,9 +90,10 @@
       </a-form-item>
       <a-form-item label="模型" required>
         <ModelSelect
-          :model-value="nodeModelSelectValue"
+          v-model:provider-id="node.data.providerId"
+          v-model:model-id="node.data.modelId"
           :disabled="readonly"
-          @change="onNodeModelChange"
+          @change="emitSync"
         />
       </a-form-item>
       <a-form-item required>
@@ -316,9 +318,10 @@
       </a-form-item>
       <a-form-item label="模型" required>
         <ModelSelect
-          :model-value="nodeModelSelectValue"
+          v-model:provider-id="node.data.providerId"
+          v-model:model-id="node.data.modelId"
           :disabled="readonly"
-          @change="onNodeModelChange"
+          @change="emitSync"
         />
       </a-form-item>
       <a-form-item label="提取指令">
@@ -905,20 +908,6 @@ function onScriptLanguageChange(lang) {
 function emitSync() {
   if (props.readonly) return
   emit('sync')
-}
-
-const nodeModelSelectValue = computed(() => {
-  const pid = props.node?.data?.providerId
-  const mid = props.node?.data?.modelId
-  if (pid != null && mid) return `${String(pid)}:${String(mid)}`
-  return undefined
-})
-
-function onNodeModelChange({ providerId, modelId } = {}) {
-  if (props.readonly) return
-  props.node.data.providerId = providerId ? String(providerId) : providerId
-  props.node.data.modelId = modelId ? String(modelId) : modelId
-  emitSync()
 }
 
 function onKnowledgeChange(v) {

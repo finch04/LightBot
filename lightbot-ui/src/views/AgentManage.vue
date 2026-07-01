@@ -127,7 +127,11 @@
         </a-form-item>
         <!-- 模型：仅新建且非工作流类型显示 -->
         <a-form-item v-if="!form.id && form.agentType !== 'workflow'" label="模型" required>
-          <ModelSelect v-model="form.model" placeholder="选择模型" @change="onModelChange" />
+          <ModelSelect
+            v-model:provider-id="createProviderId"
+            v-model:model-id="createModelId"
+            placeholder="选择模型"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -187,15 +191,28 @@ const searchText = ref('')
 const filterAgentType = ref(undefined)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const form = reactive({ id: null, name: '', description: '', agentType: 'chat', model: null })
-const selectedProviderId = ref(null)
+const form = reactive({ id: null, name: '', description: '', agentType: 'chat' })
+const createProviderId = ref(null)
+const createModelId = ref(null)
 const exampleModalVisible = ref(false)
 const workflowExamples = ref([])
 const exampleCreating = ref(null)
 const feedbackOpen = ref(false)
 
-function onModelChange({ providerId }) {
-  selectedProviderId.value = providerId
+function openDialog(row) {
+  createProviderId.value = null
+  createModelId.value = null
+  if (row) {
+    Object.assign(form, {
+      id: row.id,
+      name: row.name || '',
+      description: row.description || '',
+      agentType: row.agentType?.code || row.agentType || 'chat',
+    })
+  } else {
+    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat' })
+  }
+  dialogVisible.value = true
 }
 
 async function loadData() {
@@ -217,34 +234,21 @@ watch(searchText, () => {
   searchDebounceTimer = setTimeout(() => loadData(), 300)
 })
 
-function openDialog(row) {
-  selectedProviderId.value = null
-  if (row) {
-    Object.assign(form, {
-      id: row.id,
-      name: row.name || '',
-      description: row.description || '',
-      agentType: row.agentType?.code || row.agentType || 'chat',
-      model: null,
-    })
-  } else {
-    Object.assign(form, { id: null, name: '', description: '', agentType: 'chat', model: null })
-  }
-  dialogVisible.value = true
-}
-
 async function handleSubmit() {
   if (!form.name.trim()) return message.warning('请输入名称')
   // 工作流类型不需要模型，在LLM节点中配置
-  if (!form.id && form.agentType !== 'workflow' && !form.model) return message.warning('请选择模型')
+  if (!form.id && form.agentType !== 'workflow' && (!createProviderId.value || !createModelId.value)) {
+    return message.warning('请选择模型')
+  }
   submitting.value = true
   try {
     if (form.id) {
       await updateAgent(form)
       message.success('更新成功')
     } else {
-      // form.model 格式为 providerId:modelId，拆分后存入 config
-      const config = form.agentType === 'workflow' ? '{}' : JSON.stringify({ providerId: selectedProviderId.value })
+      const config = form.agentType === 'workflow'
+        ? '{}'
+        : JSON.stringify({ providerId: createProviderId.value, modelId: createModelId.value })
       await createAgent({ ...form, config })
       message.success('创建成功')
     }

@@ -62,7 +62,8 @@
           <div class="config-section-title">模型配置</div>
           <div class="model-select-row">
             <ModelSelect
-              :model-value="getInstModelValue(inst)"
+              v-model:provider-id="inst.providerId"
+              v-model:model-id="inst.modelId"
               size="small"
               @change="(m) => onInstModelChange(inst, m)"
             />
@@ -398,15 +399,8 @@ async function applyVersionToInstance(inst, versionData) {
   onContentChange(inst)
 }
 
-function getInstModelValue(inst) {
-  if (inst.providerId && inst.modelId) return `${String(inst.providerId)}|${String(inst.modelId)}`
-  return undefined
-}
-
 async function onInstModelChange(inst, { providerId, modelId }) {
   const prevProviderId = inst.providerId
-  inst.providerId = providerId ? String(providerId) : providerId
-  inst.modelId = modelId ? String(modelId) : modelId
   if (providerId && String(prevProviderId) !== String(providerId)) {
     inst.modelConfig = {}
     await loadConfigFieldsForInstance(inst, providerId)

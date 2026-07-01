@@ -37,7 +37,11 @@
         </a-col>
       </a-row>
       <a-form-item label="生成模型">
-        <ModelSelect v-model="form.modelValue" placeholder="不选则使用系统默认模型" @change="onModelChange" />
+        <ModelSelect
+          v-model:provider-id="selectedModel.providerId"
+          v-model:model-id="selectedModel.modelId"
+          placeholder="不选则使用系统默认模型"
+        />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -88,13 +92,8 @@ const form = reactive({
   description: '',
   count: 10,
   neighborCount: 3,
-  modelValue: null,
 })
 const selectedModel = ref({ providerId: null, modelId: null })
-
-function onModelChange({ providerId, modelId }) {
-  selectedModel.value = { providerId, modelId }
-}
 
 async function handleOk() {
   if (!form.name?.trim()) {
@@ -121,7 +120,7 @@ async function handleOk() {
     form.description = ''
     form.count = 10
     form.neighborCount = 3
-    form.modelValue = null
+    selectedModel.value = { providerId: null, modelId: null }
   } catch (e) {
     message.error('提交失败: ' + (e.message || '未知错误'))
   }

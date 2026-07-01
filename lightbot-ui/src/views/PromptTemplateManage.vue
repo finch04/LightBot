@@ -114,7 +114,11 @@
           </div>
         </a-form-item>
         <a-form-item label="模型配置">
-          <JsonInput v-model="form.modelConfig" :rows="4" placeholder='{"providerId":1,"modelId":"gpt-4"}' />
+          <ModelSelect
+            v-model:provider-id="templateModelProviderId"
+            v-model:model-id="templateModelId"
+            placeholder="选择默认模型（可选）"
+          />
         </a-form-item>
         <a-form-item label="标签">
           <TagInput v-model="form.tags" />
@@ -142,8 +146,9 @@ import {
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import TagInput from '../components/TagInput.vue'
-import JsonInput from '../components/JsonInput.vue'
+import ModelSelect from '../components/ModelSelect.vue'
 import EntityCard from '../components/EntityCard.vue'
+import { buildModelConfigJson, parseModelConfigJson } from '../utils/modelSelect'
 import {
   getPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate
 } from '../api/prompt'
@@ -156,6 +161,8 @@ const dialogVisible = ref(false)
 const previewVisible = ref(false)
 const submitting = ref(false)
 const previewingTemplate = ref(null)
+const templateModelProviderId = ref(null)
+const templateModelId = ref(null)
 const form = reactive({
   id: null,
   promptTemplateKey: '',
@@ -204,7 +211,12 @@ async function loadData() {
 }
 
 function openDialog(row) {
+  templateModelProviderId.value = null
+  templateModelId.value = null
   if (row) {
+    const parsed = parseModelConfigJson(row.modelConfig || '{}')
+    templateModelProviderId.value = parsed.providerId
+    templateModelId.value = parsed.modelId
     Object.assign(form, {
       id: row.id,
       promptTemplateKey: row.promptTemplateKey || '',
@@ -249,6 +261,7 @@ async function handleSubmit() {
 
   // 使用自动识别的变量
   const variables = detectedVars.value.join(',')
+  const modelConfig = buildModelConfigJson(templateModelProviderId.value, templateModelId.value)
 
   submitting.value = true
   try {
@@ -258,7 +271,7 @@ async function handleSubmit() {
         templateDesc: form.templateDesc,
         template: form.template,
         variables,
-        modelConfig: form.modelConfig,
+        modelConfig,
         tags: form.tags
       })
       message.success('更新成功')
@@ -268,7 +281,7 @@ async function handleSubmit() {
         templateDesc: form.templateDesc,
         template: form.template,
         variables,
-        modelConfig: form.modelConfig,
+        modelConfig,
         tags: form.tags
       })
       message.success('创建成功')

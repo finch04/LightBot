@@ -283,7 +283,8 @@
 
           <a-form-item label="模型">
             <ModelSelect
-              :model-value="modelSelectValue"
+              v-model:provider-id="agentConfig.providerId"
+              v-model:model-id="agentConfig.modelId"
               :disabled="isVersionPreview"
               @change="onModelSelectChange"
             />
@@ -2373,14 +2374,6 @@ function removeRecommendedQuestion(idx) {
 const avatarUrl = computed(() => {
   if (!agent.avatar) return ''
   return agent.avatar
-})
-
-/** ModelSelect 复合值（使用 | 分隔避免与 Ollama 模型 ID 中的 : 冲突） */
-const modelSelectValue = computed(() => {
-  const pid = agentConfig.providerId
-  const mid = agentConfig.modelId
-  if (pid && mid) return `${String(pid)}|${String(mid)}`
-  return null
 })
 
 async function onModelSelectChange({ providerId, modelId }) {
