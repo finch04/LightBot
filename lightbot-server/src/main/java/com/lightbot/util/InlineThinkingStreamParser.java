@@ -19,6 +19,12 @@ public class InlineThinkingStreamParser {
     private static final String[] CLOSE_TAGS = {REDACTED_CLOSE, THINKING_CLOSE, THINK_CLOSE};
 
     private boolean insideThinking;
+    /** 开标签后跳过 reasoning 首部换行（跨 chunk） */
+    private boolean skipReasoningLeadingNewlines;
+    /** 闭标签后跳过正文首部换行（跨 chunk） */
+    private boolean skipContentLeadingNewlines;
+    /** 闭标签前暂存、暂不输出的 reasoning 尾部换行（跨 chunk，见闭标签则丢弃） */
+    private String heldReasoningTrailingNewlines = "";
     private final StringBuilder pending = new StringBuilder();
 
     /**
@@ -58,7 +64,7 @@ public class InlineThinkingStreamParser {
             }
         }
 
-        String reasoningOut = reasoning.toString();
+        String reasoningOut = holdReasoningTrailingNewlines(reasoning.toString());
         String contentOut = content.toString();
         return trimPartialTail(reasoningOut, contentOut);
     }
@@ -81,9 +87,41 @@ public class InlineThinkingStreamParser {
                 result = new ParseResult(result.reasoningDelta(), result.contentDelta() + tail);
             }
         }
+        if (parser.insideThinking && !parser.heldReasoningTrailingNewlines.isEmpty()) {
+            result = new ParseResult(
+                    result.reasoningDelta() + parser.heldReasoningTrailingNewlines,
+                    result.contentDelta());
+            parser.heldReasoningTrailingNewlines = "";
+        }
         return new ParseResult(
                 normalizeReasoningText(result.reasoningDelta()),
                 normalizeContentText(result.contentDelta()));
+    }
+
+    /**
+     * 一次性解析完整文本（不做换行规范化，供流式 diff 推送使用）。
+     */
+    public static ParseResult parseCompleteRaw(String text) {
+        if (text == null || text.isEmpty()) {
+            return ParseResult.empty();
+        }
+        InlineThinkingStreamParser parser = new InlineThinkingStreamParser();
+        ParseResult result = parser.feed(text);
+        if (parser.pending.length() > 0) {
+            String tail = parser.pending.toString();
+            parser.pending.setLength(0);
+            if (parser.insideThinking) {
+                result = new ParseResult(result.reasoningDelta() + tail, result.contentDelta());
+            } else {
+                result = new ParseResult(result.reasoningDelta(), result.contentDelta() + tail);
+            }
+        }
+        if (parser.insideThinking && !parser.heldReasoningTrailingNewlines.isEmpty()) {
+            result = new ParseResult(
+                    result.reasoningDelta() + parser.heldReasoningTrailingNewlines,
+                    result.contentDelta());
+        }
+        return result;
     }
 
     /**
@@ -117,30 +155,46 @@ public class InlineThinkingStreamParser {
      * 流结束时 flush 挂起的 partial 标签与未闭合 thinking 内容。
      */
     public ParseResult flush() {
-        if (pending.isEmpty()) {
-            return ParseResult.empty();
+        ParseResult result = ParseResult.empty();
+        if (!pending.isEmpty()) {
+            String tail = pending.toString();
+            pending.setLength(0);
+            if (insideThinking) {
+                result = new ParseResult(normalizeReasoningText(tail), "");
+            } else {
+                result = new ParseResult("", normalizeContentText(tail));
+            }
         }
-        String tail = pending.toString();
-        pending.setLength(0);
-        if (insideThinking) {
-            return new ParseResult(normalizeReasoningText(tail), "");
+        if (insideThinking && !heldReasoningTrailingNewlines.isEmpty()) {
+            String reasoning = result.reasoningDelta() + heldReasoningTrailingNewlines;
+            heldReasoningTrailingNewlines = "";
+            result = new ParseResult(normalizeReasoningText(reasoning), result.contentDelta());
         }
-        return new ParseResult("", normalizeContentText(tail));
+        return result;
     }
 
     private int scanOutside(String input, int start, StringBuilder content) {
         int i = start;
+        if (skipContentLeadingNewlines) {
+            int after = skipLeadingNewlines(input, i);
+            if (after >= input.length()) {
+                return input.length();
+            }
+            i = after;
+            skipContentLeadingNewlines = false;
+        }
         while (i < input.length()) {
             int tagStart = input.indexOf('<', i);
             if (tagStart < 0) {
-                content.append(input.substring(i));
+                appendContentText(content, input.substring(i));
                 return input.length();
             }
-            content.append(input, i, tagStart);
+            appendContentText(content, input.substring(i, tagStart));
             String matchedOpen = matchTagAt(input, tagStart, OPEN_TAGS);
             if (matchedOpen != null) {
                 insideThinking = true;
-                return skipLeadingNewlines(input, tagStart + matchedOpen.length());
+                skipReasoningLeadingNewlines = true;
+                return tagStart + matchedOpen.length();
             }
             content.append('<');
             i = tagStart + 1;
@@ -150,28 +204,87 @@ public class InlineThinkingStreamParser {
 
     private int scanInside(String input, int start, StringBuilder reasoning) {
         int i = start;
+        if (skipReasoningLeadingNewlines) {
+            int after = skipLeadingNewlines(input, i);
+            if (after >= input.length()) {
+                return input.length();
+            }
+            i = after;
+            skipReasoningLeadingNewlines = false;
+        }
         while (i < input.length()) {
             int tagStart = input.indexOf('<', i);
             if (tagStart < 0) {
-                reasoning.append(input.substring(i));
+                appendReasoningText(reasoning, input.substring(i));
                 return input.length();
             }
-            reasoning.append(input, i, tagStart);
+            appendReasoningText(reasoning, input.substring(i, tagStart));
             String matchedClose = matchTagAt(input, tagStart, CLOSE_TAGS);
             if (matchedClose != null) {
+                heldReasoningTrailingNewlines = "";
                 trimTrailingNewlines(reasoning);
                 insideThinking = false;
+                skipContentLeadingNewlines = true;
                 return tagStart + matchedClose.length();
             }
-            // 已在 thinking 块内：重复的 open 标签忽略，仅闭合标签结束
             String matchedOpen = matchTagAt(input, tagStart, OPEN_TAGS);
             if (matchedOpen != null) {
+                // 块内重复 open 标签（模型/Ollama 偶发）：跳过标签及其后换行，不重复计入 reasoning
+                skipReasoningLeadingNewlines = true;
                 return tagStart + matchedOpen.length();
             }
             reasoning.append('<');
             i = tagStart + 1;
         }
         return i;
+    }
+
+    /** 正文分片：闭标签后跳过纯换行/空白 chunk */
+    private void appendContentText(StringBuilder content, String text) {
+        if (text.isEmpty()) {
+            return;
+        }
+        if (skipContentLeadingNewlines) {
+            text = stripLeadingNewlinesFromString(text);
+            if (text.isEmpty()) {
+                return;
+            }
+            skipContentLeadingNewlines = false;
+        }
+        content.append(text);
+    }
+
+    /** reasoning 分片：恢复 held 尾部换行；开标签后跳过首部换行 */
+    private void appendReasoningText(StringBuilder reasoning, String text) {
+        if (text.isEmpty()) {
+            return;
+        }
+        if (!heldReasoningTrailingNewlines.isEmpty()) {
+            int firstNonNewline = firstNonNewlineIndex(text);
+            if (firstNonNewline < 0) {
+                heldReasoningTrailingNewlines += text;
+                return;
+            }
+            text = heldReasoningTrailingNewlines + text.substring(firstNonNewline);
+            heldReasoningTrailingNewlines = "";
+        }
+        reasoning.append(text);
+    }
+
+    private String holdReasoningTrailingNewlines(String reasoningOut) {
+        if (!insideThinking || reasoningOut.isEmpty()) {
+            return reasoningOut;
+        }
+        int end = reasoningOut.length();
+        int start = end;
+        while (start > 0 && isNewlineChar(reasoningOut.charAt(start - 1))) {
+            start--;
+        }
+        if (start < end) {
+            heldReasoningTrailingNewlines += reasoningOut.substring(start);
+            return reasoningOut.substring(0, start);
+        }
+        return reasoningOut;
     }
 
     private ParseResult trimPartialTail(String reasoningOut, String contentOut) {
@@ -218,7 +331,6 @@ public class InlineThinkingStreamParser {
         return null;
     }
 
-    /** 开标签后常见换行，跳过 */
     private static int skipLeadingNewlines(String input, int pos) {
         while (pos < input.length()) {
             char c = input.charAt(pos);
@@ -231,7 +343,20 @@ public class InlineThinkingStreamParser {
         return pos;
     }
 
-    /** 闭标签前常见换行，从 reasoning 末尾去掉 */
+    private static String stripLeadingNewlinesFromString(String text) {
+        int start = skipLeadingNewlines(text, 0);
+        return start == 0 ? text : text.substring(start);
+    }
+
+    private static int firstNonNewlineIndex(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            if (!isNewlineChar(text.charAt(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private static void trimTrailingNewlines(StringBuilder sb) {
         while (sb.length() > 0) {
             char c = sb.charAt(sb.length() - 1);
@@ -249,9 +374,7 @@ public class InlineThinkingStreamParser {
             return "";
         }
         String trimmed = stripEdgeNewlines(text);
-        // 去掉仅含空白的行（流式分片常在行间产生空行）
         trimmed = trimmed.replaceAll("(?m)^[ \\t]+$", "");
-        // 连续 2 个及以上换行压成 1 个
         trimmed = trimmed.replaceAll("(?:\\r\\n|\\n|\\r){2,}", "\n");
         return stripEdgeNewlines(trimmed);
     }

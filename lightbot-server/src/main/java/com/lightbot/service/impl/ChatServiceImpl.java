@@ -1416,7 +1416,7 @@ public class ChatServiceImpl implements ChatService {
             return InlineThinkingStreamParser.ParseResult.empty();
         }
         ctx.appendRawLlmStreamText(delta);
-        return ctx.getInlineThinkingParser().feed(delta);
+        return ctx.computeInlineThinkingStreamDelta();
     }
 
     /**
@@ -1429,13 +1429,14 @@ public class ChatServiceImpl implements ChatService {
             return Flux.empty();
         }
         List<String> items = new ArrayList<>(2);
-        if (!parsed.reasoningDelta().isEmpty()) {
-            String reasoning = ctx.appendReasoningContent(parsed.reasoningDelta());
+        String reasoningDelta = parsed.reasoningDelta();
+        String contentDelta = parsed.contentDelta();
+        if (!reasoningDelta.isEmpty()) {
+            String reasoning = ctx.appendReasoningContent(reasoningDelta);
             if (!reasoning.isEmpty()) {
                 items.add(STATUS_PREFIX + toolEventGenerator.reasoningEvent(reasoning));
             }
         }
-        String contentDelta = parsed.contentDelta();
         if (!contentDelta.isEmpty()) {
             String delta = ctx.getSensitiveStreamState() != null
                     ? ctx.getSensitiveStreamState().processChunk(contentDelta)

@@ -125,6 +125,12 @@ public class ChatContext {
     /** Trace 用：metadata 通道的原始 reasoning 累积（MiMo 等，与正文分通道时不合并删改） */
     private StringBuilder traceMetadataReasoning = new StringBuilder();
 
+    /** 流式已解析并推送的 reasoning 快照（raw 重 parse diff 用） */
+    private String streamReasoningParsedSnapshot = "";
+
+    /** 流式已解析并推送的 content 快照（raw 重 parse diff 用） */
+    private String streamContentParsedSnapshot = "";
+
     /** inline thinking 是否已完成最终解析（Trace 与入库共用，避免重复解析） */
     private boolean inlineThinkingFinalized;
 
@@ -199,38 +205,85 @@ public class ChatContext {
     }
 
     /**
+     * 基于当前 raw 全文重 parse，与上次快照 diff 得到本次 SSE 应推送的 reasoning/content 增量。
+     * <p>Trace 完整回复已验证正确；流式展示与入库均以此为准，避免增量 feed 状态机与全文 parse 不一致。</p>
+     */
+    public com.lightbot.util.InlineThinkingStreamParser.ParseResult computeInlineThinkingStreamDelta() {
+        String raw = getRawLlmStreamText().toString();
+        if (raw.isEmpty()) {
+            return com.lightbot.util.InlineThinkingStreamParser.ParseResult.empty();
+        }
+        com.lightbot.util.InlineThinkingStreamParser.ParseResult full =
+                com.lightbot.util.InlineThinkingStreamParser.parseCompleteRaw(raw);
+        String reasoningDelta = suffixDelta(streamReasoningParsedSnapshot, full.reasoningDelta());
+        String contentDelta = suffixDelta(streamContentParsedSnapshot, full.contentDelta());
+        streamReasoningParsedSnapshot = full.reasoningDelta();
+        streamContentParsedSnapshot = full.contentDelta();
+        return new com.lightbot.util.InlineThinkingStreamParser.ParseResult(reasoningDelta, contentDelta);
+    }
+
+    private static String suffixDelta(String previous, String current) {
+        if (current == null || current.isEmpty()) {
+            return "";
+        }
+        if (previous == null || previous.isEmpty()) {
+            return current;
+        }
+        if (current.equals(previous)) {
+            return "";
+        }
+        if (current.startsWith(previous)) {
+            return current.substring(previous.length());
+        }
+        // 闭标签 trim 等导致 current 比 previous 短：勿把整段 reasoning 再推一次 SSE
+        if (previous.startsWith(current)) {
+            return "";
+        }
+        int prefixLen = longestCommonPrefixLength(previous, current);
+        if (prefixLen >= previous.length()) {
+            return current.substring(prefixLen);
+        }
+        return current.substring(prefixLen);
+    }
+
+    private static int longestCommonPrefixLength(String a, String b) {
+        int limit = Math.min(a.length(), b.length());
+        int i = 0;
+        while (i < limit && a.charAt(i) == b.charAt(i)) {
+            i++;
+        }
+        return i;
+    }
+
+    /**
      * 流式结束后最终解析 thinking 标签并规范化 reasoning / 正文（Trace 与入库前调用）。
+     * <p>以 traceCompleteReply 全文 parse 为准（与 Trace AI 完整回复同源），不再信任增量 feed 累加结果。</p>
      */
     public void finalizeInlineThinking() {
         if (inlineThinkingFinalized) {
             return;
         }
-        if (inlineThinkingParser == null) {
-            inlineThinkingFinalized = true;
-            return;
-        }
 
-        com.lightbot.util.InlineThinkingStreamParser.ParseResult tail = inlineThinkingParser.flush();
-        if (!tail.reasoningDelta().isEmpty()) {
-            appendReasoningContent(tail.reasoningDelta());
-        }
-        if (!tail.contentDelta().isEmpty()) {
-            fullReply.append(tail.contentDelta());
-        }
+        String rawText = traceCompleteReply != null ? traceCompleteReply.toString() : "";
+        String metaReasoning = traceMetadataReasoning != null ? traceMetadataReasoning.toString() : "";
 
-        String raw = getRawLlmStreamText().toString();
-        String reply = fullReply.toString();
-        String source = com.lightbot.util.InlineThinkingStreamParser.containsThinkingTags(raw) ? raw
-                : com.lightbot.util.InlineThinkingStreamParser.containsThinkingTags(reply) ? reply : null;
-        if (source != null) {
+        if (com.lightbot.util.InlineThinkingStreamParser.containsThinkingTags(rawText)) {
             com.lightbot.util.InlineThinkingStreamParser.ParseResult parsed =
-                    com.lightbot.util.InlineThinkingStreamParser.parseComplete(source);
+                    com.lightbot.util.InlineThinkingStreamParser.parseComplete(rawText);
             reasoningContent.setLength(0);
+            fullReply.setLength(0);
+            if (!metaReasoning.isEmpty()) {
+                appendReasoningContent(metaReasoning);
+            }
             if (!parsed.reasoningDelta().isEmpty()) {
                 appendReasoningContent(parsed.reasoningDelta());
             }
-            fullReply.setLength(0);
             fullReply.append(parsed.contentDelta());
+        } else if (!metaReasoning.isEmpty()) {
+            reasoningContent.setLength(0);
+            appendReasoningContent(metaReasoning);
+        } else if (!rawText.isEmpty() && fullReply.length() == 0) {
+            fullReply.append(rawText);
         }
 
         if (reasoningContent.length() > 0) {
@@ -326,7 +379,8 @@ public class ChatContext {
      */
     public void resetStreamTextTracking() {
         streamTextSnapshot = "";
-        inlineThinkingParser = new com.lightbot.util.InlineThinkingStreamParser();
+        streamReasoningParsedSnapshot = "";
+        streamContentParsedSnapshot = "";
         if (rawLlmStreamText == null) {
             rawLlmStreamText = new StringBuilder();
         } else {
@@ -359,15 +413,16 @@ public class ChatContext {
     }
 
     /**
-     * 从流式 getText() 提取增量（兼容增量片段与累积全文两种模式）。
+     * 从流式 getText() 提取增量（兼容累积全文与纯增量两种模式，忽略重复/回退 chunk）。
      *
      * @param currentText 当前 chunk 的 getText() 返回值
-     * @return 相对上一 chunk 的新增文本
+     * @return 相对已消费文本的新增片段
      */
     public String consumeStreamTextDelta(String currentText) {
         if (currentText == null || currentText.isEmpty()) {
             return "";
         }
+        // 1. 累积模式：currentText 在 snapshot 基础上延长
         if (!streamTextSnapshot.isEmpty()
                 && currentText.startsWith(streamTextSnapshot)
                 && currentText.length() > streamTextSnapshot.length()) {
@@ -375,9 +430,23 @@ public class ChatContext {
             streamTextSnapshot = currentText;
             return delta;
         }
+        // 2. 完全重复
         if (currentText.equals(streamTextSnapshot)) {
             return "";
         }
+        // 3. 累积回退 / 更短前缀重发（如先收到 "Okay, the" 再收到 "Okay"）
+        if (!streamTextSnapshot.isEmpty()
+                && currentText.length() <= streamTextSnapshot.length()
+                && streamTextSnapshot.startsWith(currentText)) {
+            return "";
+        }
+        // 4. 纯增量重复 chunk（snapshot 已以 currentText 结尾）
+        if (!streamTextSnapshot.isEmpty()
+                && currentText.length() <= streamTextSnapshot.length()
+                && streamTextSnapshot.endsWith(currentText)) {
+            return "";
+        }
+        // 5. 纯增量追加
         streamTextSnapshot = streamTextSnapshot + currentText;
         return currentText;
     }
