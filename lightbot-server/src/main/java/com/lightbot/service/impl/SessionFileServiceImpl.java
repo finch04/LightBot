@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -82,6 +83,7 @@ public class SessionFileServiceImpl implements SessionFileService {
         entries.sort(Comparator
                 .comparing((SessionFileEntryVO e) -> !Boolean.TRUE.equals(e.getDirectory()))
                 .thenComparing(e -> e.getName() == null ? "" : e.getName(), String.CASE_INSENSITIVE_ORDER));
+        disambiguateDuplicateDisplayNames(entries);
         resp.setEntries(entries);
         resp.setStats(computeStats(sessionId));
         return resp;
@@ -107,7 +109,7 @@ public class SessionFileServiceImpl implements SessionFileService {
             return vo;
         }
         vo.setSize(stat.size());
-        String mime = stat.contentType() != null ? stat.contentType() : guessMimeFromName(normalized);
+        String mime = resolveMime(stat.contentType(), normalized);
         vo.setMimeType(mime);
 
         // 1. 文本/Markdown/JSON/CSV/HTML：直接读内容
@@ -265,6 +267,51 @@ public class SessionFileServiceImpl implements SessionFileService {
     }
 
     /**
+     * 同目录下若多个文件展示名相同，为后续重复项追加 (1)、(2)… 后缀（首项保持原名）。
+     */
+    private static void disambiguateDuplicateDisplayNames(List<SessionFileEntryVO> entries) {
+        Map<String, List<SessionFileEntryVO>> groups = new LinkedHashMap<>();
+        for (SessionFileEntryVO e : entries) {
+            if (Boolean.TRUE.equals(e.getDirectory())) {
+                continue;
+            }
+            String display = e.getFileName() != null && !e.getFileName().isBlank()
+                    ? e.getFileName() : e.getName();
+            if (display == null || display.isBlank()) {
+                continue;
+            }
+            groups.computeIfAbsent(display.toLowerCase(), k -> new ArrayList<>()).add(e);
+        }
+        for (List<SessionFileEntryVO> group : groups.values()) {
+            if (group.size() <= 1) {
+                continue;
+            }
+            for (int i = 1; i < group.size(); i++) {
+                SessionFileEntryVO e = group.get(i);
+                String original = e.getFileName() != null && !e.getFileName().isBlank()
+                        ? e.getFileName() : e.getName();
+                String unique = appendDuplicateSuffix(original, i);
+                e.setName(unique);
+                e.setFileName(unique);
+            }
+        }
+    }
+
+    /** Windows 风格：report.pdf → report (1).pdf */
+    private static String appendDuplicateSuffix(String fileName, int index) {
+        if (fileName == null || fileName.isBlank()) {
+            return fileName;
+        }
+        int dot = fileName.lastIndexOf('.');
+        if (dot > 0 && dot < fileName.length() - 1) {
+            String stem = fileName.substring(0, dot);
+            String ext = fileName.substring(dot);
+            return stem + " (" + index + ")" + ext;
+        }
+        return fileName + " (" + index + ")";
+    }
+
+    /**
      * 优先使用 attachments 索引中的原名；否则从 Yuxi 风格 objectKey（{id}_{原名}）还原显示名。
      */
     private static String resolveDisplayName(String objectBaseName, SessionAttachmentVO att) {
@@ -354,9 +401,8 @@ public class SessionFileServiceImpl implements SessionFileService {
     }
 
     private String detectPreviewType(String mime, String name) {
-        if (mime == null) {
-            mime = guessMimeFromName(name);
-        }
+        // MinIO 常返回 application/octet-stream，需按扩展名推断真实 MIME
+        mime = resolveMime(mime, name);
         if (mime.startsWith("image/")) {
             return "image";
         }
@@ -375,6 +421,14 @@ public class SessionFileServiceImpl implements SessionFileService {
         return "unsupported";
     }
 
+    /** 优先使用有效 MIME；octet-stream 或空值时按文件名推断 */
+    private String resolveMime(String mime, String name) {
+        if (mime != null && !"application/octet-stream".equals(mime)) {
+            return mime;
+        }
+        return guessMimeFromName(name);
+    }
+
     private String guessMimeFromName(String name) {
         if (name == null) {
             return "application/octet-stream";
@@ -387,7 +441,7 @@ public class SessionFileServiceImpl implements SessionFileService {
         if (lower.endsWith(".svg")) return "image/svg+xml";
         if (lower.endsWith(".pdf")) return "application/pdf";
         if (lower.endsWith(".md")) return "text/markdown";
-        if (lower.endsWith(".txt")) return "text/plain";
+        if (lower.endsWith(".txt") || lower.endsWith(".log")) return "text/plain";
         if (lower.endsWith(".csv")) return "text/csv";
         if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
         if (lower.endsWith(".json")) return "application/json";

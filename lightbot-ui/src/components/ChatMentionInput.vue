@@ -10,21 +10,16 @@
       @select="onPickerSelect"
       @hover="onPickerHover"
     />
-    <a-tooltip
-      v-model:open="chipTooltip.open"
-      placement="top"
-      :mouse-enter-delay="0.2"
-      destroy-tooltip-on-hide
-    >
-      <template #title>
+    <Teleport to="body">
+      <div
+        v-show="chipTooltip.visible"
+        class="mention-chip-floating-tip"
+        :style="chipTooltip.style"
+      >
         <div class="mention-tooltip-title">{{ chipTooltip.title }}</div>
         <div v-if="chipTooltip.sub" class="mention-tooltip-sub">{{ chipTooltip.sub }}</div>
-      </template>
-      <span
-        class="mention-input-tooltip-anchor"
-        :style="chipTooltip.anchorStyle"
-      />
-    </a-tooltip>
+      </div>
+    </Teleport>
     <div
       ref="editorRef"
       class="mention-editor"
@@ -49,7 +44,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import ChatMentionPicker from './ChatMentionPicker.vue'
 import { useChatMentions } from '../composables/useChatMentions'
 import { getMentionChipClass, getMentionTooltip } from '../utils/mentionDisplay'
-import { buildMentionMap, parseMentionText } from '../utils/mention_utils'
+import { buildMentionMap, parseMentionText, resolveMentionSnapshot } from '../utils/mention_utils'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -84,7 +79,13 @@ defineExpose({
   clear: () => resetEditor(''),
   setText: (t) => resetEditor(t || ''),
   /** 从消息正文 + metadata 快照重建 chip（编辑历史消息用） */
-  setFromMessage: (rawText, snapshots = []) => renderFromText(rawText, snapshots),
+  setFromMessage: (rawText, snapshots = []) => {
+    storedSnapshots.value = Array.isArray(snapshots) ? snapshots : []
+    const content = rawText || ''
+    text.value = content
+    lastEmittedText.value = content
+    renderFromText(content, storedSnapshots.value)
+  },
   moveCursorToEnd,
   moveCursorToStart,
   mentions,
@@ -92,34 +93,43 @@ defineExpose({
 
 const text = ref('')
 const lastEmittedText = ref('')
+/** 编辑历史消息时由 setFromMessage 注入的快照，供 watch/onMounted 复用 */
+const storedSnapshots = ref([])
 let composing = false
 let chipTooltipTimer = null
 
 const chipTooltip = ref({
-  open: false,
+  visible: false,
   title: '',
   sub: '',
-  anchorStyle: { position: 'fixed', left: '0px', top: '0px', width: '0px', height: '0px', pointerEvents: 'none' },
+  style: { left: '0px', top: '0px' },
 })
+let chipTooltipActiveChip = null
 
 onMounted(() => {
   if (props.modelValue) {
     text.value = props.modelValue
     lastEmittedText.value = props.modelValue
-    renderFromText(props.modelValue)
+    renderFromText(props.modelValue, storedSnapshots.value)
   }
+  window.addEventListener('scroll', onWindowScrollHideTip, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocMousedown, true)
+  window.removeEventListener('scroll', onWindowScrollHideTip, true)
   hideChipTooltip(true)
 })
+
+function onWindowScrollHideTip() {
+  if (chipTooltip.value.visible) hideChipTooltip(true)
+}
 
 watch(() => props.modelValue, (val) => {
   if (val !== lastEmittedText.value) {
     text.value = val || ''
     lastEmittedText.value = val || ''
-    renderFromText(val || '')
+    renderFromText(val || '', storedSnapshots.value)
   }
 })
 
@@ -145,17 +155,19 @@ function tokenToChipHtml(m) {
  * 从外部 text（含 @type:id token）重建 contenteditable HTML
  * snapshotMentions：历史消息 metadata.mentions，优先于实时候选列表解析名称
  */
-function renderFromText(rawText, snapshotMentions = []) {
+function renderFromText(rawText, snapshotMentions = null) {
   const el = editorEl()
   if (!el) return
+  const textValue = rawText || ''
+  const snapshots = snapshotMentions ?? storedSnapshots.value ?? []
   mentions.value = []
-  if (!rawText) {
+  if (!textValue) {
     el.innerHTML = ''
     return
   }
-  const snapMap = buildMentionMap(snapshotMentions)
+  const snapMap = buildMentionMap(snapshots)
   let html = ''
-  for (const segment of parseMentionText(rawText)) {
+  for (const segment of parseMentionText(textValue)) {
     if (segment.kind === 'text') {
       html += escapeHtml(segment.text)
       continue
@@ -163,12 +175,17 @@ function renderFromText(rawText, snapshotMentions = []) {
     const type = segment.type
     const resourceId = segment.resourceId
     const token = segment.token
-    const snap = snapMap.get(token)
+    const snap = resolveMentionSnapshot(snapMap, snapshots, token, type, resourceId)
     const opt = findOptionByToken(token)
-    const name = snap?.name || opt?.name || token
+    const name = snap?.name || opt?.name || type || token
     const valid = !!(snap || opt)
     html += tokenToChipHtml({ type, resourceId, name, token, valid })
-    mentions.value.push({ type, resourceId, name, token })
+    mentions.value.push({
+      type,
+      resourceId,
+      name: snap?.name || opt?.name || name,
+      token,
+    })
   }
   el.innerHTML = html
   moveCursorToEnd()
@@ -502,6 +519,26 @@ function createChipElement(m) {
   return chip
 }
 
+function showChipTooltip(chip) {
+  if (!chip) return
+  const type = chip.dataset.mentionType || ''
+  const name = chip.dataset.mentionName || chip.dataset.mentionToken || ''
+  const token = chip.dataset.mentionToken || ''
+  const valid = !chip.classList.contains('mention-chip-invalid')
+  const tooltip = getMentionTooltip(type, name, token, valid)
+  const rect = chip.getBoundingClientRect()
+  chipTooltipActiveChip = chip
+  chipTooltip.value = {
+    visible: true,
+    title: tooltip.title,
+    sub: tooltip.sub,
+    style: {
+      left: `${rect.left + rect.width / 2}px`,
+      top: `${rect.top - 8}px`,
+    },
+  }
+}
+
 function onEditorMouseover(e) {
   const chip = e.target?.closest?.('.mention-chip')
   if (!chip || !editorEl()?.contains(chip)) return
@@ -509,45 +546,30 @@ function onEditorMouseover(e) {
     clearTimeout(chipTooltipTimer)
     chipTooltipTimer = null
   }
-  const type = chip.dataset.mentionType || ''
-  const name = chip.dataset.mentionName || chip.dataset.mentionToken || ''
-  const token = chip.dataset.mentionToken || ''
-  const valid = !chip.classList.contains('mention-chip-invalid')
-  const tooltip = getMentionTooltip(type, name, token, valid)
-  const rect = chip.getBoundingClientRect()
-  chipTooltip.value = {
-    open: true,
-    title: tooltip.title,
-    sub: tooltip.sub,
-    anchorStyle: {
-      position: 'fixed',
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${Math.max(rect.width, 1)}px`,
-      height: `${Math.max(rect.height, 1)}px`,
-      pointerEvents: 'none',
-    },
-  }
+  if (chipTooltipActiveChip === chip && chipTooltip.value.visible) return
+  showChipTooltip(chip)
 }
 
 function onEditorMouseout(e) {
-  const chip = e.target?.closest?.('.mention-chip')
+  if (!chipTooltipActiveChip) return
   const related = e.relatedTarget
-  if (chip && related && chip.contains(related)) return
-  if (related?.closest?.('.ant-tooltip')) return
+  if (related && chipTooltipActiveChip.contains(related)) return
+  if (related?.closest?.('.mention-chip') === chipTooltipActiveChip) return
   hideChipTooltip()
 }
 
 function hideChipTooltip(immediate = false) {
   if (chipTooltipTimer) clearTimeout(chipTooltipTimer)
   if (immediate) {
-    chipTooltip.value.open = false
+    chipTooltip.value.visible = false
+    chipTooltipActiveChip = null
     return
   }
   chipTooltipTimer = setTimeout(() => {
-    chipTooltip.value.open = false
+    chipTooltip.value.visible = false
+    chipTooltipActiveChip = null
     chipTooltipTimer = null
-  }, 80)
+  }, 100)
 }
 
 function onPickerHover(idx) {
@@ -581,6 +603,7 @@ function moveCursorToStart() {
 function resetEditor(newText) {
   text.value = newText
   lastEmittedText.value = newText
+  storedSnapshots.value = []
   clearMentions()
   if (editorEl()) editorEl().innerHTML = ''
   emit('update:modelValue', newText)
@@ -663,6 +686,28 @@ function resetEditor(newText) {
   position: fixed;
   z-index: 0;
   pointer-events: none;
+}
+
+:global(.mention-chip-floating-tip) {
+  position: fixed;
+  z-index: 10050;
+  transform: translate(-50%, -100%);
+  max-width: 320px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  white-space: normal;
+  word-break: break-word;
+}
+
+:global([data-theme="dark"] .mention-chip-floating-tip) {
+  background: rgba(38, 38, 38, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .mention-tooltip-title {

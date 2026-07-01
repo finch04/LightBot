@@ -815,6 +815,12 @@ const loadingHistory = ref(false)
 const editingMessageId = ref(null)
 const editContent = ref('')
 const editInputRef = ref(null)
+
+function resolveEditInputRef() {
+  const raw = editInputRef.value
+  if (Array.isArray(raw)) return raw.find(Boolean) || null
+  return raw
+}
 const replyTo = reactive({ active: false, messageId: null, content: '', role: '' })
 const highlightMessageId = ref(null)
 const messagePage = ref(1)
@@ -1704,7 +1710,7 @@ function startEdit(index) {
   editingMessageId.value = msg._id || `local-${index}`
   editContent.value = msg.content || ''
   nextTick(() => {
-    const comp = editInputRef.value
+    const comp = resolveEditInputRef()
     comp?.setFromMessage?.(msg.content || '', getMsgMentions(msg))
     comp?.focus?.()
   })
@@ -1714,6 +1720,24 @@ function cancelEdit() {
   editingMessageId.value = null
   editContent.value = ''
 }
+
+/** 点击编辑区外（含 @ 候选浮层除外）时退出编辑 */
+function onEditClickOutside(e) {
+  if (!editingMessageId.value) return
+  const target = e.target
+  if (!(target instanceof Element)) return
+  if (target.closest('.edit-message-outer')) return
+  if (target.closest('.mention-picker')) return
+  cancelEdit()
+}
+
+watch(editingMessageId, (id) => {
+  if (id) {
+    document.addEventListener('mousedown', onEditClickOutside, true)
+  } else {
+    document.removeEventListener('mousedown', onEditClickOutside, true)
+  }
+})
 
 function startReply(index) {
   const msg = messages.value[index]
@@ -1781,7 +1805,7 @@ function scrollToMessage(messageId) {
 }
 
 async function submitEdit() {
-  const editComp = editInputRef.value
+  const editComp = resolveEditInputRef()
   const newText = (editComp?.getText?.() || editContent.value || '').trim()
   if (!newText || loading.value) return
 
@@ -2644,6 +2668,7 @@ onUnmounted(() => {
     container.removeEventListener('scroll', scrollHandler)
   }
   document.removeEventListener('keydown', handleChatKeydown)
+  document.removeEventListener('mousedown', onEditClickOutside, true)
 })
 
 onMounted(async () => {

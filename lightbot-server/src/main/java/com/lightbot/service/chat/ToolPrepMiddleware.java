@@ -138,17 +138,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             List<Long> baseToolIds = ctx != null && ctx.getVersionToolIds() != null
                     ? ctx.getVersionToolIds() : agentService.getToolIds(agent.getId());
 
-            // mention 收窄：用户 @ 指定工具时，只保留被提及的 Agent 直接绑定工具。
-            // 不影响 Skill 引入的额外工具（skillExtraToolIds / 懒激活依赖），避免依赖链断裂。
-            if (ctx != null && ctx.getMentionScope() != null
-                    && !ctx.getMentionScope().getToolIds().isEmpty()) {
-                java.util.Set<Long> scopeToolIds = ctx.getMentionScope().getToolIds();
-                baseToolIds = baseToolIds == null
-                        ? List.of()
-                        : baseToolIds.stream().filter(scopeToolIds::contains).toList();
-                log.info("[Chat] Tool mention 收窄: baseToolIds 后={}", baseToolIds.size());
-            }
-            java.util.LinkedHashSet<Long> mergedToolIds = new java.util.LinkedHashSet<>(baseToolIds);
+            java.util.LinkedHashSet<Long> mergedToolIds = new java.util.LinkedHashSet<>(baseToolIds != null ? baseToolIds : List.of());
             if (ctx != null && ctx.getSkillExtraToolIds() != null) {
                 mergedToolIds.addAll(ctx.getSkillExtraToolIds());
             }
@@ -239,19 +229,6 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                     : (ctx != null && ctx.getBoundSubAgentIds() != null
                             ? ctx.getBoundSubAgentIds() : agentService.getSubAgentIds(agent.getId()));
 
-            // mention 收窄：用户 @ 指定 SubAgent 时，仅保留被提及的子智能体
-            if (ctx != null && ctx.getMentionScope() != null
-                    && !ctx.getMentionScope().getSubAgentIds().isEmpty()) {
-                java.util.Set<Long> scope = ctx.getMentionScope().getSubAgentIds();
-                subAgentIds = subAgentIds == null
-                        ? List.of()
-                        : subAgentIds.stream().filter(scope::contains).toList();
-                log.info("[Chat] SubAgent mention 收窄: 原绑定={}, mention 后={}",
-                        ctx.getVersionSubAgentIds() != null ? ctx.getVersionSubAgentIds().size()
-                                : (ctx.getBoundSubAgentIds() != null ? ctx.getBoundSubAgentIds().size() : 0),
-                        subAgentIds.size());
-            }
-
             if (subAgentIds != null && !subAgentIds.isEmpty()) {
                 if (ctx != null) ctx.setBoundSubAgentIds(subAgentIds);
                 ToolCallback delegateCb = delegateSubAgentTool.buildCallback(subAgentIds);
@@ -265,7 +242,7 @@ public class ToolPrepMiddleware implements ChatMiddleware {
 
             if (!dedupedCallbacks.isEmpty()) {
                 toolBuilder.toolCallbacks(dedupedCallbacks);
-                // toolContext 传递 agentId、sessionId 和 requestId（QueryKnowledgeTool 用 requestId 读取 mention 收窄范围）
+                // toolContext 传递 agentId、sessionId 和 requestId
                 Long sessionId = ctx != null ? ctx.getSessionId() : null;
                 String requestId = ctx != null ? ctx.getRequestId() : null;
                 Map<String, Object> toolCtxMap = new HashMap<>();

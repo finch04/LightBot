@@ -29,7 +29,7 @@
           <div v-for="(file, i) in data.artifacts" :key="i" class="dfr-file-card"
                @click="openPreview(file)">
             <!-- 图片缩略图 -->
-            <div v-if="isImage(file.contentType)" class="dfr-thumb">
+            <div v-if="isImage(file.contentType, file.name)" class="dfr-thumb">
               <img :src="file.url" :alt="file.name" loading="lazy" @error="onThumbError" />
             </div>
             <!-- 文件图标 -->
@@ -58,17 +58,19 @@
       </div>
     </template>
 
-    <!-- 图片预览弹窗 -->
-    <a-modal v-model:open="previewVisible" :footer="null" :width="800" destroyOnClose
-             :bodyStyle="{ padding: 0, textAlign: 'center', background: '#000' }">
-      <img v-if="previewFile" :src="previewFile.url" :alt="previewFile.name"
-           style="max-width:100%;max-height:75vh;object-fit:contain;" />
-    </a-modal>
+    <FilePreviewModal
+      v-model:open="previewVisible"
+      :file-name="previewFile?.name || ''"
+      :file-url="previewFile?.url || ''"
+      :download-url="previewFile?.url || ''"
+      :file-type="previewFileExt"
+      :is-video="previewIsVideo"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, h } from 'vue'
+import { ref, computed } from 'vue'
 import {
   CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined,
   WarningOutlined, FileImageOutlined, FilePdfOutlined,
@@ -76,6 +78,12 @@ import {
   FileZipOutlined, FileTextOutlined, FileOutlined,
   CodeOutlined
 } from '@ant-design/icons-vue'
+import FilePreviewModal from '../FilePreviewModal.vue'
+import {
+  canOpenSourcePreview,
+  getFileExtension,
+  resolveSourcePreviewKind,
+} from '../../utils/filePreview'
 
 const props = defineProps({
   event: { type: Object, required: true }
@@ -97,8 +105,16 @@ const data = computed(() => {
 const isPlainText = computed(() => !data.value || typeof data.value !== 'object')
 const displayText = computed(() => typeof data.value === 'string' ? data.value : rawResult.value)
 
-function isImage(contentType) {
-  return contentType && contentType.startsWith('image/')
+const previewFileExt = computed(() => getFileExtension(previewFile.value?.name || ''))
+
+const previewIsVideo = computed(() => {
+  const file = previewFile.value
+  if (!file) return false
+  return resolveSourcePreviewKind(file.name, file.contentType) === 'video'
+})
+
+function isImage(contentType, name) {
+  return resolveSourcePreviewKind(name, contentType) === 'image'
 }
 
 function getFileIcon(contentType, name) {
@@ -115,12 +131,13 @@ function getFileIcon(contentType, name) {
 }
 
 function openPreview(file) {
-  if (isImage(file.contentType)) {
+  if (!file?.url) return
+  if (canOpenSourcePreview(file.name)) {
     previewFile.value = file
     previewVisible.value = true
-  } else {
-    window.open(file.url, '_blank')
+    return
   }
+  window.open(file.url, '_blank')
 }
 
 function onThumbError(e) {

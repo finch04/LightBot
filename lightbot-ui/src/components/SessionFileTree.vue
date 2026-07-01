@@ -30,7 +30,25 @@
               :size="16"
               class="sft-node-icon"
             />
-            <span class="sft-node-label" :title="node.title">{{ node.title }}</span>
+            <a-tooltip
+              v-if="node.isLeaf"
+              :title="nodeDisplayName(node)"
+              placement="top"
+              :get-popup-container="tooltipPopupContainer"
+            >
+              <span
+                class="sft-node-label sft-node-label-clickable"
+                @click.stop="previewFile(node.dataRef)"
+              >{{ node.title }}</span>
+            </a-tooltip>
+            <a-tooltip
+              v-else
+              :title="node.title"
+              placement="top"
+              :get-popup-container="tooltipPopupContainer"
+            >
+              <span class="sft-node-label">{{ node.title }}</span>
+            </a-tooltip>
           </span>
           <span v-if="node.isLeaf" class="sft-node-actions">
             <a-tooltip title="预览" placement="top" :get-popup-container="tooltipPopupContainer">
@@ -158,6 +176,16 @@ function toTreeNode(entry) {
   }
 }
 
+function nodeDisplayName(node) {
+  const ref = node?.dataRef
+  return ref?.fileName || ref?.name || node?.title || ''
+}
+
+function previewFile(entry) {
+  if (!entry?.path) return
+  emit('preview', entry)
+}
+
 function nodeIconName(node) {
   if (!node.isLeaf) return node.path || node.title || ''
   const ref = node.dataRef
@@ -227,6 +255,8 @@ defineExpose({ refresh: loadRoot, removeFile })
 .sft-node-name { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
 .sft-node-icon { flex-shrink: 0; }
 .sft-node-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sft-node-label-clickable { cursor: pointer; }
+.sft-node-label-clickable:hover { color: var(--color-primary, #2563eb); text-decoration: underline; }
 .sft-node-actions { display: none; gap: 2px; flex-shrink: 0; align-items: center; }
 .sft-node-actions :deep(.ant-tooltip-open) { display: inline-flex; }
 .sft-node:hover .sft-node-actions { display: inline-flex; }

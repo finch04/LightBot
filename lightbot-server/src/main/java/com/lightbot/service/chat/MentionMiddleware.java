@@ -28,8 +28,7 @@ import java.util.Set;
 /**
  * Mention 校验中间件：在 {@code InitMiddleware} 之后校验 {@code ChatRequest.mentions}。
  * <p>校验通过后构建 {@link MentionScope} 写入 {@link ChatContext}，
- * 并通过 {@link MentionScopeStore} 缓存 knowledgeScope 供 {@code QueryKnowledgeTool} 跨线程读取。
- * 校验失败硬抛 400，列出所有失败 mention。</p>
+ * 供提示词注入「优先使用」说明；不再收窄运行时工具/知识库/SubAgent 加载范围。</p>
  *
  * @author finch
  * @since 2026-06-29
@@ -44,7 +43,6 @@ public class MentionMiddleware implements ChatMiddleware {
     private final SkillService skillService;
     private final SubAgentService subAgentService;
     private final ToolService toolService;
-    private final MentionScopeStore mentionScopeStore;
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
@@ -62,11 +60,9 @@ public class MentionMiddleware implements ChatMiddleware {
         }
         MentionScope scope = validateAndBuild(ctx, mentions);
         ctx.setMentionScope(scope);
-        if (!scope.getKnowledgeIds().isEmpty()) {
-            mentionScopeStore.putKnowledgeScope(ctx.getRequestId(), scope.getKnowledgeIds());
-        }
-        log.info("[Mention] requestId={}, knowledge={}, subagent={}, skill={}",
-                ctx.getRequestId(), scope.getKnowledgeIds(), scope.getSubAgentIds(), scope.getSkillIds());
+        log.info("[Mention] requestId={}, knowledge={}, subagent={}, skill={}, tool={}",
+                ctx.getRequestId(), scope.getKnowledgeIds(), scope.getSubAgentIds(),
+                scope.getSkillIds(), scope.getToolIds());
     }
 
     /**

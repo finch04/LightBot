@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 本轮 @ 提及的资源范围（由 {@link MentionMiddleware} 校验后构建）
- * <p>各中间件按需读取对应集合做检索/委派/提示收窄，{@code null} 或空集合表示未 @ 该类型。</p>
+ * 本轮 @ 提及的资源（由 {@link MentionMiddleware} 校验后构建）
+ * <p>各 ID 集合用于提示词「优先使用」增强；不再收窄运行时工具/知识库/SubAgent 加载范围。</p>
  *
  * @author finch
  * @since 2026-06-29
@@ -18,16 +18,16 @@ import java.util.Set;
 @Data
 public class MentionScope {
 
-    /** @ 的知识库 ID 集合（QueryKnowledgeTool 收窄检索范围） */
+    /** @ 的知识库 ID 集合（提示词优先检索） */
     private Set<Long> knowledgeIds = new HashSet<>();
 
-    /** @ 的子智能体 ID 集合（ToolPrepMiddleware 收窄 SubAgent 委派范围） */
+    /** @ 的子智能体 ID 集合（提示词优先委派） */
     private Set<Long> subAgentIds = new HashSet<>();
 
-    /** @ 的 Skill ID 集合（SkillPrepMiddleware 提示增强） */
+    /** @ 的 Skill ID 集合（提示词优先使用） */
     private Set<Long> skillIds = new HashSet<>();
 
-    /** @ 的工具 ID 集合（ToolPrepMiddleware 收窄 Agent 直接绑定的工具，不影响 Skill 引入的工具） */
+    /** @ 的工具 ID 集合（提示词优先调用） */
     private Set<Long> toolIds = new HashSet<>();
 
     /** 原始 mention 列表（持久化到 message.metadata 快照用） */

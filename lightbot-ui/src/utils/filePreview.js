@@ -58,6 +58,51 @@ export function isTextSourcePreviewable(fileNameOrExt) {
   return TEXT_SOURCE_PREVIEW_EXTENSIONS.has(normalizeFileExtension(fileNameOrExt))
 }
 
+/** 图片源文件预览扩展名 */
+export const IMAGE_SOURCE_PREVIEW_EXTENSIONS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg',
+])
+
+/** 视频源文件预览扩展名 */
+export const VIDEO_SOURCE_PREVIEW_EXTENSIONS = new Set(['mp4', 'webm', 'mov'])
+
+/**
+ * 解析源文件预览类别（与知识库「源文件预览」tab 规则一致）
+ * @returns {'blocked'|'image'|'video'|'pdf'|'html'|'markdown'|'text'|'unknown'}
+ */
+export function resolveSourcePreviewKind(fileNameOrExt, mimeType) {
+  const ext = normalizeFileExtension(fileNameOrExt)
+  if (!ext) return 'unknown'
+  if (OFFICE_NO_SOURCE_PREVIEW_EXTENSIONS.has(ext)) return 'blocked'
+  if (IMAGE_SOURCE_PREVIEW_EXTENSIONS.has(ext) || (mimeType && mimeType.startsWith('image/'))) {
+    return 'image'
+  }
+  if (VIDEO_SOURCE_PREVIEW_EXTENSIONS.has(ext) || (mimeType && mimeType.startsWith('video/'))) {
+    return 'video'
+  }
+  if (ext === 'pdf' || mimeType === 'application/pdf') return 'pdf'
+  if (IFRAME_PREVIEW_EXTENSIONS.has(ext) && ext !== 'pdf') return 'html'
+  if (['md', 'markdown'].includes(ext) || mimeType === 'text/markdown') return 'markdown'
+  if (TEXT_SOURCE_PREVIEW_EXTENSIONS.has(ext) || isTextMime(mimeType)) return 'text'
+  return 'unknown'
+}
+
+/** @param {string} [mimeType] */
+function isTextMime(mimeType) {
+  if (!mimeType) return false
+  return mimeType.startsWith('text/')
+    || mimeType === 'application/json'
+    || mimeType === 'application/xml'
+}
+
+/**
+ * 是否可打开源文件预览（与知识库「源文件预览」tab 可见性一致）
+ * @param {string} fileNameOrExt
+ */
+export function canOpenSourcePreview(fileNameOrExt) {
+  return hasSourceFilePreview(fileNameOrExt)
+}
+
 /**
  * 是否为需读取文本内容后预览的类型
  * @param {string} fileName

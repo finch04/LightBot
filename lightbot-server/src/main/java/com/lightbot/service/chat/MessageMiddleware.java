@@ -409,6 +409,15 @@ public class MessageMiddleware implements ChatMiddleware {
                     && !ctx.getSkillSystemAppendix().isBlank()) {
                 systemPrompt = systemPrompt + ctx.getSkillSystemAppendix();
             }
+
+            // 3.3 @ mention 优先使用提示（不收窄工具加载范围）
+            if (ctx != null && ctx.getMentionScope() != null) {
+                String mentionAppendix = MentionHintBuilder.buildSystemAppendix(
+                        ctx.getMentionScope().getRawMentions());
+                if (!mentionAppendix.isBlank()) {
+                    systemPrompt = systemPrompt + mentionAppendix;
+                }
+            }
         }
 
         // 3.1 替换提示词中的 {{变量}}：默认值 + biz_params 入参
@@ -483,18 +492,7 @@ public class MessageMiddleware implements ChatMiddleware {
         if (ctx == null || ctx.getMentionScope() == null) {
             return userMessage;
         }
-        List<ChatMentionDTO> raw = ctx.getMentionScope().getRawMentions();
-        if (raw == null || raw.isEmpty()) {
-            return userMessage;
-        }
-        StringBuilder hint = new StringBuilder("[用户在本轮明确 @ 指定了以下资源，请优先使用：");
-        for (ChatMentionDTO m : raw) {
-            if (m.getType() == null) continue;
-            String label = m.getName() != null && !m.getName().isBlank() ? m.getName() : m.getToken();
-            hint.append("\n- ").append(m.getType().getDesc()).append("：").append(label);
-        }
-        hint.append("]\n\n");
-        return hint + userMessage;
+        return MentionHintBuilder.prependUserMessageHint(userMessage, ctx.getMentionScope().getRawMentions());
     }
 
     /**

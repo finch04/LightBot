@@ -21,7 +21,7 @@
 <script setup>
 import { computed } from 'vue'
 import { getMentionChipClass, getMentionTooltip } from '@/utils/mentionDisplay'
-import { buildMentionMap, parseMentionText } from '@/utils/mention_utils'
+import { buildMentionMap, parseMentionText, resolveMentionSnapshot } from '@/utils/mention_utils'
 
 const props = defineProps({
   /** 原始消息文本（含 @type:id token） */
@@ -45,7 +45,7 @@ const parts = computed(() => {
     }
     const token = segment.token
     const mentionType = segment.type
-    const m = map.get(token)
+    const m = resolveMentionSnapshot(map, props.mentions, token, mentionType, segment.resourceId)
     const valid = !!m
     const name = m?.name || mentionType || token
     const tooltip = getMentionTooltip(mentionType, m?.name || name, token, valid)

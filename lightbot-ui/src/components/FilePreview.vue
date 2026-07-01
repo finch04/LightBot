@@ -69,7 +69,7 @@
 import { ref, computed, watch } from 'vue'
 import { renderMarkdownSync } from '@/utils/markdown_preview'
 import { FileOutlined, DownloadOutlined } from '@ant-design/icons-vue'
-import { fetchTextContent, isTextLikeFile, hasSourceFilePreview } from '@/utils/filePreview'
+import { fetchTextContent, isTextSourcePreviewable, hasSourceFilePreview, IMAGE_SOURCE_PREVIEW_EXTENSIONS } from '@/utils/filePreview'
 
 const props = defineProps({
   /** 文件URL */
@@ -121,10 +121,10 @@ const effectiveLoading = computed(() => props.loading || fetching.value)
 const effectiveDownloadUrl = computed(() => props.downloadUrl || props.fileUrl)
 
 const isPdf = computed(() => extension.value === 'pdf')
-const isImage = computed(() => ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension.value))
+const isImage = computed(() => IMAGE_SOURCE_PREVIEW_EXTENSIONS.has(extension.value))
 const isMarkdown = computed(() => ['md', 'markdown'].includes(extension.value))
 const isHtml = computed(() => ['html', 'htm'].includes(extension.value))
-const isText = computed(() => ['txt', 'csv', 'json', 'xml', 'log'].includes(extension.value))
+const isText = computed(() => isTextSourcePreviewable(extension.value))
 
 const isBlockedSourcePreview = computed(() => {
   const ext = extension.value
@@ -137,10 +137,12 @@ const renderedMarkdown = computed(() => {
 })
 
 watch(
-  () => [props.fileUrl, props.fileName, props.content],
+  () => [props.fileUrl, props.fileName, props.fileType, props.content],
   async () => {
     fetchedContent.value = ''
-    if (props.content || !props.fileUrl || !isTextLikeFile(props.fileName)) {
+    const needFetch = !props.content && props.fileUrl
+      && (isTextSourcePreviewable(extension.value) || ['md', 'markdown'].includes(extension.value))
+    if (!needFetch) {
       fetching.value = false
       return
     }

@@ -59,7 +59,6 @@ public class QueryKnowledgeTool {
     private final RagParamResolver ragParamResolver;
     private final ObjectMapper objectMapper;
     private final com.lightbot.service.QueryRewriteService queryRewriteService;
-    private final com.lightbot.service.chat.MentionScopeStore mentionScopeStore;
 
     @Autowired
     @Qualifier("lightBotExecutor")
@@ -91,17 +90,9 @@ public class QueryKnowledgeTool {
             return "搜索问题不能为空，请提供具体的搜索内容。";
         }
 
-        // 1. 获取知识库 ID 列表：优先用 mention 收窄范围（用户 @ 指定的知识库），否则用 Agent 绑定全量
-        java.util.Set<Long> mentionScope = mentionScopeStore.getKnowledgeScope(requestId);
-        List<Long> knowledgeIds;
-        if (mentionScope != null && !mentionScope.isEmpty()) {
-            knowledgeIds = new ArrayList<>(mentionScope);
-            mentionScopeStore.invalidate(requestId);
-            log.info("[Tool:query_knowledge] mention 收窄: agentId={}, knowledgeIds={}", finalAgentId, knowledgeIds);
-        } else {
-            knowledgeIds = agentService.getKnowledgeIds(finalAgentId);
-            log.info("[Tool:query_knowledge] Agent绑定知识库: agentId={}, knowledgeIds={}", finalAgentId, knowledgeIds);
-        }
+        // 1. 获取 Agent 绑定的知识库 ID 列表（@ 仅影响提示词优先级，不收窄检索范围）
+        List<Long> knowledgeIds = agentService.getKnowledgeIds(finalAgentId);
+        log.info("[Tool:query_knowledge] Agent绑定知识库: agentId={}, knowledgeIds={}", finalAgentId, knowledgeIds);
         if (knowledgeIds.isEmpty()) {
             return "该智能体未绑定任何知识库，无法检索。";
         }

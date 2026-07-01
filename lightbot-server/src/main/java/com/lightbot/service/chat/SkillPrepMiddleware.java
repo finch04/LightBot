@@ -161,25 +161,6 @@ public class SkillPrepMiddleware implements ChatMiddleware {
             }
         }
 
-        // mention 提示增强：用户在本轮明确 @ 指定的 Skill，提示模型优先使用
-        if (ctx.getMentionScope() != null && !ctx.getMentionScope().getSkillIds().isEmpty()) {
-            java.util.Set<Long> mentionedIds = ctx.getMentionScope().getSkillIds();
-            List<Skill> mentionedSkills = skills.stream()
-                    .filter(s -> mentionedIds.contains(s.getId()))
-                    .toList();
-            if (!mentionedSkills.isEmpty()) {
-                summary.append("\n\n## 用户本轮明确指定的 Skill\n");
-                summary.append("用户在本轮对话中明确提及以下 Skill，请优先使用：\n");
-                for (Skill s : mentionedSkills) {
-                    summary.append("- **").append(s.getName()).append("**");
-                    if (s.getDescription() != null && !s.getDescription().isBlank()) {
-                        summary.append("：").append(s.getDescription());
-                    }
-                    summary.append("\n");
-                }
-            }
-        }
-
         ctx.setSkillSystemAppendix(summary.toString());
 
         ctx.setActiveSkillNames(activeNames);

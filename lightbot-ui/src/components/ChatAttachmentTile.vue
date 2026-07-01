@@ -48,6 +48,7 @@ import {
   LoadingOutlined,
 } from '@ant-design/icons-vue'
 import FileTypeIcon from './FileTypeIcon.vue'
+import { canOpenSourcePreview } from '../utils/filePreview'
 
 const props = defineProps({
   att: { type: Object, required: true },
@@ -81,6 +82,7 @@ const canPreview = computed(() => {
     return Boolean(props.thumbUrl || att.previewUrl)
   }
   if (att.type === 'document') {
+    if (!canOpenSourcePreview(att.fileName || '')) return false
     return Boolean(att.previewUrl || att.objectKey)
   }
   return false
