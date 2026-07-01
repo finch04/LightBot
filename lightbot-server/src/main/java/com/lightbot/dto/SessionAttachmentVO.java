@@ -35,12 +35,6 @@ public class SessionAttachmentVO {
     @Schema(description = "原始文件名")
     private String fileName;
 
-    @Schema(description = "文档类附件：解析后的文本")
-    private String parsedText;
-
-    @Schema(description = "解析文本是否因超长被截断")
-    private Boolean parsedTextTruncated;
-
     @Schema(description = "来源：user_upload / ai_image / ai_sandbox / ai_deliver")
     private String source;
 

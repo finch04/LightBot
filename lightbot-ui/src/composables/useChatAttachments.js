@@ -31,7 +31,7 @@ export function useChatAttachments({
     if (att.type === 'image' || att.type === 'video') {
       if (!getAttThumbUrl(att) && !att.previewUrl) return
     } else if (att.type === 'document') {
-      if (!att.parsedText && !att.previewUrl) {
+      if (!att.previewUrl && !att.objectKey) {
         message.warning('暂无可预览内容')
         return
       }

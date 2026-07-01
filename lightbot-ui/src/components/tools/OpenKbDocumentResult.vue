@@ -55,6 +55,7 @@
             <span>分块内容</span>
           </button>
           <button
+            v-if="hasSourcePreviewTab"
             class="okd-modal-tab"
             :class="{ active: activeTab === 'preview' }"
             @click="activeTab = 'preview'"
@@ -95,7 +96,7 @@
             <div v-else class="okd-unsupported">
               <FileOutlined style="font-size:32px;color:#d4d4d8;" />
               <p style="margin:8px 0 0;font-size:13px;color:#a1a1aa;">
-                .{{ filePreview.fileType }} 格式不支持在线预览
+                <template v-if="filePreview.fileType">.{{ filePreview.fileType }} </template>格式不支持在线预览
               </p>
               <button class="okd-download-btn" @click="openFile">
                 <DownloadOutlined /> 下载文件
@@ -117,6 +118,11 @@ import {
   toolResultModalWrapStyle,
   buildToolResultModalBodyStyle,
 } from '../../composables/useToolResultModal'
+import {
+  hasSourceFilePreview,
+  isIframeSourcePreviewable,
+  isTextSourcePreviewable,
+} from '../../utils/filePreview'
 
 const PREVIEW_MAX_CHARS = 300
 
@@ -186,16 +192,17 @@ const previewText = computed(() => {
 })
 const formattedContent = computed(() => fullContent.value)
 
-// 源文件预览类型判断
-const isPreviewableIframe = computed(() => {
-  const t = filePreview.value.fileType?.toLowerCase()
-  return ['pdf', 'html', 'htm'].includes(t)
-})
+const hasSourcePreviewTab = computed(() =>
+  hasSourceFilePreview(data.value?.document_name || filePreview.value.fileName || filePreview.value.fileType)
+)
 
-const isPreviewableText = computed(() => {
-  const t = filePreview.value.fileType?.toLowerCase()
-  return ['md', 'markdown', 'txt', 'csv', 'json', 'xml', 'log'].includes(t)
-})
+const isPreviewableIframe = computed(() =>
+  isIframeSourcePreviewable(filePreview.value.fileType)
+)
+
+const isPreviewableText = computed(() =>
+  isTextSourcePreviewable(filePreview.value.fileType)
+)
 
 // 打开弹窗时重置 tab
 function openModal() {

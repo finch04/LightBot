@@ -81,6 +81,44 @@ public final class SessionStoragePath {
         return inputsPrefix(sessionId) + attachmentId + "_" + sanitizeFileName(originalFileName);
     }
 
+    /** temp 区解析产物：chat/{agentId}/temp/parsed/{attachmentId}_{stem}.md */
+    public static String tempParsedObjectKey(Long agentId, String attachmentId, String originalFileName) {
+        return "chat/" + agentId + "/temp/parsed/" + attachmentId + "_"
+                + stemFromFileName(originalFileName) + ".md";
+    }
+
+    /** 从 temp 区 objectKey 提取 agentId（chat/{agentId}/temp/...） */
+    public static Long extractAgentIdFromTempObjectKey(String objectKey) {
+        if (objectKey == null || !objectKey.startsWith("chat/")) {
+            return null;
+        }
+        int secondSlash = objectKey.indexOf('/', 5);
+        if (secondSlash <= 5) {
+            return null;
+        }
+        try {
+            return Long.parseLong(objectKey.substring(5, secondSlash));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** 从 sessions/{sessionId}/... objectKey 提取 sessionId */
+    public static Long extractSessionIdFromObjectKey(String objectKey) {
+        if (objectKey == null || !objectKey.startsWith(SESSIONS_PREFIX)) {
+            return null;
+        }
+        int end = objectKey.indexOf('/', SESSIONS_PREFIX.length());
+        if (end <= SESSIONS_PREFIX.length()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(objectKey.substring(SESSIONS_PREFIX.length(), end));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** 文档解析产物 objectKey（Yuxi 风格）：sessions/{sessionId}/inputs/parsed/{stem}.md */
     public static String inputParsedObjectKey(Long sessionId, String originalFileName) {
         return inputsParsedPrefix(sessionId) + stemFromFileName(originalFileName) + ".md";

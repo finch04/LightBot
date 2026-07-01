@@ -133,7 +133,14 @@
                       </button>
                     </a-tooltip>
                   </div>
-                  <div class="detail-msg-content">{{ msg.content }}</div>
+                  <div class="detail-msg-content">
+                    <MentionTextRenderer
+                      v-if="msg.role === 'user' && shouldShowDetailMentions(msg)"
+                      :content="msg.content"
+                      :mentions="getDetailMentions(msg)"
+                    />
+                    <template v-else>{{ msg.content }}</template>
+                  </div>
                 </div>
               </div>
             </a-checkbox-group>
@@ -188,6 +195,8 @@ import { message, Modal } from 'ant-design-vue'
 import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
 import { formatTime } from '../utils/format'
 import StarredMessages from './StarredMessages.vue'
+import MentionTextRenderer from '../components/MentionTextRenderer.vue'
+import { contentHasMentionTokens, parseMentionsFromMetadata } from '../utils/mention_utils'
 
 const router = useRouter()
 
@@ -235,6 +244,20 @@ const columns = [
 ]
 
 const roleLabels = { user: '用户', assistant: '助手', system: '系统', tool: '工具' }
+
+function getDetailMentions(msg) {
+  return parseMentionsFromMetadata(msg.metadata).map(m => ({
+    type: m.type,
+    resourceId: m.resourceId != null ? String(m.resourceId) : '',
+    name: m.name || m.token || '',
+    token: m.token || `@${m.type}:${m.resourceId}`,
+  }))
+}
+
+function shouldShowDetailMentions(msg) {
+  return getDetailMentions(msg).length > 0 || contentHasMentionTokens(msg.content)
+}
+
 
 let searchDebounceTimer = null
 

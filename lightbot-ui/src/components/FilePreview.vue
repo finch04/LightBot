@@ -1,14 +1,26 @@
 <template>
   <div class="file-preview">
     <!-- 加载中 -->
-    <div v-if="loading" class="preview-loading">
+    <div v-if="effectiveLoading" class="preview-loading">
       <a-spin />
       <span>加载中...</span>
     </div>
 
+    <!-- Office 等：知识库不提供源文件预览 -->
+    <div v-else-if="isBlockedSourcePreview" class="preview-unsupported">
+      <FileOutlined class="preview-icon" />
+      <p>{{ fileName }}</p>
+      <p class="preview-hint">
+        <template v-if="extension">.{{ extension }} </template>格式不支持在线预览
+      </p>
+      <button v-if="effectiveDownloadUrl" class="btn-primary-sm" @click="handleDownload">
+        <DownloadOutlined /> 下载文件
+      </button>
+    </div>
+
     <!-- PDF 预览 -->
     <iframe
-      v-else-if="isPdf"
+      v-else-if="isPdf && fileUrl"
       :src="fileUrl"
       class="preview-iframe"
       frameborder="0"
@@ -16,42 +28,37 @@
 
     <!-- HTML 预览 -->
     <iframe
-      v-else-if="isHtml && fileUrl"
-      :src="fileUrl"
+      v-else-if="isHtml && (fileUrl || resolvedContent)"
+      :src="fileUrl || undefined"
+      :srcdoc="!fileUrl && resolvedContent ? resolvedContent : undefined"
       class="preview-iframe"
       frameborder="0"
       sandbox="allow-same-origin"
     ></iframe>
 
     <!-- 图片预览 -->
-    <div v-else-if="isImage" class="preview-image-wrapper">
+    <div v-else-if="isImage && fileUrl" class="preview-image-wrapper">
       <img :src="fileUrl" class="preview-image" :alt="fileName" />
     </div>
 
     <!-- Markdown 预览 -->
     <div
-      v-else-if="isMarkdown && content"
+      v-else-if="isMarkdown && resolvedContent"
       class="preview-markdown markdown-body"
       v-html="renderedMarkdown"
     ></div>
 
     <!-- 代码/文本预览 -->
-    <pre v-else-if="isText && content" class="preview-text">{{ content }}</pre>
-
-    <!-- Office 文档预览（Microsoft Online） -->
-    <iframe
-      v-else-if="isOfficeOnline"
-      :src="officePreviewUrl"
-      class="preview-iframe"
-      frameborder="0"
-    ></iframe>
+    <pre v-else-if="isText && resolvedContent" class="preview-text">{{ resolvedContent }}</pre>
 
     <!-- 不支持预览 -->
     <div v-else class="preview-unsupported">
       <FileOutlined class="preview-icon" />
       <p>{{ fileName }}</p>
-      <p class="preview-hint">该文件类型不支持在线预览</p>
-      <button v-if="fileUrl" class="btn-primary-sm" @click="handleDownload">
+      <p class="preview-hint">
+        <template v-if="extension">.{{ extension }} </template>格式不支持在线预览
+      </p>
+      <button v-if="effectiveDownloadUrl" class="btn-primary-sm" @click="handleDownload">
         <DownloadOutlined /> 下载文件
       </button>
     </div>
@@ -59,9 +66,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { renderMarkdownSync } from '@/utils/markdown_preview'
 import { FileOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { fetchTextContent, isTextLikeFile, hasSourceFilePreview } from '@/utils/filePreview'
 
 const props = defineProps({
   /** 文件URL */
@@ -88,10 +96,17 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  /** 下载 URL（可与预览 URL 不同） */
+  downloadUrl: {
+    type: String,
+    default: ''
   }
 })
 
-// 文件类型判断
+const fetchedContent = ref('')
+const fetching = ref(false)
+
 const extension = computed(() => {
   if (props.fileType) return props.fileType.toLowerCase()
   if (props.fileName) {
@@ -101,30 +116,49 @@ const extension = computed(() => {
   return ''
 })
 
+const resolvedContent = computed(() => props.content || fetchedContent.value)
+const effectiveLoading = computed(() => props.loading || fetching.value)
+const effectiveDownloadUrl = computed(() => props.downloadUrl || props.fileUrl)
+
 const isPdf = computed(() => extension.value === 'pdf')
 const isImage = computed(() => ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(extension.value))
 const isMarkdown = computed(() => ['md', 'markdown'].includes(extension.value))
 const isHtml = computed(() => ['html', 'htm'].includes(extension.value))
 const isText = computed(() => ['txt', 'csv', 'json', 'xml', 'log'].includes(extension.value))
-// Microsoft Online Preview 只支持新格式（docx/pptx/xlsx）
-const isOfficeOnline = computed(() => ['docx', 'pptx', 'xlsx'].includes(extension.value))
 
-// Office 在线预览 URL
-const officePreviewUrl = computed(() => {
-  if (!props.fileUrl) return ''
-  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(props.fileUrl)}`
+const isBlockedSourcePreview = computed(() => {
+  const ext = extension.value
+  return ext ? !hasSourceFilePreview(ext) : false
 })
 
-// Markdown 渲染
 const renderedMarkdown = computed(() => {
-  if (!props.content) return ''
-  return renderMarkdownSync(props.content)
+  if (!resolvedContent.value) return ''
+  return renderMarkdownSync(resolvedContent.value)
 })
 
-// 下载文件
+watch(
+  () => [props.fileUrl, props.fileName, props.content],
+  async () => {
+    fetchedContent.value = ''
+    if (props.content || !props.fileUrl || !isTextLikeFile(props.fileName)) {
+      fetching.value = false
+      return
+    }
+    fetching.value = true
+    try {
+      fetchedContent.value = await fetchTextContent(props.fileUrl)
+    } catch {
+      fetchedContent.value = ''
+    } finally {
+      fetching.value = false
+    }
+  },
+  { immediate: true },
+)
+
 function handleDownload() {
-  if (props.fileUrl) {
-    window.open(props.fileUrl, '_blank')
+  if (effectiveDownloadUrl.value) {
+    window.open(effectiveDownloadUrl.value, '_blank')
   }
 }
 </script>
@@ -178,7 +212,6 @@ function handleDownload() {
   line-height: 1.8;
 }
 
-/* Markdown 样式 */
 .preview-markdown :deep(h1),
 .preview-markdown :deep(h2),
 .preview-markdown :deep(h3) {

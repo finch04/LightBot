@@ -3,6 +3,7 @@ package com.lightbot.service.chat;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.dto.ChatAttachmentDTO;
+import com.lightbot.dto.ChatMentionDTO;
 import com.lightbot.dto.ChatRequest;
 import com.lightbot.dto.LlmTraceSpan;
 import com.lightbot.entity.Agent;
@@ -163,6 +164,10 @@ public class TraceMiddleware implements ChatMiddleware {
         if (attachments != null && !attachments.isEmpty()) {
             attrs.put("attachments", attachments.stream().map(this::attachmentToTraceMap).toList());
         }
+        List<ChatMentionDTO> mentions = request.getMentions();
+        if (mentions != null && !mentions.isEmpty()) {
+            attrs.put("mentions", mentions.stream().map(this::mentionToTraceMap).toList());
+        }
         if (attrs.isEmpty()) {
             return;
         }
@@ -191,6 +196,17 @@ public class TraceMiddleware implements ChatMiddleware {
             m.put("objectKey", att.getObjectKey());
         }
         return m;
+    }
+
+    private Map<String, Object> mentionToTraceMap(ChatMentionDTO m) {
+        Map<String, Object> snap = new java.util.LinkedHashMap<>();
+        if (m.getType() != null) {
+            snap.put("type", m.getType().getCode());
+        }
+        snap.put("resourceId", m.getResourceId());
+        snap.put("name", m.getName());
+        snap.put("token", m.getToken());
+        return snap;
     }
 
     /**

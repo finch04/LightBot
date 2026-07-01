@@ -986,6 +986,7 @@ import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 import FilePreview from '../components/FilePreview.vue'
 import FileTypeIcon from '../components/FileTypeIcon.vue'
+import { hasSourceFilePreview } from '../utils/filePreview'
 import RAGEvaluationTab from '../components/eval/RAGEvaluationTab.vue'
 import EvaluationBenchmarks from '../components/eval/EvaluationBenchmarks.vue'
 import KnowledgeGraphTab from '../components/KnowledgeGraphTab.vue'
@@ -2008,11 +2009,9 @@ const isDocCompleted = computed(() => {
 })
 const isMarkdownFile = computed(() => ['md', 'xlsx', 'xls', 'csv', 'doc', 'docx'].includes(currentDoc.value?.fileType))
 // Office文档（doc/docx/xls/xlsx/ppt/pptx）不支持源文件预览，只展示文本化后的内容
-const hasSourcePreview = computed(() => {
-  const ft = currentDoc.value?.fileType
-  if (!ft) return false
-  return !['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ft)
-})
+const hasSourcePreview = computed(() =>
+  hasSourceFilePreview(currentDoc.value?.fileType || currentDoc.value?.name)
+)
 
 // Markdown渲染
 const renderedMarkdown = computed(() => {

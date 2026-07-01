@@ -21,8 +21,7 @@
 <script setup>
 import { computed } from 'vue'
 import { getMentionChipClass, getMentionTooltip } from '@/utils/mentionDisplay'
-
-const MENTION_TOKEN_RE = /@(knowledge|subagent|skill|tool):(\d+)/g
+import { buildMentionMap, parseMentionText } from '@/utils/mention_utils'
 
 const props = defineProps({
   /** 原始消息文本（含 @type:id token） */
@@ -36,24 +35,19 @@ const parts = computed(() => {
   const content = props.content || ''
   if (!content) return []
 
-  const map = new Map()
-  for (const m of props.mentions || []) {
-    if (m?.token) map.set(m.token, m)
-  }
-
+  const map = buildMentionMap(props.mentions)
   const result = []
-  let lastIndex = 0
-  const re = new RegExp(MENTION_TOKEN_RE.source, 'g')
-  let match
-  while ((match = re.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      result.push({ type: 'text', text: content.slice(lastIndex, match.index) })
+
+  for (const segment of parseMentionText(content)) {
+    if (segment.kind === 'text') {
+      if (segment.text) result.push({ type: 'text', text: segment.text })
+      continue
     }
-    const token = match[0]
-    const mentionType = match[1]
+    const token = segment.token
+    const mentionType = segment.type
     const m = map.get(token)
     const valid = !!m
-    const name = m?.name || token
+    const name = m?.name || mentionType || token
     const tooltip = getMentionTooltip(mentionType, m?.name || name, token, valid)
     result.push({
       type: 'mention',
@@ -64,10 +58,6 @@ const parts = computed(() => {
       tooltipTitle: tooltip.title,
       tooltipSub: tooltip.sub,
     })
-    lastIndex = match.index + token.length
-  }
-  if (lastIndex < content.length) {
-    result.push({ type: 'text', text: content.slice(lastIndex) })
   }
   return result
 })

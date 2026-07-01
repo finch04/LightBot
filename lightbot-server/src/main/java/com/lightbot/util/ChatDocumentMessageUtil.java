@@ -8,43 +8,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 对话文档附件：将 Tika 解析结果拼入用户消息文本（非多模态，走纯文本上下文）
+ * 对话文档附件：类型判断与多模态混传校验
  */
 public final class ChatDocumentMessageUtil {
 
     private ChatDocumentMessageUtil() {
-    }
-
-    /**
-     * 将文档解析文本与用户问题合并为模型输入
-     */
-    public static String wrapUserMessage(String userQuestion, List<ChatAttachmentDTO> documents) {
-        if (documents == null || documents.isEmpty()) {
-            return userQuestion != null ? userQuestion : "";
-        }
-        String question = (userQuestion != null && !userQuestion.isBlank())
-                ? userQuestion.trim()
-                : "请根据上传的文件内容回答。";
-
-        StringBuilder filesBlock = new StringBuilder();
-        for (int i = 0; i < documents.size(); i++) {
-            ChatAttachmentDTO doc = documents.get(i);
-            String name = doc.getFileName() != null ? doc.getFileName() : ("文件" + (i + 1));
-            String content = doc.getParsedText() != null ? doc.getParsedText() : "（未能解析出文本内容）";
-            if (Boolean.TRUE.equals(doc.getParsedTextTruncated())) {
-                content = content + "\n\n（注：文件内容过长，以上为截断后的节选）";
-            }
-            filesBlock.append("---\n【").append(name).append("】\n").append(content).append("\n");
-        }
-
-        return """
-                用户上传了文件，请先阅读文件内容，再结合用户问题作答。若文件与问题无关，请说明后仅回答用户问题。
-
-                【上传文件内容】
-                %s
-                【用户问题】
-                %s
-                """.formatted(filesBlock.toString().trim(), question);
     }
 
     public static boolean isDocumentAttachment(ChatAttachmentDTO att) {

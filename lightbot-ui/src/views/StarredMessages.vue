@@ -33,7 +33,14 @@
                 </button>
               </a-tooltip>
             </div>
-            <div class="starred-content">{{ truncateContent(msg.content) }}</div>
+            <div class="starred-content">
+              <MentionTextRenderer
+                v-if="msg.role === 'user' && shouldShowStarredMentions(msg)"
+                :content="truncateContent(msg.content)"
+                :mentions="getStarredMentions(msg)"
+              />
+              <template v-else>{{ truncateContent(msg.content) }}</template>
+            </div>
           </div>
         </div>
 
@@ -58,6 +65,8 @@ import { StarOutlined, StarFilled } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getStarredMessages, toggleMessageStar } from '../api/chatSession'
 import { formatRelativeTime as formatTime } from '../utils/format'
+import MentionTextRenderer from '../components/MentionTextRenderer.vue'
+import { contentHasMentionTokens, parseMentionsFromMetadata } from '../utils/mention_utils'
 
 const props = defineProps({ open: Boolean })
 const emit = defineEmits(['update:open'])
@@ -115,6 +124,19 @@ function confirmGoToSession(msg) {
 function truncateContent(content) {
   if (!content) return ''
   return content.length > 200 ? content.slice(0, 200) + '...' : content
+}
+
+function getStarredMentions(msg) {
+  return parseMentionsFromMetadata(msg.metadata).map(m => ({
+    type: m.type,
+    resourceId: m.resourceId != null ? String(m.resourceId) : '',
+    name: m.name || m.token || '',
+    token: m.token || `@${m.type}:${m.resourceId}`,
+  }))
+}
+
+function shouldShowStarredMentions(msg) {
+  return getStarredMentions(msg).length > 0 || contentHasMentionTokens(msg.content)
 }
 
 </script>

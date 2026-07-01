@@ -274,7 +274,14 @@
                 <CopyOutlined v-else />
               </button>
             </div>
-            <div v-if="traceModelInput.userContent" class="mi-pre-wrap">{{ traceModelInput.userContent }}</div>
+            <div v-if="traceModelInput.userContent" class="mi-pre-wrap">
+              <MentionTextRenderer
+                v-if="shouldShowTraceMentions(traceModelInput.userContent, traceModelInput.userMentions)"
+                :content="traceModelInput.userContent"
+                :mentions="traceModelInput.userMentions"
+              />
+              <template v-else>{{ traceModelInput.userContent }}</template>
+            </div>
             <div v-if="traceModelInput.bizParams && Object.keys(traceModelInput.bizParams).length" class="mi-sub">
               <span class="mi-sub-label">入参变量 biz_params</span>
               <pre class="mi-pre">{{ JSON.stringify(traceModelInput.bizParams, null, 2) }}</pre>
@@ -332,7 +339,14 @@
                   <CopyOutlined v-else />
                 </button>
               </div>
-              <pre v-if="m.content" class="mi-pre">{{ m.content }}</pre>
+              <div v-if="m.content" class="mi-pre">
+                <MentionTextRenderer
+                  v-if="m.role === 'user' && shouldShowTraceMentions(m.content, traceModelInput.userMentions)"
+                  :content="m.content"
+                  :mentions="traceModelInput.userMentions"
+                />
+                <template v-else>{{ m.content }}</template>
+              </div>
               <div v-else class="mi-empty-text">（无文本内容）</div>
               <div v-if="m.media && m.media.length" class="trace-att-thumbs">
                 <template v-for="(med, mdi) in m.media" :key="'med-' + mi + '-' + mdi">
@@ -469,7 +483,14 @@
                   <!-- 用户输入（含附件） -->
                   <div v-if="sub.name === 'user_message'" class="sd-section">
                     <div class="sd-section-title">用户问题</div>
-                    <div v-if="sub.attributes?.content" class="sd-content-box">{{ sub.attributes.content }}</div>
+                    <div v-if="sub.attributes?.content" class="sd-content-box">
+                      <MentionTextRenderer
+                        v-if="shouldShowTraceMentions(sub.attributes.content, normalizeTraceMentions(sub.attributes.mentions))"
+                        :content="sub.attributes.content"
+                        :mentions="normalizeTraceMentions(sub.attributes.mentions)"
+                      />
+                      <template v-else>{{ sub.attributes.content }}</template>
+                    </div>
                     <div v-if="traceAttachments(sub.attributes).length" class="sd-section-title" style="margin-top: 10px;">用户附件</div>
                     <div v-if="traceAttachments(sub.attributes).length" class="trace-att-thumbs">
                       <template v-for="(att, ti) in traceAttachments(sub.attributes)" :key="ti">
@@ -539,10 +560,12 @@ import {
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import MediaAttachmentThumb from '../components/MediaAttachmentThumb.vue'
+import MentionTextRenderer from '../components/MentionTextRenderer.vue'
 import { getTraces, getTraceDetail, getTraceOverview, deleteTraces } from '../api/observability'
 import { getToolCalls, deleteToolCalls } from '../api/toolCall'
 import { useRouter } from 'vue-router'
 import { formatTime, formatJson } from '../utils/format'
+import { contentHasMentionTokens } from '../utils/mention_utils'
 import { copyToClipboard as sharedCopy } from '../utils/clipboard'
 
 const router = useRouter()
@@ -566,6 +589,20 @@ async function copyToClipboard(text, key) {
   copiedKey.value = key
   clearTimeout(copyTimer)
   copyTimer = setTimeout(() => { copiedKey.value = null }, 2000)
+}
+
+function normalizeTraceMentions(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map(m => ({
+    type: m?.type || '',
+    resourceId: m?.resourceId != null ? String(m.resourceId) : '',
+    name: m?.name || m?.token || '',
+    token: m?.token || (m?.type && m?.resourceId ? `@${m.type}:${m.resourceId}` : ''),
+  }))
+}
+
+function shouldShowTraceMentions(content, mentions) {
+  return normalizeTraceMentions(mentions).length > 0 || contentHasMentionTokens(content)
 }
 
 function copyAllLlmMessages() {
@@ -684,6 +721,7 @@ const traceModelInput = computed(() => {
     hasData: !!(userAttrs.content || userAttachments.length || userAttrs.bizParams
       || systemPrompt || llmMessages.length || requestConfig || requestTools.length),
     userContent: userAttrs.content || '',
+    userMentions: normalizeTraceMentions(userAttrs.mentions),
     userAttachments,
     bizParams: userAttrs.bizParams || null,
     systemPrompt,
@@ -782,7 +820,7 @@ function spanNameLabel(name) {
 }
 
 function traceHiddenAttrKeys(k) {
-  return ['replyPreview', 'content', 'toolNames', 'attachments', 'messages', 'messageCount', 'systemPrompt', 'bizParams', 'config', 'tools', 'toolCount'].includes(k)
+  return ['replyPreview', 'content', 'toolNames', 'attachments', 'mentions', 'messages', 'messageCount', 'systemPrompt', 'bizParams', 'config', 'tools', 'toolCount'].includes(k)
 }
 
 function roleLabel(role) {

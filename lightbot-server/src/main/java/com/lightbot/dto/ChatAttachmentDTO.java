@@ -29,10 +29,4 @@ public class ChatAttachmentDTO {
 
     @Schema(description = "原始文件名")
     private String fileName;
-
-    @Schema(description = "文档类附件：Tika 解析后的文本（仅 type=document）")
-    private String parsedText;
-
-    @Schema(description = "解析文本是否因超长被截断")
-    private Boolean parsedTextTruncated;
 }

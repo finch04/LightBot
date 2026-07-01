@@ -98,16 +98,18 @@
             </div>
             <div class="message-body">
               <!-- 编辑模式：独立于 message-content-wrapper，占满整行 -->
-              <div v-if="editingMessageId === messages[virtualRow.index]._id" class="edit-message-outer">
+              <div v-if="isMessageEditing(messages[virtualRow.index], virtualRow.index)" class="edit-message-outer">
                 <button class="btn-copy edit-btn" @click="cancelEdit" title="取消">
                   <CloseOutlined />
                 </button>
-                <div class="edit-message-box">
-                  <a-textarea
+                <div class="edit-message-box" @keydown="handleEditKeydown">
+                  <ChatMentionInput
                     ref="editInputRef"
-                    v-model:value="editContent"
-                    :auto-size="{ minRows: 2, maxRows: 8 }"
-                    @keydown="handleEditKeydown"
+                    v-model="editContent"
+                    :agent-id="selectedAgentId"
+                    :agent-version-id="selectedAgentVersionId"
+                    placeholder="编辑消息..."
+                    @send="submitEdit"
                   />
                 </div>
                 <button
@@ -140,7 +142,7 @@
                     :key="att.id || ai"
                     :att="att"
                     :thumb-url="getAttThumbUrl(att)"
-                    @preview="openAttachmentPreview"
+                    @preview="onAttachmentPreview"
                   />
                 </div>
                 <!-- 敏感词拦截提示 -->
@@ -321,7 +323,7 @@
                     </button>
                   </a-tooltip>
                   <!-- 消息反馈：点赞/踩 -->
-                  <template v-if="messages[virtualRow.index].role === 'assistant' && messages[virtualRow.index]._id && !messages[virtualRow.index]._streaming">
+                  <template v-if="messages[virtualRow.index].role === 'assistant' && !messages[virtualRow.index]._streaming && (messages[virtualRow.index]._id || messages[virtualRow.index]._terminated)">
                     <a-tooltip title="有帮助">
                       <button
                         class="btn-copy btn-feedback"
@@ -595,7 +597,7 @@
             :att="att"
             :thumb-url="getAttThumbUrl(att)"
             removable
-            @preview="openAttachmentPreview"
+            @preview="onAttachmentPreview"
             @remove="removeAttachment(i)"
           />
         </div>
@@ -720,7 +722,7 @@
     @afterOpenChange="onFileDrawerOpened"
   >
     <template #extra>
-      <a-tooltip title="刷新文件列表" placement="bottom" :get-popup-container="tooltipPopupContainer">
+      <a-tooltip title="刷新" placement="bottom" :get-popup-container="tooltipPopupContainer">
         <span class="file-drawer-btn-wrap">
           <button
             class="btn-drawer-refresh"
@@ -786,6 +788,7 @@ import SessionFilePreviewModal from '../components/SessionFilePreviewModal.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
 import ChatMentionInput from '../components/ChatMentionInput.vue'
 import MentionTextRenderer from '../components/MentionTextRenderer.vue'
+import { contentHasMentionTokens, parseMentionsFromMetadata } from '../utils/mention_utils'
 import { useChatAgents } from '../composables/useChatAgents'
 import { useChatAttachments } from '../composables/useChatAttachments'
 import { useVoiceIO } from '../composables/useVoiceIO'
@@ -1179,6 +1182,10 @@ function getMessageFeedbackType(msg) {
 
 async function handleMessageFeedback(msg, rating) {
   const msgId = msg._id || msg.id
+  if (!msgId) {
+    message.warning('消息正在保存，请稍后再试')
+    return
+  }
   const current = messageFeedbackMap.value.get(msgId)
   // 乐观更新
   if (current === rating) {
@@ -1228,8 +1235,13 @@ async function skipDislikeReason() {
 async function submitDislikeFeedback(reason) {
   const msg = dislikeTargetMsg.value
   if (!msg) return
-  dislikeModalVisible.value = false
   const msgId = msg._id || msg.id
+  if (!msgId) {
+    dislikeModalVisible.value = false
+    message.warning('消息正在保存，请稍后再试')
+    return
+  }
+  dislikeModalVisible.value = false
   const current = messageFeedbackMap.value.get(msgId)
   messageFeedbackMap.value.set(msgId, 'dislike')
   try {
@@ -1276,14 +1288,7 @@ function getMsgMentions(msg) {
   if (!msg) return []
   const raw = (Array.isArray(msg._mentions) && msg._mentions.length)
     ? msg._mentions
-    : (() => {
-      try {
-        const meta = typeof msg.metadata === 'string' ? safeJsonParse(msg.metadata) : msg.metadata
-        return Array.isArray(meta?.mentions) ? meta.mentions : []
-      } catch {
-        return []
-      }
-    })()
+    : parseMentionsFromMetadata(msg.metadata)
   return raw.map(m => ({
     type: m.type,
     resourceId: m.resourceId != null ? String(m.resourceId) : '',
@@ -1292,16 +1297,17 @@ function getMsgMentions(msg) {
   }))
 }
 
-/** 消息文本是否含 @type:id token（含 tool） */
-function contentHasMentionTokens(content) {
-  return /@(knowledge|subagent|skill|tool):\d+/.test(content || '')
-}
-
 /** 用户消息是否应渲染 mention 高亮 */
 function shouldRenderMentions(msg, content) {
   if (!msg || msg.role !== 'user') return false
   const text = content ?? msg.content ?? ''
   return getMsgMentions(msg).length > 0 || contentHasMentionTokens(text)
+}
+
+function isMessageEditing(msg, index) {
+  if (!editingMessageId.value || !msg) return false
+  if (msg._id) return editingMessageId.value === msg._id
+  return editingMessageId.value === `local-${index}`
 }
 
 function getMsgAttachments(msg) {
@@ -1415,6 +1421,48 @@ function parseMessage(m) {
 /** 仅最后一条助手回复可重新生成（其后无用户新消息） */
 function isBackendErrorMessage(msg) {
   return msg?.role === 'assistant' && !!msg._error
+}
+
+/** 将 [DONE] 携带的消息 ID、metadata 等合并到流式消息对象 */
+function applyStreamDoneMetadata(assistantMsg, meta) {
+  if (!assistantMsg || !meta) return
+  if (meta.assistantMessageId) {
+    assistantMsg._id = meta.assistantMessageId
+  }
+  if (meta.totalTokens) {
+    sessionTokenCount.value += meta.totalTokens
+  }
+  const { assistantMessageId, userMessageId, totalTokens, ...restMeta } = meta
+  if (Object.keys(restMeta).length > 0) {
+    assistantMsg.metadata = { ...(assistantMsg.metadata || {}), ...restMeta }
+  }
+  if (restMeta.reasoningContent && !assistantMsg._reasoningContent) {
+    assistantMsg._reasoningContent = String(restMeta.reasoningContent).replace(/^\s+/, '')
+  }
+}
+
+/** 流被用户终止后，后端仍可能异步落库，轮询同步最新消息 ID 以启用收藏/反馈 */
+async function syncAbortedAssistantMessageId(sid, assistantMsg) {
+  if (!sid || !assistantMsg || assistantMsg._id) return
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await new Promise(r => setTimeout(r, 250 * (attempt + 1)))
+    try {
+      const res = await getSessionMessages(sid, { pageNum: 1, pageSize: 5 })
+      const records = res.data?.records || []
+      const latestAssistant = records.find(m => {
+        const role = String(m.role?.code || m.role || '').toLowerCase()
+        return role === 'assistant'
+      })
+      if (latestAssistant?.id) {
+        assistantMsg._id = String(latestAssistant.id)
+        assistantMsg._createTime = latestAssistant.createTime || assistantMsg._createTime
+        await loadBatchFeedbacks([assistantMsg])
+        return
+      }
+    } catch {
+      // 忽略，继续重试
+    }
+  }
 }
 
 function canRegenerate(index) {
@@ -1653,15 +1701,12 @@ function startEdit(index) {
     console.warn('[startEdit] 无法编辑：对话正在加载中')
     return
   }
-  // 确保使用最新的消息 ID（流式完成后 loadHistory 会替换为后端真实 ID）
   editingMessageId.value = msg._id || `local-${index}`
   editContent.value = msg.content || ''
   nextTick(() => {
-    const el = editInputRef.value
-    if (el) {
-      const textarea = el.$el ? el.$el : el
-      if (textarea.focus) textarea.focus()
-    }
+    const comp = editInputRef.value
+    comp?.setFromMessage?.(msg.content || '', getMsgMentions(msg))
+    comp?.focus?.()
   })
 }
 
@@ -1689,7 +1734,10 @@ function cancelReply() {
 
 async function toggleStarMessage(index) {
   const msg = messages.value[index]
-  if (!msg?._id) return
+  if (!msg?._id) {
+    message.warning('消息正在保存，请稍后再试')
+    return
+  }
   try {
     await toggleMessageStar(msg._id)
     msg._starred = !msg._starred
@@ -1733,7 +1781,8 @@ function scrollToMessage(messageId) {
 }
 
 async function submitEdit() {
-  const newText = editContent.value.trim()
+  const editComp = editInputRef.value
+  const newText = (editComp?.getText?.() || editContent.value || '').trim()
   if (!newText || loading.value) return
 
   // 尝试通过 ID 查找消息，如果找不到则尝试通过 local- 前缀解析索引
@@ -1741,7 +1790,6 @@ async function submitEdit() {
   if (editIdx < 0 && editingMessageId.value?.startsWith('local-')) {
     const idxFromLocal = parseInt(editingMessageId.value.replace('local-', ''))
     if (!isNaN(idxFromLocal) && idxFromLocal < messages.value.length) {
-      // 验证该索引位置是用户消息
       const msgAtIdx = messages.value[idxFromLocal]
       if (msgAtIdx?.role === 'user') {
         editIdx = idxFromLocal
@@ -1756,11 +1804,14 @@ async function submitEdit() {
   }
 
   const msg = messages.value[editIdx]
+  const sentMentions = editComp?.getMentions?.()
   msg.content = newText
+  if (sentMentions?.length) {
+    msg._mentions = sentMentions
+  }
   editingMessageId.value = null
   editContent.value = ''
 
-  // 删除本地的最后一条助手消息
   const lastIdx = messages.value.length - 1
   if (lastIdx > editIdx && messages.value[lastIdx].role === 'assistant') {
     messages.value.pop()
@@ -1773,18 +1824,33 @@ async function submitEdit() {
   await runChatStream({
     message: newText,
     attachments: msg._attachments || [],
+    mentions: sentMentions?.length ? sentMentions : undefined,
     regenerate: true,
     editMessageId: msg._id || null,
   })
 }
 
 function finalizeAbortedStream(assistantMsg, pushed) {
+  if (assistantMsg?._terminated) {
+    streamSmoother.stop()
+    currentStreamingMsg = null
+    reconnecting.value = false
+    loading.value = false
+    streaming.value = false
+    hasStreamContent.value = false
+    currentStatus.value = ''
+    abortController.value = null
+    userStoppedStream.value = false
+    return
+  }
+
   streamSmoother.stop()
   currentStreamingMsg = null
   reconnecting.value = false
 
+  let targetMsg = assistantMsg
   if (!pushed) {
-    messages.value.push({
+    targetMsg = {
       role: 'assistant',
       content: '*AI 输出已终止*',
       _streaming: false,
@@ -1797,7 +1863,9 @@ function finalizeAbortedStream(assistantMsg, pushed) {
       _reasoningContent: '',
       _reasoningExpanded: true,
       _reasoningDone: true,
-    })
+      _terminated: true,
+    }
+    messages.value.push(targetMsg)
   } else if (assistantMsg) {
     if (!assistantMsg._toolBlockOffsets?.length) {
       assistantMsg._toolBlockOffsets = getToolBlockOffsets(assistantMsg)
@@ -1808,6 +1876,8 @@ function finalizeAbortedStream(assistantMsg, pushed) {
     assistantMsg._streaming = false
     assistantMsg._toolsDone = true
     assistantMsg._toolExpanded = false
+    assistantMsg._terminated = true
+    targetMsg = assistantMsg
   }
 
   loading.value = false
@@ -1819,6 +1889,7 @@ function finalizeAbortedStream(assistantMsg, pushed) {
   userStoppedStream.value = false
   // 后端可能在流中断后仍落库并生成标题，继续轮询
   pollSessionTitle(sessionId.value)
+  syncAbortedAssistantMessageId(sessionId.value, targetMsg)
 
   if (isNearBottom.value) {
     nextTick(() => {
@@ -1881,8 +1952,6 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
         objectKey: a.objectKey,
         previewUrl: a.previewUrl,
         fileName: a.fileName,
-        parsedText: a.parsedText,
-        parsedTextTruncated: a.parsedTextTruncated,
       })) : undefined,
     }
     await chatStream(
@@ -2083,8 +2152,14 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
         },
         // onDone: 完成
         onDone: (meta) => {
-          // 用户主动停止时由 AbortError catch 收尾，避免与中断逻辑竞态
-          if (userStoppedStream.value) return
+          // 用户主动停止时仍合并 [DONE] 中的消息 ID（后端可能已完成落库）
+          if (userStoppedStream.value) {
+            if (assistantMsg) {
+              applyStreamDoneMetadata(assistantMsg, meta)
+              if (assistantMsg._id) loadBatchFeedbacks([assistantMsg])
+            }
+            return
+          }
           streamSmoother.stop()
           currentStreamingMsg = null
           reconnecting.value = false
@@ -2096,24 +2171,9 @@ async function runChatStream({ message, attachments, mentions, regenerate, editM
             assistantMsg._streaming = false
             assistantMsg._toolsDone = true
             assistantMsg._toolExpanded = false
-            // 后端 [DONE] 事件携带消息ID，直接赋值（无需刷新）
-            if (meta?.assistantMessageId) {
-              assistantMsg._id = meta.assistantMessageId
-            }
-            // 累加本次回复的 Token 消耗
-            if (meta?.totalTokens) {
-              sessionTokenCount.value += meta.totalTokens
-            }
-            // 合并 [DONE] 携带的完整 metadata（ragReferences、reasoningContent、requestId 等）
-            // 确保流式消息与历史消息的 metadata 一致
-            if (meta) {
-              const { assistantMessageId, userMessageId, totalTokens, ...restMeta } = meta
-              if (Object.keys(restMeta).length > 0) {
-                assistantMsg.metadata = { ...(assistantMsg.metadata || {}), ...restMeta }
-              }
-              if (restMeta.reasoningContent && !assistantMsg._reasoningContent) {
-                assistantMsg._reasoningContent = String(restMeta.reasoningContent).replace(/^\s+/, '')
-              }
+            applyStreamDoneMetadata(assistantMsg, meta)
+            if (assistantMsg._id) {
+              loadBatchFeedbacks([assistantMsg])
             }
           }
           loading.value = false
@@ -2265,6 +2325,13 @@ function stopGenerating() {
     abortController.value.abort()
     abortController.value = null
   }
+  // 兜底：AbortError 未及时触发时仍结束流式状态
+  setTimeout(() => {
+    if (!streaming.value) return
+    const msg = currentStreamingMsg
+      || [...messages.value].reverse().find(m => m.role === 'assistant' && m._streaming)
+    if (msg) finalizeAbortedStream(msg, messages.value.includes(msg))
+  }, 120)
 }
 
 function registerToolBlockOffset(msg, offset) {
@@ -2480,6 +2547,31 @@ function onFileTreeRefreshed(stats) {
     fileStats.userUpload = stats.userUpload || 0
     fileStats.aiGenerated = stats.aiGenerated || 0
   }
+}
+
+function resolveAttachmentAsSessionFile(att) {
+  if (!att?.objectKey || !sessionId.value) return null
+  const root = `sessions/${sessionId.value}/`
+  if (!att.objectKey.startsWith(root)) return null
+  const path = att.objectKey.slice(root.length)
+  if (!path) return null
+  return {
+    path,
+    fileName: att.fileName,
+    name: att.fileName || path.split('/').pop(),
+  }
+}
+
+/** 对话附件预览：已落盘的文档走会话文件预览 API，与会话侧栏一致 */
+function onAttachmentPreview(att) {
+  if (att?.type === 'document') {
+    const sessionFile = resolveAttachmentAsSessionFile(att)
+    if (sessionFile) {
+      openSessionFilePreviewModal(sessionFile)
+      return
+    }
+  }
+  openAttachmentPreview(att)
 }
 
 function openSessionFilePreviewModal(file) {
@@ -3041,6 +3133,22 @@ watch(sessionId, (newVal, oldVal) => {
   background: var(--color-canvas-soft-2);
   border-radius: 12px 12px 2px 12px;
   padding: 10px 16px;
+}
+.edit-message-box :deep(.mention-editor) {
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 0;
+  min-height: 44px;
+  max-height: 200px;
+}
+.edit-message-box :deep(.mention-editor:focus) {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 .edit-message-box :deep(textarea) {
   background: transparent;

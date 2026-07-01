@@ -7,20 +7,20 @@
       @click="$emit('preview', att)"
     >
       <img
-        v-if="thumbUrl"
+        v-if="showThumb"
         :src="thumbUrl"
         :alt="att.fileName || ''"
         class="chat-att-tile-img"
       />
       <span v-else class="chat-att-tile-doc">
-        <FileTextOutlined class="doc-icon" />
+        <FileTypeIcon :name="iconName" :size="22" class="doc-icon" />
         <span class="doc-name">{{ shortName }}</span>
       </span>
       <span class="msg-att-hover-mask">
         <EyeOutlined class="mask-icon" />
         <span class="mask-text">预览</span>
       </span>
-      <span v-if="att.type === 'video'" class="msg-att-play-badge sm"><PlayCircleOutlined /></span>
+      <span v-if="att.type === 'video' && showThumb" class="msg-att-play-badge sm"><PlayCircleOutlined /></span>
     </button>
     <div v-else-if="uploading" class="chat-att-tile-uploading">
       <LoadingOutlined spin class="upload-spin" />
@@ -45,9 +45,9 @@ import {
   EyeOutlined,
   CloseOutlined,
   PlayCircleOutlined,
-  FileTextOutlined,
   LoadingOutlined,
 } from '@ant-design/icons-vue'
+import FileTypeIcon from './FileTypeIcon.vue'
 
 const props = defineProps({
   att: { type: Object, required: true },
@@ -59,6 +59,20 @@ const props = defineProps({
 
 defineEmits(['preview', 'remove'])
 
+const showThumb = computed(() => {
+  const t = props.att?.type
+  return Boolean(props.thumbUrl && (t === 'image' || t === 'video'))
+})
+
+const iconName = computed(() => {
+  const att = props.att
+  if (att?.fileName) return att.fileName
+  if (att?.type === 'image') return 'image.png'
+  if (att?.type === 'video') return 'video.mp4'
+  if (att?.type === 'document') return 'document.pdf'
+  return att?.type || 'file'
+})
+
 const canPreview = computed(() => {
   if (props.uploading) return false
   const att = props.att
@@ -67,7 +81,7 @@ const canPreview = computed(() => {
     return Boolean(props.thumbUrl || att.previewUrl)
   }
   if (att.type === 'document') {
-    return Boolean(att.parsedText || att.previewUrl)
+    return Boolean(att.previewUrl || att.objectKey)
   }
   return false
 })
@@ -124,8 +138,7 @@ const shortName = computed(() => {
   box-sizing: border-box;
 }
 .doc-icon {
-  font-size: 18px;
-  color: var(--color-link);
+  flex-shrink: 0;
 }
 .doc-name {
   font-size: 10px;

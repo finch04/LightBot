@@ -9,6 +9,7 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.SessionStatus;
 import com.lightbot.mapper.ChatSessionMapper;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.ChatAttachmentParsedService;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.LlmTraceService;
 import com.lightbot.service.MessageService;
@@ -52,6 +53,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     private final LlmTraceService llmTraceService;
     private final RedisUtil redisUtil;
     private final MinioUtil minioUtil;
+    private final ChatAttachmentParsedService chatAttachmentParsedService;
     @Qualifier("lightBotExecutor")
     private final ThreadPoolTaskExecutor lightBotExecutor;
 
@@ -491,8 +493,6 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             vo.setObjectKey(att.getObjectKey());
             vo.setPreviewUrl(att.getPreviewUrl());
             vo.setFileName(att.getFileName());
-            vo.setParsedText(att.getParsedText());
-            vo.setParsedTextTruncated(att.getParsedTextTruncated());
             vo.setSource(source != null ? source : SessionAttachmentSource.USER_UPLOAD.getCode());
             vo.setCreatedAt(LocalDateTime.now().toString());
             vos.add(vo);
@@ -529,26 +529,10 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                     att.setPreviewUrl(minioUtil.getPresignedUrl(newKey, mime));
                 } catch (Exception ignored) {
                 }
-                // 文档解析产物同步落盘到 inputs/parsed/
-                if (att.getParsedText() != null && !att.getParsedText().isBlank()) {
-                    uploadParsedMarkdown(sessionId, fileName, att.getParsedText());
-                }
+                chatAttachmentParsedService.relocateParsedIfPresent(sessionId, att, key);
             } catch (Exception e) {
                 log.warn("[ChatSession] 迁移附件失败: from={}, to={}, error={}", key, newKey, e.getMessage());
             }
-        }
-    }
-
-    private void uploadParsedMarkdown(Long sessionId, String originalFileName, String parsedText) {
-        String parsedKey = SessionStoragePath.inputParsedObjectKey(sessionId, originalFileName);
-        if (minioUtil.exists(parsedKey)) {
-            return;
-        }
-        byte[] mdBytes = parsedText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        try {
-            minioUtil.upload(new java.io.ByteArrayInputStream(mdBytes), parsedKey, mdBytes.length, "text/markdown");
-        } catch (Exception e) {
-            log.warn("[ChatSession] 解析产物落盘失败: key={}, error={}", parsedKey, e.getMessage());
         }
     }
 

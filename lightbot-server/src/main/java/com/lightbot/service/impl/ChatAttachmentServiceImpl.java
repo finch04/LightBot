@@ -7,6 +7,7 @@ import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.ChatAttachmentParsedService;
 import com.lightbot.service.ChatAttachmentService;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
 import com.lightbot.util.ChatContentSecurityScanUtil;
@@ -38,6 +39,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
     private final TikaUtil tikaUtil;
     private final ObjectMapper objectMapper;
     private final ChatContentSecurityScanUtil contentSecurityScanUtil;
+    private final ChatAttachmentParsedService chatAttachmentParsedService;
 
     @Override
     public ChatAttachmentDTO upload(Long agentId, Long sessionId, MultipartFile file) {
@@ -66,7 +68,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             byte[] bytes = file.getBytes();
             return switch (type) {
                 case "document" -> uploadDocument(file, bytes, mime, ext, agentId, sessionId, caps, config);
-                case "image", "video" -> storeAndBuildDto(file, bytes, mime, type, agentId, sessionId, null, false);
+                case "image", "video" -> storeAndBuildDto(file, bytes, mime, type, agentId, sessionId, null);
                 default -> throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "不支持的附件类型");
             };
         } catch (BizException e) {
@@ -117,12 +119,11 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             }
         }
 
-        return storeAndBuildDto(file, bytes, mime, "document", agentId, sessionId, text, truncated[0]);
+        return storeAndBuildDto(file, bytes, mime, "document", agentId, sessionId, text);
     }
 
     private ChatAttachmentDTO storeAndBuildDto(MultipartFile file, byte[] bytes, String mime, String type,
-                                                Long agentId, Long sessionId, String parsedText,
-                                                boolean parsedTruncated) {
+                                                Long agentId, Long sessionId, String parsedText) {
         String attachmentId = UUID.randomUUID().toString().replace("-", "");
         String originalFileName = file.getOriginalFilename();
         String safeName = SessionStoragePath.sanitizeFileName(originalFileName);
@@ -135,9 +136,8 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
 
         try {
             minioUtil.upload(new ByteArrayInputStream(bytes), objectKey, bytes.length, mime);
-            // 文档解析产物落盘到 inputs/parsed/{stem}.md（Yuxi 风格）
-            if (parsedText != null && SessionStoragePath.isSessionScoped(sessionId)) {
-                uploadParsedMarkdown(sessionId, originalFileName, parsedText);
+            if (parsedText != null) {
+                chatAttachmentParsedService.storeParsed(sessionId, agentId, attachmentId, originalFileName, parsedText);
             }
         } catch (Exception e) {
             log.error("[ChatAttachment] MinIO 上传失败: {}", e.getMessage());
@@ -150,27 +150,12 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         dto.setMimeType(mime);
         dto.setObjectKey(objectKey);
         dto.setFileName(originalFileName);
-        if (parsedText != null) {
-            dto.setParsedText(parsedText);
-            dto.setParsedTextTruncated(parsedTruncated);
-        }
         try {
             dto.setPreviewUrl(minioUtil.getPresignedUrl(objectKey, mime));
         } catch (Exception e) {
             log.warn("[ChatAttachment] 生成预览 URL 失败: {}", e.getMessage());
         }
         return dto;
-    }
-
-    /** 将文档解析 Markdown 写入 sessions/{sessionId}/inputs/parsed/{stem}.md */
-    private void uploadParsedMarkdown(Long sessionId, String originalFileName, String parsedText) {
-        String parsedKey = SessionStoragePath.inputParsedObjectKey(sessionId, originalFileName);
-        byte[] mdBytes = parsedText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        try {
-            minioUtil.upload(new ByteArrayInputStream(mdBytes), parsedKey, mdBytes.length, "text/markdown");
-        } catch (Exception e) {
-            log.warn("[ChatAttachment] 解析产物落盘失败: key={}, error={}", parsedKey, e.getMessage());
-        }
     }
 
     @Override
@@ -189,8 +174,6 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             copy.setMimeType(att.getMimeType());
             copy.setObjectKey(att.getObjectKey());
             copy.setFileName(att.getFileName());
-            copy.setParsedText(att.getParsedText());
-            copy.setParsedTextTruncated(att.getParsedTextTruncated());
             try {
                 String mime = att.getMimeType() != null ? att.getMimeType() : "application/octet-stream";
                 copy.setPreviewUrl(minioUtil.getPresignedUrl(att.getObjectKey(), mime));

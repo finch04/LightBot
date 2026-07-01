@@ -49,6 +49,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import ChatMentionPicker from './ChatMentionPicker.vue'
 import { useChatMentions } from '../composables/useChatMentions'
 import { getMentionChipClass, getMentionTooltip } from '../utils/mentionDisplay'
+import { buildMentionMap, parseMentionText } from '../utils/mention_utils'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -82,6 +83,8 @@ defineExpose({
   getMentions: () => serializeForRequest(),
   clear: () => resetEditor(''),
   setText: (t) => resetEditor(t || ''),
+  /** 从消息正文 + metadata 快照重建 chip（编辑历史消息用） */
+  setFromMessage: (rawText, snapshots = []) => renderFromText(rawText, snapshots),
   moveCursorToEnd,
   moveCursorToStart,
   mentions,
@@ -140,9 +143,9 @@ function tokenToChipHtml(m) {
 
 /**
  * 从外部 text（含 @type:id token）重建 contenteditable HTML
- * 同时重建 mentions 数组
+ * snapshotMentions：历史消息 metadata.mentions，优先于实时候选列表解析名称
  */
-function renderFromText(rawText) {
+function renderFromText(rawText, snapshotMentions = []) {
   const el = editorEl()
   if (!el) return
   mentions.value = []
@@ -150,23 +153,23 @@ function renderFromText(rawText) {
     el.innerHTML = ''
     return
   }
-  const tokenRe = /@(knowledge|subagent|skill|tool):(\d+)/g
-  let lastIdx = 0
+  const snapMap = buildMentionMap(snapshotMentions)
   let html = ''
-  let m
-  while ((m = tokenRe.exec(rawText)) !== null) {
-    html += escapeHtml(rawText.slice(lastIdx, m.index))
-    const type = m[1]
-    const resourceId = m[2]
-    const token = m[0]
+  for (const segment of parseMentionText(rawText)) {
+    if (segment.kind === 'text') {
+      html += escapeHtml(segment.text)
+      continue
+    }
+    const type = segment.type
+    const resourceId = segment.resourceId
+    const token = segment.token
+    const snap = snapMap.get(token)
     const opt = findOptionByToken(token)
-    const name = opt?.name || token
-    const valid = !!opt
+    const name = snap?.name || opt?.name || token
+    const valid = !!(snap || opt)
     html += tokenToChipHtml({ type, resourceId, name, token, valid })
     mentions.value.push({ type, resourceId, name, token })
-    lastIdx = m.index + m[0].length
   }
-  html += escapeHtml(rawText.slice(lastIdx))
   el.innerHTML = html
   moveCursorToEnd()
 }

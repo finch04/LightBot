@@ -27,6 +27,7 @@ import com.lightbot.mapper.MessageMapper;
 import com.lightbot.model.ModelFactory;
 import com.lightbot.model.ProviderResolver;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.ChatAttachmentParsedService;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.ToolService;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,7 @@ public class MessageMiddleware implements ChatMiddleware {
     private final ProviderResolver providerResolver;
     private final MinioUtil minioUtil;
     private final ObjectMapper objectMapper;
+    private final ChatAttachmentParsedService chatAttachmentParsedService;
 
     /** 平台统一回复约束（不含工具相关，工具能力由 Provider 决定后按需追加） */
     private static final String PLATFORM_REPLY_CONSTRAINTS = """
@@ -137,7 +139,7 @@ public class MessageMiddleware implements ChatMiddleware {
 
     @Override
     public Flux<String> execute(ChatContext ctx, ChatMiddlewareChain next) {
-        validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
+        validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap(), ctx.getSessionId());
         String userText = resolveUserText(ctx.getRequest());
         if (Boolean.TRUE.equals(ctx.getRequest().getRegenerate())) {
             // 编辑重发时不删除之前的AI回复（那是针对旧问题的有效回答）
@@ -175,7 +177,7 @@ public class MessageMiddleware implements ChatMiddleware {
      * 同步路径专用：保存用户消息 + 构建消息列表
      */
     public void prepare(ChatContext ctx) {
-        validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap());
+        validateAttachments(ctx.getRequest().getAttachments(), ctx.getConfigMap(), ctx.getSessionId());
         String userText = resolveUserText(ctx.getRequest());
         saveUserMessage(ctx.getSessionId(), userText, ctx.getRequest().getAttachments(), null, null,
                 ctx.getRequest().getMentions(), ctx.getRequest().getAgentVersionId());
@@ -187,7 +189,7 @@ public class MessageMiddleware implements ChatMiddleware {
     /**
      * 校验附件数量与类型：文档需开启文件读取；图片/视频需开启多模态对应能力
      */
-    private void validateAttachments(List<ChatAttachmentDTO> attachments, Map<String, Object> configMap) {
+    private void validateAttachments(List<ChatAttachmentDTO> attachments, Map<String, Object> configMap, Long sessionId) {
         if (attachments == null || attachments.isEmpty()) {
             return;
         }
@@ -204,7 +206,7 @@ public class MessageMiddleware implements ChatMiddleware {
                 if (!Boolean.TRUE.equals(caps.getEnableFileRead())) {
                     throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "当前 Agent 未开启文件读取");
                 }
-                if (att.getParsedText() == null || att.getParsedText().isBlank()) {
+                if (!chatAttachmentParsedService.hasParsedContent(att, sessionId)) {
                     throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "文档附件缺少解析内容，请重新上传");
                 }
             } else if ("image".equals(att.getType())) {
@@ -452,7 +454,7 @@ public class MessageMiddleware implements ChatMiddleware {
         for (Message msg : history) {
             if (msg.getRole() == MessageRole.USER) {
                 List<ChatAttachmentDTO> histAttachments = parseAttachmentsFromMetadata(msg.getMetadata());
-                messages.add(buildUserMessageForAttachments(msg.getContent(), histAttachments));
+                messages.add(buildUserMessageForAttachments(msg.getContent(), histAttachments, sessionId));
             } else if (msg.getRole() == MessageRole.ASSISTANT) {
                 messages.add(new AssistantMessage(msg.getContent()));
             }
@@ -470,7 +472,7 @@ public class MessageMiddleware implements ChatMiddleware {
         }
         List<ChatAttachmentDTO> attachments = request != null ? request.getAttachments() : null;
         messages.add(buildUserMessageForAttachments(
-                appendMentionHintIfNeeded(effectiveUserMessage, ctx), attachments));
+                appendMentionHintIfNeeded(effectiveUserMessage, ctx), attachments, sessionId));
         return messages;
     }
 
@@ -499,14 +501,14 @@ public class MessageMiddleware implements ChatMiddleware {
      * 构建用户消息：document 附件拼入文本，image/video 仍走多模态
      */
     private org.springframework.ai.chat.messages.Message buildUserMessageForAttachments(
-            String content, List<ChatAttachmentDTO> attachments) {
+            String content, List<ChatAttachmentDTO> attachments, Long sessionId) {
         if (attachments == null || attachments.isEmpty()) {
             return new UserMessage(content != null ? content : "");
         }
-        // 文档 → Tika 文本拼入提示词；图片/视频 → 多模态一并发送（可混合）
+        // 文档 → 从 MinIO 读取解析文本拼入提示词；图片/视频 → 多模态一并发送（可混合）
         List<ChatAttachmentDTO> documents = ChatDocumentMessageUtil.filterDocuments(attachments);
         List<ChatAttachmentDTO> media = ChatDocumentMessageUtil.filterMedia(attachments);
-        String text = ChatDocumentMessageUtil.wrapUserMessage(content, documents);
+        String text = chatAttachmentParsedService.wrapUserMessage(content, documents, sessionId);
         if (!media.isEmpty()) {
             return ChatMessageMediaUtil.buildUserMessage(text, media, minioUtil);
         }
