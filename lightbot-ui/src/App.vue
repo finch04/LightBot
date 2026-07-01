@@ -369,6 +369,11 @@ body {
   background: #52525b;
 }
 
+/* 弹窗遮罩层禁止外层滚动，内容仅在 modal body 内滚动 */
+.ant-modal-wrap {
+  overflow: hidden !important;
+}
+
 /* 垂直滚动区域：内容与滚动条保持统一间距 */
 .scroll-area-y,
 .tab-content,

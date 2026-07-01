@@ -43,7 +43,10 @@
       title="搜索文档结果详情" 
       :footer="null" 
       width="720px"
-      :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }"
+      centered
+      :get-container="getToolResultModalContainer"
+      :wrap-style="toolResultModalWrapStyle"
+      :body-style="buildToolResultModalBodyStyle({ padding: '20px' })"
     >
       <div class="sd-detail-container">
         <!-- 统计信息 -->
@@ -102,6 +105,11 @@ import {
   DatabaseOutlined,
   InboxOutlined
 } from '@ant-design/icons-vue'
+import {
+  getToolResultModalContainer,
+  toolResultModalWrapStyle,
+  buildToolResultModalBodyStyle,
+} from '../../composables/useToolResultModal'
 
 const props = defineProps({
   event: { type: Object, required: true }

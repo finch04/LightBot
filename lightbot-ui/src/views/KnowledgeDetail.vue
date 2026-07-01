@@ -89,6 +89,7 @@
                 <ExclamationCircleOutlined v-else />
               </span>
             </a-tooltip>
+            <FileTypeIcon :name="doc.name" :size="16" class="doc-file-icon" />
             <a-tooltip :title="doc.name" placement="topLeft">
               <span class="doc-name">{{ doc.name }}</span>
             </a-tooltip>
@@ -984,6 +985,7 @@ import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 import FilePreview from '../components/FilePreview.vue'
+import FileTypeIcon from '../components/FileTypeIcon.vue'
 import RAGEvaluationTab from '../components/eval/RAGEvaluationTab.vue'
 import EvaluationBenchmarks from '../components/eval/EvaluationBenchmarks.vue'
 import KnowledgeGraphTab from '../components/KnowledgeGraphTab.vue'
@@ -2555,6 +2557,9 @@ onUnmounted(() => {
 .doc-status-icon.processing { color: #d97706; }
 .doc-status-icon.completed { color: #16a34a; }
 .doc-status-icon.failed { color: #dc2626; }
+.doc-file-icon {
+  flex-shrink: 0;
+}
 .doc-name {
   display: block;
   font-size: 14px;

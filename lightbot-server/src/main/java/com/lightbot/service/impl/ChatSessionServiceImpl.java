@@ -516,9 +516,8 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             if (key.startsWith(inputsPrefix)) {
                 continue;
             }
-            // 计算扩展名：优先从 objectKey 取，其次按 mime/type 推断
-            String ext = extractExtension(key, att.getMimeType(), att.getType());
-            String newKey = SessionStoragePath.inputObjectKey(sessionId, att.getId(), ext);
+            String fileName = att.getFileName() != null ? att.getFileName() : "attachment.bin";
+            String newKey = SessionStoragePath.inputObjectKey(sessionId, att.getId(), fileName);
             try {
                 // 仅当目标对象不存在时复制（避免重复发送时重复复制）
                 if (!minioUtil.exists(newKey)) {
@@ -530,37 +529,27 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                     att.setPreviewUrl(minioUtil.getPresignedUrl(newKey, mime));
                 } catch (Exception ignored) {
                 }
+                // 文档解析产物同步落盘到 inputs/parsed/
+                if (att.getParsedText() != null && !att.getParsedText().isBlank()) {
+                    uploadParsedMarkdown(sessionId, fileName, att.getParsedText());
+                }
             } catch (Exception e) {
                 log.warn("[ChatSession] 迁移附件失败: from={}, to={}, error={}", key, newKey, e.getMessage());
             }
         }
     }
 
-    private static String extractExtension(String objectKey, String mime, String type) {
-        if (objectKey != null) {
-            int slash = objectKey.lastIndexOf('/');
-            String name = slash >= 0 ? objectKey.substring(slash + 1) : objectKey;
-            int dot = name.lastIndexOf('.');
-            if (dot > 0) {
-                return name.substring(dot);
-            }
+    private void uploadParsedMarkdown(Long sessionId, String originalFileName, String parsedText) {
+        String parsedKey = SessionStoragePath.inputParsedObjectKey(sessionId, originalFileName);
+        if (minioUtil.exists(parsedKey)) {
+            return;
         }
-        if (mime != null) {
-            String e = switch (mime) {
-                case "image/png" -> ".png";
-                case "image/webp" -> ".webp";
-                case "image/gif" -> ".gif";
-                case "video/mp4" -> ".mp4";
-                case "video/webm" -> ".webm";
-                case "video/quicktime" -> ".mov";
-                case "text/plain" -> ".txt";
-                case "text/markdown" -> ".md";
-                case "application/pdf" -> ".pdf";
-                default -> ".bin";
-            };
-            return e;
+        byte[] mdBytes = parsedText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            minioUtil.upload(new java.io.ByteArrayInputStream(mdBytes), parsedKey, mdBytes.length, "text/markdown");
+        } catch (Exception e) {
+            log.warn("[ChatSession] 解析产物落盘失败: key={}, error={}", parsedKey, e.getMessage());
         }
-        return ".bin";
     }
 
     @Override

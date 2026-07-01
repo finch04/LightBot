@@ -55,7 +55,10 @@
       :title="detailTitle"
       :footer="null" 
       width="780px"
-      :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }"
+      centered
+      :get-container="getToolResultModalContainer"
+      :wrap-style="toolResultModalWrapStyle"
+      :body-style="buildToolResultModalBodyStyle({ padding: '20px' })"
     >
       <div class="fid-detail-container">
         <!-- 原文翻页模式详情 -->
@@ -140,6 +143,11 @@ import {
   FileSearchOutlined, 
   EyeOutlined 
 } from '@ant-design/icons-vue'
+import {
+  getToolResultModalContainer,
+  toolResultModalWrapStyle,
+  buildToolResultModalBodyStyle,
+} from '../../composables/useToolResultModal'
 
 const props = defineProps({
   event: { type: Object, required: true }

@@ -73,14 +73,52 @@ public final class SessionStoragePath {
         return sessionRoot(sessionId) + WORKSPACE_DIR + "/";
     }
 
-    /** 用户上传文件 objectKey：sessions/{sessionId}/inputs/{attachmentId}{ext} */
-    public static String inputObjectKey(Long sessionId, String attachmentId, String extension) {
-        return inputsPrefix(sessionId) + attachmentId + normalizeExtension(extension);
+    /**
+     * 用户上传文件 objectKey（Yuxi 风格）：sessions/{sessionId}/inputs/{attachmentId}_{safeOriginalName}
+     * <p>例：sessions/123/inputs/a1b2..._报告.pdf</p>
+     */
+    public static String inputObjectKey(Long sessionId, String attachmentId, String originalFileName) {
+        return inputsPrefix(sessionId) + attachmentId + "_" + sanitizeFileName(originalFileName);
     }
 
-    /** 文档解析产物 objectKey：sessions/{sessionId}/inputs/parsed/{attachmentId}.md */
-    public static String inputParsedObjectKey(Long sessionId, String attachmentId) {
-        return inputsParsedPrefix(sessionId) + attachmentId + ".md";
+    /** 文档解析产物 objectKey（Yuxi 风格）：sessions/{sessionId}/inputs/parsed/{stem}.md */
+    public static String inputParsedObjectKey(Long sessionId, String originalFileName) {
+        return inputsParsedPrefix(sessionId) + stemFromFileName(originalFileName) + ".md";
+    }
+
+    /**
+     * 规范化用户原始文件名为 MinIO 安全片段（仅 basename，去除路径分隔符）。
+     */
+    public static String sanitizeFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "attachment.bin";
+        }
+        String name = fileName.replace("\\", "/");
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        name = name.replace("/", "_").replace("\\", "_");
+        while (!name.isEmpty() && (name.charAt(0) == '.' || name.charAt(0) == ' ')) {
+            name = name.substring(1);
+        }
+        while (!name.isEmpty() && (name.charAt(name.length() - 1) == '.' || name.charAt(name.length() - 1) == ' ')) {
+            name = name.substring(0, name.length() - 1);
+        }
+        return name.isEmpty() ? "attachment.bin" : name;
+    }
+
+    /** 从原始文件名提取不带扩展名的 stem（用于 parsed 产物命名） */
+    public static String stemFromFileName(String fileName) {
+        String safe = sanitizeFileName(fileName);
+        String lower = safe.toLowerCase(Locale.ROOT);
+        for (String ext : new String[]{".docx", ".txt", ".html", ".htm", ".pdf", ".md", ".xlsx", ".xls", ".pptx", ".ppt", ".csv"}) {
+            if (lower.endsWith(ext)) {
+                return safe.substring(0, safe.length() - ext.length()).replace("/", "_").replace("\\", "_");
+            }
+        }
+        int dot = safe.lastIndexOf('.');
+        return dot > 0 ? safe.substring(0, dot) : safe;
     }
 
     /** AI 生图 objectKey：sessions/{sessionId}/outputs/images/{fileId}.jpg */
@@ -104,8 +142,8 @@ public final class SessionStoragePath {
      * @deprecated 使用 {@link #inputObjectKey}
      */
     @Deprecated
-    public static String uploadObjectKey(Long sessionId, String attachmentId, String extension) {
-        return inputObjectKey(sessionId, attachmentId, extension);
+    public static String uploadObjectKey(Long sessionId, String attachmentId, String originalFileName) {
+        return inputObjectKey(sessionId, attachmentId, originalFileName);
     }
 
     /**
@@ -138,12 +176,5 @@ public final class SessionStoragePath {
             throw new IllegalArgumentException("非法相对路径：禁止包含 ..");
         }
         return normalized;
-    }
-
-    private static String normalizeExtension(String extension) {
-        if (extension == null || extension.isEmpty()) {
-            return "";
-        }
-        return extension.startsWith(".") ? extension : "." + extension.toLowerCase(Locale.ROOT);
     }
 }

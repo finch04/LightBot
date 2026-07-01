@@ -124,17 +124,21 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
                                                 Long agentId, Long sessionId, String parsedText,
                                                 boolean parsedTruncated) {
         String attachmentId = UUID.randomUUID().toString().replace("-", "");
+        String originalFileName = file.getOriginalFilename();
+        String safeName = SessionStoragePath.sanitizeFileName(originalFileName);
         String objectKey;
         if (SessionStoragePath.isSessionScoped(sessionId)) {
-            objectKey = SessionStoragePath.inputObjectKey(sessionId, attachmentId,
-                    extensionFromMime(mime, type));
+            objectKey = SessionStoragePath.inputObjectKey(sessionId, attachmentId, originalFileName);
         } else {
-            String sessionPart = "temp";
-            objectKey = "chat/" + agentId + "/" + sessionPart + "/" + attachmentId + extensionFromMime(mime, type);
+            objectKey = "chat/" + agentId + "/temp/" + attachmentId + "_" + safeName;
         }
 
         try {
             minioUtil.upload(new ByteArrayInputStream(bytes), objectKey, bytes.length, mime);
+            // 文档解析产物落盘到 inputs/parsed/{stem}.md（Yuxi 风格）
+            if (parsedText != null && SessionStoragePath.isSessionScoped(sessionId)) {
+                uploadParsedMarkdown(sessionId, originalFileName, parsedText);
+            }
         } catch (Exception e) {
             log.error("[ChatAttachment] MinIO 上传失败: {}", e.getMessage());
             throw new BizException(ErrorCode.FILE_UPLOAD_FAILED);
@@ -145,7 +149,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
         dto.setType(type);
         dto.setMimeType(mime);
         dto.setObjectKey(objectKey);
-        dto.setFileName(file.getOriginalFilename());
+        dto.setFileName(originalFileName);
         if (parsedText != null) {
             dto.setParsedText(parsedText);
             dto.setParsedTextTruncated(parsedTruncated);
@@ -156,6 +160,17 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             log.warn("[ChatAttachment] 生成预览 URL 失败: {}", e.getMessage());
         }
         return dto;
+    }
+
+    /** 将文档解析 Markdown 写入 sessions/{sessionId}/inputs/parsed/{stem}.md */
+    private void uploadParsedMarkdown(Long sessionId, String originalFileName, String parsedText) {
+        String parsedKey = SessionStoragePath.inputParsedObjectKey(sessionId, originalFileName);
+        byte[] mdBytes = parsedText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            minioUtil.upload(new ByteArrayInputStream(mdBytes), parsedKey, mdBytes.length, "text/markdown");
+        } catch (Exception e) {
+            log.warn("[ChatAttachment] 解析产物落盘失败: key={}, error={}", parsedKey, e.getMessage());
+        }
     }
 
     @Override

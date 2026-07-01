@@ -38,7 +38,10 @@
       :title="data?.document_name || '文档内容'"
       :footer="null"
       width="780px"
-      :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '0' }"
+      centered
+      :get-container="getToolResultModalContainer"
+      :wrap-style="toolResultModalWrapStyle"
+      :body-style="buildToolResultModalBodyStyle({ padding: '0' })"
     >
       <div class="okd-modal-body">
         <!-- Tab 切换 -->
@@ -109,6 +112,11 @@
 import { ref, computed, watch } from 'vue'
 import { FileTextOutlined, EyeOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { getDocumentDownloadUrl } from '../../api/knowledge'
+import {
+  getToolResultModalContainer,
+  toolResultModalWrapStyle,
+  buildToolResultModalBodyStyle,
+} from '../../composables/useToolResultModal'
 
 const PREVIEW_MAX_CHARS = 300
 

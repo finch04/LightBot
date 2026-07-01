@@ -27,8 +27,16 @@
       </div>
     </template>
 
-    <a-modal v-model:open="detailVisible" title="知识库列表" :footer="null" width="640px"
-      :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }">
+    <a-modal
+      v-model:open="detailVisible"
+      title="知识库列表"
+      :footer="null"
+      width="640px"
+      centered
+      :get-container="getToolResultModalContainer"
+      :wrap-style="toolResultModalWrapStyle"
+      :body-style="buildToolResultModalBodyStyle()"
+    >
       <pre class="lkb-detail-content">{{ formattedResult }}</pre>
     </a-modal>
   </div>
@@ -37,6 +45,11 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { DatabaseOutlined } from '@ant-design/icons-vue'
+import {
+  getToolResultModalContainer,
+  toolResultModalWrapStyle,
+  buildToolResultModalBodyStyle,
+} from '../../composables/useToolResultModal'
 
 const props = defineProps({ event: { type: Object, required: true } })
 

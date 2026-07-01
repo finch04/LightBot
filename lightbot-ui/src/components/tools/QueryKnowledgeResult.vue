@@ -73,7 +73,10 @@
       :title="itemDetailTitle"
       :footer="null"
       width="680px"
-      :bodyStyle="{ maxHeight: '70vh', overflow: 'auto' }"
+      centered
+      :get-container="getToolResultModalContainer"
+      :wrap-style="toolResultModalWrapStyle"
+      :body-style="buildToolResultModalBodyStyle()"
     >
       <div v-if="activeItem" class="qkr-detail-item">
         <div class="qkr-detail-item-head">
@@ -115,7 +118,10 @@
       title="知识库查询结果详情"
       :footer="null"
       width="800px"
-      :bodyStyle="{ maxHeight: '75vh', overflow: 'auto', padding: '20px' }"
+      centered
+      :get-container="getToolResultModalContainer"
+      :wrap-style="toolResultModalWrapStyle"
+      :body-style="buildToolResultModalBodyStyle({ padding: '20px' })"
     >
       <div class="qkr-full-detail">
         <!-- 统计栏 -->
@@ -202,6 +208,11 @@ import {
   FileTextOutlined,
   EyeOutlined
 } from '@ant-design/icons-vue'
+import {
+  getToolResultModalContainer,
+  toolResultModalWrapStyle,
+  buildToolResultModalBodyStyle,
+} from '../../composables/useToolResultModal'
 
 const props = defineProps({
   event: { type: Object, required: true }

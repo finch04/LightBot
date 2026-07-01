@@ -134,8 +134,8 @@ public class SessionFileServiceImpl implements SessionFileService {
             }
         }
 
-        // 2. 图片/PDF：返回预签名 URL
-        if ("image".equals(previewType) || "pdf".equals(previewType)) {
+        // 2. 图片/PDF/视频：返回预签名 URL
+        if ("image".equals(previewType) || "pdf".equals(previewType) || "video".equals(previewType)) {
             vo.setSupported(true);
             vo.setPreviewType(previewType);
             vo.setPreviewUrl(minioUtil.getPresignedUrl(objectKey, mime));
@@ -228,11 +228,10 @@ public class SessionFileServiceImpl implements SessionFileService {
     private SessionFileEntryVO toEntry(String root, String parentPath, MinioUtil.MinioDirEntry raw,
                                        Map<String, SessionAttachmentVO> index) {
         SessionFileEntryVO e = new SessionFileEntryVO();
-        e.setName(raw.name);
         e.setPath(parentPath.isEmpty() ? raw.name : parentPath + "/" + raw.name);
         e.setDirectory(raw.directory);
         if (raw.directory) {
-            // 目录节点：无 objectKey / size
+            e.setName(raw.name);
             return e;
         }
         e.setObjectKey(raw.objectName);
@@ -240,10 +239,14 @@ public class SessionFileServiceImpl implements SessionFileService {
         e.setModifiedAt(raw.lastModified);
         // 索引 enrich：source / fileName / mimeType / previewUrl
         SessionAttachmentVO att = index.get(raw.objectName);
+        String displayName = resolveDisplayName(raw.name, att);
+        e.setName(displayName);
         if (att != null) {
             e.setSource(att.getSource());
             if (att.getFileName() != null) {
                 e.setFileName(att.getFileName());
+            } else {
+                e.setFileName(displayName);
             }
             if (att.getMimeType() != null) {
                 e.setMimeType(att.getMimeType());
@@ -255,9 +258,26 @@ public class SessionFileServiceImpl implements SessionFileService {
             }
         } else {
             e.setSource("unknown");
+            e.setFileName(displayName);
             e.setMimeType(guessMimeFromName(raw.name));
         }
         return e;
+    }
+
+    /**
+     * 优先使用 attachments 索引中的原名；否则从 Yuxi 风格 objectKey（{id}_{原名}）还原显示名。
+     */
+    private static String resolveDisplayName(String objectBaseName, SessionAttachmentVO att) {
+        if (att != null && att.getFileName() != null && !att.getFileName().isBlank()) {
+            return att.getFileName();
+        }
+        if (objectBaseName != null && objectBaseName.length() > 33 && objectBaseName.charAt(32) == '_') {
+            String prefix = objectBaseName.substring(0, 32);
+            if (prefix.matches("[0-9a-fA-F]{32}")) {
+                return objectBaseName.substring(33);
+            }
+        }
+        return objectBaseName;
     }
 
     private Map<String, SessionAttachmentVO> buildAttachmentIndex(Long sessionId) {
@@ -340,6 +360,9 @@ public class SessionFileServiceImpl implements SessionFileService {
         if (mime.startsWith("image/")) {
             return "image";
         }
+        if (mime.startsWith("video/")) {
+            return "video";
+        }
         if ("application/pdf".equals(mime)) {
             return "pdf";
         }
@@ -369,6 +392,9 @@ public class SessionFileServiceImpl implements SessionFileService {
         if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
         if (lower.endsWith(".json")) return "application/json";
         if (lower.endsWith(".xml")) return "application/xml";
+        if (lower.endsWith(".mp4")) return "video/mp4";
+        if (lower.endsWith(".webm")) return "video/webm";
+        if (lower.endsWith(".mov")) return "video/quicktime";
         return "application/octet-stream";
     }
 }

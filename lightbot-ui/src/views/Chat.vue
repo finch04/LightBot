@@ -714,40 +714,51 @@
   <a-drawer
     v-model:open="fileDrawerOpen"
     title="会话文件"
-    :width="760"
+    :width="480"
     :mask-closable="true"
+    destroy-on-close
     @afterOpenChange="onFileDrawerOpened"
   >
     <template #extra>
-      <a-tooltip title="刷新">
-        <button
-          class="btn-drawer-refresh"
-          :class="{ refreshing: fileDrawerLoading }"
-          :disabled="fileDrawerLoading"
-          @click="refreshSessionFiles"
-        >
-          <ReloadOutlined :spin="fileDrawerLoading" />
-        </button>
+      <a-tooltip title="刷新文件列表" placement="bottom" :get-popup-container="tooltipPopupContainer">
+        <span class="file-drawer-btn-wrap">
+          <button
+            class="btn-drawer-refresh"
+            :class="{ refreshing: fileDrawerLoading }"
+            :disabled="fileDrawerLoading"
+            @click="refreshSessionFiles"
+          >
+            <ReloadOutlined :spin="fileDrawerLoading" />
+          </button>
+        </span>
+      </a-tooltip>
+    </template>
+    <template #closeIcon>
+      <a-tooltip title="关闭" placement="bottom" :get-popup-container="tooltipPopupContainer">
+        <span class="file-drawer-btn-wrap">
+          <CloseOutlined />
+        </span>
       </a-tooltip>
     </template>
     <div class="file-drawer-stats">
       共 {{ fileStats.total }} 个文件，用户上传 {{ fileStats.userUpload }} 个，AI 生成 {{ fileStats.aiGenerated }} 个
     </div>
-    <div class="file-drawer-split">
-      <div class="file-drawer-tree">
-        <SessionFileTree
-          ref="sessionFileTreeRef"
-          :session-id="sessionId"
-          :refresh-tick="fileTreeRefreshTick"
-          @select="onFileSelect"
-          @refreshed="onFileTreeRefreshed"
-        />
-      </div>
-      <div class="file-drawer-preview">
-        <SessionFilePreview :session-id="sessionId" :file="selectedFile" />
-      </div>
+    <div class="file-drawer-body">
+      <SessionFileTree
+        ref="sessionFileTreeRef"
+        :session-id="sessionId"
+        :refresh-tick="fileTreeRefreshTick"
+        @preview="openSessionFilePreviewModal"
+        @refreshed="onFileTreeRefreshed"
+      />
     </div>
   </a-drawer>
+
+  <SessionFilePreviewModal
+    v-model:open="sessionFilePreviewOpen"
+    :session-id="sessionId"
+    :file="sessionFilePreviewTarget"
+  />
 </template>
 
 <script setup>
@@ -771,7 +782,7 @@ import AgentCapabilityPanel from '../components/AgentCapabilityPanel.vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
 import ChatAttachmentTile from '../components/ChatAttachmentTile.vue'
 import SessionFileTree from '../components/SessionFileTree.vue'
-import SessionFilePreview from '../components/SessionFilePreview.vue'
+import SessionFilePreviewModal from '../components/SessionFilePreviewModal.vue'
 import VoiceMicVisualizer from '../components/VoiceMicVisualizer.vue'
 import ChatMentionInput from '../components/ChatMentionInput.vue'
 import MentionTextRenderer from '../components/MentionTextRenderer.vue'
@@ -850,7 +861,8 @@ const fileDrawerLoading = ref(false)
 const fileDrawerLoadedOnce = ref(false)
 const fileStats = reactive({ total: 0, userUpload: 0, aiGenerated: 0 })
 const fileTreeRefreshTick = ref(0)
-const selectedFile = ref(null)
+const sessionFilePreviewOpen = ref(false)
+const sessionFilePreviewTarget = ref(null)
 const sessionFileTreeRef = ref(null)
 
 // Agent 管理（chatCapabilities 在此 composable 内部创建）
@@ -1436,7 +1448,8 @@ async function loadHistory() {
   initialLoadDone.value = false
   lastReplyElapsed.value = null
   fileDrawerLoadedOnce.value = false
-  selectedFile.value = null
+  sessionFilePreviewTarget.value = null
+  sessionFilePreviewOpen.value = false
   fileStats.total = 0; fileStats.userUpload = 0; fileStats.aiGenerated = 0
   input.value = ''
   inputHistory.value = []
@@ -2428,7 +2441,10 @@ function cancelTitleEdit() {
   titleEditValue.value = ''
 }
 
-// ===== 文件抽屉 =====
+function tooltipPopupContainer() {
+  return document.body
+}
+
 function openFileDrawer() {
   // 首次打开提前置 loading，避免抽屉展开动画期间闪烁空状态
   if (!fileDrawerLoadedOnce.value) {
@@ -2466,8 +2482,9 @@ function onFileTreeRefreshed(stats) {
   }
 }
 
-function onFileSelect(file) {
-  selectedFile.value = file
+function openSessionFilePreviewModal(file) {
+  sessionFilePreviewTarget.value = file
+  sessionFilePreviewOpen.value = true
 }
 
 function openSessionFilePreview(att) {
@@ -4244,24 +4261,16 @@ span.agent-menu-icon {
   line-height: 1.5;
 }
 
-.file-drawer-split {
-  display: flex;
-  gap: 12px;
+.file-drawer-body {
   height: calc(100vh - 160px);
   min-height: 360px;
-}
-.file-drawer-tree {
-  flex: 0 0 300px;
-  border-right: 1px solid var(--color-hairline);
-  padding-right: 12px;
   overflow: auto;
 }
-.file-drawer-preview {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--color-hairline);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--color-canvas);
+.file-drawer-btn-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  vertical-align: middle;
 }
 </style>

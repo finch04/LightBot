@@ -11,13 +11,13 @@
     <div v-else class="sfp-content">
       <div class="sfp-header">
         <FileTextOutlined class="sfp-header-icon" />
-        <span class="sfp-header-name" :title="file.name">{{ file.name }}</span>
+        <span class="sfp-header-name" :title="displayName">{{ displayName }}</span>
         <a :href="downloadUrl" target="_blank" class="sfp-download" v-if="downloadUrl">
           <DownloadOutlined /> 下载
         </a>
       </div>
       <div class="sfp-body">
-        <img v-if="previewType === 'image' && contentUrl" :src="contentUrl" :alt="file.name" class="sfp-img" />
+        <img v-if="previewType === 'image' && contentUrl" :src="contentUrl" :alt="displayName" class="sfp-img" />
         <iframe v-else-if="previewType === 'pdf' && contentUrl" :src="contentUrl" class="sfp-pdf" title="pdf-preview"></iframe>
         <MarkdownPreview v-else-if="previewType === 'markdown' && content" :content="content" :image-preview="false" />
         <pre v-else-if="previewType === 'text' && content" class="sfp-text">{{ content }}</pre>
@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { LoadingOutlined, EyeOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { getSessionFileContent, getSessionFileDownloadUrl } from '../api/chatSession'
 import MarkdownPreview from './MarkdownPreview.vue'
@@ -51,6 +51,8 @@ const content = ref('')
 const contentUrl = ref('')
 const downloadUrl = ref('')
 const message = ref('')
+
+const displayName = computed(() => props.file?.fileName || props.file?.name || '')
 
 watch(() => props.file, (f) => {
   if (f) load(f)
