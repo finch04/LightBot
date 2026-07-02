@@ -293,7 +293,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
                 }
                 rootAttrs.put("edges", edgeList);
             }
-            // 保存所有节点定义（含 position，用于前端布局）
+            // 保存所有节点定义（含 position、完整 data，供可观测性详情只读配置展示）
             if (workflow != null && workflow.getNodes() != null) {
                 List<Map<String, Object>> nodeList = new ArrayList<>();
                 for (WorkflowNode n : workflow.getNodes()) {
@@ -301,6 +301,10 @@ public class WorkflowMiddleware implements ChatMiddleware {
                     nodeMap.put("id", n.getId());
                     nodeMap.put("type", n.getType() != null ? n.getType().getCode() : "");
                     if (n.getPosition() != null) nodeMap.put("position", n.getPosition());
+                    if (n.getParentNode() != null) nodeMap.put("parentNode", n.getParentNode());
+                    if (n.getData() != null && !n.getData().isEmpty()) {
+                        nodeMap.put("data", new LinkedHashMap<>(n.getData()));
+                    }
                     String label = n.getData() != null ? (String) n.getData().get("label") : null;
                     nodeMap.put("label", label != null ? label : n.getId());
                     nodeList.add(nodeMap);
@@ -470,7 +474,7 @@ public class WorkflowMiddleware implements ChatMiddleware {
     }
 
     /**
-     * 从节点定义中提取关键配置（排除 UI 相关字段）
+     * 从节点定义中提取配置（排除 UI / 调试字段，保留运行时完整业务配置）
      */
     private Map<String, Object> extractNodeConfig(WorkflowNode nodeDef, String nodeType) {
         if (nodeDef == null || nodeDef.getData() == null) {
@@ -478,50 +482,19 @@ public class WorkflowMiddleware implements ChatMiddleware {
         }
         Map<String, Object> data = nodeDef.getData();
         Map<String, Object> config = new LinkedHashMap<>();
-        // 按节点类型提取关键配置
-        List<String> keys = getConfigKeys(nodeType);
-        if (!keys.isEmpty()) {
-            for (String key : keys) {
-                Object val = data.get(key);
-                if (val != null) {
-                    config.put(key, val);
-                }
+        for (Map.Entry<String, Object> e : data.entrySet()) {
+            String key = e.getKey();
+            if (UI_KEYS.contains(key) || "debugStatus".equals(key)) {
+                continue;
             }
-        } else {
-            // 未知节点类型：排除 UI 字段后全部保留
-            for (Map.Entry<String, Object> e : data.entrySet()) {
-                if (!UI_KEYS.contains(e.getKey()) && e.getValue() != null) {
-                    config.put(e.getKey(), e.getValue());
-                }
+            if (e.getValue() != null) {
+                config.put(key, e.getValue());
             }
         }
         return config;
     }
 
     private static final Set<String> UI_KEYS = Set.of("label", "description", "icon", "color", "position");
-
-    private static List<String> getConfigKeys(String nodeType) {
-        return switch (nodeType != null ? nodeType : "") {
-            case "llm" -> List.of("model", "modelId", "modelName", "sysPrompt", "promptTemplate", "enableStreaming");
-            case "classifier" -> List.of("model", "modelId", "modelName", "inputVariable", "conditions", "mode_switch", "instruction");
-            case "retrieval" -> List.of("knowledgeId", "inputVariable", "topK", "threshold", "overrideConfig");
-            case "api" -> List.of("url", "method", "timeout", "headers");
-            case "script" -> List.of("scriptContent", "scriptLanguage", "codeContent", "code");
-            case "variable" -> List.of("variableName", "variableValue");
-            case "variable_handle" -> List.of("handleType", "type", "templateContent", "template_content", "groupStrategy", "groups");
-            case "condition" -> List.of("conditionGroups", "branches");
-            case "tool" -> List.of("toolId");
-            case "mcp" -> List.of("mcpServerId", "mcpServerName", "serverName", "toolName");
-            case "parameter_extractor" -> List.of("inputVariable", "extractParams", "instruction", "model", "modelId");
-            case "input" -> List.of("outputParams", "output_params");
-            case "confirm" -> List.of("message", "formFields", "form_fields");
-            case "output" -> List.of("output");
-            case "app_component" -> List.of("componentCode", "componentType");
-            case "batch" -> List.of("concurrentSize");
-            case "loop" -> List.of("loopCondition", "maxIterations");
-            default -> List.of();
-        };
-    }
 
     private static String extractString(Map<String, Object> map, String key) {
         Object val = map.get(key);

@@ -2,13 +2,14 @@
   <div class="json-input-wrapper" :class="{ 'json-error': error }">
     <a-textarea
       :value="modelValue"
-      @input="$emit('update:modelValue', $event.target.value)"
+      :readonly="readonly"
+      @input="onInput"
       :placeholder="placeholder"
       :rows="rows"
       spellcheck="false"
       class="json-textarea code-block-scroll"
     />
-    <div class="json-input-actions">
+    <div v-if="!readonly" class="json-input-actions">
       <WorkflowTooltip title="格式化 JSON" placement="top">
         <button type="button" class="json-btn" @click="formatJson" :disabled="!modelValue">
           <CodeOutlined />
@@ -33,9 +34,15 @@ const props = defineProps({
   modelValue: { type: String, default: '{}' },
   placeholder: { type: String, default: 'JSON 格式' },
   rows: { type: Number, default: 3 },
+  readonly: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+function onInput(e) {
+  if (props.readonly) return
+  emit('update:modelValue', e.target.value)
+}
 
 const error = ref('')
 

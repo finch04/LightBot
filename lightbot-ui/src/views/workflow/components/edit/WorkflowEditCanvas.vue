@@ -14,27 +14,21 @@
       <span class="trash-label">{{ canDeleteDraggedNode ? '拖到此处删除' : '开始/结束节点不可删除' }}</span>
     </div>
 
-    <VueFlow
-      :id="flowId"
-      v-if="nodes.length > 0"
+    <WorkflowCanvasCore
+      :flow-id="flowId"
       :nodes="nodes"
       v-model:edges="edgesModel"
       :edge-types="edgeTypes"
-      connection-mode="strict"
-      :connection-radius="28"
+      :default-edge-options="defaultEdgeOptions"
+      :is-valid-connection="isValidConnection"
       :nodes-draggable="!isVersionPreview"
       :edges-selectable="!isVersionPreview"
       :edges-updatable="!isVersionPreview"
       :nodes-connectable="!isVersionPreview"
       :elements-selectable="!isVersionPreview"
-      selection-key-code="Shift"
-      multi-selection-key-code="Control"
-      :default-edge-options="defaultEdgeOptions"
-      :is-valid-connection="isValidConnection"
-      :delete-key-code="null"
-      fit-view-on-init
-      :min-zoom="0.1"
-      :max-zoom="4"
+      :readonly="isVersionPreview"
+      :get-node-color="getNodeColor"
+      :show-connection-line="true"
       @edges-change="$emit('edges-change', $event)"
       @connect="$emit('connect', $event)"
       @edge-update="$emit('edge-update', $event)"
@@ -42,7 +36,6 @@
       @node-drag-start="$emit('node-drag-start', $event)"
       @node-drag="$emit('node-drag', $event)"
       @node-drag-stop="$emit('node-drag-stop', $event)"
-      @dragover.prevent
       @drop="$emit('drop', $event)"
       @node-click="$emit('node-click', $event)"
       @edge-click="$emit('edge-click', $event)"
@@ -51,63 +44,25 @@
       @edge-mouse-leave="$emit('edge-mouse-leave', $event)"
       @pane-click="$emit('pane-click', $event)"
     >
-      <Background :gap="[20, 20]" pattern-color="#e5e7eb" />
-      <Controls position="bottom-right" show-zoom show-fit-view />
-      <MiniMap
-        position="bottom-left"
-        class="workflow-minimap"
-        :offset-scale="4"
-        pannable
-        zoomable
-        :node-color="getNodeColor"
-        :node-stroke-width="3"
-      />
-
-      <template #node-start="props"><StartNode v-bind="props" /></template>
-      <template #node-end="props"><EndNode v-bind="props" /></template>
-      <template #node-llm="props"><LlmNode v-bind="props" /></template>
-      <template #node-condition="props"><ConditionNode v-bind="props" /></template>
-      <template #node-retrieval="props"><RetrievalNode v-bind="props" /></template>
-      <template #node-tool="props"><ToolNode v-bind="props" /></template>
-      <template #node-classifier="props"><ClassifierNode v-bind="props" /></template>
-      <template #node-api="props"><GenericWorkflowNode v-bind="props" node-type="api" summary-key="url" /></template>
-      <template #node-loop="props"><LoopNode v-bind="props" /></template>
-      <template #node-loop_start="props"><GroupBuiltinNode v-bind="props" node-type="loop_start" /></template>
-      <template #node-loop_end="props"><GroupBuiltinNode v-bind="props" node-type="loop_end" /></template>
-      <template #node-variable="props"><GenericWorkflowNode v-bind="props" node-type="variable" summary-key="variableName" /></template>
-      <template #node-batch="props"><BatchNode v-bind="props" /></template>
-      <template #node-batch_start="props"><GroupBuiltinNode v-bind="props" node-type="batch_start" /></template>
-      <template #node-batch_end="props"><GroupBuiltinNode v-bind="props" node-type="batch_end" /></template>
-      <template #node-script="props"><GenericWorkflowNode v-bind="props" node-type="script" /></template>
-      <template #node-mcp="props"><GenericWorkflowNode v-bind="props" node-type="mcp" summary-key="mcpServerName" /></template>
-      <template #node-input="props"><GenericWorkflowNode v-bind="props" node-type="input" /></template>
-      <template #node-confirm="props"><GenericWorkflowNode v-bind="props" node-type="confirm" summary-key="message" /></template>
-      <template #node-output="props"><GenericWorkflowNode v-bind="props" node-type="output" summary-key="output" /></template>
-      <template #node-variable_handle="props"><GenericWorkflowNode v-bind="props" node-type="variable_handle" /></template>
-      <template #node-parameter_extractor="props"><GenericWorkflowNode v-bind="props" node-type="parameter_extractor" /></template>
-      <template #node-app_component="props"><GenericWorkflowNode v-bind="props" node-type="app_component" summary-key="componentName" /></template>
-
-      <template #connection-line="lineProps">
-        <WorkflowConnectionLine v-bind="lineProps" />
+      <template #overlay>
+        <EdgeLabelRenderer>
+          <div
+            v-if="edgeInsertAnchorEdge && !isVersionPreview && edgeInsertLabelStyle"
+            :style="edgeInsertLabelStyle"
+            class="edge-insert-label-layer"
+            @mouseenter="$emit('edge-insert-pointer-enter')"
+            @mouseleave="$emit('edge-insert-pointer-leave')"
+          >
+            <WorkflowEdgeInsert
+              :visible="true"
+              @select="type => $emit('insert-node-on-edge', type)"
+              @menu-open="$emit('edge-insert-menu-open')"
+              @menu-close="$emit('edge-insert-menu-close')"
+            />
+          </div>
+        </EdgeLabelRenderer>
       </template>
-
-      <EdgeLabelRenderer>
-        <div
-          v-if="edgeInsertAnchorEdge && !isVersionPreview && edgeInsertLabelStyle"
-          :style="edgeInsertLabelStyle"
-          class="edge-insert-label-layer"
-          @mouseenter="$emit('edge-insert-pointer-enter')"
-          @mouseleave="$emit('edge-insert-pointer-leave')"
-        >
-          <WorkflowEdgeInsert
-            :visible="true"
-            @select="type => $emit('insert-node-on-edge', type)"
-            @menu-open="$emit('edge-insert-menu-open')"
-            @menu-close="$emit('edge-insert-menu-close')"
-          />
-        </div>
-      </EdgeLabelRenderer>
-    </VueFlow>
+    </WorkflowCanvasCore>
 
     <div v-if="nodes.length === 0" class="canvas-empty">
       <p>从左侧拖拽节点到画布开始构建工作流</p>
@@ -172,23 +127,9 @@
 
 <script setup>
 import { ref } from 'vue'
-import { VueFlow, EdgeLabelRenderer } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
+import { EdgeLabelRenderer } from '@vue-flow/core'
 import { DeleteOutlined, CloseOutlined, HolderOutlined } from '@ant-design/icons-vue'
-import StartNode from '../../nodes/StartNode.vue'
-import EndNode from '../../nodes/EndNode.vue'
-import LlmNode from '../../nodes/LlmNode.vue'
-import ConditionNode from '../../nodes/ConditionNode.vue'
-import RetrievalNode from '../../nodes/RetrievalNode.vue'
-import ToolNode from '../../nodes/ToolNode.vue'
-import ClassifierNode from '../../nodes/ClassifierNode.vue'
-import GenericWorkflowNode from '../../nodes/GenericWorkflowNode.vue'
-import LoopNode from '../../nodes/LoopNode.vue'
-import BatchNode from '../../nodes/BatchNode.vue'
-import GroupBuiltinNode from '../../nodes/GroupBuiltinNode.vue'
-import WorkflowConnectionLine from '../WorkflowConnectionLine.vue'
+import WorkflowCanvasCore from '../WorkflowCanvasCore.vue'
 import WorkflowEdgeInsert from '../WorkflowEdgeInsert.vue'
 
 const edgesModel = defineModel('edges', { type: Array, default: () => [] })
@@ -196,7 +137,7 @@ const edgesModel = defineModel('edges', { type: Array, default: () => [] })
 defineProps({
   flowId: { type: String, default: 'lightbot-workflow-edit' },
   nodes: { type: Array, default: () => [] },
-  edgeTypes: { type: Object, required: true },
+  edgeTypes: { type: Object, default: () => ({}) },
   defaultEdgeOptions: { type: Object, required: true },
   isValidConnection: { type: Function, required: true },
   isVersionPreview: Boolean,
@@ -397,41 +338,4 @@ defineExpose({
   word-break: break-word;
 }
 .version-item-desc { font-size: 12px; color: var(--color-mute); }
-</style>
-
-<!-- 工作流节点深色模式覆盖（非 scoped，对所有子节点生效） -->
-<style>
-/* 通用节点 */
-[data-theme="dark"] .generic-node { border-color: #3f3f46; }
-[data-theme="dark"] .generic-node .node-header { border-color: #2e2e33; }
-
-/* LLM 节点 */
-[data-theme="dark"] .llm-node .node-header { background: #2e1065; }
-
-/* 工具调用节点 */
-[data-theme="dark"] .tool-node .node-header { background: #052e16; }
-
-/* 意图分类节点 */
-[data-theme="dark"] .classifier-node .node-header { background: #422006; border-color: #3f3f46; }
-
-/* 容器节点 — 批处理 */
-[data-theme="dark"] .batch-shell { background: rgba(5, 46, 22, 0.25); border-color: #0d9488; }
-[data-theme="dark"] .batch-shell .group-header { background: rgba(5, 46, 22, 0.65); border-color: #115e59; }
-[data-theme="dark"] .batch-shell .group-title { color: #5eead4; }
-[data-theme="dark"] .batch-shell .group-tag { background: #115e59; color: #99f6e4; }
-[data-theme="dark"] .batch-shell .group-icon { background: rgba(20, 184, 166, 0.25); color: #5eead4; }
-[data-theme="dark"] .batch-shell .group-inner { border-color: rgba(20, 184, 166, 0.3); background: rgba(0, 0, 0, 0.15); }
-
-/* 容器节点 — 循环 */
-[data-theme="dark"] .loop-shell { background: rgba(124, 45, 18, 0.2); border-color: #ea580c; }
-[data-theme="dark"] .loop-shell .group-header { background: rgba(124, 45, 18, 0.5); border-color: #9a3412; }
-[data-theme="dark"] .loop-shell .group-title { color: #fdba74; }
-[data-theme="dark"] .loop-shell .group-tag { background: #7c2d12; color: #fed7aa; }
-[data-theme="dark"] .loop-shell .group-icon { background: rgba(249, 115, 22, 0.25); color: #fb923c; }
-[data-theme="dark"] .loop-shell .group-inner { border-color: rgba(249, 115, 22, 0.3); background: rgba(0, 0, 0, 0.15); }
-
-/* 内置节点（迭代开始/结束、并行开始/结束） */
-[data-theme="dark"] .group-builtin-node { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
-[data-theme="dark"] .group-builtin-node.loop-end { background: linear-gradient(135deg, #4c1d95, #5b21b6); color: #e9d5ff; border-color: #6d28d9; }
-[data-theme="dark"] .group-builtin-node.batch-end { background: linear-gradient(135deg, #134e4a, #115e59); color: #99f6e4; border-color: #0f766e; }
 </style>

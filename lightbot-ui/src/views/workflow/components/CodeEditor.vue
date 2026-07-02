@@ -3,7 +3,7 @@
     <div class="code-editor-toolbar">
       <a-select
         :value="language"
-        :disabled="disabled"
+        :disabled="disabled || readOnly"
         size="small"
         style="width: 130px"
         @change="onLanguageChange"
@@ -12,7 +12,7 @@
           {{ lang.label }}
         </a-select-option>
       </a-select>
-      <a-button type="text" size="small" :disabled="disabled" @click="toggleFullscreen">
+      <a-button type="text" size="small" :disabled="disabled || readOnly" @click="toggleFullscreen">
         <FullscreenOutlined v-if="!isFullscreen" />
         <FullscreenExitOutlined v-else />
         {{ isFullscreen ? '退出全屏' : '全屏编辑' }}
@@ -29,7 +29,8 @@
           ref="textareaRef"
           class="code-editor-input"
           :value="modelValue"
-          :disabled="disabled"
+          :disabled="disabled && !readOnly"
+          :readonly="readOnly"
           :placeholder="placeholder"
           spellcheck="false"
           wrap="off"
@@ -70,7 +71,8 @@
               ref="modalTextareaRef"
               class="code-editor-input"
               :value="modelValue"
-              :disabled="disabled"
+              :disabled="disabled && !readOnly"
+              :readonly="readOnly"
               :placeholder="placeholder"
               spellcheck="false"
               wrap="off"
@@ -103,6 +105,8 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   language: { type: String, default: 'javascript' },
   disabled: { type: Boolean, default: false },
+  /** 只读查看：可滚动、不可编辑 */
+  readOnly: { type: Boolean, default: false },
   rows: { type: Number, default: 12 },
   placeholder: { type: String, default: 'function main(params) { ... }' },
   fullscreenTitle: { type: String, default: '脚本编辑' },
@@ -156,6 +160,7 @@ function syncActiveEditor() {
 }
 
 function onInput(e) {
+  if (props.readOnly) return
   const v = e.target.value
   emit('update:modelValue', v)
   emit('change', v)

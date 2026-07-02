@@ -370,8 +370,13 @@ async function loadOptions() {
 
 function emitSelection(parsed) {
   // 先 change 后 v-model，便于父组件在 @change 中读取切换前的 providerId
-  emit('change', parsed)
   const normalized = formatModelSelectValue(parsed.providerId, parsed.modelId)
+  const opt = options.value.find(o => o.value === normalized) || null
+  emit('change', {
+    ...parsed,
+    providerName: opt?.providerName || null,
+    modelName: opt?.modelId || parsed.modelId || null,
+  })
   emit('update:modelValue', normalized)
   emit('update:providerId', parsed.providerId)
   emit('update:modelId', parsed.modelId)

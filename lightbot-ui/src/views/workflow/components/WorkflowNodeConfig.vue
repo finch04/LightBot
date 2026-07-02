@@ -1,7 +1,16 @@
 <template>
-  <div :class="{ 'config-readonly': readonly }">
-  <div v-if="readonly" class="readonly-overlay" aria-hidden="true" />
-  <a-form layout="vertical" :disabled="readonly" class="workflow-node-config-form">
+  <div :class="readonlyRootClass">
+  <div v-if="readonly && !readonlyScrollable" class="readonly-overlay" aria-hidden="true" />
+  <div v-if="readonly && readonlyScrollable" class="readonly-overlay readonly-overlay--scrollable" aria-hidden="true" />
+  <a-form
+    layout="vertical"
+    :disabled="readonly && !readonlyScrollable"
+    class="workflow-node-config-form"
+    @keydown.capture="onReadonlyViewEvent"
+    @beforeinput.capture="onReadonlyViewEvent"
+    @paste.capture="onReadonlyViewEvent"
+    @cut.capture="onReadonlyViewEvent"
+  >
     <a-form-item label="节点 ID">
       <span class="node-id-display mono">{{ node.id }}</span>
     </a-form-item>
@@ -38,11 +47,12 @@
         <template #label>
           <ConfigFieldLabel label="模型" :tip="hint('llm', 'modelId')" />
         </template>
+        <ConfigReadonlyValue v-if="readonly" :text="modelDisplayText" />
         <ModelSelect
+          v-else
           v-model:provider-id="node.data.providerId"
           v-model:model-id="node.data.modelId"
-          :disabled="readonly"
-          @change="emitSync"
+          @change="onModelChange"
         />
       </a-form-item>
       <a-form-item>
@@ -89,11 +99,12 @@
         <VariablePickerInput v-model="node.data.inputVariable" placeholder="{{query}}" :disabled="readonly" @change="emitSync" />
       </a-form-item>
       <a-form-item label="模型" required>
+        <ConfigReadonlyValue v-if="readonly" :text="modelDisplayText" />
         <ModelSelect
+          v-else
           v-model:provider-id="node.data.providerId"
           v-model:model-id="node.data.modelId"
-          :disabled="readonly"
-          @change="emitSync"
+          @change="onModelChange"
         />
       </a-form-item>
       <a-form-item required>
@@ -160,7 +171,9 @@
         <template #label>
           <ConfigFieldLabel label="知识库" :tip="hint('retrieval', 'knowledgeId')" />
         </template>
+        <ConfigReadonlyValue v-if="readonly" :text="knowledgeDisplayText" />
         <a-select
+          v-else
           v-model:value="node.data.knowledgeId"
           show-search
           placeholder="选择知识库"
@@ -229,7 +242,9 @@
     <!-- 工具 -->
     <template v-if="node.type === 'tool'">
       <a-form-item label="工具" required>
+        <ConfigReadonlyValue v-if="readonly" :text="toolDisplayText" />
         <a-select
+          v-else
           v-model:value="node.data.toolId"
           show-search
           placeholder="选择工具"
@@ -356,11 +371,12 @@
         <a-input v-model:value="node.data.inputVariable" placeholder="{{input}}" @change="emitSync" />
       </a-form-item>
       <a-form-item label="模型" required>
+        <ConfigReadonlyValue v-if="readonly" :text="modelDisplayText" />
         <ModelSelect
+          v-else
           v-model:provider-id="node.data.providerId"
           v-model:model-id="node.data.modelId"
-          :disabled="readonly"
-          @change="emitSync"
+          @change="onModelChange"
         />
       </a-form-item>
       <a-form-item label="提取指令">
@@ -415,10 +431,10 @@
         </a-select>
       </a-form-item>
       <a-form-item label="Headers (JSON)">
-        <JsonInput v-model="node.data.headers" :rows="3" placeholder='{"Content-Type":"application/json"}' @update:model-value="emitSync" />
+        <JsonInput v-model="node.data.headers" :rows="3" :readonly="scrollableReadonly" placeholder='{"Content-Type":"application/json"}' @update:model-value="emitSync" />
       </a-form-item>
       <a-form-item label="Body (JSON)">
-        <JsonInput v-model="node.data.body" :rows="4" placeholder='{"key":"value"}' @update:model-value="emitSync" />
+        <JsonInput v-model="node.data.body" :rows="4" :readonly="scrollableReadonly" placeholder='{"key":"value"}' @update:model-value="emitSync" />
       </a-form-item>
       <a-form-item label="超时(秒)"><a-input-number v-model:value="node.data.timeout" :min="1" :max="120" @change="emitSync" /></a-form-item>
     </template>
@@ -535,7 +551,8 @@
         <CodeEditor
           v-model="node.data.scriptContent"
           v-model:language="node.data.scriptLanguage"
-          :disabled="readonly"
+          :disabled="readonly && !readonlyScrollable"
+          :read-only="scrollableReadonly"
           :rows="14"
           fullscreen-title="脚本编辑"
           @update:language="onScriptLanguageChange"
@@ -612,6 +629,7 @@
         <JsonInput
           v-model="node.data.defaultOutput"
           :rows="4"
+          :readonly="scrollableReadonly"
           placeholder='{"result":""}'
           @update:model-value="emitSync"
         />
@@ -620,14 +638,15 @@
     <!-- MCP -->
     <template v-if="node.type === 'mcp'">
       <a-form-item label="MCP 服务" required>
+        <ConfigReadonlyValue v-if="readonly" :text="mcpServerDisplayText" />
         <a-select
+          v-else
           v-model:value="node.data.mcpServerId"
           show-search
           placeholder="选择 MCP 服务"
           option-label-prop="label"
           dropdown-class-name="workflow-resource-dropdown"
           :filter-option="filterMcpOption"
-          :disabled="readonly"
           :loading="mcpServersLoading"
           @change="onMcpServerChange"
         >
@@ -648,14 +667,16 @@
       </a-form-item>
       <a-form-item label="工具" required>
         <div class="mcp-tool-picker">
+          <ConfigReadonlyValue v-if="readonly" :text="mcpToolDisplayText" />
           <a-select
+            v-else
             v-model:value="node.data.toolName"
             show-search
             placeholder="选择 MCP 工具"
             option-label-prop="label"
             dropdown-class-name="workflow-resource-dropdown"
             :filter-option="filterMcpToolOption"
-            :disabled="readonly || !node.data.mcpServerId"
+            :disabled="!node.data.mcpServerId"
             :loading="mcpToolsLoading"
             @change="emitSync"
           >
@@ -687,7 +708,7 @@
         </div>
       </a-form-item>
       <a-form-item label="输入参数 JSON">
-        <JsonInput v-model="mcpInputParamsJson" :rows="4" placeholder='{"chat_id":"oc_xxx","text":"{{query}}"}' />
+        <JsonInput v-model="mcpInputParamsJson" :rows="4" :readonly="scrollableReadonly" placeholder='{"chat_id":"oc_xxx","text":"{{query}}"}' />
       </a-form-item>
       <a-form-item label="超时(秒)">
         <a-input-number v-model:value="node.data.timeout" :min="1" :max="120" :placeholder="'默认60'" @change="emitSync" />
@@ -702,6 +723,7 @@ import { computed, watch, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { DeleteOutlined, PlusOutlined, CopyOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { getMcpServers, getMcpServerTools, refreshMcpServerTools } from '../../../api/mcp'
+import { getProvidersWithModels } from '../../../api/modelProvider'
 import ShortMemoryForm from './ShortMemoryForm.vue'
 import ConfigFieldLabel from './ConfigFieldLabel.vue'
 import VariablePickerInput from './VariablePickerInput.vue'
@@ -710,6 +732,14 @@ import ConditionGroupForm from './ConditionGroupForm.vue'
 import JsonInput from '../../../components/JsonInput.vue'
 import ModelSelect from '../../../components/ModelSelect.vue'
 import EntitySelectOption from '../../../components/EntitySelectOption.vue'
+import ConfigReadonlyValue from './ConfigReadonlyValue.vue'
+import {
+  formatModelDisplay,
+  resolveKnowledgeName,
+  resolveToolName,
+  resolveMcpServerName,
+  resolveMcpToolName,
+} from '../workflowNodeDisplayLabels.js'
 import { getToolTypeLabel } from '../../../utils/bindingTheme'
 import { createConditionId } from '../nodeMeta'
 import { BUILTIN_VARIABLES, getFieldHint, getScriptExampleConfig } from '../nodeConfigMeta'
@@ -720,6 +750,8 @@ const props = defineProps({
   node: { type: Object, required: true },
   edges: { type: Array, default: () => [] },
   readonly: { type: Boolean, default: false },
+  /** 只读但允许滚动查看长文本（可观测性 trace 等） */
+  readonlyScrollable: { type: Boolean, default: false },
   knowledgeList: { type: Array, default: () => [] },
   tools: { type: Array, default: () => [] },
   targetNodes: { type: Array, default: () => [] },
@@ -739,9 +771,42 @@ const mcpServersLoading = ref(false)
 const mcpTools = ref([])
 const mcpToolsLoading = ref(false)
 const mcpToolsRefreshing = ref(false)
+const modelOptions = ref([])
 const enabledMcpTools = computed(() =>
   (mcpTools.value || []).filter(t => t.enabled !== false)
 )
+
+const modelDisplayText = computed(() => formatModelDisplay(props.node?.data, modelOptions.value))
+const knowledgeDisplayText = computed(() => resolveKnowledgeName(props.node?.data, props.knowledgeList))
+const toolDisplayText = computed(() => resolveToolName(props.node?.data, props.tools))
+const mcpServerDisplayText = computed(() => resolveMcpServerName(props.node?.data, mcpServers.value))
+const mcpToolDisplayText = computed(() => resolveMcpToolName(props.node?.data))
+
+const scrollableReadonly = computed(() => props.readonly && props.readonlyScrollable)
+const readonlyRootClass = computed(() => ({
+  'config-readonly': props.readonly && !props.readonlyScrollable,
+  'config-readonly-scrollable': scrollableReadonly.value,
+}))
+
+const READONLY_VIEW_NAV_KEYS = new Set([
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'PageUp', 'PageDown', 'Home', 'End', 'Tab', 'Escape',
+])
+
+function onReadonlyViewEvent(e) {
+  if (!scrollableReadonly.value) return
+  const tag = e.target?.tagName?.toLowerCase()
+  if (tag !== 'textarea' && tag !== 'input') return
+  if (e.type === 'keydown') {
+    if (READONLY_VIEW_NAV_KEYS.has(e.key)) return
+    if ((e.ctrlKey || e.metaKey) && ['a', 'c'].includes(e.key.toLowerCase())) return
+    e.preventDefault()
+    return
+  }
+  if (['beforeinput', 'paste', 'cut', 'input'].includes(e.type)) {
+    e.preventDefault()
+  }
+}
 
 const mcpInputParamsJson = computed({
   get() {
@@ -959,6 +1024,13 @@ function onToolChange(v) {
   emit('tool-change', v)
 }
 
+function onModelChange(payload) {
+  if (props.readonly) return
+  if (payload?.providerName) props.node.data.providerName = payload.providerName
+  if (payload?.modelId) props.node.data.modelName = payload.modelId
+  emitSync()
+}
+
 function filterMcpOption(input, option) {
   const label = (option?.label ?? '').toString().toLowerCase()
   const kw = (input || '').toLowerCase()
@@ -975,6 +1047,27 @@ function mcpInstallTypeLabel(server) {
   const t = server?.installType?.code || server?.installType
   const map = { npx: 'NPX', uvx: 'UVX', sse: 'SSE' }
   return map[t] || t || ''
+}
+
+async function loadModelOptionsForDisplay() {
+  if (!props.readonly) return
+  try {
+    const res = await getProvidersWithModels('llm')
+    const providers = res.data || []
+    const opts = []
+    for (const p of providers) {
+      for (const m of (p.models || [])) {
+        opts.push({
+          providerId: String(p.id),
+          modelId: String(m.modelId),
+          providerName: p.name,
+        })
+      }
+    }
+    modelOptions.value = opts
+  } catch {
+    modelOptions.value = []
+  }
 }
 
 async function loadMcpServers() {
@@ -1042,6 +1135,7 @@ function resolveMcpServerIdFromName() {
 }
 
 onMounted(async () => {
+  if (props.readonly) await loadModelOptionsForDisplay()
   if (props.node?.type === 'mcp') {
     await loadMcpServers()
     resolveMcpServerIdFromName()
@@ -1049,6 +1143,10 @@ onMounted(async () => {
       await loadMcpTools(props.node.data.mcpServerId, true)
     }
   }
+})
+
+watch(() => props.readonly, (v) => {
+  if (v) loadModelOptionsForDisplay()
 })
 
 watch(
@@ -1301,12 +1399,29 @@ function removeGroupVar(idx) {
 .config-readonly {
   position: relative;
 }
+.config-readonly-scrollable {
+  position: relative;
+}
 .readonly-overlay {
   position: absolute;
   inset: 0;
   z-index: 20;
   cursor: not-allowed;
   background: transparent;
+}
+.readonly-overlay--scrollable {
+  cursor: default;
+}
+.config-readonly-scrollable :deep(textarea.ant-input),
+.config-readonly-scrollable :deep(.json-input-wrapper),
+.config-readonly-scrollable :deep(.code-editor) {
+  position: relative;
+  z-index: 21;
+  pointer-events: auto;
+}
+.config-readonly-scrollable :deep(.ant-btn-dashed),
+.config-readonly-scrollable :deep(.ant-btn-text.ant-btn-dangerous) {
+  display: none;
 }
 .config-readonly :deep(.ant-btn-dashed),
 .config-readonly :deep(.ant-btn-text.ant-btn-dangerous) {

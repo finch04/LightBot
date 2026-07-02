@@ -56,152 +56,47 @@
     </div>
 
     <a-spin :spinning="loading">
-      <!-- 图模式 -->
-      <div v-if="viewMode === 'graph' && graphNodes.length" class="graph-container">
-        <!-- 缩放控制 -->
-        <div class="zoom-controls">
-          <a-button size="small" @click="zoomIn"><PlusOutlined /></a-button>
-          <span class="zoom-label">{{ Math.round(scale * 100) }}%</span>
-          <a-button size="small" @click="zoomOut"><MinusOutlined /></a-button>
-          <a-button size="small" @click="resetView">重置</a-button>
-          <a-divider type="vertical" />
-          <a-button size="small" @click="reLayout"><ApartmentOutlined /> 重新布局</a-button>
+      <!-- 图模式：与编排页统一的 Vue Flow 只读画板 -->
+      <div v-if="viewMode === 'graph'" class="graph-container">
+        <div v-if="viewerNodes.length" class="graph-viewer-wrap">
+          <WorkflowViewerCanvas
+            flow-id="workflow-trace-viewer"
+            :nodes="viewerNodes"
+            :edges="viewerEdges"
+            :node-states="viewerNodeStates"
+            :highlighted-edge-ids="highlightedEdgeIds"
+            :selected-node-id="selectedCanvasNodeId"
+            @node-click="onViewerNodeClick"
+            @pane-click="selectedNodeId = null"
+          />
         </div>
+        <div v-else class="graph-empty-hint">暂无工作流图快照，请切换到文本模式查看节点详情</div>
 
-        <svg
-          ref="svgRef"
-          class="dag-svg"
-          @mousedown="onSvgMouseDown"
-          @mousemove="onSvgMouseMove"
-          @mouseup="onSvgMouseUp"
-          @mouseleave="onSvgMouseUp"
-          @wheel.prevent="onWheel"
-          @click="onSvgClick"
-        >
-          <g :transform="`translate(${panX}, ${panY}) scale(${scale})`">
-            <!-- 边 -->
-            <g v-for="edge in graphEdges" :key="edge.id" class="edge-group">
-              <path :d="edge.path" fill="none" :stroke="edge.highlighted ? '#1890ff' : '#d9d9d9'"
-                    :stroke-width="edge.highlighted ? 2.5 : 1.5" :stroke-dasharray="edge.highlighted ? 'none' : '4 2'" />
-              <polygon v-if="edge.highlighted" :points="arrowPoints(edge)" fill="#1890ff" />
-              <text v-if="edge.label" :x="edge.labelX" :y="edge.labelY"
-                    font-size="10" fill="#8c8c8c" text-anchor="middle">{{ edge.label }}</text>
-            </g>
-            <!-- 容器节点（batch/loop） -->
-            <template v-for="node in graphNodes" :key="node.id">
-              <g v-if="node.isContainer"
-                 class="dag-node dag-container"
-                 :class="{ 'node-selected': selectedNodeId === node.id, 'node-dragging': dragState.id === node.id }"
-                 :transform="`translate(${node.x + (dragState.id === node.id ? dragState.dx : 0)}, ${node.y + (dragState.id === node.id ? dragState.dy : 0)})`"
-                 @mousedown.stop="onNodeMouseDown($event, node)"
-                 @click.stop="selectNode(node.id)">
-                <rect :x="-node.w / 2" :y="-node.h / 2"
-                      :width="node.w" :height="node.h" rx="12"
-                      fill="#fafbfc" :stroke="node.stroke" stroke-width="2" stroke-dasharray="6 3" />
-                <text :x="-node.w / 2 + 16" :y="-node.h / 2 + 20"
-                      font-size="12" font-weight="600" :fill="node.textColor">
-                  {{ node.icon }} {{ node.label }}
-                </text>
-                <!-- 容器内子节点 -->
-                <g v-for="child in node.children" :key="child.id"
-                   class="dag-node"
-                   :class="{ 'node-selected': selectedNodeId === child.id }"
-                   :transform="`translate(${child.x}, ${child.y})`"
-                   @click.stop="selectNode(child.id)">
-                  <rect :x="-child.w / 2" :y="-child.h / 2"
-                        :width="child.w" :height="child.h" rx="8"
-                        :fill="child.fill" :stroke="child.stroke" stroke-width="1.5" />
-                  <text x="0" y="-4" text-anchor="middle"
-                        font-size="11" font-weight="500" :fill="child.textColor">
-                    {{ child.icon }} {{ child.label }}
-                  </text>
-                  <text x="0" y="12" text-anchor="middle"
-                        font-size="10" fill="#8c8c8c">
-                    {{ child.statusText }}
-                  </text>
-                  <text v-if="child.durationText" x="0" y="24" text-anchor="middle"
-                        font-size="9" fill="#bfbfbf">
-                    {{ child.durationText }}
-                  </text>
-                </g>
-              </g>
-              <!-- 普通节点 -->
-              <g v-else
-                 class="dag-node"
-                 :class="{
-                   'node-selected': selectedNodeId === node.id,
-                   'node-dragging': dragState.id === node.id,
-                   'node-transition': dragState.id !== node.id
-                 }"
-                 :transform="`translate(${node.x + (dragState.id === node.id ? dragState.dx : 0)}, ${node.y + (dragState.id === node.id ? dragState.dy : 0)})`"
-                 @mousedown.stop="onNodeMouseDown($event, node)"
-                 @click.stop="selectNode(node.id)">
-                <rect :x="-node.w / 2" :y="-node.h / 2"
-                      :width="node.w" :height="node.h" rx="8"
-                      :fill="node.fill" :stroke="node.stroke" stroke-width="2" />
-                <text x="0" y="-6" text-anchor="middle"
-                      font-size="12" font-weight="600" :fill="node.textColor">
-                  {{ node.icon }} {{ node.label }}
-                </text>
-                <text x="0" y="10" text-anchor="middle"
-                      font-size="10" fill="#8c8c8c">
-                  {{ node.statusText }}
-                </text>
-                <text v-if="node.durationText" x="0" y="24" text-anchor="middle"
-                      font-size="10" fill="#bfbfbf">
-                  {{ node.durationText }}
-                </text>
-              </g>
-            </template>
-          </g>
-        </svg>
-
-        <!-- 节点详情面板 -->
-        <div v-if="selectedNodeSpan" class="node-detail-panel">
-          <div class="panel-header">
-            <span class="panel-title">{{ getNodeIcon(selectedNodeSpan.attributes?.nodeType) }} {{ selectedNodeSpan.attributes?.nodeLabel || selectedNodeSpan.spanId }}</span>
-            <a-button type="text" size="small" @click="selectedNodeId = null"><CloseOutlined /></a-button>
-          </div>
-          <div class="panel-body">
-            <div class="panel-grid">
-              <div class="pg-item"><span class="pg-key">节点类型</span><span class="pg-val">{{ getNodeTitle(selectedNodeSpan.attributes?.nodeType) }}</span></div>
-              <div class="pg-item"><span class="pg-key">状态</span><span class="pg-val"><a-tag :color="selectedNodeSpan.status === 'completed' ? 'success' : 'error'" size="small">{{ selectedNodeSpan.status === 'completed' ? '成功' : '失败' }}</a-tag></span></div>
-              <div class="pg-item"><span class="pg-key">耗时</span><span class="pg-val">{{ formatDuration(selectedNodeSpan.durationMs) }}</span></div>
-              <div v-if="selectedNodeSpan.attributes?.message" class="pg-item" style="grid-column: 1 / -1;">
-                <span class="pg-key">消息</span><span class="pg-val">{{ selectedNodeSpan.attributes.message }}</span>
-              </div>
-            </div>
-            <div v-if="selectedNodeSpan.attributes?.config && Object.keys(selectedNodeSpan.attributes.config).length" class="panel-section">
-              <div class="ps-title">节点配置</div>
-              <pre class="ps-json">{{ JSON.stringify(selectedNodeSpan.attributes.config, null, 2) }}</pre>
-            </div>
-            <div v-if="selectedNodeSpan.attributes?.input && Object.keys(selectedNodeSpan.attributes.input).length" class="panel-section">
-              <div class="ps-title">输入参数</div>
-              <pre class="ps-json">{{ JSON.stringify(selectedNodeSpan.attributes.input, null, 2) }}</pre>
-            </div>
-            <div v-if="selectedNodeSpan.attributes?.outputs && Object.keys(selectedNodeSpan.attributes.outputs).length" class="panel-section">
-              <div class="ps-title">输出结果</div>
-              <pre class="ps-json">{{ JSON.stringify(filterOutputs(selectedNodeSpan.attributes.outputs), null, 2) }}</pre>
-            </div>
-            <div v-if="llmMessages(selectedNodeSpan)" class="panel-section">
-              <div class="ps-title">LLM 上下文（完整消息列表）</div>
-              <div class="llm-messages-list">
-                <div v-for="(msg, mi) in llmMessages(selectedNodeSpan)" :key="mi" class="llm-msg-item" :class="'llm-msg-' + msg.role">
-                  <span class="llm-msg-role">{{ msg.role }}</span>
-                  <pre class="llm-msg-content">{{ msg.content }}</pre>
-                </div>
-              </div>
-            </div>
-            <div v-if="selectedNodeSpan.attributes?.detail" class="panel-section">
-              <div class="ps-title">执行详情</div>
-              <div class="ps-text">{{ selectedNodeSpan.attributes.detail }}</div>
-            </div>
-            <div v-if="llmChildSpan(selectedNodeSpan)" class="panel-section">
-              <div class="ps-title">LLM 调用</div>
-              <pre class="ps-json">{{ formatLlmAttrs(llmChildSpan(selectedNodeSpan).attributes) }}</pre>
-            </div>
-          </div>
-        </div>
+        <!-- 节点详情：与编排页一致的只读配置面板 + 本次执行结果 -->
+        <WorkflowNodeDetailPanel
+          v-if="selectedWorkflowNode"
+          class="trace-node-detail-panel"
+          compact
+          :node="selectedWorkflowNode"
+          :edges="viewerEdges"
+          force-readonly
+          :show-header-actions="false"
+          :show-footer-delete="false"
+          :execution-span="selectedNodeSpan"
+          :llm-child-span="selectedNodeSpan ? llmChildSpan(selectedNodeSpan) : null"
+          :config-incomplete-hint="configSnapshotIncomplete"
+          :node-errors="[]"
+          :knowledge-list="knowledgeList"
+          :tools="tools"
+          :target-nodes="traceTargetNodes"
+          :filter-knowledge-option="filterKnowledgeOption"
+          :filter-tool-option="filterToolOption"
+          :get-tool-type-label="getToolTypeLabel"
+          :get-node-color="getNodeColor"
+          :get-node-title="getNodeTitle"
+          :is-group-builtin-node="isGroupBuiltinNodeFn"
+          @close="selectedNodeId = null"
+        />
       </div>
 
       <!-- 文本模式 -->
@@ -258,20 +153,24 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, shallowRef } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeftOutlined,
   ApartmentOutlined,
   UnorderedListOutlined,
-  CloseOutlined,
-  PlusOutlined,
-  MinusOutlined,
 } from '@ant-design/icons-vue'
 import { getTraceDetail } from '../api/observability'
+import { getKnowledgeList } from '../api/knowledge'
+import { getTools } from '../api/tool'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
-import { getNodeIconText as getNodeIcon, getNodeColors } from '../utils/nodeStyleUtils'
-import { getNodeTitle } from '../views/workflow/nodeMeta'
+import WorkflowViewerCanvas from './workflow/components/WorkflowViewerCanvas.vue'
+import WorkflowNodeDetailPanel from './workflow/components/edit/WorkflowNodeDetailPanel.vue'
+import { workflowGraphToVueFlow, mergeTraceNodeData } from './workflow/workflowGraphToVueFlow.js'
+import { spansToNodeStates, buildExecutedEdgeIds } from './workflow/workflowViewerAdapter.js'
+import { getNodeIconText as getNodeIcon } from '../utils/nodeStyleUtils'
+import { getNodeTitle, getNodeColor } from '../views/workflow/nodeMeta'
+import { isGroupBuiltinType } from './workflow/workflowGroup.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -281,27 +180,24 @@ const trace = ref(null)
 const viewMode = ref('graph')
 const selectedNodeId = ref(null)
 const textExpanded = ref(new Set())
-const svgRef = ref(null)
-
-// Pan & Zoom
-const panX = ref(40)
-const panY = ref(20)
-const scale = ref(1)
-let isPanning = false
-let panMoved = false
-let panStart = { x: 0, y: 0 }
-
-// Node drag — 用 offset 代替直接改 x/y，避免触发大量响应式更新
-const dragState = reactive({ id: null, dx: 0, dy: 0, startX: 0, startY: 0, mouseStartX: 0, mouseStartY: 0 })
-let rafId = null
-let pendingMouse = null
-
-// Graph data — shallowRef 避免深层响应式追踪
-const graphNodes = shallowRef([])
-const graphEdges = shallowRef([])
-const rawWfEdges = shallowRef([])
+const knowledgeList = ref([])
+const tools = ref([])
 
 // --- Data loading ---
+
+async function loadResources() {
+  try {
+    const [knowledgeRes, toolRes] = await Promise.all([
+      getKnowledgeList({ pageNum: 1, pageSize: 200 }),
+      getTools({ pageNum: 1, pageSize: 200 }),
+    ])
+    knowledgeList.value = knowledgeRes.data?.records || knowledgeRes.data || []
+    tools.value = toolRes.data?.records || toolRes.data || []
+  } catch {
+    knowledgeList.value = []
+    tools.value = []
+  }
+}
 
 async function loadTrace() {
   loading.value = true
@@ -313,7 +209,7 @@ async function loadTrace() {
   }
 }
 
-// --- Span parsing ---
+// --- Span parsing（与改造前一致，trace 业务逻辑不变）---
 
 function parseSpans() {
   if (!trace.value?.spans) return []
@@ -352,337 +248,102 @@ function llmChildSpan(nodeSpan) {
   return llmSpans.value[nodeSpan.spanId] || null
 }
 
-// --- Graph init ---
+// --- 只读画板数据（由 trace span 适配，不改变 span 解析逻辑）---
 
-const CONTAINER_TYPES = new Set(['batch', 'loop'])
-const CONTAINER_W = 420, CONTAINER_H = 260
-const NODE_W = 160, NODE_H = 56
-const CHILD_PAD_X = 30, CHILD_PAD_TOP = 50, CHILD_GAP_Y = 80
-
-function initGraph(forceLayout = false) {
+const viewerGraph = computed(() => {
   const root = rootSpan.value
-  const spans = nodeSpans.value
-  if (!root || !spans.length) { graphNodes.value = []; graphEdges.value = []; return }
-
-  const rootAttrs = root.attributes || {}
-  const wfEdges = rootAttrs.edges || []
-  const wfNodes = rootAttrs.nodes || []
-  rawWfEdges.value = wfEdges
-
-  const spanMap = new Map()
-  for (const s of spans) {
-    const nid = s.spanId.replace('node:', '')
-    spanMap.set(nid, s)
+  if (!root?.attributes?.nodes?.length) {
+    return { nodes: [], edges: [] }
   }
-
-  const wfNodeMap = new Map(wfNodes.map(n => [n.id, n]))
-  const childIds = new Set(wfNodes.filter(n => n.parentNode).map(n => n.id))
-  const topNodes = wfNodes.filter(n => !n.parentNode)
-
-  // 构建节点列表：容器 + 顶层普通节点
-  const nodes = []
-  for (const wfNode of topNodes) {
-    const nid = wfNode.id
-    const isContainer = CONTAINER_TYPES.has(wfNode.type)
-    if (isContainer) {
-      const children = wfNodes.filter(n => n.parentNode === nid)
-      const childNodes = children.map(child => buildGraphNode(child, spanMap))
-      // 容器内子节点按相对坐标排列后转为绝对坐标
-      layoutChildrenInside(childNodes)
-      const span = spanMap.get(nid)
-      const status = computeContainerStatus(children, spanMap)
-      nodes.push({
-        id: `node:${nid}`, nodeId: nid, nodeType: wfNode.type,
-        label: truncate(wfNode.data?.label || wfNode.label || nid, 14),
-        icon: getNodeIcon(wfNode.type), status,
-        statusText: status === 'completed' ? '成功' : status === 'failed' ? '失败' : '未执行',
-        durationText: '', w: CONTAINER_W, h: CONTAINER_H,
-        x: 0, y: 0, ...getNodeColors(wfNode.type, status), span,
-        isContainer: true, children: childNodes,
-      })
-    } else {
-      nodes.push(buildGraphNode(wfNode, spanMap))
-    }
-  }
-
-  // 布局：容器和普通节点一起参与顶层布局
-  const hasPositions = !forceLayout && topNodes.some(n => n.position && typeof n.position.x === 'number')
-  if (!hasPositions) {
-    autoLayout(nodes, wfEdges)
-  } else {
-    const padX = 60, padY = 40
-    const minX = Math.min(...nodes.map(n => n.x - n.w / 2))
-    const minY = Math.min(...nodes.map(n => n.y - n.h / 2))
-    nodes.forEach(n => {
-      n.x = n.x - minX + padX
-      n.y = n.y - minY + padY
-      if (n.isContainer && n.children) {
-        n.children.forEach(c => { c.x += n.x - (n.w / 2 - CHILD_PAD_X); c.y += n.y - (n.h / 2 - CHILD_PAD_TOP) })
-      }
-    })
-  }
-
-  // 构建边：容器子节点的边也渲染
-  const allNodeMap = new Map()
-  for (const n of nodes) {
-    allNodeMap.set(n.nodeId, n)
-    if (n.isContainer && n.children) {
-      for (const c of n.children) allNodeMap.set(c.nodeId, c)
-    }
-  }
-  const executedIds = new Set(spanMap.keys())
-  const edges = wfEdges.map(e => {
-    const srcNode = allNodeMap.get(e.source)
-    const tgtNode = allNodeMap.get(e.target)
-    if (!srcNode || !tgtNode) return null
-    const highlighted = executedIds.has(e.source) && executedIds.has(e.target)
-    return {
-      id: e.id || `${e.source}->${e.target}`,
-      source: e.source, target: e.target,
-      label: e.label || '', sourceHandle: e.sourceHandle || '',
-      highlighted, ...buildEdgePath(srcNode, tgtNode),
-    }
-  }).filter(Boolean)
-
-  graphNodes.value = nodes
-  graphEdges.value = edges
-}
-
-function buildGraphNode(wfNode, spanMap) {
-  const nid = wfNode.id
-  const span = spanMap.get(nid)
-  const attrs = span?.attributes || {}
-  const nodeType = wfNode.type || attrs.nodeType || nid
-  const label = wfNode.data?.label || wfNode.label || attrs.nodeLabel || nid
-  const status = span?.status || 'SKIPPED'
-  const pos = wfNode.position || {}
-  const x = (typeof pos.x === 'number' ? pos.x : 0) + NODE_W / 2
-  const y = (typeof pos.y === 'number' ? pos.y : 0) + NODE_H / 2
-  return {
-    id: `node:${nid}`, nodeId: nid, nodeType,
-    label: truncate(label, 14), icon: getNodeIcon(nodeType), status,
-    statusText: status === 'completed' ? '成功' : status === 'failed' ? '失败' : '未执行',
-    durationText: span?.durationMs != null ? formatDuration(span.durationMs) : '',
-    w: NODE_W, h: NODE_H, x, y, ...getNodeColors(nodeType, status), span,
-  }
-}
-
-function layoutChildrenInside(children) {
-  if (!children.length) return
-  // 按原始 position.y 排序，再依次垂直排列
-  children.sort((a, b) => a.y - b.y || a.x - b.x)
-  for (let i = 0; i < children.length; i++) {
-    children[i].x = CHILD_PAD_X + NODE_W / 2
-    children[i].y = CHILD_PAD_TOP + i * (NODE_H + CHILD_GAP_Y) + NODE_H / 2
-  }
-}
-
-function computeContainerStatus(children, spanMap) {
-  const statuses = children.map(c => spanMap.get(c.id)?.status || 'SKIPPED')
-  if (statuses.some(s => s === 'failed')) return 'failed'
-  if (statuses.some(s => s === 'completed')) return 'completed'
-  return 'SKIPPED'
-}
-
-function buildEdgePath(srcNode, tgtNode) {
-  const sx = srcNode.x + srcNode.w / 2, sy = srcNode.y
-  const tx = tgtNode.x - tgtNode.w / 2, ty = tgtNode.y
-  const mx = (sx + tx) / 2
-  return {
-    path: `M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}`,
-    labelX: mx, labelY: (sy + ty) / 2 - 8,
-  }
-}
-
-function autoLayout(nodes, wfEdges) {
-  if (!nodes.length) return
-  const nodeGapX = 220, nodeGapY = 100, startX = 80, startY = 60
-  const adj = new Map(), inDeg = new Map()
-  for (const n of nodes) { adj.set(n.nodeId, []); inDeg.set(n.nodeId, 0) }
-  for (const e of wfEdges) {
-    if (adj.has(e.source) && adj.has(e.target)) {
-      adj.get(e.source).push(e.target)
-      inDeg.set(e.target, (inDeg.get(e.target) || 0) + 1)
-    }
-  }
-  const queue = nodes.filter(n => (inDeg.get(n.nodeId) || 0) === 0).map(n => n.nodeId)
-  const topoOrder = []
-  while (queue.length) {
-    const id = queue.shift(); topoOrder.push(id)
-    for (const next of (adj.get(id) || [])) {
-      inDeg.set(next, inDeg.get(next) - 1)
-      if (inDeg.get(next) === 0) queue.push(next)
-    }
-  }
-  for (const n of nodes) { if (!topoOrder.includes(n.nodeId)) topoOrder.push(n.nodeId) }
-  const depthMap = new Map()
-  for (const id of topoOrder) {
-    const preds = wfEdges.filter(e => e.target === id).map(e => e.source)
-    const predDepths = preds.map(p => depthMap.get(p) ?? 0)
-    depthMap.set(id, predDepths.length ? Math.max(...predDepths) + 1 : 0)
-  }
-  const depthGroups = new Map()
-  for (const n of nodes) {
-    const d = depthMap.get(n.nodeId) ?? 0
-    if (!depthGroups.has(d)) depthGroups.set(d, [])
-    depthGroups.get(d).push(n)
-  }
-  for (const [depth, group] of depthGroups) {
-    const x = startX + depth * nodeGapX
-    const totalHeight = group.length * nodeGapY
-    const offsetY = startY + Math.max(0, (400 - totalHeight) / 2)
-    group.forEach((n, i) => {
-      n.x = x
-      n.y = offsetY + i * nodeGapY
-      // 容器内子节点跟随容器移动
-      if (n.isContainer && n.children) {
-        n.children.forEach(c => {
-          c.x += n.x - (n.w / 2 - CHILD_PAD_X)
-          c.y += n.y - (n.h / 2 - CHILD_PAD_TOP)
-        })
-      }
-    })
-  }
-}
-
-function reLayout() {
-  initGraph(true)
-}
-
-// --- Zoom ---
-
-function zoomIn() { scale.value = Math.min(scale.value * 1.2, 3) }
-function zoomOut() { scale.value = Math.max(scale.value / 1.2, 0.2) }
-function resetView() { scale.value = 1; panX.value = 40; panY.value = 20 }
-
-function onWheel(e) {
-  const delta = e.deltaY > 0 ? 0.9 : 1.1
-  const newScale = Math.min(Math.max(scale.value * delta, 0.2), 3)
-  const rect = svgRef.value.getBoundingClientRect()
-  const mx = e.clientX - rect.left
-  const my = e.clientY - rect.top
-  panX.value = mx - (mx - panX.value) * (newScale / scale.value)
-  panY.value = my - (my - panY.value) * (newScale / scale.value)
-  scale.value = newScale
-}
-
-// --- SVG panning ---
-
-function onSvgMouseDown(e) {
-  isPanning = true
-  panMoved = false
-  panStart = { x: e.clientX - panX.value, y: e.clientY - panY.value }
-}
-
-function onSvgMouseMove(e) {
-  // 节点拖拽
-  if (dragState.id && pendingMouse) {
-    pendingMouse.x = e.clientX
-    pendingMouse.y = e.clientY
-    if (!rafId) {
-      rafId = requestAnimationFrame(flushDrag)
-    }
-    return
-  }
-  // 画布平移
-  if (!isPanning) return
-  panMoved = true
-  panX.value = e.clientX - panStart.x
-  panY.value = e.clientY - panStart.y
-}
-
-function onSvgMouseUp() {
-  if (dragState.id) {
-    commitDrag()
-  }
-  isPanning = false
-}
-
-function onSvgClick() {
-  // 点击空白处（非拖拽、非平移）关闭节点详情
-  if (!dragMoved && !panMoved) {
-    selectedNodeId.value = null
-  }
-}
-
-// --- Node drag (CSS transform + rAF) ---
-
-let dragMoved = false
-
-function onNodeMouseDown(e, node) {
-  dragState.id = node.id
-  dragState.dx = 0
-  dragState.dy = 0
-  dragState.startX = node.x
-  dragState.startY = node.y
-  dragState.mouseStartX = e.clientX
-  dragState.mouseStartY = e.clientY
-  pendingMouse = { x: e.clientX, y: e.clientY }
-  dragMoved = false
-}
-
-function flushDrag() {
-  rafId = null
-  if (!dragState.id || !pendingMouse) return
-  dragState.dx = (pendingMouse.x - dragState.mouseStartX) / scale.value
-  dragState.dy = (pendingMouse.y - dragState.mouseStartY) / scale.value
-  if (dragState.dx !== 0 || dragState.dy !== 0) dragMoved = true
-  rebuildEdges()
-}
-
-function commitDrag() {
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
-  if (!dragState.id) return
-
-  const finalDx = dragState.dx
-  const finalDy = dragState.dy
-
-  // 写入实际坐标
-  const nodes = graphNodes.value
-  const node = nodes.find(n => n.id === dragState.id)
-  if (node) {
-    node.x = dragState.startX + finalDx
-    node.y = dragState.startY + finalDy
-  }
-
-  // 重置 offset
-  dragState.dx = 0
-  dragState.dy = 0
-  dragState.id = null
-  pendingMouse = null
-
-  // 重建受影响的边
-  rebuildEdges()
-}
-
-function rebuildEdges() {
-  const isDragging = dragState.id != null
-  const nodeMap = new Map(graphNodes.value.map(n => {
-    if (isDragging && n.id === dragState.id) {
-      // 拖拽中：用偏移后的位置计算边
-      return [n.nodeId, { ...n, x: n.x + dragState.dx, y: n.y + dragState.dy }]
-    }
-    return [n.nodeId, n]
-  }))
-  graphEdges.value = graphEdges.value.map(edge => {
-    const srcNode = nodeMap.get(edge.source)
-    const tgtNode = nodeMap.get(edge.target)
-    if (!srcNode || !tgtNode) return edge
-    return { ...edge, ...buildEdgePath(srcNode, tgtNode) }
+  return workflowGraphToVueFlow({
+    nodes: root.attributes.nodes || [],
+    edges: root.attributes.edges || [],
   })
+})
+
+const viewerNodes = computed(() => viewerGraph.value.nodes)
+const viewerEdges = computed(() => viewerGraph.value.edges)
+
+const viewerNodeStates = computed(() => spansToNodeStates(nodeSpans.value))
+
+const highlightedEdgeIds = computed(() => {
+  const executedIds = nodeSpans.value
+    .map(s => s.spanId?.replace(/^node:/, ''))
+    .filter(Boolean)
+  return buildExecutedEdgeIds(rootSpan.value?.attributes?.edges || [], executedIds)
+})
+
+const selectedCanvasNodeId = computed(() => {
+  if (!selectedNodeId.value) return null
+  return selectedNodeId.value.replace(/^node:/, '')
+})
+
+/** 来自 trace 图快照 + span 配置合并（执行时刻真实配置） */
+const selectedWorkflowNode = computed(() => {
+  const id = selectedCanvasNodeId.value
+  if (!id) return null
+  const n = viewerNodes.value.find(x => x.id === id)
+  if (!n) return null
+  return mergeTraceNodeData(n, selectedNodeSpan.value)
+})
+
+/** 旧 trace 仅有 label、无完整 data 时提示 */
+const configSnapshotIncomplete = computed(() => {
+  if (!selectedWorkflowNode.value || !selectedNodeSpan.value) return false
+  const data = selectedWorkflowNode.value.data || {}
+  const keys = Object.keys(data).filter(k => k !== 'label')
+  const spanCfg = selectedNodeSpan.value.attributes?.config
+  const spanKeys = spanCfg && typeof spanCfg === 'object' ? Object.keys(spanCfg) : []
+  return keys.length === 0 && spanKeys.length > 0
+})
+
+const traceTargetNodes = computed(() =>
+  viewerNodes.value.map(n => ({ id: n.id, label: n.data?.label || n.id, type: n.type })),
+)
+
+function filterKnowledgeOption(input, option) {
+  const k = knowledgeList.value.find(item => String(item.id) === String(option.value))
+  if (!k) return false
+  const keyword = (input || '').toLowerCase()
+  const text = `${k.name} ${k.description || ''} ${k.embeddingModel || ''}`.toLowerCase()
+  return text.includes(keyword)
 }
 
-// --- Node selection ---
+function filterToolOption(input, option) {
+  const t = tools.value.find(item => String(item.id) === String(option.value))
+  if (!t) return false
+  const keyword = (input || '').toLowerCase()
+  const text = `${t.displayName || ''} ${t.name || ''} ${t.description || ''}`.toLowerCase()
+  return text.includes(keyword)
+}
+
+function getToolTypeLabel(toolType) {
+  const code = toolType?.code || toolType
+  const labels = {
+    builtin: '内置',
+    http: 'HTTP',
+    script: '脚本',
+    knowledge: '知识',
+    mcp: 'MCP',
+  }
+  return labels[code] || code || ''
+}
+
+function isGroupBuiltinNodeFn(node) {
+  return node && isGroupBuiltinType(node.type)
+}
+
+function onViewerNodeClick(nodeId) {
+  const spanId = `node:${nodeId}`
+  selectedNodeId.value = selectedNodeId.value === spanId ? null : spanId
+}
+
+// --- Node selection（详情面板仍绑定 span）---
 
 const selectedNodeSpan = computed(() => {
   if (!selectedNodeId.value) return null
   return nodeSpans.value.find(s => s.spanId === selectedNodeId.value)
 })
-
-function selectNode(id) {
-  if (dragState.id || dragMoved) return
-  selectedNodeId.value = selectedNodeId.value === id ? null : id
-}
 
 // --- Text mode ---
 
@@ -693,17 +354,7 @@ function toggleTextExpand(spanId) {
   textExpanded.value = s
 }
 
-// --- Helpers ---
-
-function arrowPoints(edge) {
-  const path = edge.path
-  if (!path) return ''
-  const match = path.match(/(\d+\.?\d*),(\d+\.?\d*)$/)
-  if (!match) return ''
-  const tx = parseFloat(match[1])
-  const ty = parseFloat(match[2])
-  return `${tx},${ty} ${tx - 8},${ty - 4} ${tx - 8},${ty + 4}`
-}
+// --- Helpers（文本模式仍使用）---
 
 function llmMessages(span) {
   const msgs = span.attributes?.outputs?.llmMessages
@@ -734,20 +385,11 @@ function formatDuration(ms) {
   return (ms / 1000).toFixed(1) + 's'
 }
 
-function truncate(s, max) {
-  if (!s) return ''
-  return s.length > max ? s.substring(0, max) + '...' : s
-}
-
-// --- Watch trace changes to rebuild graph ---
-
-import { watch } from 'vue'
-watch(() => trace.value, () => initGraph(), { flush: 'post' })
-
 // --- Init ---
 
-onMounted(loadTrace)
-onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
+onMounted(async () => {
+  await Promise.all([loadTrace(), loadResources()])
+})
 </script>
 
 <style scoped>
@@ -867,138 +509,23 @@ onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
   background: var(--color-canvas);
   position: relative;
 }
-.dag-svg {
+.graph-viewer-wrap {
   flex: 1;
-  cursor: grab;
   min-width: 0;
-  user-select: none;
+  min-height: 0;
 }
-.dag-svg:active { cursor: grabbing; }
-
-.dag-node { cursor: pointer; }
-.dag-node:hover rect { filter: brightness(0.95); }
-.node-selected rect { stroke-width: 3 !important; filter: drop-shadow(0 2px 8px rgba(24, 144, 255, 0.3)); }
-
-/* 非拖拽节点平滑过渡 */
-.node-transition {
-  transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-/* 拖拽中的节点：无过渡 + 阴影 + 微放大 */
-.node-dragging {
-  cursor: grabbing;
-}
-.node-dragging rect {
-  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.18));
-  stroke-width: 2.5;
-}
-
-/* 边平滑过渡 */
-.edge-group {
-  transition: opacity 0.2s;
-}
-
-/* Zoom controls */
-.zoom-controls {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: 6px;
-  padding: 4px 8px;
-}
-.zoom-label {
-  font-size: 11px;
-  color: var(--color-mute);
-  min-width: 36px;
-  text-align: center;
-}
-
-/* Node detail panel */
-.node-detail-panel {
-  width: 380px;
-  min-width: 380px;
-  border-left: 1px solid var(--color-hairline);
-  background: var(--color-canvas-soft);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.trace-node-detail-panel.config-panel {
+  height: 100%;
   max-height: 100%;
 }
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-hairline);
-  background: var(--color-canvas);
-}
-.panel-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.panel-body {
-  padding: 12px 16px;
+.graph-empty-hint {
   flex: 1;
-  overflow-y: auto;
-}
-.panel-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.pg-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-.pg-key {
-  font-size: 12px;
+  justify-content: center;
   color: var(--color-mute);
-  min-width: 50px;
-}
-.pg-val {
-  font-size: 12px;
-}
-.panel-section {
-  margin-bottom: 12px;
-}
-.ps-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-body);
-  margin-bottom: 6px;
-}
-.ps-json {
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-size: 11px;
-  line-height: 1.5;
-  max-height: 240px;
-  overflow: auto;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.ps-text {
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.6;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+  font-size: 14px;
+  padding: 24px;
 }
 
 /* Text mode */
