@@ -102,51 +102,65 @@
         @overwrite-draft="overwriteDraftFromVersion"
       />
 
-      <WorkflowEdgeDetailPanel
+      <ResizableSidePanel
         v-if="selectedEdge"
-        :edge="selectedEdge"
-        :is-version-preview="isVersionPreview"
-        :edge-target-candidates="edgeTargetCandidates"
-        :edge-source-handle-options="edgeSourceHandleOptions"
-        :handle-in="HANDLE_IN"
-        :handle-out="HANDLE_OUT"
-        :get-edge-source-label="getEdgeSourceLabel"
-        :get-edge-source-type="getEdgeSourceType"
-        :get-edge-target-label="getEdgeTargetLabel"
-        :get-edge-target-type="getEdgeTargetType"
-        :get-handle-display-name="getHandleDisplayName"
-        :get-node-title="getNodeTitle"
-        @close="clearEdgeSelection"
-        @target-change="onEdgeTargetChange"
-        @source-handle-change="onEdgeSourceHandleChange"
-        @delete="deleteSelectedEdge"
-      />
+        storage-key="workflow-edge-detail-panel-width"
+        :default-width="480"
+        :min-width="320"
+        :max-width="720"
+      >
+        <WorkflowEdgeDetailPanel
+          :edge="selectedEdge"
+          :is-version-preview="isVersionPreview"
+          :edge-target-candidates="edgeTargetCandidates"
+          :edge-source-handle-options="edgeSourceHandleOptions"
+          :handle-in="HANDLE_IN"
+          :handle-out="HANDLE_OUT"
+          :get-edge-source-label="getEdgeSourceLabel"
+          :get-edge-source-type="getEdgeSourceType"
+          :get-edge-target-label="getEdgeTargetLabel"
+          :get-edge-target-type="getEdgeTargetType"
+          :get-handle-display-name="getHandleDisplayName"
+          :get-node-title="getNodeTitle"
+          @close="clearEdgeSelection"
+          @target-change="onEdgeTargetChange"
+          @source-handle-change="onEdgeSourceHandleChange"
+          @delete="deleteSelectedEdge"
+        />
+      </ResizableSidePanel>
 
-      <WorkflowNodeDetailPanel
+      <ResizableSidePanel
         v-else-if="selectedNode"
-        :node="selectedNode"
-        :edges="edges"
-        :is-version-preview="isVersionPreview"
-        :can-test-selected-node="canTestSelectedNode"
-        :node-errors="getNodeErrors(selectedNode.id)"
-        :knowledge-list="knowledgeList"
-        :tools="tools"
-        :target-nodes="getTargetNodes()"
-        :filter-knowledge-option="filterKnowledgeOption"
-        :filter-tool-option="filterToolOption"
-        :get-tool-type-label="getToolTypeLabel"
-        :get-node-color="getNodeColor"
-        :get-node-title="getNodeTitle"
-        :is-group-builtin-node="isGroupBuiltinNode"
-        @close="closeNodePanel"
-        @open-example="openNodeExampleModal"
-        @open-test="openNodeTestDrawer"
-        @copy="copySelectedNode"
-        @sync="syncNodes"
-        @knowledge-change="onKnowledgeChange"
-        @tool-change="onToolChange"
-        @delete="deleteSelectedNode"
-      />
+        storage-key="workflow-node-detail-panel-width"
+        :default-width="480"
+        :min-width="320"
+        :max-width="720"
+      >
+        <WorkflowNodeDetailPanel
+          :node="selectedNode"
+          :edges="edges"
+          :is-version-preview="isVersionPreview"
+          :can-test-selected-node="canTestSelectedNode"
+          :node-errors="getNodeErrors(selectedNode.id)"
+          :knowledge-list="knowledgeList"
+          :tools="tools"
+          :target-nodes="getTargetNodes()"
+          :filter-knowledge-option="filterKnowledgeOption"
+          :filter-tool-option="filterToolOption"
+          :get-tool-type-label="getToolTypeLabel"
+          :get-node-color="getNodeColor"
+          :get-node-title="getNodeTitle"
+          :is-group-builtin-node="isGroupBuiltinNode"
+          @close="closeNodePanel"
+          @open-example="openNodeExampleModal"
+          @open-test="openNodeTestDrawer"
+          @copy="copySelectedNode"
+          @sync="syncNodes"
+          @knowledge-change="onKnowledgeChange"
+          @tool-change="onToolChange"
+          @delete="deleteSelectedNode"
+        />
+      </ResizableSidePanel>
     </div>
   </div>
 
@@ -229,6 +243,7 @@ import WorkflowEditLeftPanel from '../views/workflow/components/edit/WorkflowEdi
 import WorkflowEditCanvas from '../views/workflow/components/edit/WorkflowEditCanvas.vue'
 import WorkflowEdgeDetailPanel from '../views/workflow/components/edit/WorkflowEdgeDetailPanel.vue'
 import WorkflowNodeDetailPanel from '../views/workflow/components/edit/WorkflowNodeDetailPanel.vue'
+import ResizableSidePanel from '../views/workflow/components/ResizableSidePanel.vue'
 import WorkflowNodeHelpModal from '../views/workflow/components/edit/WorkflowNodeHelpModal.vue'
 import WorkflowGlobalConfigModal from '../views/workflow/components/edit/WorkflowGlobalConfigModal.vue'
 import WorkflowTestDrawer from '../views/workflow/components/edit/WorkflowTestDrawer.vue'
@@ -3013,16 +3028,17 @@ function goBack() {
   font-size: 14px;
 }
 
-/* 右侧配置面板 */
+/* 右侧配置面板（宽度由 ResizableSidePanel 控制） */
 .config-panel {
-  width: 480px;
-  min-width: 480px;
-  max-width: 42vw;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   flex-shrink: 0;
   background: var(--color-canvas);
-  border-left: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 .config-panel .panel-header,

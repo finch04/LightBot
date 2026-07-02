@@ -73,30 +73,36 @@
         <div v-else class="graph-empty-hint">暂无工作流图快照，请切换到文本模式查看节点详情</div>
 
         <!-- 节点详情：与编排页一致的只读配置面板 + 本次执行结果 -->
-        <WorkflowNodeDetailPanel
+        <ResizableSidePanel
           v-if="selectedWorkflowNode"
-          class="trace-node-detail-panel"
-          compact
-          :node="selectedWorkflowNode"
-          :edges="viewerEdges"
-          force-readonly
-          :show-header-actions="false"
-          :show-footer-delete="false"
-          :execution-span="selectedNodeSpan"
-          :llm-child-span="selectedNodeSpan ? llmChildSpan(selectedNodeSpan) : null"
-          :config-incomplete-hint="configSnapshotIncomplete"
-          :node-errors="[]"
-          :knowledge-list="knowledgeList"
-          :tools="tools"
-          :target-nodes="traceTargetNodes"
-          :filter-knowledge-option="filterKnowledgeOption"
-          :filter-tool-option="filterToolOption"
-          :get-tool-type-label="getToolTypeLabel"
-          :get-node-color="getNodeColor"
-          :get-node-title="getNodeTitle"
-          :is-group-builtin-node="isGroupBuiltinNodeFn"
-          @close="selectedNodeId = null"
-        />
+          storage-key="workflow-trace-detail-panel-width"
+          :default-width="360"
+          :min-width="280"
+          :max-width="560"
+        >
+          <WorkflowNodeDetailPanel
+            class="trace-node-detail-panel"
+            :node="selectedWorkflowNode"
+            :edges="viewerEdges"
+            force-readonly
+            :show-header-actions="false"
+            :show-footer-delete="false"
+            :execution-span="selectedNodeSpan"
+            :llm-child-span="selectedNodeSpan ? llmChildSpan(selectedNodeSpan) : null"
+            :config-incomplete-hint="configSnapshotIncomplete"
+            :node-errors="[]"
+            :knowledge-list="knowledgeList"
+            :tools="tools"
+            :target-nodes="traceTargetNodes"
+            :filter-knowledge-option="filterKnowledgeOption"
+            :filter-tool-option="filterToolOption"
+            :get-tool-type-label="getToolTypeLabel"
+            :get-node-color="getNodeColor"
+            :get-node-title="getNodeTitle"
+            :is-group-builtin-node="isGroupBuiltinNodeFn"
+            @close="selectedNodeId = null"
+          />
+        </ResizableSidePanel>
       </div>
 
       <!-- 文本模式 -->
@@ -165,6 +171,7 @@ import { getKnowledgeList } from '../api/knowledge'
 import { getTools } from '../api/tool'
 import MarkdownPreview from '../components/MarkdownPreview.vue'
 import WorkflowViewerCanvas from './workflow/components/WorkflowViewerCanvas.vue'
+import ResizableSidePanel from './workflow/components/ResizableSidePanel.vue'
 import WorkflowNodeDetailPanel from './workflow/components/edit/WorkflowNodeDetailPanel.vue'
 import { workflowGraphToVueFlow, mergeTraceNodeData } from './workflow/workflowGraphToVueFlow.js'
 import { spansToNodeStates, buildExecutedEdgeIds } from './workflow/workflowViewerAdapter.js'
@@ -515,6 +522,10 @@ onMounted(async () => {
   min-height: 0;
 }
 .trace-node-detail-panel.config-panel {
+  height: 100%;
+  max-height: 100%;
+}
+.graph-container :deep(.resizable-side-panel) {
   height: 100%;
   max-height: 100%;
 }

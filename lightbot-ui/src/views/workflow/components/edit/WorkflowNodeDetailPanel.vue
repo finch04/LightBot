@@ -1,5 +1,5 @@
 <template>
-  <div class="config-panel" :class="{ 'config-panel-compact': compact }">
+  <div class="config-panel">
     <div class="panel-header config-panel-header">
       <div class="node-type-badge">
         <div class="type-icon" :style="{ background: getNodeColor(node.type) + '20', color: getNodeColor(node.type) }">
@@ -126,7 +126,7 @@ defineProps({
   /** 本次运行的 span，展示执行结果区块 */
   executionSpan: { type: Object, default: null },
   llmChildSpan: { type: Object, default: null },
-  /** 紧凑宽度（可观测性 trace 侧栏） */
+  /** @deprecated 宽度由 ResizableSidePanel 控制，保留 prop 兼容旧调用 */
   compact: Boolean,
   /** 旧 trace 配置快照不完整时的提示 */
   configIncompleteHint: Boolean,
@@ -151,19 +151,15 @@ defineEmits([
 
 <style scoped>
 .config-panel {
-  width: 480px;
-  min-width: 480px;
-  max-width: 42vw;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   flex-shrink: 0;
   background: var(--color-canvas);
-  border-left: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-}
-.config-panel-compact {
-  width: 360px;
-  min-width: 360px;
-  max-width: 34vw;
+  height: 100%;
+  min-height: 0;
 }
 .config-panel-header {
   display: flex;

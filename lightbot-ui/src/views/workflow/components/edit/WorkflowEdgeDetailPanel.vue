@@ -102,14 +102,15 @@ defineEmits(['close', 'target-change', 'source-handle-change', 'delete'])
 
 <style scoped>
 .config-panel {
-  width: 480px;
-  min-width: 480px;
-  max-width: 42vw;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   flex-shrink: 0;
   background: var(--color-canvas);
-  border-left: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 .panel-header {
   display: flex;
