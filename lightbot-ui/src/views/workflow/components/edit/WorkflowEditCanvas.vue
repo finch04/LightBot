@@ -68,14 +68,14 @@
       <p>从左侧拖拽节点到画布开始构建工作流</p>
     </div>
 
-    <div v-if="versionVisible" class="canvas-overlay-top">
-      <div class="version-panel-float" :style="versionPanelStyle">
-        <div class="version-panel-header">
-          <span
-            class="version-panel-drag-handle"
-            title="按住拖动面板"
-            @mousedown.prevent="$emit('version-panel-drag-start', $event)"
-          >
+        <div v-if="versionVisible" class="canvas-overlay-top">
+          <div class="version-panel-float" :style="versionPanelStyle">
+            <div class="version-panel-header">
+              <span
+                class="version-panel-drag-handle"
+                title="按住拖动面板"
+                @mousedown.prevent.stop="$emit('version-panel-drag-start', $event)"
+              >
             <HolderOutlined />
           </span>
           <span class="version-panel-title">历史版本</span>
@@ -83,7 +83,7 @@
             <CloseOutlined />
           </button>
         </div>
-        <div class="version-panel-body">
+        <div class="version-panel-body scroll-area-y">
           <div
             class="version-item draft"
             :class="{ active: selectedVersion === 'draft' }"
@@ -296,7 +296,7 @@ defineExpose({
 .version-panel-close:hover { color: var(--color-body); }
 .version-panel-body {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   padding: 12px;
 }
 .version-panel-footer {

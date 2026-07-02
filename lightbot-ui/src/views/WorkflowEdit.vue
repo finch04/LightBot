@@ -348,7 +348,8 @@ const {
 } = useVueFlow({ id: WORKFLOW_FLOW_ID })
 
 const workflowCanvasRef = ref(null)
-const canvasAreaRef = computed(() => workflowCanvasRef.value?.canvasAreaEl?.value ?? null)
+/** 子组件 defineExpose 的 ref 在父组件访问时会自动解包，勿再 .value */
+const canvasAreaRef = computed(() => workflowCanvasRef.value?.canvasAreaEl ?? null)
 const trashRef = computed(() => workflowCanvasRef.value?.trashEl ?? null)
 
 /** 避免 edge 组件被 reactive 包装导致大量 Vue warn */
@@ -3153,6 +3154,11 @@ function goBack() {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.workflow-canvas-shell :deep(.canvas-area) {
+  flex: 1;
+  min-height: 0;
 }
 
 .test-history-viewer-overlay {

@@ -5,6 +5,9 @@
 .code-block-scroll {
   scrollbar-width: thin;
   scrollbar-color: #d4d4d8 transparent;
+  scrollbar-gutter: stable;
+  padding-right: var(--scroll-content-gap, 8px);
+  padding-bottom: var(--scroll-content-gap, 8px);
 }
 
 .code-block-scroll::-webkit-scrollbar {

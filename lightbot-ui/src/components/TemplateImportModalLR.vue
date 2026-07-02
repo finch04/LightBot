@@ -17,7 +17,7 @@
         >
           <template #prefix><SearchOutlined /></template>
         </a-input>
-        <div class="template-list">
+        <div class="template-list scroll-area-y">
           <div
             v-for="t in filteredTemplates"
             :key="t.id"
@@ -41,7 +41,7 @@
       </div>
 
       <!-- 右侧：模板预览 -->
-      <div class="template-right">
+      <div class="template-right scroll-area-y">
         <div v-if="selectedTemplate" class="template-preview-content">
           <div class="preview-header">
             <h4>{{ selectedTemplate.promptTemplateKey }}</h4>
@@ -202,11 +202,10 @@ onMounted(() => {
 
 .template-list {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-right: 8px;
 }
 
 .template-item {
@@ -276,10 +275,10 @@ onMounted(() => {
 .template-right {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   background: var(--color-canvas-soft);
   border-radius: 8px;
   padding: 16px;
-  overflow-y: auto;
 }
 
 .template-preview-content {

@@ -219,6 +219,8 @@ watch(visible, (val) => {
   word-break: break-word;
   max-height: 100px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: calc(8px + var(--scroll-content-gap, 8px));
 }
 
 .preview-vars {

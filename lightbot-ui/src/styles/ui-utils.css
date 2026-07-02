@@ -1,7 +1,8 @@
 /* UI 工具类 - 统一卡片/面板/按钮样式 */
 
 /* 垂直滚动区域：内容与滚动条保持统一间距 */
-.scroll-area-y {
+.scroll-area-y,
+.modal-scroll-body {
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding-right: var(--scroll-content-gap, 8px);
@@ -12,6 +13,10 @@
   width: 6px;
 }
 
+.modal-scroll-body::-webkit-scrollbar {
+  width: 6px;
+}
+
 .scroll-area-y::-webkit-scrollbar-thumb {
   background: #d4d4d8;
   border-radius: 3px;
@@ -19,7 +24,18 @@
   background-clip: padding-box;
 }
 
+.modal-scroll-body::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 [data-theme="dark"] .scroll-area-y::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+[data-theme="dark"] .modal-scroll-body::-webkit-scrollbar-thumb {
   background: #3f3f46;
 }
 

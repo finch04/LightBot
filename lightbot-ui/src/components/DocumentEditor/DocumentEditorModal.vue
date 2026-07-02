@@ -526,6 +526,8 @@ function resetState() {
 .version-content-pre {
   max-height: 50vh;
   overflow: auto;
+  scrollbar-gutter: stable;
+  padding-right: var(--scroll-content-gap, 8px);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;

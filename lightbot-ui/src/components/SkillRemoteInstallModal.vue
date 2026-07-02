@@ -157,7 +157,7 @@
 
     <!-- 全局搜索说明弹窗 -->
     <a-modal v-model:open="searchGuideVisible" title="全局搜索安装说明" :width="560" :footer="null">
-      <div class="guide">
+      <div class="guide scroll-area-y">
         <div class="guide-section">
           <div class="guide-h3">什么是全局搜索？</div>
           <p>全局搜索基于 <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer">skills.sh</a> 社区索引，可直接输入关键字（如 <code>web</code>、<code>python</code>、<code>git</code>）发现开源 Skills 并一键安装，无需手动输入仓库地址。</p>
@@ -600,7 +600,7 @@ function handleCancel() {
   flex-shrink: 0;
 }
 /* 全局搜索说明弹窗样式 */
-.guide { max-height: 60vh; overflow-y: auto; }
+.guide { max-height: 60vh; }
 .guide-section { margin-bottom: 20px; }
 .guide-section:last-child { margin-bottom: 0; }
 .guide-h3 { font-size: 15px; font-weight: 600; color: var(--color-ink); margin-bottom: 8px; }

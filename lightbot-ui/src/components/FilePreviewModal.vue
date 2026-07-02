@@ -152,6 +152,8 @@ function handleClose() {
 .fpm-body {
   height: 100%;
   overflow: auto;
+  scrollbar-gutter: stable;
+  padding-right: var(--scroll-content-gap, 8px);
 }
 .fpm-body :deep(.file-preview) {
   min-height: 100%;

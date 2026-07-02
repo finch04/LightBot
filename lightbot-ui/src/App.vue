@@ -376,6 +376,7 @@ body {
 
 /* 垂直滚动区域：内容与滚动条保持统一间距 */
 .scroll-area-y,
+.modal-scroll-body,
 .tab-content,
 .guide,
 .log-table-body,
@@ -387,11 +388,21 @@ body {
 }
 
 .scroll-area-y,
+.modal-scroll-body,
 .tab-content,
 .guide,
 .log-table-body,
 .fetch-model-list,
 .model-list {
+  padding-right: var(--scroll-content-gap);
+}
+
+/* 弹窗 / 抽屉内可滚动区域 */
+.ant-modal-body .scroll-area-y,
+.ant-modal-body .modal-scroll-body,
+.ant-modal-body .dialog-scroll-body,
+.ant-drawer-body .scroll-area-y,
+.ant-drawer-body .modal-scroll-body {
   padding-right: var(--scroll-content-gap);
 }
 

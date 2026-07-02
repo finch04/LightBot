@@ -1,6 +1,6 @@
 <template>
   <a-modal v-model:open="open" title="如何新增工作流节点" :width="760" :footer="null" destroy-on-close>
-    <div class="node-help-content">
+    <div class="node-help-content scroll-area-y">
       <p class="node-help-intro">
         工作流采用「前端画板定义 DAG + 后端 NodeProcessor 执行」架构。新增一种节点需要<strong>前后端同时扩展</strong>，后端通过 Spring 自动注册处理器。
       </p>
@@ -54,7 +54,6 @@ const open = defineModel('open', { type: Boolean, default: false })
 <style scoped>
 .node-help-content {
   max-height: 65vh;
-  overflow-y: auto;
   font-size: 14px;
   line-height: 1.7;
   color: var(--color-text-dark);
