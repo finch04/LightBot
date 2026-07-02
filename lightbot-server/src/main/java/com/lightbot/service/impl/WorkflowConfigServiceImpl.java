@@ -7,6 +7,8 @@ import com.lightbot.dto.WorkflowNodeTestRequest;
 import com.lightbot.dto.WorkflowResumeRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
+import com.lightbot.dto.WorkflowTestRunDetailVO;
+import com.lightbot.dto.WorkflowTestRunVO;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.enums.ErrorCode;
@@ -14,12 +16,15 @@ import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.WorkflowConfigService;
+import com.lightbot.service.WorkflowTestRunService;
 import com.lightbot.workflow.WorkflowConfigParser;
 import com.lightbot.workflow.WorkflowDefinition;
 import com.lightbot.workflow.WorkflowExecutorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import cn.dev33.satoken.stp.StpUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,6 +45,7 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
     private final AgentVersionService agentVersionService;
     private final ObjectMapper objectMapper;
     private final WorkflowExecutorService workflowExecutorService;
+    private final WorkflowTestRunService workflowTestRunService;
 
     @Override
     public Map<String, Object> getWorkflowConfig(Long agentId) {
@@ -103,18 +109,61 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
                 || request.getUseDraft() == null
                 || Boolean.TRUE.equals(request.getUseDraft());
 
+        long userId = StpUtil.getLoginIdAsLong();
+        String runId = workflowTestRunService.startRun(agentId, userId, request, definition, usedDraft);
+        long startMs = System.currentTimeMillis();
         List<Map<String, Object>> events = new ArrayList<>();
-        WorkflowTestResultVO result = workflowExecutorService.executeForTest(
-                agent, definition, request.getInput(), events, initialVariables);
-        result.setUsedDraft(usedDraft);
-        return result;
+        try {
+            WorkflowTestResultVO result = workflowExecutorService.executeForTest(
+                    agent, definition, request.getInput(), events, initialVariables, runId);
+            result.setUsedDraft(usedDraft);
+            result.setRunId(runId);
+            result.setTestRunId(workflowTestRunService.findIdByRunId(runId));
+            workflowTestRunService.finishRun(runId, result, System.currentTimeMillis() - startMs, null);
+            return result;
+        } catch (Exception e) {
+            workflowTestRunService.finishRun(runId, null, System.currentTimeMillis() - startMs, e.getMessage());
+            throw e;
+        }
     }
 
     @Override
     public WorkflowTestResultVO resumeWorkflow(Long agentId, WorkflowResumeRequest request) {
         requireAgent(agentId);
         Map<String, Object> formData = request.getFormData() != null ? request.getFormData() : Map.of();
-        return workflowExecutorService.resumeAfterConfirm(agentId, request.getRunId(), formData);
+        long startMs = System.currentTimeMillis();
+        WorkflowTestResultVO result = workflowExecutorService.resumeAfterConfirm(agentId, request.getRunId(), formData);
+        workflowTestRunService.updateAfterResume(
+                request.getRunId(), result, System.currentTimeMillis() - startMs, null);
+        if (result.getRunId() == null) {
+            result.setRunId(request.getRunId());
+        }
+        result.setTestRunId(workflowTestRunService.findIdByRunId(request.getRunId()));
+        return result;
+    }
+
+    @Override
+    public List<WorkflowTestRunVO> listTestRuns(Long agentId) {
+        requireAgent(agentId);
+        return workflowTestRunService.listByAgent(agentId, 50);
+    }
+
+    @Override
+    public WorkflowTestRunDetailVO getTestRun(Long agentId, String runId) {
+        requireAgent(agentId);
+        return workflowTestRunService.getDetail(agentId, runId);
+    }
+
+    @Override
+    public void deleteTestRun(Long agentId, String runId) {
+        requireAgent(agentId);
+        workflowTestRunService.deleteRun(agentId, runId);
+    }
+
+    @Override
+    public void clearTestRuns(Long agentId) {
+        requireAgent(agentId);
+        workflowTestRunService.clearByAgent(agentId);
     }
 
     @Override

@@ -44,7 +44,11 @@
       <span v-else-if="lastAutoSaveTime" class="auto-save-hint">{{ formatAutoSaveTime(lastAutoSaveTime) }} 已自动保存</span>
     </div>
     <div class="toolbar-actions">
-      <template v-if="isVersionPreview">
+      <template v-if="viewingTestHistory">
+        <a-button type="default" @click="$emit('open-test')">测试运行</a-button>
+        <a-button type="primary" danger @click="$emit('exit-test-history')">退出历史快照</a-button>
+      </template>
+      <template v-else-if="isVersionPreview">
         <a-button type="primary" @click="$emit('back-to-draft')">
           <RollbackOutlined /> 回到当前版本
         </a-button>
@@ -82,6 +86,7 @@ defineProps({
   validationErrors: { type: Array, default: () => [] },
   nodeCount: { type: Number, default: 0 },
   isVersionPreview: Boolean,
+  viewingTestHistory: Boolean,
   canUndo: Boolean,
   saving: Boolean,
   autoSaving: Boolean,
@@ -94,6 +99,7 @@ defineProps({
 defineEmits([
   'back', 'format-layout', 'validate', 'back-to-draft', 'open-version',
   'undo', 'open-global-config', 'open-test', 'save-draft', 'open-publish',
+  'exit-test-history',
 ])
 </script>
 

@@ -102,3 +102,35 @@ export function normalizePosition(pos) {
   if (!pos || typeof pos !== 'object') return { x: 0, y: 0 }
   return { x: Number(pos.x) || 0, y: Number(pos.y) || 0 }
 }
+
+function normalizeNodeTypeValue(type) {
+  if (typeof type === 'string') return type
+  if (type && typeof type === 'object') {
+    if (typeof type.code === 'string') return type.code
+    if (typeof type.name === 'string') return type.name.toLowerCase()
+  }
+  return type != null ? String(type) : type
+}
+
+/**
+ * 将测试/Trace 落库的 graph JSON 规范为 { nodes, edges }
+ * @param {object|string|null|undefined} raw
+ * @returns {{ nodes: Array, edges: Array }}
+ */
+export function normalizeWorkflowGraphSnapshot(raw) {
+  if (!raw) return { nodes: [], edges: [] }
+  let graph = raw
+  if (typeof raw === 'string') {
+    try {
+      graph = JSON.parse(raw)
+    } catch {
+      return { nodes: [], edges: [] }
+    }
+  }
+  if (!graph || typeof graph !== 'object') return { nodes: [], edges: [] }
+  const nodes = (graph.nodes || []).map(n => ({
+    ...n,
+    type: normalizeNodeTypeValue(n.type),
+  }))
+  return { nodes, edges: graph.edges || [] }
+}

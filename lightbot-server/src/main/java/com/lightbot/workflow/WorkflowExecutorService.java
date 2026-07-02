@@ -141,7 +141,8 @@ public class WorkflowExecutorService {
 
         LoopOutcome outcome = runExecutionLoop(
                 agent, workflow, context, currentNodeId, 0,
-                new StringBuilder(), workflowEvents, onEvent, serializeWorkflow(workflow));
+                new StringBuilder(), workflowEvents, onEvent, serializeWorkflow(workflow),
+                ExecutionOptions.chat());
 
         if (outcome.isSuspended()) {
             return outcome.getSuspendedMessage();
@@ -214,7 +215,8 @@ public class WorkflowExecutorService {
                 new StringBuilder(),
                 events,
                 null,
-                suspended.getWorkflowGraphJson());
+                suspended.getWorkflowGraphJson(),
+                ExecutionOptions.fromSuspended(suspended));
 
         WorkflowTestResultVO.WorkflowTestResultVOBuilder builder = WorkflowTestResultVO.builder()
                 .nodeEvents(events)
@@ -267,7 +269,8 @@ public class WorkflowExecutorService {
                                          StringBuilder result,
                                          List<Map<String, Object>> workflowEvents,
                                          Consumer<Map<String, Object>> onEvent,
-                                         String workflowGraphJson) {
+                                         String workflowGraphJson,
+                                         ExecutionOptions options) {
         Long agentId = agent.getId();
         int stepIndex = startStepIndex;
 
@@ -315,7 +318,11 @@ public class WorkflowExecutorService {
                         () -> processor.execute(context));
 
                 if (nodeResult.isSuspended()) {
-                    String runId = UUID.randomUUID().toString().replace("-", "");
+                    String runId = options != null && options.assignedRunId != null
+                            ? options.assignedRunId
+                            : UUID.randomUUID().toString().replace("-", "");
+                    String suspendSource = options != null && options.suspendSource != null
+                            ? options.suspendSource : "chat";
 
                     Map<String, Object> confirmEvent = new LinkedHashMap<>();
                     confirmEvent.put("type", "workflow_confirm_required");
@@ -349,6 +356,7 @@ public class WorkflowExecutorService {
                             .nextNodeId(nodeResult.getNextNodeId())
                             .stepIndex(stepIndex)
                             .workflowEvents(workflowEvents != null ? new ArrayList<>(workflowEvents) : new ArrayList<>())
+                            .source(suspendSource)
                             .build();
                     workflowRunStateUtil.saveSuspended(suspended);
 
@@ -769,7 +777,7 @@ public class WorkflowExecutorService {
      */
     public WorkflowTestResultVO executeForTest(Agent agent, WorkflowDefinition workflow,
                                                String userInput, List<Map<String, Object>> workflowEvents,
-                                               Map<String, Object> initialVariables) {
+                                               Map<String, Object> initialVariables, String assignedRunId) {
         NodeExecutionContext context = NodeExecutionContext.builder()
                 .agentId(agent.getId())
                 .userInput(userInput)
@@ -792,17 +800,19 @@ public class WorkflowExecutorService {
         }
 
         String workflowJson = serializeWorkflow(workflow);
+        ExecutionOptions options = ExecutionOptions.test(assignedRunId);
         LoopOutcome outcome = runExecutionLoop(
                 agent, workflow, context, currentNodeId, 0,
-                new StringBuilder(), workflowEvents, null, workflowJson);
+                new StringBuilder(), workflowEvents, null, workflowJson, options);
 
         WorkflowTestResultVO.WorkflowTestResultVOBuilder builder = WorkflowTestResultVO.builder()
                 .nodeEvents(workflowEvents)
                 .variables(new LinkedHashMap<>(context.getVariables()))
-                .suspended(outcome.isSuspended());
+                .suspended(outcome.isSuspended())
+                .runId(assignedRunId);
 
         if (outcome.isSuspended()) {
-            builder.runId(outcome.getRunId())
+            builder.runId(outcome.getRunId() != null ? outcome.getRunId() : assignedRunId)
                     .confirmForm(outcome.getConfirmForm())
                     .output(outcome.getSuspendedMessage());
             return builder.build();
@@ -917,5 +927,31 @@ public class WorkflowExecutorService {
                 .nodeEvents(events)
                 .usedDraft(true)
                 .build();
+    }
+
+    /**
+     * 执行循环选项：测试 runId 与挂起来源
+     */
+    private static final class ExecutionOptions {
+        private final String assignedRunId;
+        private final String suspendSource;
+
+        private ExecutionOptions(String assignedRunId, String suspendSource) {
+            this.assignedRunId = assignedRunId;
+            this.suspendSource = suspendSource;
+        }
+
+        static ExecutionOptions test(String runId) {
+            return new ExecutionOptions(runId, "test");
+        }
+
+        static ExecutionOptions chat() {
+            return new ExecutionOptions(null, "chat");
+        }
+
+        static ExecutionOptions fromSuspended(WorkflowSuspendedRun suspended) {
+            String source = suspended.getSource() != null ? suspended.getSource() : "chat";
+            return new ExecutionOptions(suspended.getRunId(), source);
+        }
     }
 }

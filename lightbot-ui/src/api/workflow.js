@@ -39,3 +39,19 @@ export function testWorkflowNode(agentId, data) {
 export function resumeWorkflow(agentId, data) {
   return request.post(`/agents/${agentId}/workflow/resume`, data)
 }
+
+export function listWorkflowTestRuns(agentId) {
+  return request.get(`/agents/${agentId}/workflow/test-runs`)
+}
+
+export function getWorkflowTestRun(agentId, runId) {
+  return request.get(`/agents/${agentId}/workflow/test-runs/${runId}`)
+}
+
+export function deleteWorkflowTestRun(agentId, runId) {
+  return request.delete(`/agents/${agentId}/workflow/test-runs/${runId}`)
+}
+
+export function clearWorkflowTestRuns(agentId) {
+  return request.delete(`/agents/${agentId}/workflow/test-runs`)
+}

@@ -6,6 +6,8 @@ import com.lightbot.dto.WorkflowNodeTestRequest;
 import com.lightbot.dto.WorkflowResumeRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
+import com.lightbot.dto.WorkflowTestRunDetailVO;
+import com.lightbot.dto.WorkflowTestRunVO;
 import com.lightbot.dto.WorkflowVersionVO;
 import com.lightbot.service.WorkflowConfigService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -96,5 +98,35 @@ public class AgentWorkflowController {
             @PathVariable Long agentId,
             @RequestBody @Valid WorkflowNodeTestRequest request) {
         return Result.ok(workflowConfigService.testNode(agentId, request));
+    }
+
+    @Operation(summary = "测试运行历史列表")
+    @GetMapping("/test-runs")
+    public Result<List<WorkflowTestRunVO>> listTestRuns(@PathVariable Long agentId) {
+        return Result.ok(workflowConfigService.listTestRuns(agentId));
+    }
+
+    @Operation(summary = "测试运行详情")
+    @GetMapping("/test-runs/{runId}")
+    public Result<WorkflowTestRunDetailVO> getTestRun(
+            @PathVariable Long agentId,
+            @PathVariable String runId) {
+        return Result.ok(workflowConfigService.getTestRun(agentId, runId));
+    }
+
+    @Operation(summary = "删除单条测试记录")
+    @DeleteMapping("/test-runs/{runId}")
+    public Result<Void> deleteTestRun(
+            @PathVariable Long agentId,
+            @PathVariable String runId) {
+        workflowConfigService.deleteTestRun(agentId, runId);
+        return Result.ok();
+    }
+
+    @Operation(summary = "清空测试历史")
+    @DeleteMapping("/test-runs")
+    public Result<Void> clearTestRuns(@PathVariable Long agentId) {
+        workflowConfigService.clearTestRuns(agentId);
+        return Result.ok();
     }
 }

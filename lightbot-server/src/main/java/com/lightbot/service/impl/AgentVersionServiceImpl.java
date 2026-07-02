@@ -85,6 +85,9 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         result.put("published", publishedGraph);
         result.put("publishedVersion", agent.getVersion() != null ? agent.getVersion() : 0);
         result.put("status", resolveWorkflowStatusCode(agent));
+        if (draft != null && draft.getId() != null) {
+            result.put("draftVersionId", draft.getId());
+        }
         return result;
     }
 
@@ -160,12 +163,6 @@ public class AgentVersionServiceImpl implements AgentVersionService {
                     .edgeCount(row.getEdgeCount())
                     .current(row.getVersion() != null && row.getVersion().equals(current))
                     .description(row.getDescription())
-                    .draftVersionId(draftId)
-                    .build());
-        }
-        // 无已发布版本时，仍返回一条携带 draftVersionId 的占位 VO，供前端匹配草稿选项
-        if (list.isEmpty() && draftId != null) {
-            list.add(WorkflowVersionVO.builder()
                     .draftVersionId(draftId)
                     .build());
         }

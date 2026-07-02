@@ -3,9 +3,12 @@ package com.lightbot.service;
 import com.lightbot.dto.WorkflowGraphDTO;
 import com.lightbot.dto.WorkflowNodeTestRequest;
 import com.lightbot.dto.WorkflowResumeRequest;
-import com.lightbot.dto.WorkflowResumeRequest;
 import com.lightbot.dto.WorkflowTestRequest;
 import com.lightbot.dto.WorkflowTestResultVO;
+import com.lightbot.dto.WorkflowTestRunDetailVO;
+import com.lightbot.dto.WorkflowTestRunVO;
+import com.lightbot.dto.WorkflowTestRunDetailVO;
+import com.lightbot.dto.WorkflowTestRunVO;
 import com.lightbot.dto.WorkflowVersionVO;
 
 import java.util.List;
@@ -65,4 +68,24 @@ public interface WorkflowConfigService {
      * 单节点调试运行
      */
     WorkflowTestResultVO testNode(Long agentId, WorkflowNodeTestRequest request);
+
+    /**
+     * 测试运行历史列表
+     */
+    List<WorkflowTestRunVO> listTestRuns(Long agentId);
+
+    /**
+     * 测试运行详情
+     */
+    WorkflowTestRunDetailVO getTestRun(Long agentId, String runId);
+
+    /**
+     * 删除单条测试记录
+     */
+    void deleteTestRun(Long agentId, String runId);
+
+    /**
+     * 清空 Agent 测试历史
+     */
+    void clearTestRuns(Long agentId);
 }

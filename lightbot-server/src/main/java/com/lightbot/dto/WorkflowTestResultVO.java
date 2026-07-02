@@ -1,5 +1,7 @@
 package com.lightbot.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
@@ -35,4 +37,8 @@ public class WorkflowTestResultVO {
 
     @Schema(description = "人工确认表单（message + formFields）")
     private Map<String, Object> confirmForm;
+
+    @Schema(description = "测试记录 DB 主键")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long testRunId;
 }

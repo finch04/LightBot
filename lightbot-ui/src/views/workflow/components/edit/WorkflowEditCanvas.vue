@@ -96,7 +96,7 @@
           <a-spin :spinning="versionLoading">
             <a-timeline>
               <a-timeline-item
-                v-for="(item, idx) in versionList"
+                v-for="item in versionList"
                 :key="item.version"
                 :color="selectedVersion === item.version ? '#6366f1' : '#d1d5db'"
               >
@@ -106,8 +106,8 @@
                   @click="$emit('select-version', item.version)"
                 >
                   <div class="version-item-header">
-                    <span class="version-item-title">{{ idx === 0 ? '线上版本' : `v${item.version}` }}</span>
-                    <a-tag v-if="idx === 0" color="green" size="small">最新</a-tag>
+                    <span class="version-item-title">{{ item.current ? '线上版本' : `v${item.version}` }}</span>
+                    <a-tag v-if="item.current" color="green" size="small">最新</a-tag>
                   </div>
                   <div v-if="item.description" class="version-item-note">{{ item.description }}</div>
                   <div class="version-item-desc">{{ formatVersionDesc(item) }}</div>

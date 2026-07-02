@@ -47,4 +47,7 @@ public class WorkflowSuspendedRun {
 
     @Builder.Default
     private List<Map<String, Object>> workflowEvents = new ArrayList<>();
+
+    /** 挂起来源：test 编排页测试 | chat 对话 */
+    private String source;
 }

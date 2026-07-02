@@ -108,8 +108,8 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
     try {
       const res = await listAgentVersions(agentId)
       const versions = res.data || []
-      // 从版本列表中取草稿行的真实 agent_version.id（每个版本 VO 都携带同一个 draftVersionId）
-      const draftVersionId = versions[0]?.draftVersionId ? String(versions[0].draftVersionId) : null
+      const draftRow = versions.find(v => v.draftVersionId)
+      const draftVersionId = draftRow?.draftVersionId ? String(draftRow.draftVersionId) : null
       const opts = [{
         value: 0,
         versionId: draftVersionId,

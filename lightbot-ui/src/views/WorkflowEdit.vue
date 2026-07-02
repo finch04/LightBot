@@ -7,6 +7,7 @@
       :validation-errors="validationErrors"
       :node-count="nodes.length"
       :is-version-preview="isVersionPreview"
+      :viewing-test-history="viewingTestHistory"
       :can-undo="canUndo"
       :saving="saving"
       :auto-saving="autoSaving"
@@ -22,6 +23,7 @@
       @undo="undoAction"
       @open-global-config="globalConfigVisible = true"
       @open-test="testVisible = true"
+      @exit-test-history="backToLiveTest"
       @save-draft="saveDraft"
       @open-publish="openPublishModal"
     />
@@ -56,51 +58,70 @@
         @drag-start="onDragStart"
       />
 
-      <WorkflowEditCanvas
-        ref="workflowCanvasRef"
-        :flow-id="WORKFLOW_FLOW_ID"
-        :nodes="nodes"
-        v-model:edges="edges"
-        :edge-types="edgeTypes"
-        :default-edge-options="defaultEdgeOptions"
-        :is-valid-connection="isValidWorkflowConnectionFn"
-        :is-version-preview="isVersionPreview"
-        :is-node-dragging="isNodeDragging"
-        :drag-over-trash="dragOverTrash"
-        :can-delete-dragged-node="canDeleteDraggedNode"
-        :get-node-color="getNodeColor"
-        :edge-insert-anchor-edge="edgeInsertAnchorEdge"
-        :edge-insert-label-style="edgeInsertLabelStyle"
-        :version-visible="versionVisible"
-        :version-panel-style="versionPanelStyle"
-        :version-list="versionList"
-        :version-loading="versionLoading"
-        :selected-version="selectedVersion"
-        :format-version-desc="formatVersionDesc"
-        @edges-change="onEdgesChange"
-        @connect="onConnect"
-        @edge-update="onEdgeUpdate"
-        @nodes-change="onNodesChange"
-        @node-drag-start="onNodeDragStart"
-        @node-drag="onNodeDrag"
-        @node-drag-stop="onNodeDragStop"
-        @drop="onDrop"
-        @node-click="onNodeClick"
-        @edge-click="onEdgeClick"
-        @edge-mouse-enter="onEdgeMouseEnter"
-        @edge-mouse-move="onEdgeMouseMove"
-        @edge-mouse-leave="onEdgeMouseLeave"
-        @pane-click="onPaneClick"
-        @edge-insert-pointer-enter="onEdgeInsertPointerEnter"
-        @edge-insert-pointer-leave="onEdgeInsertPointerLeave"
-        @insert-node-on-edge="onInsertNodeOnEdge"
-        @edge-insert-menu-open="onEdgeInsertMenuOpen"
-        @edge-insert-menu-close="onEdgeInsertMenuClose"
-        @version-panel-drag-start="onVersionPanelDragStart"
-        @close-version-panel="versionVisible = false"
-        @select-version="selectVersion"
-        @overwrite-draft="overwriteDraftFromVersion"
-      />
+      <div class="workflow-canvas-shell">
+        <WorkflowEditCanvas
+          ref="workflowCanvasRef"
+          :flow-id="WORKFLOW_FLOW_ID"
+          :nodes="nodes"
+          v-model:edges="edges"
+          :edge-types="edgeTypes"
+          :default-edge-options="defaultEdgeOptions"
+          :is-valid-connection="isValidWorkflowConnectionFn"
+          :is-version-preview="isVersionPreview"
+          :is-node-dragging="isNodeDragging"
+          :drag-over-trash="dragOverTrash"
+          :can-delete-dragged-node="canDeleteDraggedNode"
+          :get-node-color="getNodeColor"
+          :edge-insert-anchor-edge="edgeInsertAnchorEdge"
+          :edge-insert-label-style="edgeInsertLabelStyle"
+          :version-visible="versionVisible"
+          :version-panel-style="versionPanelStyle"
+          :version-list="publishedVersionList"
+          :version-loading="versionLoading"
+          :selected-version="selectedVersion"
+          :format-version-desc="formatVersionDesc"
+          @edges-change="onEdgesChange"
+          @connect="onConnect"
+          @edge-update="onEdgeUpdate"
+          @nodes-change="onNodesChange"
+          @node-drag-start="onNodeDragStart"
+          @node-drag="onNodeDrag"
+          @node-drag-stop="onNodeDragStop"
+          @drop="onDrop"
+          @node-click="onNodeClick"
+          @edge-click="onEdgeClick"
+          @edge-mouse-enter="onEdgeMouseEnter"
+          @edge-mouse-move="onEdgeMouseMove"
+          @edge-mouse-leave="onEdgeMouseLeave"
+          @pane-click="onPaneClick"
+          @edge-insert-pointer-enter="onEdgeInsertPointerEnter"
+          @edge-insert-pointer-leave="onEdgeInsertPointerLeave"
+          @insert-node-on-edge="onInsertNodeOnEdge"
+          @edge-insert-menu-open="onEdgeInsertMenuOpen"
+          @edge-insert-menu-close="onEdgeInsertMenuClose"
+          @version-panel-drag-start="onVersionPanelDragStart"
+          @close-version-panel="versionVisible = false"
+          @select-version="selectVersion"
+          @overwrite-draft="overwriteDraftFromVersion"
+        />
+
+        <div v-if="viewingTestHistory" class="test-history-viewer-overlay">
+          <div class="test-history-banner">
+            正在回放历史测试快照（与当前草稿可能不一致）
+          </div>
+          <WorkflowViewerCanvas
+            v-if="testHistoryViewerNodes.length"
+            ref="testHistoryViewerRef"
+            flow-id="lightbot-workflow-test-history"
+            :nodes="testHistoryViewerNodes"
+            :edges="testHistoryViewerEdges"
+            :node-states="testHistoryNodeStates"
+            :highlighted-edge-ids="testHistoryHighlightedEdges"
+            :selected-node-id="testCurrentNodeId"
+          />
+          <div v-else class="test-history-empty">该记录无工作流图快照，请在右侧查看执行轨迹</div>
+        </div>
+      </div>
 
       <ResizableSidePanel
         v-if="selectedEdge"
@@ -201,11 +222,20 @@
     :test-result="testResult"
     :test-current-node-id="testCurrentNodeId"
     :test-pending-confirm="testPendingConfirm"
+    :history-list="testHistoryList"
+    :history-loading="testHistoryLoading"
+    :selected-history-run-id="selectedHistoryRunId"
+    :viewing-history="viewingTestHistory"
     :get-node-title-by-id="getNodeTitleById"
     @close="onTestDrawerClose"
     @run="runWorkflowTest"
     @resume="resumeWorkflowTest"
     @clear-conversation="clearTestConversation"
+    @select-node="onTestTimelineNodeSelect"
+    @open-history-run="openTestRunHistory"
+    @delete-history="deleteTestRunHistory"
+    @clear-history="clearTestRunHistory"
+    @back-to-live="backToLiveTest"
   />
 
   <WorkflowPublishModal
@@ -233,7 +263,11 @@ import {
   getWorkflowVersionDetail,
   restoreWorkflowVersion,
   testWorkflow,
-  resumeWorkflow
+  resumeWorkflow,
+  listWorkflowTestRuns,
+  getWorkflowTestRun,
+  deleteWorkflowTestRun,
+  clearWorkflowTestRuns,
 } from '../api/workflow'
 import NodeSingleTestDrawer from '../views/workflow/components/NodeSingleTestDrawer.vue'
 import NodeExampleModal from '../views/workflow/components/NodeExampleModal.vue'
@@ -247,7 +281,10 @@ import ResizableSidePanel from '../views/workflow/components/ResizableSidePanel.
 import WorkflowNodeHelpModal from '../views/workflow/components/edit/WorkflowNodeHelpModal.vue'
 import WorkflowGlobalConfigModal from '../views/workflow/components/edit/WorkflowGlobalConfigModal.vue'
 import WorkflowTestDrawer from '../views/workflow/components/edit/WorkflowTestDrawer.vue'
+import WorkflowViewerCanvas from '../views/workflow/components/WorkflowViewerCanvas.vue'
 import WorkflowPublishModal from '../views/workflow/components/edit/WorkflowPublishModal.vue'
+import { workflowGraphToVueFlow, normalizeWorkflowGraphSnapshot } from '../views/workflow/workflowGraphToVueFlow.js'
+import { buildExecutedEdgeIds } from '../views/workflow/workflowViewerAdapter.js'
 import { getNodeExample, canApplyNodeExample } from '../views/workflow/nodeConfigMeta'
 import { canSingleTestNodeType } from '../views/workflow/workflowNodeTest'
 import { ensureConditionGroups } from '../views/workflow/conditionUtils'
@@ -370,6 +407,26 @@ const testAnimating = ref(false)
 const testCurrentNodeId = ref(null)
 const testResult = ref(null)
 const testPendingConfirm = ref(null)
+const testHistoryList = ref([])
+const testHistoryLoading = ref(false)
+const selectedHistoryRunId = ref(null)
+const viewingTestHistory = ref(false)
+const liveTestSnapshot = ref(null)
+/** 历史回放只读画板（REQ-TEST-004：使用 workflow_graph 快照，不与编辑画布混用） */
+const testHistoryViewerRef = ref(null)
+const testHistoryViewerNodes = ref([])
+const testHistoryViewerEdges = ref([])
+const testHistoryRawEdges = ref([])
+const testHistoryNodeStates = ref({})
+const testHistoryHighlightedEdges = computed(() => {
+  if (!viewingTestHistory.value) return new Set()
+  const executedIds = Object.keys(testHistoryNodeStates.value).filter(
+    id => testHistoryNodeStates.value[id]?.debugStatus,
+  )
+  return buildExecutedEdgeIds(testHistoryRawEdges.value, executedIds)
+})
+/** 历史回放动画代次，用于取消/防重复触发 */
+const testAnimationGeneration = ref(0)
 const versionVisible = ref(false)
 const publishModalVisible = ref(false)
 const publishDescription = ref('')
@@ -379,6 +436,9 @@ const agentStatusLabels = ref(null)
 const workflowLoaded = ref(false)
 let autoSaveTimer = null
 const versionList = ref([])
+const publishedVersionList = computed(() =>
+  (versionList.value || []).filter(v => v?.version != null && v.version > 0),
+)
 const versionLoading = ref(false)
 const selectedVersion = ref('draft')
 const VERSION_PANEL_WIDTH = 300
@@ -409,6 +469,10 @@ const selectedEdge = ref(null)
 watch([selectedNode, selectedEdge, panelCollapsed, versionVisible], () => {
   if (!versionVisible.value) return
   nextTick(() => clampVersionPanelPosition())
+})
+
+watch(testVisible, (open) => {
+  if (open) loadTestHistoryList()
 })
 
 const validationErrors = ref([])
@@ -1950,21 +2014,78 @@ function setNodeDebugStatus(nodeId, status) {
   if (node) focusNode(node)
 }
 
-async function animateWorkflowTest(events) {
+function clearReplayNodeStatus() {
+  if (viewingTestHistory.value && testHistoryViewerNodes.value.length) {
+    testHistoryNodeStates.value = {}
+    return
+  }
   clearNodeDebugStatus()
+}
+
+function focusTestHistoryNode(nodeId) {
+  if (!nodeId) return
+  try {
+    testHistoryViewerRef.value?.fitView?.({
+      nodes: [nodeId],
+      padding: 0.45,
+      duration: 300,
+    })
+  } catch (_) { /* VueFlow 未就绪 */ }
+}
+
+function setReplayNodeStatus(nodeId, status) {
+  if (viewingTestHistory.value && testHistoryViewerNodes.value.length) {
+    testHistoryNodeStates.value = {
+      ...testHistoryNodeStates.value,
+      [nodeId]: {
+        ...testHistoryNodeStates.value[nodeId],
+        debugStatus: status,
+      },
+    }
+    focusTestHistoryNode(nodeId)
+    return
+  }
+  setNodeDebugStatus(nodeId, status)
+}
+
+async function animateWorkflowTest(events, animationToken) {
+  const token = animationToken ?? testAnimationGeneration.value
+  clearReplayNodeStatus()
   testAnimating.value = true
   for (const ev of events || []) {
+    if (token !== testAnimationGeneration.value) {
+      testAnimating.value = false
+      return
+    }
     if (ev.type === 'workflow_node_start' && ev.nodeId) {
-      setNodeDebugStatus(ev.nodeId, 'executing')
+      setReplayNodeStatus(ev.nodeId, 'executing')
       testCurrentNodeId.value = ev.nodeId
       await sleep(700)
     }
     if (ev.type === 'workflow_node_complete' && ev.nodeId) {
-      setNodeDebugStatus(ev.nodeId, ev.success === false ? 'fail' : 'success')
+      setReplayNodeStatus(ev.nodeId, ev.success === false ? 'fail' : 'success')
       await sleep(400)
     }
   }
-  testAnimating.value = false
+  if (token === testAnimationGeneration.value) {
+    testAnimating.value = false
+  }
+}
+
+function applyTestHistorySnapshot(detail) {
+  const snapshot = normalizeWorkflowGraphSnapshot(detail?.workflowGraph)
+  testHistoryRawEdges.value = snapshot.edges
+  const viewer = workflowGraphToVueFlow(snapshot)
+  testHistoryViewerNodes.value = viewer.nodes
+  testHistoryViewerEdges.value = viewer.edges
+  testHistoryNodeStates.value = {}
+}
+
+function clearTestHistorySnapshot() {
+  testHistoryViewerNodes.value = []
+  testHistoryViewerEdges.value = []
+  testHistoryRawEdges.value = []
+  testHistoryNodeStates.value = {}
 }
 
 // 删除选中节点
@@ -2165,6 +2286,10 @@ async function openVersionDrawer() {
 }
 
 async function selectVersion(version) {
+  if (version !== 'draft' && (version == null || version === 'undefined')) {
+    message.warning('该版本无效，请选择已发布的版本')
+    return
+  }
   selectedVersion.value = version
   selectedNode.value = null
   clearEdgeSelection()
@@ -2330,10 +2455,145 @@ function clearTestConversation() {
   testMessages.value = []
   testResult.value = null
   testPendingConfirm.value = null
+  viewingTestHistory.value = false
+  selectedHistoryRunId.value = null
+  liveTestSnapshot.value = null
+}
+
+async function loadTestHistoryList() {
+  testHistoryLoading.value = true
+  try {
+    const res = await listWorkflowTestRuns(agentId)
+    testHistoryList.value = res.data || []
+  } catch {
+    testHistoryList.value = []
+  } finally {
+    testHistoryLoading.value = false
+  }
+}
+
+function stopTestReplayAnimation() {
+  testAnimationGeneration.value++
+  testAnimating.value = false
+  testCurrentNodeId.value = null
+  clearReplayNodeStatus()
+}
+
+function applyTestRunDetail(detail, { fromHistory = false, replayAnimation = true } = {}) {
+  if (fromHistory) {
+    applyTestHistorySnapshot(detail)
+  }
+  testResult.value = {
+    output: detail.output,
+    nodeEvents: detail.nodeEvents || [],
+    variables: detail.variables || {},
+    usedDraft: detail.usedDraft,
+    suspended: detail.status === 'suspended',
+    runId: detail.runId,
+    testRunId: detail.id,
+  }
+  if (detail.status === 'suspended' && detail.confirmForm && !fromHistory) {
+    testPendingConfirm.value = { runId: detail.runId, confirmForm: detail.confirmForm }
+  } else {
+    testPendingConfirm.value = null
+  }
+  testCurrentNodeId.value = null
+  if (replayAnimation) {
+    const token = ++testAnimationGeneration.value
+    animateWorkflowTest(detail.nodeEvents || [], token)
+  }
+}
+
+async function openTestRunHistory(runId) {
+  // 同一条历史正在回放时，重复点击不重新触发动画
+  if (testAnimating.value && selectedHistoryRunId.value === runId) {
+    return
+  }
+  // 切换到另一条记录时，取消进行中的回放动画
+  if (testAnimating.value) {
+    testAnimationGeneration.value++
+    testAnimating.value = false
+  }
+  selectedHistoryRunId.value = runId
+  viewingTestHistory.value = true
+  versionVisible.value = false
+  if (!liveTestSnapshot.value && testResult.value) {
+    liveTestSnapshot.value = {
+      testResult: testResult.value,
+      testPendingConfirm: testPendingConfirm.value,
+    }
+  }
+  try {
+    const res = await getWorkflowTestRun(agentId, runId)
+    applyTestRunDetail(res.data, { fromHistory: true })
+  } catch (e) {
+    notification.error({ message: '加载历史记录失败', description: e.message })
+  }
+}
+
+function backToLiveTest() {
+  stopTestReplayAnimation()
+  viewingTestHistory.value = false
+  selectedHistoryRunId.value = null
+  testResult.value = null
+  testPendingConfirm.value = null
+  liveTestSnapshot.value = null
+  clearTestHistorySnapshot()
+}
+
+async function deleteTestRunHistory(runId) {
+  Modal.confirm({
+    title: '删除测试记录',
+    content: '确定删除这条测试运行记录吗？删除后无法恢复。',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await deleteWorkflowTestRun(agentId, runId)
+        if (selectedHistoryRunId.value === runId) {
+          backToLiveTest()
+          testResult.value = null
+        }
+        await loadTestHistoryList()
+        message.success('已删除')
+      } catch (e) {
+        notification.error({ message: '删除失败', description: e.message })
+      }
+    },
+  })
+}
+
+async function clearTestRunHistory() {
+  try {
+    await clearWorkflowTestRuns(agentId)
+    backToLiveTest()
+    testResult.value = null
+    testHistoryList.value = []
+    message.success('已清空测试历史')
+  } catch (e) {
+    notification.error({ message: '清空失败', description: e.message })
+  }
+}
+
+function onTestTimelineNodeSelect(nodeId) {
+  testCurrentNodeId.value = nodeId
+  if (viewingTestHistory.value && testHistoryViewerNodes.value.length) {
+    focusTestHistoryNode(nodeId)
+    return
+  }
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (node) focusNode(node)
 }
 
 function onTestDrawerClose() {
-  clearNodeDebugStatus()
+  // 历史快照回放中关闭侧栏：仅隐藏抽屉，画布动画与历史状态保持
+  if (viewingTestHistory.value) {
+    return
+  }
+  testAnimationGeneration.value++
+  testAnimating.value = false
+  clearReplayNodeStatus()
 }
 
 async function runWorkflowTest() {
@@ -2356,6 +2616,10 @@ async function runWorkflowTest() {
   }
 
   testVisible.value = true
+  viewingTestHistory.value = false
+  selectedHistoryRunId.value = null
+  liveTestSnapshot.value = null
+  testAnimationGeneration.value++
   testRunning.value = true
   testResult.value = null
   testPendingConfirm.value = null
@@ -2383,6 +2647,7 @@ async function runWorkflowTest() {
       }
       await animateWorkflowTest(res.data?.nodeEvents || [])
       message.info('工作流已暂停，请填写确认表单后继续')
+      await loadTestHistoryList()
       return
     }
     if (testMode.value === 'conversation' && res.data?.output) {
@@ -2391,6 +2656,7 @@ async function runWorkflowTest() {
     testInput.value = ''
     await animateWorkflowTest(res.data?.nodeEvents || [])
     message.success('测试运行完成')
+    await loadTestHistoryList()
   } catch (e) {
     if (testMode.value === 'conversation' && testMessages.value.length) {
       const last = testMessages.value[testMessages.value.length - 1]
@@ -2413,12 +2679,7 @@ async function resumeWorkflowTest(formData) {
       runId: testPendingConfirm.value.runId,
       formData,
     })
-    const prevEvents = testResult.value?.nodeEvents || []
-    testResult.value = {
-      ...res.data,
-      nodeEvents: [...prevEvents, ...(res.data?.nodeEvents || [])],
-      variables: res.data?.variables || testResult.value?.variables,
-    }
+    testResult.value = res.data
     if (res.data?.suspended) {
       testPendingConfirm.value = {
         runId: res.data.runId,
@@ -2434,6 +2695,7 @@ async function resumeWorkflowTest(formData) {
     }
     await animateWorkflowTest(res.data?.nodeEvents || [])
     message.success('工作流执行完成')
+    await loadTestHistoryList()
   } catch (e) {
     notification.error({ message: '恢复执行失败', description: e.message })
   } finally {
@@ -2883,6 +3145,48 @@ function goBack() {
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
+.workflow-canvas-shell {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.test-history-viewer-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-canvas);
+}
+
+.test-history-banner {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  text-align: center;
+  border-bottom: 1px solid #fcd34d;
+}
+
+.test-history-viewer-overlay :deep(.workflow-viewer-canvas) {
+  flex: 1;
+  min-height: 0;
+}
+
+.test-history-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-mute);
+  font-size: 14px;
+  padding: 24px;
 }
 
 /* 左侧节点面板 */
