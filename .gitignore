@@ -33,7 +33,8 @@ logs/
 .claude/
 
 # Docs (本地文档，不上传远程)
-docs/
+docs/*
+!docs/assets/
 
 # CodeGraph
 .codegraph/
