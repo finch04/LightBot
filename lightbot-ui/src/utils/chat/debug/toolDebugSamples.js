@@ -28,7 +28,7 @@ export const TOOL_DEBUG_SAMPLES = {
         document_id: '2056961707612393473',
         document_name: '产品手册.pdf',
         knowledge_id: '1001',
-        content: 'LightBot 是一个轻量级 Java AI Agent 平台，支持 RAG、工作流与多工具调用。',
+        content: '智元 是一个轻量级 Java AI Agent 平台，支持 RAG、工作流与多工具调用。',
         score: 0.92,
       },
       {
@@ -88,7 +88,7 @@ export const TOOL_DEBUG_SAMPLES = {
     knowledge_id: '1001',
     knowledge_name: '产品架构',
     mindmap: {
-      name: 'LightBot 架构',
+      name: '智元 架构',
       children: [
         { name: 'lightbot-server', children: [{ name: 'Agent' }, { name: 'RAG' }] },
         { name: 'lightbot-ui', children: [{ name: 'Chat' }, { name: 'Workflow' }] },
@@ -99,7 +99,7 @@ export const TOOL_DEBUG_SAMPLES = {
   open_kb_document: sample('open_kb_document', {
     document_id: '2056961707612393473',
     document_name: 'README.md',
-    content: '# LightBot\n\n轻量级 Java AI Agent 平台。\n\n## 功能\n\n- Agent 对话\n- 知识库 RAG\n- 工作流编排',
+    content: '# 智元\n\n轻量级 Java AI Agent 平台。\n\n## 功能\n\n- Agent 对话\n- 知识库 RAG\n- 工作流编排',
   }),
 
   web_search: sample('web_search', {
@@ -227,7 +227,7 @@ export const TOOL_DEBUG_SAMPLES = {
   execute_code: sample('execute_code', {
     success: true,
     language: 'python',
-    output: 'Hello, LightBot!\n',
+    output: 'Hello, 智元!\n',
     returnValue: null,
     error: null,
     elapsedMs: 128,
@@ -262,7 +262,7 @@ export const TOOL_DEBUG_SAMPLES = {
     source_path: 'invoice.pdf',
     parsed_path: 'ocr/invoice.md',
     char_count: 1280,
-    preview: '发票号码：12345678\n开票日期：2026-01-15\n\n商品名称    数量    金额\nLightBot 订阅  1    ¥999.00\n\n合计：¥999.00',
+    preview: '发票号码：12345678\n开票日期：2026-01-15\n\n商品名称    数量    金额\n智元 订阅  1    ¥999.00\n\n合计：¥999.00',
     truncated: true,
   }),
 
@@ -288,6 +288,28 @@ export const TOOL_DEBUG_SAMPLES = {
       },
     ],
     errors: [],
+  }),
+
+  present_business_page: sample('present_business_page', {
+    success: true,
+    pageType: 'leave_request',
+    displayName: '请假申请',
+    title: '请假申请',
+    mode: 'inline',
+    props: {
+      days: 1,
+      reason: '事假',
+    },
+    pageHtml: '<!DOCTYPE html><html><body><p>请假申请 Demo</p></body></html>',
+    actions: ['submit', 'cancel'],
+    options: {
+      primaryButtonText: '提交申请',
+      hint: 'H5 业务页 · Debug Lab 预览',
+    },
+    wait_for_user: true,
+    break_loop: true,
+    renderHint: 'h5',
+    schemaVersion: 1,
   }),
 
   install_skill: sample('install_skill', {
@@ -401,6 +423,7 @@ export const TOOL_DEBUG_ERROR_SAMPLES = {
     artifacts: [],
     errors: ['outputs/missing.pdf（文件不存在）', 'outputs/bad.txt（路径不在 outputs/ 下）'],
   },
+  present_business_page: { _error: true, message: '未知或已禁用 pageType: not_exists。可用：（尚未在能力中心注册任何业务页）' },
   install_skill: { _error: true, message: '未找到可安装的技能' },
   memory_save: { success: false, error: '缺少 content 参数' },
   memory_search: { success: false, error: '缺少用户上下文，无法查询长期记忆' },

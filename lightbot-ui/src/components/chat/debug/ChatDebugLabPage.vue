@@ -402,7 +402,7 @@ watch(composerUiState, () => {
 
 <style scoped>
 .debug-lab-root {
-  min-height: 100vh;
+  min-height: var(--app-content-height);
   background: var(--color-canvas);
 }
 

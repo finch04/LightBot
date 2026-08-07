@@ -3,9 +3,12 @@ package com.lightbot.controller;
 import com.lightbot.common.Result;
 import com.lightbot.dto.DefaultAiConfigDTO;
 import com.lightbot.dto.DefaultModelsConfigDTO;
+import com.lightbot.dto.LongMemoryPolicyUpdateDTO;
+import com.lightbot.vo.LongMemoryPolicyVO;
 import jakarta.validation.Valid;
 import cn.dev33.satoken.stp.StpUtil;
 import com.lightbot.service.HealthService;
+import com.lightbot.service.LongMemoryPolicyService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.TokenBudgetService;
 import com.lightbot.service.UserService;
@@ -31,6 +34,7 @@ public class SystemConfigController {
 
     private final SystemConfigService systemConfigService;
     private final TokenBudgetService tokenBudgetService;
+    private final LongMemoryPolicyService longMemoryPolicyService;
     private final UserService userService;
     private final HealthService healthService;
 
@@ -114,6 +118,22 @@ public class SystemConfigController {
     @GetMapping("/health")
     public Result<Map<String, Object>> health() {
         return Result.ok(healthService.aggregate());
+    }
+
+    // ========== 企业长期记忆策略 ==========
+
+    @Operation(summary = "获取企业长期记忆默认策略")
+    @GetMapping("/long-memory")
+    public Result<LongMemoryPolicyVO> getLongMemoryPolicy() {
+        userService.checkAdmin();
+        return Result.ok(longMemoryPolicyService.getEnterprisePolicy());
+    }
+
+    @Operation(summary = "更新企业长期记忆默认策略")
+    @PutMapping("/long-memory")
+    public Result<LongMemoryPolicyVO> updateLongMemoryPolicy(@Valid @RequestBody LongMemoryPolicyUpdateDTO request) {
+        userService.checkAdmin();
+        return Result.ok(longMemoryPolicyService.updateEnterprisePolicy(request));
     }
 
     // ========== Token 预算管理 ==========

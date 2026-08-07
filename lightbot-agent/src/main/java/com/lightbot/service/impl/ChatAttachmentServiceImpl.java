@@ -212,7 +212,7 @@ public class ChatAttachmentServiceImpl implements ChatAttachmentService {
             if (sessionId != null && !sessionId.equals(sid)) {
                 throw new BizException(ErrorCode.BAD_REQUEST.getCode(), "附件与会话不匹配");
             }
-            chatSessionService.ensureOwnedByUser(sid, StpUtil.getLoginIdAsLong());
+            chatSessionService.ensurePlatformOwnedByUser(sid, StpUtil.getLoginIdAsLong());
             return;
         }
         if (objectKey.startsWith("chat/")) {

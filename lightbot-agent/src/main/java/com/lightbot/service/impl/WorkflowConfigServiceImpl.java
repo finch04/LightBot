@@ -16,11 +16,13 @@ import com.lightbot.vo.WorkflowTestRunVO;
 import com.lightbot.vo.WorkflowVersionVO;
 import com.lightbot.entity.Agent;
 import com.lightbot.entity.Message;
+import com.lightbot.entity.SubAgent;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.NodeType;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.AgentVersionService;
 import com.lightbot.service.MessageService;
+import com.lightbot.service.SubAgentService;
 import com.lightbot.service.WorkflowConfigService;
 import com.lightbot.service.WorkflowTestRunService;
 import com.lightbot.service.workflow.WorkflowTestSseHelper;
@@ -61,6 +63,7 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
 
     private final AgentService agentService;
     private final AgentVersionService agentVersionService;
+    private final SubAgentService subAgentService;
     private final ObjectMapper objectMapper;
     private final WorkflowExecutorService workflowExecutorService;
     private final WorkflowTestRunService workflowTestRunService;
@@ -718,13 +721,31 @@ public class WorkflowConfigServiceImpl implements WorkflowConfigService {
                     }
                 }
             }
-            // 条件分支节点必须有默认路径（out_c 边）
+            if ("sub_agent".equals(type)) {
+                Long subAgentId = com.lightbot.workflow.WorkflowNodeDataUtils.parseLongId(data.get("subAgentId"));
+                if (subAgentId == null) {
+                    errors.add("SubAgent 节点未选择子智能体: " + id);
+                } else {
+                    SubAgent subAgent = subAgentService.getById(subAgentId);
+                    if (subAgent == null) {
+                        errors.add("SubAgent 不存在: " + id);
+                    } else if (!Integer.valueOf(1).equals(subAgent.getEnabled())) {
+                        errors.add("SubAgent 未启用: " + id);
+                    }
+                }
+                Object task = data.get("task");
+                if (task == null || String.valueOf(task).isBlank()) {
+                    errors.add("SubAgent 节点未配置任务描述: " + id);
+                }
+            }
+            // 条件分支节点必须有未命中兜底边（{nodeId}_default）
             if ("condition".equals(type)) {
+                String defaultHandle = id + "_default";
                 boolean hasDefaultEdge = edges.stream().anyMatch(e ->
                         id.equals(String.valueOf(e.get("source")))
-                                && "out_c".equals(String.valueOf(e.get("sourceHandle"))));
+                                && defaultHandle.equals(String.valueOf(e.get("sourceHandle"))));
                 if (!hasDefaultEdge) {
-                    errors.add("条件分支节点缺少默认路径: " + id);
+                    errors.add("条件分支节点缺少「都未命中」默认路径: " + id);
                 }
             }
             try {

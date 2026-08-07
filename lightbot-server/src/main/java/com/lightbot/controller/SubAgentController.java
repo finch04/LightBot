@@ -91,7 +91,7 @@ public class SubAgentController {
             @RequestParam(required = false) String parentRequestId,
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.pageRuns(sessionId, batchId, parentRequestId, pageNum, pageSize));
     }
 
@@ -101,7 +101,7 @@ public class SubAgentController {
             @RequestParam Long sessionId,
             @RequestParam(required = false) String parentRequestId,
             @RequestParam(defaultValue = "20") int limit) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.listRuntimeSummaries(sessionId, parentRequestId, limit));
     }
 
@@ -110,42 +110,42 @@ public class SubAgentController {
     public Result<ResearchTaskProjectionVO> getResearchProjection(
             @RequestParam Long sessionId,
             @RequestParam String parentRequestId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(researchTaskProjectionService.getProjection(sessionId, parentRequestId));
     }
 
     @Operation(summary = "获取SubAgent批次详情")
     @GetMapping("/batches/{batchId}")
     public Result<java.util.Map<String, Object>> getBatch(@PathVariable String batchId, @RequestParam Long sessionId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.getBatchDetail(batchId, sessionId));
     }
 
     @Operation(summary = "取消SubAgent批次")
     @PostMapping("/batches/{batchId}/cancel")
     public Result<java.util.Map<String, Object>> cancelBatch(@PathVariable String batchId, @RequestParam Long sessionId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.cancelBatch(batchId, sessionId));
     }
 
     @Operation(summary = "取消SubAgent单任务")
     @PostMapping("/runs/{taskId}/cancel")
     public Result<java.util.Map<String, Object>> cancelRun(@PathVariable String taskId, @RequestParam Long sessionId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.cancelTask(taskId, sessionId));
     }
 
     @Operation(summary = "获取SubAgent单任务详情")
     @GetMapping("/runs/{taskId}")
     public Result<java.util.Map<String, Object>> getRun(@PathVariable String taskId, @RequestParam Long sessionId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.getTaskDetail(taskId, sessionId));
     }
 
     @Operation(summary = "获取SubAgent任务的独立子线程详情")
     @GetMapping("/runs/{taskId}/thread")
     public Result<java.util.Map<String, Object>> getRunThread(@PathVariable String taskId, @RequestParam Long sessionId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.getTaskThreadDetail(taskId, sessionId));
     }
 
@@ -156,7 +156,7 @@ public class SubAgentController {
             @RequestParam Long sessionId,
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "50") int limit) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(subAgentTaskService.getTaskEvents(taskId, sessionId, cursor, limit));
     }
 }

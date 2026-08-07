@@ -38,6 +38,7 @@ public enum NodeType {
     VARIABLE_HANDLE("variable_handle", "变量处理"),
     PARAMETER_EXTRACTOR("parameter_extractor", "参数提取"),
     APP_COMPONENT("app_component", "应用组件"),
+    SUB_AGENT("sub_agent", "SubAgent"),
     CONFIRM("confirm", "人工确认");
 
     @EnumValue

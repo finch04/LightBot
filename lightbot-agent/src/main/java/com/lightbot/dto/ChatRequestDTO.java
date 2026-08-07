@@ -16,7 +16,22 @@ public class ChatRequestDTO {
     private Long agentId;
 
     /**
-     * 入参变量，用于替换系统提示词中的 {{变量名}} 占位符
+     * 上层业务系统的终端用户标识（可选）。
+     * <p>仅企业 API Key 调用时生效；传入后启用该用户在本 Key 下的跨会话长期记忆。
+     * 不传则保持无个人记忆（仅 sessionId 隔离短期上下文）。</p>
+     * <p>兼容字段：等价于 {@code callerContext.externalUserId}；优先使用 {@link #callerContext}。</p>
+     */
+    private String externalUserId;
+
+    /**
+     * 调用方身份上下文（可选，仅 API Key）。
+     * <p>含 externalUserId / regionId / enterpriseId / profile，供 Tool、MCP、问数做数据与权限隔离。
+     * 首轮写入会话后续聊可省略；隔离主键不可中途更换。</p>
+     */
+    private CallerContext callerContext;
+
+    /**
+     * 入参变量，用于替换系统提示词中的 {{变量名}} 占位符（不承载身份）
      */
     private Map<String, Object> bizParams;
 
@@ -64,7 +79,17 @@ public class ChatRequestDTO {
     private List<ChatMentionDTO> mentions;
 
     /**
+     * 本轮是否启用深度思考。null=沿用 Agent 配置；false=强制关闭（如业务办理页提交回灌）。
+     */
+    private Boolean enableReasoning;
+
+    /**
      * API Key ID（由拦截器注入，不从前端传入）
      */
     private transient Long apiKeyId;
+
+    /**
+     * 系统内部调用时的执行用户（无登录态时由 InitMiddleware 回退使用，不从前端传入）
+     */
+    private transient Long actorUserId;
 }

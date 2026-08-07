@@ -138,9 +138,24 @@
           </a-form-item>
           <a-alert type="info" show-icon message="测试不会保存配置；创建时会再次验证连接。Dify Dataset 为只读知识库。" />
         </template>
-        <a-form-item v-else label="Embed模型" required>
-          <ModelSelect v-model="form.embeddingModel" model-type="embedding" placeholder="选择嵌入模型" />
-        </a-form-item>
+        <template v-else>
+          <a-form-item label="Embed模型" required>
+            <ModelSelect
+              v-model="form.embeddingModel"
+              model-type="embedding"
+              placeholder="选择嵌入模型"
+              @change="({ modelId }) => { selectedEmbeddingModelId = modelId }"
+            />
+          </a-form-item>
+          <a-form-item label="知识图谱">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <a-switch v-model:checked="form.graphEnabled" />
+              <a-tooltip title="开启后，文档入库完成时自动触发知识图谱抽取，提取实体和关系用于图谱检索增强（RAG Graph）。需配置 Neo4j。">
+                <QuestionCircleOutlined style="font-size: 14px; color: var(--color-mute); cursor: help;" />
+              </a-tooltip>
+            </div>
+          </a-form-item>
+        </template>
       </a-form>
       </div>
       <template #footer>
@@ -161,7 +176,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined, DatabaseOutlined, CloudServerOutlined, ApiOutlined, FileTextOutlined, BlockOutlined, FontColorsOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ApartmentOutlined, DatabaseOutlined, CloudServerOutlined, ApiOutlined, FileTextOutlined, BlockOutlined, FontColorsOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getKnowledgeList, createKnowledge, deleteKnowledge, testDifyDraftConnection } from '../api/knowledge'
 import ModelSelect from '../components/ModelSelect.vue'
@@ -182,8 +197,11 @@ const form = reactive({
   description: '',
   type: 'pg',
   embeddingModel: null,
+  graphEnabled: false,
   difyConfig: { apiUrl: '', datasetId: '', token: '' },
 })
+/** 知识库仅持久化 modelId（与详情编辑一致），下拉 v-model 仍用复合值 */
+const selectedEmbeddingModelId = ref(null)
 
 function formatTokenCount(count) {
   if (!count || count <= 0) return '0'
@@ -194,6 +212,8 @@ function formatTokenCount(count) {
 
 function openCreateModal() {
   form.embeddingModel = null
+  selectedEmbeddingModelId.value = null
+  form.graphEnabled = false
   form.difyConfig.apiUrl = ''
   form.difyConfig.datasetId = ''
   form.difyConfig.token = ''
@@ -246,7 +266,7 @@ async function handleCreate() {
     message.warning('请输入名称')
     return
   }
-  if (form.type !== 'dify' && !form.embeddingModel) {
+  if (form.type !== 'dify' && !selectedEmbeddingModelId.value) {
     message.warning('请选择 Embed 模型')
     return
   }
@@ -258,7 +278,8 @@ async function handleCreate() {
   try {
     await createKnowledge({
       ...form,
-      embeddingModel: form.type === 'dify' ? null : form.embeddingModel,
+      embeddingModel: form.type === 'dify' ? null : selectedEmbeddingModelId.value,
+      graphEnabled: form.type === 'dify' ? false : form.graphEnabled,
       config: '{}',
     })
     message.success('创建成功')
@@ -266,6 +287,7 @@ async function handleCreate() {
     form.name = ''
     form.description = ''
     form.type = 'pg'
+    form.graphEnabled = false
     loadData()
   } finally {
     submitting.value = false

@@ -1,7 +1,7 @@
 <template>
   <div class="extensions-page">
     <LbPageTabsHeader
-      title="扩展"
+      title="能力中心"
       :tabs="extensionTabs"
       :active-key="activeTab"
       @update:active-key="activeTab = $event"
@@ -54,6 +54,7 @@
       <SkillManage v-if="activeTab === 'skills'" ref="skillRef" hide-header />
       <ToolManage v-if="activeTab === 'tools'" ref="toolRef" hide-header />
       <SubAgentManage v-if="activeTab === 'subagents'" ref="subAgentRef" hide-header />
+      <BusinessPageManage v-if="activeTab === 'businessPages'" ref="bizPageRef" hide-header />
     </div>
   </div>
 </template>
@@ -66,6 +67,7 @@ import McpManage from './McpManage.vue'
 import SkillManage from './SkillManage.vue'
 import ToolManage from './ToolManage.vue'
 import SubAgentManage from './SubAgentManage.vue'
+import BusinessPageManage from './BusinessPageManage.vue'
 import DynamicToolDrawer from '../components/DynamicToolDrawer.vue'
 import LbPageTabsHeader from '../components/common/LbPageTabsHeader.vue'
 
@@ -77,6 +79,7 @@ const extensionTabs = [
   { key: 'skills', label: 'Skill' },
   { key: 'tools', label: '工具' },
   { key: 'subagents', label: 'SubAgents' },
+  { key: 'businessPages', label: '业务页组件' },
 ]
 const searchText = ref('')
 const toolTypeFilter = ref('all')
@@ -84,49 +87,57 @@ const mcpRef = ref(null)
 const skillRef = ref(null)
 const toolRef = ref(null)
 const subAgentRef = ref(null)
+const bizPageRef = ref(null)
+
+const manageRefMap = {
+  mcp: mcpRef,
+  skills: skillRef,
+  tools: toolRef,
+  subagents: subAgentRef,
+  businessPages: bizPageRef,
+}
+
+function currentManage() {
+  return manageRefMap[activeTab.value]?.value || null
+}
 
 const addBtnText = computed(() => {
-  const map = { mcp: '新增 MCP Server', skills: '新增 Skill', tools: '新增工具', subagents: '新增 SubAgent' }
+  const map = {
+    mcp: '新增 MCP Server',
+    skills: '新增 Skill',
+    tools: '新增工具',
+    subagents: '新增 SubAgent',
+    businessPages: '新建业务页',
+  }
   return map[activeTab.value] || '新增'
 })
 
 const searchPlaceholder = computed(() => {
-  const map = { mcp: '搜索 MCP Server...', skills: '搜索 Skill...', tools: '搜索工具...', subagents: '搜索 SubAgent...' }
+  const map = {
+    mcp: '搜索 MCP Server...',
+    skills: '搜索 Skill...',
+    tools: '搜索工具...',
+    subagents: '搜索 SubAgent...',
+    businessPages: '搜索业务页...',
+  }
   return map[activeTab.value] || '搜索...'
 })
 
 // 当前激活 tab 子组件的 loading 状态：刷新按钮 spin 与搜索框 loading 共用，让用户看到"操作已生效"
-const currentLoading = computed(() => {
-  const target = activeTab.value === 'mcp' ? mcpRef.value
-    : activeTab.value === 'skills' ? skillRef.value
-    : activeTab.value === 'tools' ? toolRef.value
-    : subAgentRef.value
-  return !!target?.loading
-})
+const currentLoading = computed(() => !!currentManage()?.loading)
 
 function handleAdd() {
-  const target = activeTab.value === 'mcp' ? mcpRef.value
-    : activeTab.value === 'skills' ? skillRef.value
-    : activeTab.value === 'tools' ? toolRef.value
-    : subAgentRef.value
-  target?.openDialog()
+  currentManage()?.openDialog()
 }
 
 function handleRefresh() {
   searchText.value = ''
   toolTypeFilter.value = 'all'
-  const target = activeTab.value === 'mcp' ? mcpRef.value
-    : activeTab.value === 'skills' ? skillRef.value
-    : activeTab.value === 'tools' ? toolRef.value
-    : subAgentRef.value
-  target?.refresh()
+  currentManage()?.refresh()
 }
 
 function handleSearch() {
-  const target = activeTab.value === 'mcp' ? mcpRef.value
-    : activeTab.value === 'skills' ? skillRef.value
-    : activeTab.value === 'tools' ? toolRef.value
-    : subAgentRef.value
+  const target = currentManage()
   // 传递搜索文本和工具类型（仅工具Tab）
   if (activeTab.value === 'tools') {
     const type = toolTypeFilter.value === 'all' ? undefined : toolTypeFilter.value
@@ -148,17 +159,13 @@ watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } })
   searchText.value = ''
   toolTypeFilter.value = 'all'
-  const target = tab === 'mcp' ? mcpRef.value
-    : tab === 'skills' ? skillRef.value
-    : tab === 'tools' ? toolRef.value
-    : subAgentRef.value
-  target?.refresh()
+  manageRefMap[tab]?.value?.refresh()
 })
 </script>
 
 <style scoped>
 .extensions-page {
-  height: 100vh;
+  height: var(--app-content-height);
   overflow: hidden;
   background: var(--color-canvas-soft);
   padding: 32px;

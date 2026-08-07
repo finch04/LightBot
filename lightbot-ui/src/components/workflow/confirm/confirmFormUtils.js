@@ -80,21 +80,32 @@ export function isAskUserHitlForm(confirmForm) {
   return confirmForm?.hitlType === 'ask_user' || confirmForm?.toolName === 'ask_user'
 }
 
+/** 业务办理页 HITL */
+export function isBusinessPageHitlForm(confirmForm) {
+  return confirmForm?.hitlType === 'business_page' || confirmForm?.toolName === 'present_business_page'
+}
+
 export function getHitlPendingTitle(confirmForm) {
+  if (isBusinessPageHitlForm(confirmForm)) return '等待业务办理'
   return isAskUserHitlForm(confirmForm) ? '等待您的回答' : '等待人工确认'
 }
 
 export function getHitlResolvedTitle(confirmForm) {
+  if (isBusinessPageHitlForm(confirmForm)) return '业务办理已提交'
   return isAskUserHitlForm(confirmForm) ? '已提交回答' : '人工确认已提交'
 }
 
 export function getHitlSubmitLabel(confirmForm) {
+  if (isBusinessPageHitlForm(confirmForm)) return '提交办理结果'
   return isAskUserHitlForm(confirmForm) ? '提交回答' : '确认并继续'
 }
 
 export function getHitlAbandonLabel(confirmForm) {
+  if (isBusinessPageHitlForm(confirmForm)) return '放弃办理'
   return isAskUserHitlForm(confirmForm) ? '放弃回答' : '放弃本次确认'
 }
+
+export const BUSINESS_RESULT_KEY = 'businessResult'
 
 export const ASK_USER_ANSWER_KEY = 'answer'
 export const ASK_USER_SELECTED_OPTION_KEY = 'selectedOption'

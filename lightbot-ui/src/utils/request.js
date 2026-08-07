@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { message } from 'ant-design-vue'
 import router from '../router'
+import { RequestError } from './requestError'
 
 /**
  * 将 JSON 字符串中的 Long 类型数字转为字符串，防止前端精度丢失
@@ -134,14 +135,19 @@ request.interceptors.response.use(
     const res = response.data
     if (res.code && res.code !== 200) {
       // 业务错误（HTTP 200 但 code !== 200）：使用后端返回的 message
-      if (!response.config?.silent) {
+      const handled = !response.config?.silent
+      if (handled) {
         message.error(res.message || '请求失败')
       }
       if (res.code === 401) {
         localStorage.removeItem('token')
         router.push(buildLoginTarget())
       }
-      return Promise.reject(new Error(res.message))
+      // 用 RequestError 标记：避免未 catch 的 await 被 ErrorBoundary 当成渲染崩溃
+      return Promise.reject(new RequestError(res.message || '请求失败', {
+        code: res.code,
+        handled: handled || res.code === 401,
+      }))
     }
     return res
   },
@@ -151,18 +157,25 @@ request.interceptors.response.use(
 
     // 无响应（后端未启动/网络断开）→ 跳 Landing 页，URL 携带 redirect 便于恢复
     if (!error.response) {
-      if (!error.config?.silent) {
+      const handled = !error.config?.silent
+      if (handled) {
         message.error('服务不可用，请稍后重试')
       }
       try {
         const current = router.currentRoute.value
         if (current && !current.meta?.public && current.path !== '/') {
           router.push({ path: '/', query: { redirect: current.fullPath } })
-          return Promise.reject(error)
+          return Promise.reject(new RequestError('服务不可用，请稍后重试', {
+            httpStatus: 0,
+            handled: true,
+          }))
         }
       } catch { /* ignore */ }
       router.push('/')
-      return Promise.reject(error)
+      return Promise.reject(new RequestError('服务不可用，请稍后重试', {
+        httpStatus: 0,
+        handled: true,
+      }))
     }
 
     // 401 → 跳登录页
@@ -176,10 +189,15 @@ request.interceptors.response.use(
     const msg = (res?.code && res?.message)
       ? res.message
       : HTTP_STATUS_MSG[status] || '网络异常，请稍后重试'
-    if (!error.config?.silent) {
+    const handled = !error.config?.silent
+    if (handled) {
       message.error(msg)
     }
-    return Promise.reject(new Error(msg))
+    return Promise.reject(new RequestError(msg, {
+      code: res?.code,
+      httpStatus: status,
+      handled: handled || status === 401,
+    }))
   }
 )
 

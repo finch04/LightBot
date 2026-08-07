@@ -127,7 +127,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     public ChatSession createSession(Long userId, Long agentId) {
-        // 1. agentId为空时查询用户的默认Agent
+        // 1. agentId为空时查询企业默认Agent
         Long finalAgentId = agentId;
         if (finalAgentId == null) {
             var defaultAgent = agentService.getDefaultAgent(userId);
@@ -136,9 +136,49 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             }
         }
 
-        // 3. 创建会话，初始化统计数据
+        // 2. 创建平台调试会话；callerContext 由首轮对话绑定（支持模拟角色）
         ChatSession session = new ChatSession();
         session.setUserId(userId);
+        session.setAgentId(finalAgentId);
+        session.setSource(com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_PLATFORM);
+        session.setTitle(ChatSession.DEFAULT_TITLE);
+        session.setStatus(SessionStatus.ACTIVE);
+        session.setMessageCount(0);
+        session.setTotalTokens(0L);
+        session.setPinned(false);
+        save(session);
+        evictListCache(userId);
+        ensureSessionDirs(session.getId());
+        return session;
+    }
+
+    @Override
+    public ChatSession createApiSession(Long apiKeyId, Long agentId, String externalUserId) {
+        com.lightbot.dto.CallerContext ctx = null;
+        if (externalUserId != null && !externalUserId.isBlank()) {
+            ctx = new com.lightbot.dto.CallerContext();
+            ctx.setExternalUserId(externalUserId.trim());
+        }
+        return createApiSession(apiKeyId, agentId, ctx);
+    }
+
+    @Override
+    public ChatSession createApiSession(Long apiKeyId, Long agentId, com.lightbot.dto.CallerContext callerContext) {
+        if (apiKeyId == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "缺少 API Key");
+        }
+        Long finalAgentId = agentId;
+        if (finalAgentId == null) {
+            var defaultAgent = agentService.getDefaultAgent(com.lightbot.constant.EnterpriseActors.API_KEY);
+            if (defaultAgent != null) {
+                finalAgentId = defaultAgent.getId();
+            }
+        }
+        ChatSession session = new ChatSession();
+        session.setUserId(com.lightbot.constant.EnterpriseActors.API_KEY);
+        session.setApiKeyId(apiKeyId);
+        applyCallerContext(session, callerContext);
+        session.setSource(com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_API);
         session.setAgentId(finalAgentId);
         session.setTitle(ChatSession.DEFAULT_TITLE);
         session.setStatus(SessionStatus.ACTIVE);
@@ -146,11 +186,82 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         session.setTotalTokens(0L);
         session.setPinned(false);
         save(session);
-        // 新建会话后清除列表缓存
-        evictListCache(userId);
-        // 预创建 MinIO 会话目录占位（inputs / outputs / workspace）
         ensureSessionDirs(session.getId());
         return session;
+    }
+
+    @Override
+    public void applyCallerContext(ChatSession session, com.lightbot.dto.CallerContext callerContext) {
+        if (session == null) {
+            return;
+        }
+        if (callerContext == null || callerContext.isEmpty()) {
+            session.setExternalUserId(null);
+            session.setCallerContext(null);
+            return;
+        }
+        session.setExternalUserId(callerContext.getExternalUserId());
+        try {
+            session.setCallerContext(objectMapper.writeValueAsString(callerContext.toMap()));
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "callerContext 序列化失败");
+        }
+    }
+
+    @Override
+    public ChatSession createAutomationSession(Long triggerUserId, Long agentId) {
+        Long finalAgentId = agentId;
+        if (finalAgentId == null) {
+            var defaultAgent = agentService.getDefaultAgent(
+                    triggerUserId != null ? triggerUserId : com.lightbot.constant.EnterpriseActors.API_KEY);
+            if (defaultAgent != null) {
+                finalAgentId = defaultAgent.getId();
+            }
+        }
+        ChatSession session = new ChatSession();
+        // userId 记触发人审计；source 标识自动化，不进入个人调试列表
+        session.setUserId(triggerUserId != null ? triggerUserId : com.lightbot.constant.EnterpriseActors.API_KEY);
+        session.setSource(com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_AUTOMATION);
+        session.setAgentId(finalAgentId);
+        session.setTitle(ChatSession.DEFAULT_TITLE);
+        session.setStatus(SessionStatus.ACTIVE);
+        session.setMessageCount(0);
+        session.setTotalTokens(0L);
+        session.setPinned(false);
+        save(session);
+        ensureSessionDirs(session.getId());
+        return session;
+    }
+
+    @Override
+    public Page<ChatSession> listApiSessions(int pageNum, int pageSize, String keyword) {
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<ChatSession>()
+                        .eq(ChatSession::getSource, com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_API)
+                        .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
+                        .like(keyword != null && !keyword.isBlank(), ChatSession::getTitle, keyword)
+                        .orderByDesc(ChatSession::getLastMessageAt));
+    }
+
+    @Override
+    public Page<ChatSession> listAutomationSessions(int pageNum, int pageSize, String keyword) {
+        return baseMapper.selectPage(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<ChatSession>()
+                        .eq(ChatSession::getSource, com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_AUTOMATION)
+                        .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
+                        .like(keyword != null && !keyword.isBlank(), ChatSession::getTitle, keyword)
+                        .orderByDesc(ChatSession::getLastMessageAt));
+    }
+
+    @Override
+    public void ensureOwnedByApiKey(Long sessionId, Long apiKeyId) {
+        ChatSession session = getById(sessionId);
+        if (session == null
+                || !com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_API.equals(session.getSource())
+                || apiKeyId == null
+                || !apiKeyId.equals(session.getApiKeyId())) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
     }
 
     /**
@@ -186,6 +297,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         Page<ChatSession> page = baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<ChatSession>()
                         .eq(ChatSession::getUserId, userId)
+                        .and(w -> w.eq(ChatSession::getSource, com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_PLATFORM)
+                                .or()
+                                .isNull(ChatSession::getSource))
                         .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
                         .orderByDesc(ChatSession::getPinned)
                         .orderByDesc(ChatSession::getLastMessageAt));
@@ -266,8 +380,8 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     public void togglePin(Long sessionId) {
-        // 1. 越权校验：sessionId 必须属于当前登录用户（ensureOwnedByUser 抛 SESSION_NOT_FOUND 兼顾 null/越权两种场景）
-        ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        // 1. 越权校验：仅本人平台调试会话可置顶
+        ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         ChatSession session = getById(sessionId);
         session.setPinned(Boolean.TRUE.equals(session.getPinned()) ? false : true);
         updateById(session);
@@ -298,6 +412,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     public Page<ChatSession> listMySessions(Long userId, int pageNum, int pageSize, String keyword) {
         LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<ChatSession>()
                 .eq(ChatSession::getUserId, userId)
+                .and(w -> w.eq(ChatSession::getSource, com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_PLATFORM)
+                        .or()
+                        .isNull(ChatSession::getSource))
                 .eq(ChatSession::getStatus, SessionStatus.ACTIVE)
                 .like(keyword != null && !keyword.isBlank(), ChatSession::getTitle, keyword)
                 .orderByDesc(ChatSession::getPinned)
@@ -307,22 +424,39 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void deleteSessions(Long userId, List<Long> ids) {
+    public void deleteSessions(Long userId, List<Long> ids, boolean admin) {
         if (ids == null || ids.isEmpty()) {
             return;
         }
-        // 1. 一次 IN 删所有 session 下的 message（含级联 tool_calls / feedback / MinIO）
+        // 1. 按 source 校验：platform 仅本人；api/automation 仅管理员
+        List<ChatSession> sessions = listByIds(ids);
+        if (sessions.size() != ids.size()) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        for (ChatSession session : sessions) {
+            String source = session.getSource();
+            boolean enterpriseSession = com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_API.equals(source)
+                    || com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_AUTOMATION.equals(source);
+            if (enterpriseSession) {
+                if (!admin) {
+                    throw new BizException(ErrorCode.FORBIDDEN);
+                }
+            } else if (!userId.equals(session.getUserId())) {
+                throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+            }
+        }
+        // 2. 一次 IN 删所有 session 下的 message（含级联 tool_calls / feedback / MinIO）
         messageService.deleteBySessionIds(ids);
-        // 2. 一次 IN 删所有 session 下的 llm_trace
+        // 3. 一次 IN 删所有 session 下的 llm_trace
         llmTraceService.deleteBySessionIds(ids);
-        // 3. 批量物理删除会话
+        // 4. 批量物理删除会话
         removeByIds(ids);
-        // 4. 清除缓存
+        // 5. 清除缓存
         for (Long id : ids) {
             evictSessionCache(id);
         }
         evictListCache(userId);
-        // 5. MinIO 文件清理放在事务提交后
+        // 6. MinIO 文件清理放在事务提交后
         runAfterCommit(() -> lightBotExecutor.execute(() -> {
             for (Long id : ids) {
                 try {
@@ -336,8 +470,12 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     public void deleteByAgentId(Long agentId) {
+        // 仅级联删除平台调试会话；API / 自动化会话保留供企业排障，由管理员在会话管理中清理
         List<ChatSession> sessions = list(new LambdaQueryWrapper<ChatSession>()
-                .eq(ChatSession::getAgentId, agentId));
+                .eq(ChatSession::getAgentId, agentId)
+                .and(w -> w.eq(ChatSession::getSource, com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_PLATFORM)
+                        .or()
+                        .isNull(ChatSession::getSource)));
         if (sessions.isEmpty()) {
             return;
         }
@@ -350,7 +488,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                 log.warn("[ChatSession] 级联删除会话失败: sessionId={}, error={}", session.getId(), e.getMessage());
             }
         }
-        log.info("[ChatSession] 批量删除: agentId={}, count={}", agentId, sessions.size());
+        log.info("[ChatSession] 批量删除平台调试会话: agentId={}, count={}", agentId, sessions.size());
     }
 
     /**
@@ -373,14 +511,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     public String exportSession(Long userId, Long sessionId, String format) {
-        // 1. 校验会话归属
+        // 1. 可读校验（platform 本人；api/automation 建设者排障可读）
+        ensureReadableByUser(sessionId, userId);
         ChatSession session = getById(sessionId);
-        if (session == null) {
-            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
-        }
-        if (!userId.equals(session.getUserId())) {
-            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
-        }
 
         // 2. 获取全部消息（按时间正序）
         List<com.lightbot.entity.Message> messages = messageService.listBySessionId(sessionId);
@@ -613,7 +746,34 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     @Override
     public void ensureOwnedByUser(Long sessionId, Long userId) {
         ChatSession session = getById(sessionId);
-        if (session == null || !userId.equals(session.getUserId())) {
+        if (session == null || userId == null || !userId.equals(session.getUserId())) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+    }
+
+    @Override
+    public void ensurePlatformOwnedByUser(Long sessionId, Long userId) {
+        ChatSession session = getById(sessionId);
+        if (session == null || userId == null || !userId.equals(session.getUserId())) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        String source = session.getSource();
+        if (source != null && !com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_PLATFORM.equals(source)) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+    }
+
+    @Override
+    public void ensureReadableByUser(Long sessionId, Long userId) {
+        ChatSession session = getById(sessionId);
+        if (session == null) {
+            throw new BizException(ErrorCode.SESSION_NOT_FOUND);
+        }
+        if (com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_API.equals(session.getSource())
+                || com.lightbot.constant.EnterpriseActors.SESSION_SOURCE_AUTOMATION.equals(session.getSource())) {
+            return;
+        }
+        if (userId == null || !userId.equals(session.getUserId())) {
             throw new BizException(ErrorCode.SESSION_NOT_FOUND);
         }
     }

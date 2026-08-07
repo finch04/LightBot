@@ -4,6 +4,8 @@
  * 当前仅 console + localStorage 滚动缓冲；接入 Sentry / 自建后端时替换 captureException 实现
  */
 
+import { isHandledRequestError } from './requestError'
+
 const BUFFER_KEY = 'lightbot:errorLog'
 const BUFFER_MAX = 50
 // 与 request.js 约定的 sessionStorage 键名，用于读取最近一次后端 traceId
@@ -68,6 +70,11 @@ export function clearRecentErrors() {
 export function installGlobalErrorHandlers() {
   // Promise reject 未被 catch
   window.addEventListener('unhandledrejection', (event) => {
+    // request 已 toast 的业务错误：阻止浏览器默认噪音，也不当崩溃上报
+    if (isHandledRequestError(event.reason)) {
+      event.preventDefault()
+      return
+    }
     captureException(event.reason instanceof Error
       ? event.reason
       : new Error(String(event.reason)), { source: 'unhandledrejection' })
@@ -76,6 +83,10 @@ export function installGlobalErrorHandlers() {
   // 同步异常（setTimeout、事件回调等）
   window.addEventListener('error', (event) => {
     if (event.error) {
+      if (isHandledRequestError(event.error)) {
+        event.preventDefault()
+        return
+      }
       captureException(event.error, {
         source: 'window.onerror',
         filename: event.filename,

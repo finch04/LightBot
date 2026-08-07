@@ -53,6 +53,13 @@ const FIXED_OUTPUTS = {
     { key: 'result', label: '子流程结果', desc: '' },
     { key: 'output', label: '子流程输出', desc: '' },
   ],
+  sub_agent: [
+    { key: 'reply', label: 'SubAgent 回复', desc: '子智能体最终文本' },
+    { key: 'output', label: '输出（别名）', desc: '与 reply 相同' },
+    { key: 'threadId', label: '线程 ID', desc: 'SubAgent 会话线程' },
+    { key: 'subAgentName', label: 'SubAgent 名称', desc: '' },
+    { key: 'subAgentId', label: 'SubAgent ID', desc: '' },
+  ],
   end: [{ key: 'result', label: '最终结果', desc: '字符串，非 Map' }],
 }
 
@@ -121,7 +128,7 @@ function extractDynamicOutputFields(type, data) {
         if (name) fields.push({ key: name, label: name, desc: '分组变量' })
       }
     }
-  } else if (type === 'tool' || type === 'app_component') {
+  } else if (type === 'tool' || type === 'app_component' || type === 'sub_agent') {
     collectKeys(data.outputMappings, fields)
   }
   return fields

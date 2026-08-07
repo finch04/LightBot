@@ -6,7 +6,7 @@
 
 <style scoped>
 .debug-lab-layout {
-  min-height: 100vh;
+  min-height: var(--app-content-height, 100vh);
   background: var(--color-canvas);
 }
 </style>

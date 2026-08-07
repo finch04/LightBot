@@ -2,7 +2,7 @@ import {
   RobotOutlined, ForkOutlined, BookOutlined, ToolOutlined, PlayCircleOutlined,
   StopOutlined, ApiOutlined, SyncOutlined, EditOutlined, TagsOutlined,
   ClusterOutlined, CodeOutlined, CloudServerOutlined, ImportOutlined,
-  ExportOutlined, FunctionOutlined, FilterOutlined, AppstoreOutlined, PauseCircleOutlined
+  ExportOutlined, FunctionOutlined, FilterOutlined,   AppstoreOutlined, PauseCircleOutlined, TeamOutlined
 } from '@ant-design/icons-vue'
 import { NODE_RESILIENCE_PROFILES } from './nodeResilienceMeta.js'
 
@@ -17,7 +17,7 @@ export const NODE_META = {
   start: { title: '开始', color: '#22c55e', icon: PlayCircleOutlined, desc: '工作流入口' },
   end: { title: '结束', color: '#ef4444', icon: StopOutlined, desc: '工作流出口' },
   llm: { title: '大模型', color: '#7c3aed', icon: RobotOutlined, desc: '调用大模型生成内容' },
-  condition: { title: '条件判断', color: '#d97706', icon: ForkOutlined, desc: '条件组匹配后走上/下/右出口' },
+  condition: { title: '条件判断', color: '#d97706', icon: ForkOutlined, desc: '按条件组顺序匹配，右侧出口路由；未命中走默认口' },
   retrieval: { title: '知识检索', color: '#4f46e5', icon: BookOutlined, desc: '从知识库检索内容' },
   tool: { title: '工具调用', color: '#059669', icon: ToolOutlined, desc: '执行预设工具' },
   api: { title: 'HTTP API', color: '#0ea5e9', icon: ApiOutlined, desc: '调用外部 HTTP 接口' },
@@ -36,7 +36,8 @@ export const NODE_META = {
   output: { title: '流程输出', color: '#0891b2', icon: ExportOutlined, desc: '输出流程中间结果' },
   variable_handle: { title: '变量处理', color: '#db2777', icon: FunctionOutlined, desc: '对变量进行模板/分组处理' },
   parameter_extractor: { title: '参数提取', color: '#e11d48', icon: FilterOutlined, desc: '从文本提取结构化参数' },
-  app_component: { title: '应用组件', color: '#2563eb', icon: AppstoreOutlined, desc: '引用已发布的子工作流' }
+  app_component: { title: '应用组件', color: '#2563eb', icon: AppstoreOutlined, desc: '引用已发布的子工作流' },
+  sub_agent: { title: 'SubAgent', color: '#d97706', icon: TeamOutlined, desc: '委派子智能体执行任务' }
 }
 
 /** 节点库分组（细致分类） */
@@ -45,7 +46,7 @@ export const NODE_LIBRARY_GROUPS = [
   { key: 'io', title: '流程交互', types: ['input', 'confirm', 'output'] },
   { key: 'variable', title: '变量与参数', types: ['variable', 'variable_handle', 'parameter_extractor'] },
   { key: 'logic', title: '逻辑控制', types: ['classifier', 'loop', 'batch'] },
-  { key: 'integration', title: '集成调用', types: ['tool', 'api', 'mcp', 'app_component', 'script'] }
+  { key: 'integration', title: '集成调用', types: ['tool', 'api', 'mcp', 'app_component', 'sub_agent', 'script'] }
 ]
 
 export function getNodeLibraryGroups(search = '') {
@@ -132,7 +133,14 @@ export function getDefaultNodeData(type) {
     },
     condition: {
       label: '条件判断',
-      conditionGroups: [],
+      conditionGroups: [
+        {
+          id: createConditionId(),
+          label: '如果',
+          relation: 'and',
+          rules: [{ id: createConditionId(), variable: '{{query}}', operator: 'contains', value: '' }],
+        },
+      ],
       branches: [],
     },
     retrieval: {
@@ -257,6 +265,14 @@ export function getDefaultNodeData(type) {
       streamSwitch: false,
       inputMappings: [{ key: 'query', value: '{{query}}' }, { key: 'input', value: '{{input}}' }],
       outputMappings: [{ key: 'result', value: '{{result}}' }],
+    },
+    sub_agent: {
+      label: 'SubAgent',
+      subAgentId: null,
+      subAgentName: '',
+      task: '{{query}}',
+      streamSwitch: false,
+      outputMappings: [{ key: 'reply', value: '{{reply}}' }],
     },
     loop_start: { label: '迭代开始', builtin: true },
     loop_end: { label: '迭代结束', builtin: true },

@@ -1,6 +1,5 @@
 package com.lightbot.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lightbot.common.BizException;
@@ -149,18 +148,15 @@ public class KnowledgeMemberServiceImpl extends ServiceImpl<KnowledgeMemberMappe
 
     @Override
     public void checkMember(Long knowledgeId) {
-        long userId = StpUtil.getLoginIdAsLong();
-        KnowledgeRole role = getMemberRole(knowledgeId, userId);
-        if (role == null) {
-            throw new BizException(ErrorCode.KNOWLEDGE_NO_PERMISSION);
+        // 企业资产：任意登录建设者可访问（登录态由拦截器保证）；成员表仅作历史协作元数据
+        if (knowledgeId == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
     }
 
     @Override
     public void checkPermission(Long knowledgeId, KnowledgeRole requiredRole) {
-        long userId = StpUtil.getLoginIdAsLong();
-        if (!hasPermission(knowledgeId, userId, requiredRole)) {
-            throw new BizException(ErrorCode.KNOWLEDGE_ROLE_INSUFFICIENT, requiredRole.getDesc());
-        }
+        // 企业资产：建设者共同维护，不再按成员角色阶梯限制写操作
+        checkMember(knowledgeId);
     }
 }

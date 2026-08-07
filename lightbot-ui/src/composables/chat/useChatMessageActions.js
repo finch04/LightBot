@@ -55,7 +55,9 @@ export function useChatMessageActions(deps) {
 
   function isLastUserMessage(index) {
     for (let i = messages.value.length - 1; i >= 0; i--) {
-      if (messages.value[i].role === 'user') return i === index
+      const m = messages.value[i]
+      // 业务页回灌不算用户主动提问
+      if (m.role === 'user' && !m._businessPageCallback) return i === index
     }
     return false
   }

@@ -309,8 +309,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document>
                 throw new BizException(ErrorCode.DOCUMENT_CHUNKS_TOO_SHORT);
             }
 
-            // 3. 批量保存分块到数据库，状态为 CHUNKED
+            // 3. 重新入库时先清理旧向量与分块，避免 uk_embedding_chunk_id / 分块翻倍
             progressCallback.accept(30, "正在保存分块...");
+            embeddingService.deleteByDocumentId(doc.getId());
+            chunkService.remove(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocumentId, doc.getId()));
+
+            // 4. 批量保存分块到数据库，状态为 CHUNKED
             long totalTokens = 0;
             List<Chunk> chunkEntities = new ArrayList<>();
             for (int i = 0; i < chunks.size(); i++) {

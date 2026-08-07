@@ -2,13 +2,13 @@ package com.lightbot.agent.tool.memory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.dto.MemoryScope;
 import com.lightbot.vo.UserMemoryVO;
-import com.lightbot.vo.UserPreferenceVO;
 import com.lightbot.entity.UserMemory;
-import com.lightbot.enums.UserMemoryStatus;
+import com.lightbot.service.LongMemoryPolicyService;
 import com.lightbot.service.UserMemoryService;
-import com.lightbot.service.UserPreferenceService;
 import com.lightbot.service.chat.ChatContext;
+import com.lightbot.vo.LongMemoryPolicyVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -37,7 +37,7 @@ public class UserMemoryToolCallbackFactory {
     public static final String DELETE_TOOL_NAME = "memory_delete";
 
     private final UserMemoryService userMemoryService;
-    private final UserPreferenceService userPreferenceService;
+    private final LongMemoryPolicyService longMemoryPolicyService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -77,8 +77,8 @@ public class UserMemoryToolCallbackFactory {
         public String call(String toolInput, ToolContext toolContext) {
             try {
                 Map<String, Object> args = parseArgs(toolInput);
-                Long userId = resolveUserId(toolContext);
-                if (userId == null) {
+                MemoryScope scope = resolveMemoryScope(toolContext);
+                if (scope == null || !scope.isValid()) {
                     return failure("缺少用户上下文，无法保存长期记忆");
                 }
                 String content = str(args.get("content"));
@@ -86,8 +86,8 @@ public class UserMemoryToolCallbackFactory {
                     return failure("缺少 content 参数");
                 }
                 UserMemoryVO saved = userMemoryService.saveFromTool(
-                        userId,
-                        resolveMemoryAgentId(userId, toolContext),
+                        scope,
+                        resolveMemoryAgentId(scope, toolContext),
                         resolveSessionId(toolContext),
                         resolveUserMessageId(toolContext),
                         str(args.get("memoryType")),
@@ -124,13 +124,14 @@ public class UserMemoryToolCallbackFactory {
         public String call(String toolInput, ToolContext toolContext) {
             try {
                 Map<String, Object> args = parseArgs(toolInput);
-                Long userId = resolveUserId(toolContext);
-                if (userId == null) {
+                MemoryScope scope = resolveMemoryScope(toolContext);
+                if (scope == null || !scope.isValid()) {
                     return failure("缺少用户上下文，无法查询长期记忆");
                 }
                 String query = str(args.get("query"));
                 int limit = intVal(args.get("limit"), 5, 1, 10);
-                List<UserMemoryVO> memories = userMemoryService.searchForPrompt(userId, resolveMemoryAgentId(userId, toolContext), query, limit)
+                List<UserMemoryVO> memories = userMemoryService.searchForPrompt(
+                                scope, resolveMemoryAgentId(scope, toolContext), query, limit)
                         .stream()
                         .map(UserMemoryVO::from)
                         .toList();
@@ -163,17 +164,14 @@ public class UserMemoryToolCallbackFactory {
         public String call(String toolInput, ToolContext toolContext) {
             try {
                 Map<String, Object> args = parseArgs(toolInput);
-                Long userId = resolveUserId(toolContext);
+                MemoryScope scope = resolveMemoryScope(toolContext);
                 Long memoryId = longVal(args.get("memoryId"));
-                if (userId == null || memoryId == null) {
+                if (scope == null || !scope.isValid() || memoryId == null) {
                     return failure("缺少用户上下文或 memoryId 参数");
                 }
-                UserMemory memory = userMemoryService.getById(memoryId);
-                if (memory == null || !userId.equals(memory.getUserId())) {
+                if (!userMemoryService.disableMemory(scope, memoryId)) {
                     return failure("未找到可停用的长期记忆");
                 }
-                memory.setStatus(UserMemoryStatus.DISABLED);
-                userMemoryService.updateById(memory);
                 return objectMapper.writeValueAsString(Map.of("success", true, "memoryId", String.valueOf(memoryId)));
             } catch (Exception e) {
                 return failure(e.getMessage());
@@ -220,13 +218,30 @@ public class UserMemoryToolCallbackFactory {
         }
     }
 
-    private Long resolveUserId(ToolContext toolContext) {
-        Object value = contextValue(toolContext, "userId");
-        if (value == null) {
+    private MemoryScope resolveMemoryScope(ToolContext toolContext) {
+        Long apiKeyId = longVal(contextValue(toolContext, "apiKeyId"));
+        String externalUserId = str(contextValue(toolContext, "externalUserId"));
+        if (apiKeyId == null || externalUserId == null) {
             ChatContext chatContext = resolveChatContext(toolContext);
-            return chatContext != null ? chatContext.getUserId() : null;
+            if (chatContext != null && chatContext.getRequest() != null) {
+                if (apiKeyId == null) {
+                    apiKeyId = chatContext.getRequest().getApiKeyId();
+                }
+                if (externalUserId == null) {
+                    externalUserId = chatContext.getRequest().getExternalUserId();
+                }
+            }
         }
-        return longVal(value);
+        if (apiKeyId != null && externalUserId != null && !externalUserId.isBlank()) {
+            return MemoryScope.external(apiKeyId, externalUserId);
+        }
+        Long userId = longVal(contextValue(toolContext, "userId"));
+        if (userId == null) {
+            ChatContext chatContext = resolveChatContext(toolContext);
+            userId = chatContext != null ? chatContext.getUserId() : null;
+        }
+        // 控制台调试：统一走 debug_user_{userId} 命名空间
+        return userId != null ? MemoryScope.consoleDebug(userId) : null;
     }
 
     private Long resolveAgentId(ToolContext toolContext) {
@@ -234,10 +249,14 @@ public class UserMemoryToolCallbackFactory {
         return longVal(value);
     }
 
-    private Long resolveMemoryAgentId(Long userId, ToolContext toolContext) {
+    private Long resolveMemoryAgentId(MemoryScope scope, ToolContext toolContext) {
+        if (scope == null) {
+            return null;
+        }
         try {
-            UserPreferenceVO preferences = userPreferenceService.getPreferences(userId);
-            return "agent".equalsIgnoreCase(preferences.getLongMemoryScope()) ? resolveAgentId(toolContext) : null;
+            Long apiKeyId = scope.isExternal() ? scope.getApiKeyId() : null;
+            LongMemoryPolicyVO policy = longMemoryPolicyService.resolveEffective(apiKeyId);
+            return "agent".equalsIgnoreCase(policy.getScope()) ? resolveAgentId(toolContext) : null;
         } catch (Exception e) {
             return null;
         }

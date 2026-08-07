@@ -14,6 +14,7 @@ import './styles/lb-components.css'
 import App from './App.vue'
 import router from './router'
 import { captureException, installGlobalErrorHandlers } from './utils/errorReport'
+import { isHandledRequestError } from './utils/requestError'
 import { installModalScrollObserver } from './utils/modalScroll'
 
 // 限制全局最多显示3条消息提示，防止堆叠
@@ -25,6 +26,10 @@ const app = createApp(App)
 
 // 全局 Vue 错误兜底：组件未捕获异常由这里捕获，避免整页白屏
 app.config.errorHandler = (err, instance, info) => {
+  // 已由 request 拦截器提示过的业务/网络错误，不再二次上报或弹「页面异常」
+  if (isHandledRequestError(err)) {
+    return
+  }
   captureException(err, {
     source: 'vue.errorHandler',
     info,

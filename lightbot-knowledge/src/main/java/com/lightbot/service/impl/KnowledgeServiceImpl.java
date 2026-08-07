@@ -13,7 +13,6 @@ import com.lightbot.dto.DifyKnowledgeConfigDTO;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import org.springframework.util.StringUtils;
-import com.lightbot.entity.KnowledgeMember;
 import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.DocumentStatus;
 import com.lightbot.enums.ErrorCode;
@@ -112,7 +111,10 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         knowledge.setType(request.getType());
         knowledge.setConfig(buildKnowledgeConfig(request, true, null));
         knowledge.setQueryParams(request.getQueryParams());
-        knowledge.setGraphEnabled(request.getType() == KnowledgeType.DIFY ? false : request.getGraphEnabled());
+        // graphEnabled 前端新建时可不传；三元两侧类型需同为 Boolean，避免 false 触发拆箱 NPE
+        knowledge.setGraphEnabled(request.getType() == KnowledgeType.DIFY
+                ? Boolean.FALSE
+                : (request.getGraphEnabled() != null ? request.getGraphEnabled() : Boolean.FALSE));
 
         // 3. 初始化内部字段
         knowledge.setUserId(userId);
@@ -125,23 +127,17 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         // 4. Dify Token 独立加密保存，避免通过知识库详情或日志泄露。
         if (knowledge.getType() == KnowledgeType.DIFY) {
             // 新建即校验真实连通性；失败时事务回滚，不留下不可用的外部知识库。
-            knowledgeRetrievalService.retrieve(knowledge, "LightBot connection test", 1, 0.0, Map.of());
+            knowledgeRetrievalService.retrieve(knowledge, "智元 connection test", 1, 0.0, Map.of());
         }
 
-        // 5. 创建者自动成为成员（CREATOR角色）
-        KnowledgeMember member = new KnowledgeMember();
-        member.setKnowledgeId(knowledge.getId());
-        member.setUserId(userId);
-        member.setRole(KnowledgeRole.CREATOR);
-        knowledgeMemberService.save(member);
-
+        // 5. 企业资产：不再写入成员表；userId 仅作创建人审计
         return sanitizeForResponse(knowledge);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Knowledge update(KnowledgeSaveDTO request) {
-        // 1. 权限校验：需要MANAGER及以上权限
+        // 1. 企业资产：登录建设者可维护（checkPermission 已放宽为存在性校验）
         checkPermission(request.getId(), KnowledgeRole.MANAGER);
 
         // 2. 校验存在性
@@ -169,7 +165,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
             existing.setEmbeddingModel(null);
             existing.setGraphEnabled(false);
             existing.setConfig(buildKnowledgeConfig(request, false, existing.getConfig()));
-            knowledgeRetrievalService.retrieve(existing, "LightBot connection test", 1, 0.0, Map.of());
+            knowledgeRetrievalService.retrieve(existing, "智元 connection test", 1, 0.0, Map.of());
         }
         updateById(existing);
         return sanitizeForResponse(existing);
@@ -177,23 +173,27 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
     @Override
     public Page<Knowledge> listMyKnowledge(int pageNum, int pageSize, String name) {
-        long userId = StpUtil.getLoginIdAsLong();
-
-        // 1. 查询用户加入的所有知识库ID
-        List<Long> knowledgeIds = knowledgeMemberService.listKnowledgeIdsByUserId(userId);
-        if (knowledgeIds.isEmpty()) {
-            return new Page<>(pageNum, pageSize);
-        }
-
-        // 2. 分页查询这些知识库
+        // 企业资产：建设者可见全部启用中的知识库（不再按成员表过滤）
         Page<Knowledge> page = baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Knowledge>()
-                        .in(Knowledge::getId, knowledgeIds)
                         .eq(Knowledge::getStatus, CommonStatus.ACTIVE)
                         .like(StringUtils.hasText(name), Knowledge::getName, name)
                         .orderByDesc(Knowledge::getCreateTime));
         page.setRecords(page.getRecords().stream().map(this::sanitizeForResponse).toList());
         return page;
+    }
+
+    @Override
+    public List<Knowledge> listCreatedByUserId(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        return list(new LambdaQueryWrapper<Knowledge>()
+                .eq(Knowledge::getUserId, userId)
+                .orderByDesc(Knowledge::getCreateTime))
+                .stream()
+                .map(this::sanitizeForResponse)
+                .toList();
     }
 
     @Override
@@ -604,24 +604,19 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
     // ========== 权限校验 ==========
 
     /**
-     * 校验当前用户是否为知识库成员
+     * 校验知识库存在（企业资产：任意登录建设者可访问）
      */
     private void checkMember(Long knowledgeId) {
-        long userId = StpUtil.getLoginIdAsLong();
-        KnowledgeRole role = knowledgeMemberService.getMemberRole(knowledgeId, userId);
-        if (role == null) {
-            throw new BizException(ErrorCode.KNOWLEDGE_NO_PERMISSION);
+        if (getById(knowledgeId) == null) {
+            throw new BizException(ErrorCode.KNOWLEDGE_NOT_FOUND);
         }
     }
 
     /**
-     * 校验当前用户是否具有指定等级的角色
+     * 校验知识库写权限（企业资产：建设者共同维护，不再按成员角色阶梯限制）
      */
     private void checkPermission(Long knowledgeId, KnowledgeRole requiredRole) {
-        long userId = StpUtil.getLoginIdAsLong();
-        if (!knowledgeMemberService.hasPermission(knowledgeId, userId, requiredRole)) {
-            throw new BizException(ErrorCode.KNOWLEDGE_ROLE_INSUFFICIENT, requiredRole.getDesc());
-        }
+        checkMember(knowledgeId);
     }
 
     /**
@@ -856,7 +851,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
         }
 
         // 2. 调用 Dify retrieve 接口；空结果同样表示连接和鉴权成功。
-        knowledgeRetrievalService.retrieve(knowledge, "LightBot connection test", 1, 0.0, Map.of());
+        knowledgeRetrievalService.retrieve(knowledge, "智元 connection test", 1, 0.0, Map.of());
 
         // 3. 只返回非敏感的连接结果。
         DifyConnectionTestVO result = new DifyConnectionTestVO();
@@ -875,7 +870,7 @@ public class KnowledgeServiceImpl extends ServiceImpl<KnowledgeMapper, Knowledge
 
         // 2. 空结果仍代表地址、Dataset 与鉴权均有效。
         difyDatasetClient.retrieve(config.getApiUrl().trim(), config.getDatasetId().trim(), config.getToken().trim(),
-                "LightBot connection test", 1, 0.0, "vector");
+                "智元 connection test", 1, 0.0, "vector");
 
         DifyConnectionTestVO result = new DifyConnectionTestVO();
         result.setConnected(true);

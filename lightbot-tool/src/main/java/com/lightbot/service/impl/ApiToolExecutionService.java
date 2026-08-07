@@ -9,6 +9,7 @@ import com.lightbot.entity.Tool;
 import com.lightbot.enums.AuthType;
 import com.lightbot.enums.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.stereotype.Service;
 
 import java.net.InetAddress;
@@ -18,6 +19,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +40,9 @@ public class ApiToolExecutionService {
 
     private static final int TIMEOUT_SECONDS = 30;
 
+    /** 模板占位符：{{callerContext.regionId}} / {{regionId}} */
+    private static final Pattern CONTEXT_PLACEHOLDER = Pattern.compile("\\{\\{\\s*([\\w.]+)\\s*}}");
+
     private final ObjectMapper objectMapper;
 
     public ApiToolExecutionService(ObjectMapper objectMapper) {
@@ -51,17 +57,31 @@ public class ApiToolExecutionService {
      * @return 执行结果字符串
      */
     public String execute(Tool tool, Map<String, Object> inputs) {
+        return execute(tool, inputs, null);
+    }
+
+    /**
+     * 执行 API 工具，并可按 tool.config 的 contextHeaders/contextQuery 注入调用方身份
+     *
+     * @param tool        工具实体
+     * @param inputs      输入参数
+     * @param toolContext 对话 ToolContext（含 callerContext）
+     * @return 执行结果字符串
+     */
+    public String execute(Tool tool, Map<String, Object> inputs, ToolContext toolContext) {
         // 1. 参数校验
         validateInputs(tool, inputs);
 
         // 2. SSRF 防护
         validateUrl(tool.getEndpointUrl());
 
-        // 3. 构建认证头
+        // 3. 构建认证头 + 上下文映射头
         Map<String, String> authHeaders = buildAuthHeaders(tool);
+        authHeaders.putAll(resolveContextMappings(tool, toolContext, "contextHeaders"));
 
-        // 4. 参数路由 + 构建 HTTP 请求
-        HttpRequest request = buildRequest(tool, inputs, authHeaders);
+        // 4. 参数路由 + 构建 HTTP 请求（附加 contextQuery）
+        Map<String, String> contextQuery = resolveContextMappings(tool, toolContext, "contextQuery");
+        HttpRequest request = buildRequest(tool, inputs, authHeaders, contextQuery);
 
         // 5. 执行 HTTP 请求
         return doExecute(request);
@@ -195,8 +215,16 @@ public class ApiToolExecutionService {
     /**
      * 构建 HTTP 请求：参数路由 + URL 模板替换
      */
-    @SuppressWarnings("unchecked")
     private HttpRequest buildRequest(Tool tool, Map<String, Object> inputs, Map<String, String> authHeaders) {
+        return buildRequest(tool, inputs, authHeaders, Map.of());
+    }
+
+    /**
+     * 构建 HTTP 请求：参数路由 + URL 模板替换 + 上下文 Query
+     */
+    @SuppressWarnings("unchecked")
+    private HttpRequest buildRequest(Tool tool, Map<String, Object> inputs, Map<String, String> authHeaders,
+                                     Map<String, String> contextQuery) {
         String url = tool.getEndpointUrl();
         String method = resolveMethod(tool);
         Map<String, String> headers = new HashMap<>(authHeaders);
@@ -205,6 +233,9 @@ public class ApiToolExecutionService {
         Map<String, String> paramLocations = parseParamLocations(tool.getInputSchema());
 
         Map<String, String> queryParams = new LinkedHashMap<>();
+        if (contextQuery != null) {
+            queryParams.putAll(contextQuery);
+        }
         Map<String, Object> bodyParams = new LinkedHashMap<>();
         Map<String, String> headerParams = new LinkedHashMap<>();
 
@@ -300,6 +331,97 @@ public class ApiToolExecutionService {
     }
 
     // ── 工具方法 ──
+
+    /**
+     * 从 tool.config 的 contextHeaders / contextQuery 解析并渲染模板
+     * <p>示例：{@code {"contextHeaders":{"X-Region-Id":"{{callerContext.regionId}}"}}}</p>
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> resolveContextMappings(Tool tool, ToolContext toolContext, String configKey) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (tool == null || tool.getConfig() == null || tool.getConfig().isBlank()) {
+            return out;
+        }
+        try {
+            Map<String, Object> config = parseJson(tool.getConfig());
+            Object raw = config.get(configKey);
+            if (!(raw instanceof Map<?, ?> mapping) || mapping.isEmpty()) {
+                return out;
+            }
+            Map<String, Object> vars = flattenCallerVars(toolContext);
+            for (Map.Entry<?, ?> e : mapping.entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) {
+                    continue;
+                }
+                String rendered = renderContextTemplate(String.valueOf(e.getValue()), vars);
+                if (rendered != null && !rendered.isBlank()) {
+                    out.put(String.valueOf(e.getKey()), rendered);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[ApiToolExecution] 解析 {} 失败: toolId={}, error={}", configKey, tool.getId(), e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * 展平 ToolContext 中的身份变量，供模板替换
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> flattenCallerVars(ToolContext toolContext) {
+        Map<String, Object> vars = new LinkedHashMap<>();
+        if (toolContext == null || toolContext.getContext() == null) {
+            return vars;
+        }
+        Map<String, Object> ctx = toolContext.getContext();
+        putIfPresent(vars, "externalUserId", ctx.get("externalUserId"));
+        putIfPresent(vars, "regionId", ctx.get("regionId"));
+        putIfPresent(vars, "enterpriseId", ctx.get("enterpriseId"));
+        putIfPresent(vars, "apiKeyId", ctx.get("apiKeyId"));
+        putIfPresent(vars, "sessionId", ctx.get("sessionId"));
+        Object caller = ctx.get("callerContext");
+        if (caller instanceof Map<?, ?> callerMap) {
+            for (Map.Entry<?, ?> e : callerMap.entrySet()) {
+                if (e.getKey() == null) {
+                    continue;
+                }
+                String key = String.valueOf(e.getKey());
+                putIfPresent(vars, key, e.getValue());
+                putIfPresent(vars, "callerContext." + key, e.getValue());
+                if ("profile".equals(key) && e.getValue() instanceof Map<?, ?> profile) {
+                    for (Map.Entry<?, ?> pe : profile.entrySet()) {
+                        if (pe.getKey() != null) {
+                            putIfPresent(vars, "callerContext.profile." + pe.getKey(), pe.getValue());
+                            putIfPresent(vars, "profile." + pe.getKey(), pe.getValue());
+                        }
+                    }
+                }
+            }
+        }
+        return vars;
+    }
+
+    private static void putIfPresent(Map<String, Object> vars, String key, Object value) {
+        if (value != null && (!(value instanceof String s) || !s.isBlank())) {
+            vars.put(key, value);
+        }
+    }
+
+    private String renderContextTemplate(String template, Map<String, Object> vars) {
+        if (template == null) {
+            return null;
+        }
+        Matcher matcher = CONTEXT_PLACEHOLDER.matcher(template);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String path = matcher.group(1);
+            Object value = vars.get(path);
+            String replacement = value == null ? "" : Matcher.quoteReplacement(String.valueOf(value));
+            matcher.appendReplacement(sb, replacement);
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
 
     /**
      * 从 inputSchema 解析参数位置（x-location 扩展字段）

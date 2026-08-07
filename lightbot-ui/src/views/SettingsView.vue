@@ -5,145 +5,14 @@
     </div>
 
     <a-tabs v-model:activeKey="activeTab" class="settings-tabs">
-      <a-tab-pane key="model" tab="默认模型" />
       <a-tab-pane key="landing" tab="Landing配置" />
       <a-tab-pane key="users" tab="用户管理" />
-      <a-tab-pane key="token" tab="Token限额" />
-      <a-tab-pane key="apiKey" tab="API Key" />
+      <a-tab-pane key="memory" tab="长期记忆" />
+      <a-tab-pane key="token" tab="企业 Token" />
+      <a-tab-pane key="apiKey" tab="企业 API Key" />
     </a-tabs>
 
-    <!-- Tab 1: 默认模型管理 -->
-    <div v-show="activeTab === 'model'">
-    <a-spin :spinning="modelLoading">
-    <div class="content-grid">
-      <!-- 默认对话模型 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <h3>默认对话模型</h3>
-            <span class="panel-desc">系统级对话/生成场景使用</span>
-          </div>
-        </div>
-        <div class="panel-body">
-          <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型">
-              <ModelSelect
-                v-model:provider-id="chatProviderId"
-                v-model:model-id="chatModelId"
-                model-type="llm"
-                placeholder="选择对话模型"
-              />
-            </a-form-item>
-            <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="chatSaving" @click="saveModel('chat')">
-                <SaveOutlined /> {{ chatSaving ? '保存中...' : '保存配置' }}
-              </button>
-            </a-form-item>
-          </a-form>
-          <div class="panel-tip">
-            <BulbOutlined />
-            <span>用于：AI 生成系统提示词、AI 生成推荐问题、知识库思维导图、内容安全扫描等</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 默认向量模型 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <h3>默认向量模型</h3>
-            <span class="panel-desc">向量化与检索场景使用</span>
-          </div>
-        </div>
-        <div class="panel-body">
-          <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型">
-              <ModelSelect
-                v-model:provider-id="embeddingProviderId"
-                v-model:model-id="embeddingModelId"
-                model-type="embedding"
-                placeholder="选择向量模型"
-              />
-            </a-form-item>
-            <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="embeddingSaving" @click="saveModel('embedding')">
-                <SaveOutlined /> {{ embeddingSaving ? '保存中...' : '保存配置' }}
-              </button>
-            </a-form-item>
-          </a-form>
-          <div class="panel-tip">
-            <BulbOutlined />
-            <span>用于：知识库默认 Embedding（新建知识库未指定时使用）、文本相似度计算等</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 默认重排模型 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <h3>默认重排模型</h3>
-            <span class="panel-desc">RAG 召回后精排使用</span>
-          </div>
-        </div>
-        <div class="panel-body">
-          <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型">
-              <ModelSelect
-                v-model:provider-id="rerankProviderId"
-                v-model:model-id="rerankModelId"
-                model-type="rerank"
-                placeholder="选择重排模型"
-              />
-            </a-form-item>
-            <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="rerankSaving" @click="saveModel('rerank')">
-                <SaveOutlined /> {{ rerankSaving ? '保存中...' : '保存配置' }}
-              </button>
-            </a-form-item>
-          </a-form>
-          <div class="panel-tip">
-            <BulbOutlined />
-            <span>用于：知识库检索结果重排序</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 默认TTS模型 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-wrap">
-            <h3>默认 TTS 模型</h3>
-            <span class="panel-desc">语音合成场景使用</span>
-          </div>
-        </div>
-        <div class="panel-body">
-          <a-form :label-col="{ span: 6 }">
-            <a-form-item label="模型">
-              <ModelSelect
-                v-model:provider-id="ttsProviderId"
-                v-model:model-id="ttsModelId"
-                model-type="tts"
-                placeholder="选择 TTS 模型"
-              />
-            </a-form-item>
-            <a-form-item :wrapper-col="{ offset: 6 }">
-              <button class="btn-primary" :disabled="ttsSaving" @click="saveModel('tts')">
-                <SaveOutlined /> {{ ttsSaving ? '保存中...' : '保存配置' }}
-              </button>
-            </a-form-item>
-          </a-form>
-          <div class="panel-tip">
-            <BulbOutlined />
-            <span>用于：文本转语音播放、AI 回复语音化等</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    </a-spin>
-    </div>
-
-    <!-- Tab 2: Landing 管理 -->
+    <!-- Tab: Landing 管理 -->
     <div v-show="activeTab === 'landing'">
     <a-spin :spinning="landingLoading">
     <div class="panel landing-panel">
@@ -156,7 +25,7 @@
       <div class="panel-body">
         <a-form :label-col="{ span: 4 }" :wrapper-col="{ span: 18 }">
           <a-form-item label="主标题">
-            <a-input v-model:value="landing.title" placeholder="请输入主标题（不超过 30 字）" :maxlength="30" show-count />
+            <a-input v-model:value="landing.title" placeholder="智元" :maxlength="30" show-count />
           </a-form-item>
           <a-form-item label="副标题轮播">
             <div class="subtitle-list">
@@ -178,7 +47,7 @@
             <a-input v-model:value="landing.github" placeholder="请输入 GitHub 地址（不超过 200 字）" :maxlength="200" show-count />
           </a-form-item>
           <a-form-item label="版权信息">
-            <a-input v-model:value="landing.copyright" placeholder="请输入版权信息（不超过 100 字）" :maxlength="100" show-count />
+            <a-input v-model:value="landing.copyright" placeholder="© 2026 智元" :maxlength="100" show-count />
           </a-form-item>
           <a-form-item label="功能展示">
             <div class="features-toggle-bar">
@@ -251,6 +120,58 @@
       <UserManage />
     </div>
 
+    <!-- Tab: 企业长期记忆默认策略 -->
+    <div v-show="activeTab === 'memory'">
+      <a-spin :spinning="memoryPolicyLoading">
+        <div class="panel" style="grid-column: 1 / -1;">
+          <div class="panel-header split-header">
+            <div class="panel-title-wrap">
+              <h3>企业长期记忆默认策略</h3>
+              <span class="panel-desc">控制台调试与开放 API（未单独覆盖的 Key）均跟随此默认；各 Key 可在「企业 API Key」中分策略覆盖</span>
+            </div>
+            <button class="btn-primary" :disabled="memoryPolicySaving" @click="saveMemoryPolicy">
+              <SaveOutlined /> {{ memoryPolicySaving ? '保存中...' : '保存配置' }}
+            </button>
+          </div>
+          <div class="panel-body">
+            <div class="memory-settings">
+              <label class="setting-row">
+                <span class="setting-text">
+                  <strong>启用长期记忆</strong>
+                  <small>关闭后控制台调试与开放 API 均不注入记忆（除非 Key 单独覆盖开启）</small>
+                </span>
+                <a-switch v-model:checked="memoryPolicyForm.enabled" />
+              </label>
+              <label class="setting-row">
+                <span class="setting-text">
+                  <strong>自动抽取记忆</strong>
+                  <small>回复结束后尝试保存明确偏好 / 「请记住」类内容</small>
+                </span>
+                <a-switch v-model:checked="memoryPolicyForm.autoExtract" :disabled="!memoryPolicyForm.enabled" />
+              </label>
+              <label class="setting-row">
+                <span class="setting-text">
+                  <strong>每轮注入数量</strong>
+                  <small>控制进入 Prompt 的记忆条数</small>
+                </span>
+                <a-input-number v-model:value="memoryPolicyForm.injectLimit" :min="1" :max="15" :disabled="!memoryPolicyForm.enabled" />
+              </label>
+              <label class="setting-row">
+                <span class="setting-text">
+                  <strong>记忆作用域</strong>
+                  <small>跨 Agent 共享，或按 Agent 隔离</small>
+                </span>
+                <a-select v-model:value="memoryPolicyForm.scope" :disabled="!memoryPolicyForm.enabled" class="setting-select">
+                  <a-select-option value="user">跨 Agent 生效</a-select-option>
+                  <a-select-option value="agent">按 Agent 隔离</a-select-option>
+                </a-select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </a-spin>
+    </div>
+
     <!-- Tab 4: Token 管理 -->
     <div v-show="activeTab === 'token'">
     <a-spin :spinning="tokenLoading">
@@ -258,7 +179,7 @@
       <!-- 全局统计大屏 -->
       <div class="panel token-stats-panel">
         <div class="panel-header">
-          <h3>今日 Token 消耗</h3>
+          <h3>企业今日 Token 消耗</h3>
           <span class="panel-desc panel-desc-right">{{ tokenStats.date }}</span>
           <button class="btn-icon-refresh" @click="loadTokenStats" :disabled="tokenStatsLoading">
             <SyncOutlined :spin="tokenStatsLoading" />
@@ -285,8 +206,8 @@
       <div class="panel token-config-panel">
         <div class="panel-header">
           <div class="panel-title-wrap">
-            <h3>限额配置</h3>
-            <span class="panel-desc">调整 Token 使用限制</span>
+            <h3>企业限额配置</h3>
+            <span class="panel-desc">全局与建设者调试日限额；开放 API 另受各 Key 日配额约束</span>
           </div>
         </div>
         <div class="panel-body">
@@ -313,7 +234,7 @@
     <!-- 用户消耗排行 -->
     <div class="panel token-ranking-panel">
       <div class="panel-header">
-        <h3>用户 Token 消耗排行</h3>
+        <h3>建设者调试 Token 排行</h3>
         <a-radio-group
           v-model:value="rankingRange"
           button-style="solid"
@@ -368,40 +289,16 @@
     <div class="panel" style="grid-column: 1 / -1;">
       <div class="panel-header">
         <div class="panel-title-wrap">
-          <h3>API Key 管理</h3>
-          <a-popover trigger="click" placement="right" :overlay-style="{ maxWidth: '480px' }">
-            <template #content>
-              <div style="font-size: 13px; line-height: 1.8; padding: 4px 0;">
-                <p style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">API Key 使用说明</p>
-                <p><b>什么是 API Key？</b></p>
-                <p>API Key 是用于外部系统调用 LightBot 接口的认证凭证，格式为 <code>lbkey_xxxx...</code>，支持通过 HTTP Header 传递。</p>
-                <p style="margin-top: 8px;"><b>如何使用？</b></p>
-                <p>在请求头中添加：</p>
-                <p><code>Authorization: Bearer lbkey_your_key_here</code></p>
-                <p style="margin-top: 8px;"><b>支持的接口：</b></p>
-                <ul style="padding-left: 16px; margin: 4px 0;">
-                  <li><code>chat</code> 权限：仅可调用对话相关接口（/api/chat/**）</li>
-                  <li><code>full</code> 权限：可调用所有已认证接口</li>
-                </ul>
-                <p style="margin-top: 8px;"><b>注意事项：</b></p>
-                <ul style="padding-left: 16px; margin: 4px 0;">
-                  <li>密钥仅在创建时显示一次，请妥善保管</li>
-                  <li>可随时启用/禁用或删除密钥</li>
-                  <li>支持设置过期时间，过期后自动失效</li>
-                  <li>如密钥泄露，请立即删除并重新生成</li>
-                </ul>
-              </div>
-            </template>
-            <QuestionCircleOutlined style="font-size: 15px; color: var(--color-mute); cursor: pointer; margin-left: 6px;" />
-          </a-popover>
+          <h3>企业 API Key</h3>
         </div>
-        <span class="panel-desc">用于外部系统调用 LightBot 接口的认证凭证</span>
+        <span class="panel-desc">用于外部系统调用智元接口的认证凭证</span>
+        <a class="apikey-docs-link" href="/docs" target="_blank" rel="noopener noreferrer">在线文档</a>
         <button class="btn-primary" style="margin-left: auto;" @click="showCreateApiKey">
-          <PlusOutlined /> 创建 API Key
+          <PlusOutlined /> 创建企业 API Key
         </button>
       </div>
       <div class="panel-body">
-        <div v-if="apiKeyList.length === 0 && !apiKeyLoading" class="empty-tip">暂无 API Key，点击上方按钮创建一个</div>
+        <div v-if="apiKeyList.length === 0 && !apiKeyLoading" class="empty-tip">暂无企业 API Key，点击上方按钮创建一个</div>
         <div v-else class="apikey-cards-grid">
           <div v-for="key in apiKeyList" :key="key.id" class="apikey-card">
             <div class="apikey-card-header">
@@ -414,8 +311,8 @@
             <div class="apikey-card-body">
               <div class="apikey-card-row">
                 <span class="apikey-card-label">权限</span>
-                <a-tag :color="key.permissions === 'full' ? 'blue' : 'default'">
-                  {{ key.permissions === 'full' ? '完全访问' : '仅对话' }}
+                <a-tag :color="isFullApiKeyPermission(key.permissions) ? 'blue' : 'default'">
+                  {{ apiKeyPermissionLabel(key.permissions) }}
                 </a-tag>
               </div>
               <div class="apikey-card-row">
@@ -425,6 +322,14 @@
               <div class="apikey-card-row">
                 <span class="apikey-card-label">Token配额</span>
                 <span>{{ formatToken(key.dailyQuota) }} / 日{{ key.usedTokens > 0 ? '（已用 ' + formatToken(key.usedTokens) + '）' : '' }}</span>
+              </div>
+              <div class="apikey-card-row">
+                <span class="apikey-card-label">长期记忆</span>
+                <span>{{ memoryConfigSummary(key) }}</span>
+              </div>
+              <div class="apikey-card-row">
+                <span class="apikey-card-label">业务办理页</span>
+                <span>{{ bizPageConfigSummary(key) }}</span>
               </div>
               <div class="apikey-card-row" v-if="key.agentIds && key.agentIds.length > 0">
                 <span class="apikey-card-label">绑定Agent</span>
@@ -436,7 +341,7 @@
               </div>
               <div class="apikey-card-row">
                 <span class="apikey-card-label">最近使用</span>
-                <span>{{ key.lastUsedAt || '-' }}</span>
+                <span>{{ key.lastUsedAt ? formatTime(key.lastUsedAt) : '-' }}</span>
               </div>
             </div>
             <div class="apikey-card-footer">
@@ -445,7 +350,16 @@
                 <a-switch :checked="key.isEnabled === 1" size="small" @change="handleToggleApiKey(key)" />
               </div>
               <div class="apikey-card-actions">
-                <a-popconfirm title="确定要删除此 API Key 吗？" @confirm="handleDeleteApiKey(key)" ok-text="确定" cancel-text="取消">
+                <a-button type="text" size="small" @click="openKeyMemoryPolicy(key)">
+                  <SettingOutlined /> 记忆策略
+                </a-button>
+                <a-button type="text" size="small" @click="openKeyBizPagePolicy(key)">
+                  <AppstoreOutlined /> 业务页
+                </a-button>
+                <a-button type="text" size="small" @click="openMemoryDrawer(key)">
+                  <DatabaseOutlined /> 记忆治理
+                </a-button>
+                <a-popconfirm title="确定要删除此企业 API Key 吗？" @confirm="handleDeleteApiKey(key)" ok-text="确定" cancel-text="取消">
                   <a-button type="text" size="small" danger>
                     <DeleteOutlined /> 删除
                   </a-button>
@@ -459,10 +373,141 @@
     </a-spin>
     </div>
 
+    <a-modal
+      v-model:open="keyPolicyVisible"
+      :title="keyPolicyTitle"
+      :confirmLoading="keyPolicySaving"
+      ok-text="保存"
+      cancel-text="取消"
+      @ok="saveKeyMemoryPolicy"
+    >
+      <div class="dialog-scroll-body">
+        <a-spin :spinning="keyPolicyLoading">
+          <a-form :label-col="{ flex: '0 0 120px' }">
+            <a-form-item label="跟随企业默认">
+              <a-switch v-model:checked="keyPolicyForm.inherit" />
+              <div class="form-hint">开启后忽略下方覆盖项，完全使用「长期记忆」Tab 中的企业默认</div>
+            </a-form-item>
+            <template v-if="!keyPolicyForm.inherit">
+              <a-form-item label="启用长期记忆">
+                <a-switch v-model:checked="keyPolicyForm.enabled" />
+              </a-form-item>
+              <a-form-item label="自动抽取记忆">
+                <a-switch v-model:checked="keyPolicyForm.autoExtract" :disabled="!keyPolicyForm.enabled" />
+              </a-form-item>
+              <a-form-item label="每轮注入数量">
+                <a-input-number v-model:value="keyPolicyForm.injectLimit" :min="1" :max="15" :disabled="!keyPolicyForm.enabled" style="width: 100%" />
+              </a-form-item>
+              <a-form-item label="记忆作用域">
+                <a-select v-model:value="keyPolicyForm.scope" :disabled="!keyPolicyForm.enabled" style="width: 100%">
+                  <a-select-option value="user">跨 Agent 生效</a-select-option>
+                  <a-select-option value="agent">按 Agent 隔离</a-select-option>
+                </a-select>
+              </a-form-item>
+            </template>
+            <a-form-item v-if="keyPolicyEffective" label="当前生效">
+              <div class="effective-policy">
+                {{ keyPolicyEffective.enabled ? '已启用' : '已关闭' }}
+                · 抽取 {{ keyPolicyEffective.autoExtract ? '开' : '关' }}
+                · 注入 {{ keyPolicyEffective.injectLimit }}
+                · {{ keyPolicyEffective.scope === 'agent' ? '按 Agent' : '跨 Agent' }}
+              </div>
+            </a-form-item>
+          </a-form>
+        </a-spin>
+      </div>
+    </a-modal>
+
+    <a-modal
+      v-model:open="keyBizPageVisible"
+      :title="`业务办理页白名单 · ${keyBizPageKey?.name || ''}`"
+      :confirmLoading="keyBizPageSaving"
+      ok-text="保存"
+      cancel-text="取消"
+      @ok="saveKeyBizPagePolicy"
+      destroy-on-close
+    >
+      <a-spin :spinning="keyBizPageLoading">
+        <a-form :label-col="{ flex: '0 0 120px' }">
+          <a-form-item label="全部已启用页">
+            <a-switch v-model:checked="keyBizPageForm.inherit" />
+            <div class="form-hint">关闭后仅允许下方勾选的 pageType</div>
+          </a-form-item>
+          <a-form-item v-if="!keyBizPageForm.inherit" label="允许的页面">
+            <a-select
+              v-model:value="keyBizPageForm.allowedPageTypes"
+              mode="multiple"
+              style="width: 100%"
+              :options="keyBizPageOptions"
+              placeholder="选择 pageType"
+            />
+          </a-form-item>
+        </a-form>
+      </a-spin>
+    </a-modal>
+
+    <a-drawer
+      v-model:open="memoryDrawerVisible"
+      :title="memoryDrawerTitle"
+      :width="720"
+      :bodyStyle="{ padding: '16px' }"
+      destroy-on-close
+    >
+      <p class="memory-drawer-desc">
+        正式长期记忆按「企业 API Key + externalUserId」隔离。清空会影响该外部用户的跨会话偏好，请谨慎操作。
+      </p>
+      <a-spin :spinning="memoryUsersLoading">
+        <a-empty v-if="!memoryUsers.length && !memoryUsersLoading" description="暂无外部用户记忆" />
+        <div v-else class="memory-user-list">
+          <div v-for="item in memoryUsers" :key="item.externalUserId" class="memory-user-card">
+            <div class="memory-user-head">
+              <div>
+                <code class="memory-user-id">{{ item.externalUserId }}</code>
+                <div class="memory-user-meta">
+                  启用 {{ item.activeCount ?? 0 }} / 共 {{ item.totalCount ?? 0 }}
+                  <span v-if="item.lastUpdateTime"> · 更新于 {{ formatTime(item.lastUpdateTime) }}</span>
+                </div>
+              </div>
+              <div class="memory-user-actions">
+                <a-button size="small" @click="loadMemoryDetails(item.externalUserId)">查看明细</a-button>
+                <a-popconfirm
+                  title="确定清空该外部用户在本 Key 下的全部记忆？"
+                  ok-text="清空"
+                  cancel-text="取消"
+                  @confirm="handleClearUserMemories(item.externalUserId)"
+                >
+                  <a-button size="small" danger>清空</a-button>
+                </a-popconfirm>
+              </div>
+            </div>
+            <div v-if="selectedMemoryUserId === item.externalUserId" class="memory-detail-panel">
+              <a-spin :spinning="memoryDetailsLoading">
+                <a-empty v-if="!memoryDetails.length && !memoryDetailsLoading" description="暂无明细" />
+                <div v-else class="memory-detail-list">
+                  <div v-for="mem in memoryDetails" :key="mem.id" class="memory-detail-item">
+                    <div class="memory-detail-main">
+                      <a-tag>{{ mem.memoryType || 'memory' }}</a-tag>
+                      <a-tag :color="mem.status === 'active' ? 'green' : 'default'">{{ mem.status || '-' }}</a-tag>
+                      <span class="memory-detail-content">{{ mem.content }}</span>
+                    </div>
+                    <a-popconfirm title="确定删除这条记忆？" @confirm="handleDeleteMemory(mem.id)">
+                      <a-button type="text" size="small" danger>
+                        <DeleteOutlined />
+                      </a-button>
+                    </a-popconfirm>
+                  </div>
+                </div>
+              </a-spin>
+            </div>
+          </div>
+        </div>
+      </a-spin>
+    </a-drawer>
+
     <!-- 创建 API Key 弹窗 -->
     <a-modal
       v-model:open="apiKeyCreateVisible"
-      title="创建 API Key"
+      title="创建企业 API Key"
       :maskClosable="false"
       @ok="handleCreateApiKey"
       :confirmLoading="apiKeyCreateLoading"
@@ -476,8 +521,8 @@
         </a-form-item>
         <a-form-item label="权限">
           <a-select v-model:value="apiKeyForm.permissions">
-            <a-select-option value="chat">仅对话</a-select-option>
-            <a-select-option value="full">完全访问</a-select-option>
+            <a-select-option value="chat">仅对话（对话接口）</a-select-option>
+            <a-select-option value="full">完全访问（对话 + 开放数据 API）</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="每分钟限流">
@@ -500,7 +545,7 @@
     <!-- 密钥展示弹窗（创建后一次性显示） -->
     <a-modal
       v-model:open="apiKeySecretVisible"
-      title="API Key 已创建"
+      title="企业 API Key 已创建"
       :maskClosable="false"
       :footer="null"
       width="720px"
@@ -513,58 +558,68 @@
         </a-button>
       </div>
     </a-modal>
+
   </div>
+
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, markRaw } from 'vue'
+import { ref, reactive, computed, onMounted, watch, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  SaveOutlined, BulbOutlined, PlusOutlined, DeleteOutlined,
+  SaveOutlined, PlusOutlined, DeleteOutlined,
   UpOutlined, DownOutlined,
   RobotOutlined, TeamOutlined, ApartmentOutlined, ApiOutlined,
   ToolOutlined, ThunderboltOutlined, ExperimentOutlined, EyeOutlined,
   FormOutlined, DatabaseOutlined, NodeIndexOutlined, BranchesOutlined,
   CloudOutlined, CodeOutlined, FileTextOutlined, RocketOutlined,
-  SafetyOutlined, SettingOutlined, ThunderboltFilled, SyncOutlined,
+  SafetyOutlined, SettingOutlined, SyncOutlined,
   AppstoreOutlined, ControlOutlined, ClusterOutlined, BlockOutlined,
-  QuestionCircleOutlined, KeyOutlined, CopyOutlined,
+  KeyOutlined, CopyOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import {
-  getAllDefaultModels,
-  updateDefaultChatModel,
-  updateDefaultEmbeddingModel,
-  updateDefaultTtsModel,
-  updateDefaultRerankModel,
-} from '../api/systemConfig'
 import { getLandingConfig, updateLandingConfig } from '../api/landing'
 import { getTokenBudgetConfig, updateTokenBudgetConfig, getTokenBudgetStats, getTokenBudgetRanking } from '../api/tokenBudget'
-import { listApiKeys, createApiKey, toggleApiKey, deleteApiKey } from '../api/apiKey'
+import { getEnterpriseLongMemoryPolicy, updateEnterpriseLongMemoryPolicy } from '../api/longMemory'
+import {
+  listApiKeys,
+  createApiKey,
+  toggleApiKey,
+  deleteApiKey,
+  getApiKeyMemoryConfig,
+  updateApiKeyMemoryConfig,
+  listApiKeyMemoryUsers,
+  listApiKeyMemories,
+  clearApiKeyUserMemories,
+  deleteApiKeyMemory,
+} from '../api/apiKey'
+import {
+  listBusinessPages,
+  getApiKeyBusinessPageConfig,
+  updateApiKeyBusinessPageConfig,
+} from '../api/businessPage'
 import AgentSelect from '../components/AgentSelect.vue'
-import ModelSelect from '../components/ModelSelect.vue'
 import UserManage from './UserManage.vue'
 import { copyToClipboard } from '../utils/clipboard'
+import { formatTime } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
-const VALID_TABS = ['model', 'landing', 'users', 'token', 'apiKey']
-const activeTab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'model')
-const modelLoading = ref(false)
+const VALID_TABS = ['landing', 'users', 'memory', 'token', 'apiKey']
+// 旧链接 ?tab=model 跳转到模型管理
+if (route.query.tab === 'model') {
+  router.replace({ path: '/app/model-providers', query: { tab: 'defaults' } })
+}
+// 业务办理页已迁到能力中心
+if (route.query.tab === 'bizPage') {
+  router.replace({ path: '/app/extensions', query: { tab: 'businessPages' } })
+}
+const activeTab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'landing')
 const landingLoading = ref(false)
 const loadedTabs = new Set()
 
-const chatProviderId = ref(null)
-const chatModelId = ref(null)
-const embeddingProviderId = ref(null)
-const embeddingModelId = ref(null)
-const rerankProviderId = ref(null)
-const rerankModelId = ref(null)
-const ttsProviderId = ref(null)
-const ttsModelId = ref(null)
-
 onMounted(() => {
-  loadTabData('model')
+  loadTabData(activeTab.value)
 })
 
 watch(activeTab, (tab) => {
@@ -576,24 +631,19 @@ watch(activeTab, (tab) => {
 async function loadTabData(tab) {
   if (loadedTabs.has(tab)) return
   loadedTabs.add(tab)
-  if (tab === 'model') {
-    modelLoading.value = true
-    try {
-      const res = await getAllDefaultModels()
-      const data = res.data || {}
-      applyModelConfig('chat', data.chat)
-      applyModelConfig('embedding', data.embedding)
-      applyModelConfig('tts', data.tts)
-      applyModelConfig('rerank', data.rerank)
-    } finally {
-      modelLoading.value = false
-    }
-  } else if (tab === 'landing') {
+  if (tab === 'landing') {
     landingLoading.value = true
     try {
       await loadLandingConfig()
     } finally {
       landingLoading.value = false
+    }
+  } else if (tab === 'memory') {
+    memoryPolicyLoading.value = true
+    try {
+      await loadMemoryPolicy()
+    } finally {
+      memoryPolicyLoading.value = false
     }
   } else if (tab === 'token') {
     tokenLoading.value = true
@@ -609,41 +659,6 @@ async function loadTabData(tab) {
     } finally {
       apiKeyLoading.value = false
     }
-  }
-}
-
-const chatSaving = ref(false)
-const embeddingSaving = ref(false)
-const ttsSaving = ref(false)
-const rerankSaving = ref(false)
-
-function applyModelConfig(kind, cfg) {
-  const pid = cfg?.providerId ? String(cfg.providerId) : null
-  const mid = cfg?.modelId ? String(cfg.modelId) : null
-  if (kind === 'chat') { chatProviderId.value = pid; chatModelId.value = mid }
-  else if (kind === 'embedding') { embeddingProviderId.value = pid; embeddingModelId.value = mid }
-  else if (kind === 'rerank') { rerankProviderId.value = pid; rerankModelId.value = mid }
-  else if (kind === 'tts') { ttsProviderId.value = pid; ttsModelId.value = mid }
-}
-
-const modelSaveConfig = {
-  chat:      { providerId: chatProviderId,      modelId: chatModelId,      saving: chatSaving,      api: updateDefaultChatModel,      label: '默认对话模型' },
-  embedding: { providerId: embeddingProviderId, modelId: embeddingModelId, saving: embeddingSaving, api: updateDefaultEmbeddingModel, label: '默认向量模型' },
-  rerank:    { providerId: rerankProviderId,    modelId: rerankModelId,    saving: rerankSaving,    api: updateDefaultRerankModel,    label: '默认重排模型' },
-  tts:       { providerId: ttsProviderId,       modelId: ttsModelId,       saving: ttsSaving,       api: updateDefaultTtsModel,       label: '默认 TTS 模型' },
-}
-
-async function saveModel(kind) {
-  const cfg = modelSaveConfig[kind]
-  if (!cfg.providerId.value || !cfg.modelId.value) return message.warning('请选择模型')
-  cfg.saving.value = true
-  try {
-    await cfg.api({ providerId: cfg.providerId.value, modelId: cfg.modelId.value })
-    message.success(`${cfg.label}已保存`)
-  } catch (e) {
-    message.error(e.response?.data?.message || '保存失败')
-  } finally {
-    cfg.saving.value = false
   }
 }
 
@@ -805,6 +820,41 @@ function formatToken(val) {
   return String(val)
 }
 
+// 企业长期记忆默认策略
+const memoryPolicyLoading = ref(false)
+const memoryPolicySaving = ref(false)
+const memoryPolicyForm = reactive({
+  enabled: true,
+  autoExtract: true,
+  injectLimit: 6,
+  scope: 'user',
+})
+
+async function loadMemoryPolicy() {
+  const res = await getEnterpriseLongMemoryPolicy()
+  Object.assign(memoryPolicyForm, {
+    enabled: res.data?.enabled !== false,
+    autoExtract: res.data?.autoExtract !== false,
+    injectLimit: res.data?.injectLimit ?? 6,
+    scope: res.data?.scope === 'agent' ? 'agent' : 'user',
+  })
+}
+
+async function saveMemoryPolicy() {
+  memoryPolicySaving.value = true
+  try {
+    const res = await updateEnterpriseLongMemoryPolicy({ ...memoryPolicyForm })
+    Object.assign(memoryPolicyForm, res.data || memoryPolicyForm)
+    message.success('企业长期记忆策略已保存')
+    // 允许 API Key 页重新拉取卡片摘要
+    loadedTabs.delete('apiKey')
+  } catch {
+    // interceptor handled
+  } finally {
+    memoryPolicySaving.value = false
+  }
+}
+
 // API Key 管理
 const apiKeyLoading = ref(false)
 const apiKeyList = ref([])
@@ -813,6 +863,157 @@ const apiKeyCreateLoading = ref(false)
 const apiKeySecretVisible = ref(false)
 const apiKeyCreatedSecret = ref('')
 const apiKeyForm = reactive({ name: '', permissions: 'chat', rateLimit: 60, dailyQuota: 100000, agentIds: [] })
+
+// API Key 记忆策略覆盖
+const keyPolicyVisible = ref(false)
+const keyPolicyLoading = ref(false)
+const keyPolicySaving = ref(false)
+const keyPolicyKey = ref(null)
+const keyPolicyEffective = ref(null)
+const keyPolicyForm = reactive({
+  inherit: true,
+  enabled: true,
+  autoExtract: true,
+  injectLimit: 6,
+  scope: 'user',
+})
+
+const keyPolicyTitle = computed(() => {
+  const name = keyPolicyKey.value?.name || '企业 API Key'
+  return `记忆策略 · ${name}`
+})
+
+function memoryConfigSummary(key) {
+  if (!key?.memoryConfig) return '跟随企业默认'
+  try {
+    const cfg = typeof key.memoryConfig === 'string' ? JSON.parse(key.memoryConfig) : key.memoryConfig
+    if (!cfg || cfg.inherit !== false) return '跟随企业默认'
+    const on = cfg.enabled !== false
+    const scopeText = cfg.scope === 'agent' ? '按 Agent' : '跨 Agent'
+    return `${on ? '自定义·启用' : '自定义·关闭'} · ${scopeText}`
+  } catch {
+    return '跟随企业默认'
+  }
+}
+
+async function openKeyMemoryPolicy(key) {
+  keyPolicyKey.value = key
+  keyPolicyVisible.value = true
+  keyPolicyLoading.value = true
+  keyPolicyEffective.value = null
+  try {
+    const res = await getApiKeyMemoryConfig(key.id)
+    const data = res.data || {}
+    Object.assign(keyPolicyForm, {
+      inherit: data.inherit !== false,
+      enabled: data.enabled !== false,
+      autoExtract: data.autoExtract !== false,
+      injectLimit: data.injectLimit ?? 6,
+      scope: data.scope === 'agent' ? 'agent' : 'user',
+    })
+    keyPolicyEffective.value = data.effective || null
+  } catch {
+    Object.assign(keyPolicyForm, { inherit: true, enabled: true, autoExtract: true, injectLimit: 6, scope: 'user' })
+  } finally {
+    keyPolicyLoading.value = false
+  }
+}
+
+async function saveKeyMemoryPolicy() {
+  if (!keyPolicyKey.value?.id) return
+  keyPolicySaving.value = true
+  try {
+    const payload = keyPolicyForm.inherit
+      ? { inherit: true }
+      : {
+          inherit: false,
+          enabled: keyPolicyForm.enabled,
+          autoExtract: keyPolicyForm.autoExtract,
+          injectLimit: keyPolicyForm.injectLimit,
+          scope: keyPolicyForm.scope,
+        }
+    const res = await updateApiKeyMemoryConfig(keyPolicyKey.value.id, payload)
+    keyPolicyEffective.value = res.data?.effective || null
+    message.success('记忆策略已保存')
+    keyPolicyVisible.value = false
+    await loadApiKeys()
+  } catch {
+    // interceptor handled
+  } finally {
+    keyPolicySaving.value = false
+  }
+}
+
+// —— 企业 API Key · 业务办理页白名单（模板管理已迁到能力中心） ——
+const bizPages = ref([])
+const keyBizPageVisible = ref(false)
+const keyBizPageLoading = ref(false)
+const keyBizPageSaving = ref(false)
+const keyBizPageKey = ref(null)
+const keyBizPageForm = reactive({ inherit: true, allowedPageTypes: [] })
+const keyBizPageOptions = ref([])
+
+function bizPageConfigSummary(key) {
+  if (!key?.businessPageConfig) return '全部已启用页'
+  try {
+    const cfg = typeof key.businessPageConfig === 'string' ? JSON.parse(key.businessPageConfig) : key.businessPageConfig
+    if (!cfg || cfg.inherit !== false) return '全部已启用页'
+    const n = Array.isArray(cfg.allowedPageTypes) ? cfg.allowedPageTypes.length : 0
+    return n === 0 ? '已禁止全部' : `白名单 ${n} 个`
+  } catch {
+    return '全部已启用页'
+  }
+}
+
+async function loadBizPages() {
+  try {
+    const res = await listBusinessPages()
+    bizPages.value = res.data || []
+  } catch {
+    bizPages.value = []
+  }
+}
+
+async function openKeyBizPagePolicy(key) {
+  keyBizPageKey.value = key
+  keyBizPageVisible.value = true
+  keyBizPageLoading.value = true
+  try {
+    if (!bizPages.value.length) await loadBizPages()
+    keyBizPageOptions.value = (bizPages.value || [])
+      .filter((p) => p.enabled === 1)
+      .map((p) => ({ label: `${p.displayName} (${p.pageType})`, value: p.pageType }))
+    const res = await getApiKeyBusinessPageConfig(key.id)
+    const data = res.data || {}
+    keyBizPageForm.inherit = data.inherit !== false
+    keyBizPageForm.allowedPageTypes = Array.isArray(data.allowedPageTypes) ? [...data.allowedPageTypes] : []
+  } finally {
+    keyBizPageLoading.value = false
+  }
+}
+
+async function saveKeyBizPagePolicy() {
+  if (!keyBizPageKey.value?.id) return
+  keyBizPageSaving.value = true
+  try {
+    await updateApiKeyBusinessPageConfig(keyBizPageKey.value.id, keyBizPageForm.inherit
+      ? { inherit: true }
+      : { inherit: false, allowedPageTypes: keyBizPageForm.allowedPageTypes })
+    message.success('业务页白名单已保存')
+    keyBizPageVisible.value = false
+    await loadApiKeys()
+  } finally {
+    keyBizPageSaving.value = false
+  }
+}
+
+function isFullApiKeyPermission(permissions) {
+  return permissions === 'full' || permissions === 'FULL' || permissions === '完全访问'
+}
+
+function apiKeyPermissionLabel(permissions) {
+  return isFullApiKeyPermission(permissions) ? '完全访问' : '仅对话'
+}
 
 async function loadApiKeys() {
   const res = await listApiKeys()
@@ -875,13 +1076,89 @@ async function handleDeleteApiKey(key) {
     // interceptor handled
   }
 }
+
+// 企业 API Key 外部用户记忆治理
+const memoryDrawerVisible = ref(false)
+const memoryDrawerKey = ref(null)
+const memoryUsersLoading = ref(false)
+const memoryUsers = ref([])
+const selectedMemoryUserId = ref('')
+const memoryDetailsLoading = ref(false)
+const memoryDetails = ref([])
+
+const memoryDrawerTitle = computed(() => {
+  const name = memoryDrawerKey.value?.name || '企业 API Key'
+  return `长期记忆治理 · ${name}`
+})
+
+async function openMemoryDrawer(key) {
+  memoryDrawerKey.value = key
+  memoryDrawerVisible.value = true
+  selectedMemoryUserId.value = ''
+  memoryDetails.value = []
+  await loadMemoryUsers()
+}
+
+async function loadMemoryUsers() {
+  if (!memoryDrawerKey.value?.id) return
+  memoryUsersLoading.value = true
+  try {
+    const res = await listApiKeyMemoryUsers(memoryDrawerKey.value.id)
+    memoryUsers.value = res.data || []
+  } catch {
+    memoryUsers.value = []
+  } finally {
+    memoryUsersLoading.value = false
+  }
+}
+
+async function loadMemoryDetails(externalUserId) {
+  if (!memoryDrawerKey.value?.id || !externalUserId) return
+  selectedMemoryUserId.value = externalUserId
+  memoryDetailsLoading.value = true
+  try {
+    const res = await listApiKeyMemories(memoryDrawerKey.value.id, { externalUserId })
+    memoryDetails.value = res.data || []
+  } catch {
+    memoryDetails.value = []
+  } finally {
+    memoryDetailsLoading.value = false
+  }
+}
+
+async function handleClearUserMemories(externalUserId) {
+  if (!memoryDrawerKey.value?.id) return
+  try {
+    const res = await clearApiKeyUserMemories(memoryDrawerKey.value.id, externalUserId)
+    message.success(`已清空 ${res.data?.deleted ?? 0} 条记忆`)
+    if (selectedMemoryUserId.value === externalUserId) {
+      selectedMemoryUserId.value = ''
+      memoryDetails.value = []
+    }
+    await loadMemoryUsers()
+  } catch {
+    // interceptor handled
+  }
+}
+
+async function handleDeleteMemory(memoryId) {
+  if (!memoryDrawerKey.value?.id) return
+  try {
+    await deleteApiKeyMemory(memoryDrawerKey.value.id, memoryId)
+    message.success('记忆已删除')
+    await loadMemoryDetails(selectedMemoryUserId.value)
+    await loadMemoryUsers()
+  } catch {
+    // interceptor handled
+  }
+}
 </script>
 
 <style scoped>
 .page {
   padding: var(--space-xl);
   padding-right: calc(var(--space-xl) + var(--scroll-content-gap));
-  height: 100vh;
+  height: var(--app-content-height);
   overflow-y: auto;
   background: var(--color-canvas-soft);
   scrollbar-gutter: stable;
@@ -1204,6 +1481,15 @@ async function handleDeleteApiKey(key) {
   font-weight: 500;
   color: var(--color-ink);
 }
+.apikey-docs-link {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--color-link);
+  text-decoration: none;
+}
+.apikey-docs-link:hover {
+  text-decoration: underline;
+}
 .apikey-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -1291,5 +1577,132 @@ async function handleDeleteApiKey(key) {
   white-space: nowrap;
   overflow-x: auto;
   color: var(--color-ink);
+}
+.split-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.memory-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 12px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  color: var(--color-body);
+  background: var(--color-canvas-soft);
+}
+.setting-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.setting-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.setting-text small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-mute);
+}
+.setting-select {
+  width: 160px;
+}
+.form-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-mute);
+  line-height: 1.4;
+}
+.effective-policy {
+  font-size: 13px;
+  color: var(--color-body);
+}
+.memory-drawer-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--color-mute);
+  line-height: 1.5;
+}
+@media (max-width: 960px) {
+  .memory-settings {
+    grid-template-columns: 1fr;
+  }
+}
+.memory-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.memory-user-card {
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--color-canvas-soft);
+}
+.memory-user-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.memory-user-id {
+  font-size: 13px;
+  color: var(--color-ink);
+}
+.memory-user-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-mute);
+}
+.memory-user-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.memory-detail-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-hairline);
+}
+.memory-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.memory-detail-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+}
+.memory-detail-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.memory-detail-content {
+  flex: 1 1 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-body);
+  word-break: break-word;
 }
 </style>

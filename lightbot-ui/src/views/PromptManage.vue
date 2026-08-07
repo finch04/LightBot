@@ -1,11 +1,11 @@
 <template>
   <div class="page">
     <LbManageHeader
-      title="Prompt"
+      title="提示词"
       v-model="searchText"
-      search-placeholder="搜索 Prompt Key..."
+      search-placeholder="搜索提示词标识..."
       :refresh-disabled="loading"
-      create-text="新建 Prompt"
+      create-text="新建提示词"
       @refresh="refresh"
       @create="openDialog()"
     >
@@ -50,7 +50,7 @@
       <LbEmptyState
         v-if="list.length === 0 && !loading"
         :icon="FileTextOutlined"
-        :title="searchText ? '没有匹配的 Prompt' : '还没有 Prompt，点击右上角创建一个吧'"
+        :title="searchText ? '没有匹配的提示词' : '还没有提示词，点击右上角创建一个吧'"
       />
     </LbEntityGrid>
     </a-spin>
@@ -58,7 +58,7 @@
     <!-- 创建/编辑弹窗 -->
     <a-modal
       v-model:open="dialogVisible"
-      :title="form.id ? '编辑 Prompt' : '新建 Prompt'"
+      :title="form.id ? '编辑提示词' : '新建提示词'"
       :width="560"
       :maskClosable="false"
     >
@@ -190,7 +190,7 @@ function handleDelete(id) {
 .page {
   padding: var(--space-xl);
   padding-right: calc(var(--space-xl) + var(--scroll-content-gap));
-  height: 100vh;
+  height: var(--app-content-height);
   overflow-y: auto;
   background: var(--color-canvas-soft);
   scrollbar-gutter: stable;

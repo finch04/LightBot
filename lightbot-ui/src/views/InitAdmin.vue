@@ -9,9 +9,9 @@
       <!-- 右侧表单 -->
       <div class="card-right">
         <div class="form-header">
-          <img src="/lightbot-logo-single.png" alt="LightBot" class="form-logo" />
+          <img src="/lightbot-logo-single.png" alt="智元" class="form-logo" />
           <h2>系统初始化</h2>
-          <p>创建管理员账号以开始使用 LightBot</p>
+          <p>创建管理员账号以开始使用智元</p>
         </div>
 
         <form class="init-form" @submit.prevent="handleInit">
@@ -79,7 +79,7 @@
 
     <!-- 底部链接 -->
     <div class="page-footer">
-      <div class="footer-copyright">© 2026 LightBot. All Rights Reserved.</div>
+      <div class="footer-copyright">© 2026 智元. All Rights Reserved.</div>
     </div>
   </div>
 </template>

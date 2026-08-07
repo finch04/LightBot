@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.constant.ToolResultPrefixes;
 import com.lightbot.enums.NodeType;
 import com.lightbot.service.ToolService;
+import com.lightbot.tool.builtin.PresentBusinessPageTool;
 import com.lightbot.workflow.NodeExecutionContext;
 import com.lightbot.workflow.NodeExecutionResult;
 import com.lightbot.workflow.NodeProcessor;
@@ -88,12 +89,21 @@ public class ToolNodeProcessor extends AbstractFlowNodeProcessor implements Node
             outputs.put("toolDisplayName", displayName);
         }
 
-        // ask_user：与 confirm 节点共用 HITL 挂起 / resume 机制
-        if (WorkflowHitlPayloadBuilder.isAskUserWaitForUser(toolName, rawResult, objectMapper)) {
-            WorkflowHitlPayloadBuilder.enrichAskUserPhaseOutputs(outputs, toolVars);
-            Map<String, Object> suspendPayload = WorkflowHitlPayloadBuilder.fromAskUserTool(
-                    context.getCurrentNodeId(), rawResult, objectMapper);
-            log.info("[ToolNodeProcessor] ask_user 挂起工作流等待用户回答: nodeId={}", context.getCurrentNodeId());
+        // wait_for_user：ask_user / present_business_page 等与 confirm 节点共用 HITL 挂起
+        if (WorkflowHitlPayloadBuilder.hasWaitForUserFlag(rawResult, objectMapper)) {
+            Map<String, Object> suspendPayload;
+            if (PresentBusinessPageTool.TOOL_NAME.equals(toolName)
+                    || WorkflowHitlPayloadBuilder.isBusinessPageResult(rawResult, objectMapper)) {
+                suspendPayload = WorkflowHitlPayloadBuilder.fromBusinessPageTool(
+                        context.getCurrentNodeId(), rawResult, objectMapper);
+                log.info("[ToolNodeProcessor] 业务办理页挂起工作流: nodeId={}, tool={}",
+                        context.getCurrentNodeId(), toolName);
+            } else {
+                WorkflowHitlPayloadBuilder.enrichAskUserPhaseOutputs(outputs, toolVars);
+                suspendPayload = WorkflowHitlPayloadBuilder.fromAskUserTool(
+                        context.getCurrentNodeId(), rawResult, objectMapper);
+                log.info("[ToolNodeProcessor] ask_user 挂起工作流等待用户回答: nodeId={}", context.getCurrentNodeId());
+            }
             return NodeExecutionResult.builder()
                     .suspended(true)
                     .nextNodeId(resolveNextNodeId(context))

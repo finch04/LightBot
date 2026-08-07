@@ -20,6 +20,7 @@ const ApiNodeDetail = defineAsyncComponent(() => import('./nodeDetails/ApiNodeDe
 const ScriptNodeDetail = defineAsyncComponent(() => import('./nodeDetails/ScriptNodeDetail.vue'))
 const ParameterExtractorNodeDetail = defineAsyncComponent(() => import('./nodeDetails/ParameterExtractorNodeDetail.vue'))
 const AppComponentNodeDetail = defineAsyncComponent(() => import('./nodeDetails/AppComponentNodeDetail.vue'))
+const SubAgentNodeDetail = defineAsyncComponent(() => import('./nodeDetails/SubAgentNodeDetail.vue'))
 const ConfirmNodeDetail = defineAsyncComponent(() => import('./nodeDetails/ConfirmNodeDetail.vue'))
 const ContainerNodeDetail = defineAsyncComponent(() => import('./nodeDetails/ContainerNodeDetail.vue'))
 const DefaultNodeDetail = defineAsyncComponent(() => import('./nodeDetails/DefaultNodeDetail.vue'))
@@ -42,6 +43,7 @@ export const WORKFLOW_NODE_DETAIL_RENDERERS = {
   script: ScriptNodeDetail,
   parameter_extractor: ParameterExtractorNodeDetail,
   app_component: AppComponentNodeDetail,
+  sub_agent: SubAgentNodeDetail,
   confirm: ConfirmNodeDetail,
   loop: ContainerNodeDetail,
   batch: ContainerNodeDetail,

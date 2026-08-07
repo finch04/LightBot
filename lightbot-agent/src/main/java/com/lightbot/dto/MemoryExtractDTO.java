@@ -15,6 +15,12 @@ public class MemoryExtractDTO {
 
     private Long userId;
 
+    /** 企业 API Key ID（开放 API 外部用户记忆） */
+    private Long apiKeyId;
+
+    /** 上层业务终端用户标识 */
+    private String externalUserId;
+
     private Long sessionId;
 
     private Long agentId;

@@ -161,6 +161,11 @@ public class TraceMiddleware implements ChatMiddleware {
         if (request.getBizParams() != null && !request.getBizParams().isEmpty()) {
             attrs.put("bizParams", request.getBizParams());
         }
+        if (request.getCallerContext() != null && !request.getCallerContext().isEmpty()) {
+            attrs.put("callerContext", request.getCallerContext().isolationKeys());
+        } else if (request.getExternalUserId() != null) {
+            attrs.put("externalUserId", request.getExternalUserId());
+        }
         List<ChatAttachmentDTO> attachments = request.getAttachments();
         if (attachments != null && !attachments.isEmpty()) {
             attrs.put("attachments", attachments.stream().map(this::attachmentToTraceMap).toList());

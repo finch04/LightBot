@@ -11,8 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -87,6 +89,30 @@ public class ToolCallServiceImpl extends ServiceImpl<ToolCallMapper, ToolCall>
             log.debug("[工具调用记录] toolName=[{}], status=[{}]", toolCall.getToolName(), toolCall.getStatus());
         } catch (Exception e) {
             log.error("[工具调用记录] 写入失败, toolName={}", toolCall.getToolName(), e);
+        }
+    }
+
+    /**
+     * 流式收尾线程（Reactor/HttpClient worker）上勿用 {@code saveBatch}：
+     * MyBatis-Plus batch SPI（CompatibleHelper）在该线程 ClassLoader 下会抛 NoSuchElementException，
+     * 导致整段 buildDoneEvent 失败、DONE 元数据丢失。改为逐条 insert。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void persistPendingCalls(Collection<ToolCall> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        for (ToolCall toolCall : toolCalls) {
+            if (toolCall == null) {
+                continue;
+            }
+            if (toolCall.getCreatedAt() == null) {
+                toolCall.setCreatedAt(now);
+            }
+            toolCall.setToolInput(sanitizeToolInputForJsonb(toolCall.getToolInput()));
+            save(toolCall);
         }
     }
 

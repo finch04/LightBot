@@ -10,8 +10,8 @@
 
     <LbDetailHeader
       :title="headerName || ''"
-      :desc="agent.description"
-      :breadcrumb="[{ label: 'Agents', onClick: handleGoBack }]"
+      :breadcrumb="[{ onClick: handleGoBack }]"
+      slim
       @back="handleGoBack"
     >
       <template #tags>
@@ -1023,6 +1023,91 @@
         </div>
       </a-tab-pane>
 
+      <!-- 可问数据（按数据模型分类绑定） -->
+      <a-tab-pane key="dataModels" tab="可问数据">
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
+          <div class="knowledge-bind">
+            <div class="selected-knowledge">
+              <div class="selected-header">
+                <span class="selected-label">已绑定 {{ selectedAskCategories.length }}/{{ BIND_LIMITS.dataModelCategory }} 个数据分类</span>
+                <span v-if="selectedAskCategories.length > 0" class="kb-tool-hint">
+                  <InfoCircleOutlined />
+                  <span>勾选分类后，该类下全部模型均可问；可选到数据模型卡片「问数增强」补默认过滤与业务指标</span>
+                </span>
+                <button v-if="!isVersionPreview && selectedAskCategories.length > 0" class="btn-clear" @click="clearSelectedAskCategories">
+                  <DeleteOutlined /> 清空
+                </button>
+              </div>
+              <div class="selected-knowledge-tags">
+                <div v-if="selectedAskCategories.length === 0" class="empty-tip">
+                  暂未开启问数：从下方勾选数据分类即可（字段语义以各模型为准）
+                </div>
+                <div
+                  v-for="c in selectedAskCategories"
+                  :key="c.id"
+                  class="knowledge-tag"
+                  :class="{ 'binding-tag--deleted': c._deleted }"
+                >
+                  <span class="tag-avatar" style="background: linear-gradient(135deg,#1677ff,#69b1ff)">{{ (c.name || 'C')[0].toUpperCase() }}</span>
+                  <span>{{ c.name }}</span>
+                  <span
+                    v-if="c.modelNamesText"
+                    class="item-desc ask-category-tag-models"
+                    :title="c.modelNamesText"
+                  >{{ c.modelNamesText }}</span>
+                  <span v-else-if="c.modelCount != null" class="item-desc" style="margin-left:4px">{{ c.modelCount }} 个模型</span>
+                  <span v-if="c._deleted" class="binding-deleted-tag">已删除</span>
+                  <button v-if="!isVersionPreview" class="tag-remove" @click="removeAskCategory(c.id)">
+                    <CloseOutlined />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="knowledge-list">
+              <div class="list-header">
+                <span>可用数据分类（{{ selectedAskCategories.length }}/{{ BIND_LIMITS.dataModelCategory }}）</span>
+                <a-input
+                  v-model:value="askCategorySearchText"
+                  placeholder="搜索分类 / 模型..."
+                  size="small"
+                  style="width: 200px"
+                  :disabled="isVersionPreview"
+                >
+                  <template #prefix><SearchOutlined /></template>
+                </a-input>
+              </div>
+              <div class="list-body">
+                <div
+                  v-for="c in filteredAskCategoryList"
+                  :key="c.id"
+                  class="knowledge-item"
+                  :class="{ selected: selectedAskCategoryIds.has(toBindingId(c.id)), 'is-preview-locked': isVersionPreview }"
+                  @click="!isVersionPreview && toggleAskCategory(c)"
+                >
+                  <div class="item-icon knowledge-icon">{{ (c.name || 'C')[0].toUpperCase() }}</div>
+                  <div class="item-info">
+                    <div class="item-name">
+                      {{ c.name }}
+                      <span v-if="c.modelCount" class="ask-category-count">{{ c.modelCount }}</span>
+                    </div>
+                    <div
+                      class="item-desc ask-category-models"
+                      :title="c.modelNamesText || ''"
+                    >{{ c.modelNamesText || '暂无数据模型' }}</div>
+                  </div>
+                  <div class="item-check" v-if="selectedAskCategoryIds.has(toBindingId(c.id))">
+                    <CheckOutlined />
+                  </div>
+                </div>
+                <div v-if="filteredAskCategoryList.length === 0" class="empty-tip">
+                  暂无数据分类，请先到数据中心创建
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+
       <!-- 知识库绑定 -->
       <a-tab-pane key="knowledge" tab="知识库">
         <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
@@ -1356,6 +1441,85 @@
         </div>
         </div>
       </a-tab-pane>
+      <!-- 业务页组件绑定（对话型）：绑定后才可呈现/调用 -->
+      <a-tab-pane key="businessPages" tab="业务页组件">
+        <div class="binding-tab-pane" :class="{ 'preview-lock-zone': isVersionPreview }">
+        <div class="subagent-bind">
+          <div class="selected-subagents">
+            <div class="selected-header">
+              <span class="selected-label">已绑定 {{ selectedBusinessPages.length }}/{{ BIND_LIMITS.businessPage }} 个业务页</span>
+              <button v-if="!isVersionPreview && selectedBusinessPages.length > 0" class="btn-clear" @click="clearSelectedBusinessPages">
+                <DeleteOutlined /> 清空
+              </button>
+            </div>
+            <div class="selected-subagents-tags">
+              <div v-if="selectedBusinessPages.length === 0" class="empty-tip">
+                未绑定则无法调用业务办理页，请从下方列表选择
+              </div>
+              <div
+                v-for="p in selectedBusinessPages"
+                :key="p.id"
+                class="knowledge-tag skill-tag"
+                :class="{ 'binding-tag--deleted': p._deleted, 'binding-tag--disabled': p._disabled && !p._deleted }"
+              >
+                <span class="tag-avatar" style="background: var(--gradient-entity-tool, linear-gradient(135deg,#6366f1,#8b5cf6))">
+                  <AppstoreOutlined />
+                </span>
+                <span class="tag-name-wrap">
+                  <span>{{ p.displayName || p.name || p.pageType }}</span>
+                </span>
+                <span v-if="p._deleted" class="binding-deleted-tag">已删除</span>
+                <span v-else-if="p._disabled" class="binding-disabled-tag">已禁用</span>
+                <button v-if="!isVersionPreview" class="tag-remove" @click="removeBusinessPage(p.id)">
+                  <CloseOutlined />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="subagent-list">
+            <div class="list-header">
+              <span>可用业务页（{{ selectedBusinessPages.length }}/{{ BIND_LIMITS.businessPage }}）</span>
+              <a-input
+                v-model:value="businessPageSearchText"
+                placeholder="搜索业务页..."
+                size="small"
+                style="width: 200px"
+                :disabled="isVersionPreview"
+              >
+                <template #prefix><SearchOutlined /></template>
+              </a-input>
+            </div>
+            <div class="list-body">
+              <div
+                v-for="p in filteredBusinessPageList"
+                :key="p.id"
+                class="subagent-item"
+                :class="{ selected: selectedBusinessPageIds.has(toBindingId(p.id)), 'is-preview-locked': isVersionPreview }"
+                @click="!isVersionPreview && toggleBusinessPage(p)"
+              >
+                <div class="item-icon skill-icon">
+                  <AppstoreOutlined />
+                </div>
+                <div class="item-info">
+                  <div class="item-name">{{ p.displayName || p.name || p.pageType }}</div>
+                  <a-tooltip v-if="p.description" :title="p.description" placement="topLeft" :overlay-style="{ maxWidth: '400px' }">
+                    <div class="item-desc">{{ truncateText(p.description, 50) }}</div>
+                  </a-tooltip>
+                  <div v-else class="item-desc">暂无描述</div>
+                  <div class="item-tools" v-if="p.pageType">pageType: {{ p.pageType }}</div>
+                </div>
+                <div class="item-check" v-if="selectedBusinessPageIds.has(toBindingId(p.id))">
+                  <CheckOutlined />
+                </div>
+              </div>
+              <div v-if="filteredBusinessPageList.length === 0" class="empty-tip">
+                暂无已启用的业务页，请先在能力中心注册
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </a-tab-pane>
 
     </a-tabs>
     </div>
@@ -1635,6 +1799,24 @@
               </div>
             </div>
           </div>
+          <div class="preview-field">
+            <label>业务页组件</label>
+            <div class="preview-value">
+              <div v-if="previewBusinessPageList.length === 0" class="preview-empty">未绑定</div>
+              <div v-else>
+                <div
+                  v-for="p in previewBusinessPageList"
+                  :key="p.id"
+                  class="preview-tag subagent"
+                  :class="{ 'preview-tag--deleted': p._deleted, 'preview-tag--disabled': p._disabled && !p._deleted }"
+                >
+                  {{ p.displayName || p.name || p.pageType }}
+                  <span v-if="p._deleted" class="binding-deleted-tag">已删除</span>
+                  <span v-else-if="p._disabled" class="binding-disabled-tag">已禁用</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1666,7 +1848,7 @@
           <div class="version-help-row"><span>图标</span><span>智能体图标（emoji）</span></div>
           <div class="version-help-row"><span>是否默认</span><span>默认智能体标记</span></div>
         </div>
-        <p class="version-help-note">提示：系统提示词、变量配置、模型配置、对话配置、工具/知识库/SubAgent 绑定等均受版本控制。</p>
+        <p class="version-help-note">提示：系统提示词、变量配置、模型配置、对话配置、工具/知识库/SubAgent/Skill/业务页组件绑定等均受版本控制。</p>
       </div>
     </a-modal>
 
@@ -1685,10 +1867,11 @@
 defineOptions({ name: 'AgentDetail' })
 import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
-import { SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined, RightOutlined, DownOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
+import { SaveOutlined, CloseOutlined, SearchOutlined, CheckOutlined, MessageOutlined, PlusOutlined, ThunderboltOutlined, UploadOutlined, LoadingOutlined, UndoOutlined, ToolOutlined, QuestionCircleOutlined, ApiOutlined, DeleteOutlined, BookOutlined, RobotOutlined, SettingOutlined, CheckCircleOutlined, ExclamationCircleOutlined, HistoryOutlined, InfoCircleOutlined, IdcardOutlined, RightOutlined, DownOutlined, DatabaseOutlined, CloudServerOutlined, AppstoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { copyToClipboard } from '../utils/clipboard'
-import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, updateAgentSkills, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
+import { getAgentDetail, updateAgent, updateAgentKnowledge, updateAgentDataModelCategories, updateAgentTools, getAgentToolIds, getAgentToolDetails, generateAgentPrompt, generateAgentQuestions, uploadAgentAvatar, updateAgentMcpServers, updateAgentSubAgents, updateAgentSkills, publishAgent, listAgentVersions, getAgentVersionDetail, restoreAgentVersion, deleteAgentVersion } from '../api/agent'
+import { listDataModelCategoriesForBinding } from '../api/dataCenter'
 import { getWorkflowConfig } from '../api/workflow'
 import { getTools } from '../api/tool'
 import { getToolTypes } from '../api/enum'
@@ -1698,6 +1881,7 @@ import { getKnowledgeList } from '../api/knowledge'
 import { getMcpServers } from '../api/mcp'
 import { getSubAgents } from '../api/subagent'
 import { getSkills } from '../api/skill'
+import { listEnabledBusinessPages } from '../api/businessPage'
 import { safeJsonParse } from '../utils/request'
 import { truncateText } from '../utils/format'
 import { agentAvatarGradient } from '../utils/bindingTheme'
@@ -1723,7 +1907,7 @@ const agentId = route.params.id
 const pageLoading = ref(false)
 const avatarInputRef = ref(null)
 
-const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5, skill: 10 }
+const BIND_LIMITS = { knowledge: 10, mcp: 5, tool: 10, subAgent: 5, skill: 10, dataModelCategory: 10, businessPage: 20 }
 /** 右侧配置卡片：模型参数 / 对话配置 */
 const configTab = ref('prompt')
 
@@ -1915,6 +2099,7 @@ const agentConfig = reactive({
   summaryKeepMessages: 6,
   summaryToolResultTokenLimit: 500,
   maxExecutionSteps: 20,
+  allowedBusinessPages: [],
   modelRetryTimes: 2,
 })
 
@@ -2049,6 +2234,12 @@ const knowledge = useBinding({
   verb: '绑定',
   deps: { isVersionPreview, bindingCatalogsLoaded },
 })
+const askCategories = useBinding({
+  limit: 10, entityLabel: '可问数据分类', loadApi: listDataModelCategoriesForBinding,
+  searchFields: ['name', 'description', 'modelNamesText'],
+  verb: '绑定',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
 const tools = useBinding({
   limit: 10, entityLabel: '工具', loadApi: getTools,
   filterPredicate: t => (t.toolType?.code || t.toolType) !== 'knowledge' && t.status !== 'disabled',
@@ -2073,19 +2264,38 @@ const skill = useBinding({
   verb: '启用',
   deps: { isVersionPreview, bindingCatalogsLoaded },
 })
+const businessPage = useBinding({
+  limit: BIND_LIMITS.businessPage,
+  entityLabel: '业务页组件',
+  loadApi: async () => {
+    const res = await listEnabledBusinessPages()
+    const records = (res.data || []).map((p) => ({
+      ...p,
+      id: p.pageType,
+      name: p.displayName || p.pageType,
+      displayName: p.displayName || p.pageType,
+    }))
+    return { data: { records } }
+  },
+  searchFields: ['displayName', 'name', 'pageType', 'description'],
+  verb: '绑定',
+  deps: { isVersionPreview, bindingCatalogsLoaded },
+})
 
 // 兼容模板中使用的变量名
 const selectedKnowledgeIds = knowledge.selectedIds
 const knowledgeList = knowledge.list
 const knowledgeLoading = knowledge.loading
 const searchText = knowledge.searchText
+const selectedAskCategoryIds = askCategories.selectedIds
+const askCategorySearchText = askCategories.searchText
 const selectedToolIds = tools.selectedIds
 const toolList = tools.list
 const toolSearchText = tools.searchText
 const toolTypeFilter = ref('')
 const toolTypeList = ref([])
 const toolTypeLabels = { builtin: '内置', knowledge: '知识库', api: 'API调用' }
-const automaticSessionToolNames = new Set(['write_todos', 'present_artifacts'])
+const automaticSessionToolNames = new Set(['write_todos', 'present_artifacts', 'present_business_page'])
 const toolTypeOptions = computed(() => {
   const options = [{ value: '', label: '全部' }]
   for (const t of toolTypeList.value) {
@@ -2120,6 +2330,7 @@ const CHAT_CONFIG_PREVIEW_DEFAULTS = {
   summaryKeepMessages: 6,
   summaryToolResultTokenLimit: 500,
   maxExecutionSteps: 20,
+  allowedBusinessPages: [],
   modelRetryTimes: 2,
   userSensitiveFilterEnabled: false,
   sensitiveFilterEnabled: false,
@@ -2241,6 +2452,20 @@ const selectedSkillIds = skill.selectedIds
 const skillList = skill.list
 const skillSearchText = skill.searchText
 const skillLoading = skill.loading
+const selectedBusinessPageIds = businessPage.selectedIds
+const businessPageList = businessPage.list
+const businessPageSearchText = businessPage.searchText
+const filteredBusinessPageList = businessPage.filteredList
+
+const previewBusinessPageList = computed(() => {
+  const pageTypes = versionPreview.value?.chatConfig?.allowedBusinessPages
+    ?? versionPreview.value?.allowedBusinessPages
+  return resolveBindingItems(
+    toBindingIdSet(pageTypes),
+    businessPageList.value,
+    { entityLabel: '业务页' }
+  )
+})
 const recommendedQuestions = ref([])
 const generatingPrompt = ref(false)
 const generatingQuestions = ref(false)
@@ -2418,11 +2643,14 @@ async function onModelSelectChange({ providerId, modelId }) {
 // 绑定 computed（从 composable 获取）
 const selectedKnowledge = knowledge.selected
 const filteredKnowledgeList = knowledge.filteredList
+const selectedAskCategories = askCategories.selected
+const filteredAskCategoryList = askCategories.filteredList
 const selectedTools = tools.selected
 const selectedMcpServers = mcp.selected
 const filteredMcpServerList = mcp.filteredList
 const selectedSubAgents = subAgent.selected
 const selectedSkills = skill.selected
+const selectedBusinessPages = businessPage.selected
 
 // filteredToolList 需要额外处理 toolTypeFilter，单独定义
 const filteredToolList = computed(() => {
@@ -2441,10 +2669,12 @@ const deletedBindingCount = computed(() => {
   if (!bindingCatalogsLoaded.value) return 0
   return (
     countDeletedBindingItems(selectedKnowledge.value)
+    + countDeletedBindingItems(selectedAskCategories.value)
     + countDeletedBindingItems(selectedTools.value)
     + countDeletedBindingItems(selectedMcpServers.value)
     + countDeletedBindingItems(selectedSubAgents.value)
     + countDeletedBindingItems(selectedSkills.value)
+    + countDeletedBindingItems(selectedBusinessPages.value)
   )
 })
 
@@ -2452,10 +2682,12 @@ const disabledBindingCount = computed(() => {
   if (!bindingCatalogsLoaded.value) return 0
   return (
     countDisabledBindingItems(selectedKnowledge.value)
+    + countDisabledBindingItems(selectedAskCategories.value)
     + countDisabledBindingItems(selectedTools.value)
     + countDisabledBindingItems(selectedMcpServers.value)
     + countDisabledBindingItems(selectedSubAgents.value)
     + countDisabledBindingItems(selectedSkills.value)
+    + countDisabledBindingItems(selectedBusinessPages.value)
   )
 })
 
@@ -2471,10 +2703,12 @@ const invalidBindingAlertMessage = computed(() => {
 /** 已删除绑定分类型明细（Alert / 保存弹窗） */
 const deletedBindingSections = computed(() => [
   { label: '知识库', items: selectedKnowledge.value },
+  { label: '可问数据', items: selectedAskCategories.value },
   { label: '工具', items: selectedTools.value },
   { label: 'MCP', items: selectedMcpServers.value },
   { label: 'SubAgent', items: selectedSubAgents.value },
   { label: 'Skill', items: selectedSkills.value },
+  { label: '业务页组件', items: selectedBusinessPages.value },
 ])
 
 const deletedBindingDetailLines = computed(() =>
@@ -2485,10 +2719,12 @@ function removeAllDeletedBindings() {
   if (isVersionPreview.value) return
   let n = 0
   n += removeDeletedIdsFromSet(selectedKnowledgeIds.value, selectedKnowledge.value)
+  n += removeDeletedIdsFromSet(selectedAskCategoryIds.value, selectedAskCategories.value)
   n += removeDeletedIdsFromSet(selectedToolIds.value, selectedTools.value)
   n += removeDeletedIdsFromSet(selectedMcpServerIds.value, selectedMcpServers.value)
   n += removeDeletedIdsFromSet(selectedSubAgentIds.value, selectedSubAgents.value)
   n += removeDeletedIdsFromSet(selectedSkillIds.value, selectedSkills.value)
+  n += removeDeletedIdsFromSet(selectedBusinessPageIds.value, selectedBusinessPages.value)
   if (n > 0) {
     message.success(`已移除 ${n} 个已删除的绑定`)
   }
@@ -2597,7 +2833,7 @@ function restoreDefaults() {
 async function loadAgent() {
   try {
     const res = await getAgentDetail(agentId)
-    const { agent: agentData, knowledgeIds, mcpServerIds, subAgentIds, skillIds } = res.data
+    const { agent: agentData, knowledgeIds, dataModelCategoryIds, mcpServerIds, subAgentIds, skillIds } = res.data
 
     // 分离基本信息和配置
     const { config, agentType, ...basicInfo } = agentData
@@ -2629,6 +2865,9 @@ async function loadAgent() {
         if (agentConfig.streamOutput === undefined) {
           agentConfig.streamOutput = true
         }
+        if (!Array.isArray(agentConfig.allowedBusinessPages)) {
+          agentConfig.allowedBusinessPages = []
+        }
       } catch (e) {
         // ignore
       }
@@ -2654,8 +2893,10 @@ async function loadAgent() {
     }
 
     selectedKnowledgeIds.value = toBindingIdSet(knowledgeIds)
+    selectedAskCategoryIds.value = toBindingIdSet(dataModelCategoryIds)
     selectedSubAgentIds.value = toBindingIdSet(subAgentIds)
     selectedSkillIds.value = toBindingIdSet(skillIds)
+    selectedBusinessPageIds.value = toBindingIdSet(agentConfig.allowedBusinessPages)
 
     // 工具绑定 ID（须从接口读取，已删除的工具不会出现在 detail 列表中）
     const toolIdsRes = await getAgentToolIds(agentId)
@@ -2697,6 +2938,7 @@ function captureFormSnapshot() {
     mcpServerIds: sortedIds(selectedMcpServerIds.value),
     subAgentIds: sortedIds(selectedSubAgentIds.value),
     skillIds: sortedIds(selectedSkillIds.value),
+    businessPageTypes: sortedIds(selectedBusinessPageIds.value),
     userSensitiveWords: [...userSensitiveWords.value],
     sensitiveWords: [...sensitiveWords.value],
   })
@@ -2776,6 +3018,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 })
 
 const loadKnowledgeList = knowledge.load
+const loadAskCategoryList = askCategories.load
 
 async function loadToolTypes() {
   try {
@@ -2850,6 +3093,10 @@ const toggleKnowledge = knowledge.toggle
 const removeKnowledge = knowledge.remove
 const clearSelectedKnowledge = knowledge.clear
 
+const toggleAskCategory = askCategories.toggle
+const removeAskCategory = askCategories.remove
+const clearSelectedAskCategories = askCategories.clear
+
 const toggleTool = tools.toggle
 const removeTool = tools.remove
 const clearSelectedTools = tools.clear
@@ -2865,10 +3112,14 @@ const clearSelectedSubAgents = subAgent.clear
 const toggleSkill = skill.toggle
 const removeSkill = skill.remove
 const clearSelectedSkills = skill.clear
+const toggleBusinessPage = businessPage.toggle
+const removeBusinessPage = businessPage.remove
+const clearSelectedBusinessPages = businessPage.clear
 
 const loadSubAgentList = subAgent.load
 
 const loadSkillList = skill.load
+const loadBusinessPageList = businessPage.load
 
 /** 进入详情时预加载全部绑定目录，避免未点 Tab 误判「已删除」 */
 async function loadBindingCatalogs() {
@@ -2876,9 +3127,11 @@ async function loadBindingCatalogs() {
   try {
     await Promise.all([
       loadKnowledgeList(),
+      loadAskCategoryList(),
       loadMcpServerList(),
       loadSubAgentList(),
       loadSkillList(),
+      loadBusinessPageList(),
       loadToolTypes(),
       loadToolList(toolTypeFilter.value || undefined),
     ])
@@ -2906,10 +3159,14 @@ async function onBindingTabChange(tab) {
     await loadMcpServerList()
   } else if (tab === 'knowledge') {
     await loadKnowledgeList()
+  } else if (tab === 'dataModels') {
+    await loadAskCategoryList()
   } else if (tab === 'subagents') {
     await loadSubAgentList()
   } else if (tab === 'skill') {
     await loadSkillList()
+  } else if (tab === 'businessPages') {
+    await loadBusinessPageList()
   }
 }
 
@@ -3065,6 +3322,10 @@ async function handleSave(options = {}) {
     message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.subAgent} 个 SubAgent`)
     return false
   }
+  if (selectedBusinessPageIds.value.size > BIND_LIMITS.businessPage) {
+    message.warning(`每个 Agent 最多绑定 ${BIND_LIMITS.businessPage} 个业务页组件`)
+    return false
+  }
 
   // 4.1 校验 Skill 依赖工具是否已绑定（知识库类型工具默认绑定，跳过）
   const skillDepWarnings = []
@@ -3163,6 +3424,7 @@ async function handleSave(options = {}) {
       .filter(Boolean)
     const configObj = {
       ...agentConfig,
+      allowedBusinessPages: Array.from(selectedBusinessPageIds.value),
       promptVariables: serializedVars,
       userSensitiveWords: serializedUserSensitiveWords,
       sensitiveWords: serializedSensitiveWords,
@@ -3181,6 +3443,9 @@ async function handleSave(options = {}) {
 
     // 3. 更新知识库绑定
     await updateAgentKnowledge(agentId, Array.from(selectedKnowledgeIds.value))
+
+    // 3.1 更新可问数据模型（模型即可问）
+    await updateAgentDataModelCategories(agentId, Array.from(selectedAskCategoryIds.value))
 
     // 4. 更新工具绑定
     await updateAgentTools(agentId, Array.from(selectedToolIds.value))
@@ -3267,6 +3532,7 @@ async function openVersionDrawer() {
       loadMcpServerList(),
       loadSubAgentList(),
       loadSkillList(),
+      loadBusinessPageList(),
       listAgentVersions(agentId).then(res => {
         const payload = res.data || {}
         versionList.value = Array.isArray(payload) ? payload : (payload.versions || [])
@@ -3299,10 +3565,14 @@ async function applyVersionPreviewToForm(data) {
   syncSensitiveWordsFromConfig(agentConfig)
 
   selectedKnowledgeIds.value = toBindingIdSet(data.knowledgeIds)
+  selectedAskCategoryIds.value = toBindingIdSet(data.dataModelCategoryIds)
   selectedMcpServerIds.value = toBindingIdSet(data.mcpServerIds)
   selectedSubAgentIds.value = toBindingIdSet(data.subAgentIds)
   selectedToolIds.value = toBindingIdSet(data.toolIds)
   selectedSkillIds.value = toBindingIdSet(data.skillIds)
+  selectedBusinessPageIds.value = toBindingIdSet(
+    chatConfig.allowedBusinessPages ?? data.allowedBusinessPages ?? agentConfig.allowedBusinessPages
+  )
 
   if (data.tools?.length) {
     for (const t of data.tools) {
@@ -3384,6 +3654,7 @@ function normalizeVersionDetailData(data) {
       summaryKeepMessages: cfg.summaryKeepMessages,
       summaryToolResultTokenLimit: cfg.summaryToolResultTokenLimit,
       maxExecutionSteps: cfg.maxExecutionSteps,
+      allowedBusinessPages: Array.isArray(cfg.allowedBusinessPages) ? cfg.allowedBusinessPages : [],
       modelRetryTimes: cfg.modelRetryTimes,
       userSensitiveFilterEnabled: cfg.userSensitiveFilterEnabled,
       userSensitiveWords: cfg.userSensitiveWords,
@@ -3549,7 +3820,7 @@ onMounted(async () => {
     if (agentId) {
       await loadAgent()
     } else {
-      await Promise.all([loadToolTypes(), loadToolList()])
+      await Promise.all([loadToolTypes(), loadToolList(), loadBusinessPageList()])
       bindingCatalogsLoaded.value = true
     }
   } finally {
@@ -4887,6 +5158,29 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ask-category-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-mute);
+  background: var(--color-canvas-soft-2, rgba(0, 0, 0, 0.04));
+  padding: 0 6px;
+  border-radius: 999px;
+}
+.ask-category-models {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-all;
+  line-height: 1.4;
+}
+.ask-category-tag-models {
+  margin-left: 4px;
+  max-width: 220px;
+  display: inline-block;
+  vertical-align: bottom;
 }
 .item-check {
   color: var(--color-link);

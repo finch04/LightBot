@@ -36,13 +36,21 @@ public interface KnowledgeService extends IService<Knowledge> {
     Knowledge update(KnowledgeSaveDTO request);
 
     /**
-     * 分页查询当前用户有权限的知识库
+     * 分页查询企业知识库
      *
      * @param pageNum  页码
      * @param pageSize 每页数量
      * @return 分页结果
      */
     Page<Knowledge> listMyKnowledge(int pageNum, int pageSize, String name);
+
+    /**
+     * 按创建人查询知识库（管理员审计用）
+     *
+     * @param userId 创建人用户 ID
+     * @return 知识库列表
+     */
+    List<Knowledge> listCreatedByUserId(Long userId);
 
     /**
      * 删除知识库（逻辑删除）
@@ -52,7 +60,7 @@ public interface KnowledgeService extends IService<Knowledge> {
     void deleteById(Long id);
 
     /**
-     * 获取知识库详情（需要成员权限）
+     * 获取知识库详情（建设者可读）
      *
      * @param id 知识库ID
      * @return 知识库

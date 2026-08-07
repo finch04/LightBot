@@ -10,12 +10,8 @@ function resolveHandleMeta(handleId, role, nodeType) {
   if (role === 'target' || id === HANDLE_IN) {
     return { position: Position.Left, id: HANDLE_IN }
   }
-  if (id === 'out_a') return { position: Position.Top, id }
-  if (id === 'out_b') return { position: Position.Bottom, id }
-  if (id === 'out_c') return { position: Position.Right, id }
-  if (nodeType === 'condition' && id?.startsWith('out_')) {
-    if (id === 'out_a') return { position: Position.Top, id }
-    if (id === 'out_b') return { position: Position.Bottom, id }
+  // 条件判断 / 意图分类：右侧动态口 {nodeId}_{id} / {nodeId}_default
+  if ((nodeType === 'condition' || nodeType === 'classifier') && id && id !== HANDLE_OUT && id !== HANDLE_IN) {
     return { position: Position.Right, id }
   }
   return { position: Position.Right, id: HANDLE_OUT }

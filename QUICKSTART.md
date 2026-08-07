@@ -29,7 +29,11 @@ psql -v ON_ERROR_STOP=1 -U postgres -h localhost -f sql/2026-07-28-init.sql
 psql -v ON_ERROR_STOP=1 -U postgres -h localhost -d lightbot -f sql/insert-sql.sql
 ```
 
-验证：
+该脚本会创建 `lightbot` 数据库并执行 `CREATE EXTENSION vector`。执行账号需要具备建库与创建扩展权限。
+
+已有库升级时不要重跑快照；请按 [SQL 迁移说明](sql/README.md) 执行尚未应用的增量脚本（含企业会话来源、`caller_context` 等）。
+
+验证连接：
 
 ```bash
 psql -U postgres -h localhost -d lightbot -c "\dt"
@@ -132,11 +136,11 @@ pnpm dev
 
 ## 5. 首次使用
 
-1. 打开 <http://localhost:5173>，完成注册或管理员初始化。
-2. 在“模型管理”中检查模型提供商和默认模型配置。
-3. 创建 Agent，发起流式对话。
-4. 需要 RAG 时，再启动 MinIO 与 Milvus，创建知识库并上传文档。
-5. 需要知识图谱时，再连接 Neo4j；需要 Dify 能力时，先配置加密密钥再保存 Dify 连接信息。
+1. 访问前端页面并完成管理员初始化（公开注册已关闭，后续账号由管理员创建）。
+2. 在模型管理中配置可用模型并设置默认模型。
+3. 创建 Agent，或从内置 Agent/工作流模板开始。
+4. 创建会话，选择 Agent 后发起流式对话。
+5. 需要 RAG 时，再启动 MinIO 与 Milvus，创建知识库并上传文档；需要知识图谱时再连接 Neo4j。
 
 ## 6. 常见问题
 

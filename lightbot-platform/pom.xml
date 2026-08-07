@@ -32,10 +32,11 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
-        <!-- 内存日志收集（MemoryLogAppender） -->
+        <!-- 数据池导入结果 Excel -->
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
         </dependency>
         <!-- 测试：JUnit5 + Mockito + Spring Test -->
         <dependency>

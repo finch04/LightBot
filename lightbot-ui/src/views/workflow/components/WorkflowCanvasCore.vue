@@ -12,8 +12,7 @@
     :edges-updatable="edgesUpdatable"
     :nodes-connectable="nodesConnectable"
     :elements-selectable="elementsSelectable"
-    :selection-key-code="readonly ? null : 'Shift'"
-    :multi-selection-key-code="readonly ? null : 'Control'"
+    v-bind="selectionKeyBindings"
     :default-edge-options="defaultEdgeOptions"
     :is-valid-connection="isValidConnection"
     :delete-key-code="null"
@@ -75,6 +74,7 @@
     <template #node-variable_handle="slotProps"><GenericWorkflowNode v-bind="slotProps" node-type="variable_handle" /></template>
     <template #node-parameter_extractor="slotProps"><GenericWorkflowNode v-bind="slotProps" node-type="parameter_extractor" /></template>
     <template #node-app_component="slotProps"><GenericWorkflowNode v-bind="slotProps" node-type="app_component" summary-key="componentName" /></template>
+    <template #node-sub_agent="slotProps"><GenericWorkflowNode v-bind="slotProps" node-type="sub_agent" summary-key="subAgentName" /></template>
 
     <template v-if="showConnectionLine" #connection-line="lineProps">
       <WorkflowConnectionLine v-bind="lineProps" />
@@ -153,6 +153,13 @@ defineEmits([
 
 const { isDark } = useTheme()
 const patternColor = computed(() => (isDark.value ? '#3f3f46' : '#e5e7eb'))
+
+/** 可编辑时不传 keyCode，沿用 Vue Flow 默认 Shift/Control；只读时禁用框选快捷键 */
+const selectionKeyBindings = computed(() => (
+  props.readonly
+    ? { selectionKeyCode: null, multiSelectionKeyCode: null }
+    : {}
+))
 
 const edgeTypes = markRaw({
   'workflow-bezier': markRaw(WorkflowBezierEdge),

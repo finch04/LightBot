@@ -14,6 +14,7 @@
 
 <p align="center">
   <a href="QUICKSTART.md">快速启动</a> ·
+  <a href="权限配置.md">权限与数据隔离</a> ·
   <a href="docs/deployment.md">部署指南</a> ·
   <a href="docs/architecture/module-boundaries.md">模块边界</a> ·
   <a href="sql/README.md">数据库与迁移</a> ·

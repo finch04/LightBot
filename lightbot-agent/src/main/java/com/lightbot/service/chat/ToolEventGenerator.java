@@ -26,6 +26,8 @@ public class ToolEventGenerator {
     public static final String METADATA_PREFIX = "[METADATA]";
     /** 请求 ID 前缀，前端用于复制并在可观测中检索 */
     public static final String REQUEST_ID_PREFIX = "[REQUEST_ID]";
+    /** 会话 ID 前缀（新建或续聊均回传，供开放 API 多轮携带） */
+    public static final String SESSION_ID_PREFIX = "[SESSION_ID]";
 
     /** 安全回退 JSON：objectMapper 异常时使用，确保值被正确转义 */
     private String safeFallbackJson(Map<String, Object> fields) {
@@ -517,8 +519,25 @@ public class ToolEventGenerator {
      * @param fullMetadata       持久化metadata JSON（含 ragReferences、reasoningContent 等），可为null
      */
     public String doneWithMetadata(Long userMessageId, Long assistantMessageId, long totalTokens, String fullMetadata) {
+        return doneWithMetadata(null, userMessageId, assistantMessageId, totalTokens, fullMetadata);
+    }
+
+    /**
+     * 生成带会话 ID / 消息 ID 的 [DONE] 事件
+     *
+     * @param sessionId          会话 ID（开放 API 多轮续聊）
+     * @param userMessageId      用户消息ID
+     * @param assistantMessageId AI回复消息ID
+     * @param totalTokens        总Token消耗
+     * @param fullMetadata       持久化metadata JSON，可为null
+     */
+    public String doneWithMetadata(Long sessionId, Long userMessageId, Long assistantMessageId,
+                                   long totalTokens, String fullMetadata) {
         try {
             Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            if (sessionId != null) {
+                meta.put("sessionId", sessionId.toString());
+            }
             if (userMessageId != null) {
                 meta.put("userMessageId", userMessageId.toString());
             }

@@ -101,6 +101,7 @@ public final class NodeIoContractRegistry {
             case VARIABLE_HANDLE -> List.of("output");
             case LOOP, BATCH -> List.of("iterations");
             case APP_COMPONENT -> List.of("result", "output");
+            case SUB_AGENT -> List.of("reply", "output", "threadId", "subAgentName", "subAgentId");
             default -> List.of();
         };
     }
@@ -144,7 +145,7 @@ public final class NodeIoContractRegistry {
                     keys.add("output");
                 }
             }
-            case TOOL, APP_COMPONENT -> collectKeyFromList(nodeData.get("outputMappings"), keys);
+            case TOOL, APP_COMPONENT, SUB_AGENT -> collectKeyFromList(nodeData.get("outputMappings"), keys);
             default -> {
             }
         }

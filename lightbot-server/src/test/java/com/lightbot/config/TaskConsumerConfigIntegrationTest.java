@@ -67,6 +67,8 @@ class TaskConsumerConfigIntegrationTest {
         retryPolicyProperties = new RetryPolicyProperties();
         consumer = new TaskConsumerConfig(
                 taskQueueService, taskService, applicationContext, retryPolicyProperties);
+        // markStart 改为 CAS 返回 boolean，默认抢占成功
+        lenient().when(taskService.markStart(anyLong(), anyInt(), anyString())).thenReturn(true);
     }
 
     private Task newTask(Long id, TaskStatus status, int attempts) {

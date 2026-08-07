@@ -98,8 +98,10 @@ export function useWorkflowStepContext(stepSource) {
 }
 
 export function handleLabel(handle) {
-  const map = { out_a: '分支 A', out_b: '分支 B', out_c: '否则' }
-  return map[handle] || handle
+  if (!handle) return ''
+  if (String(handle).endsWith('_default')) return '都未命中'
+  const parts = String(handle).split('_')
+  return parts.length > 1 ? parts.slice(1).join('_') : handle
 }
 
 export function formatScore(score) {

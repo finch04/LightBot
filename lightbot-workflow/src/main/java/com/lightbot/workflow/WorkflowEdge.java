@@ -39,7 +39,7 @@ public class WorkflowEdge {
     private String label;
 
     /**
-     * 源连接点（如 in / out / out_a）
+     * 源连接点（如 in / out / {nodeId}_{branchId} / {nodeId}_default）
      */
     private String sourceHandle;
 

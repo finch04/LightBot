@@ -18,7 +18,7 @@
       <ul>
         <li><code>StartNodeProcessor</code> — 将用户输入写入变量 <code>input</code>，沿出边进入下一节点</li>
         <li><code>LlmNodeProcessor</code> — 读取 <code>modelId</code>、<code>promptTemplate</code>，调用 Spring AI 生成内容</li>
-        <li><code>ConditionNodeProcessor</code> — 评估 <code>branches</code> 条件表达式，选择分支目标</li>
+        <li><code>ConditionNodeProcessor</code> — 按条件组顺序匹配，命中走 <code>{nodeId}_{groupId}</code>，否则走 <code>{nodeId}_default</code></li>
         <li><code>EndNodeProcessor</code> — 结束工作流</li>
       </ul>
       <p>类上添加 <code>@Component</code>，无需手动注册。</p>

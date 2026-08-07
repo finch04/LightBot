@@ -110,7 +110,7 @@ public class EvalRagBenchmarkServiceImpl
                 progressCallback);
 
         if (items.isEmpty()) {
-            throw new RuntimeException("基准题目生成失败：未能生成任何有效题目");
+            throw new RuntimeException("基准题目生成失败：未能生成任何有效题目（请确认知识库已有向量化分块，且所选模型能正常返回 JSON）");
         }
 
         // 2. 保存题目

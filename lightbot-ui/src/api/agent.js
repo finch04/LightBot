@@ -43,6 +43,32 @@ export function getAgentKnowledgeIds(id) {
   return request.get(`/agents/${id}/knowledge`)
 }
 
+export function updateAgentDatasets(id, datasetIds) {
+  return request.put(`/agents/${id}/datasets`, datasetIds)
+}
+
+export function getAgentDatasetIds(id) {
+  return request.get(`/agents/${id}/datasets`)
+}
+
+/** 可问数据分类（主路径：按分类绑定，该类下模型均可问） */
+export function updateAgentDataModelCategories(id, categoryIds) {
+  return request.put(`/agents/${id}/data-model-categories`, categoryIds)
+}
+
+export function getAgentDataModelCategoryIds(id) {
+  return request.get(`/agents/${id}/data-model-categories`)
+}
+
+/** 可问数据模型（兼容旧接口） */
+export function updateAgentDataModels(id, dataModelIds) {
+  return request.put(`/agents/${id}/data-models`, dataModelIds)
+}
+
+export function getAgentDataModelIds(id) {
+  return request.get(`/agents/${id}/data-models`)
+}
+
 export function generateAgentPrompt(id) {
   return request.post(`/agents/${id}/generate-prompt`)
 }

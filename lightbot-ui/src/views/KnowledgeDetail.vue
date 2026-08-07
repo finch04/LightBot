@@ -1,5 +1,5 @@
 <template>
-  <div v-if="knowledge && docPagination && typeof askRag === 'function'" class="detail-page">
+  <div v-if="knowledge && docPagination" class="detail-page">
     <LbDetailHeader
       :title="knowledge?.name"
       :desc="knowledge?.description"
@@ -47,9 +47,6 @@
         </a-tooltip>
       </template>
       <template #extra>
-        <button class="lb-btn" @click="openMembersModal">
-          <TeamOutlined /> 成员
-        </button>
         <button class="lb-btn lb-btn--primary" @click="openEditDialog">
           <EditOutlined /> 编辑
         </button>
@@ -925,105 +922,6 @@
       </div>
     </a-modal>
 
-    <!-- 成员管理弹窗 -->
-    <a-modal v-model:open="membersVisible" :width="560" :footer="null">
-      <template #title>
-        <span>成员管理</span>
-        <QuestionCircleOutlined
-          style="margin-left: 8px; color: #999; font-size: 14px; cursor: pointer;"
-          @click="permHelpVisible = true"
-        />
-      </template>
-      <div class="members-section">
-        <div class="member-list">
-          <div v-for="member in membersWithInfo" :key="member.userId" class="member-item">
-            <div class="member-info">
-              <div class="member-avatar">
-                <img v-if="member.avatar" :src="member.avatar" alt="avatar" class="member-avatar-img" @error="member.avatar = ''" />
-                <span v-else>{{ (member.username || member.nickname || 'U')[0] }}</span>
-              </div>
-              <div class="member-detail">
-                <span class="member-name">{{ member.username || member.nickname || '用户' }}</span>
-              </div>
-              <a-tag :color="roleColor(member.role)">{{ roleText(member.role) }}</a-tag>
-            </div>
-            <div class="member-actions" v-if="isManagerOrCreator">
-              <a-select
-                v-if="member.role !== 'creator'"
-                :value="member.role"
-                size="small"
-                style="width: 100px"
-                @change="(val) => handleChangeRole(member.userId, val)"
-              >
-                <a-select-option value="manager">管理者</a-select-option>
-                <a-select-option value="developer">开发者</a-select-option>
-                <a-select-option value="viewer">查看者</a-select-option>
-              </a-select>
-              <a-tooltip v-if="member.role !== 'creator'" title="移除成员">
-                <button
-                  class="btn-icon-sm danger"
-                  @click="handleRemoveMember(member.userId)"
-                >
-                  <CloseOutlined />
-                </button>
-              </a-tooltip>
-            </div>
-          </div>
-          <div v-if="membersWithInfo.length === 0" class="empty-tip">暂无成员</div>
-        </div>
-        <div v-if="isManagerOrCreator" class="add-member-form">
-          <button class="btn-primary-sm" @click="openInviteModal">
-            <PlusOutlined /> 添加成员
-          </button>
-        </div>
-      </div>
-    </a-modal>
-
-    <!-- 邀请成员弹窗 -->
-    <a-modal v-model:open="inviteVisible" title="邀请成员" :width="480" :footer="null" :maskClosable="false">
-      <div class="invite-section">
-        <a-input
-          v-model:value="inviteKeyword"
-          placeholder="搜索用户名或昵称..."
-          allow-clear
-          @input="onInviteSearch"
-        >
-          <template #prefix><SearchOutlined /></template>
-        </a-input>
-        <div class="invite-results">
-          <div v-if="inviteSearching" class="invite-loading">
-            <LoadingOutlined spin /> 搜索中...
-          </div>
-          <div v-else-if="!inviteKeyword" class="empty-tip">输入关键词搜索用户</div>
-          <div v-else-if="inviteResults.length === 0" class="empty-tip">未找到用户</div>
-          <template v-else>
-            <div v-for="u in inviteResults" :key="u.id" class="invite-item">
-              <div class="invite-user">
-                <div class="member-avatar">
-                  <img v-if="u.avatar" :src="u.avatar" alt="avatar" class="member-avatar-img" @error="u.avatar = ''" />
-                  <span v-else>{{ (u.username || u.nickname || 'U')[0] }}</span>
-                </div>
-                <div class="invite-info">
-                  <span class="invite-name">{{ u.username || u.nickname }}</span>
-                  <span class="invite-username">@{{ u.username }}</span>
-                </div>
-              </div>
-              <a-select
-                v-model:value="inviteRole"
-                size="small"
-                style="width: 90px"
-              >
-                <a-select-option value="manager">管理者</a-select-option>
-                <a-select-option value="developer">开发者</a-select-option>
-                <a-select-option value="viewer">查看者</a-select-option>
-              </a-select>
-              <button class="btn-primary-sm" @click="handleInvite(u.id)">邀请</button>
-            </div>
-          </template>
-        </div>
-      </div>
-    </a-modal>
-
     <!-- 文档编辑弹窗 -->
     <DocumentEditorModal
       v-model:open="docEditorVisible"
@@ -1039,40 +937,6 @@
       @apply="onQueryParamsApply"
       @qa-change="onQaChange"
     />
-
-    <!-- 权限说明弹窗 -->
-    <a-modal v-model:open="permHelpVisible" title="权限说明" :width="520" :footer="null">
-      <div class="perm-help">
-        <p>知识库采用四级角色权限体系，高权限包含低权限的所有能力：</p>
-        <table class="perm-table">
-          <thead>
-            <tr>
-              <th>功能</th>
-              <th>查看者</th>
-              <th>开发者</th>
-              <th>管理者</th>
-              <th>创建者</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>查看文档/检索/问答</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>查看评估/基准/思维导图</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>上传/删除/入库文档</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>生成思维导图/示例问题</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>创建/删除评估基准</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>运行/删除评估</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>图谱抽取/编辑</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>查看问答对</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>新增/编辑/删除问答对</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>AI生成问答对</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>清空图谱数据</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>编辑知识库设置</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>添加/移除成员</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-            <tr><td>删除知识库</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="no">&#10007;</td><td class="yes">&#10003;</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </a-modal>
   </div>
   <div v-else class="detail-page detail-page--loading">
     <div class="detail-page-loading-text">知识库加载中...</div>
@@ -1086,7 +950,7 @@ import { renderMarkdownSync } from '@/utils/markdown_preview'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  EditOutlined, TeamOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
+  EditOutlined, PlusOutlined, CloseOutlined, SearchOutlined,
   CheckCircleOutlined, ClockCircleOutlined, SyncOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
   DownloadOutlined, LoadingOutlined, ReloadOutlined, QuestionCircleOutlined, DeleteOutlined, RobotOutlined,
   UploadOutlined, RedoOutlined,
@@ -1101,18 +965,15 @@ import {
 import {
   getKnowledge, updateKnowledge, getDocuments, uploadDocument, uploadDocuments, deleteDocument,
   previewDocument, getDocumentDownloadUrl, getChunks, searchKnowledge,
-  generateMindmap, getMindmap, getKnowledgeMembers, addKnowledgeMember, updateKnowledgeMemberRole,
-  removeKnowledgeMember, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
+  generateMindmap, getMindmap, ingestDocument, previewChunks, getDefaultIngestConfig, checkOcrHealth,
   generateExampleQuestions, getExampleQuestions, updateExampleQuestions, generateOneExampleQuestion,
   fetchUrlDocument, previewUrlDocument, saveUrlDocument, getQueryParams, checkMilvusHealth,
   refreshKnowledgeStats, syncUrlDocument,
 } from '../api/knowledge'
-import { searchUsers } from '../api/auth'
 import request from '../utils/request'
 import { getProvidersWithModels } from '../api/modelProvider'
 import { findModelSelectValueByModelId } from '../utils/modelSelect'
 import ModelSelect from '../components/ModelSelect.vue'
-import { useUserStore } from '../stores/user'
 import { Transformer } from 'markmap-lib'
 import { Markmap } from 'markmap-view'
 import FilePreview from '../components/FilePreview.vue'
@@ -1131,7 +992,6 @@ const DocumentEditorModal = defineAsyncComponent(() =>
 
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore()
 const knowledgeId = route.params.id
 
 const knowledge = ref({})
@@ -1392,23 +1252,6 @@ function pickRandomQuestionIndex() {
   shownQuestionIndices.value.add(idx)
   return idx
 }
-
-// 成员管理
-const members = ref([])
-const membersWithInfo = ref([])
-const currentMemberRole = ref(null)
-const membersVisible = ref(false)
-const permHelpVisible = ref(false)
-const inviteVisible = ref(false)
-const inviteKeyword = ref('')
-const inviteResults = ref([])
-const inviteRole = ref('viewer')
-const inviteSearching = ref(false)
-let inviteSearchTimer = null
-
-const isManagerOrCreator = computed(() => {
-  return currentMemberRole.value === 'creator' || currentMemberRole.value === 'manager'
-})
 
 async function loadKnowledge() {
   const res = await getKnowledge(knowledgeId)
@@ -2399,115 +2242,10 @@ function jsonToMarkdown(node, level) {
   return md
 }
 
-// ========== 成员管理 ==========
-
-async function loadMembers() {
-  try {
-    const res = await getKnowledgeMembers(knowledgeId)
-    members.value = res.data || []
-    // 后端已连表查询返回用户昵称、头像，直接使用
-    membersWithInfo.value = members.value
-    // 判断当前用户角色
-    const userId = userStore.user?.id
-    const myMember = members.value.find(m => String(m.userId) === String(userId))
-    currentMemberRole.value = myMember?.role || null
-  } catch (e) {
-    // interceptor已处理错误提示
-  }
-}
-
-function openMembersModal() {
-  membersVisible.value = true
-  loadMembers()
-}
-
-function openInviteModal() {
-  inviteKeyword.value = ''
-  inviteResults.value = []
-  inviteSearching.value = false
-  inviteRole.value = 'viewer'
-  inviteVisible.value = true
-}
-
-function onInviteSearch() {
-  clearTimeout(inviteSearchTimer)
-  const kw = inviteKeyword.value.trim()
-  if (!kw) {
-    inviteResults.value = []
-    inviteSearching.value = false
-    return
-  }
-  // 关键字变化后立即进入搜索中状态：debounce 等待期间 + API 请求期间都显示 loading
-  // 避免 debounce 窗口里 inviteResults 还是空数组，提前闪一下"未找到用户"
-  inviteSearching.value = true
-  inviteSearchTimer = setTimeout(async () => {
-    try {
-      const res = await searchUsers(kw)
-      // 过滤掉已经是成员的用户
-      const memberIds = new Set(members.value.map(m => String(m.userId)))
-      inviteResults.value = (res.data || []).filter(u => !memberIds.has(String(u.id)))
-    } catch {
-      inviteResults.value = []
-    } finally {
-      inviteSearching.value = false
-    }
-  }, 300)
-}
-
-async function handleInvite(userId) {
-  try {
-    await addKnowledgeMember(knowledgeId, String(userId), inviteRole.value)
-    message.success('邀请成功')
-    inviteVisible.value = false
-    loadMembers()
-  } catch (e) {
-    // interceptor已处理错误提示
-  }
-}
-
-async function handleChangeRole(userId, role) {
-  try {
-    await updateKnowledgeMemberRole(knowledgeId, userId, role)
-    message.success('角色更新成功')
-    loadMembers()
-  } catch (e) {
-    // interceptor已处理错误提示
-  }
-}
-
-async function handleRemoveMember(userId) {
-  Modal.confirm({
-    title: '确认移除',
-    content: '确定要移除该成员吗？',
-    okText: '确认',
-    okType: 'danger',
-    cancelText: '取消',
-    async onOk() {
-      try {
-        await removeKnowledgeMember(knowledgeId, userId)
-        message.success('成员已移除')
-        loadMembers()
-      } catch (e) {
-        // interceptor已处理错误提示
-      }
-    },
-  })
-}
-
-function roleText(role) {
-  const map = { creator: '创建者', manager: '管理者', developer: '开发者', viewer: '查看者' }
-  return map[role] || role
-}
-
-function roleColor(role) {
-  const map = { creator: 'red', manager: 'orange', developer: 'blue', viewer: 'green' }
-  return map[role] || 'default'
-}
-
 onMounted(async () => {
+  // 企业版：知识库共同维护，不再加载成员邀请主路径
   loadKnowledge()
   await loadDocuments()
-  loadMembers()
 
   // 页面加载时如有处理中的文档，自动开启轮询
   if (hasProcessingDocs()) {
@@ -3567,67 +3305,6 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 
-/* 成员管理 */
-.members-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.member-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.member-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border: 1px solid var(--color-hairline);
-  border-radius: 8px;
-}
-.member-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.member-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #0070f3;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-.member-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.member-detail {
-  display: flex;
-  flex-direction: column;
-}
-.member-name {
-  font-size: 14px;
-  color: var(--color-ink);
-  font-weight: 500;
-}
-.member-id {
-  font-size: 12px;
-  color: var(--color-mute);
-}
-.member-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .btn-icon-sm {
   width: 28px;
   height: 28px;
@@ -3648,43 +3325,6 @@ onUnmounted(() => {
   color: var(--color-error);
   background: var(--color-error-soft);
 }
-.add-member-form {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-hairline);
-}
-.empty-tip {
-  text-align: center;
-  padding: 24px;
-  color: var(--color-mute);
-  font-size: 13px;
-}
-
-/* 权限说明 */
-.perm-help p { margin-bottom: 12px; font-size: 13px; color: var(--color-body); line-height: 1.6; }
-.perm-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.perm-table th, .perm-table td {
-  border: 1px solid var(--color-hairline);
-  padding: 6px 8px;
-  text-align: center;
-}
-.perm-table th {
-  background: var(--color-canvas-soft);
-  font-weight: 600;
-  color: var(--color-ink);
-}
-.perm-table td:first-child {
-  text-align: left;
-  color: var(--color-body);
-}
-.perm-table .yes { color: #52c41a; font-weight: 600; }
-.perm-table .no { color: #d9d9d9; }
 
 /* 上传弹窗 */
 .upload-section {
@@ -4157,57 +3797,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-/* 邀请弹窗 */
-.invite-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.invite-results {
-  max-height: 360px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.invite-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 32px 0;
-  color: var(--color-mute);
-  font-size: 13px;
-}
-.invite-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--color-hairline);
-  border-radius: 8px;
-}
-.invite-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-.invite-info {
-  display: flex;
-  flex-direction: column;
-}
-.invite-name {
-  font-size: 14px;
-  color: var(--color-ink);
-  font-weight: 500;
-}
-.invite-username {
-  font-size: 12px;
-  color: var(--color-mute);
 }
 
 .qa-disabled-mask {

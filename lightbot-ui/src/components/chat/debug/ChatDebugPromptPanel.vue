@@ -50,7 +50,7 @@ const samples = {
     description: '验证 Mustache 变量替换、变量列表和渲染结果。',
     template: '你是 {{agentName}}，负责回答 {{domain}} 相关问题。\n\n语气：{{tone}}\n限制：不要泄露 {{secretName}}。',
     variables: [
-      { key: 'agentName', label: '智能体名称', value: 'LightBot 客服助手' },
+      { key: 'agentName', label: '智能体名称', value: '智元 客服助手' },
       { key: 'domain', label: '业务领域', value: '知识库与工作流编排' },
       { key: 'tone', label: '回复语气', value: '清晰、克制、可执行' },
       { key: 'secretName', label: '敏感变量', value: '系统密钥' },

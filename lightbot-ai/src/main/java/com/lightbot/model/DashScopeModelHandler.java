@@ -5,12 +5,14 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.ModelProvider;
 import com.lightbot.enums.ModelProviderType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
@@ -19,6 +21,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -117,6 +120,7 @@ public class DashScopeModelHandler implements ModelProviderHandler {
             if (config.containsKey("maxTokens")) {
                 builder.maxTokens(toInt(config.get("maxTokens")));
             }
+            applyCompatibleEnableThinking(builder, config);
             OpenAiStreamUsageSupport.enableStreamUsage(builder);
             return builder.build();
         } else {
@@ -136,9 +140,68 @@ public class DashScopeModelHandler implements ModelProviderHandler {
             if (config.containsKey("repetitionPenalty")) {
                 builder.withRepetitionPenalty(toDouble(config.get("repetitionPenalty")));
             }
+            builder.withEnableThinking(DashScopeModelSupport.isEnabled(
+                    config.get(ConfigKeys.Agent.ENABLE_REASONING)));
             DashScopeModelSupport.applyMultimodalRouting(builder, modelId);
             return builder.build();
         }
+    }
+
+    /**
+     * 兼容模式下对话链路使用通用 ToolCallingChatOptions，需在此注入 enable_thinking。
+     */
+    @Override
+    public ToolCallingChatOptions adaptToolCallingOptions(ModelProvider provider,
+                                                          Map<String, Object> config,
+                                                          ToolCallingChatOptions options) {
+        if (options == null || provider == null
+                || !DashScopeModelSupport.isCompatibleMode(provider.getBaseUrl())) {
+            return options;
+        }
+        Map<String, Object> safeConfig = config != null ? config : Map.of();
+        boolean enableThinking = DashScopeModelSupport.isEnabled(
+                safeConfig.get(ConfigKeys.Agent.ENABLE_REASONING));
+        // 重建 OpenAiChatOptions 并注入 enable_thinking（兼容模式对话链路的实际请求参数）
+        OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
+        if (options.getModel() != null) {
+            builder.model(options.getModel());
+        }
+        if (options.getTemperature() != null) {
+            builder.temperature(options.getTemperature());
+        }
+        if (options.getTopP() != null) {
+            builder.topP(options.getTopP());
+        }
+        if (options.getMaxTokens() != null) {
+            builder.maxTokens(options.getMaxTokens());
+        }
+        var callbacks = options.getToolCallbacks();
+        if (callbacks != null && !callbacks.isEmpty()) {
+            builder.toolCallbacks(callbacks);
+        }
+        var toolContext = options.getToolContext();
+        if (toolContext != null && !toolContext.isEmpty()) {
+            builder.toolContext(toolContext);
+        }
+        Map<String, Object> extra = new HashMap<>();
+        if (options instanceof OpenAiChatOptions openAiOptions
+                && openAiOptions.getExtraBody() != null) {
+            extra.putAll(openAiOptions.getExtraBody());
+        }
+        extra.put("enable_thinking", enableThinking);
+        builder.extraBody(extra);
+        OpenAiStreamUsageSupport.enableStreamUsage(builder);
+        OpenAiChatOptions adapted = builder.build();
+        adapted.setInternalToolExecutionEnabled(options.getInternalToolExecutionEnabled());
+        return adapted;
+    }
+
+    private static void applyCompatibleEnableThinking(OpenAiChatOptions.Builder builder,
+                                                      Map<String, Object> config) {
+        builder.extraBody(Map.of(
+                "enable_thinking",
+                DashScopeModelSupport.isEnabled(
+                        config != null ? config.get(ConfigKeys.Agent.ENABLE_REASONING) : null)));
     }
 
     @Override

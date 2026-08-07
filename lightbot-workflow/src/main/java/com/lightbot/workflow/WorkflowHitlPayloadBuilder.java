@@ -16,9 +16,11 @@ import java.util.Map;
 public final class WorkflowHitlPayloadBuilder {
 
     public static final String HITL_TYPE_ASK_USER = "ask_user";
+    public static final String HITL_TYPE_BUSINESS_PAGE = "business_page";
     public static final String ANSWER_FIELD_KEY = "answer";
     /** 有选项时单选字段（与 {@link #ANSWER_FIELD_KEY} 自定义文本二选一或优先文本） */
     public static final String SELECTED_OPTION_FIELD_KEY = "selectedOption";
+    public static final String BUSINESS_RESULT_FIELD_KEY = "businessResult";
 
     private WorkflowHitlPayloadBuilder() {
     }
@@ -45,6 +47,52 @@ public final class WorkflowHitlPayloadBuilder {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * 是否为业务办理页工具结果（含 pageType 字段）
+     */
+    public static boolean isBusinessPageResult(String rawResult, ObjectMapper objectMapper) {
+        if (rawResult == null || rawResult.isBlank()) {
+            return false;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(rawResult.trim());
+            return node.hasNonNull("pageType") && node.path("success").asBoolean(true);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 将 present_business_page 工具 JSON 转为 confirmForm（前端渲染固化业务页）
+     */
+    public static Map<String, Object> fromBusinessPageTool(String nodeId, String rawResult, ObjectMapper objectMapper) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("nodeId", nodeId);
+        payload.put("hitlType", HITL_TYPE_BUSINESS_PAGE);
+        payload.put("toolName", "present_business_page");
+        payload.put("message", "请完成业务办理后继续");
+        try {
+            JsonNode node = objectMapper.readTree(rawResult.trim());
+            Map<String, Object> pagePayload = objectMapper.convertValue(node, Map.class);
+            payload.put("pagePayload", pagePayload);
+            if (node.hasNonNull("title")) {
+                payload.put("message", node.get("title").asText());
+            }
+        } catch (Exception ignored) {
+            payload.put("pagePayload", Map.of());
+        }
+        // 隐藏字段：前端业务页提交后写入 JSON
+        List<Map<String, Object>> fields = new ArrayList<>();
+        Map<String, Object> resultField = new HashMap<>();
+        resultField.put("key", BUSINESS_RESULT_FIELD_KEY);
+        resultField.put("label", "办理结果");
+        resultField.put("type", "textarea");
+        resultField.put("required", true);
+        fields.add(resultField);
+        payload.put("formFields", fields);
+        return payload;
     }
 
     /**

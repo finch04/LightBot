@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.constant.ConfigKeys;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lightbot.dto.AdminUserCreateDTO;
 import com.lightbot.dto.AdminUserUpdateDTO;
 import com.lightbot.dto.ChangePasswordDTO;
 import com.lightbot.dto.LoginDTO;
@@ -54,20 +55,32 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDTO register(RegisterDTO request) {
-        // 1. 用户名唯一校验
+        // 公开自助注册已关闭：首个管理员走 init-admin，后续账号由管理员创建
+        throw new BizException(ErrorCode.PUBLIC_REGISTER_DISABLED);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserDTO adminCreateUser(AdminUserCreateDTO request) {
+        // 1. 仅管理员可创建账号
+        checkAdmin();
+
+        // 2. 用户名唯一校验
         long count = userMapper.selectCount(
                 new LambdaQueryWrapper<User>().eq(User::getUsername, request.getUsername()));
         if (count > 0) {
             throw new BizException(ErrorCode.USERNAME_EXISTS);
         }
 
-        // 2. 创建用户，密码BCrypt加密存储
+        // 3. 创建用户，密码 BCrypt 加密；角色默认普通用户
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(cn.dev33.satoken.secure.BCrypt.hashpw(request.getPassword(), cn.dev33.satoken.secure.BCrypt.gensalt()));
-        user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
+        user.setNickname(request.getNickname() != null && !request.getNickname().isBlank()
+                ? request.getNickname() : request.getUsername());
         user.setEmail(request.getEmail() != null ? request.getEmail() : "");
-        user.setRole(UserRole.USER);
+        user.setPhone(request.getPhone());
+        user.setRole(request.getRole() != null ? request.getRole() : UserRole.USER);
         user.setStatus(UserStatus.ACTIVE);
         userMapper.insert(user);
 

@@ -107,6 +107,7 @@ public interface MessageMapper extends BaseMapper<Message> {
             JOIN chat_session s ON m.session_id = s.id
             WHERE s.user_id = #{userId}
               AND s.deleted = 0
+              AND (s.source = 'platform' OR s.source IS NULL)
               AND m.content ILIKE CONCAT('%', #{keyword}, '%')
             ORDER BY m.create_time DESC, m.id DESC
             LIMIT #{limit}

@@ -14,7 +14,7 @@ public class LightBotApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(LightBotApplication.class, args);
-        System.out.println("LightBot 启动成功！");
-        System.out.println("LightBot started successfully.");
+        System.out.println("智元启动成功！");
+        System.out.println("Zhiyuan started successfully.");
     }
 }

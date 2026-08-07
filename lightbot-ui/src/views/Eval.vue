@@ -903,7 +903,7 @@ function progressStatus(s) {
 
 <style scoped>
 .eval-page {
-  height: 100vh;
+  height: var(--app-content-height);
   overflow: hidden;
   background: var(--color-canvas-soft);
   padding: 32px;

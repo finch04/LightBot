@@ -1,4 +1,5 @@
 import { refreshChatAttachmentPreviews } from '../../api/chat'
+import { parseBusinessPageSubmitDataFromContent } from '../../components/businessPages/businessPageResultUtils'
 import { resolveWorkflowConfirmPending, resolveWorkflowFailureFromEvents, stripWorkflowErrorContent } from '../../components/workflow/workflowStepUtils.js'
 import { safeJsonParse } from '../../utils/request'
 import { contentHasMentionTokens, parseMentionsFromMetadata, resolveMentionsForDisplay } from '../../utils/mention_utils'
@@ -186,6 +187,29 @@ export function parseMessage(m) {
       message: metadata.error.message || '未知错误',
       code: metadata.error.code || 'UNKNOWN',
     }
+  }
+
+  // 业务页回灌：历史消息按系统通知展示，不表现为用户再次提问
+  if (
+    role === 'user'
+    && typeof content === 'string'
+    && (
+      content.startsWith('系统通知：用户')
+      || content.startsWith('用户已完成业务办理页')
+      || content.startsWith('用户取消了业务办理页')
+    )
+  ) {
+    msg._businessPageCallback = true
+    msg._businessPageCallbackStatus = content.includes('取消') ? 'cancelled' : 'submitted'
+    const typeMatch = content.match(/业务办理页(?:完成提交)?（([^）]+)）/)
+      || content.match(/业务办理页提交（([^）]+)）/)
+    if (typeMatch?.[1]) {
+      msg._businessPageCallbackPageType = typeMatch[1]
+    }
+    // 从回灌正文恢复办理字段与页面标签（标签来自提交时 DOM 采集，非平台硬编码）
+    const parsed = parseBusinessPageSubmitDataFromContent(content)
+    msg._businessPageCallbackValues = parsed.values
+    msg._businessPageCallbackFieldLabels = parsed.fieldLabels
   }
 
   normalizeAssistantMessageErrors(msg)

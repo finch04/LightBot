@@ -34,7 +34,7 @@
       />
       <a-button type="primary" @click="loadTraces(1)"><SearchOutlined /> 查询</a-button>
       <a-button @click="handleRefresh"><ReloadOutlined /> 刷新</a-button>
-      <a-button danger :disabled="selectedRowKeys.length === 0" @click="handleBatchDelete"><DeleteOutlined /> 批量删除</a-button>
+      <a-button v-if="isAdmin" danger :disabled="selectedRowKeys.length === 0" @click="handleBatchDelete"><DeleteOutlined /> 批量删除</a-button>
     </div>
 
     <!-- 工具调用 筛选栏 -->
@@ -53,7 +53,7 @@
       />
       <a-button type="primary" @click="loadToolCalls(1)"><SearchOutlined /> 查询</a-button>
       <a-button @click="handleToolRefresh"><ReloadOutlined /> 刷新</a-button>
-      <a-button danger :disabled="selectedToolRowKeys.length === 0" @click="handleBatchDeleteTool"><DeleteOutlined /> 批量删除</a-button>
+      <a-button v-if="isAdmin" danger :disabled="selectedToolRowKeys.length === 0" @click="handleBatchDeleteTool"><DeleteOutlined /> 批量删除</a-button>
     </div>
 
     <!-- Trace 列表 -->
@@ -571,13 +571,17 @@ import ObservabilitySubAgentTree from '../components/observability/Observability
 import LbStatCard from '../components/common/LbStatCard.vue'
 import { getTraces, getTraceDetail, getTraceOverview, deleteTraces } from '../api/observability'
 import { getToolCalls, deleteToolCalls } from '../api/toolCall'
+import { getSession } from '../api/chatSession'
 import { formatTime, formatJson } from '../utils/format'
 import { contentHasMentionTokens } from '../utils/mention_utils'
 import { copyToClipboard as sharedCopy } from '../utils/clipboard'
 import { normalizeObservabilityTab } from '../utils/observabilityTabs'
+import { useUserStore } from '../stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.user?.role === 'admin')
 
 const loading = ref(false)
 const statsLoading = ref(false)
@@ -1053,7 +1057,20 @@ function handleTableChange(pag) {
   loadTraces(pag.current)
 }
 
-function goToChat(sessionId) {
+async function goToChat(sessionId) {
+  if (!sessionId) return
+  try {
+    const res = await getSession(sessionId)
+    const source = res.data?.source
+    if (source === 'api' || source === 'automation') {
+      // 集成/自动化会话只读：跳转会话管理对应 Tab
+      const scope = source === 'api' ? 'api' : 'automation'
+      router.push({ path: '/app/sessions', query: { scope, sessionId: String(sessionId) } })
+      return
+    }
+  } catch {
+    // 回退到对话页（平台会话或查询失败）
+  }
   router.push(`/app/chat/${sessionId}`)
 }
 

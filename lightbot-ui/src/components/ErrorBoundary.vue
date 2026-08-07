@@ -23,6 +23,7 @@
 import { ref, computed, onErrorCaptured } from 'vue'
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons-vue'
 import { captureException } from '../utils/errorReport'
+import { isHandledRequestError } from '../utils/requestError'
 
 const props = defineProps({
   /** 友好的错误提示文案，覆盖默认 */
@@ -46,6 +47,11 @@ const errorDetail = computed(() => {
 })
 
 onErrorCaptured((err, instance, info) => {
+  // 请求层已 toast/跳转的业务错误：吞掉，绝不替换整页为错误页
+  // 典型场景：a-modal @ok="asyncSave" 未写 try/catch，await 失败被 Vue 送进 errorCaptured
+  if (isHandledRequestError(err)) {
+    return false
+  }
   error.value = err
   capturedContext.value = {
     source: 'errorCaptured',

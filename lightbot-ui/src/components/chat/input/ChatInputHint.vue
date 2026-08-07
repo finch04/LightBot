@@ -1,5 +1,5 @@
 <template>
-  <div v-if="showInputDisclaimer" class="input-hint">LightBot 可能会犯错，请核实重要信息。</div>
+  <div v-if="showInputDisclaimer" class="input-hint">智元可能会犯错，请核实重要信息。</div>
   <div v-else class="input-hint-carousel">
     <div class="input-hint-carousel-row">
       <span class="input-question-label">你可以问我</span>

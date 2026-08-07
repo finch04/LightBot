@@ -321,11 +321,16 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         List<String> mcpServerIds = resolveBindingIdStrings(payload, "mcpServerIds", "mcpServers");
         List<String> subAgentIds = resolveBindingIdStrings(payload, "subAgentIds", "subagents");
         List<String> skillIds = resolveBindingIdStrings(payload, "skillIds", "skills");
+        List<String> dataModelCategoryIds = resolveBindingIdStrings(
+                payload, "dataModelCategoryIds", "dataModelCategories");
+        List<String> dataModelIds = resolveBindingIdStrings(payload, "dataModelIds", "dataModels");
         result.put("knowledgeIds", knowledgeIds);
         result.put("toolIds", toolIds);
         result.put("mcpServerIds", mcpServerIds);
         result.put("subAgentIds", subAgentIds);
         result.put("skillIds", skillIds);
+        result.put("dataModelCategoryIds", dataModelCategoryIds);
+        result.put("dataModelIds", dataModelIds);
 
         // 5. 按 ID 回查绑定实体（供版本预览展示名称）
         result.put("knowledges", resolveKnowledgeSummaries(knowledgeIds));
@@ -341,6 +346,8 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         compatPayload.put("mcpServerIds", mcpServerIds);
         compatPayload.put("subAgentIds", subAgentIds);
         compatPayload.put("skillIds", skillIds);
+        compatPayload.put("dataModelCategoryIds", dataModelCategoryIds);
+        compatPayload.put("dataModelIds", dataModelIds);
         result.put("payload", compatPayload);
     }
 
@@ -585,6 +592,12 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         agentService.updateMcpServerBindings(agentId, toLongList(payload.get("mcpServerIds")));
         agentService.updateSubAgentBindings(agentId, toLongList(payload.get("subAgentIds")));
         agentService.updateSkillBindings(agentId, toLongList(payload.get("skillIds")));
+        List<Long> categoryIds = toLongList(payload.get("dataModelCategoryIds"));
+        if (!categoryIds.isEmpty()) {
+            agentService.updateDataModelCategoryBindings(agentId, categoryIds);
+        } else {
+            agentService.updateDataModelBindings(agentId, toLongList(payload.get("dataModelIds")));
+        }
 
         saveDraftConfig(agent, snap, 0, 0);
         updateAgentStatusAfterRestore(agent);
@@ -1065,6 +1078,8 @@ public class AgentVersionServiceImpl implements AgentVersionService {
         payload.put("mcpServerIds", readBindingIdsAsStrings(agent, "mcpServers"));
         payload.put("subAgentIds", readBindingIdsAsStrings(agent, "subagents"));
         payload.put("skillIds", readBindingIdsAsStrings(agent, "skills"));
+        payload.put("dataModelCategoryIds", readBindingIdsAsStrings(agent, "dataModelCategories"));
+        payload.put("dataModelIds", readBindingIdsAsStrings(agent, "dataModels"));
 
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("kind", KIND_CHAT);

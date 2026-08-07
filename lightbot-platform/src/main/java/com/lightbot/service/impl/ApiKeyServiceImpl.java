@@ -60,7 +60,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         apiKey.setName(name);
         apiKey.setKeyPrefix(keyPrefix);
         apiKey.setKeyHash(keyHash);
-        apiKey.setPermissions(ApiKeyPermission.valueOf(permissions != null ? permissions.toUpperCase() : "CHAT"));
+        apiKey.setPermissions(ApiKeyPermission.fromValue(permissions != null ? permissions : "chat"));
         apiKey.setAgentIds(agentIds != null && !agentIds.isEmpty() ? agentIds : null);
         apiKey.setRateLimit(rateLimit != null ? rateLimit : 60);
         apiKey.setDailyQuota(dailyQuota != null ? dailyQuota : 100000);
@@ -81,15 +81,15 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
     }
 
     @Override
-    public List<ApiKey> listByUserId(Long userId) {
+    public List<ApiKey> listAll() {
+        // 企业维度：返回全部 Key（不再按创建人过滤）
         return list(new LambdaQueryWrapper<ApiKey>()
-                .eq(ApiKey::getUserId, userId)
                 .orderByDesc(ApiKey::getCreateTime));
     }
 
     @Override
     public void toggleEnabled(Long id, Long userId) {
-        ApiKey apiKey = getByIdAndCheckOwner(id, userId);
+        ApiKey apiKey = requireExists(id);
         apiKey.setIsEnabled(apiKey.getIsEnabled() == 1 ? 0 : 1);
         updateById(apiKey);
         log.info("[API Key] 切换状态 id=[{}], enabled=[{}]", id, apiKey.getIsEnabled());
@@ -97,14 +97,14 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
 
     @Override
     public void deleteApiKey(Long id, Long userId) {
-        getByIdAndCheckOwner(id, userId);
+        requireExists(id);
         removeById(id);
         log.info("[API Key] 删除成功 id=[{}]", id);
     }
 
     @Override
     public Map<String, Object> regenerateApiKey(Long id, Long userId) {
-        ApiKey apiKey = getByIdAndCheckOwner(id, userId);
+        ApiKey apiKey = requireExists(id);
 
         // 1. 生成新密钥
         String rawKey = KEY_PREFIX + UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
@@ -126,7 +126,8 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
     @Override
     public Long authenticate(String rawKey) {
         ApiKey apiKey = authenticateWithDetails(rawKey);
-        return apiKey != null ? apiKey.getUserId() : null;
+        // 企业服务身份：不再返回创建人 userId
+        return apiKey != null ? com.lightbot.constant.EnterpriseActors.API_KEY : null;
     }
 
     @Override
@@ -241,9 +242,9 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         return affected > 0;
     }
 
-    private ApiKey getByIdAndCheckOwner(Long id, Long userId) {
+    private ApiKey requireExists(Long id) {
         ApiKey apiKey = getById(id);
-        if (apiKey == null || !apiKey.getUserId().equals(userId)) {
+        if (apiKey == null) {
             throw new BizException(ErrorCode.NOT_FOUND);
         }
         return apiKey;

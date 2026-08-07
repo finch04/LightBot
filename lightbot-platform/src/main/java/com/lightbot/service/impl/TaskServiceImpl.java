@@ -103,16 +103,21 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     }
 
     @Override
-    public void markStart(Long taskId, int attempts, String streamId) {
-        lambdaUpdate()
+    public boolean markStart(Long taskId, int attempts, String streamId) {
+        // CAS：仅 PENDING / PENDING_RETRY 可转入 RUNNING，避免 cg:default 与 cg:heavy 同时执行同一任务
+        boolean updated = lambdaUpdate()
                 .eq(Task::getId, taskId)
+                .in(Task::getStatus, TaskStatus.PENDING, TaskStatus.PENDING_RETRY)
                 .set(Task::getStatus, TaskStatus.RUNNING)
                 .set(Task::getAttempts, attempts)
                 .set(Task::getStreamId, streamId)
                 .set(Task::getStartedAt, LocalDateTime.now())
                 .set(Task::getUpdateTime, LocalDateTime.now())
                 .update();
-        broadcastTaskCountByTaskId(taskId);
+        if (updated) {
+            broadcastTaskCountByTaskId(taskId);
+        }
+        return updated;
     }
 
     @Override
@@ -202,10 +207,11 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
 
     @Override
     public Page<Task> listByUserId(Long userId, int pageNum, int pageSize, String name, String status, String type) {
+        // 企业资产：userId 为空时查全企业任务（触发人仅作审计）
         TaskType taskType = StringUtils.hasText(type) ? TaskType.fromValue(type) : null;
         return baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Task>()
-                        .eq(Task::getUserId, userId)
+                        .eq(userId != null, Task::getUserId, userId)
                         .like(StringUtils.hasText(name), Task::getName, name)
                         .eq(StringUtils.hasText(status) && !"active".equals(status), Task::getStatus, status)
                         .in(StringUtils.hasText(status) && "active".equals(status), Task::getStatus,
@@ -217,7 +223,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     @Override
     public Task getTaskById(Long taskId, Long userId) {
         Task task = getById(taskId);
-        if (task == null || !task.getUserId().equals(userId)) {
+        if (task == null) {
             throw new BizException(ErrorCode.TASK_NOT_FOUND);
         }
         return task;
@@ -226,15 +232,14 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     @Override
     public Long countByStatus(Long userId, String status) {
         return count(new LambdaQueryWrapper<Task>()
-                .eq(Task::getUserId, userId)
+                .eq(userId != null, Task::getUserId, userId)
                 .eq(Task::getStatus, status));
     }
 
     @Override
     public Map<String, Long> countByType(Long userId) {
-        // 查询所有进行中+等待中+等待重试的任务，按类型分组计数
         List<Task> tasks = list(new LambdaQueryWrapper<Task>()
-                .eq(Task::getUserId, userId)
+                .eq(userId != null, Task::getUserId, userId)
                 .in(Task::getStatus, List.of(TaskStatus.PENDING, TaskStatus.PENDING_RETRY, TaskStatus.RUNNING)));
         return tasks.stream()
                 .collect(java.util.stream.Collectors.groupingBy(
@@ -245,34 +250,29 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task>
     @Override
     public void deleteTask(Long taskId, Long userId) {
         Task task = getTaskById(taskId, userId);
-
-        // 仅已终态任务可删除
         boolean isTerminal = task.getStatus() == TaskStatus.SUCCESS
                 || task.getStatus() == TaskStatus.FAILED
                 || task.getStatus() == TaskStatus.CANCELLED;
         if (!isTerminal) {
             throw new BizException(ErrorCode.TASK_DELETE_FAILED);
         }
-
         removeById(taskId);
-        log.info("[任务] 删除成功, taskId={}, userId={}", taskId, userId);
+        log.info("[任务] 删除成功, taskId={}, triggeredBy={}", taskId, task.getUserId());
+        broadcastTaskCount(null);
     }
 
-    /** 推送任务计数变更给指定用户 */
+    /** 推送企业任务计数变更给所有在线建设者 */
     private void broadcastTaskCount(Long userId) {
         try {
-            taskCountNotifier.getObject().notifyUser(userId);
+            taskCountNotifier.getObject().notifyAllUsers();
         } catch (Exception e) {
             // 推送失败不影响主流程
         }
     }
 
-    /** 通过 taskId 查询 userId 后推送 */
+    /** 任务状态变更后广播企业计数 */
     private void broadcastTaskCountByTaskId(Long taskId) {
-        Task task = getById(taskId);
-        if (task != null) {
-            broadcastTaskCount(task.getUserId());
-        }
+        broadcastTaskCount(null);
     }
 
     /** 截断字符串到指定长度，避免 DB 字段超长 */

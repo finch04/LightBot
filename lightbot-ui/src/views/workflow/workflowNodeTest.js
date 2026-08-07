@@ -16,6 +16,8 @@ export const NODE_TYPES_SINGLE_TEST = new Set([
   'condition',
   'loop',
   'batch',
+  'sub_agent',
+  'app_component',
 ])
 
 export function canSingleTestNodeType(type) {
@@ -52,6 +54,14 @@ export function buildNodeTestInputs(node) {
   }
   if (node.type === 'classifier' || node.type === 'parameter_extractor') {
     push('query', '待处理文本', d.inputVariable || '{{query}}')
+  }
+  if (node.type === 'sub_agent') {
+    push('query', '任务相关输入', d.task || '{{query}}')
+    push('input', '流程输入', '')
+  }
+  if (node.type === 'app_component') {
+    push('query', '子流程输入', '{{query}}')
+    push('input', '流程输入', '')
   }
 
   if (!inputs.length) {

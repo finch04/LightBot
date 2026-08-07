@@ -1,16 +1,19 @@
 <template>
   <div class="chat-container">
     <ChatTopBar
-      v-if="sessionId"
       :session-title="sessionTitle"
       :title-editing="titleEditing"
       :title-edit-value="titleEditValue"
-      :show-file-drawer="!!sessionId"
+      :show-file-drawer="!!sessionId && !enterpriseReadonly"
       :show-runtime-panel="!!sessionId"
       :runtime-panel-open="sessionRuntimePanelOpen"
       :show-subagent-drawer="!!sessionId"
       :subagent-running-count="runningSubagentCount"
-      :title-editable="!!sessionId"
+      :title-editable="!!sessionId && !enterpriseReadonly"
+      :show-sim-role="!enterpriseReadonly"
+      :sim-role-user-id="userStore.user?.id"
+      :session-has-messages="messages.length > 0"
+      :sim-role-disabled="enterpriseReadonly"
       @start-title-edit="startTitleEdit"
       @confirm-title-edit="confirmTitleEdit"
       @cancel-title-edit="cancelTitleEdit"
@@ -18,6 +21,8 @@
       @open-file-drawer="openFileDrawer"
       @toggle-runtime-panel="sessionRuntimePanelOpen = !sessionRuntimePanelOpen"
       @open-subagent-drawer="subagentRuntimeOpen = true"
+      @sim-role-change="onSimRoleChange"
+      @sim-role-new-session="onSimRoleNewSession"
     />
 
     <div class="chat-workspace">
@@ -115,9 +120,10 @@
       ref="chatInputAreaRef"
       v-model:input="input"
       :loading="loading"
-      :can-send="canSend"
+      :can-send="canSend && !enterpriseReadonly"
       :workflow-confirm-blocked="workflowConfirmBlocked"
       :ask-user-blocked="askUserModal.visible"
+      :read-only="enterpriseReadonly"
       :switching-session="inputMaskLoading"
       :agents="agents"
       :selected-agent-id="selectedAgentId"
@@ -231,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { LoadingOutlined } from '@ant-design/icons-vue'
 import ChatAttachmentPreview from '../components/ChatAttachmentPreview.vue'
@@ -247,6 +253,8 @@ import ChatSessionFilesDrawer from '../components/chat/session/ChatSessionFilesD
 import ChatSubAgentRuntimeDrawer from '../components/chat/session/ChatSubAgentRuntimeDrawer.vue'
 import ChatSessionRuntimePanel from '../components/chat/session/ChatSessionRuntimePanel.vue'
 import ChatStreamingPlaceholder from '../components/chat/session/ChatStreamingPlaceholder.vue'
+import { getSession } from '../api/chatSession'
+import { useUserStore } from '../stores/user'
 import { buildSubagentLiveStatusBadges } from '../components/capabilities/subagentEventUtils.js'
 import { useChatAgents } from '../composables/useChatAgents'
 import { useChatAttachments } from '../composables/useChatAttachments'
@@ -272,8 +280,28 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const sessionId = computed(() => route.params.sessionId || null)
+/** API 集成 / 自动化会话：只读排障，禁止控制台续聊 */
+const enterpriseReadonly = ref(false)
+/** 当前选中的模拟角色 → 请求 callerContext */
+const simCallerContext = ref(null)
+
+async function refreshEnterpriseReadonly() {
+  const sid = sessionId.value
+  if (!sid) {
+    enterpriseReadonly.value = false
+    return
+  }
+  try {
+    const res = await getSession(sid)
+    const source = res.data?.source
+    enterpriseReadonly.value = source === 'api' || source === 'automation'
+  } catch {
+    enterpriseReadonly.value = false
+  }
+}
 
 const input = ref('')
 const inputHistory = ref([])
@@ -307,6 +335,18 @@ const sessionRuntimePanelOpen = ref(false)
 const sessionRuntimePanelWidth = ref(336)
 const currentRequestStartIndex = ref(null)
 let stopRuntimePanelResize = null
+
+function onSimRoleChange(payload) {
+  simCallerContext.value = payload?.callerContext || null
+}
+
+function onSimRoleNewSession() {
+  skipNextWatch.value = true
+  messages.value = []
+  sessionTokenCount.value = 0
+  liveSubagentEvents.value = []
+  router.push('/app/chat')
+}
 
 /** 协作状态的待办/产物属于一轮用户任务，历史轮次只由各自消息与会话级抽屉承载。 */
 const currentRequestMessages = computed(() => {
@@ -544,7 +584,7 @@ const {
 })
 
 const {
-  submitAskUserResponse, runChatStream,
+  submitAskUserResponse, submitBusinessPageResult, runChatStream,
   sendMessage, regenerateReply, stopGenerating,
 } = useChatStream({
   sessionId, messages, messagesRef, loading, streaming, hasStreamContent,
@@ -552,6 +592,7 @@ const {
   toolEvents, isNearBottom, userScrolledUp, skipNextWatch, input, inputHistory,
   historyIndex, pendingAttachments, inputRef, replyTo, canSend, workflowConfirmBlocked,
   selectedAgentId, selectedConfigVersion, selectedAgentVersionId, sessionTokenCount,
+  simCallerContext,
   streamSmoother,
   getCurrentStreamingMsg: () => currentStreamingMsg,
   setCurrentStreamingMsg: (msg) => { currentStreamingMsg = msg },
@@ -562,6 +603,8 @@ const {
 })
 
 streamHolder.runChatStream = runChatStream
+provide('submitBusinessPageResult', submitBusinessPageResult)
+provide('chatMessages', messages)
 
 const {
   hasMoreMessages, loadingOlder, switchingSession,
@@ -620,6 +663,7 @@ const scrollHandler = createScrollHandler({ loadOlderMessages, hasMoreMessages, 
 
 onMounted(async () => {
   const queryAgentId = route.query.agentId
+  refreshEnterpriseReadonly()
   loadHistory()
   await loadAgents(queryAgentId || undefined)
   if (queryAgentId) {
@@ -663,6 +707,7 @@ watch(() => route.params.sessionId, () => {
   liveSubagentEvents.value = []
   currentRequestStartIndex.value = null
   messageRowComponentRefs.clear()
+  refreshEnterpriseReadonly()
   loadHistory()
 })
 
@@ -693,7 +738,10 @@ watch(sessionId, (newVal, oldVal) => {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* 顶栏改造后对话区在 MainLayout 内，用 content-height，避免高出顶栏被裁切 */
+  height: var(--app-content-height);
+  max-height: var(--app-content-height);
+  overflow: hidden;
   background: var(--color-canvas);
 }
 

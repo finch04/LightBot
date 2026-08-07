@@ -179,7 +179,7 @@
           </div>
           <div class="guide-step">
             <span class="guide-num">3</span>
-            <div><b>（可选）绑定工具</b><p>限制 SubAgent 可调用的工具范围，不绑定则继承主 Agent 工具策略（以实现为准）。</p></div>
+            <div><b>（可选）绑定工具</b><p>SubAgent 仅能使用此处绑定的工具；不绑定则运行时无工具可用（不会继承主 Agent 的工具）。部分工具（如产物交付）禁止 SubAgent 调用。</p></div>
           </div>
           <div class="guide-step">
             <span class="guide-num">4</span>

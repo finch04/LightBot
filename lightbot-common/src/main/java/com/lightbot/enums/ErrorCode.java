@@ -30,6 +30,7 @@ public enum ErrorCode {
     USERNAME_EXISTS(20002, "用户名已存在", HttpStatus.BAD_REQUEST),
     USERNAME_OR_PASSWORD_ERROR(20003, "用户名或密码错误", HttpStatus.BAD_REQUEST),
     ACCOUNT_DISABLED(20004, "账号已被禁用", HttpStatus.FORBIDDEN),
+    PUBLIC_REGISTER_DISABLED(20005, "系统已关闭公开注册，请联系管理员创建账号", HttpStatus.FORBIDDEN),
 
     // ========== Agent模块 ==========
     AGENT_NOT_FOUND(30000, "Agent不存在", HttpStatus.BAD_REQUEST),
@@ -37,6 +38,8 @@ public enum ErrorCode {
     AGENT_KNOWLEDGE_LIMIT(30003, "每个Agent最多绑定10个知识库", HttpStatus.BAD_REQUEST),
     AGENT_TOOL_LIMIT(30005, "每个Agent最多绑定10个额外工具", HttpStatus.BAD_REQUEST),
     AGENT_MCP_LIMIT(30006, "每个Agent最多绑定5个MCP Server", HttpStatus.BAD_REQUEST),
+    AGENT_DATASET_LIMIT(30014, "每个Agent最多绑定10个问数数据集", HttpStatus.BAD_REQUEST),
+    AGENT_DATA_MODEL_LIMIT(30015, "每个Agent最多绑定10个可问数据分类", HttpStatus.BAD_REQUEST),
     AGENT_SUBAGENT_LIMIT(30007, "每个Agent最多绑定5个SubAgent", HttpStatus.BAD_REQUEST),
     AGENT_SKILL_LIMIT(30008, "每个Agent最多绑定10个Skill", HttpStatus.BAD_REQUEST),
     AVATAR_UNSUPPORTED_TYPE(30004, "头像文件格式不支持: %s", HttpStatus.BAD_REQUEST),
@@ -162,6 +165,15 @@ public enum ErrorCode {
     API_KEY_EXPIRED(94002, "API Key已过期", HttpStatus.UNAUTHORIZED),
     API_KEY_DISABLED(94003, "API Key已被禁用", HttpStatus.UNAUTHORIZED),
     API_KEY_INVALID(94004, "API Key无效", HttpStatus.UNAUTHORIZED),
+    API_KEY_PATH_FORBIDDEN(94005, "企业 API Key 无权访问该接口", HttpStatus.FORBIDDEN),
+    API_KEY_AGENT_FORBIDDEN(94006, "该 API Key 无权访问此 Agent", HttpStatus.FORBIDDEN),
+    API_KEY_AGENT_REQUIRED(94007, "企业 API Key 调用对话时必须指定 agentId", HttpStatus.BAD_REQUEST),
+    API_KEY_AGENT_NOT_PUBLISHED(94008, "企业 API Key 仅可调用已发布的 Agent（当前状态：%s），请先在控制台发布", HttpStatus.FORBIDDEN),
+    API_EXTERNAL_USER_INVALID(94009, "externalUserId 无效：最长128字符，仅允许字母、数字与 . _ - : @ /", HttpStatus.BAD_REQUEST),
+    API_EXTERNAL_USER_MISMATCH(94010, "会话已绑定其他外部用户，与请求中的 externalUserId 不一致", HttpStatus.FORBIDDEN),
+    API_CALLER_CONTEXT_INVALID(94011, "callerContext 无效：%s", HttpStatus.BAD_REQUEST),
+    API_CALLER_CONTEXT_MISMATCH(94012, "会话已绑定其他调用方身份，与请求中的 callerContext 不一致", HttpStatus.FORBIDDEN),
+    API_KEY_PERMISSION_INSUFFICIENT(94009, "该 API Key 权限不足（仅对话不可访问开放数据接口，请使用「完全访问」）", HttpStatus.FORBIDDEN),
 
     // ========== Prompt模块 ==========
     PROMPT_NOT_FOUND(100001, "Prompt不存在", HttpStatus.BAD_REQUEST),
@@ -186,7 +198,34 @@ public enum ErrorCode {
     EVAL_EXPERIMENT_STATUS_INVALID(100302, "实验状态不允许此操作", HttpStatus.BAD_REQUEST),
     EVAL_EXPERIMENT_LLM_CALL_FAILED(100303, "LLM调用失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
     EVAL_EXPERIMENT_SCORE_PARSE_FAILED(100304, "评分结果解析失败", HttpStatus.INTERNAL_SERVER_ERROR),
-    EVAL_EXPERIMENT_EVALUATOR_LIMIT(100305, "每个实验最多添加5个评估器", HttpStatus.BAD_REQUEST);
+    EVAL_EXPERIMENT_EVALUATOR_LIMIT(100305, "每个实验最多添加5个评估器", HttpStatus.BAD_REQUEST),
+
+    // ========== 数据中心 ==========
+    DATA_CATEGORY_NOT_FOUND(110001, "数据模型分类不存在", HttpStatus.BAD_REQUEST),
+    DATA_CATEGORY_NAME_EXISTS(110002, "分类名称已存在", HttpStatus.BAD_REQUEST),
+    DATA_CATEGORY_HAS_MODELS(110003, "分类下仍有数据模型，无法删除", HttpStatus.BAD_REQUEST),
+    DATA_MODEL_NOT_FOUND(110004, "数据模型不存在", HttpStatus.BAD_REQUEST),
+    DATA_MODEL_NAME_EXISTS(110005, "数据模型名称已存在", HttpStatus.BAD_REQUEST),
+    DATA_MODEL_TABLE_EXISTS(110006, "物理表名已存在: %s", HttpStatus.BAD_REQUEST),
+    DATA_MODEL_TABLE_INVALID(110007, "物理表名不合法: %s", HttpStatus.BAD_REQUEST),
+    DATA_MODEL_SCHEMA_INVALID(110008, "数据模型配置不合法: %s", HttpStatus.BAD_REQUEST),
+    DATA_MODEL_DDL_FAILED(110009, "数据表结构同步失败: %s", HttpStatus.INTERNAL_SERVER_ERROR),
+    DATA_POOL_RECORD_NOT_FOUND(110010, "数据记录不存在", HttpStatus.BAD_REQUEST),
+    DATA_POOL_IMPORT_FAILED(110011, "数据导入失败: %s", HttpStatus.BAD_REQUEST),
+    DATA_POOL_FIELD_INVALID(110012, "字段值不合法: %s", HttpStatus.BAD_REQUEST),
+    DATA_POOL_UNIQUE_CONFLICT(110013, "唯一约束冲突: %s", HttpStatus.BAD_REQUEST),
+    ASK_DATASET_NOT_FOUND(110020, "问数数据集不存在", HttpStatus.BAD_REQUEST),
+    ASK_DATASET_CODE_EXISTS(110021, "问数数据集编码已存在: %s", HttpStatus.BAD_REQUEST),
+    ASK_DATASET_MODEL_BOUND(110022, "该数据模型已配置问数数据集", HttpStatus.BAD_REQUEST),
+    ASK_DATA_QUERY_INVALID(110023, "问数查询不合法: %s", HttpStatus.BAD_REQUEST),
+    ASK_DATA_DATASET_FORBIDDEN(110024, "无权查询该问数数据集", HttpStatus.FORBIDDEN),
+    ASK_RELATION_NOT_FOUND(110025, "问数关联不存在", HttpStatus.BAD_REQUEST),
+    ASK_DATA_TENANT_REQUIRED(110026, "问数租户隔离要求调用方提供 %s", HttpStatus.FORBIDDEN),
+
+    // ========== 自动化定时任务 ==========
+    AUTOMATION_JOB_NOT_FOUND(120001, "定时任务不存在", HttpStatus.BAD_REQUEST),
+    AUTOMATION_SCHEDULE_INVALID(120002, "调度配置不合法: %s", HttpStatus.BAD_REQUEST),
+    AUTOMATION_AGENT_INVALID(120003, "智能体不可用或不存在", HttpStatus.BAD_REQUEST);
 
     /** 业务错误码 */
     private final int code;

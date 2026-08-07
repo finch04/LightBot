@@ -5,8 +5,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
+import com.lightbot.constant.EnterpriseActors;
 import com.lightbot.dto.MemoryExtractDTO;
+import com.lightbot.dto.MemoryScope;
 import com.lightbot.dto.UserMemoryRequestDTO;
+import com.lightbot.vo.ExternalMemoryUserSummaryVO;
 import com.lightbot.vo.UserMemoryVO;
 import com.lightbot.vo.UserPreferenceVO;
 import com.lightbot.entity.UserMemory;
@@ -14,8 +17,10 @@ import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.UserMemoryStatus;
 import com.lightbot.enums.UserMemoryType;
 import com.lightbot.mapper.UserMemoryMapper;
+import com.lightbot.service.LongMemoryPolicyService;
 import com.lightbot.service.UserMemoryService;
 import com.lightbot.service.UserPreferenceService;
+import com.lightbot.vo.LongMemoryPolicyVO;
 import com.lightbot.util.TextNormalizeUtil;
 import com.lightbot.util.VectorUtil;
 import lombok.RequiredArgsConstructor;
@@ -52,9 +57,9 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
     private static final BigDecimal AUTO_MIN_CONFIDENCE = BigDecimal.valueOf(0.75);
     private static final int MAX_PROMPT_MEMORY_CHARS = 1500;
     private static final int MAX_USER_MEMORY_COUNT = 15;
-
     private final UserMemoryMapper userMemoryMapper;
     private final UserPreferenceService userPreferenceService;
+    private final LongMemoryPolicyService longMemoryPolicyService;
     private final ObjectMapper objectMapper;
     private final EmbeddingModel embeddingModel;
 
@@ -123,15 +128,24 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
     public UserMemoryVO saveFromTool(Long userId, Long agentId, Long sessionId, Long sourceMessageId,
                                      String memoryType, String content, List<String> keywords,
                                      BigDecimal confidence) {
-        if (userId == null) {
+        return saveFromTool(MemoryScope.platform(userId), agentId, sessionId, sourceMessageId,
+                memoryType, content, keywords, confidence);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserMemoryVO saveFromTool(MemoryScope scope, Long agentId, Long sessionId, Long sourceMessageId,
+                                     String memoryType, String content, List<String> keywords,
+                                     BigDecimal confidence) {
+        if (scope == null || !scope.isValid()) {
             throw new BizException(ErrorCode.UNAUTHORIZED);
         }
         if (content == null || content.isBlank()) {
             throw new BizException(ErrorCode.BAD_REQUEST);
         }
-        UserMemory memory = buildMemory(userId, agentId, sessionId, sourceMessageId,
+        UserMemory memory = buildMemory(scope, agentId, sessionId, sourceMessageId,
                 memoryType, content, keywords, confidence);
-        UserMemory existing = findSimilarMemory(userId, agentId, memory.getContent());
+        UserMemory existing = findSimilarMemory(scope, agentId, memory.getContent());
         if (existing != null) {
             existing.setContent(memory.getContent());
             existing.setMemoryType(memory.getMemoryType());
@@ -142,7 +156,7 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
             refreshEmbedding(existing);
             return UserMemoryVO.from(existing);
         }
-        pruneForNewMemory(userId);
+        pruneForNewMemory(scope);
         save(memory);
         refreshEmbedding(memory);
         return UserMemoryVO.from(memory);
@@ -150,23 +164,28 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
 
     @Override
     public List<UserMemory> searchForPrompt(Long userId, Long agentId, String query, int limit) {
-        if (userId == null || limit <= 0) {
+        return searchForPrompt(MemoryScope.platform(userId), agentId, query, limit);
+    }
+
+    @Override
+    public List<UserMemory> searchForPrompt(MemoryScope scope, Long agentId, String query, int limit) {
+        if (scope == null || !scope.isValid() || limit <= 0) {
             return List.of();
         }
         int safeLimit = Math.max(1, Math.min(limit, MAX_USER_MEMORY_COUNT));
-        List<UserMemory> semantic = searchSemanticSafely(userId, agentId, query, safeLimit);
+        List<UserMemory> semantic = searchSemanticSafely(scope, agentId, query, safeLimit);
         if (!semantic.isEmpty()) {
             markUsed(semantic);
             return semantic;
         }
 
         LambdaQueryWrapper<UserMemory> wrapper = new LambdaQueryWrapper<UserMemory>()
-                .eq(UserMemory::getUserId, userId)
                 .eq(UserMemory::getStatus, UserMemoryStatus.ACTIVE)
                 .orderByDesc(UserMemory::getConfidence)
                 .orderByDesc(UserMemory::getLastUsedAt)
                 .orderByDesc(UserMemory::getUpdateTime)
                 .last("LIMIT " + Math.max(safeLimit * 2, safeLimit));
+        applyScope(wrapper, scope);
         if (agentId != null) {
             wrapper.and(w -> w.isNull(UserMemory::getAgentId).or().eq(UserMemory::getAgentId, agentId));
         } else {
@@ -180,7 +199,12 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
 
     @Override
     public String buildMemoryPrompt(Long userId, Long agentId, String query, int limit) {
-        List<UserMemory> memories = searchForPrompt(userId, agentId, query, limit);
+        return buildMemoryPrompt(MemoryScope.platform(userId), agentId, query, limit);
+    }
+
+    @Override
+    public String buildMemoryPrompt(MemoryScope scope, Long agentId, String query, int limit) {
+        List<UserMemory> memories = searchForPrompt(scope, agentId, query, limit);
         if (memories.isEmpty()) {
             return "";
         }
@@ -201,33 +225,134 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
 
     @Override
     public void extractAsync(MemoryExtractDTO request) {
-        if (request == null || request.getUserId() == null || request.getUserMessage() == null) {
+        if (request == null || request.getUserMessage() == null) {
             return;
         }
-        UserPreferenceVO preferences = userPreferenceService.getPreferences(request.getUserId());
-        if (!Boolean.TRUE.equals(preferences.getLongMemoryEnabled())
-                || !Boolean.TRUE.equals(preferences.getLongMemoryAutoExtract())) {
+        MemoryScope scope = resolveExtractScope(request);
+        if (scope == null || !scope.isValid()) {
             return;
         }
-        if (Boolean.TRUE.equals(request.getMemorySaved())) {
-            log.debug("[UserMemory] 本轮已调用 memory_save，跳过自动记忆兜底: userId={}", request.getUserId());
-            return;
+        Long memoryAgentId = null;
+        if (scope.isExternal() || scope.isConsoleDebug()) {
+            // 开放 API / 控制台调试：按企业默认或 Key 覆盖策略
+            LongMemoryPolicyVO policy = longMemoryPolicyService.resolveEffective(scope.getApiKeyId());
+            if (!Boolean.TRUE.equals(policy.getEnabled()) || !Boolean.TRUE.equals(policy.getAutoExtract())) {
+                return;
+            }
+            if (Boolean.TRUE.equals(request.getMemorySaved())) {
+                log.debug("[UserMemory] 本轮已调用 memory_save，跳过自动记忆兜底: apiKeyId={}, externalUserId={}",
+                        scope.getApiKeyId(), scope.getExternalUserId());
+                return;
+            }
+            memoryAgentId = "agent".equalsIgnoreCase(policy.getScope()) ? request.getAgentId() : null;
+        } else {
+            UserPreferenceVO preferences = userPreferenceService.getPreferences(scope.getUserId());
+            if (!Boolean.TRUE.equals(preferences.getLongMemoryEnabled())
+                    || !Boolean.TRUE.equals(preferences.getLongMemoryAutoExtract())) {
+                return;
+            }
+            if (Boolean.TRUE.equals(request.getMemorySaved())) {
+                log.debug("[UserMemory] 本轮已调用 memory_save，跳过自动记忆兜底: userId={}", scope.getUserId());
+                return;
+            }
+            memoryAgentId = "agent".equalsIgnoreCase(preferences.getLongMemoryScope()) ? request.getAgentId() : null;
         }
         String userMessage = request.getUserMessage();
         String assistantReply = request.getAssistantReply() != null ? request.getAssistantReply() : "";
-        Long memoryAgentId = "agent".equalsIgnoreCase(preferences.getLongMemoryScope()) ? request.getAgentId() : null;
-        lightBotExecutor.execute(() -> autoExtract(request, memoryAgentId, userMessage, assistantReply));
+        Long finalAgentId = memoryAgentId;
+        lightBotExecutor.execute(() -> autoExtract(scope, request, finalAgentId, userMessage, assistantReply));
     }
 
-    private void autoExtract(MemoryExtractDTO request, Long memoryAgentId, String userMessage, String assistantReply) {
+    @Override
+    public boolean disableMemory(MemoryScope scope, Long memoryId) {
+        if (scope == null || !scope.isValid() || memoryId == null) {
+            return false;
+        }
+        UserMemory memory = getById(memoryId);
+        if (memory == null || !belongsToScope(memory, scope)) {
+            return false;
+        }
+        memory.setStatus(UserMemoryStatus.DISABLED);
+        updateById(memory);
+        return true;
+    }
+
+    @Override
+    public List<ExternalMemoryUserSummaryVO> listExternalUserSummaries(Long apiKeyId) {
+        if (apiKeyId == null) {
+            return List.of();
+        }
+        return userMemoryMapper.summarizeExternalUsers(apiKeyId);
+    }
+
+    @Override
+    public List<UserMemoryVO> listExternalMemories(Long apiKeyId, String externalUserId, String status, String keyword) {
+        if (apiKeyId == null) {
+            return List.of();
+        }
+        LambdaQueryWrapper<UserMemory> wrapper = new LambdaQueryWrapper<UserMemory>()
+                .eq(UserMemory::getApiKeyId, apiKeyId)
+                .isNotNull(UserMemory::getExternalUserId)
+                .ne(UserMemory::getExternalUserId, "")
+                .eq(externalUserId != null && !externalUserId.isBlank(),
+                        UserMemory::getExternalUserId, externalUserId != null ? externalUserId.trim() : null)
+                .eq(status != null && !status.isBlank(), UserMemory::getStatus, UserMemoryStatus.fromValue(status))
+                .orderByDesc(UserMemory::getUpdateTime)
+                .last("LIMIT 200");
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like(UserMemory::getContent, keyword.trim());
+        }
+        return list(wrapper).stream().map(UserMemoryVO::from).toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int clearExternalUserMemories(Long apiKeyId, String externalUserId) {
+        if (apiKeyId == null || externalUserId == null || externalUserId.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "apiKeyId 与 externalUserId 不能为空");
+        }
+        return baseMapper.delete(new LambdaQueryWrapper<UserMemory>()
+                .eq(UserMemory::getApiKeyId, apiKeyId)
+                .eq(UserMemory::getExternalUserId, externalUserId.trim()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteExternalMemory(Long apiKeyId, Long memoryId) {
+        if (apiKeyId == null || memoryId == null) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "参数不能为空");
+        }
+        UserMemory memory = getById(memoryId);
+        if (memory == null || memory.getApiKeyId() == null || !apiKeyId.equals(memory.getApiKeyId())) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "记忆不存在或不属于该 API Key");
+        }
+        removeById(memoryId);
+    }
+
+    private MemoryScope resolveExtractScope(MemoryExtractDTO request) {
+        if (request.getApiKeyId() != null
+                && request.getExternalUserId() != null
+                && !request.getExternalUserId().isBlank()) {
+            return MemoryScope.external(request.getApiKeyId(), request.getExternalUserId());
+        }
+        // 控制台调试：apiKeyId 为空时使用 debug_user_{userId}
+        if (request.getApiKeyId() == null && request.getUserId() != null) {
+            return MemoryScope.consoleDebug(request.getUserId());
+        }
+        return null;
+    }
+
+    private void autoExtract(MemoryScope scope, MemoryExtractDTO request, Long memoryAgentId,
+                             String userMessage, String assistantReply) {
         try {
             ExtractedMemory extracted = heuristicExtract(userMessage, assistantReply);
             if (extracted == null || extracted.confidence().compareTo(AUTO_MIN_CONFIDENCE) < 0) {
                 return;
             }
-            saveFromTool(request.getUserId(), memoryAgentId, request.getSessionId(), request.getSourceMessageId(),
+            saveFromTool(scope, memoryAgentId, request.getSessionId(), request.getSourceMessageId(),
                     extracted.memoryType().getCode(), extracted.content(), extracted.keywords(), extracted.confidence());
-            log.info("[UserMemory] 自动记忆已保存: userId={}, type={}", request.getUserId(), extracted.memoryType());
+            log.info("[UserMemory] 自动记忆已保存: scopeExternal={}, type={}",
+                    scope.isExternal(), extracted.memoryType());
         } catch (Exception e) {
             log.warn("[UserMemory] 自动记忆抽取失败: {}", e.getMessage());
         }
@@ -260,9 +385,28 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
     private UserMemory buildMemory(Long userId, Long agentId, Long sessionId, Long sourceMessageId,
                                    String memoryType, String content, List<String> keywords,
                                    BigDecimal confidence) {
+        return buildMemory(MemoryScope.platform(userId), agentId, sessionId, sourceMessageId,
+                memoryType, content, keywords, confidence);
+    }
+
+    private UserMemory buildMemory(MemoryScope scope, Long agentId, Long sessionId, Long sourceMessageId,
+                                   String memoryType, String content, List<String> keywords,
+                                   BigDecimal confidence) {
         String normalizedContent = normalizeContent(content);
         UserMemory memory = new UserMemory();
-        memory.setUserId(userId);
+        if (scope.isExternal()) {
+            memory.setUserId(EnterpriseActors.API_KEY);
+            memory.setApiKeyId(scope.getApiKeyId());
+            memory.setExternalUserId(scope.getExternalUserId());
+        } else if (scope.isConsoleDebug()) {
+            memory.setUserId(scope.getUserId());
+            memory.setApiKeyId(null);
+            memory.setExternalUserId(scope.getExternalUserId());
+        } else {
+            memory.setUserId(scope.getUserId());
+            memory.setApiKeyId(null);
+            memory.setExternalUserId(null);
+        }
         memory.setAgentId(agentId);
         memory.setSessionId(sessionId);
         memory.setSourceMessageId(sourceMessageId);
@@ -275,21 +419,48 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
         return memory;
     }
 
+    private void applyScope(LambdaQueryWrapper<UserMemory> wrapper, MemoryScope scope) {
+        if (scope.isExternal()) {
+            wrapper.eq(UserMemory::getApiKeyId, scope.getApiKeyId())
+                    .eq(UserMemory::getExternalUserId, scope.getExternalUserId());
+        } else if (scope.isConsoleDebug()) {
+            wrapper.eq(UserMemory::getUserId, scope.getUserId())
+                    .isNull(UserMemory::getApiKeyId)
+                    .eq(UserMemory::getExternalUserId, scope.getExternalUserId());
+        } else {
+            wrapper.eq(UserMemory::getUserId, scope.getUserId())
+                    .isNull(UserMemory::getApiKeyId);
+        }
+    }
+
+    private boolean belongsToScope(UserMemory memory, MemoryScope scope) {
+        if (scope.isExternal()) {
+            return scope.getApiKeyId().equals(memory.getApiKeyId())
+                    && scope.getExternalUserId().equals(memory.getExternalUserId());
+        }
+        if (scope.isConsoleDebug()) {
+            return scope.getUserId().equals(memory.getUserId())
+                    && memory.getApiKeyId() == null
+                    && scope.getExternalUserId().equals(memory.getExternalUserId());
+        }
+        return scope.getUserId().equals(memory.getUserId()) && memory.getApiKeyId() == null;
+    }
+
     private UserMemory getOwnedMemory(Long id, Long userId) {
         UserMemory memory = getById(id);
-        if (memory == null || !userId.equals(memory.getUserId())) {
+        if (memory == null || !userId.equals(memory.getUserId()) || memory.getApiKeyId() != null) {
             throw new BizException(ErrorCode.NOT_FOUND);
         }
         return memory;
     }
 
-    private UserMemory findSimilarMemory(Long userId, Long agentId, String content) {
+    private UserMemory findSimilarMemory(MemoryScope scope, Long agentId, String content) {
         String key = content.length() > 80 ? content.substring(0, 80) : content;
         LambdaQueryWrapper<UserMemory> wrapper = new LambdaQueryWrapper<UserMemory>()
-                .eq(UserMemory::getUserId, userId)
                 .eq(UserMemory::getStatus, UserMemoryStatus.ACTIVE)
                 .like(UserMemory::getContent, key)
                 .last("LIMIT 1");
+        applyScope(wrapper, scope);
         if (agentId != null) {
             wrapper.and(w -> w.isNull(UserMemory::getAgentId).or().eq(UserMemory::getAgentId, agentId));
         } else {
@@ -300,8 +471,13 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
     }
 
     private void pruneForNewMemory(Long userId) {
-        List<UserMemory> existing = list(new LambdaQueryWrapper<UserMemory>()
-                .eq(UserMemory::getUserId, userId));
+        pruneForNewMemory(MemoryScope.platform(userId));
+    }
+
+    private void pruneForNewMemory(MemoryScope scope) {
+        LambdaQueryWrapper<UserMemory> wrapper = new LambdaQueryWrapper<>();
+        applyScope(wrapper, scope);
+        List<UserMemory> existing = list(wrapper);
         int overflow = existing.size() - MAX_USER_MEMORY_COUNT + 1;
         if (overflow <= 0) {
             return;
@@ -344,14 +520,23 @@ public class UserMemoryServiceImpl extends ServiceImpl<UserMemoryMapper, UserMem
         return time != null ? time : LocalDateTime.MIN;
     }
 
-    private List<UserMemory> searchSemanticSafely(Long userId, Long agentId, String query, int limit) {
+    private List<UserMemory> searchSemanticSafely(MemoryScope scope, Long agentId, String query, int limit) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
         try {
             float[] vector = embeddingModel.call(new EmbeddingRequest(List.of(query), null))
                     .getResult().getOutput();
-            return userMemoryMapper.searchSemantic(userId, agentId, VectorUtil.toVectorString(vector), limit);
+            String vectorStr = VectorUtil.toVectorString(vector);
+            if (scope.isExternal()) {
+                return userMemoryMapper.searchSemanticExternal(
+                        scope.getApiKeyId(), scope.getExternalUserId(), agentId, vectorStr, limit);
+            }
+            if (scope.isConsoleDebug()) {
+                return userMemoryMapper.searchSemanticConsole(
+                        scope.getUserId(), scope.getExternalUserId(), agentId, vectorStr, limit);
+            }
+            return userMemoryMapper.searchSemantic(scope.getUserId(), agentId, vectorStr, limit);
         } catch (Exception e) {
             log.debug("[UserMemory] 语义检索不可用，降级为关键词排序: {}", e.getMessage());
             return List.of();

@@ -106,6 +106,19 @@ public interface EmbeddingMapper extends BaseMapper<Embedding> {
     void batchInsertVectors(@Param("vectors") List<Map<String, Object>> vectors);
 
     /**
+     * 按 chunk_id 列表删除向量（批量写入前幂等清理）
+     *
+     * @param chunkIds 分块ID列表
+     */
+    @Delete("<script>" +
+            "DELETE FROM embedding WHERE chunk_id IN " +
+            "<foreach collection='chunkIds' item='id' open='(' separator=',' close=')'>" +
+            "#{id}" +
+            "</foreach>" +
+            "</script>")
+    void deleteByChunkIds(@Param("chunkIds") List<Long> chunkIds);
+
+    /**
      * 删除指定知识库的所有向量
      *
      * @param knowledgeId 知识库ID

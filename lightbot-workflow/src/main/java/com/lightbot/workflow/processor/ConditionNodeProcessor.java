@@ -14,7 +14,10 @@ import java.util.Map;
 
 /**
  * 条件分支节点处理器
- * <p>支持 conditionGroups（条件组 + 规则）与画布出口 sourceHandle 联动</p>
+ * <p>
+ * 按 conditionGroups 顺序匹配；命中走 {@code {nodeId}_{groupId}} 出口；
+ * 均未命中走 {@code {nodeId}_default} 兜底出口。
+ * </p>
  *
  * @author finch
  * @since 2026-05-24
@@ -22,6 +25,8 @@ import java.util.Map;
 @Slf4j
 @Component
 public class ConditionNodeProcessor implements NodeProcessor {
+
+    private static final String DEFAULT_HANDLE_SUFFIX = "_default";
 
     @Override
     public NodeType getType() {
@@ -33,8 +38,8 @@ public class ConditionNodeProcessor implements NodeProcessor {
     public NodeExecutionResult execute(NodeExecutionContext context) {
         Map<String, Object> nodeData = context.getCurrentNodeData();
         Map<String, Object> variables = context.getVariables();
+        String nodeId = context.getCurrentNodeId();
 
-        // 1. 优先 conditionGroups（与前端条件组 UI 对齐）
         if (nodeData != null) {
             List<Map<String, Object>> groups = (List<Map<String, Object>>) nodeData.get("conditionGroups");
             if (groups != null && !groups.isEmpty()) {
@@ -43,53 +48,44 @@ public class ConditionNodeProcessor implements NodeProcessor {
                     if (rules == null || rules.isEmpty()) {
                         continue;
                     }
-                    if (evaluateGroup(group, variables)) {
-                        String handle = group.get("sourceHandle") != null
-                                ? group.get("sourceHandle").toString()
-                                : null;
-                        String next = resolveTargetByHandle(context, handle);
-                        log.info("[ConditionNodeProcessor] 条件组命中: nodeId={}, handle={}, next={}",
-                                context.getCurrentNodeId(), handle, next);
-                        return routeResult(context, next, handle, resolveGroupLabel(group));
+                    if (!evaluateGroup(group, variables)) {
+                        continue;
                     }
+                    String handle = resolveGroupHandle(nodeId, group);
+                    String next = resolveTargetByHandle(context, handle);
+                    log.info("[ConditionNodeProcessor] 条件组命中: nodeId={}, handle={}, next={}",
+                            nodeId, handle, next);
+                    return routeResult(context, next, handle, resolveGroupLabel(group));
                 }
-                // 否则分支：out_c 或最后一条出边
-                String elseNext = resolveTargetByHandle(context, "out_c");
+                // 均未命中 → 默认兜底口
+                String defaultHandle = defaultHandleId(nodeId);
+                String elseNext = resolveTargetByHandle(context, defaultHandle);
                 if (elseNext == null) {
                     elseNext = resolveDefaultOutEdge(context);
                 }
-                return routeResult(context, elseNext, "out_c", "否则");
+                return routeResult(context, elseNext, defaultHandle, "都未命中");
             }
         }
 
-        // 2. 兼容旧 branches 配置
-        if (nodeData != null) {
-            List<Map<String, Object>> branches = (List<Map<String, Object>>) nodeData.get("branches");
-            if (branches != null && !branches.isEmpty()) {
-                for (Map<String, Object> branch : branches) {
-                    String condition = branch.get("condition") != null ? branch.get("condition").toString() : null;
-                    if (condition == null || condition.isBlank()) {
-                        continue;
-                    }
-                    if (evaluateConditionExpression(condition, variables)) {
-                        String handle = branch.get("sourceHandle") != null
-                                ? branch.get("sourceHandle").toString()
-                                : null;
-                        String target = branch.get("targetNodeId") != null
-                                ? branch.get("targetNodeId").toString()
-                                : null;
-                        if (target == null || target.isBlank()) {
-                            target = resolveTargetByHandle(context, handle);
-                        }
-                        return routeResult(context, target, handle, branch.get("label") != null
-                                ? branch.get("label").toString() : handle);
-                    }
-                }
-            }
+        String defaultHandle = defaultHandleId(nodeId);
+        String defaultNext = resolveTargetByHandle(context, defaultHandle);
+        if (defaultNext == null) {
+            defaultNext = resolveDefaultOutEdge(context);
         }
+        return routeResult(context, defaultNext, defaultHandle, "都未命中");
+    }
 
-        String defaultNext = resolveDefaultOutEdge(context);
-        return routeResult(context, defaultNext, null, "默认");
+    private String resolveGroupHandle(String nodeId, Map<String, Object> group) {
+        Object id = group.get("id");
+        if (id != null && !String.valueOf(id).isBlank()) {
+            return nodeId + "_" + id;
+        }
+        // 无 id 时退化为顺序无关的不可用口，避免误连
+        return nodeId + "_unknown";
+    }
+
+    private String defaultHandleId(String nodeId) {
+        return nodeId + DEFAULT_HANDLE_SUFFIX;
     }
 
     private NodeExecutionResult routeResult(NodeExecutionContext context, String nextNodeId,
@@ -116,8 +112,8 @@ public class ConditionNodeProcessor implements NodeProcessor {
         if (label != null && !String.valueOf(label).isBlank()) {
             return String.valueOf(label);
         }
-        Object handle = group.get("sourceHandle");
-        return handle != null ? String.valueOf(handle) : null;
+        Object id = group.get("id");
+        return id != null ? String.valueOf(id) : null;
     }
 
     @SuppressWarnings("unchecked")
@@ -179,7 +175,7 @@ public class ConditionNodeProcessor implements NodeProcessor {
 
     private String resolveTargetByHandle(NodeExecutionContext context, String sourceHandle) {
         if (sourceHandle == null || sourceHandle.isBlank()) {
-            return resolveDefaultOutEdge(context);
+            return null;
         }
         List<WorkflowEdge> outEdges = context.getWorkflow().getOutEdges(context.getCurrentNodeId());
         for (WorkflowEdge edge : outEdges) {
@@ -193,73 +189,5 @@ public class ConditionNodeProcessor implements NodeProcessor {
     private String resolveDefaultOutEdge(NodeExecutionContext context) {
         List<WorkflowEdge> outEdges = context.getWorkflow().getOutEdges(context.getCurrentNodeId());
         return outEdges.isEmpty() ? null : outEdges.get(0).getTarget();
-    }
-
-    private boolean evaluateConditionExpression(String condition, Map<String, Object> variables) {
-        if (variables == null || condition == null) {
-            return false;
-        }
-        try {
-            condition = condition.trim();
-            if (condition.contains(" AND ")) {
-                String[] parts = condition.split(" AND ");
-                for (String part : parts) {
-                    if (!evaluateConditionExpression(part.trim(), variables)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            if (condition.contains(" OR ")) {
-                String[] parts = condition.split(" OR ");
-                for (String part : parts) {
-                    if (evaluateConditionExpression(part.trim(), variables)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            if (condition.contains("==")) {
-                String[] parts = condition.split("==", 2);
-                String varName = resolveVariableKey(parts[0].trim());
-                String expectedValue = parts[1].trim();
-                Object actualValue = variables.get(varName);
-                return expectedValue.equals(String.valueOf(actualValue));
-            }
-            if (condition.contains("!=")) {
-                String[] parts = condition.split("!=", 2);
-                String varName = resolveVariableKey(parts[0].trim());
-                String expectedValue = parts[1].trim();
-                Object actualValue = variables.get(varName);
-                return !expectedValue.equals(String.valueOf(actualValue));
-            }
-            if (condition.contains("not_contains")) {
-                String[] parts = condition.split("not_contains", 2);
-                String varName = resolveVariableKey(parts[0].trim());
-                String searchValue = parts[1].trim();
-                Object actualValue = variables.get(varName);
-                if (actualValue == null) {
-                    return true;
-                }
-                return !String.valueOf(actualValue).contains(searchValue);
-            }
-            if (condition.contains("contains")) {
-                String[] parts = condition.split("contains", 2);
-                String varName = resolveVariableKey(parts[0].trim());
-                String searchValue = parts[1].trim();
-                Object actualValue = variables.get(varName);
-                if (actualValue == null) {
-                    return false;
-                }
-                return String.valueOf(actualValue).contains(searchValue);
-            }
-            if (variables.containsKey(condition)) {
-                Object value = variables.get(condition);
-                return Boolean.TRUE.equals(value) || "true".equals(String.valueOf(value));
-            }
-        } catch (Exception e) {
-            log.warn("[ConditionNodeProcessor] 条件评估失败: condition={}, error={}", condition, e.getMessage());
-        }
-        return false;
     }
 }

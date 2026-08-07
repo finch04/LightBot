@@ -50,14 +50,14 @@ export const DEBUG_PRESETS = [
     label: '知识库检索 + 正文',
     message: {
       role: 'assistant',
-      content: '根据知识库检索结果，LightBot 支持 RAG 与工作流编排。',
+      content: '根据知识库检索结果，智元 支持 RAG 与工作流编排。',
       metadata: {
         toolEvents: [
           {
             type: 'tool_call',
             toolName: 'query_knowledge',
             displayName: getToolDisplayName('query_knowledge'),
-            args: JSON.stringify({ query: 'LightBot 功能' }),
+            args: JSON.stringify({ query: '智元 功能' }),
             contentOffset: 0,
           },
           {
@@ -254,7 +254,7 @@ export const DEBUG_PRESETS = [
     label: 'SubAgent 委派',
     message: {
       role: 'assistant',
-      content: '主 Agent 已完成分析，SubAgent 检索结果如下：\n\n根据检索，LightBot 支持 RAG 与工作流编排。',
+      content: '主 Agent 已完成分析，SubAgent 检索结果如下：\n\n根据检索，智元 支持 RAG 与工作流编排。',
       metadata: {
         toolEvents: [
           {
@@ -278,12 +278,12 @@ export const DEBUG_PRESETS = [
             toolName: 'web_search',
             delegationIndex: 0,
             contentOffset: 0,
-            result: JSON.stringify({ results: [{ title: 'LightBot', snippet: 'Java AI Agent 平台' }] }),
+            result: JSON.stringify({ results: [{ title: '智元', snippet: 'Java AI Agent 平台' }] }),
           },
           {
             type: 'subagent_token',
             subagentName: 'research-agent',
-            content: '根据检索，LightBot 支持 RAG 与工作流编排。',
+            content: '根据检索，智元 支持 RAG 与工作流编排。',
             delegationIndex: 0,
             contentOffset: 0,
           },
@@ -293,7 +293,7 @@ export const DEBUG_PRESETS = [
             success: true,
             delegationIndex: 0,
             contentOffset: 0,
-            result: '根据检索，LightBot 支持 RAG 与工作流编排。',
+            result: '根据检索，智元 支持 RAG 与工作流编排。',
           },
         ],
         workflowEvents: [],
@@ -348,12 +348,12 @@ export const DEBUG_PRESETS = [
             delegationIndex: 0,
             contentOffset: 0,
             tasks: [
-              { task_index: 0, task_id: 'subagent_task_debug_research', subagent_name: 'research-agent', task: '检索 LightBot 的核心能力并用 Markdown 总结。' },
+              { task_index: 0, task_id: 'subagent_task_debug_research', subagent_name: 'research-agent', task: '检索 智元 的核心能力并用 Markdown 总结。' },
               { task_index: 1, task_id: 'subagent_task_debug_arch', subagent_name: 'architect-agent', task: '给出模块职责和依赖关系。' },
             ],
           },
           { type: 'subagent_task_start', batch_id: 'subagent_batch_debug_001', task_id: 'subagent_task_debug_research', task_index: 0, subagentName: 'research-agent', contentOffset: 0, delegationIndex: 0 },
-          { type: 'subagent_tool_call', batch_id: 'subagent_batch_debug_001', task_id: 'subagent_task_debug_research', task_index: 0, subagentName: 'research-agent', displayName: '研究助手', toolName: 'web_search', toolDisplayName: '联网搜索', args: '{"query":"LightBot 核心能力"}', contentOffset: 0, delegationIndex: 0 },
+          { type: 'subagent_tool_call', batch_id: 'subagent_batch_debug_001', task_id: 'subagent_task_debug_research', task_index: 0, subagentName: 'research-agent', displayName: '研究助手', toolName: 'web_search', toolDisplayName: '联网搜索', args: '{"query":"智元 核心能力"}', contentOffset: 0, delegationIndex: 0 },
           { type: 'subagent_token', batch_id: 'subagent_batch_debug_001', task_id: 'subagent_task_debug_research', task_index: 0, subagentName: 'research-agent', content: '## 核心能力\n\n- Agent 对话\n- **RAG** 知识库\n- 工作流编排', contentOffset: 0, delegationIndex: 0 },
           { type: 'subagent_task_done', batch_id: 'subagent_batch_debug_001', task_id: 'subagent_task_debug_research', task_index: 0, subagentName: 'research-agent', contentOffset: 0, delegationIndex: 0, result: { status: 'completed', reply: '## 核心能力\n\n- Agent 对话\n- **RAG** 知识库\n- 工作流编排' } },
           { type: 'subagent_task_done', batch_id: 'subagent_batch_debug_001', task_id: 'subagent_task_debug_arch', task_index: 1, subagentName: 'architect-agent', contentOffset: 0, delegationIndex: 0, result: { status: 'completed', reply: '## 模块分层\n\n`server → agent → tool`' } },

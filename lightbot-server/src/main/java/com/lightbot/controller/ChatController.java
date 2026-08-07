@@ -15,6 +15,7 @@ import com.lightbot.service.MessageFeedbackService;
 import com.lightbot.service.chat.ChatStreamSseHelper;
 import com.lightbot.service.chat.SseEventBuffer;
 import jakarta.validation.Valid;
+import com.lightbot.constant.EnterpriseActors;
 import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.service.ChatAttachmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,7 +47,9 @@ public class ChatController {
 
     @Operation(summary = "同步对话")
     @PostMapping
-    public Result<String> chat(@Valid @RequestBody ChatRequestDTO request) {
+    public Result<String> chat(@Valid @RequestBody ChatRequestDTO request,
+                               jakarta.servlet.http.HttpServletRequest httpRequest) {
+        injectApiKey(request, httpRequest);
         return Result.ok(chatService.chat(request));
     }
 
@@ -59,20 +62,31 @@ public class ChatController {
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@Valid @RequestBody ChatRequestDTO request,
                                  jakarta.servlet.http.HttpServletRequest httpRequest) {
-        // 注入 API Key ID（如有），用于 Token 配额扣减
+        injectApiKey(request, httpRequest);
+        Long userId = resolveChatActorId(httpRequest, request.getApiKeyId());
+        Flux<String> flux = chatService.chatStream(request);
+        return chatStreamSseHelper.subscribe(flux, userId);
+    }
+
+    private void injectApiKey(ChatRequestDTO request, jakarta.servlet.http.HttpServletRequest httpRequest) {
         Object apiKeyAttr = httpRequest.getAttribute(ApiKeyAuthInterceptor.ATTR_API_KEY_ENTITY);
         if (apiKeyAttr instanceof com.lightbot.entity.ApiKey apiKey) {
             request.setApiKeyId(apiKey.getId());
         }
-        // 当前 userId（API Key 路径无 Sa-Token session 时为 null，仅影响断线重连缓冲归属校验）
-        Long userId;
-        try {
-            userId = StpUtil.getLoginIdAsLong();
-        } catch (Exception ignored) {
-            userId = null;
+    }
+
+    /**
+     * 对话归属身份：企业 API Key → 虚拟身份；否则登录用户
+     */
+    private Long resolveChatActorId(jakarta.servlet.http.HttpServletRequest httpRequest, Long apiKeyId) {
+        if (apiKeyId != null || httpRequest.getAttribute(ApiKeyAuthInterceptor.ATTR_API_KEY_USER_ID) != null) {
+            return EnterpriseActors.API_KEY;
         }
-        Flux<String> flux = chatService.chatStream(request);
-        return chatStreamSseHelper.subscribe(flux, userId);
+        try {
+            return StpUtil.getLoginIdAsLong();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -82,9 +96,12 @@ public class ChatController {
      */
     @Operation(summary = "SSE断线重连")
     @PostMapping("/reconnect")
-    public Result<Map<String, Object>> reconnect(@Valid @RequestBody ReconnectDTO req) {
-        Long userId;
-        try { userId = StpUtil.getLoginIdAsLong(); } catch (Exception e) { return Result.fail(401, "未登录"); }
+    public Result<Map<String, Object>> reconnect(@Valid @RequestBody ReconnectDTO req,
+                                                 jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = resolveChatActorId(httpRequest, null);
+        if (userId == null) {
+            return Result.fail(401, "未登录");
+        }
 
         SseEventBuffer.ReconnectResult result = eventBuffer.getReconnectData(
                 req.getRequestId(), req.getLastEventId(), userId);
@@ -111,8 +128,12 @@ public class ChatController {
 
     @Operation(summary = "停止流式对话")
     @PostMapping("/stream/stop")
-    public Result<Void> stopStream(@RequestParam String requestId) {
-        long userId = StpUtil.getLoginIdAsLong();
+    public Result<Void> stopStream(@RequestParam String requestId,
+                                   jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = resolveChatActorId(httpRequest, null);
+        if (userId == null) {
+            return Result.fail(401, "未登录");
+        }
         chatService.stopStream(requestId, userId);
         return Result.ok();
     }

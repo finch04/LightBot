@@ -3,7 +3,12 @@
     <div class="page-header">
       <h2>会话管理</h2>
       <div class="page-header-right">
-        <button class="btn-outline" @click="starredOpen = true">
+        <a-radio-group v-model:value="sessionScope" button-style="solid" size="small" @change="handleScopeChange">
+          <a-radio-button value="platform">调试会话</a-radio-button>
+          <a-radio-button value="api">API 集成</a-radio-button>
+          <a-radio-button value="automation">自动化</a-radio-button>
+        </a-radio-group>
+        <button v-if="sessionScope === 'platform'" class="btn-outline" @click="starredOpen = true">
           <StarOutlined /> 收藏消息
         </button>
         <a-input
@@ -18,7 +23,7 @@
           <ReloadOutlined :spin="loading" /> 刷新
         </button>
         <a-popconfirm
-          v-if="selectedRowKeys.length > 0"
+          v-if="canBatchDelete && selectedRowKeys.length > 0"
           placement="topLeft"
           :title="`确认删除选中的 ${selectedRowKeys.length} 个会话？`"
           ok-text="确认删除"
@@ -38,7 +43,7 @@
       :columns="columns"
       :data-source="sessions"
       :pagination="pagination"
-      :row-selection="{ selectedRowKeys, onChange: onSelectChange }"
+      :row-selection="canBatchDelete ? { selectedRowKeys, onChange: onSelectChange } : undefined"
       @change="handleTableChange"
       row-key="id"
       size="middle"
@@ -69,7 +74,7 @@
             <a-button type="link" size="small" @click="openDetail(record)">
               <EyeOutlined /> 详情
             </a-button>
-            <a-button type="link" size="small" @click="goToChat(record)">
+            <a-button v-if="sessionScope === 'platform'" type="link" size="small" @click="goToChat(record)">
               <MessageOutlined /> 前往对话
             </a-button>
           </a-space>
@@ -115,14 +120,14 @@
               </button>
             </a-tooltip>
           </div>
-          <button v-if="selectedMsgKeys.length > 0" class="btn-msg-delete" @click="confirmDeleteMessages">
+          <button v-if="canDeleteMessages && selectedMsgKeys.length > 0" class="btn-msg-delete" @click="confirmDeleteMessages">
             <DeleteOutlined /> 删除 ({{ selectedMsgKeys.length }})
           </button>
         </div>
         <a-spin :spinning="messagesLoading">
           <div v-if="detailMessages.length === 0 && !messagesLoading" class="detail-messages-empty">暂无消息</div>
           <div v-else class="detail-messages-list">
-            <a-checkbox-group v-model:value="selectedMsgKeys" class="msg-checkbox-group">
+            <a-checkbox-group v-if="canDeleteMessages" v-model:value="selectedMsgKeys" class="msg-checkbox-group">
               <div v-for="(msg, i) in detailMessages" :key="msg.id || i" class="detail-msg" :class="msg.role">
                 <a-checkbox :value="msg.id" class="msg-checkbox" />
                 <div class="msg-body" @click="goToChatMsg(msg)" style="cursor:pointer;">
@@ -145,6 +150,28 @@
                 </div>
               </div>
             </a-checkbox-group>
+            <template v-else>
+              <div v-for="(msg, i) in detailMessages" :key="msg.id || i" class="detail-msg" :class="msg.role">
+                <div class="msg-body" @click="goToChatMsg(msg)" style="cursor:pointer;">
+                  <div class="detail-msg-role">
+                    {{ roleLabels[msg.role] || msg.role }}
+                    <a-tooltip title="查看元数据">
+                      <button class="btn-msg-meta" @click.stop="openMsgMeta(msg)">
+                        <CodeOutlined />
+                      </button>
+                    </a-tooltip>
+                  </div>
+                  <div class="detail-msg-content">
+                    <MentionTextRenderer
+                      v-if="msg.role === 'user' && shouldShowDetailMentions(msg)"
+                      :content="msg.content"
+                      :mentions="getDetailMentions(msg)"
+                    />
+                    <template v-else>{{ msg.content }}</template>
+                  </div>
+                </div>
+              </div>
+            </template>
             <div v-if="hasMoreMessages" class="detail-load-more">
               <a-button size="small" :loading="loadingOlder" @click="loadOlderMessages">
                 加载更早的消息
@@ -189,22 +216,31 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ReloadOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, MessageOutlined, CodeOutlined, PushpinFilled, StarOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { getSessions, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
+import { getSessions, getApiSessions, getAutomationSessions, getSession, getSessionMessages, deleteSessionsBatch, deleteMessage, searchMessages } from '../api/chatSession'
 import { formatTime } from '../utils/format'
 import StarredMessages from './StarredMessages.vue'
 import MentionTextRenderer from '../components/MentionTextRenderer.vue'
 import { contentHasMentionTokens, parseMentionsFromMetadata, resolveMentionsForDisplay } from '../utils/mention_utils'
+import { useUserStore } from '../stores/user'
 
+const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const sessions = ref([])
 const searchText = ref('')
 const selectedRowKeys = ref([])
+const sessionScope = ref('platform')
+const isAdmin = computed(() => userStore.user?.role === 'admin')
+/** 调试会话本人可删；API / 自动化会话仅管理员可删 */
+const canBatchDelete = computed(() => sessionScope.value === 'platform' || isAdmin.value)
+/** 消息删除仅平台调试会话；API / 自动化为排障只读（管理员可清会话） */
+const canDeleteMessages = computed(() => sessionScope.value === 'platform' || isAdmin.value)
 
 const starredOpen = ref(false)
 
@@ -270,7 +306,14 @@ async function loadData() {
       pageSize: pagination.pageSize,
     }
     if (searchText.value) params.keyword = searchText.value
-    const res = await getSessions(params)
+    let res
+    if (sessionScope.value === 'api') {
+      res = await getApiSessions(params)
+    } else if (sessionScope.value === 'automation') {
+      res = await getAutomationSessions(params)
+    } else {
+      res = await getSessions(params)
+    }
     sessions.value = res.data?.records || []
     pagination.total = res.data?.total || 0
   } catch {
@@ -278,6 +321,12 @@ async function loadData() {
   } finally {
     loading.value = false
   }
+}
+
+function handleScopeChange() {
+  selectedRowKeys.value = []
+  pagination.current = 1
+  loadData()
 }
 
 function handleRefresh() {
@@ -405,6 +454,11 @@ function goToChat(record) {
 
 function goToChatMsg(msg) {
   if (!detailSession.value?.id) return
+  // API / 自动化会话仅在本页排障，不进入可编辑对话页
+  if (sessionScope.value !== 'platform') {
+    message.info('集成/自动化会话为只读排障，请直接在此查看消息')
+    return
+  }
   Modal.confirm({
     title: '跳转确认',
     content: '即将离开当前页面并跳转到对应会话，是否继续？',
@@ -468,8 +522,23 @@ function formatTokens(tokens) {
   return String(tokens)
 }
 
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  const scope = route.query.scope
+  if (scope === 'api' || scope === 'automation' || scope === 'platform') {
+    sessionScope.value = scope
+  }
+  await loadData()
+  // Observability 等入口：打开指定会话详情（API/自动化只读排障）
+  const sid = route.query.sessionId
+  if (sid) {
+    try {
+      const res = await getSession(sid)
+      if (res.data) openDetail(res.data)
+    } catch {
+      // interceptor handled
+    }
+    router.replace({ path: '/app/sessions', query: { scope: sessionScope.value } })
+  }
 })
 
 onUnmounted(() => {

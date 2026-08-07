@@ -4,14 +4,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lightbot.common.Result;
 import com.lightbot.dto.IngestDTO;
 import com.lightbot.dto.DifyKnowledgeConfigDTO;
-import com.lightbot.vo.KnowledgeMemberVO;
 import com.lightbot.dto.KnowledgeSaveDTO;
 import com.lightbot.entity.Document;
 import com.lightbot.entity.Knowledge;
 import com.lightbot.vo.DifyConnectionTestVO;
-import com.lightbot.enums.KnowledgeRole;
 import com.lightbot.service.DocumentService;
-import com.lightbot.service.KnowledgeMemberService;
 import com.lightbot.service.KnowledgeService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,13 +23,13 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 
 /**
- * 知识库管理接口（CRUD、成员管理、配置、思维导图、示例问题）
+ * 知识库管理接口（CRUD、配置、思维导图、示例问题）
  *
  * @author finch
  * @since 2026-05-19
  */
 @Slf4j
-@Tag(name = "知识库管理", description = "知识库CRUD、成员管理、配置、思维导图、示例问题")
+@Tag(name = "知识库管理", description = "企业知识库 CRUD、配置、思维导图、示例问题")
 @RestController
 @RequestMapping("/api/knowledge")
 @RequiredArgsConstructor
@@ -40,7 +37,6 @@ public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
     private final DocumentService documentService;
-    private final KnowledgeMemberService knowledgeMemberService;
     @Qualifier("lightBotExecutor")
     private final Executor lightBotExecutor;
 
@@ -52,13 +48,13 @@ public class KnowledgeController {
         return Result.ok(knowledgeService.create(request));
     }
 
-    @Operation(summary = "更新知识库（需要MANAGER及以上权限）")
+    @Operation(summary = "更新知识库")
     @PutMapping
     public Result<Knowledge> update(@Valid @RequestBody KnowledgeSaveDTO request) {
         return Result.ok(knowledgeService.update(request));
     }
 
-    @Operation(summary = "分页查询当前用户有权限的知识库")
+    @Operation(summary = "分页查询企业知识库")
     @GetMapping
     public Result<Page<Knowledge>> list(
             @RequestParam(defaultValue = "1") int pageNum,
@@ -67,50 +63,17 @@ public class KnowledgeController {
         return Result.ok(knowledgeService.listMyKnowledge(pageNum, pageSize, name));
     }
 
-    @Operation(summary = "获取知识库详情（需要成员权限）")
+    @Operation(summary = "获取知识库详情")
     @GetMapping("/{id}")
     public Result<Knowledge> getById(@PathVariable Long id) {
         return Result.ok(knowledgeService.getByIdWithPermission(id));
     }
 
-    @Operation(summary = "删除知识库（仅CREATOR）")
+    @Operation(summary = "删除知识库")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         knowledgeService.deleteById(id);
         return Result.ok();
-    }
-
-    // ========== 成员管理 ==========
-
-    @Operation(summary = "添加成员（需要MANAGER及以上权限）")
-    @PostMapping("/{id}/members")
-    public Result<Void> addMember(@PathVariable Long id,
-                                   @RequestParam Long userId,
-                                   @RequestParam(defaultValue = "viewer") String role) {
-        knowledgeMemberService.addMember(id, userId, KnowledgeRole.fromValue(role));
-        return Result.ok();
-    }
-
-    @Operation(summary = "更新成员角色（需要MANAGER及以上权限）")
-    @PutMapping("/{id}/members/{userId}")
-    public Result<Void> updateMemberRole(@PathVariable Long id,
-                                          @PathVariable Long userId,
-                                          @RequestParam String role) {
-        knowledgeMemberService.updateMemberRole(id, userId, KnowledgeRole.fromValue(role));
-        return Result.ok();
-    }
-
-    @Operation(summary = "移除成员（需要MANAGER及以上权限）")
-    @DeleteMapping("/{id}/members/{userId}")
-    public Result<Void> removeMember(@PathVariable Long id, @PathVariable Long userId) {
-        knowledgeMemberService.removeMember(id, userId);
-        return Result.ok();
-    }
-
-    @Operation(summary = "获取知识库成员列表（需要成员权限）")
-    @GetMapping("/{id}/members")
-    public Result<List<KnowledgeMemberVO>> listMembers(@PathVariable Long id) {
-        return Result.ok(knowledgeMemberService.listMemberVOs(id));
     }
 
     // ========== 配置 ==========
@@ -127,7 +90,7 @@ public class KnowledgeController {
         return Result.ok(knowledgeService.getQueryParams(id));
     }
 
-    @Operation(summary = "更新知识库检索配置（需要MANAGER及以上权限）")
+    @Operation(summary = "更新知识库检索配置")
     @PutMapping("/{id}/query-params")
     public Result<Void> updateQueryParams(@PathVariable Long id,
                                            @RequestBody Map<String, Object> params) {
@@ -153,7 +116,7 @@ public class KnowledgeController {
         return Result.ok(knowledgeService.testDifyConnection(config));
     }
 
-    @Operation(summary = "全量重算知识库统计信息（需要成员权限）")
+    @Operation(summary = "全量重算知识库统计信息")
     @PostMapping("/{id}/stats/refresh")
     public Result<Void> refreshStats(@PathVariable Long id) {
         knowledgeService.refreshStats(id);

@@ -999,7 +999,7 @@ onUnmounted(() => {
 .standalone-graph-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: var(--app-content-height);
   overflow: hidden;
   background: var(--color-canvas-soft);
   position: relative;

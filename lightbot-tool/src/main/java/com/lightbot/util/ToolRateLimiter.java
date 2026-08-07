@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 工具维度限流器
- * <p>按 (userId, toolName) 维度对工具调用做固定窗口限流。
- * Redis Key 形如 {@code tool:rate:{userId}:{toolName}:{windowStart}}，
+ * <p>按 (subject, toolName) 维度对工具调用做固定窗口限流。
+ * Redis Key 形如 {@code tool:rate:{subject}:{toolName}:{windowStart}}，
  * 其中 {@code windowStart} 是窗口起点 epoch 秒（按窗口大小对齐），
  * 窗口结束时 key 自然过期。</p>
  *
@@ -30,42 +30,48 @@ public class ToolRateLimiter {
     private final ObjectMapper objectMapper;
 
     /**
-     * 尝试获取一次调用配额
+     * 尝试获取一次调用配额（按用户 ID）
      *
-     * @param userId           当前用户 ID（系统级调用传 0）
-     * @param toolName         工具标识
-     * @param rateLimitConfig  {@code {"limit":N,"window":"MINUTE|HOUR|DAY"}}
+     * @param userId          当前用户 ID（系统级调用传 0）
+     * @param toolName        工具标识
+     * @param rateLimitConfig {@code {"limit":N,"window":"MINUTE|HOUR|DAY"}}
      * @return true=允许调用，false=已超阈值
      */
     public boolean tryAcquire(Long userId, String toolName, String rateLimitConfig) {
+        return tryAcquire("u:" + (userId != null ? userId : 0L), toolName, rateLimitConfig);
+    }
+
+    /**
+     * 尝试获取一次调用配额（按任意主体，如企业 API Key：{@code k:{apiKeyId}}）
+     *
+     * @param subject         限流主体
+     * @param toolName        工具标识
+     * @param rateLimitConfig 限流配置 JSON
+     * @return true=允许调用，false=已超限额
+     */
+    public boolean tryAcquire(String subject, String toolName, String rateLimitConfig) {
         RateLimitConfig cfg = parse(rateLimitConfig);
         if (cfg == null) {
             return true;
         }
+        String safeSubject = (subject == null || subject.isBlank()) ? "u:0" : subject;
         long windowSeconds = cfg.window.toSeconds();
         long windowStart = alignToWindowStart(windowSeconds);
-        // Key 包含窗口起点，新窗口开始时自动从 0 计数
-        String key = KEY_PREFIX + userId + ":" + toolName + ":" + windowStart;
+        String key = KEY_PREFIX + safeSubject + ":" + toolName + ":" + windowStart;
         long count = redisUtil.rateLimitIncrement(key, windowSeconds);
         if (count > cfg.limit) {
-            log.warn("[ToolRateLimit] 触发限流: userId={}, tool={}, count={}, limit={}, window={}",
-                    userId, toolName, count, cfg.limit, cfg.window.getCode());
+            log.warn("[ToolRateLimit] 触发限流: subject={}, tool={}, count={}, limit={}, window={}",
+                    safeSubject, toolName, count, cfg.limit, cfg.window.getCode());
             return false;
         }
         return true;
     }
 
-    /**
-     * 按 windowSeconds 对齐当前时间到窗口起点（epoch 秒）
-     */
     private long alignToWindowStart(long windowSeconds) {
         long now = System.currentTimeMillis() / 1000L;
         return now - (now % windowSeconds);
     }
 
-    /**
-     * 解析限流配置，配置非法（缺字段/格式错）返回 null（视为不限流）
-     */
     private RateLimitConfig parse(String rateLimitConfig) {
         if (rateLimitConfig == null || rateLimitConfig.isBlank()) {
             return null;

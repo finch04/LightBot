@@ -753,6 +753,23 @@ public class WorkflowExecutorService {
                 return preview;
             }
         }
+        if (nodeData != null && node.getType() == NodeType.SUB_AGENT) {
+            Object taskRaw = nodeData.get("task");
+            if (taskRaw == null || String.valueOf(taskRaw).isBlank()) {
+                taskRaw = "{{query}}";
+            }
+            Object task = WorkflowMappingUtils.resolveTemplateValue(taskRaw, context);
+            preview.put("task", summarizeValue(task));
+            Object subAgentId = nodeData.get("subAgentId");
+            if (subAgentId != null) {
+                preview.put("subAgentId", summarizeValue(subAgentId));
+            }
+            Object subAgentName = nodeData.get("subAgentName");
+            if (subAgentName != null && !String.valueOf(subAgentName).isBlank()) {
+                preview.put("subAgentName", summarizeValue(subAgentName));
+            }
+            return preview;
+        }
 
         Object inputParamsObj = nodeData != null ? nodeData.get("input_params") : null;
         if (inputParamsObj == null && nodeData != null) {

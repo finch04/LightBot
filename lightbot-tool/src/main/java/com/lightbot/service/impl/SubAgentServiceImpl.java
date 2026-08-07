@@ -24,7 +24,6 @@ import com.lightbot.service.ToolService;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * SubAgent 服务实现
@@ -46,8 +45,7 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
     private final ToolService toolService;
 
     /**
-     * 校验当前登录用户对 SubAgent 的访问权（owner / 内置 / 管理员）
-     * <p>内置 SubAgent 为全局共享资源，任何登录用户均可读/调；非内置仅 owner 或 admin 可写</p>
+     * 校验 SubAgent 存在（企业资产：任意登录建设者可维护非内置项；内置项写操作另有字段限制）
      *
      * @param id SubAgent ID
      * @return 已通过校验的 SubAgent 实体
@@ -56,14 +54,6 @@ public class SubAgentServiceImpl extends ServiceImpl<SubAgentMapper, SubAgent>
         SubAgent subAgent = getById(id);
         if (subAgent == null) {
             throw new BizException(ErrorCode.SUBAGENT_NOT_FOUND);
-        }
-        boolean isBuiltin = Integer.valueOf(1).equals(subAgent.getIsBuiltin());
-        if (isBuiltin || StpUtil.hasRole("admin")) {
-            return subAgent;
-        }
-        long currentUserId = StpUtil.getLoginIdAsLong();
-        if (!Objects.equals(subAgent.getUserId(), currentUserId)) {
-            throw new BizException(ErrorCode.FORBIDDEN);
         }
         return subAgent;
     }

@@ -1,5 +1,13 @@
 <template>
-  <div :class="['message', msg?.role, { 'message-highlight': highlightMessageId === msg?._id }]">
+  <div
+    v-if="msg?._businessPageCallback"
+    class="message business-page-callback"
+  >
+    <div class="business-page-callback-tip">
+      {{ callbackTipText }}
+    </div>
+  </div>
+  <div v-else :class="['message', msg?.role, { 'message-highlight': highlightMessageId === msg?._id }]">
     <div class="message-body">
       <!-- 编辑模式：独立于 message-content-wrapper，占满整行 -->
       <ChatMessageEditBar
@@ -160,6 +168,15 @@ const ragRefs = computed(() => getMsgRagRefs(props.msg))
 
 const editMentions = computed(() => getMsgMentions(props.msg))
 
+const callbackTipText = computed(() => {
+  const status = props.msg?._businessPageCallbackStatus
+  const pageType = props.msg?._businessPageCallbackPageType
+  if (status === 'cancelled') {
+    return pageType ? `已取消业务办理（${pageType}）` : '已取消业务办理'
+  }
+  return pageType ? `已提交业务办理（${pageType}）` : '已提交业务办理'
+})
+
 const editBarRef = ref(null)
 
 function getEditMentionInput() {
@@ -199,6 +216,19 @@ defineExpose({ getEditMentionInput })
   0% { background: rgba(0, 112, 243, 0.18); }
   30% { background: rgba(0, 112, 243, 0.12); }
   100% { background: transparent; }
+}
+.business-page-callback {
+  display: flex;
+  justify-content: center;
+  padding: 4px 32px 8px;
+}
+.business-page-callback-tip {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-tertiary, #8c8c8c);
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.04));
+  border-radius: 999px;
+  padding: 4px 12px;
 }
 </style>
 

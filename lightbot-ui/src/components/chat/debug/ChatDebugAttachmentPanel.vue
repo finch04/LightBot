@@ -148,9 +148,9 @@ function createSampleAttachment({ fileName, type, mimeType, content: sampleConte
 
 function loadSample() {
   clearAttachments()
-  const imageSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#eef2ff"/><circle cx="165" cy="170" r="72" fill="#6366f1"/><rect x="285" y="115" width="250" height="110" rx="18" fill="#14b8a6"/><text x="320" y="255" font-size="32" fill="#111827">LightBot Debug</text></svg>`
+  const imageSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#eef2ff"/><circle cx="165" cy="170" r="72" fill="#6366f1"/><rect x="285" y="115" width="250" height="110" rx="18" fill="#14b8a6"/><text x="320" y="255" font-size="32" fill="#111827">智元 Debug</text></svg>`
   const md = '# Debug 附件样例\n\n- 支持 Markdown 预览\n- 支持本地 Blob URL\n- 不需要上传到后端\n'
-  const csv = 'name,score\nLightBot,0.96\nDebug Lab,0.91\n'
+  const csv = 'name,score\n智元,0.96\nDebug Lab,0.91\n'
   const unsupported = 'Office placeholder'
   const createImageSamples = () => [
     createSampleAttachment({ fileName: 'debug-image.svg', type: 'image', mimeType: 'image/svg+xml', content: imageSvg }),

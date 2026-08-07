@@ -67,3 +67,13 @@ export function resolveSubWorkflowName(data, agents = []) {
   }
   return String(code)
 }
+
+export function resolveSubAgentName(data, subAgents = []) {
+  if (data?.subAgentName) return data.subAgentName
+  if (data?.subAgentId != null && subAgents.length) {
+    const s = subAgents.find(x => String(x.id) === String(data.subAgentId))
+    if (s) return s.displayName || s.name || String(data.subAgentId)
+  }
+  if (data?.subAgentId != null) return String(data.subAgentId)
+  return '—'
+}

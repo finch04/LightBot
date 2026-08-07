@@ -42,9 +42,26 @@ public class ChatSession {
     private Long agentVersionId;
 
     @TableField("user_id")
-    @Schema(description = "用户ID")
+    @Schema(description = "用户ID（平台调试=建设者；API 集成=企业虚拟身份）")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
+
+    @TableField("source")
+    @Schema(description = "会话来源：platform / api / automation")
+    private String source;
+
+    @TableField("api_key_id")
+    @Schema(description = "企业 API Key ID（source=api 时有值）")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long apiKeyId;
+
+    @TableField("external_user_id")
+    @Schema(description = "上层业务终端用户标识（source=api 时可选）")
+    private String externalUserId;
+
+    @TableField(value = "caller_context", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "调用方身份上下文 JSON（source=api 时可选绑定）")
+    private String callerContext;
 
     @TableField("title")
     @Size(max = 50, message = "会话标题不超过50字")

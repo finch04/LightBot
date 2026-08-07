@@ -37,6 +37,11 @@ function nodeSize(type, node) {
     const rowCount = conditions.length + 1
     return { w: DEFAULT_W, h: Math.max(DEFAULT_H, 52 + rowCount * 36) }
   }
+  if (type === 'condition') {
+    const groups = (node?.data?.conditionGroups || []).filter(g => g?.id && Array.isArray(g.rules) && g.rules.length)
+    const rowCount = groups.length + 1
+    return { w: DEFAULT_W, h: Math.max(DEFAULT_H, 52 + rowCount * 36) }
+  }
   return { w: DEFAULT_W, h: DEFAULT_H }
 }
 
@@ -52,26 +57,21 @@ function getLayoutNodeSize(node) {
 function getBranchHandleRank(node, sourceHandle) {
   if (!node || !sourceHandle) return 0
 
-  if (node.type === 'condition') {
-    if (sourceHandle === 'out_a') return 0
-    if (sourceHandle === 'out_c') return 1
-    if (sourceHandle === 'out_b') return 2
-    return 3
-  }
-
-  if (node.type === 'classifier') {
+  if (node.type === 'condition' || node.type === 'classifier') {
     const nodeId = String(node.id)
-    const conditions = (node.data?.conditions || []).filter(c => c.id !== 'default')
+    const items = node.type === 'condition'
+      ? (node.data?.conditionGroups || []).filter(g => g?.id && Array.isArray(g.rules) && g.rules.length)
+      : (node.data?.conditions || []).filter(c => c.id !== 'default')
     const defaultHandle = `${nodeId}_default`
     if (sourceHandle === defaultHandle || sourceHandle.endsWith('_default')) {
-      return conditions.length
+      return items.length
     }
     const prefix = `${nodeId}_`
-    const intentId = sourceHandle.startsWith(prefix)
+    const itemId = sourceHandle.startsWith(prefix)
       ? sourceHandle.slice(prefix.length)
       : sourceHandle
-    const idx = conditions.findIndex(c => c.id === intentId)
-    return idx >= 0 ? idx : conditions.length
+    const idx = items.findIndex(c => c.id === itemId)
+    return idx >= 0 ? idx : items.length
   }
 
   return 0

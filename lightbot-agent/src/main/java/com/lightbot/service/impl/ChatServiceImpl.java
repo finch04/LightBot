@@ -23,6 +23,7 @@ import com.lightbot.model.MimoChatClient;
 import com.lightbot.subagent.DelegateSubAgentTool;
 import com.lightbot.tool.ToolEventEmitter;
 import com.lightbot.tool.builtin.AskUserTool;
+import com.lightbot.tool.builtin.PresentBusinessPageTool;
 import com.lightbot.agent.tool.knowledge.QueryKnowledgeTool;
 import com.lightbot.agent.tool.memory.UserMemoryToolCallbackFactory;
 import com.lightbot.entity.Knowledge;
@@ -108,6 +109,7 @@ public class ChatServiceImpl implements ChatService {
     private final SessionAttachmentRegistrar sessionAttachmentRegistrar;
     private final SubAgentService subAgentService;
     private final UserMemoryService userMemoryService;
+    private final com.lightbot.service.LongMemoryPolicyService longMemoryPolicyService;
     private final ChatAbortRegistry chatAbortRegistry;
     private final com.lightbot.subagent.service.SubAgentTaskService subAgentTaskService;
 
@@ -163,30 +165,28 @@ public class ChatServiceImpl implements ChatService {
                 reply, metadataStr, toolEventsStr, totalTokens, MessageType.TEXT, null, null);
         ctx.setAssistantMessageId(messageId);
 
-        // 3.0 记录 Token 消耗
-        if (ctx.getUserId() != null) {
-            tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
-        }
-        // 3.0.1 API Key 配额扣减
-        Long apiKeyId = ctx.getRequest().getApiKeyId();
+        // 3.0 Token：API Key 走企业配额；平台调试走个人预算
+        Long apiKeyId = ctx.getRequest() != null ? ctx.getRequest().getApiKeyId() : null;
         if (apiKeyId != null) {
             apiKeyService.checkAndConsumeQuota(apiKeyId, totalTokens);
+        } else if (ctx.getUserId() != null) {
+            tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
         }
 
-        // 3.1 批量写入工具调用记录
-        if (!ctx.getPendingToolCalls().isEmpty()) {
-            java.time.LocalDateTime now = java.time.LocalDateTime.now();
-            for (ToolCall tc : ctx.getPendingToolCalls()) {
-                tc.setMessageId(messageId);
-                if (tc.getCreatedAt() == null) {
-                    tc.setCreatedAt(now);
-                }
-            }
-            toolCallService.saveBatch(ctx.getPendingToolCalls());
-        }
+        // 3.1 写入工具调用记录（逐条 insert，避免 Reactor 线程 saveBatch SPI 失败）
+        persistPendingToolCalls(ctx, messageId);
 
         // 4. 异步生成标题
         taskExecutor.execute(() -> traceMiddleware.generateTitle(ctx.getSessionId(), ctx.getAgent(), ctx.getConfigMap()));
+
+        // 5. 长期记忆抽取（平台调试 / 带 externalUserId 的开放 API）
+        if (shouldExtractUserMemory(ctx)) {
+            try {
+                userMemoryService.extractAsync(buildMemoryExtractRequest(ctx));
+            } catch (Exception e) {
+                log.warn("[Chat] 调度长期记忆抽取失败: {}", e.getMessage());
+            }
+        }
 
         return reply;
     }
@@ -292,11 +292,9 @@ public class ChatServiceImpl implements ChatService {
                     .responses(toolResponses)
                     .build());
 
-            // ask_user 工具执行后中断循环，等待用户回复
-            boolean hasAskUser = toolResponses.stream()
-                    .anyMatch(r -> AskUserTool.TOOL_NAME.equals(r.name()));
-            if (hasAskUser) {
-                log.info("[Chat][Trace] ask_user 工具调用，中断工具循环，等待用户回复");
+            // ask_user / present_business_page 等 wait_for_user 工具：中断循环，避免模型再灌一大段说明
+            if (shouldBreakToolLoop(toolResponses)) {
+                log.info("[Chat][Trace] wait_for_user 工具调用，中断工具循环，等待用户操作");
                 break;
             }
         }
@@ -397,6 +395,7 @@ public class ChatServiceImpl implements ChatService {
                 skillPrepMiddleware, messageMiddleware, toolPrepMiddleware, traceMiddleware);
         ChatServiceCore core = this::streamCore;
 
+        // requestId 可立即回传；sessionId 在 InitMiddleware 解析会话后发出（见 SESSION_ID 事件）
         return Flux.just(REQUEST_ID_PREFIX + ctx.getRequestId())
                 .concatWith(ChatMiddlewareChain.of(middlewares, core).proceed(ctx))
                 .concatWith(Mono.fromCallable(() -> buildDoneEvent(ctx)))
@@ -433,27 +432,25 @@ public class ChatServiceImpl implements ChatService {
     private String buildDoneEvent(ChatContext ctx) {
         long totalTokens = ctx.getInputTokenHolder()[0] + ctx.getOutputTokenHolder()[0];
         if (ctx.isStreamFailed()) {
-            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), null, totalTokens,
+            return toolEventGenerator.doneWithMetadata(ctx.getSessionId(), ctx.getUserMessageId(), null, totalTokens,
                     buildStreamFailureMetadata(ctx));
         }
         // 用户输入敏感词拦截：UserSensitiveMiddleware 已落库 USER + ASSISTANT 两条消息，
         // 直接返回带 IDs 的 [DONE]，跳过助手消息重复保存与标题/记忆抽取等后置流程
         if (ctx.isSensitiveUserBlocked()) {
             return toolEventGenerator.doneWithMetadata(
-                    ctx.getUserMessageId(), ctx.getAssistantMessageId(), totalTokens, null);
+                    ctx.getSessionId(), ctx.getUserMessageId(), ctx.getAssistantMessageId(), totalTokens, null);
         }
 
         try {
             Long agentId = ctx.getAgent() != null ? ctx.getAgent().getId() : null;
 
-            // 0. 记录 Token 消耗到预算服务
-            if (ctx.getUserId() != null) {
-                tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
-            }
-            // 0.1 API Key 配额扣减
-            Long apiKeyId = ctx.getRequest().getApiKeyId();
+            // 0. Token：API Key 走企业配额；平台调试走个人预算
+            Long apiKeyId = ctx.getRequest() != null ? ctx.getRequest().getApiKeyId() : null;
             if (apiKeyId != null) {
                 apiKeyService.checkAndConsumeQuota(apiKeyId, totalTokens);
+            } else if (ctx.getUserId() != null) {
+                tokenBudgetService.recordUsage(ctx.getUserId(), ctx.getInputTokenHolder()[0], ctx.getOutputTokenHolder()[0]);
             }
 
             // 1. 持久化 AI 回复
@@ -472,35 +469,53 @@ public class ChatServiceImpl implements ChatService {
                     (int) totalTokens, MessageType.TEXT, null, null);
             ctx.setAssistantMessageId(assistantMessageId);
 
-            // 1.1 批量写入工具调用记录
-            if (!ctx.getPendingToolCalls().isEmpty()) {
-                java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                for (ToolCall tc : ctx.getPendingToolCalls()) {
-                    tc.setMessageId(assistantMessageId);
-                    if (tc.getCreatedAt() == null) {
-                        tc.setCreatedAt(now);
-                    }
-                }
-                toolCallService.saveBatch(ctx.getPendingToolCalls());
-            }
+            // 1.1 写入工具调用记录（与消息落库解耦：失败只打日志，不破坏 DONE）
+            persistPendingToolCalls(ctx, assistantMessageId);
             ctx.getFullReply().setLength(0);
             ctx.getFullReply().append(replyToSave);
 
             // 1.2 助手消息已落库，异步生成会话标题（须晚于 TraceMiddleware.doOnComplete）
             scheduleTitleGeneration(ctx);
 
-            // 1.3 助手消息已落库后再异步抽取长期记忆，避免影响主回复完成事件
-            try {
-                userMemoryService.extractAsync(buildMemoryExtractRequest(ctx));
-            } catch (Exception e) {
-                log.warn("[Chat] 调度长期记忆抽取失败: {}", e.getMessage());
+            // 1.3 助手消息已落库后再异步抽取长期记忆
+            // 平台调试：按用户偏好；开放 API：仅当有 externalUserId；自动化：不抽取
+            if (shouldExtractUserMemory(ctx)) {
+                try {
+                    userMemoryService.extractAsync(buildMemoryExtractRequest(ctx));
+                } catch (Exception e) {
+                    log.warn("[Chat] 调度长期记忆抽取失败: {}", e.getMessage());
+                }
             }
 
             // 2. 返回带消息ID、Token数和完整metadata的 [DONE] 事件
-            return toolEventGenerator.doneWithMetadata(ctx.getUserMessageId(), assistantMessageId, totalTokens, metadataStr);
+            return toolEventGenerator.doneWithMetadata(
+                    ctx.getSessionId(), ctx.getUserMessageId(), assistantMessageId, totalTokens, metadataStr);
         } catch (Exception e) {
             log.error("[Chat] 构建[DONE]事件异常: {}", e.getMessage(), e);
             return DONE_PREFIX;
+        }
+    }
+
+    /**
+     * 落库本轮暂存的 tool_calls。失败不影响助手消息与 DONE（历史曾因 saveBatch SPI 整段失败）。
+     *
+     * @param ctx       对话上下文
+     * @param messageId 助手消息 ID
+     */
+    private void persistPendingToolCalls(ChatContext ctx, Long messageId) {
+        if (ctx == null || messageId == null || ctx.getPendingToolCalls() == null
+                || ctx.getPendingToolCalls().isEmpty()) {
+            return;
+        }
+        try {
+            for (ToolCall tc : ctx.getPendingToolCalls()) {
+                tc.setMessageId(messageId);
+            }
+            toolCallService.persistPendingCalls(ctx.getPendingToolCalls());
+            ctx.getPendingToolCalls().clear();
+        } catch (Exception e) {
+            log.error("[Chat] 写入 tool_calls 失败: messageId={}, count={}, err={}",
+                    messageId, ctx.getPendingToolCalls().size(), e.getMessage(), e);
         }
     }
 
@@ -513,6 +528,10 @@ public class ChatServiceImpl implements ChatService {
     private MemoryExtractDTO buildMemoryExtractRequest(ChatContext ctx) {
         MemoryExtractDTO request = new MemoryExtractDTO();
         request.setUserId(ctx.getUserId());
+        if (ctx.getRequest() != null) {
+            request.setApiKeyId(ctx.getRequest().getApiKeyId());
+            request.setExternalUserId(ctx.getRequest().getExternalUserId());
+        }
         request.setSessionId(ctx.getSessionId());
         request.setAgentId(ctx.getAgent() != null ? ctx.getAgent().getId() : null);
         request.setSourceMessageId(ctx.getUserMessageId());
@@ -520,6 +539,32 @@ public class ChatServiceImpl implements ChatService {
         request.setAssistantReply(ctx.getFullReply() != null ? ctx.getFullReply().toString() : "");
         request.setMemorySaved(hasMemorySaveToolCall(ctx));
         return request;
+    }
+
+    /**
+     * 是否调度长期记忆抽取：平台调试按登录用户；开放 API 需 externalUserId；自动化不抽取
+     */
+    private boolean shouldExtractUserMemory(ChatContext ctx) {
+        if (ctx == null || ctx.getRequest() == null) {
+            return false;
+        }
+        if (ctx.getRequest().getActorUserId() != null && ctx.getRequest().getApiKeyId() == null) {
+            return false;
+        }
+        Long apiKeyId = ctx.getRequest().getApiKeyId();
+        try {
+            if (!Boolean.TRUE.equals(longMemoryPolicyService.resolveEffective(apiKeyId).getEnabled())) {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        // 开放 API：需 externalUserId；控制台：登录用户启用 debug_user_{userId} 调试记忆
+        if (apiKeyId != null) {
+            String externalUserId = ctx.getRequest().getExternalUserId();
+            return externalUserId != null && !externalUserId.isBlank();
+        }
+        return ctx.getUserId() != null;
     }
 
     /**
@@ -1031,17 +1076,53 @@ public class ChatServiceImpl implements ChatService {
                     // 正文先于组件事件下发，确保组件插在完整正文之后，不腰斩已产出内容
                     toolEventFlux = leadingContentFlux.concatWith(toolEventFlux);
 
-                    // ask_user 工具执行后中断循环，等待用户回复
-                    boolean hasAskUser = toolResponses.stream()
-                            .anyMatch(r -> AskUserTool.TOOL_NAME.equals(r.name()));
-                    if (hasAskUser) {
-                        log.info("[Chat][Trace] ask_user 工具调用，中断工具循环，等待用户回复");
+                    // ask_user / present_business_page 等 wait_for_user 工具：中断循环，避免再流式输出操作指南
+                    if (shouldBreakToolLoop(toolResponses)) {
+                        log.info("[Chat][Trace] wait_for_user 工具调用，中断工具循环，等待用户操作");
                         return toolEventFlux;
                     }
 
                     trimToolCallContext(messages);
                     return toolEventFlux.concatWith(processToolCallsRecursively(ctx, depth + 1, nextLlmStart, eventSink));
                 });
+    }
+
+    /**
+     * 工具结果要求等待用户时，停止后续 LLM 轮次（页面/表单已自解释，无需再生成长文）。
+     */
+    private boolean shouldBreakToolLoop(
+            List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> toolResponses) {
+        if (toolResponses == null || toolResponses.isEmpty()) {
+            return false;
+        }
+        for (var r : toolResponses) {
+            if (r == null || r.name() == null) {
+                continue;
+            }
+            if (AskUserTool.TOOL_NAME.equals(r.name())
+                    || PresentBusinessPageTool.TOOL_NAME.equals(r.name())) {
+                return true;
+            }
+            // 通用：结果 JSON 含 break_loop / wait_for_user
+            String data = r.responseData();
+            if (data != null && looksLikeWaitForUserResult(data)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean looksLikeWaitForUserResult(String data) {
+        String trimmed = data.trim();
+        if (!trimmed.startsWith("{")) {
+            return false;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(trimmed);
+            return node.path("break_loop").asBoolean(false) || node.path("wait_for_user").asBoolean(false);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -1397,21 +1478,7 @@ public class ChatServiceImpl implements ChatService {
                 }
                 // 2.1 工具执行超时保护：CompletableFuture 包装 + get(timeout)，防止 MCP 工具卡死
                 long timeoutSeconds = resolveToolExecutionTimeoutSeconds(toolName, effectiveArgs);
-                Map<String, Object> ctxMap = new java.util.HashMap<>();
-                ctxMap.put("agentId", agentId);
-                ctxMap.put("sessionId", sessionId != null ? sessionId.toString() : "default");
-                ctxMap.put("requestId", requestId);
-                ctxMap.put("parentThreadId", sessionId != null ? sessionId.toString() : "default");
-                boolean mcpTool = chatContext != null && chatContext.getMcpToolNames() != null
-                        && chatContext.getMcpToolNames().contains(toolName);
-                if (chatContext != null && !mcpTool) {
-                    ctxMap.put("chatContext", chatContext);
-                }
-                // 注入本轮 todos 快照作为 WriteTodosTool 按 id 合并的基准：
-                // 每次 write_todos 成功后会回写到 chatContext.currentTodosSnapshot，下次调用拿到的是最新合并结果
-                if (chatContext != null && chatContext.getCurrentTodosSnapshot() != null) {
-                    ctxMap.put("currentTodos", chatContext.getCurrentTodosSnapshot());
-                }
+                Map<String, Object> ctxMap = buildExecutableToolContext(chatContext, agentId, sessionId, requestId, toolName);
                 final String argsForCall = effectiveArgs != null ? effectiveArgs : "{}";
                 String result = CompletableFuture.supplyAsync(() -> {
                     try {
@@ -1453,10 +1520,8 @@ public class ChatServiceImpl implements ChatService {
                             String retryArgs = stripInternalRepairFlags(repaired);
                             log.warn("[Chat] 工具参数解析失败后二次修复重试: name={}", toolName);
                             // 避免递归死循环：直接再调一次 callback（同步）
-                            Map<String, Object> ctxMap = new java.util.HashMap<>();
-                            ctxMap.put("agentId", agentId);
-                            ctxMap.put("sessionId", sessionId != null ? sessionId.toString() : "default");
-                            ctxMap.put("requestId", requestId);
+                            Map<String, Object> ctxMap = buildExecutableToolContext(
+                                    chatContext, agentId, sessionId, requestId, toolName);
                             String retryResult = callback.call(retryArgs, new ToolContext(ctxMap));
                             if (!ToolResultPrefixes.isError(retryResult)) {
                                 sessionAttachmentRegistrar.registerFromToolResult(sessionId, toolName, retryResult);
@@ -1476,6 +1541,75 @@ public class ChatServiceImpl implements ChatService {
         }
         log.warn("[Chat][Trace] 工具不存在: name={}, 可用工具={}", toolName, toolCallbackMap.keySet());
         return ToolResultPrefixes.failureJson(ToolResultPrefixes.NOT_FOUND + ": " + toolName);
+    }
+
+    /**
+     * 构建工具执行时的 ToolContext：合并 ToolPrep 预置可序列化键 + 本轮核心键。
+     * <p>MCP 与内置工具同源（MCP 经 _meta 透传）；MCP 不注入不可序列化的 chatContext。</p>
+     *
+     * @param chatContext 对话上下文
+     * @param agentId     Agent ID
+     * @param sessionId   会话 ID
+     * @param requestId   请求 ID
+     * @param toolName    工具名（用于判断是否 MCP）
+     * @return ToolContext Map
+     */
+    private Map<String, Object> buildExecutableToolContext(ChatContext chatContext, Long agentId,
+                                                          Long sessionId, String requestId, String toolName) {
+        Map<String, Object> ctxMap = new java.util.HashMap<>();
+        // 1. 合并 ToolPrep 预置（callerContext / apiKeyId / allowedBusinessPages 等）
+        if (chatContext != null && chatContext.getToolOptions() != null
+                && chatContext.getToolOptions().getToolContext() != null) {
+            for (Map.Entry<String, Object> e : chatContext.getToolOptions().getToolContext().entrySet()) {
+                if (e.getKey() == null || "chatContext".equals(e.getKey()) || "exchange".equals(e.getKey())) {
+                    continue;
+                }
+                if (e.getValue() != null) {
+                    ctxMap.put(e.getKey(), e.getValue());
+                }
+            }
+        }
+        // 2. 覆盖核心运行时键
+        ctxMap.put("agentId", agentId);
+        ctxMap.put("sessionId", sessionId != null ? sessionId.toString() : "default");
+        ctxMap.put("requestId", requestId);
+        ctxMap.put("parentThreadId", sessionId != null ? sessionId.toString() : "default");
+        if (chatContext != null) {
+            if (chatContext.getUserId() != null) {
+                ctxMap.put("userId", chatContext.getUserId());
+            }
+            if (chatContext.getRequest() != null) {
+                if (chatContext.getRequest().getApiKeyId() != null) {
+                    ctxMap.put("apiKeyId", chatContext.getRequest().getApiKeyId());
+                }
+                if (chatContext.getRequest().getExternalUserId() != null) {
+                    ctxMap.put("externalUserId", chatContext.getRequest().getExternalUserId());
+                }
+                if (chatContext.getRequest().getCallerContext() != null
+                        && !chatContext.getRequest().getCallerContext().isEmpty()) {
+                    Map<String, Object> callerMap = chatContext.getRequest().getCallerContext().toMap();
+                    ctxMap.put("callerContext", callerMap);
+                    Object regionId = callerMap.get("regionId");
+                    if (regionId != null) {
+                        ctxMap.put("regionId", regionId);
+                    }
+                    Object enterpriseId = callerMap.get("enterpriseId");
+                    if (enterpriseId != null) {
+                        ctxMap.put("enterpriseId", enterpriseId);
+                    }
+                }
+            }
+            if (chatContext.getCurrentTodosSnapshot() != null) {
+                ctxMap.put("currentTodos", chatContext.getCurrentTodosSnapshot());
+            }
+        }
+        boolean mcpTool = chatContext != null && chatContext.getMcpToolNames() != null
+                && chatContext.getMcpToolNames().contains(toolName);
+        // 3. 非 MCP 保留 chatContext 回退（记忆工具等）；MCP 仅可序列化 map → _meta
+        if (chatContext != null && !mcpTool) {
+            ctxMap.put("chatContext", chatContext);
+        }
+        return ctxMap;
     }
 
     /**
@@ -1915,9 +2049,9 @@ public class ChatServiceImpl implements ChatService {
     private long appendToolCallStart(ChatContext ctx, List<Map<String, Object>> toolEventsList,
                                      List<Flux<String>> statusFluxes,
                                      String toolName, String args, int contentOffset) {
-        // 按需推送 skill_active（工具属于某个 Skill 时）
+        // 按需推送 skill_active（工具属于某个 Skill 时）；同步对话 statusFluxes 为 null，仅写入 toolEventsList
         Flux<String> skillFlux = emitSkillActiveIfNeeded(ctx, toolName, toolEventsList, contentOffset);
-        if (skillFlux != null) {
+        if (skillFlux != null && statusFluxes != null) {
             statusFluxes.add(skillFlux);
         }
 

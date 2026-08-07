@@ -261,6 +261,15 @@ public class TaskConsumerConfig implements TaskInterruptPort {
             return;
         }
 
+        // 1.1 按任务分组过滤：main stream 上 cg:default / cg:heavy 都会收到同一条消息，
+        //     非本组成员只 ACK 不执行，避免 DOCUMENT_INGEST 等被双线程并发跑
+        if (task.getType() != null && task.getType().getGroup() != group) {
+            log.debug("[任务消费者] 跳过非本组成员任务, taskId={}, type={}, group={}, workerGroup={}",
+                    taskId, task.getType(), task.getType().getGroup(), group);
+            safeAck(streamId);
+            return;
+        }
+
         // 2. 执行前取消检查：取消信号若已存在则直接落 CANCELLED
         if (taskQueueService.isCancelled(taskId)) {
             taskService.markCancelled(taskId, "任务在执行前被用户取消");
@@ -273,11 +282,16 @@ public class TaskConsumerConfig implements TaskInterruptPort {
         int prevAttempts = task.getAttempts() == null ? 0 : task.getAttempts();
         int newAttempts = prevAttempts + 1;
 
-        // 4. 记录执行线程，便于取消时 interrupt
+        // 4. CAS 抢占 RUNNING：失败说明另一消费者已开始，直接 ACK
+        if (!taskService.markStart(taskId, newAttempts, streamId)) {
+            log.info("[任务消费者] 抢占失败，跳过重复消费, taskId={}, streamId={}", taskId, streamId);
+            safeAck(streamId);
+            return;
+        }
+
+        // 5. 记录执行线程，便于取消时 interrupt
         runningTasks.put(taskId, Thread.currentThread());
         try {
-            // 5. 状态置 RUNNING + 写入 attempts/streamId
-            taskService.markStart(taskId, newAttempts, streamId);
             log.info("[任务消费者] 开始执行, taskId={}, type={}, attempts={}/{}",
                     taskId, task.getType(), newAttempts,
                     task.getMaxAttempts() == null ? retryPolicyProperties.resolve(task.getType()).getMaxAttempts() : task.getMaxAttempts());

@@ -418,8 +418,8 @@ function buildLinearBasicFixture() {
     edge('llm-summary', 'end'),
   ]
   const events = buildEvents([
-    { nodeId: 'start', nodeType: 'start', nodeLabel: '开始', outputs: { query: '总结 LightBot Debug 能力' }, message: '工作流已启动' },
-    { nodeId: 'llm-summary', nodeType: 'llm', nodeLabel: '大模型总结', input: { prompt: '总结 LightBot Debug 能力' }, outputs: { text: 'Debug Lab 用于验证前端渲染链路。' }, durationMs: 860 },
+    { nodeId: 'start', nodeType: 'start', nodeLabel: '开始', outputs: { query: '总结 智元 Debug 能力' }, message: '工作流已启动' },
+    { nodeId: 'llm-summary', nodeType: 'llm', nodeLabel: '大模型总结', input: { prompt: '总结 智元 Debug 能力' }, outputs: { text: 'Debug Lab 用于验证前端渲染链路。' }, durationMs: 860 },
     { nodeId: 'end', nodeType: 'end', nodeLabel: '结束', outputs: { answer: 'Debug Lab 可复现工作流渲染问题。' }, durationMs: 8 },
   ])
   return { graph: { nodes, edges }, events }
@@ -428,7 +428,7 @@ function buildLinearBasicFixture() {
 function buildRagAnswerFixture() {
   const nodes = [
     node('start', 'start', 80, 160),
-    node('retrieval-docs', 'retrieval', 300, 146, { label: '检索 Debug 文档', knowledgeName: 'LightBot Docs' }),
+    node('retrieval-docs', 'retrieval', 300, 146, { label: '检索 Debug 文档', knowledgeName: '智元 Docs' }),
     node('llm-answer', 'llm', 560, 146, { label: '生成答案', modelName: 'Debug Mock Model' }),
     node('end', 'end', 820, 160),
   ]
@@ -470,15 +470,25 @@ function buildRagAnswerFixture() {
 function buildConditionBranchFixture() {
   const nodes = [
     node('start', 'start', 80, 190),
-    node('condition-score', 'condition', 300, 178, { label: '置信度判断' }),
+    node('condition-score', 'condition', 300, 178, {
+      label: '置信度判断',
+      conditionGroups: [
+        {
+          id: 'cg_high',
+          label: '高置信',
+          relation: 'and',
+          rules: [{ id: 'r1', variable: '{{score}}', operator: 'contains', value: '0.7' }],
+        },
+      ],
+    }),
     node('llm-high', 'llm', 560, 80, { label: '高置信回答' }),
     node('llm-low', 'llm', 560, 280, { label: '低置信澄清' }),
     node('end', 'end', 840, 190),
   ]
   const edges = [
     edge('start', 'condition-score'),
-    edge('condition-score', 'llm-high', { sourceHandle: 'condition-score_out_a' }),
-    edge('condition-score', 'llm-low', { sourceHandle: 'condition-score_out_b' }),
+    edge('condition-score', 'llm-high', { sourceHandle: 'condition-score_cg_high' }),
+    edge('condition-score', 'llm-low', { sourceHandle: 'condition-score_default' }),
     edge('llm-high', 'end'),
     edge('llm-low', 'end'),
   ]

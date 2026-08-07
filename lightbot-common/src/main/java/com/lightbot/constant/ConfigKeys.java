@@ -37,6 +37,11 @@ public final class ConfigKeys {
         public static final String SUMMARY_TOOL_RESULT_TOKEN_LIMIT = "summaryToolResultTokenLimit";
         /** 最大执行步数（工具调用递归深度上限） */
         public static final String MAX_EXECUTION_STEPS = "maxExecutionSteps";
+        /**
+         * 对话型 Agent 绑定的业务页组件 pageType 列表（字符串数组）。
+         * 缺省/null/空数组=未绑定，不允许呈现任何业务页；非空时与 API Key 白名单取交集。
+         */
+        public static final String ALLOWED_BUSINESS_PAGES = "allowedBusinessPages";
         /** 模型调用失败重试次数 */
         public static final String MODEL_RETRY_TIMES = "modelRetryTimes";
         /** 提示词自定义变量列表 [{key,label,defaultValue,description}] */
@@ -114,5 +119,7 @@ public final class ConfigKeys {
         public static final String DEFAULT_RERANK_MODEL = "default_rerank_model";
         /** Landing 页面配置 */
         public static final String LANDING_CONFIG = "landing_config";
+        /** 企业长期记忆默认策略 */
+        public static final String LONG_MEMORY_CONFIG = "long_memory_config";
     }
 }

@@ -132,7 +132,10 @@ public class EmbeddingServiceImpl extends ServiceImpl<EmbeddingMapper, Embedding
             return;
         }
 
-        // pgvector（原有逻辑）
+        // pgvector：先删后插，避免重新入库 / 并发消费触发 uk_embedding_chunk_id
+        if (!chunkIds.isEmpty()) {
+            embeddingMapper.deleteByChunkIds(chunkIds);
+        }
         List<Map<String, Object>> batch = new ArrayList<>(chunkIds.size());
         for (int i = 0; i < chunkIds.size(); i++) {
             float[] vector = vectors.get(i);

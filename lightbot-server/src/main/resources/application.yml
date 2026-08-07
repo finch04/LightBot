@@ -62,7 +62,7 @@ spring:
   # ========================================
   ai:
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY}
+      api-key: sk-c0dcee1f2bae4555aaef62f4193829d4
       chat:
         options:
           model: qwen-plus
@@ -136,6 +136,15 @@ neo4j:
 
 # 系统配置
 lightbot:
+  # 自动化定时任务（分钟级扫描，降低 DB 负担）
+  automation:
+    scan-interval-ms: 60000
+    scan-initial-delay-ms: 45000
+    scan-batch-size: 20
+    reclaim-interval-ms: 300000
+    reclaim-initial-delay-ms: 120000
+    reclaim-batch-size: 50
+    execute-pool-size: 2
   dify:
     # Base64 编码的 32 字节 AES 密钥；生产环境必须通过环境变量注入。
     encryption-key: ${LIGHTBOT_DIFY_ENCRYPTION_KEY:}
@@ -224,16 +233,6 @@ lightbot:
   # ========================================
   log-cleanup:
     retention-days: 30
-
-# ========================================
-# CORS 允许的前端源（生产环境必须收紧白名单）
-# 多个用逗号分隔，如：https://a.com,https://b.com
-# ========================================
-  cors:
-    allowed-origins: 'http://localhost:5173,http://localhost:3000'
-    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
-    allow-credentials: true
-    max-age: 3600
 
 # ========================================
 # 内置工具 API Key 配置

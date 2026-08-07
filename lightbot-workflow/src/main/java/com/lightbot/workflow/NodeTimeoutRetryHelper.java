@@ -33,6 +33,7 @@ public final class NodeTimeoutRetryHelper {
             Map.entry(NodeType.LOOP, new TimeoutProfile(0, 120)),
             Map.entry(NodeType.BATCH, new TimeoutProfile(0, 120)),
             Map.entry(NodeType.APP_COMPONENT, new TimeoutProfile(0, 60)),
+            Map.entry(NodeType.SUB_AGENT, new TimeoutProfile(0, 120)),
             Map.entry(NodeType.CONDITION, new TimeoutProfile(0, 3)),
             Map.entry(NodeType.VARIABLE, new TimeoutProfile(0, 3)),
             Map.entry(NodeType.VARIABLE_HANDLE, new TimeoutProfile(0, 5)),

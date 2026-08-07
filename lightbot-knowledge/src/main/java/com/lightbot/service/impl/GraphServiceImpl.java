@@ -786,7 +786,7 @@ public class GraphServiceImpl implements GraphService {
     }
 
     private List<org.neo4j.driver.Record> queryByKeyword(String label, String keyword, int maxNodes) {
-        String cypher = """
+        String mergedCypher = """
             MATCH (n:Entity:`%s`)
             WHERE toLower(n.name) CONTAINS toLower($keyword)
               AND (n.graph_source = 'merged' OR n.graph_source IS NULL)
@@ -795,19 +795,42 @@ public class GraphServiceImpl implements GraphService {
             WHERE r.graph_source = 'merged' OR r.graph_source IS NULL
             RETURN n, r, m
             """.formatted(label, label);
-
-        return neo4jUtil.query(cypher, Map.of("keyword", keyword, "maxNodes", maxNodes));
+        List<org.neo4j.driver.Record> merged = neo4jUtil.query(mergedCypher,
+                Map.of("keyword", keyword, "maxNodes", maxNodes));
+        if (!merged.isEmpty()) {
+            return merged;
+        }
+        String singleCypher = """
+            MATCH (n:Entity:`%s`)
+            WHERE toLower(n.name) CONTAINS toLower($keyword)
+              AND n.graph_source = 'single_doc'
+            WITH n LIMIT $maxNodes
+            OPTIONAL MATCH (n)-[r]-(m:Entity:`%s`)
+            WHERE r.graph_source = 'single_doc'
+            RETURN n, r, m
+            """.formatted(label, label);
+        return neo4jUtil.query(singleCypher, Map.of("keyword", keyword, "maxNodes", maxNodes));
     }
 
     private List<org.neo4j.driver.Record> querySampleSubgraph(String label, int maxNodes) {
-        String cypher = """
+        // 知识库页优先展示合并图谱；若尚未合并但已有单文档抽取结果，回退展示 single_doc
+        String mergedCypher = """
             MATCH (n:Entity:`%s`)-[r:RELATION]-(m:Entity:`%s`)
             WHERE n.graph_source = 'merged' OR n.graph_source IS NULL
             RETURN n, r, m
             LIMIT $maxNodes
             """.formatted(label, label);
-
-        return neo4jUtil.query(cypher, Map.of("maxNodes", maxNodes));
+        List<org.neo4j.driver.Record> merged = neo4jUtil.query(mergedCypher, Map.of("maxNodes", maxNodes));
+        if (!merged.isEmpty()) {
+            return merged;
+        }
+        String singleCypher = """
+            MATCH (n:Entity:`%s`)-[r:RELATION]-(m:Entity:`%s`)
+            WHERE n.graph_source = 'single_doc'
+            RETURN n, r, m
+            LIMIT $maxNodes
+            """.formatted(label, label);
+        return neo4jUtil.query(singleCypher, Map.of("maxNodes", maxNodes));
     }
 
     private List<org.neo4j.driver.Record> querySubgraphByDocument(String label, String documentId, int maxNodes) {
@@ -897,14 +920,32 @@ public class GraphServiceImpl implements GraphService {
     }
 
     private GraphStatsVO getStatsFromNeo4j(String label) {
+        GraphStatsVO merged = countGraphBySource(label, "merged");
+        // 合并层为空时回退统计单文档层，避免「抽取完成但知识库页显示暂无图谱」
+        if (merged.getNodeCount() > 0 || merged.getEdgeCount() > 0) {
+            return merged;
+        }
+        return countGraphBySource(label, "single_doc");
+    }
+
+    /**
+     * 按 graph_source 统计节点/边；source=merged 时同时兼容历史 null
+     */
+    private GraphStatsVO countGraphBySource(String label, String source) {
+        String nodeFilter = "merged".equals(source)
+                ? "(n.graph_source = 'merged' OR n.graph_source IS NULL)"
+                : "n.graph_source = 'single_doc'";
+        String relFilter = "merged".equals(source)
+                ? "(r.graph_source = 'merged' OR r.graph_source IS NULL)"
+                : "r.graph_source = 'single_doc'";
         String cypher = """
             MATCH (n:Entity:`%s`)
-            WHERE n.graph_source = 'merged' OR n.graph_source IS NULL
+            WHERE %s
             WITH count(n) AS nodeCount
             OPTIONAL MATCH (:Entity:`%s`)-[r:RELATION]->(:Entity:`%s`)
-            WHERE r.graph_source = 'merged' OR r.graph_source IS NULL
+            WHERE %s
             RETURN nodeCount, count(r) AS edgeCount
-            """.formatted(label, label, label);
+            """.formatted(label, nodeFilter, label, label, relFilter);
 
         List<org.neo4j.driver.Record> records = neo4jUtil.query(cypher, Map.of());
         int nodeCount = 0, edgeCount = 0;
@@ -916,10 +957,10 @@ public class GraphServiceImpl implements GraphService {
 
         String distCypher = """
             MATCH (n:Entity:`%s`)
-            WHERE n.graph_source = 'merged' OR n.graph_source IS NULL
+            WHERE %s
             RETURN n.entity_type AS type, count(*) AS cnt
             ORDER BY cnt DESC
-            """.formatted(label);
+            """.formatted(label, nodeFilter);
 
         Map<String, Integer> typeDist = new LinkedHashMap<>();
         List<org.neo4j.driver.Record> distRecords = neo4jUtil.query(distCypher, Map.of());

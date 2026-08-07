@@ -2,9 +2,9 @@
   <div class="landing-container">
     <!-- 后端不可用 -->
     <div v-if="isBackendDown" class="loading-container">
-      <img src="/lightbot-logo-single.png" alt="LightBot" class="error-logo" />
+      <img src="/lightbot-logo-single.png" alt="智元" class="error-logo" />
       <h2 class="error-title">服务连接失败</h2>
-      <p class="error-desc">无法连接到 LightBot 后端服务，请确认服务已启动。</p>
+      <p class="error-desc">无法连接到智元后端服务，请确认服务已启动。</p>
       <button class="button-base primary retry-btn" @click="retryHealthCheck">
         <SyncOutlined />
         <span>重新连接</span>
@@ -29,24 +29,11 @@
       <!-- 顶部导航 -->
       <header class="glass-header">
         <div class="logo" @click="router.push('/')">
-          <img src="/lightbot-logo-single.png" alt="LightBot" class="logo-img" />
-          <span class="logo-text">LightBot</span>
+          <img src="/lightbot-logo-single.png" alt="智元" class="logo-img" />
+          <span class="logo-text">智元</span>
         </div>
         <div class="header-actions">
-          <a
-            class="github-link"
-            :href="config.github || 'https://github.com/finch04/LightBot'"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="GitHub"
-          >
-            <svg height="20" width="20" viewBox="0 0 16 16" version="1.1">
-              <path
-                fill-rule="evenodd"
-                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-              ></path>
-            </svg>
-          </a>
+          <a class="docs-link" href="/docs" target="_blank" rel="noopener noreferrer">在线文档</a>
           <button class="theme-toggle-landing" @click="toggleTheme" :title="isDark ? '切换浅色模式' : '切换深色模式'">
             <BulbFilled v-if="isDark" />
             <BulbOutlined v-else />
@@ -87,7 +74,7 @@
         <div class="hero-layout">
           <!-- 左侧文案 -->
           <div class="hero-content">
-            <h1 class="title reveal-up delay-1">{{ config.title || 'LightBot' }}</h1>
+            <h1 class="title reveal-up delay-1">{{ config.title || '智元' }}</h1>
             <Transition name="subtitle-switch" mode="out-in">
               <p v-if="currentSubtitle" class="subtitle reveal-up delay-2" :key="currentSubtitle">
                 {{ currentSubtitle }}
@@ -134,7 +121,7 @@
 
       <!-- 底部 -->
       <footer class="footer">
-        <p class="copyright">{{ config.copyright || '© 2026 LightBot. All Rights Reserved.' }}</p>
+        <p class="copyright">{{ config.copyright || '© 2026 智元. All Rights Reserved.' }}</p>
       </footer>
     </template>
   </div>
@@ -191,7 +178,7 @@ const avatarInitial = computed(() => {
 const userRoleText = computed(() => {
   const role = userStore.user?.role
   if (role === 'admin') return '管理员'
-  if (role === 'user') return '普通用户'
+  if (role === 'user') return '建设者'
   return '未知角色'
 })
 
@@ -288,7 +275,7 @@ function handleStart() {
     return
   }
   if (userStore.token) {
-    router.push('/app/chat')
+    router.push('/app/dashboard')
   } else {
     router.push('/login')
   }
@@ -304,7 +291,7 @@ async function loadLandingConfig() {
   } catch (e) {
     console.error('加载 Landing 配置失败:', e)
     config.value = {
-      title: 'LightBot',
+      title: '智元',
       subtitle: 'AI Native 智能体平台',
       subtitles: ['AI Native 智能体平台', '一站式 RAG 知识库引擎', '可视化 Workflow 编排'],
       description: '构建智能体、知识库、工作流与工具集成的统一平台。',
@@ -320,8 +307,7 @@ async function loadLandingConfig() {
         { icon: 'Eval', title: '评测中心', desc: '数据集管理与自动评估' },
         { icon: 'Observability', title: '可观测性', desc: '全链路 Trace 追踪与监控' },
       ],
-      github: 'https://github.com/finch04/LightBot',
-      copyright: '© 2026 LightBot. All Rights Reserved.',
+      copyright: '© 2026 智元. All Rights Reserved.',
     }
   }
 }
@@ -484,8 +470,8 @@ onUnmounted(() => {
   user-select: none;
 }
 .logo-img {
-  height: 28px;
-  width: 28px;
+  height: 40px;
+  width: 40px;
   object-fit: contain;
 }
 .logo-text {
@@ -499,23 +485,21 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
 }
-.github-link {
-  display: flex;
+.docs-link {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
   height: 36px;
+  padding: 0 12px;
   border-radius: 8px;
-  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-mute);
+  text-decoration: none;
   transition: color 0.2s, background 0.2s;
 }
-.github-link:hover {
+.docs-link:hover {
   color: var(--color-link);
   background: rgba(0, 112, 243, 0.06);
-}
-.github-link svg {
-  fill: currentColor;
 }
 .theme-toggle-landing {
   display: flex;
@@ -1005,10 +989,10 @@ onUnmounted(() => {
   .button-base.primary:hover {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
   }
-  .github-link {
+  .docs-link {
     color: var(--color-mute);
   }
-  .github-link:hover {
+  .docs-link:hover {
     color: var(--color-link);
     background: rgba(255, 255, 255, 0.06);
   }

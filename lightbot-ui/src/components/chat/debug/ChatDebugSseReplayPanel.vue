@@ -80,8 +80,8 @@ const eventBlocks = [
     label: '委派 SubAgent',
     description: '旧协议 + 子工具完整链路',
     events: [
-      { type: 'subagent_call', subagentName: 'research-agent', displayName: '研究助手', task: '总结 LightBot 核心模块', contentOffset: 0, delegationIndex: 0 },
-      { type: 'subagent_tool_call', subagentName: 'research-agent', toolName: 'query_knowledge', toolDisplayName: '知识库检索', args: '{"query":"LightBot 模块"}', contentOffset: 0, delegationIndex: 0 },
+      { type: 'subagent_call', subagentName: 'research-agent', displayName: '研究助手', task: '总结 智元 核心模块', contentOffset: 0, delegationIndex: 0 },
+      { type: 'subagent_tool_call', subagentName: 'research-agent', toolName: 'query_knowledge', toolDisplayName: '知识库检索', args: '{"query":"智元 模块"}', contentOffset: 0, delegationIndex: 0 },
       { type: 'subagent_tool_result', subagentName: 'research-agent', toolName: 'query_knowledge', toolDisplayName: '知识库检索', result: '{"total":3}', contentOffset: 0, delegationIndex: 0 },
       { type: 'subagent_result', subagentName: 'research-agent', contentOffset: 0, delegationIndex: 0, result: '{"reply":"## 调研结论\\n\\n- Agent\\n- RAG\\n- Workflow"}' },
     ],
@@ -96,7 +96,7 @@ const eventBlocks = [
         { task_index: 1, task_id: 'debug-task-review', subagent_name: 'review-agent', task: '检查实现边界' },
       ] },
       { type: 'subagent_task_start', batch_id: 'debug-batch-001', task_id: 'debug-task-research', task_index: 0, subagentName: 'research-agent', status: 'running', contentOffset: 0, delegationIndex: 0 },
-      { type: 'subagent_tool_call', batch_id: 'debug-batch-001', task_id: 'debug-task-research', task_index: 0, subagentName: 'research-agent', toolName: 'web_search', toolDisplayName: '联网搜索', args: '{"query":"LightBot"}', contentOffset: 0, delegationIndex: 0 },
+      { type: 'subagent_tool_call', batch_id: 'debug-batch-001', task_id: 'debug-task-research', task_index: 0, subagentName: 'research-agent', toolName: 'web_search', toolDisplayName: '联网搜索', args: '{"query":"智元"}', contentOffset: 0, delegationIndex: 0 },
       { type: 'subagent_tool_result', batch_id: 'debug-batch-001', task_id: 'debug-task-research', task_index: 0, subagentName: 'research-agent', toolName: 'web_search', toolDisplayName: '联网搜索', result: '{"results":2}', contentOffset: 0, delegationIndex: 0 },
       { type: 'subagent_task_done', batch_id: 'debug-batch-001', task_id: 'debug-task-research', task_index: 0, subagentName: 'research-agent', status: 'completed', contentOffset: 0, delegationIndex: 0, result: { reply: '## 调研结果\\n\\n- 支持流式对话' } },
       { type: 'subagent_task_done', batch_id: 'debug-batch-001', task_id: 'debug-task-review', task_index: 1, subagentName: 'review-agent', status: 'completed', contentOffset: 0, delegationIndex: 0, result: { reply: '## 检查结果\\n\\n- 保持单一委派渲染链路' } },
@@ -136,7 +136,7 @@ const toolOptions = getToolSelectOptions().filter(option => option.value !== UNR
 
 const selectedBlockIds = ref(['batch-subagent', 'skill'])
 const selectedToolNames = ref(['query_knowledge', 'web_search'])
-const bodyContent = ref('根据执行结果，LightBot 已完成对应能力展示。')
+const bodyContent = ref('根据执行结果，智元 已完成对应能力展示。')
 const includeMetadata = ref(true)
 const sseLog = ref('')
 const baseJson = ref(apiMessageToEditorJson({

@@ -156,24 +156,26 @@ public class GraphExtractionExecutor implements TaskExecutor {
             int successDocCount = 0;
             int totalChunkCount = 0;
 
-            // 6. 多文档合并抽取：先清空合并图谱数据
-            boolean isMultiDoc = documentIds != null && documentIds.size() > 1;
-            if (isMultiDoc || documentIds == null) {
+            // 6. 判定抽取模式：有 graphDocIds 才是「单文档抽取」（写入 single_doc）；
+            //    否则为合并/全量抽取（写入 merged）。不能仅用 documentIds.size()>1，
+            //    否则「多文档合并抽取」只选 1 个文档时会误写成 single_doc，知识库页查不到。
+            boolean isSingleDocMode = !graphDocIds.isEmpty();
+            if (!isSingleDocMode) {
                 tracker.nextPhase("正在清空旧图谱数据...");
                 clearAllGraphData(label);
                 log.info("[图谱抽取执行器] 已清空合并图谱数据: knowledgeId={}, label={}", knowledgeId, label);
             }
 
             // 7. 逐文档处理
-            String graphSource = (isMultiDoc || documentIds == null) ? "merged" : "single_doc";
+            String graphSource = isSingleDocMode ? "single_doc" : "merged";
             var docProgress = tracker.subRange(25, 75, documents.size());
             for (int docIdx = 0; docIdx < documents.size(); docIdx++) {
                 Document doc = documents.get(docIdx);
                 GraphDocument docGraphDoc = docGraphDocMap.getOrDefault(doc.getId(), fallbackGd);
 
                 try {
-                    // 7.1 单文档抽取时才逐文档删除；多文档合并抽取已在步骤6清空
-                    if (!isMultiDoc && documentIds != null) {
+                    // 7.1 单文档抽取时才逐文档删除；合并抽取已在步骤6清空
+                    if (isSingleDocMode) {
                         deleteDocGraphFromNeo4j(label, doc.getId());
                     }
 
@@ -237,20 +239,29 @@ public class GraphExtractionExecutor implements TaskExecutor {
                 }
             }
 
-            // 9. 更新知识库统计
+            // 9. 更新知识库统计（单文档模式用本次计数；合并模式从 Neo4j merged 层读取）
             tracker.nextPhase("正在更新统计...");
-            GraphStatsVO stats = getStatsFromNeo4j(label);
+            int finalNodeCount;
+            int finalEdgeCount;
+            if (isSingleDocMode) {
+                finalNodeCount = totalNodes;
+                finalEdgeCount = totalEdges;
+            } else {
+                GraphStatsVO stats = getStatsFromNeo4j(label);
+                finalNodeCount = stats.getNodeCount();
+                finalEdgeCount = stats.getEdgeCount();
+            }
             Knowledge knowledge = knowledgeService.getById(knowledgeId);
             if (knowledge != null) {
-                knowledge.setNodeCount(stats.getNodeCount());
-                knowledge.setEdgeCount(stats.getEdgeCount());
+                knowledge.setNodeCount(finalNodeCount);
+                knowledge.setEdgeCount(finalEdgeCount);
                 knowledgeService.updateById(knowledge);
             }
 
-            // 9. 更新 KnowledgeGraph 状态
+            // 10. 更新 KnowledgeGraph 状态
             kg.setStatus(GraphTaskStatus.COMPLETED);
-            kg.setNodeCount(stats.getNodeCount());
-            kg.setEdgeCount(stats.getEdgeCount());
+            kg.setNodeCount(finalNodeCount);
+            kg.setEdgeCount(finalEdgeCount);
             kg.setTaskId(null);
             kg.setErrorMessage(null);
             knowledgeGraphMapper.updateById(kg);

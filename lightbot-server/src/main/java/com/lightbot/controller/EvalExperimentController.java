@@ -55,7 +55,8 @@ public class EvalExperimentController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status) {
-        return Result.ok(experimentService.list(pageNum, pageSize, keyword, status, StpUtil.getLoginIdAsLong()));
+        // 企业资产：列表不过滤创建人
+        return Result.ok(experimentService.list(pageNum, pageSize, keyword, status, null));
     }
 
     @Operation(summary = "停止实验")

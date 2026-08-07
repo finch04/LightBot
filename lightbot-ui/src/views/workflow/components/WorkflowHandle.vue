@@ -5,6 +5,7 @@
     :position="position"
     :id="handleId"
     :connectable="connectable"
+    :style="style"
     class="wf-handle"
     :class="handleClass"
     :title="handleTitle"
@@ -21,6 +22,8 @@ const props = defineProps({
   position: { type: String, required: true },
   id: { type: String, default: undefined },
   connectable: { type: [Boolean, Number, Function], default: true },
+  /** 多出口节点（意图分类等）用于错开同一侧 Handle 的定位，如 { top: '35%' } */
+  style: { type: [Object, String], default: undefined },
 })
 
 const handleId = computed(() => {

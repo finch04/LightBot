@@ -14,6 +14,9 @@
       <button class="btn-refresh" @click="refreshUsers" :disabled="loading">
         <ReloadOutlined :spin="loading" /> 刷新
       </button>
+      <button class="btn-create" @click="openCreate">
+        <PlusOutlined /> 创建用户
+      </button>
     </div>
 
     <!-- 用户表格 -->
@@ -41,7 +44,7 @@
           </template>
           <template v-else-if="column.key === 'role'">
             <a-tag :color="record.role === 'admin' ? 'red' : 'blue'">
-              {{ record.role === 'admin' ? '管理员' : '普通用户' }}
+              {{ record.role === 'admin' ? '管理员' : '建设者' }}
             </a-tag>
           </template>
           <template v-else-if="column.key === 'status'">
@@ -72,6 +75,44 @@
       </a-table>
     </a-spin>
 
+    <!-- 创建用户弹窗 -->
+    <a-modal
+      v-model:open="createVisible"
+      title="创建用户账号"
+      :width="520"
+      :maskClosable="false"
+      :confirmLoading="createLoading"
+      okText="创建"
+      @ok="handleCreate"
+      @cancel="createVisible = false"
+    >
+      <div class="dialog-scroll-body">
+        <a-form :label-col="{ flex: '0 0 80px' }">
+          <a-form-item label="用户名" required>
+            <a-input v-model:value="createForm.username" placeholder="3-32 位用户名" :maxlength="32" />
+          </a-form-item>
+          <a-form-item label="密码" required>
+            <a-input-password v-model:value="createForm.password" placeholder="至少 6 位密码" :maxlength="64" />
+          </a-form-item>
+          <a-form-item label="昵称">
+            <a-input v-model:value="createForm.nickname" placeholder="用户昵称" :maxlength="20" show-count />
+          </a-form-item>
+          <a-form-item label="邮箱">
+            <a-input v-model:value="createForm.email" placeholder="邮箱地址" />
+          </a-form-item>
+          <a-form-item label="手机">
+            <a-input v-model:value="createForm.phone" placeholder="手机号码" />
+          </a-form-item>
+          <a-form-item label="角色">
+            <a-select v-model:value="createForm.role">
+              <a-select-option value="user">建设者</a-select-option>
+              <a-select-option value="admin">管理员</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-form>
+      </div>
+    </a-modal>
+
     <!-- 编辑弹窗 -->
     <a-modal
       v-model:open="editVisible"
@@ -97,7 +138,7 @@
         </a-form-item>
         <a-form-item label="角色">
           <a-select v-model:value="editForm.role">
-            <a-select-option value="user">普通用户</a-select-option>
+            <a-select-option value="user">建设者</a-select-option>
             <a-select-option value="admin">管理员</a-select-option>
           </a-select>
         </a-form-item>
@@ -143,7 +184,7 @@
             <span class="detail-label">角色</span>
             <span class="detail-value">
               <a-tag :color="detailUser.role === 'admin' ? 'red' : 'blue'">
-                {{ detailUser.role === 'admin' ? '管理员' : '普通用户' }}
+                {{ detailUser.role === 'admin' ? '管理员' : '建设者' }}
               </a-tag>
             </span>
           </div>
@@ -161,9 +202,9 @@
           </div>
         </div>
 
-        <!-- 用户的 Agent -->
+        <!-- 创建人审计：该用户创建的 Agent（企业资产共享后仅作审计） -->
         <div class="detail-resources">
-          <h4>Agent（{{ userAgents.length }}）</h4>
+          <h4>创建的 Agent（{{ userAgents.length }}）</h4>
           <a-spin :spinning="agentsLoading">
             <div v-if="userAgents.length === 0" class="resource-empty">暂无 Agent</div>
             <div v-else class="resource-list">
@@ -183,9 +224,9 @@
           </a-spin>
         </div>
 
-        <!-- 用户的知识库 -->
+        <!-- 创建人审计：该用户创建的知识库 -->
         <div class="detail-resources">
-          <h4>知识库（{{ userKnowledges.length }}）</h4>
+          <h4>创建的知识库（{{ userKnowledges.length }}）</h4>
           <a-spin :spinning="knowledgesLoading">
             <div v-if="userKnowledges.length === 0" class="resource-empty">暂无知识库</div>
             <div v-else class="resource-list">
@@ -208,10 +249,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined, DeleteOutlined,
-  RobotOutlined, DatabaseOutlined,
+  PlusOutlined, RobotOutlined, DatabaseOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { listUsers, adminUpdateUser, adminDeleteUser, getUserDetail, getUserAgents, getUserKnowledges } from '../api/admin'
+import { listUsers, adminCreateUser, adminUpdateUser, adminDeleteUser, getUserAgents, getUserKnowledges } from '../api/admin'
 import { formatTime } from '../utils/format'
 
 let searchTimer = null
@@ -240,6 +281,18 @@ const columns = [
   { title: '注册时间', key: 'createTime', width: 170 },
   { title: '操作', key: 'action', width: 110, align: 'center', fixed: 'right' },
 ]
+
+// 创建弹窗
+const createVisible = ref(false)
+const createLoading = ref(false)
+const createForm = reactive({
+  username: '',
+  password: '',
+  nickname: '',
+  email: '',
+  phone: '',
+  role: 'user',
+})
 
 // 编辑弹窗
 const editVisible = ref(false)
@@ -293,6 +346,49 @@ function handleTableChange(pag) {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
   loadUsers()
+}
+
+function openCreate() {
+  Object.assign(createForm, {
+    username: '',
+    password: '',
+    nickname: '',
+    email: '',
+    phone: '',
+    role: 'user',
+  })
+  createVisible.value = true
+}
+
+async function handleCreate() {
+  if (!createForm.username || createForm.username.length < 3) {
+    message.warning('用户名长度需为 3-32 位')
+    return Promise.reject()
+  }
+  if (!createForm.password || createForm.password.length < 6) {
+    message.warning('密码长度至少 6 位')
+    return Promise.reject()
+  }
+  createLoading.value = true
+  try {
+    await adminCreateUser({
+      username: createForm.username,
+      password: createForm.password,
+      nickname: createForm.nickname || undefined,
+      email: createForm.email || undefined,
+      phone: createForm.phone || undefined,
+      role: createForm.role,
+    })
+    message.success('用户创建成功')
+    createVisible.value = false
+    pagination.current = 1
+    loadUsers()
+  } catch (e) {
+    message.error(e.response?.data?.message || '创建失败')
+    return Promise.reject()
+  } finally {
+    createLoading.value = false
+  }
 }
 
 function openEdit(record) {
@@ -405,6 +501,22 @@ async function openDetail(record) {
 }
 .btn-refresh:hover:not(:disabled) { border-color: var(--color-link); color: var(--color-link); }
 .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 8px 16px;
+  background: var(--color-link);
+  border: none;
+  border-radius: 100px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.btn-create:hover { opacity: 0.9; }
 .user-cell {
   display: flex;
   align-items: center;

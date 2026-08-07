@@ -56,7 +56,8 @@ export default defineConfig({
         "media-src 'self' data: blob:",
         "style-src 'self' 'unsafe-inline'",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-        "connect-src 'self' https: ws: wss:",
+        // 开发态放行 http：业务页 srcdoc 常调本地后端；localhost 与 127.0.0.1 不同源，'self' 盖不住
+        "connect-src 'self' https: http: ws: wss:",
         "font-src 'self' data:",
         "frame-src 'self'",
         "object-src 'none'",

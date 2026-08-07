@@ -33,6 +33,15 @@
         :form-fields="formFields"
         :submitted-data="submittedData"
       />
+      <!-- 业务办理页 HITL：渲染固化模板，提交后写入 businessResult -->
+      <div v-else-if="isBusinessPageHitl && businessPageEvent" class="business-page-hitl">
+        <PresentBusinessPageResult
+          :event="businessPageEvent"
+          :workflow-mode="true"
+          @workflow-submit="handleBusinessPageSubmit"
+          @workflow-cancel="handleBusinessPageCancel"
+        />
+      </div>
       <a-form v-else layout="vertical" class="confirm-fields">
         <template v-for="field in formFields" :key="field.key || field.label">
           <WorkflowConfirmInfoBlock v-if="field.type === 'info'" :field="field" />
@@ -112,7 +121,22 @@ import { message } from 'ant-design-vue'
 import { CheckCircleOutlined, RightOutlined, WarningOutlined } from '@ant-design/icons-vue'
 import WorkflowConfirmInfoBlock from './workflow/confirm/WorkflowConfirmInfoBlock.vue'
 import WorkflowConfirmSubmittedSummary from './workflow/confirm/WorkflowConfirmSubmittedSummary.vue'
-import { normalizeConfirmOptions, buildConfirmSubmittedEntries, isAskUserHitlForm, getHitlPendingTitle, getHitlResolvedTitle, getHitlSubmitLabel, getHitlAbandonLabel, validateAskUserFormFields, resolveAskUserSubmitPayload, resolveAskUserDisplayAnswer, ASK_USER_SELECTED_OPTION_KEY } from './workflow/confirm/confirmFormUtils.js'
+import PresentBusinessPageResult from './businessPages/PresentBusinessPageResult.vue'
+import {
+  normalizeConfirmOptions,
+  buildConfirmSubmittedEntries,
+  isAskUserHitlForm,
+  isBusinessPageHitlForm,
+  getHitlPendingTitle,
+  getHitlResolvedTitle,
+  getHitlSubmitLabel,
+  getHitlAbandonLabel,
+  validateAskUserFormFields,
+  resolveAskUserSubmitPayload,
+  resolveAskUserDisplayAnswer,
+  ASK_USER_SELECTED_OPTION_KEY,
+  BUSINESS_RESULT_KEY,
+} from './workflow/confirm/confirmFormUtils.js'
 
 const props = defineProps({
   confirmForm: { type: Object, default: null },
@@ -177,10 +201,31 @@ const formFields = computed(() => {
 })
 
 const isAskUserHitl = computed(() => isAskUserHitlForm(props.confirmForm))
+const isBusinessPageHitl = computed(() => isBusinessPageHitlForm(props.confirmForm))
+const businessPageEvent = computed(() => {
+  if (!isBusinessPageHitl.value || !props.confirmForm?.pagePayload) return null
+  try {
+    return {
+      type: 'tool_result',
+      toolName: 'present_business_page',
+      result: JSON.stringify(props.confirmForm.pagePayload),
+    }
+  } catch {
+    return null
+  }
+})
 const hitlPendingTitle = computed(() => getHitlPendingTitle(props.confirmForm))
 const hitlResolvedTitle = computed(() => getHitlResolvedTitle(props.confirmForm))
 const hitlSubmitLabel = computed(() => getHitlSubmitLabel(props.confirmForm))
 const hitlAbandonLabel = computed(() => getHitlAbandonLabel(props.confirmForm))
+
+function handleBusinessPageSubmit(result) {
+  emit('submit', { [BUSINESS_RESULT_KEY]: JSON.stringify(result || {}), action: result?.action || 'submit' })
+}
+
+function handleBusinessPageCancel(result) {
+  emit('abandon')
+}
 
 const submittedEntries = computed(() => {
   if (isAskUserHitl.value && props.submittedData) {

@@ -69,7 +69,8 @@ public class PromptController {
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
-        return Result.ok(promptService.list(pageNum, pageSize, keyword, StpUtil.getLoginIdAsLong()));
+        // 企业资产：列表不过滤创建人
+        return Result.ok(promptService.list(pageNum, pageSize, keyword, null));
     }
 
     @Operation(summary = "更新Prompt")

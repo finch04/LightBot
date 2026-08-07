@@ -511,6 +511,18 @@
 .lb-detail-header__tags--inline {
   flex-wrap: nowrap;
 }
+.lb-detail-header__title--inline {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-ink, #171717);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(360px, 40vw);
+}
 .lb-detail-header--slim .lb-detail-header__top-bar {
   padding: 12px 32px;
 }
@@ -520,7 +532,7 @@
    内容区 .detail-page__body 自带 padding，让卡片与页面有间隔。
    避免每个详情页重复写 scoped 样式，也避免污染全局 .page（admin-page.css）。 */
 .detail-page {
-  height: 100vh;
+  height: var(--app-content-height, 100%);
   background: var(--color-canvas-soft);
   display: flex;
   flex-direction: column;

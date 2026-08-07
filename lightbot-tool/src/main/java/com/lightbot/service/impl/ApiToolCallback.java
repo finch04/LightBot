@@ -49,7 +49,7 @@ public class ApiToolCallback implements ToolCallback {
         log.info("[ApiToolCallback] 执行API工具: name={}, input={}", tool.getName(), toolInput);
         try {
             Map<String, Object> inputs = parseInputs(toolInput);
-            String result = executionService.execute(tool, inputs);
+            String result = executionService.execute(tool, inputs, toolContext);
             log.info("[ApiToolCallback] API工具执行完成: name={}, resultLength={}", tool.getName(), result.length());
             return result;
         } catch (Exception e) {

@@ -31,7 +31,10 @@ import java.util.Set;
 public class SubAgentPermissionPolicy {
 
     /** 父会话专属工具：产物只能由主 Agent 汇总后向用户交付。 */
-    private static final Set<String> PARENT_SESSION_TOOL_NAMES = Set.of("present_artifacts");
+    private static final Set<String> PARENT_SESSION_TOOL_NAMES = Set.of(
+            "present_artifacts",
+            "present_business_page"
+    );
 
     private final ObjectMapper objectMapper;
 

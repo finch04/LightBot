@@ -1,6 +1,7 @@
 package com.lightbot.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lightbot.dto.AdminUserCreateDTO;
 import com.lightbot.dto.AdminUserUpdateDTO;
 import com.lightbot.dto.ChangePasswordDTO;
 import com.lightbot.dto.LoginDTO;
@@ -21,12 +22,20 @@ import java.util.List;
 public interface UserService {
 
     /**
-     * 用户注册
+     * 公开注册（已关闭，始终拒绝；请使用管理员创建用户）
      *
      * @param request 注册请求
      * @return 用户信息
      */
     UserDTO register(RegisterDTO request);
+
+    /**
+     * 管理员创建普通用户（或指定角色）账号
+     *
+     * @param request 创建请求
+     * @return 用户信息
+     */
+    UserDTO adminCreateUser(AdminUserCreateDTO request);
 
     /**
      * 用户登录

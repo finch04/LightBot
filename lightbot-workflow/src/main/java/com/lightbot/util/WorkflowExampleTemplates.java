@@ -6,7 +6,7 @@ import java.util.*;
 
 /**
  * 内置示例工作流模板定义
- * <p>9 个示例 Agent 覆盖工作流节点与工具节点（含 confirm / tool / ask_user / app_component），帮助用户快速学习</p>
+ * <p>10 个示例 Agent 覆盖工作流节点与工具节点（含 confirm / tool / ask_user / app_component / sub_agent），帮助用户快速学习</p>
  *
  * @author finch
  * @since 2026-05-31
@@ -17,9 +17,19 @@ public final class WorkflowExampleTemplates {
     public static final String SUB_PLACEHOLDER_PREFIX = "__SUB:";
     /** 工具占位符前缀，创建示例 Agent 时按工具名解析 toolId */
     public static final String TOOL_PLACEHOLDER_PREFIX = "__TOOL:";
+    /** SubAgent 能力占位符前缀，创建示例时替换为真实 SubAgent ID */
+    public static final String CAPABILITY_SUBAGENT_PLACEHOLDER_PREFIX = "__SA:";
 
     private static final Map<String, String> SUB_WORKFLOW_NAMES = Map.of(
             "data_prep_sub", "示例子流程：结构化提取模块"
+    );
+
+    private static final Map<String, String> CAPABILITY_SUBAGENT_NAMES = Map.of(
+            "example_summarizer", "wf_example_summarizer"
+    );
+
+    private static final Map<String, String> CAPABILITY_SUBAGENT_DISPLAY_NAMES = Map.of(
+            "example_summarizer", "示例摘要助手"
     );
 
     private WorkflowExampleTemplates() {}
@@ -75,6 +85,11 @@ public final class WorkflowExampleTemplates {
                         .key("gaokao_volunteer").name("示例：高考志愿填报助手")
                         .description("向用户提问工具链式反问省市、分数、选科，再生成志愿填报建议，演示 ask_user HITL 挂起与 resume")
                         .nodeTypeTags(List.of("input", "tool", "variable_handle", "llm", "output"))
+                        .build(),
+                WorkflowExampleVO.builder()
+                        .key("sub_agent_delegate").name("示例：SubAgent 委派助手")
+                        .description("输入需求后委派 SubAgent 摘要整理，再输出结果，演示 sub_agent 节点在 DAG 中的用法")
+                        .nodeTypeTags(List.of("input", "sub_agent", "output"))
                         .build()
         );
     }
@@ -90,10 +105,34 @@ public final class WorkflowExampleTemplates {
     }
 
     /**
+     * 主示例是否需要先准备 SubAgent 能力实例
+     */
+    public static List<String> getCapabilitySubAgentKeys(String key) {
+        if ("sub_agent_delegate".equals(key)) {
+            return List.of("example_summarizer");
+        }
+        return List.of();
+    }
+
+    /**
      * 子工作流 Agent 名称
      */
     public static String getSubWorkflowName(String subKey) {
         return SUB_WORKFLOW_NAMES.getOrDefault(subKey, "示例子工作流");
+    }
+
+    /**
+     * SubAgent 能力标识名（英文唯一名）
+     */
+    public static String getCapabilitySubAgentName(String saKey) {
+        return CAPABILITY_SUBAGENT_NAMES.getOrDefault(saKey, saKey);
+    }
+
+    /**
+     * SubAgent 能力显示名
+     */
+    public static String getCapabilitySubAgentDisplayName(String saKey) {
+        return CAPABILITY_SUBAGENT_DISPLAY_NAMES.getOrDefault(saKey, saKey);
     }
 
     /**
@@ -107,12 +146,13 @@ public final class WorkflowExampleTemplates {
     }
 
     /**
-     * 解析快照中的工具 ID / 子工作流 Agent ID 占位符（原地修改）
+     * 解析快照中的工具 ID / 子工作流 Agent ID / SubAgent 能力 ID 占位符（原地修改）
      */
     @SuppressWarnings("unchecked")
     public static void resolveBindings(Map<String, Object> snapshot,
-                                       Map<String, Long> subAgentIds,
-                                       Map<String, Long> toolIds) {
+                                       Map<String, Long> subWorkflowAgentIds,
+                                       Map<String, Long> toolIds,
+                                       Map<String, Long> capabilitySubAgentIds) {
         if (snapshot == null) {
             return;
         }
@@ -124,6 +164,9 @@ public final class WorkflowExampleTemplates {
         if (!(nodesObj instanceof List<?> nodes)) {
             return;
         }
+        Map<String, Long> safeSubWorkflowIds = subWorkflowAgentIds != null ? subWorkflowAgentIds : Map.of();
+        Map<String, Long> safeToolIds = toolIds != null ? toolIds : Map.of();
+        Map<String, Long> safeCapabilityIds = capabilitySubAgentIds != null ? capabilitySubAgentIds : Map.of();
         for (Object nodeObj : nodes) {
             if (!(nodeObj instanceof Map<?, ?> node)) {
                 continue;
@@ -133,8 +176,9 @@ public final class WorkflowExampleTemplates {
                 continue;
             }
             Map<String, Object> dataMap = (Map<String, Object>) data;
-            resolveToolPlaceholder(dataMap, toolIds);
-            resolveSubWorkflowPlaceholder(dataMap, subAgentIds);
+            resolveToolPlaceholder(dataMap, safeToolIds);
+            resolveSubWorkflowPlaceholder(dataMap, safeSubWorkflowIds);
+            resolveCapabilitySubAgentPlaceholder(dataMap, safeCapabilityIds);
         }
     }
 
@@ -142,14 +186,15 @@ public final class WorkflowExampleTemplates {
      * 获取解析占位符后的工作流快照
      */
     public static Map<String, Object> buildResolvedSnapshot(String key,
-                                                            Map<String, Long> subAgentIds,
-                                                            Map<String, Long> toolIds) {
+                                                            Map<String, Long> subWorkflowAgentIds,
+                                                            Map<String, Long> toolIds,
+                                                            Map<String, Long> capabilitySubAgentIds) {
         Map<String, Object> snapshot = getWorkflowSnapshot(key);
         if (snapshot == null) {
             return null;
         }
         Map<String, Object> mutable = deepCopyMap(snapshot);
-        resolveBindings(mutable, subAgentIds, toolIds);
+        resolveBindings(mutable, subWorkflowAgentIds, toolIds, capabilitySubAgentIds);
         return mutable;
     }
 
@@ -162,7 +207,7 @@ public final class WorkflowExampleTemplates {
             return null;
         }
         Map<String, Object> mutable = deepCopyMap(snapshot);
-        resolveBindings(mutable, Map.of(), toolIds);
+        resolveBindings(mutable, Map.of(), toolIds, Map.of());
         return mutable;
     }
 
@@ -183,6 +228,7 @@ public final class WorkflowExampleTemplates {
             case "human_review" -> buildHumanReviewWorkflow();
             case "sub_workflow_orchestrator" -> buildSubWorkflowOrchestrator();
             case "gaokao_volunteer" -> buildGaokaoVolunteerWorkflow();
+            case "sub_agent_delegate" -> buildSubAgentDelegateWorkflow();
             default -> null;
         };
     }
@@ -222,7 +268,8 @@ public final class WorkflowExampleTemplates {
             Map.entry("tool_multi", "## 多工具协作助手\n我会先提取你的问题与计算参数，再调用联网搜索和计算器工具，最后汇总成完整回答。\n\n> 请描述一个需要查资料并做简单计算的问题。"),
             Map.entry("human_review", "## 人工审核助手\n我会先生成草稿内容，然后暂停等待你在对话中完成人工确认（含展示信息、文本、数字、单选、下拉、多行意见等字段），通过后再输出正式版本。\n\n> 适合体验 confirm 人工确认节点的完整表单能力。"),
             Map.entry("sub_workflow_orchestrator", "## 子工作流编排助手\n我会调用内置子工作流做结构化提取，再请你复核子流程结果，最后生成定稿回复。\n\n> 创建本示例时会自动生成并发布子工作流 Agent。"),
-            Map.entry("gaokao_volunteer", "## 高考志愿填报助手\n我会依次向您确认**高考省份、总分、选科组合**等信息（对话中会弹出提问表单），收集完整后再给出冲稳保方向的志愿建议。\n\n> 演示 ask_user 工具节点的工作流挂起与 resume；请以官方招生简章与考试院数据为准。")
+            Map.entry("gaokao_volunteer", "## 高考志愿填报助手\n我会依次向您确认**高考省份、总分、选科组合**等信息（对话中会弹出提问表单），收集完整后再给出冲稳保方向的志愿建议。\n\n> 演示 ask_user 工具节点的工作流挂起与 resume；请以官方招生简章与考试院数据为准。"),
+            Map.entry("sub_agent_delegate", "## SubAgent 委派助手\n我会把你的需求交给 SubAgent 做摘要整理，再把结果返回给流程。\n\n> 创建本示例时会自动准备示例 SubAgent（`wf_example_summarizer`）。")
     );
 
     private static final Map<String, String> QUESTIONS_MAP = Map.ofEntries(
@@ -231,10 +278,11 @@ public final class WorkflowExampleTemplates {
             Map.entry("batch_parallel", "[\"请批量评审这些需求：\\n1. 登录页偶发白屏，影响客户演示，需要今天修复\\n2. 希望知识库支持批量导入飞书文档\\n3. 工作流编排页节点太多时拖动画布卡顿\\n4. 新增对话消息导出为 Markdown\", \"请把这些用户反馈按优先级整理：\\n1. 客户说支付成功后订单状态偶尔不更新\\n2. 希望移动端对话页面支持语音输入\\n3. 上传大文件时进度提示不明显\\n4. 希望管理员能导出团队成员使用报表\", \"请分析下面的缺陷和优化建议：\\n1. 知识库检索结果偶尔为空，但文档里明明有相关内容\\n2. 希望工作流节点支持复制粘贴\\n3. 对话历史很多时页面滚动变卡\\n4. 发布工作流前希望增加配置完整性检查\"]"),
             Map.entry("data_extract", "[\"我叫张三，邮箱是zhangsan@example.com，电话13800138000\", \"帮我验证一下 test@domain.com 这个邮箱格式对不对\", \"从这段话里提取所有联系方式\"]"),
             Map.entry("external_integration", "[\"帮我调用API获取数据\", \"用MCP工具处理一下任务\", \"外部接口调用失败了怎么办？\"]"),
-            Map.entry("tool_multi", "[\"查一下2024年全球AI市场规模，并计算1000×1.15\", \"搜索LightBot是什么，再算一下256+128\", \"帮我调研云原生趋势并计算增长率\"]"),
+            Map.entry("tool_multi", "[\"查一下2024年全球AI市场规模，并计算1000×1.15\", \"搜索智元是什么，再算一下256+128\", \"帮我调研云原生趋势并计算增长率\"]"),
             Map.entry("human_review", "[\"帮我写一段产品发布公告\", \"起草一封客户道歉邮件\", \"生成一份活动邀请文案\"]"),
             Map.entry("sub_workflow_orchestrator", "[\"整理这段需求：我们要做智能客服，支持多轮对话和知识库\", \"提取下面方案的关键信息并复核\", \"分析这段产品介绍，输出结构化摘要\"]"),
-            Map.entry("gaokao_volunteer", "[\"我是河南考生，想报计算机相关专业\", \"帮我看看600分左右能报哪些学校\", \"新高考选科物化生，分数630怎么填志愿\"]")
+            Map.entry("gaokao_volunteer", "[\"我是河南考生，想报计算机相关专业\", \"帮我看看600分左右能报哪些学校\", \"新高考选科物化生，分数630怎么填志愿\"]"),
+            Map.entry("sub_agent_delegate", "[\"请帮我摘要：我们要做智能客服，支持多轮对话、知识库检索和工单流转\", \"把下面需求整理成三点：提升响应速度、降低人工成本、支持夜间值班\", \"总结这段话的核心目标与约束\"]")
     );
 
     // ========== 示例 1：RAG 知识问答助手 ==========
@@ -511,16 +559,10 @@ public final class WorkflowExampleTemplates {
                 node("condition_1", "condition", 650, 300, Map.of(
                         "label", "状态检查",
                         "conditionGroups", List.of(
-                                Map.of(
-                                        "relation", "and",
-                                        "sourceHandle", "out_a",
-                                        "rules", List.of(Map.of("variable", "statusCode", "operator", "eq", "value", "200"))
-                                ),
-                                Map.of(
-                                        "relation", "and",
-                                        "sourceHandle", "out_b",
-                                        "rules", List.of(Map.of("variable", "error", "operator", "not_empty", "value", ""))
-                                )
+                                conditionGroup("cg_ok", "成功", "and",
+                                        List.of(Map.of("variable", "statusCode", "operator", "eq", "value", "200"))),
+                                conditionGroup("cg_err", "有错误", "and",
+                                        List.of(Map.of("variable", "error", "operator", "not_empty", "value", "")))
                         )
                 )),
                 node("mcp_1", "mcp", 900, 300, Map.of(
@@ -555,8 +597,9 @@ public final class WorkflowExampleTemplates {
                 edge("e_start", "start_1", "api_1"),
                 edge("e_api", "api_1", "script_parse"),
                 edge("e_parse", "script_parse", "condition_1"),
-                edgeHandle("e_ok", "condition_1", "mcp_1", "out_a", "in"),
-                edgeHandle("e_err", "condition_1", "variable_err", "out_b", "in"),
+                edgeHandle("e_ok", "condition_1", "mcp_1", "condition_1_cg_ok", "in"),
+                edgeHandle("e_err", "condition_1", "variable_err", "condition_1_cg_err", "in"),
+                edgeHandle("e_fallback", "condition_1", "variable_err", "condition_1_default", "in"),
                 edge("e_mcp", "mcp_1", "llm_1"),
                 edge("e_llm", "llm_1", "output_ok"),
                 edge("e_out_ok", "output_ok", "end_1"),
@@ -808,16 +851,10 @@ public final class WorkflowExampleTemplates {
                 node("condition_1", "condition", 900, 280, Map.of(
                         "label", "审核分支",
                         "conditionGroups", List.of(
-                                Map.of(
-                                        "relation", "and",
-                                        "sourceHandle", "out_a",
-                                        "rules", List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "通过"))
-                                ),
-                                Map.of(
-                                        "relation", "and",
-                                        "sourceHandle", "out_b",
-                                        "rules", List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "驳回"))
-                                )
+                                conditionGroup("cg_pass", "通过", "and",
+                                        List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "通过"))),
+                                conditionGroup("cg_reject", "驳回", "and",
+                                        List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "驳回")))
                         )
                 )),
                 node("llm_final", "llm", 1150, 150, Map.of(
@@ -851,9 +888,9 @@ public final class WorkflowExampleTemplates {
                 edge("e_input", "input_1", "llm_draft"),
                 edge("e_draft_confirm", "llm_draft", "confirm_1"),
                 edge("e_confirm_cond", "confirm_1", "condition_1"),
-                edgeHandle("e_pass", "condition_1", "llm_final", "out_a", "in"),
-                edgeHandle("e_reject", "condition_1", "variable_reject", "out_b", "in"),
-                edgeHandle("e_fallback", "condition_1", "output_fallback", "out_c", "in"),
+                edgeHandle("e_pass", "condition_1", "llm_final", "condition_1_cg_pass", "in"),
+                edgeHandle("e_reject", "condition_1", "variable_reject", "condition_1_cg_reject", "in"),
+                edgeHandle("e_fallback", "condition_1", "output_fallback", "condition_1_default", "in"),
                 edge("e_final_out", "llm_final", "output_ok"),
                 edge("e_reject_out", "variable_reject", "output_reject"),
                 edge("e_ok_end", "output_ok", "end_1"),
@@ -936,16 +973,10 @@ public final class WorkflowExampleTemplates {
                 node("condition_1", "condition", 940, 280, Map.of(
                         "label", "复核分支",
                         "conditionGroups", List.of(
-                                Map.of(
-                                        "relation", "and",
-                                        "sourceHandle", "out_a",
-                                        "rules", List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "确认"))
-                                ),
-                                Map.of(
-                                        "relation", "and",
-                                        "sourceHandle", "out_b",
-                                        "rules", List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "退回修改"))
-                                )
+                                conditionGroup("cg_pass", "确认", "and",
+                                        List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "确认"))),
+                                conditionGroup("cg_reject", "退回修改", "and",
+                                        List.of(Map.of("variable", "confirmed", "operator", "eq", "value", "退回修改")))
                         )
                 )),
                 node("llm_1", "llm", 1180, 150, Map.of(
@@ -979,14 +1010,46 @@ public final class WorkflowExampleTemplates {
                 edge("e_input", "input_1", "sub_1"),
                 edge("e_sub_confirm", "sub_1", "confirm_1"),
                 edge("e_confirm_cond", "confirm_1", "condition_1"),
-                edgeHandle("e_pass", "condition_1", "llm_1", "out_a", "in"),
-                edgeHandle("e_reject", "condition_1", "variable_reject", "out_b", "in"),
-                edgeHandle("e_fallback", "condition_1", "output_fallback", "out_c", "in"),
+                edgeHandle("e_pass", "condition_1", "llm_1", "condition_1_cg_pass", "in"),
+                edgeHandle("e_reject", "condition_1", "variable_reject", "condition_1_cg_reject", "in"),
+                edgeHandle("e_fallback", "condition_1", "output_fallback", "condition_1_default", "in"),
                 edge("e_llm_out", "llm_1", "output_ok"),
                 edge("e_rej_out", "variable_reject", "output_reject"),
                 edge("e_ok_end", "output_ok", "end_1"),
                 edge("e_rej_end", "output_reject", "end_1"),
                 edge("e_fb_end", "output_fallback", "end_1")
+        );
+        return workflowSnapshot(nodes, edges);
+    }
+
+    // ========== 示例 10：SubAgent 委派助手 ==========
+
+    private static Map<String, Object> buildSubAgentDelegateWorkflow() {
+        List<Map<String, Object>> nodes = List.of(
+                node("start_1", "start", 50, 200, Map.of()),
+                node("input_1", "input", 220, 200, Map.of(
+                        "label", "用户需求",
+                        "outputParams", List.of(Map.of("key", "query", "type", "String", "defaultValue", ""))
+                )),
+                node("sa_1", "sub_agent", 460, 200, Map.of(
+                        "label", "SubAgent 摘要",
+                        "subAgentId", capabilitySubAgentPlaceholder("example_summarizer"),
+                        "subAgentName", "示例摘要助手",
+                        "task", "请将以下内容整理为简洁摘要（3-5 条要点）：\n{{query}}",
+                        "streamSwitch", false,
+                        "outputMappings", List.of(Map.of("key", "reply", "value", "{{reply}}"))
+                )),
+                node("output_1", "output", 720, 200, Map.of(
+                        "label", "输出摘要",
+                        "output", "{{reply}}"
+                )),
+                node("end_1", "end", 940, 200, Map.of())
+        );
+        List<Map<String, Object>> edges = List.of(
+                edge("e_start", "start_1", "input_1"),
+                edge("e_input", "input_1", "sa_1"),
+                edge("e_sa", "sa_1", "output_1"),
+                edge("e_out", "output_1", "end_1")
         );
         return workflowSnapshot(nodes, edges);
     }
@@ -1024,6 +1087,10 @@ public final class WorkflowExampleTemplates {
         return SUB_PLACEHOLDER_PREFIX + subKey + "__";
     }
 
+    private static String capabilitySubAgentPlaceholder(String saKey) {
+        return CAPABILITY_SUBAGENT_PLACEHOLDER_PREFIX + saKey + "__";
+    }
+
     @SuppressWarnings("unchecked")
     private static void resolveToolPlaceholder(Map<String, Object> dataMap, Map<String, Long> toolIds) {
         Object raw = dataMap.get("toolId");
@@ -1038,15 +1105,33 @@ public final class WorkflowExampleTemplates {
     }
 
     @SuppressWarnings("unchecked")
-    private static void resolveSubWorkflowPlaceholder(Map<String, Object> dataMap, Map<String, Long> subAgentIds) {
+    private static void resolveSubWorkflowPlaceholder(Map<String, Object> dataMap, Map<String, Long> subWorkflowAgentIds) {
         Object raw = dataMap.get("componentCode");
         if (!(raw instanceof String placeholder) || !placeholder.startsWith(SUB_PLACEHOLDER_PREFIX)) {
             return;
         }
         String subKey = placeholder.substring(SUB_PLACEHOLDER_PREFIX.length()).replace("__", "");
-        Long subAgentId = subAgentIds.get(subKey);
+        Long subAgentId = subWorkflowAgentIds.get(subKey);
         if (subAgentId != null) {
             dataMap.put("componentCode", String.valueOf(subAgentId));
+        }
+    }
+
+    private static void resolveCapabilitySubAgentPlaceholder(Map<String, Object> dataMap,
+                                                            Map<String, Long> capabilitySubAgentIds) {
+        Object raw = dataMap.get("subAgentId");
+        if (!(raw instanceof String placeholder)
+                || !placeholder.startsWith(CAPABILITY_SUBAGENT_PLACEHOLDER_PREFIX)) {
+            return;
+        }
+        String saKey = placeholder.substring(CAPABILITY_SUBAGENT_PLACEHOLDER_PREFIX.length()).replace("__", "");
+        Long subAgentId = capabilitySubAgentIds.get(saKey);
+        if (subAgentId != null) {
+            dataMap.put("subAgentId", String.valueOf(subAgentId));
+            String displayName = CAPABILITY_SUBAGENT_DISPLAY_NAMES.get(saKey);
+            if (displayName != null && !displayName.isBlank()) {
+                dataMap.put("subAgentName", displayName);
+            }
         }
     }
 
@@ -1074,6 +1159,17 @@ public final class WorkflowExampleTemplates {
         e.put("sourceHandle", sourceHandle);
         e.put("targetHandle", targetHandle);
         return e;
+    }
+
+    /** 条件组（右侧动态出口，handle = {nodeId}_{id}） */
+    private static Map<String, Object> conditionGroup(String id, String label, String relation,
+                                                      List<Map<String, Object>> rules) {
+        Map<String, Object> g = new LinkedHashMap<>();
+        g.put("id", id);
+        g.put("label", label);
+        g.put("relation", relation);
+        g.put("rules", rules);
+        return g;
     }
 
     private static Map<String, Object> workflowSnapshot(List<Map<String, Object>> nodes,

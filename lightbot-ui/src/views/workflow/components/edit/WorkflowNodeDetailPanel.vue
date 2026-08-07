@@ -79,6 +79,7 @@
         @sync="$emit('sync')"
         @knowledge-change="$emit('knowledge-change', $event)"
         @tool-change="$emit('tool-change', $event)"
+        @remove-source-handles="$emit('remove-source-handles', $event)"
       />
       <a-form v-else layout="vertical" :disabled="isVersionPreview || forceReadonly">
         <a-form-item label="节点 ID"><span class="node-id-display mono">{{ node.id }}</span></a-form-item>
@@ -171,7 +172,7 @@ defineProps({
 
 defineEmits([
   'close', 'open-example', 'open-test', 'copy', 'sync',
-  'knowledge-change', 'tool-change', 'delete',
+  'knowledge-change', 'tool-change', 'delete', 'remove-source-handles',
 ])
 </script>
 

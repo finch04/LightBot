@@ -20,6 +20,7 @@ import {
   FolderOpenOutlined,
   ScanOutlined,
   CheckSquareOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons-vue'
 import { defineAsyncComponent } from 'vue'
 
@@ -30,6 +31,7 @@ const SearchDocumentsResult = defineAsyncComponent(() => import('./tools/SearchD
 const WebSearchResult = defineAsyncComponent(() => import('./tools/WebSearchResult.vue'))
 const CalculatorResult = defineAsyncComponent(() => import('./tools/CalculatorResult.vue'))
 const PgSqlQueryResult = defineAsyncComponent(() => import('./tools/PgSqlQueryResult.vue'))
+const AskDataResult = defineAsyncComponent(() => import('./tools/AskDataResult.vue'))
 const PgSqlListTablesResult = defineAsyncComponent(() => import('./tools/PgSqlListTablesResult.vue'))
 const PgSqlDescribeTableResult = defineAsyncComponent(() => import('./tools/PgSqlDescribeTableResult.vue'))
 const AskUserResult = defineAsyncComponent(() => import('./tools/AskUserResult.vue'))
@@ -47,6 +49,7 @@ const InstallSkillResult = defineAsyncComponent(() => import('./tools/InstallSki
 const UserMemoryResult = defineAsyncComponent(() => import('./tools/UserMemoryResult.vue'))
 const ChartResult = defineAsyncComponent(() => import('./tools/ChartResult.vue'))
 const WriteTodosResult = defineAsyncComponent(() => import('./tools/WriteTodosResult.vue'))
+const PresentBusinessPageResult = defineAsyncComponent(() => import('./businessPages/PresentBusinessPageResult.vue'))
 
 // 工具渲染组件映射
 export const TOOL_RENDERERS = {
@@ -65,6 +68,10 @@ export const TOOL_RENDERERS = {
   pg_list_tables: PgSqlListTablesResult,
   pg_describe_table: PgSqlDescribeTableResult,
   pg_query: PgSqlQueryResult,
+  // 智能问数
+  ask_data_search_catalog: AskDataResult,
+  ask_data_describe_dataset: AskDataResult,
+  ask_data_execute: AskDataResult,
   // 交互
   ask_user: AskUserResult,
   // 协作待办：避免在对话中直接回显工具 JSON
@@ -83,6 +90,7 @@ export const TOOL_RENDERERS = {
   ocr_parse_file: OcrParseFileResult,
   // 交付 / 安装
   present_artifacts: DeliverFileResult,
+  present_business_page: PresentBusinessPageResult,
   install_skill: InstallSkillResult,
   memory_save: UserMemoryResult,
   memory_search: UserMemoryResult,
@@ -114,6 +122,7 @@ export const TOOL_ICON_MAP = {
   sandbox_append_file: FileTextOutlined,
   ocr_parse_file: ScanOutlined,
   present_artifacts: FolderOpenOutlined,
+  present_business_page: AppstoreOutlined,
   install_skill: ThunderboltOutlined,
   memory_save: DatabaseOutlined,
   memory_search: DatabaseOutlined,
@@ -154,6 +163,7 @@ export const TOOL_DISPLAY_NAMES = {
   sandbox_append_file: '追加文件',
   ocr_parse_file: 'OCR 解析文件',
   present_artifacts: '文件交付',
+  present_business_page: '业务办理页',
   install_skill: '技能安装',
   memory_save: '保存长期记忆',
   memory_search: '查询长期记忆',
@@ -199,10 +209,20 @@ export function isHiddenTool(toolName) {
   return HIDDEN_TOOL_NAMES.has(toolName)
 }
 
+/** 业务办理类工具：结果应在对话中默认展开（不当作普通工具 JSON 收起） */
+export const PRESENTATION_TOOL_NAMES = new Set([
+  'present_business_page',
+])
+
 /** 是否已在 toolRegistry 注册专用渲染组件 */
 export function hasToolRenderer(toolName) {
   if (!toolName) return false
   return Object.prototype.hasOwnProperty.call(TOOL_RENDERERS, String(toolName).trim())
+}
+
+/** 是否为对话内业务呈现工具 */
+export function isPresentationTool(toolName) {
+  return PRESENTATION_TOOL_NAMES.has(String(toolName || '').trim())
 }
 
 /**

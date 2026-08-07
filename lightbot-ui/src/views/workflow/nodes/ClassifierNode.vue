@@ -1,5 +1,5 @@
 <template>
-  <div class="workflow-node classifier-node" :class="nodeClass" @dblclick="$emit('edit')">
+  <div ref="rootRef" class="workflow-node classifier-node" :class="nodeClass" @dblclick="$emit('edit')">
     <WorkflowHandle type="target" position="left" />
     <div class="node-header">
       <div class="node-icon">
@@ -8,20 +8,38 @@
       <div class="node-title">{{ data.label || '意图分类' }}</div>
     </div>
     <div class="node-body">
-      <div v-for="item in intentConditions" :key="item.id" class="branch-row">
+      <div
+        v-for="(item, idx) in intentConditions"
+        :key="item.id"
+        class="branch-row"
+        :ref="el => setBranchRowRef(el, idx)"
+      >
         <span class="branch-label">{{ item.subject || '暂未配置意图' }}</span>
-        <WorkflowHandle type="source" position="right" :id="`${id}_${item.id}`" />
+        <WorkflowHandle
+          type="source"
+          position="right"
+          :id="`${id}_${item.id}`"
+          :style="handleStyleAt(idx)"
+        />
       </div>
-      <div class="branch-row default-row">
+      <div
+        class="branch-row default-row"
+        :ref="el => setBranchRowRef(el, intentConditions.length)"
+      >
         <span class="branch-label">其他意图</span>
-        <WorkflowHandle type="source" position="right" :id="`${id}_default`" />
+        <WorkflowHandle
+          type="source"
+          position="right"
+          :id="`${id}_default`"
+          :style="handleStyleAt(intentConditions.length)"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, ref, watch } from 'vue'
 import WorkflowHandle from '../components/WorkflowHandle.vue'
 import NodeTypeIcon from '../components/NodeTypeIcon.vue'
 import { useGroupDragMask } from '../useGroupDragMask'
@@ -37,6 +55,12 @@ defineEmits(['edit'])
 
 const { isGroupChildDragMasked } = useGroupDragMask(props)
 
+const rootRef = ref(null)
+const branchRowEls = ref([])
+/** 各分支出口相对节点高度的 top 百分比，避免多个右侧 Handle 叠在中线 */
+const handleTops = ref([])
+let resizeObserver = null
+
 const intentConditions = computed(() => {
   const list = props.data?.conditions || []
   return list.filter(c => c.id !== 'default')
@@ -47,6 +71,58 @@ const nodeClass = computed(() => ({
   'wf-group-child-mask': isGroupChildDragMasked.value,
   [`debug-${props.data?.debugStatus}`]: !!props.data?.debugStatus
 }))
+
+function setBranchRowRef(el, idx) {
+  if (el) branchRowEls.value[idx] = el
+}
+
+function handleStyleAt(idx) {
+  const top = handleTops.value[idx]
+  if (top == null) return undefined
+  return { top: `${top}%` }
+}
+
+function measureHandleTops() {
+  const root = rootRef.value
+  if (!root) return
+  const rootRect = root.getBoundingClientRect()
+  const h = rootRect.height || 1
+  const count = intentConditions.value.length + 1
+  const tops = []
+  for (let i = 0; i < count; i++) {
+    const row = branchRowEls.value[i]
+    if (!row) {
+      tops.push(((i + 1) / (count + 1)) * 100)
+      continue
+    }
+    const rowRect = row.getBoundingClientRect()
+    const midY = rowRect.top + rowRect.height / 2 - rootRect.top
+    tops.push(Math.min(95, Math.max(5, (midY / h) * 100)))
+  }
+  // 值未变则不写回，避免 onUpdated/响应式形成无限重渲染把页面卡在加载遮罩
+  const prev = handleTops.value
+  if (prev.length === tops.length && prev.every((v, i) => Math.abs(v - tops[i]) < 0.05)) return
+  handleTops.value = tops
+}
+
+onBeforeUpdate(() => {
+  branchRowEls.value = []
+})
+
+onMounted(() => {
+  nextTick(measureHandleTops)
+  if (typeof ResizeObserver !== 'undefined' && rootRef.value) {
+    resizeObserver = new ResizeObserver(() => measureHandleTops())
+    resizeObserver.observe(rootRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
+
+watch(intentConditions, () => nextTick(measureHandleTops), { deep: true })
 </script>
 
 <style scoped>
@@ -55,6 +131,7 @@ const nodeClass = computed(() => ({
   border: 2px solid #f59e0b;
   border-radius: 12px;
   min-width: 200px;
+  position: relative;
 }
 .classifier-node.selected { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25); }
 .classifier-node.debug-executing { animation: wf-executing 1.2s linear infinite; border-color: var(--color-link); }

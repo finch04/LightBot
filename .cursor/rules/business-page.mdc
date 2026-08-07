@@ -1,0 +1,63 @@
+---
+description: 业务办理页（present_business_page / H5）编码约束：禁止字段词典硬编码、标签来自页面
+globs: lightbot-ui/src/components/businessPages/**/*,lightbot-ui/src/utils/businessPageHtmlTemplate.js,lightbot-ui/src/views/BusinessPageManage.vue,lightbot-tool/src/main/java/com/lightbot/businesspage/**/*,lightbot-tool/src/main/java/com/lightbot/tool/builtin/PresentBusinessPageTool.java,lightbot-server/src/main/java/com/lightbot/controller/BusinessPageController.java
+alwaysApply: false
+---
+
+# 业务办理页编码规则
+
+## 禁止事项
+
+```text
+❌ 禁止在平台代码中硬编码业务字段中英映射表
+   （如 accountNo→户号、amount→金额、phone→手机号 等 FIELD_LABELS / switch-case 词典）
+❌ 禁止按 pageType 特化前端渲染分支或后端工具逻辑（除注册表元数据外）
+❌ 禁止要求业务 H5 必须手写 postMessage / LightBot SDK 才能完成办理（内嵌 HTML 走静默桥接）
+❌ 禁止把演示接口整段 JSON（含 status/message）当作用户可见摘要正文
+```
+
+## 必须遵守
+
+```text
+✅ 字段展示名来自页面本身：桥接从 label[for] / 包裹 <label> 采集 fieldLabels，随 submit 回传
+✅ 历史恢复用回灌标记 <!--lightbot-bp-data:{"values":...,"fieldLabels":...}-->，勿再造平台词典
+✅ 办结态展示回执摘要（标题 + 状态 + 字段行），不要继续露出可点的「取消/提交」
+✅ 内嵌 HTML 与外链二选一；内容以能力中心登记为准（DB），不预装业务页组件
+✅ 跨模块调用走 Service / Port；Controller 只做透传
+```
+
+## 标签解析优先级
+
+1. 提交载荷 `fieldLabels[fieldKey]`（页面 DOM 采集）
+2. 否则直接展示 `fieldKey`（字段码本身）
+3. **不要**在 `businessPageResultUtils` 或其它平台模块新增业务中文词典
+
+## DOM 采集兼容（桥接 `collectFieldLabels`）
+
+页面中文/英文章摘要不一致，通常是 DOM 结构差异，不是平台硬编码：
+
+| 结构 | 能否采到标签文案 |
+|------|------------------|
+| `<label>户号 <input id="accountNo"></label>` | ✅ |
+| `<label for="name">姓名</label><input id="name">` | ✅ |
+| `<label>姓名</label><input name="name">`（兄弟节点、无 for） | ✅（相邻 label） |
+| `<div><label>姓名</label><input name="name"></div>` | ✅（同容器唯一 label） |
+| 表单项分栏：`div > [.label列] + [.control列>input]`（报名 AI 页常见） | ✅（向上找表单项） |
+| JSON key 与 input name/id 不一致，但字段顺序一致 | ✅（按 DOM 顺序对齐兜底） |
+| 仅有英文 placeholder、无任何 label 文案 | ❌ 回退显示 field key |
+
+业务页应写可见 `<label>`（或 `data-label` / `aria-label`），不要依赖平台翻译 field key。
+
+**现象对照**：填报页是中文、办结摘要是英文 → 优先查回传路径是否带了 `fieldLabels`，不是平台硬编码词典。
+
+典型坑（已修）：
+
+- `<button type="button">` + `fetch` → 走 fetch 拦截（有 fieldLabels）✓
+- `<form>` + `type="submit"` 若在**捕获阶段**抢先 `emitSubmit(values)` → 无 fieldLabels，且绕过页内校验 ✗
+- 正确：submit 用冒泡；页面 `preventDefault`+`fetch` 时交给 fetch 拦截；仅无 JS 的空 action 表单才 FormData 兜底并 `withFieldLabels`
+
+## 相关文件
+
+- 桥接采集：`lightbot-ui/src/components/businessPages/businessPageBridge.js`（`collectFieldLabels`）
+- 摘要工具：`lightbot-ui/src/components/businessPages/businessPageResultUtils.js`
+- 办结 UI：`lightbot-ui/src/components/businessPages/H5BusinessPageFrame.vue`

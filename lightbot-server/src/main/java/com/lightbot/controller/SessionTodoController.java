@@ -36,14 +36,14 @@ public class SessionTodoController {
     public Result<List<TodoItemVO>> listByRequest(
             @PathVariable Long sessionId,
             @RequestParam String parentRequestId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(sessionTodoService.listByRequest(sessionId, parentRequestId));
     }
 
     @Operation(summary = "获取会话最新待办（重进/刷新时调用）")
     @GetMapping("/latest")
     public Result<List<TodoItemVO>> latest(@PathVariable Long sessionId) {
-        chatSessionService.ensureOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
         return Result.ok(sessionTodoService.listLatestBySession(sessionId));
     }
 }

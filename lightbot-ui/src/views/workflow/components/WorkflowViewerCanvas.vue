@@ -68,7 +68,7 @@ const displayEdges = computed({
   },
 })
 
-const { fitView, setCenter } = useVueFlow({ id: props.flowId })
+const { fitView, setCenter } = useVueFlow(props.flowId)
 
 function getNodeColor(node) {
   const status = node?.data?.debugStatus

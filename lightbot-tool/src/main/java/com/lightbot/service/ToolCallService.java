@@ -3,6 +3,7 @@ package com.lightbot.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lightbot.entity.ToolCall;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -34,4 +35,11 @@ public interface ToolCallService extends IService<ToolCall> {
      * @param toolCall 工具调用记录
      */
     void recordToolCall(ToolCall toolCall);
+
+    /**
+     * 持久化本轮暂存的工具调用（逐条 insert，避免 Reactor 线程上 saveBatch SPI 失败）。
+     *
+     * @param toolCalls 待写入记录
+     */
+    void persistPendingCalls(Collection<ToolCall> toolCalls);
 }

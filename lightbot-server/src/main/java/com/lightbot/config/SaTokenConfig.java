@@ -33,7 +33,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/auth/login",
-                        "/api/auth/register",
                         "/api/auth/init-status",
                         "/api/auth/init-admin",
                         "/api/landing/config",
@@ -49,25 +48,20 @@ public class SaTokenConfig implements WebMvcConfigurer {
 
         // 3. Sa-Token 拦截器
         registry.addInterceptor(new SaInterceptor(handle -> {
-            // 日志/任务监控接口：需要登录 + ADMIN 角色
-            SaRouter.match("/api/logs/**").check(r -> {
-                checkLoginOrApiKey();
-                StpUtil.checkRole(UserRole.ADMIN.getCode());
-            });
+            // 管理端接口：仅 Sa-Token 登录管理员（企业 API Key 不可走管理端）
             SaRouter.match("/api/admin/**").check(r -> {
-                checkLoginOrApiKey();
+                StpUtil.checkLogin();
                 StpUtil.checkRole(UserRole.ADMIN.getCode());
             });
-            SaRouter.match("/api/tasks/stream").check(r -> checkLoginOrApiKey());
+            SaRouter.match("/api/tasks/stream").check(r -> StpUtil.checkLogin());
             // 排除不需要认证的路径
             SaRouter.match("/api/auth/login").stop();
-            SaRouter.match("/api/auth/register").stop();
             SaRouter.match("/api/auth/init-status").stop();
             SaRouter.match("/api/auth/init-admin").stop();
             SaRouter.match("GET", "/api/landing/config").stop();
             SaRouter.match("GET", "/api/ocr/health").stop();
             SaRouter.match("GET", "/api/system-config/health").stop();
-            // 其余接口：API Key 已认证则跳过 Sa-Token 检查
+            // 其余接口：已通过 API Key 拦截器放行的请求跳过登录；否则必须登录
             checkLoginOrApiKey();
         })).addPathPatterns("/api/**").order(2);
     }

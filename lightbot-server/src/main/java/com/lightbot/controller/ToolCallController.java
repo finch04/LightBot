@@ -2,6 +2,7 @@ package com.lightbot.controller;
 
 import com.lightbot.common.Result;
 import com.lightbot.service.ToolCallService;
+import com.lightbot.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class ToolCallController {
 
     private final ToolCallService toolCallService;
+    private final UserService userService;
 
     @GetMapping
     @Operation(summary = "分页查询工具调用记录")
@@ -42,8 +44,9 @@ public class ToolCallController {
      * 批量删除工具调用记录
      */
     @DeleteMapping
-    @Operation(summary = "批量删除工具调用记录")
+    @Operation(summary = "批量删除工具调用记录（仅管理员）")
     public Result<Void> deleteToolCalls(@RequestBody List<Long> ids) {
+        userService.checkAdmin();
         if (ids != null && !ids.isEmpty()) {
             toolCallService.removeByIds(ids);
         }

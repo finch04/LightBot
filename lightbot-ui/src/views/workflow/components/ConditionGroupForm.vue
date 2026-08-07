@@ -2,18 +2,17 @@
   <div class="condition-group-form">
     <div v-for="(group, gIdx) in groups" :key="group.id" class="condition-group-card">
       <div class="condition-group-header">
-        <span class="condition-group-badge" :class="`handle-${group.sourceHandle}`">
-          {{ handleLabel(group.sourceHandle) }}
-        </span>
+        <span class="condition-group-badge">条件 {{ gIdx + 1 }}</span>
         <a-input
           v-model:value="group.label"
           size="small"
           class="condition-group-title-input"
+          placeholder="分支名称"
           :disabled="disabled"
           @change="emitChange"
         />
         <a-button
-          v-if="groups.length > 1 && group.sourceHandle !== 'out_c'"
+          v-if="groups.length > 1"
           type="text"
           danger
           size="small"
@@ -24,7 +23,7 @@
         </a-button>
       </div>
 
-      <div v-if="group.rules?.length" class="condition-rules">
+      <div class="condition-rules">
         <div class="condition-relation-row">
           <span class="relation-label">组内关系</span>
           <a-radio-group v-model:value="group.relation" size="small" :disabled="disabled" @change="emitChange">
@@ -64,24 +63,27 @@
           <PlusOutlined /> 添加条件
         </a-button>
       </div>
-      <div v-else class="condition-else-hint">
-        否则分支：当上方条件均未命中时，走「{{ handleLabel('out_c') }}」出口连线
+    </div>
+
+    <div class="condition-else-card">
+      <span class="condition-group-badge else-badge">都未命中</span>
+      <div class="condition-else-hint">
+        上方条件按顺序匹配，均未命中时走画布右侧「都未命中」出口（须连线）。
       </div>
     </div>
 
     <a-button
-      v-if="groups.length < 3"
       type="dashed"
       block
       size="small"
       class="param-add-btn"
-      :disabled="disabled"
+      :disabled="disabled || groups.length >= MAX_GROUPS"
       @click="addGroup"
     >
-      <PlusOutlined /> 添加条件组（最多 3 组，对应上/下/右出口）
+      <PlusOutlined /> 添加条件组{{ groups.length >= MAX_GROUPS ? `（最多 ${MAX_GROUPS} 组）` : '' }}
     </a-button>
     <div class="condition-tip">
-      在画布上从条件节点<strong>上/下/右</strong>出口拖线到目标节点；组顺序与出口一一对应。
+      在画布上从条件节点<strong>右侧各出口</strong>拖线到目标节点；组顺序即匹配优先级。
     </div>
   </div>
 </template>
@@ -93,18 +95,15 @@ import { CONDITION_OPERATORS } from '../nodeConfigMeta'
 import { createConditionId } from '../nodeMeta'
 import VariablePickerInput from './VariablePickerInput.vue'
 
-const HANDLE_LABELS = {
-  out_a: '上分支',
-  out_b: '下分支',
-  out_c: '右分支(否则)',
-}
+/** 软上限，防止节点过高；需要时可再调大 */
+const MAX_GROUPS = 20
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:modelValue', 'change'])
+const emit = defineEmits(['update:modelValue', 'change', 'remove-group'])
 
 const groups = computed({
   get: () => props.modelValue || [],
@@ -114,41 +113,30 @@ const groups = computed({
   },
 })
 
-function handleLabel(handle) {
-  return HANDLE_LABELS[handle] || handle
-}
-
 function emitChange() {
   emit('change', groups.value)
 }
 
-function nextHandle() {
-  const used = new Set(groups.value.map(g => g.sourceHandle))
-  for (const h of ['out_a', 'out_b', 'out_c']) {
-    if (!used.has(h)) return h
-  }
-  return 'out_c'
-}
-
 function addGroup() {
-  if (groups.value.length >= 3) return
-  const list = [...groups.value]
-  list.splice(list.length - 1, 0, {
-    id: createConditionId(),
-    label: '否则如果',
-    relation: 'and',
-    sourceHandle: nextHandle(),
-    rules: [{ id: createConditionId(), variable: '{{query}}', operator: 'contains', value: '' }],
-  })
-  groups.value = list
+  if (groups.value.length >= MAX_GROUPS) return
+  groups.value = [
+    ...groups.value,
+    {
+      id: createConditionId(),
+      label: '否则如果',
+      relation: 'and',
+      rules: [{ id: createConditionId(), variable: '{{query}}', operator: 'contains', value: '' }],
+    },
+  ]
 }
 
 function removeGroup(idx) {
   const g = groups.value[idx]
-  if (g?.sourceHandle === 'out_c') return
+  if (!g || groups.value.length <= 1) return
   const list = [...groups.value]
   list.splice(idx, 1)
   groups.value = list
+  emit('remove-group', g.id)
 }
 
 function addRule(gIdx) {
@@ -165,6 +153,7 @@ function addRule(gIdx) {
 
 function removeRule(gIdx, rIdx) {
   const list = [...groups.value]
+  if ((list[gIdx].rules || []).length <= 1) return
   list[gIdx].rules.splice(rIdx, 1)
   groups.value = list
 }
@@ -176,7 +165,8 @@ function removeRule(gIdx, rIdx) {
   flex-direction: column;
   gap: 12px;
 }
-.condition-group-card {
+.condition-group-card,
+.condition-else-card {
   border: 1px solid var(--color-border-slate);
   border-radius: 8px;
   padding: 12px;
@@ -194,10 +184,15 @@ function removeRule(gIdx, rIdx) {
   padding: 2px 8px;
   border-radius: 4px;
   flex-shrink: 0;
+  background: var(--color-warn-bg-deep);
+  color: #b45309;
 }
-.handle-out_a { background: var(--color-warn-bg-deep); color: #b45309; }
-.handle-out_b { background: var(--color-info-bg); color: #1d4ed8; }
-.handle-out_c { background: #f3e8ff; color: #7c3aed; }
+.else-badge {
+  background: #f3e8ff;
+  color: #7c3aed;
+  display: inline-block;
+  margin-bottom: 8px;
+}
 .condition-group-title-input {
   flex: 1;
 }
@@ -225,10 +220,7 @@ function removeRule(gIdx, rIdx) {
 .condition-else-hint {
   font-size: 12px;
   color: var(--color-mute);
-  padding: 8px;
-  background: var(--color-canvas);
-  border-radius: 6px;
-  border: 1px dashed #cbd5e1;
+  line-height: 1.5;
 }
 .condition-tip {
   font-size: 12px;
@@ -237,6 +229,6 @@ function removeRule(gIdx, rIdx) {
 }
 .param-add-btn {
   margin-top: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 </style>

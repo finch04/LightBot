@@ -2,7 +2,8 @@
 .page {
   padding: var(--space-xl);
   padding-right: calc(var(--space-xl) + var(--scroll-content-gap, 8px));
-  height: 100vh;
+  /* 填满 MainLayout 内容区；100vh 会比视口多出顶栏高度，底部被裁切 */
+  height: var(--app-content-height, 100%);
   overflow-y: auto;
   background: var(--color-canvas-soft);
   scrollbar-gutter: stable;

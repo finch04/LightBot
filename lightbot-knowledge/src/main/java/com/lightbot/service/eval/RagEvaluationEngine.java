@@ -86,7 +86,22 @@ public class RagEvaluationEngine {
                         .eq(Chunk::getStatus, com.lightbot.enums.ChunkStatus.VECTORIZED)
                         .select(Chunk::getId, Chunk::getContent));
         if (allChunks.isEmpty()) {
-            return List.of();
+            // 区分「无分块 / 未向量化」与「LLM 产出无效」，便于前端定位
+            long totalChunks = chunkService.count(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Chunk>()
+                            .eq(Chunk::getKnowledgeId, knowledgeId));
+            long failedChunks = chunkService.count(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Chunk>()
+                            .eq(Chunk::getKnowledgeId, knowledgeId)
+                            .eq(Chunk::getStatus, com.lightbot.enums.ChunkStatus.FAILED));
+            if (totalChunks == 0) {
+                throw new RuntimeException("基准题目生成失败：知识库暂无分块，请先上传并完成文档入库");
+            }
+            if (failedChunks > 0) {
+                throw new RuntimeException(
+                        "基准题目生成失败：知识库有 " + failedChunks + " 个分块向量化失败、0 个已向量化，请重新入库/向量化文档后再试");
+            }
+            throw new RuntimeException("基准题目生成失败：知识库尚无已向量化分块，请等待文档向量化完成后再试");
         }
 
         // 2. 构建 chunkId → content 映射

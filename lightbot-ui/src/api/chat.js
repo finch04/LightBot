@@ -245,6 +245,8 @@ export function processSseLines(text, { onChunk, onStatus, onMetadata, onToolEve
           onMetadata?.(content.substring(10))
         } else if (content.startsWith('[REQUEST_ID]')) {
           onRequestId?.(content.substring(12))
+        } else if (content.startsWith('[SESSION_ID]')) {
+          // 开放 API / 多轮续聊用；控制台侧通常已有路由 sessionId，此处忽略即可
         } else {
           onChunk?.(decodeSseTextContent(content))
         }

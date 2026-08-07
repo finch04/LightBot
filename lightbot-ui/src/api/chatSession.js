@@ -8,6 +8,16 @@ export function getSessions(params) {
   return request.get('/chat/sessions', { params })
 }
 
+/** 企业 API 集成会话（建设者排障只读） */
+export function getApiSessions(params) {
+  return request.get('/chat/sessions/api-integration', { params })
+}
+
+/** 自动化任务会话（建设者排障只读） */
+export function getAutomationSessions(params) {
+  return request.get('/chat/sessions/automation', { params })
+}
+
 export function getSession(id, config = {}) {
   return request.get(`/chat/sessions/${id}`, config)
 }

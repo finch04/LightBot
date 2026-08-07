@@ -31,9 +31,18 @@ public class UserMemory {
     private Long id;
 
     @TableField("user_id")
-    @Schema(description = "用户ID")
+    @Schema(description = "平台用户ID（开放 API 外部记忆可为空或虚拟身份）")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
+
+    @TableField("api_key_id")
+    @Schema(description = "企业 API Key ID（开放 API 外部用户记忆）")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long apiKeyId;
+
+    @TableField("external_user_id")
+    @Schema(description = "上层业务终端用户标识（与 api_key_id 组成记忆命名空间）")
+    private String externalUserId;
 
     @TableField("agent_id")
     @Schema(description = "AgentID，空表示用户全局记忆")

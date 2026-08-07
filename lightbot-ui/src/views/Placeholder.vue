@@ -17,7 +17,7 @@ const route = useRoute()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  height: var(--app-content-height);
   background: var(--color-canvas-soft);
 }
 .placeholder-icon {

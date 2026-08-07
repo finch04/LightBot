@@ -28,17 +28,19 @@ export function needTruncate(text, maxLen = 50) {
  */
 export function formatTime(t) {
   if (!t) return ''
+  const pad = (n) => String(n).padStart(2, '0')
   if (Array.isArray(t)) {
     const [y, m, d, h = 0, mi = 0, s = 0] = t
-    const pad = (n) => String(n).padStart(2, '0')
     return `${y}-${pad(m)}-${pad(d)} ${pad(h)}:${pad(mi)}:${pad(s)}`
+  }
+  // Java LocalDateTime 序列化常见形态：2026-07-29T20:58:24.442659（无时区）
+  // 直接规范化，避免 new Date() 跨浏览器时区偏移
+  if (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(t)) {
+    return t.replace('T', ' ').replace(/\.\d+/, '').slice(0, 19)
   }
   const date = typeof t === 'string' || t instanceof Date ? new Date(t) : null
   if (!date || isNaN(date.getTime())) return String(t)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 /**

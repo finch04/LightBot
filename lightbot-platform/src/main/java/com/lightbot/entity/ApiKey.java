@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.lightbot.enums.ApiKeyPermission;
+import com.lightbot.handler.JsonbTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -21,7 +22,7 @@ import java.util.List;
  * @since 2026-06-25
  */
 @Data
-@TableName("api_key")
+@TableName(value = "api_key", autoResultMap = true)
 @Schema(description = "API Key表")
 public class ApiKey {
 
@@ -31,7 +32,7 @@ public class ApiKey {
     private Long id;
 
     @TableField("user_id")
-    @Schema(description = "所属用户ID")
+    @Schema(description = "创建人用户ID（审计字段，不作为运行时身份）")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
@@ -63,6 +64,14 @@ public class ApiKey {
     @TableField("daily_quota")
     @Schema(description = "每日Token配额，默认100000")
     private Integer dailyQuota;
+
+    @TableField(value = "memory_config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "长期记忆策略覆盖，null 表示跟随企业默认")
+    private String memoryConfig;
+
+    @TableField(value = "business_page_config", typeHandler = JsonbTypeHandler.class, jdbcType = JdbcType.OTHER)
+    @Schema(description = "业务办理页白名单，null/inherit 表示全部已启用页")
+    private String businessPageConfig;
 
     @TableField("used_tokens")
     @Schema(description = "当日已用Token数")

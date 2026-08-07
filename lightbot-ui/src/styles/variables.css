@@ -95,6 +95,11 @@
   --sidebar-text: #d4d4d8;
   --sidebar-text-bright: #fafafa;
 
+  /* App shell — 顶栏迁到顶部后，业务页高度必须用 content-height，禁止再写死 100vh
+     MainLayout 在无顶栏路由（如工作流编辑）会把 --app-topbar-height 置为 0 */
+  --app-topbar-height: 56px;
+  --app-content-height: calc(100vh - var(--app-topbar-height));
+
   /* Spacing */
   --space-xxs: 4px;
   --space-xs: 8px;

@@ -4,6 +4,7 @@ import com.lightbot.common.Result;
 import com.lightbot.vo.LlmTraceDetailVO;
 import com.lightbot.dto.LlmTraceRequestDTO;
 import com.lightbot.service.LlmTraceService;
+import com.lightbot.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class LlmTraceController {
 
     private final LlmTraceService llmTraceService;
+    private final UserService userService;
 
     /**
      * 分页查询调用链列表
@@ -57,8 +59,9 @@ public class LlmTraceController {
      * 批量删除调用链记录
      */
     @DeleteMapping("/traces")
-    @Operation(summary = "批量删除调用链")
+    @Operation(summary = "批量删除调用链（仅管理员）")
     public Result<Void> deleteTraces(@RequestBody List<Long> ids) {
+        userService.checkAdmin();
         llmTraceService.deleteByIds(ids);
         return Result.ok();
     }

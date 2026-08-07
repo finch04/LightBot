@@ -87,7 +87,7 @@ function buildEndNode() {
 function buildLlmNode() {
   const id = nextId('llm')
   return [
-    { type: 'workflow_node_start', nodeId: id, nodeType: 'llm', nodeLabel: '大模型生成', stepIndex: 0, input: { prompt: '总结 LightBot 功能' } },
+    { type: 'workflow_node_start', nodeId: id, nodeType: 'llm', nodeLabel: '大模型生成', stepIndex: 0, input: { prompt: '总结 智元 功能' } },
     {
       type: 'workflow_node_complete',
       nodeId: id,
@@ -97,7 +97,7 @@ function buildLlmNode() {
       success: true,
       durationMs: 1280,
       outputs: {
-        text: 'LightBot 是轻量级 Java AI Agent 平台，支持 RAG、工作流与 Tool 调用。',
+        text: '智元 是轻量级 Java AI Agent 平台，支持 RAG、工作流与 Tool 调用。',
         tokenUsage: { prompt: 120, completion: 86 },
       },
       message: '模型回复已生成',
@@ -120,7 +120,7 @@ function buildRetrievalNode() {
       durationMs: 340,
       outputs: {
         results: [
-          { documentName: '架构设计.md', content: 'LightBot 采用模块化单体架构...', score: 0.92 },
+          { documentName: '架构设计.md', content: '智元 采用模块化单体架构...', score: 0.92 },
           { documentName: 'RAG 指南.pdf', content: '向量检索用于增强生成...', score: 0.88 },
         ],
         total: 2,

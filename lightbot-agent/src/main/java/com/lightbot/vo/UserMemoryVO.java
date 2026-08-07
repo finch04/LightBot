@@ -29,6 +29,11 @@ public class UserMemoryVO {
     private Long id;
 
     @JsonSerialize(using = ToStringSerializer.class)
+    private Long apiKeyId;
+
+    private String externalUserId;
+
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long agentId;
 
     @JsonSerialize(using = ToStringSerializer.class)
@@ -46,6 +51,8 @@ public class UserMemoryVO {
     public static UserMemoryVO from(UserMemory memory) {
         UserMemoryVO vo = new UserMemoryVO();
         vo.setId(memory.getId());
+        vo.setApiKeyId(memory.getApiKeyId());
+        vo.setExternalUserId(memory.getExternalUserId());
         vo.setAgentId(memory.getAgentId());
         vo.setSessionId(memory.getSessionId());
         vo.setMemoryType(memory.getMemoryType() != null ? memory.getMemoryType().getCode() : null);

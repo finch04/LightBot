@@ -745,7 +745,7 @@ onUnmounted(() => {
 
 <style scoped>
 .skill-detail-page {
-  height: 100vh;
+  height: var(--app-content-height);
   overflow: hidden;
   background: var(--color-canvas-soft);
   display: flex;

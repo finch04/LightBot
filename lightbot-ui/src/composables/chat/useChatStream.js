@@ -48,6 +48,7 @@ export function useChatStream(deps) {
     selectedAgentId,
     selectedConfigVersion,
     selectedAgentVersionId,
+    simCallerContext,
     sessionTokenCount,
     streamSmoother,
     getCurrentStreamingMsg,
@@ -96,6 +97,115 @@ export function useChatStream(deps) {
       message: text,
       attachments: [],
       regenerate: false,
+    })
+  }
+
+  /** 业务页回灌字段格式化：嵌套对象展开；展示名优先用页面采集的 fieldLabels */
+  function formatBusinessPageResultLines(result) {
+    const lines = []
+    const fieldLabels = (result?.fieldLabels && typeof result.fieldLabels === 'object')
+      ? result.fieldLabels
+      : {}
+    const displayKey = (key) => {
+      const label = fieldLabels[key]
+      return (typeof label === 'string' && label.trim()) ? label.trim() : key
+    }
+    const walk = (key, value, indent = '') => {
+      const name = displayKey(key)
+      if (value == null || value === '') {
+        lines.push(`${indent}- ${name}：`)
+        return
+      }
+      if (Array.isArray(value)) {
+        if (value.every((x) => x == null || typeof x !== 'object')) {
+          lines.push(`${indent}- ${name}：${value.join('、')}`)
+          return
+        }
+        lines.push(`${indent}- ${name}：`)
+        value.forEach((item, i) => walk(`[${i}]`, item, `${indent}  `))
+        return
+      }
+      if (typeof value === 'object') {
+        // values 容器本身不输出空父级行，直接展开字段
+        if (key === 'values') {
+          Object.entries(value).forEach(([k, v]) => walk(k, v, indent))
+          return
+        }
+        lines.push(`${indent}- ${name}：`)
+        Object.entries(value).forEach(([k, v]) => walk(k, v, `${indent}  `))
+        return
+      }
+      lines.push(`${indent}- ${name}：${String(value)}`)
+    }
+    Object.entries(result || {})
+      .filter(([k]) => k !== 'pageType' && k !== 'action' && k !== 'fieldLabels' && k !== 'extra')
+      .forEach(([k, v]) => walk(k, v))
+    return lines.length ? lines : ['- （无字段）']
+  }
+
+  /**
+   * 业务办理页提交/取消回灌对话（结构化文本，供 Agent 继续）
+   * @param {{ messageIndex: number, result: object, status: 'submitted'|'cancelled' }} payload
+   */
+  async function submitBusinessPageResult(payload) {
+    if (payload?.messageIndex == null || payload.messageIndex < 0 || !payload?.result) {
+      message.warning('业务页状态已失效')
+      return
+    }
+    const status = payload.status === 'cancelled' ? 'cancelled' : 'submitted'
+    const result = payload.result
+    const pageType = result.pageType || 'unknown'
+    const values = (result.values && typeof result.values === 'object' && !Array.isArray(result.values))
+      ? result.values
+      : {}
+    const fieldLabels = (result.fieldLabels && typeof result.fieldLabels === 'object')
+      ? result.fieldLabels
+      : {}
+    const lines = formatBusinessPageResultLines(
+      Object.keys(values).length ? { values, fieldLabels } : result,
+    )
+    // 机器可读标记：刷新历史时可还原办理字段与页面标签（禁止平台硬编码字段词典）
+    let dataMarker = ''
+    try {
+      dataMarker = `\n<!--lightbot-bp-data:${JSON.stringify({ values, fieldLabels })}-->`
+    } catch {
+      dataMarker = ''
+    }
+    // 发给模型的上下文：要求自动简短确认，无需用户再问
+    const text = status === 'cancelled'
+      ? `系统通知：用户取消了业务办理页（${pageType}）。请用一两句话确认已取消，不要追问、不要要求用户再次输入。${dataMarker}`
+      : `系统通知：用户已在业务办理页完成提交（${pageType}）。办理数据如下：\n${lines.join('\n')}\n请直接根据上述结果给用户一句简短确认提示（到账/受理情况即可），不要追问、不要要求用户再次输入。${dataMarker}`
+    // 本地标记已处理，避免重复提交
+    const msg = messages.value[payload.messageIndex]
+    if (msg?._toolEvents?.length) {
+      for (let i = msg._toolEvents.length - 1; i >= 0; i--) {
+        const evt = msg._toolEvents[i]
+        if (evt.type === 'tool_result' && evt.toolName === 'present_business_page') {
+          evt.businessPageResult = { status, ...result }
+          break
+        }
+      }
+    }
+    // 回灌消息对用户隐藏为「系统通知」条，不表现为用户再次提问
+    messages.value.push({
+      role: 'user',
+      content: text,
+      _attachments: [],
+      _businessPageCallback: true,
+      _businessPageCallbackStatus: status,
+      _businessPageCallbackPageType: pageType,
+      _businessPageCallbackValues: values,
+      _businessPageCallbackFieldLabels: fieldLabels,
+    })
+    isNearBottom.value = true
+    userScrolledUp.value = false
+    scrollToBottom()
+    await runChatStream({
+      message: text,
+      attachments: [],
+      regenerate: false,
+      // 业务办理提交回灌：即使 Agent 开启深度思考，本轮也不走思维链
+      enableReasoning: false,
     })
   }
 
@@ -212,7 +322,7 @@ export function useChatStream(deps) {
 
   const router = useRouter()
 
-  async function runChatStream({ message: msgText, attachments, mentions, regenerate, editMessageId: editMsgId, replyToMessageId: replyMsgId, deleteAssistantMessageId }) {
+  async function runChatStream({ message: msgText, attachments, mentions, regenerate, editMessageId: editMsgId, replyToMessageId: replyMsgId, deleteAssistantMessageId, enableReasoning }) {
     loading.value = true
     streaming.value = true
     hasStreamContent.value = false
@@ -292,6 +402,12 @@ export function useChatStream(deps) {
         router.replace(`/app/chat/${sid}`)
       }
 
+      // 首轮携带模拟角色；续聊省略，由服务端从会话 caller_context 回填（避免与已绑定身份冲突）
+      const userTurns = messages.value.filter((m) => m?.role === 'user').length
+      const sendCallerContext = !regenerate && !editMsgId && userTurns <= 1
+        ? (simCallerContext?.value || undefined)
+        : undefined
+
       const chatPayload = {
         message: msgText || undefined,
         sessionId: sid,
@@ -302,6 +418,9 @@ export function useChatStream(deps) {
         deleteAssistantMessageId: deleteAssistantMessageId || undefined,
         editMessageId: editMsgId || undefined,
         replyToMessageId: replyMsgId || undefined,
+        // 仅业务页回灌等场景显式传 false；undefined 表示沿用 Agent 深度思考配置
+        enableReasoning: enableReasoning === false ? false : undefined,
+        callerContext: sendCallerContext,
         mentions: mentions?.length ? mentions.map(m => ({
           type: m.type,
           resourceId: String(m.resourceId),
@@ -727,6 +846,7 @@ export function useChatStream(deps) {
   return {
     clearErrorRetry,
     submitAskUserResponse,
+    submitBusinessPageResult,
     syncAbortedAssistantMessageId,
     finalizeAbortedStream,
     runChatStream,

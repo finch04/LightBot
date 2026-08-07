@@ -48,7 +48,7 @@ export function useChatAgents({ sessionId, loading, pendingAttachments, voiceLis
     if (currentAgent.value?.welcomeMessage) {
       return currentAgent.value.welcomeMessage
     }
-    return '## 你好，我是 LightBot\n有什么可以帮你的？'
+    return '## 你好，我是智元\n有什么可以帮你的？'
   })
 
   const currentRecommendedQuestions = computed(() => {

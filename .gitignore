@@ -33,6 +33,7 @@ lightbot-ui/.env.local
 # Logs
 *.log
 logs/
+.run/
 
 # Claude Code
 .claude/

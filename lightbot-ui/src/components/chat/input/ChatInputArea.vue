@@ -28,6 +28,10 @@
         <PauseCircleOutlined class="workflow-confirm-send-icon" />
         <span>AI 正等待您完成上方提问，请提交回答后再继续对话</span>
       </div>
+      <div v-if="readOnly" class="workflow-confirm-send-block">
+        <PauseCircleOutlined class="workflow-confirm-send-icon" />
+        <span>此为 API 集成 / 自动化会话，仅供排障只读；请在「会话管理」查看详情</span>
+      </div>
       <div class="chat-input">
         <input
           ref="imageInputRef"
@@ -82,7 +86,7 @@
             type="button"
             class="btn-attach"
             :class="{ 'btn-attach--uploading': uploading }"
-            :disabled="loading || uploading || workflowConfirmBlocked || askUserBlocked"
+            :disabled="readOnly || loading || uploading || workflowConfirmBlocked || askUserBlocked"
           >
             <LoadingOutlined v-if="uploading" spin />
             <PaperClipOutlined v-else />
@@ -93,8 +97,8 @@
           :model-value="input"
           :agent-id="selectedAgentId"
           :agent-version-id="selectedAgentVersionId"
-          :disabled="loading || workflowConfirmBlocked || askUserBlocked"
-          :placeholder="inputPlaceholder"
+          :disabled="readOnly || loading || workflowConfirmBlocked || askUserBlocked"
+          :placeholder="readOnly ? '只读排障模式，不可发送' : inputPlaceholder"
           @update:model-value="$emit('update:input', $event)"
           @send="$emit('send')"
         />
@@ -108,7 +112,7 @@
               type="button"
               class="btn-voice"
               :class="{ listening: voiceListening }"
-              :disabled="loading"
+              :disabled="readOnly || loading"
               @click="$emit('toggle-voice')"
             >
               <AudioOutlined />
@@ -125,7 +129,7 @@
           <button
             v-else
             class="btn-send"
-            :disabled="!canSend || askUserBlocked"
+            :disabled="readOnly || !canSend || askUserBlocked"
             @click="$emit('send')"
           >
             <SendOutlined />
@@ -172,6 +176,8 @@ const props = defineProps({
   canSend: { type: Boolean, default: false },
   workflowConfirmBlocked: { type: Boolean, default: false },
   askUserBlocked: { type: Boolean, default: false },
+  /** 企业 API / 自动化会话只读排障 */
+  readOnly: { type: Boolean, default: false },
   switchingSession: { type: Boolean, default: false },
   agents: { type: Array, default: () => [] },
   selectedAgentId: { type: [String, Number], default: null },

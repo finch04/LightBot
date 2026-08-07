@@ -50,13 +50,21 @@ public final class AgentCapabilityConfigFields {
     }
 
     /**
-     * 通义千问 DashScope：VL 系列支持图片；语音输入走浏览器 STT
+     * 通义千问 DashScope：VL 系列支持图片；语音输入走浏览器 STT；深度思考走 enable_thinking
      */
     public static List<ConfigField> dashScopeFields() {
-        return visionAndAudioFields(
+        List<ConfigField> fields = new ArrayList<>(visionAndAudioFields(
                 "开启后对话页可上传图片；建议选用 qwen-vl-max / qwen-vl-plus / qwen2-vl 等视觉模型",
                 "允许用户上传 JPEG/PNG/WebP/GIF，通过通义千问多模态接口发送",
-                null);
+                null));
+        fields.add(ConfigField.builder()
+                .key(ConfigKeys.Agent.ENABLE_REASONING)
+                .label("深度思考")
+                .type("switch")
+                .defaultValue(false)
+                .hint("开启后请求 enable_thinking，流式展示思考过程（需选用支持思维链的 Qwen 模型，如 qwen3.5-plus）")
+                .build());
+        return fields;
     }
 
     private static List<ConfigField> visionAndAudioFields(String multimodalHint, String imageHint, String videoHint) {

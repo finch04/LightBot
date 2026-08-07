@@ -18,8 +18,11 @@ import com.lightbot.service.McpClientService;
 import com.lightbot.service.McpServerService;
 import com.lightbot.service.SessionTodoService;
 import com.lightbot.service.SkillService;
+import com.lightbot.businesspage.PresentBusinessPageToolEnricher;
+import com.lightbot.service.BusinessPageService;
+import com.lightbot.tool.builtin.PresentBusinessPageTool;
+import com.lightbot.service.LongMemoryPolicyService;
 import com.lightbot.service.ToolService;
-import com.lightbot.service.UserPreferenceService;
 import com.lightbot.subagent.DelegateSubAgentTool;
 import com.lightbot.agent.tool.memory.UserMemoryToolCallbackFactory;
 import com.lightbot.util.JsonIdParser;
@@ -67,8 +70,10 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     private final SkillService skillService;
     /** 用于把当前会话 todos 快照塞入 ToolContext，供 WriteTodosTool 按 id 合并 */
     private final SessionTodoService sessionTodoService;
-    private final UserPreferenceService userPreferenceService;
     private final UserMemoryToolCallbackFactory userMemoryToolCallbackFactory;
+    private final LongMemoryPolicyService longMemoryPolicyService;
+    private final BusinessPageService businessPageService;
+    private final PresentBusinessPageToolEnricher presentBusinessPageToolEnricher;
 
     @Autowired
     @Qualifier("lightBotExecutor")
@@ -159,7 +164,9 @@ public class ToolPrepMiddleware implements ChatMiddleware {
 
             // 0. 会话协作工具由父 Agent 自动获得：维护待办并显式交付 outputs/ 文件。
             // SubAgent 运行时不经过该中间件，不能获得这些父会话能力。
-            allCallbacks.addAll(toolService.resolveToolCallbacks(List.of("write_todos", "present_artifacts")));
+            // present_business_page 仅在 Agent 显式绑定业务页后注入（见下方白名单解析）。
+            allCallbacks.addAll(toolService.resolveToolCallbacks(
+                    List.of("write_todos", "present_artifacts")));
 
             // 1. 加载内置/自定义工具（合并：Agent 自身绑定 + Skill 引入的额外工具）
             // 优先使用版本快照中的绑定 ID，避免暂存/发布混淆
@@ -210,6 +217,24 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                                 agent.getId(), knowledgeIds.size(), kbToolNames);
                     }
                 }
+            }
+
+            // 1.1b 问数工具自动注入：绑定 dataModels（主路径）或旧 datasets 即开启
+            List<Long> askDataModelIds = agentService.getDataModelIds(agent.getId());
+            List<Long> askDatasetIds = agentService.getDatasetIds(agent.getId());
+            boolean askEnabled = (askDataModelIds != null && !askDataModelIds.isEmpty())
+                    || (askDatasetIds != null && !askDatasetIds.isEmpty());
+            if (askEnabled) {
+                List<String> askDataTools = List.of(
+                        "ask_data_search_catalog",
+                        "ask_data_describe_dataset",
+                        "ask_data_execute");
+                allCallbacks.addAll(toolService.resolveToolCallbacks(askDataTools));
+                log.info("[Chat] 自动注入问数工具: agentId={}, dataModels={}, datasets={}, tools={}",
+                        agent.getId(),
+                        askDataModelIds != null ? askDataModelIds.size() : 0,
+                        askDatasetIds != null ? askDatasetIds.size() : 0,
+                        askDataTools);
             }
 
             // 1.2 用户长期记忆工具自动注入：仅在用户显式开启长期记忆后提供
@@ -283,8 +308,20 @@ public class ToolPrepMiddleware implements ChatMiddleware {
             // 若绑定只含 write 而缺 append/read，模型调用 append 会撞「工具不存在」。此处强制补齐。
             ensureSandboxWriteCompanions(allCallbacks);
 
+            // 业务页组件：须在 Agent 侧显式绑定；未绑定则不注入工具。最终可用 = Agent 绑定 ∩ API Key 白名单
+            Long apiKeyId = ctx != null && ctx.getRequest() != null ? ctx.getRequest().getApiKeyId() : null;
+            List<String> agentAllowedPages = parseAllowedBusinessPages(configMap);
+            Set<String> allowedBusinessPages =
+                    businessPageService.resolveAllowedPageTypes(apiKeyId, agentAllowedPages);
+            if (!allowedBusinessPages.isEmpty()) {
+                allCallbacks.addAll(toolService.resolveToolCallbacks(
+                        List.of(PresentBusinessPageTool.TOOL_NAME)));
+            }
+
             // 去重：同名工具只保留第一个（如 Agent 手动绑定了 query_knowledge，自动注入不再重复）
             List<ToolCallback> dedupedCallbacks = dedupCallbacks(allCallbacks);
+            // 将可用 pageType 写入工具描述 + schema enum，避免模型自造别名
+            dedupedCallbacks = presentBusinessPageToolEnricher.enrich(dedupedCallbacks, allowedBusinessPages);
             if (ctx != null) {
                 Set<String> activeMcpToolNames = dedupedCallbacks.stream()
                         .filter(mcpCallbacks::contains)
@@ -309,8 +346,27 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                     toolCtxMap.put("requestId", requestId);
                 }
                 if (ctx != null) toolCtxMap.put("userId", ctx.getUserId());
+                if (ctx != null && ctx.getRequest() != null) {
+                    if (ctx.getRequest().getApiKeyId() != null) {
+                        toolCtxMap.put("apiKeyId", ctx.getRequest().getApiKeyId());
+                    }
+                    if (ctx.getRequest().getExternalUserId() != null) {
+                        toolCtxMap.put("externalUserId", ctx.getRequest().getExternalUserId());
+                    }
+                    if (ctx.getRequest().getCallerContext() != null
+                            && !ctx.getRequest().getCallerContext().isEmpty()) {
+                        toolCtxMap.put("callerContext", ctx.getRequest().getCallerContext().toMap());
+                        if (ctx.getRequest().getCallerContext().getRegionId() != null) {
+                            toolCtxMap.put("regionId", ctx.getRequest().getCallerContext().getRegionId());
+                        }
+                        if (ctx.getRequest().getCallerContext().getEnterpriseId() != null) {
+                            toolCtxMap.put("enterpriseId", ctx.getRequest().getCallerContext().getEnterpriseId());
+                        }
+                    }
+                }
                 // 当前会话 todos 快照：供 WriteTodosTool 按 id 合并，避免 AI 漏传导致丢项
                 toolCtxMap.put("currentTodos", loadCurrentTodos(sessionId, requestId));
+                toolCtxMap.put("allowedBusinessPages", allowedBusinessPages);
                 // MCP serializes ToolContext as JSON-RPC _meta; ChatContext is injected only for non-MCP execution.
                 toolBuilder.toolContext(toolCtxMap);
                 log.info("[Chat] 加载Agent工具: agentId={}, 内置/技能工具={}, MCP Servers={}, SubAgents={}, MemoryTools={}",
@@ -335,15 +391,29 @@ public class ToolPrepMiddleware implements ChatMiddleware {
     }
 
     private boolean shouldInjectUserMemoryTools(ChatContext ctx) {
-        if (ctx == null || ctx.getUserId() == null) {
+        if (ctx == null || ctx.getRequest() == null) {
             return false;
         }
+        // 自动化调度：不注入
+        if (ctx.getRequest().getActorUserId() != null && ctx.getRequest().getApiKeyId() == null) {
+            return false;
+        }
+        // 策略未启用则不注入
+        Long apiKeyId = ctx.getRequest().getApiKeyId();
         try {
-            return userPreferenceService.isLongMemoryEnabled(ctx.getUserId());
+            if (!Boolean.TRUE.equals(longMemoryPolicyService.resolveEffective(apiKeyId).getEnabled())) {
+                return false;
+            }
         } catch (Exception e) {
-            log.warn("[Chat] 读取用户长期记忆配置失败: userId={}, error={}", ctx.getUserId(), e.getMessage());
+            log.warn("[Chat] 读取长期记忆策略失败: apiKeyId={}, error={}", apiKeyId, e.getMessage());
             return false;
         }
+        // 开放 API：有 externalUserId 才注入；控制台：登录用户使用 debug_user_{userId}
+        if (apiKeyId != null) {
+            String externalUserId = ctx.getRequest().getExternalUserId();
+            return externalUserId != null && !externalUserId.isBlank();
+        }
+        return ctx.getUserId() != null;
     }
 
     /**
@@ -557,6 +627,33 @@ public class ToolPrepMiddleware implements ChatMiddleware {
                     sessionId, requestId, e.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * 解析 Agent.config.allowedBusinessPages。
+     * 缺省/null → 空列表（未绑定，不允许任何业务页）；非空列表为显式绑定。
+     */
+    private List<String> parseAllowedBusinessPages(Map<String, Object> configMap) {
+        if (configMap == null || !configMap.containsKey(ConfigKeys.Agent.ALLOWED_BUSINESS_PAGES)) {
+            return List.of();
+        }
+        Object raw = configMap.get(ConfigKeys.Agent.ALLOWED_BUSINESS_PAGES);
+        if (raw == null) {
+            return List.of();
+        }
+        if (raw instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object item : list) {
+                if (item != null && !String.valueOf(item).isBlank()) {
+                    out.add(String.valueOf(item).trim());
+                }
+            }
+            return out;
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            return List.of(s.trim());
+        }
+        return List.of();
     }
 
 }

@@ -6,7 +6,6 @@ import com.lightbot.dto.InitAdminDTO;
 import com.lightbot.vo.InitStatusVO;
 import com.lightbot.dto.LoginDTO;
 import com.lightbot.dto.ProfileUpdateDTO;
-import com.lightbot.dto.RegisterDTO;
 import com.lightbot.dto.UserDTO;
 import com.lightbot.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,20 +19,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@Tag(name = "认证管理", description = "用户注册、登录、登出")
+@Tag(name = "认证管理", description = "用户登录、登出与初始化")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final UserService userService;
-
-    @Operation(summary = "用户注册")
-    @PostMapping("/register")
-    public Result<UserDTO> register(@Valid @RequestBody RegisterDTO request) {
-        UserDTO user = userService.register(request);
-        return Result.ok(user);
-    }
 
     @Operation(summary = "用户登录")
     @PostMapping("/login")
@@ -69,9 +61,10 @@ public class AuthController {
         return Result.ok(userService.getUsersByIds(ids));
     }
 
-    @Operation(summary = "搜索用户（按用户名或昵称）")
+    @Operation(summary = "搜索用户（按用户名或昵称，管理员）")
     @GetMapping("/users/search")
     public Result<List<UserDTO>> searchUsers(@RequestParam String keyword) {
+        userService.checkAdmin();
         return Result.ok(userService.searchUsers(keyword));
     }
 

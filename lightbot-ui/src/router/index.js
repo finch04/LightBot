@@ -9,6 +9,12 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/docs',
+    name: 'ApiDocs',
+    component: () => import('../views/ApiDocsView.vue'),
+    meta: { public: true, title: '在线文档' },
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
@@ -16,9 +22,7 @@ const routes = [
   },
   {
     path: '/register',
-    name: 'Register',
-    component: () => import('../views/Register.vue'),
-    meta: { public: true },
+    redirect: '/login',
   },
   {
     path: '/init',
@@ -70,7 +74,7 @@ const routes = [
         path: 'model-providers',
         name: 'ModelProviders',
         component: () => import('../views/ModelProviderManage.vue'),
-        meta: { requiresAdmin: true },
+        // 建设者可维护模型渠道；默认模型写操作仍由后端 checkAdmin 收口
       },
       {
         path: 'agents',
@@ -112,6 +116,17 @@ const routes = [
         path: 'extensions',
         name: 'Extensions',
         component: () => import('../views/Extensions.vue'),
+      },
+      {
+        path: 'data-center',
+        name: 'DataCenter',
+        component: () => import('../views/DataCenter.vue'),
+      },
+      {
+        path: 'automation',
+        name: 'Automation',
+        component: () => import('../views/Automation.vue'),
+        meta: { title: '自动化' },
       },
       {
         path: 'dashboard',
@@ -191,11 +206,6 @@ const routes = [
         component: () => import('../views/ExperimentDetail.vue'),
       },
       {
-        path: 'logs',
-        name: 'Logs',
-        component: () => import('../views/LogMonitor.vue'),
-      },
-      {
         path: 'profile',
         name: 'Profile',
         component: () => import('../views/ProfileView.vue'),
@@ -215,11 +225,6 @@ const routes = [
         name: 'Settings',
         component: () => import('../views/SettingsView.vue'),
         meta: { requiresAdmin: true },
-      },
-      {
-        path: 'about',
-        name: 'About',
-        component: () => import('../views/AboutView.vue'),
       },
     ],
   },

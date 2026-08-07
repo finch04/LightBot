@@ -128,6 +128,54 @@ public interface AgentService extends IService<Agent> {
     void updateKnowledgeBindings(Long agentId, List<Long> knowledgeIds);
 
     /**
+     * 获取 Agent 绑定的问数数据集 ID 列表（兼容旧配置）
+     *
+     * @param agentId Agent ID
+     * @return 数据集 ID 列表
+     */
+    List<Long> getDatasetIds(Long agentId);
+
+    /**
+     * 更新 Agent 的问数数据集绑定（兼容旧配置）
+     *
+     * @param agentId    Agent ID
+     * @param datasetIds 问数数据集 ID 列表
+     */
+    void updateDatasetBindings(Long agentId, List<Long> datasetIds);
+
+    /**
+     * 获取 Agent 可问数据模型 ID 列表（由已绑分类展开；兼容旧版直接绑模型）
+     *
+     * @param agentId Agent ID
+     * @return 数据模型 ID 列表
+     */
+    List<Long> getDataModelIds(Long agentId);
+
+    /**
+     * 获取 Agent 可问数据分类 ID 列表（主路径绑定维度）
+     *
+     * @param agentId Agent ID
+     * @return 数据模型分类 ID 列表
+     */
+    List<Long> getDataModelCategoryIds(Long agentId);
+
+    /**
+     * 更新可问数据分类绑定；该类下全部模型即可问，并自动 ensure 语义配置
+     *
+     * @param agentId     Agent ID
+     * @param categoryIds 数据模型分类 ID 列表
+     */
+    void updateDataModelCategoryBindings(Long agentId, List<Long> categoryIds);
+
+    /**
+     * 更新可问数据模型绑定（兼容旧接口）；会清空分类绑定
+     *
+     * @param agentId      Agent ID
+     * @param dataModelIds 数据模型 ID 列表
+     */
+    void updateDataModelBindings(Long agentId, List<Long> dataModelIds);
+
+    /**
      * 获取 Agent 绑定的工具ID列表
      *
      * @param agentId Agent ID
@@ -235,6 +283,9 @@ public interface AgentService extends IService<Agent> {
      *
      * @param userId 用户ID
      * @return Agent列表
+     */
+    /**
+     * 按创建人查询 Agent（管理员审计用，非访问控制）
      */
     List<Agent> listByUserId(Long userId);
 

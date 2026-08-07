@@ -528,8 +528,8 @@ async function loadPromptsData() {
 <style scoped>
 .page {
   padding: 20px calc(24px + var(--scroll-content-gap)) 20px 24px;
-  min-height: 100vh;
-  height: 100vh;
+  min-height: var(--app-content-height);
+  height: var(--app-content-height);
   overflow-y: auto;
   background: var(--color-canvas-soft);
   scrollbar-gutter: stable;

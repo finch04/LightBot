@@ -103,3 +103,9 @@
   max-height: none;
   overflow: visible;
 }
+
+/* 业务页全屏编辑：取消 max-height 压缩，由内部 flex 铺满视口 */
+.bp-html-fullscreen-modal .ant-modal-body {
+  max-height: none;
+  overflow: hidden;
+}

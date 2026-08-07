@@ -15,13 +15,78 @@ import java.util.List;
 public interface ChatSessionService extends IService<ChatSession> {
 
     /**
-     * 创建新会话
+     * 创建新会话（平台调试）
      *
      * @param userId  用户ID
      * @param agentId AgentID
      * @return 会话
      */
     ChatSession createSession(Long userId, Long agentId);
+
+    /**
+     * 创建企业 API Key 集成会话
+     *
+     * @param apiKeyId         API Key ID
+     * @param agentId          AgentID
+     * @param externalUserId   上层业务终端用户标识（可选）
+     * @return 会话
+     */
+    ChatSession createApiSession(Long apiKeyId, Long agentId, String externalUserId);
+
+    /**
+     * 创建 API 会话并绑定调用方身份上下文
+     *
+     * @param apiKeyId      API Key ID
+     * @param agentId       Agent ID
+     * @param callerContext 调用方身份（可为 null）
+     * @return 新建会话
+     */
+    ChatSession createApiSession(Long apiKeyId, Long agentId, com.lightbot.dto.CallerContext callerContext);
+
+    /**
+     * 将会话上的调用方身份写回（同步 external_user_id 与 caller_context）
+     *
+     * @param session       会话实体
+     * @param callerContext 身份上下文（null 表示清空）
+     */
+    void applyCallerContext(ChatSession session, com.lightbot.dto.CallerContext callerContext);
+
+    /**
+     * 创建自动化任务会话
+     *
+     * @param triggerUserId 触发人（审计）
+     * @param agentId       AgentID
+     * @return 会话
+     */
+    ChatSession createAutomationSession(Long triggerUserId, Long agentId);
+
+    /**
+     * 分页查询企业 API 集成会话（建设者排障只读）
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页数量
+     * @param keyword  标题关键词
+     * @return 分页结果
+     */
+    Page<ChatSession> listApiSessions(int pageNum, int pageSize, String keyword);
+
+    /**
+     * 分页查询自动化任务会话（建设者排障只读）
+     *
+     * @param pageNum  页码
+     * @param pageSize 每页数量
+     * @param keyword  标题关键词
+     * @return 分页结果
+     */
+    Page<ChatSession> listAutomationSessions(int pageNum, int pageSize, String keyword);
+
+    /**
+     * 校验会话归属指定企业 API Key
+     *
+     * @param sessionId 会话 ID
+     * @param apiKeyId  API Key ID
+     */
+    void ensureOwnedByApiKey(Long sessionId, Long apiKeyId);
 
     /**
      * 分页查询当前用户的会话列表
@@ -46,11 +111,13 @@ public interface ChatSessionService extends IService<ChatSession> {
 
     /**
      * 批量删除会话（物理删除，包含所有消息）
+     * <p>platform：仅本人；api/automation：仅管理员</p>
      *
-     * @param userId 用户ID
+     * @param userId 当前用户ID
      * @param ids    会话ID列表
+     * @param admin  是否管理员
      */
-    void deleteSessions(Long userId, List<Long> ids);
+    void deleteSessions(Long userId, List<Long> ids, boolean admin);
 
     /**
      * 获取会话标题（轻量查询，跳过缓存）
@@ -148,12 +215,28 @@ public interface ChatSessionService extends IService<ChatSession> {
     List<com.lightbot.vo.SessionAttachmentVO> getSessionAttachments(Long sessionId);
 
     /**
-     * 校验会话归属当前用户，不属于抛 SESSION_NOT_FOUND。
+     * 校验会话归属当前用户（不限制 source），不属于抛 SESSION_NOT_FOUND。
      *
      * @param sessionId 会话 ID
      * @param userId    当前用户 ID
      */
     void ensureOwnedByUser(Long sessionId, Long userId);
+
+    /**
+     * 校验为本人的平台调试会话（source=platform），用于控制台写操作。
+     *
+     * @param sessionId 会话 ID
+     * @param userId    当前用户 ID
+     */
+    void ensurePlatformOwnedByUser(Long sessionId, Long userId);
+
+    /**
+     * 可读校验：platform 须本人；api/automation 任意建设者可排障只读。
+     *
+     * @param sessionId 会话 ID
+     * @param userId    当前用户 ID
+     */
+    void ensureReadableByUser(Long sessionId, Long userId);
 
     /**
      * 按 objectKey 移除会话附件索引条目（删除 MinIO 文件后同步用）。

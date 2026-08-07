@@ -4,17 +4,25 @@
       title="模型管理"
       :searchable="false"
       :show-refresh="false"
+      :show-create="activeTab === 'providers'"
       create-text="新增提供商"
       @create="openDialog()"
     >
-      <template #actions>
+      <template v-if="activeTab === 'providers'" #actions>
         <button class="lb-btn" :disabled="refreshing" @click="handleRefreshCache">
           <SyncOutlined :class="{ spinning: refreshing }" /> 刷新缓存
         </button>
       </template>
     </LbManageHeader>
 
-    <div class="provider-grid">
+    <a-tabs v-model:activeKey="activeTab" class="model-manage-tabs">
+      <a-tab-pane key="defaults" tab="默认模型" />
+      <a-tab-pane key="providers" tab="渠道配置" />
+    </a-tabs>
+
+    <DefaultModelsPanel v-if="activeTab === 'defaults'" />
+
+    <div v-show="activeTab === 'providers'" class="provider-grid">
       <div v-for="p in list" :key="p.id" :class="['provider-card', { disabled: p.status?.code === 'disabled' || p.status === 'disabled' }]">
         <div class="card-top">
           <div class="card-icon">{{ p.name[0] }}</div>
@@ -294,6 +302,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { getModelProviders, createModelProvider, updateModelProvider, deleteModelProvider, checkModelProviderByForm, fetchProviderModels, refreshModelProviderCache, toggleProviderStatus, getProviderDefaultModel, getModelProviderPresets } from '../api/modelProvider'
@@ -302,6 +311,16 @@ import { getModelsByProvider, createModel, deleteModel } from '../api/model'
 import JsonInput from '../components/JsonInput.vue'
 import LbDialogFooter from '../components/common/LbDialogFooter.vue'
 import LbManageHeader from '../components/common/LbManageHeader.vue'
+import DefaultModelsPanel from '../components/DefaultModelsPanel.vue'
+
+const route = useRoute()
+const router = useRouter()
+const VALID_TABS = ['defaults', 'providers']
+const activeTab = ref(VALID_TABS.includes(route.query.tab) ? route.query.tab : 'defaults')
+
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
+})
 
 const list = ref([])
 const providerTypes = ref([])
@@ -757,10 +776,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.model-manage-tabs {
+  margin-bottom: 8px;
+}
+.model-manage-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 16px;
+}
 .page {
   padding: var(--space-xl);
   padding-right: calc(var(--space-xl) + var(--scroll-content-gap));
-  height: 100vh;
+  height: var(--app-content-height);
   overflow-y: auto;
   background: var(--color-canvas-soft);
   scrollbar-gutter: stable;

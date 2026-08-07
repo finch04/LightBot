@@ -1,5 +1,5 @@
 <template>
-  <!-- 面包屑模式 + slim：仅顶栏一行，tags 紧跟面包屑显示（无标题区） -->
+  <!-- 面包屑模式 + slim：仅顶栏一行（面包屑 + 可选标题 + tags + 操作） -->
   <div
     v-if="breadcrumb && breadcrumb.length && slim"
     class="lb-detail-header lb-detail-header--stack lb-detail-header--slim"
@@ -7,6 +7,7 @@
     <div class="lb-detail-header__top-bar">
       <div class="lb-detail-header__top-left">
         <LbBreadcrumb :items="breadcrumb" :show-arrow="showBack" @back="emit('back')" />
+        <h2 v-if="title" class="lb-detail-header__title lb-detail-header__title--inline">{{ title }}</h2>
         <div v-if="$slots.tags || tagsList.length" class="lb-detail-header__tags lb-detail-header__tags--inline">
           <slot name="tags">
             <a-tag v-for="t in tagsList" :key="t" color="blue">{{ t }}</a-tag>
@@ -74,7 +75,7 @@
  * 支持三种模式：
  * 1. 面包屑模式（推荐）：传入 breadcrumb 数组，渲染「顶栏（面包屑 + 操作）+ 标题区（h2 + 描述竖线 + 元信息）」两行布局，
  *    参考 Linear / Notion / Dify。解决「返回按钮放哪都丑」问题——箭头融入面包屑导航路径。
- * 2. 面包屑 + slim：仅顶栏一行，tags 紧跟面包屑显示（适用于 trace 类无主标题、只需状态回显的页面）。
+ * 2. 面包屑 + slim：仅顶栏一行；有 title 时紧跟面包屑，tags 再跟其后（适用于 Agent 详情等需压缩高度的页面）。
  * 3. 兼容模式：不传 breadcrumb 但 showBack=true，退化为原「返回按钮 + 标题 + tags + extra」单行布局。
  */
 import { ArrowLeftOutlined } from '@ant-design/icons-vue'

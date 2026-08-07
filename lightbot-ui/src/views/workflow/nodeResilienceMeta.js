@@ -15,6 +15,7 @@ export const RESILIENCE_NODE_TYPES = new Set([
   'loop',
   'batch',
   'app_component',
+  'sub_agent',
   'condition',
   'variable',
   'variable_handle',
@@ -107,6 +108,12 @@ export const NODE_RESILIENCE_PROFILES = {
     showReadTimeout: true,
     showRetry: false,
     readTimeout: { min: 10, max: 300, default: 60 },
+  },
+  sub_agent: {
+    showConnectTimeout: false,
+    showReadTimeout: true,
+    showRetry: false,
+    readTimeout: { min: 10, max: 600, default: 120 },
   },
   condition: {
     showConnectTimeout: false,

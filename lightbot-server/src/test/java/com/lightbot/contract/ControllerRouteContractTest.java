@@ -22,10 +22,15 @@ class ControllerRouteContractTest {
             Map.entry(AgentController.class, "/api/agents"),
             Map.entry(AgentWorkflowController.class, "/api/agents/{agentId}/workflow"),
             Map.entry(ApiKeyController.class, "/api/api-keys"),
+            Map.entry(AskDatasetController.class, "/api/ask-data"),
             Map.entry(AuthController.class, "/api/auth"),
             Map.entry(ChatController.class, "/api/chat"),
             Map.entry(ChatSessionController.class, "/api/chat/sessions"),
             Map.entry(DashboardController.class, "/api/dashboard"),
+            Map.entry(DataModelCategoryController.class, "/api/data-model-categories"),
+            Map.entry(DataModelController.class, "/api/data-models"),
+            Map.entry(DataPoolAttachmentController.class, "/api/data-pools/attachments"),
+            Map.entry(DataPoolController.class, "/api/data-pools/{modelId}"),
             Map.entry(DocumentEditController.class, "/api/documents"),
             Map.entry(EnumController.class, "/api/enums"),
             Map.entry(EvalDatasetController.class, "/api/eval/datasets"),
@@ -39,12 +44,13 @@ class ControllerRouteContractTest {
             Map.entry(KnowledgeRagController.class, "/api/knowledge"),
             Map.entry(LandingController.class, "/api/landing"),
             Map.entry(LlmTraceController.class, "/api/observability"),
-            Map.entry(LogController.class, "/api/logs"),
             Map.entry(McpServerController.class, "/api/mcp-servers"),
             Map.entry(ModelController.class, "/api/models"),
             Map.entry(ModelProviderController.class, "/api/model-providers"),
             Map.entry(OcrController.class, "/api/ocr"),
+            Map.entry(OpenDataPoolController.class, "/api/open/v1/data-pools/records"),
             Map.entry(PromptController.class, "/api/prompts"),
+            Map.entry(RegionController.class, "/api/regions"),
             Map.entry(SkillController.class, "/api/skills"),
             Map.entry(StandaloneGraphController.class, "/api/graph"),
             Map.entry(SubAgentController.class, "/api/subagents"),
@@ -59,7 +65,7 @@ class ControllerRouteContractTest {
 
     @Test
     void test_controllerBasePaths_shouldRemainCompatible() {
-        assertEquals(37, EXPECTED_BASE_PATHS.size());
+        assertEquals(42, EXPECTED_BASE_PATHS.size());
 
         EXPECTED_BASE_PATHS.forEach((controllerClass, expectedPath) -> {
             RequestMapping requestMapping = controllerClass.getAnnotation(RequestMapping.class);

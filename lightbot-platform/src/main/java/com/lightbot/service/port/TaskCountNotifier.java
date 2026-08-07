@@ -10,9 +10,16 @@ package com.lightbot.service.port;
 public interface TaskCountNotifier {
 
     /**
-     * 通知指定用户的任务计数已变更
+     * 通知指定用户的任务计数已变更（兼容旧调用）
      *
      * @param userId 用户ID
      */
     void notifyUser(Long userId);
+
+    /**
+     * 通知所有在线建设者：企业任务计数已变更
+     */
+    default void notifyAllUsers() {
+        notifyUser(null);
+    }
 }

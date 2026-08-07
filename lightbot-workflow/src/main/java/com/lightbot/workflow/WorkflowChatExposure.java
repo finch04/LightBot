@@ -84,7 +84,7 @@ public final class WorkflowChatExposure {
         if (type == NodeType.OUTPUT) {
             return isOutputStreamSwitchEnabled(data);
         }
-        if (type == NodeType.APP_COMPONENT) {
+        if (type == NodeType.APP_COMPONENT || type == NodeType.SUB_AGENT) {
             return Boolean.TRUE.equals(data.get("streamSwitch"));
         }
         return false;

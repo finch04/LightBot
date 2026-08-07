@@ -17,7 +17,7 @@ import lombok.Getter;
 public enum UserRole implements EnumDisplay {
 
     ADMIN("admin", "管理员"),
-    USER("user", "普通用户");
+    USER("user", "建设者");
 
     @EnumValue
     private final String code;

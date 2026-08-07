@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lightbot.common.BizException;
 import com.lightbot.constant.ConfigKeys;
 import com.lightbot.entity.ModelProvider;
+import com.lightbot.enums.CommonStatus;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.enums.ModelProviderType;
 import com.lightbot.event.CacheInvalidationBroadcaster;
@@ -393,6 +394,8 @@ public class ModelFactory {
 
     /**
      * 获取所有可用的 providerId 列表（优先Redis缓存，未命中回源数据库）
+     * <p>仅返回已启用、且具备有效 API Key（Ollama 除外）的提供商，
+     * 避免默认回退到禁用/无密钥提供商导致「API key value must not be null」</p>
      *
      * @return providerId 列表
      */
@@ -400,14 +403,25 @@ public class ModelFactory {
         // 1. 优先从Redis缓存获取
         List<ModelProvider> cached = cacheUtil.getAllProviders();
         if (!cached.isEmpty()) {
-            return cached.stream().map(ModelProvider::getId).collect(Collectors.toList());
+            return cached.stream().filter(this::isUsableProvider).map(ModelProvider::getId).collect(Collectors.toList());
         }
         // 2. 缓存未命中，回源数据库并刷新缓存
         List<ModelProvider> providers = modelProviderService.list();
         if (!providers.isEmpty()) {
             cacheUtil.cacheAllProviders(providers);
         }
-        return providers.stream().map(ModelProvider::getId).collect(Collectors.toList());
+        return providers.stream().filter(this::isUsableProvider).map(ModelProvider::getId).collect(Collectors.toList());
+    }
+
+    /** 是否可作为 Chat 默认回退：已启用，且非 Ollama 时必须有 API Key */
+    private boolean isUsableProvider(ModelProvider provider) {
+        if (provider == null || provider.getStatus() != CommonStatus.ACTIVE) {
+            return false;
+        }
+        if (provider.getType() == ModelProviderType.OLLAMA) {
+            return true;
+        }
+        return provider.getApiKey() != null && !provider.getApiKey().isBlank();
     }
 
     /**

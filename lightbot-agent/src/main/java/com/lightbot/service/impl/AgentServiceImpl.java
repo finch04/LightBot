@@ -19,6 +19,8 @@ import com.lightbot.entity.McpServer;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.dto.AgentSaveDTO;
 import com.lightbot.service.AgentService;
+import com.lightbot.service.AskDatasetService;
+import com.lightbot.service.DataModelService;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
 import com.lightbot.util.AgentChatRuntimeConfigUtil;
 import com.lightbot.workflow.WorkflowConfigParser;
@@ -26,6 +28,8 @@ import com.lightbot.service.McpServerService;
 import com.lightbot.service.SystemConfigService;
 import com.lightbot.service.ToolService;
 import com.lightbot.entity.Tool;
+import com.lightbot.entity.SubAgent;
+import com.lightbot.dto.SubAgentRequestDTO;
 import com.lightbot.util.LlmTraceContext;
 import com.lightbot.util.MinioUtil;
 import com.lightbot.util.WorkflowExampleTemplates;
@@ -54,6 +58,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -63,7 +68,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -90,6 +94,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     private final KnowledgeService knowledgeService;
     private final SkillService skillService;
     private final SubAgentService subAgentService;
+    private final AskDatasetService askDatasetService;
+    private final DataModelService dataModelService;
 
     private static final String GENERATE_PROMPT_SYSTEM = """
             你是一个AI助手提示词生成专家。根据用户提供的Agent名称和描述，生成一段专业的系统提示词。
@@ -152,7 +158,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     /**
-     * 校验当前登录用户对 Agent 的访问权（owner / 默认 Agent / 管理员）
+     * 校验 Agent 存在（企业资产：任意登录建设者可读写，userId 仅作创建人审计）
      *
      * @param id Agent ID
      * @return 已通过校验的 Agent 实体
@@ -161,13 +167,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         Agent agent = getById(id);
         if (agent == null) {
             throw new BizException(ErrorCode.AGENT_NOT_FOUND);
-        }
-        long currentUserId = StpUtil.getLoginIdAsLong();
-        boolean isAdmin = StpUtil.hasRole("admin");
-        boolean isOwner = Objects.equals(agent.getUserId(), currentUserId);
-        boolean isDefault = Boolean.TRUE.equals(agent.getIsDefault());
-        if (!isAdmin && !isOwner && !isDefault) {
-            throw new BizException(ErrorCode.FORBIDDEN);
         }
         return agent;
     }
@@ -321,11 +320,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     public Page<Agent> listMyAgents(int pageNum, int pageSize, String name, String agentType, boolean includeDefault) {
-        long userId = StpUtil.getLoginIdAsLong();
+        // 企业资产：返回全量 Agent 列表（不再按创建人过滤；includeDefault 保留兼容，语义上已包含全部）
         LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<Agent>()
-                .and(includeDefault
-                        ? w -> w.eq(Agent::getUserId, userId).or().eq(Agent::getIsDefault, true)
-                        : w -> w.eq(Agent::getUserId, userId))
                 .like(StringUtils.hasText(name), Agent::getName, name)
                 .orderByDesc(Agent::getIsDefault)
                 .orderByDesc(Agent::getCreateTime);
@@ -364,6 +360,14 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
                 .map(String::valueOf)
                 .toList();
 
+        // 5.1 可问数据：按分类绑定（主路径）+ 展开模型 ID + 兼容旧 dataset 绑定
+        List<Long> dataModelCategoryIds = getDataModelCategoryIds(id);
+        List<String> dataModelCategoryIdStrs = dataModelCategoryIds.stream().map(String::valueOf).toList();
+        List<Long> dataModelIds = getDataModelIds(id);
+        List<String> dataModelIdStrs = dataModelIds.stream().map(String::valueOf).toList();
+        List<Long> datasetIds = getDatasetIds(id);
+        List<String> datasetIdStrs = datasetIds.stream().map(String::valueOf).toList();
+
         // 6. 对话能力（多模态/联网等）
         Map<String, Object> configMap = WorkflowConfigParser.parseConfigMap(agent.getConfig(), objectMapper);
         AgentChatCapabilitiesDTO chatCapabilities = AgentChatCapabilitiesUtil.fromConfigMap(configMap);
@@ -375,6 +379,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         result.put("mcpServerIds", mcpServerIdStrs);
         result.put("subAgentIds", subAgentIdStrs);
         result.put("skillIds", skillIdStrs);
+        result.put("dataModelCategoryIds", dataModelCategoryIdStrs);
+        result.put("dataModelIds", dataModelIdStrs);
+        result.put("datasetIds", datasetIdStrs);
         result.put("chatCapabilities", chatCapabilities);
         return result;
     }
@@ -549,6 +556,113 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     }
 
     @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':datasetIds'")
+    public List<Long> getDatasetIds(Long agentId) {
+        return readBindingIdsFromConfig(agentId, "datasets");
+    }
+
+    @Override
+    @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':datasetIds'")
+    public void updateDatasetBindings(Long agentId, List<Long> datasetIds) {
+        writeBindingIdsToConfig(agentId, "datasets", datasetIds, 10, ErrorCode.AGENT_DATASET_LIMIT);
+    }
+
+    @Override
+    public List<Long> getDataModelIds(Long agentId) {
+        // 1. 主路径：按分类展开当前模型（分类下新增模型自动可问，故不缓存展开结果）
+        List<Long> categoryIds = readBindingIdsFromConfig(agentId, "dataModelCategories");
+        if (!categoryIds.isEmpty()) {
+            return dataModelService.listIdsByCategoryIds(categoryIds);
+        }
+        // 2. 兼容旧版直接绑定模型 ID
+        return readBindingIdsFromConfig(agentId, "dataModels");
+    }
+
+    @Override
+    @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':dataModelCategoryIds'")
+    public List<Long> getDataModelCategoryIds(Long agentId) {
+        List<Long> categoryIds = readBindingIdsFromConfig(agentId, "dataModelCategories");
+        if (!categoryIds.isEmpty()) {
+            return categoryIds;
+        }
+        // 兼容旧版：由已绑模型反查分类，便于前端按分类维度回显
+        List<Long> legacyModelIds = readBindingIdsFromConfig(agentId, "dataModels");
+        if (legacyModelIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return dataModelService.listCategoryIdsByModelIds(legacyModelIds);
+    }
+
+    @Override
+    @Caching(evict = {
+            @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':dataModelCategoryIds'"),
+            @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':dataModelIds'")
+    })
+    public void updateDataModelCategoryBindings(Long agentId, List<Long> categoryIds) {
+        // 1. 写入分类绑定，并清空旧版模型绑定
+        writeAskDataBindingsToConfig(agentId, categoryIds, List.of());
+        // 2. 展开分类下模型并 ensure 语义配置
+        ensureAskDatasetsForModels(agentId, dataModelService.listIdsByCategoryIds(
+                categoryIds != null ? categoryIds : List.of()));
+    }
+
+    @Override
+    @Caching(evict = {
+            @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':dataModelCategoryIds'"),
+            @CacheEvict(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':dataModelIds'")
+    })
+    public void updateDataModelBindings(Long agentId, List<Long> dataModelIds) {
+        // 兼容旧接口：按模型写入，并清空分类绑定
+        writeAskDataBindingsToConfig(agentId, List.of(), dataModelIds);
+        ensureAskDatasetsForModels(agentId, dataModelIds != null ? dataModelIds : List.of());
+    }
+
+    /**
+     * 写入可问数据绑定：分类为主路径，模型为兼容字段（二者互斥写入）
+     */
+    private void writeAskDataBindingsToConfig(Long agentId, List<Long> categoryIds, List<Long> dataModelIds) {
+        List<Long> cats = categoryIds != null ? categoryIds : List.of();
+        List<Long> models = dataModelIds != null ? dataModelIds : List.of();
+        if (!cats.isEmpty() && cats.size() > 10) {
+            throw new BizException(ErrorCode.AGENT_DATA_MODEL_LIMIT);
+        }
+        if (cats.isEmpty() && models.size() > 10) {
+            throw new BizException(ErrorCode.AGENT_DATA_MODEL_LIMIT);
+        }
+        Agent agent = checkOwnership(agentId);
+        try {
+            var configNode = objectMapper.readTree(
+                    agent.getConfig() != null ? agent.getConfig() : "{}");
+            var configMap = objectMapper.convertValue(configNode, new TypeReference<Map<String, Object>>() {});
+            configMap.put("dataModelCategories", cats.stream().map(String::valueOf).distinct().toList());
+            configMap.put("dataModels", models.stream().map(String::valueOf).distinct().toList());
+            agent.setConfig(objectMapper.writeValueAsString(configMap));
+            updateById(agent);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[Agent] 更新可问数据绑定失败: agentId={}, error={}", agentId, e.getMessage(), e);
+            throw new BizException(ErrorCode.INTERNAL_ERROR);
+        }
+    }
+
+    private void ensureAskDatasetsForModels(Long agentId, List<Long> modelIds) {
+        if (modelIds == null || modelIds.isEmpty()) {
+            return;
+        }
+        for (Long modelId : modelIds) {
+            try {
+                askDatasetService.ensureFromModel(modelId);
+            } catch (Exception e) {
+                log.warn("[Agent] ensure 问数配置失败: agentId={}, modelId={}, err={}",
+                        agentId, modelId, e.getMessage());
+                throw e instanceof BizException be ? be
+                        : new BizException(ErrorCode.ASK_DATA_QUERY_INVALID, e.getMessage());
+            }
+        }
+    }
+
+    @Override
     @Cacheable(value = RedisCacheConfig.CACHE_AGENT_BINDING, key = "#agentId + ':toolIds'")
     public List<Long> getToolIds(Long agentId) {
         return readBindingIdsFromConfig(agentId, "tools");
@@ -717,8 +831,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     @Override
     public Agent getDefaultAgent(long userId) {
+        // 企业默认 Agent：全平台唯一，不再按用户维度查找（userId 参数保留兼容调用方）
         return getOne(new LambdaQueryWrapper<Agent>()
-                .eq(Agent::getUserId, userId)
                 .eq(Agent::getIsDefault, true)
                 .last("LIMIT 1"));
     }
@@ -726,13 +840,11 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setDefaultAgent(long agentId) {
-        // 1. 校验Agent存在性 + 所有权
+        // 1. 校验 Agent 存在
         Agent agent = checkOwnership(agentId);
 
-        // 2. 清除该用户其他Agent的默认标记（1 条 SQL）
-        long userId = agent.getUserId();
+        // 2. 清除企业内其他 Agent 的默认标记（全平台唯一默认）
         lambdaUpdate()
-                .eq(Agent::getUserId, userId)
                 .eq(Agent::getIsDefault, true)
                 .set(Agent::getIsDefault, false)
                 .update();
@@ -758,7 +870,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
         long userId = StpUtil.getLoginIdAsLong();
         Map<String, Long> toolIds = resolveExampleToolIds();
-        Map<String, Long> subAgentIds = createPublishedSubWorkflowExamples(key, userId, toolIds);
+        Map<String, Long> subWorkflowAgentIds = createPublishedSubWorkflowExamples(key, userId, toolIds);
+        Map<String, Long> capabilitySubAgentIds = resolveOrCreateExampleCapabilitySubAgents(key);
 
         // 2. 构建 Agent 实体
         Agent agent = new Agent();
@@ -774,7 +887,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
         save(agent);
 
         // 3. 解析占位符并初始化草稿版本
-        Map<String, Object> snapshot = WorkflowExampleTemplates.buildResolvedSnapshot(key, subAgentIds, toolIds);
+        Map<String, Object> snapshot = WorkflowExampleTemplates.buildResolvedSnapshot(
+                key, subWorkflowAgentIds, toolIds, capabilitySubAgentIds);
         if (snapshot == null) {
             throw new BizException("示例工作流快照不存在: " + key);
         }
@@ -798,7 +912,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
     /** 创建并发布示例子工作流，返回 subKey → agentId */
     private Map<String, Long> createPublishedSubWorkflowExamples(String key, long userId, Map<String, Long> toolIds) {
-        Map<String, Long> subAgentIds = new HashMap<>();
+        Map<String, Long> subWorkflowAgentIds = new HashMap<>();
         for (String subKey : WorkflowExampleTemplates.getSubWorkflowKeys(key)) {
             Map<String, Object> subSnapshot = WorkflowExampleTemplates.buildResolvedSubSnapshot(subKey, toolIds);
             if (subSnapshot == null) {
@@ -819,9 +933,39 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent>
 
             agentVersionService.initDraftWithWorkflow(subAgent, subSnapshot);
             publishExampleWorkflowSnapshot(subAgent.getId(), subSnapshot);
-            subAgentIds.put(subKey, subAgent.getId());
+            subWorkflowAgentIds.put(subKey, subAgent.getId());
         }
-        return subAgentIds;
+        return subWorkflowAgentIds;
+    }
+
+    /**
+     * 准备示例用 SubAgent 能力实例：已存在则复用并确保启用，不存在则创建
+     */
+    private Map<String, Long> resolveOrCreateExampleCapabilitySubAgents(String key) {
+        Map<String, Long> capabilityIds = new LinkedHashMap<>();
+        for (String saKey : WorkflowExampleTemplates.getCapabilitySubAgentKeys(key)) {
+            String name = WorkflowExampleTemplates.getCapabilitySubAgentName(saKey);
+            SubAgent existing = subAgentService.getByName(name);
+            if (existing != null) {
+                if (!Integer.valueOf(1).equals(existing.getEnabled())) {
+                    subAgentService.setEnabled(existing.getId(), true);
+                }
+                capabilityIds.put(saKey, existing.getId());
+                continue;
+            }
+            SubAgentRequestDTO request = new SubAgentRequestDTO();
+            request.setName(name);
+            request.setDisplayName(WorkflowExampleTemplates.getCapabilitySubAgentDisplayName(saKey));
+            request.setDescription("工作流示例用摘要助手");
+            request.setSystemPrompt(
+                    "你是摘要助手。请把用户给出的内容整理为简洁、可执行的要点列表（3-5 条），不要编造事实。");
+            request.setIcon("TeamOutlined");
+            request.setEnabled(true);
+            request.setToolIds(List.of());
+            SubAgent created = subAgentService.create(request);
+            capabilityIds.put(saKey, created.getId());
+        }
+        return capabilityIds;
     }
 
     private void publishExampleWorkflowSnapshot(Long agentId, Map<String, Object> workflowSnapshot) {

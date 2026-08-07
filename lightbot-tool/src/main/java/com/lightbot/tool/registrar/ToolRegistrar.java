@@ -38,7 +38,8 @@ public class ToolRegistrar {
             "com.lightbot.tool.builtin",
             "com.lightbot.tool.systemtool",
             "com.lightbot.agent.tool.knowledge",
-            "com.lightbot.agent.tool.memory"
+            "com.lightbot.agent.tool.memory",
+            "com.lightbot.agent.tool.askdata"
     );
 
     private final ToolService toolService;

@@ -5,9 +5,12 @@ import com.lightbot.common.Result;
 import cn.dev33.satoken.stp.StpUtil;
 import com.lightbot.entity.ChatSession;
 import com.lightbot.entity.Message;
+import com.lightbot.constant.EnterpriseActors;
+import com.lightbot.enums.UserRole;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.MessageService;
 import com.lightbot.service.SessionFileService;
+import com.lightbot.service.UserService;
 import com.lightbot.vo.ConversationSearchResultVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,6 +43,7 @@ public class ChatSessionController {
     private final ChatSessionService chatSessionService;
     private final MessageService messageService;
     private final SessionFileService sessionFileService;
+    private final UserService userService;
 
     @Operation(summary = "创建新会话")
     @PostMapping
@@ -48,7 +52,7 @@ public class ChatSessionController {
         return Result.ok(chatSessionService.createSession(userId, agentId));
     }
 
-    @Operation(summary = "分页查询当前用户的会话列表")
+    @Operation(summary = "分页查询当前用户的平台调试会话列表")
     @GetMapping
     public Result<Page<ChatSession>> list(
             @RequestParam(defaultValue = "1") int pageNum,
@@ -58,9 +62,28 @@ public class ChatSessionController {
         return Result.ok(chatSessionService.listMySessions(userId, pageNum, pageSize, keyword));
     }
 
+    @Operation(summary = "分页查询企业 API 集成会话（建设者排障只读）")
+    @GetMapping("/api-integration")
+    public Result<Page<ChatSession>> listApiSessions(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword) {
+        return Result.ok(chatSessionService.listApiSessions(pageNum, pageSize, keyword));
+    }
+
+    @Operation(summary = "分页查询自动化任务会话（建设者排障只读）")
+    @GetMapping("/automation")
+    public Result<Page<ChatSession>> listAutomationSessions(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword) {
+        return Result.ok(chatSessionService.listAutomationSessions(pageNum, pageSize, keyword));
+    }
+
     @Operation(summary = "获取会话详情")
     @GetMapping("/{id}")
     public Result<ChatSession> getById(@PathVariable Long id) {
+        ensureReadable(id);
         return Result.ok(chatSessionService.getById(id));
     }
 
@@ -70,12 +93,14 @@ public class ChatSessionController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "10") int pageSize) {
+        ensureReadable(id);
         return Result.ok(messageService.listBySessionIdPage(id, pageNum, pageSize));
     }
 
     @Operation(summary = "获取会话标题（轻量轮询，跳过缓存）")
     @GetMapping("/{id}/title")
     public Result<String> getTitle(@PathVariable Long id) {
+        ensureReadable(id);
         return Result.ok(chatSessionService.getTitle(id));
     }
 
@@ -84,6 +109,8 @@ public class ChatSessionController {
     public Result<Void> updateTitle(@PathVariable Long id,
                                     @RequestParam @NotBlank(message = "会话标题不能为空")
                                     @Size(max = 50, message = "会话标题不超过50字") String title) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensurePlatformOwnedByUser(id, userId);
         chatSessionService.updateTitle(id, title);
         return Result.ok();
     }
@@ -91,6 +118,8 @@ public class ChatSessionController {
     @Operation(summary = "归档会话")
     @PutMapping("/{id}/archive")
     public Result<Void> archive(@PathVariable Long id) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensurePlatformOwnedByUser(id, userId);
         chatSessionService.archiveSession(id);
         return Result.ok();
     }
@@ -98,6 +127,14 @@ public class ChatSessionController {
     @Operation(summary = "删除会话（物理删除，包含所有消息）")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
+        ChatSession session = chatSessionService.getById(id);
+        if (session != null && (EnterpriseActors.SESSION_SOURCE_API.equals(session.getSource())
+                || EnterpriseActors.SESSION_SOURCE_AUTOMATION.equals(session.getSource()))) {
+            // API / 自动化会话：仅管理员可清理
+            userService.checkAdmin();
+        } else {
+            chatSessionService.ensurePlatformOwnedByUser(id, StpUtil.getLoginIdAsLong());
+        }
         chatSessionService.deleteSession(id);
         return Result.ok();
     }
@@ -106,20 +143,30 @@ public class ChatSessionController {
     @DeleteMapping("/batch")
     public Result<Void> deleteBatch(@RequestBody List<Long> ids) {
         long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.deleteSessions(userId, ids);
+        boolean admin = StpUtil.hasRole(UserRole.ADMIN.getCode());
+        chatSessionService.deleteSessions(userId, ids, admin);
         return Result.ok();
     }
 
     @Operation(summary = "切换会话置顶状态")
     @PutMapping("/{id}/pin")
     public Result<Void> togglePin(@PathVariable Long id) {
+        long userId = StpUtil.getLoginIdAsLong();
+        chatSessionService.ensurePlatformOwnedByUser(id, userId);
         chatSessionService.togglePin(id);
         return Result.ok();
     }
 
-    @Operation(summary = "删除单条消息")
+    @Operation(summary = "删除单条消息（仅平台调试会话；API/自动化仅管理员）")
     @DeleteMapping("/{sessionId}/messages/{messageId}")
     public Result<Void> deleteMessage(@PathVariable Long sessionId, @PathVariable Long messageId) {
+        ChatSession session = chatSessionService.getById(sessionId);
+        if (session != null && (EnterpriseActors.SESSION_SOURCE_API.equals(session.getSource())
+                || EnterpriseActors.SESSION_SOURCE_AUTOMATION.equals(session.getSource()))) {
+            userService.checkAdmin();
+        } else {
+            chatSessionService.ensurePlatformOwnedByUser(sessionId, StpUtil.getLoginIdAsLong());
+        }
         messageService.deleteMessage(messageId, sessionId);
         return Result.ok();
     }
@@ -131,6 +178,7 @@ public class ChatSessionController {
             @RequestParam String keyword,
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "20") int pageSize) {
+        ensureReadable(id);
         return Result.ok(messageService.searchBySessionId(id, keyword, pageNum, pageSize));
     }
 
@@ -167,8 +215,7 @@ public class ChatSessionController {
     @Operation(summary = "获取会话附件列表")
     @GetMapping("/{id}/attachments")
     public Result<List<com.lightbot.vo.SessionAttachmentVO>> getAttachments(@PathVariable Long id) {
-        long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.ensureOwnedByUser(id, userId);
+        ensureReadable(id);
         return Result.ok(chatSessionService.getSessionAttachments(id));
     }
 
@@ -177,8 +224,7 @@ public class ChatSessionController {
     public Result<com.lightbot.vo.SessionFileTreeResponseVO> getFileTree(
             @PathVariable Long id,
             @RequestParam(required = false, defaultValue = "") String path) {
-        long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.ensureOwnedByUser(id, userId);
+        ensureReadable(id);
         return Result.ok(sessionFileService.listDirectory(id, path));
     }
 
@@ -187,8 +233,7 @@ public class ChatSessionController {
     public Result<com.lightbot.vo.SessionFileContentVO> getFileContent(
             @PathVariable Long id,
             @RequestParam String path) {
-        long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.ensureOwnedByUser(id, userId);
+        ensureReadable(id);
         return Result.ok(sessionFileService.readContent(id, path));
     }
 
@@ -197,8 +242,7 @@ public class ChatSessionController {
     public Result<String> getFileDownloadUrl(
             @PathVariable Long id,
             @RequestParam String path) {
-        long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.ensureOwnedByUser(id, userId);
+        ensureReadable(id);
         return Result.ok(sessionFileService.getDownloadUrl(id, path));
     }
 
@@ -208,7 +252,7 @@ public class ChatSessionController {
             @PathVariable Long id,
             @RequestParam String path) {
         long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.ensureOwnedByUser(id, userId);
+        chatSessionService.ensurePlatformOwnedByUser(id, userId);
         sessionFileService.deleteFile(id, path);
         return Result.ok();
     }
@@ -217,7 +261,7 @@ public class ChatSessionController {
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     public Result<Void> removeAttachment(@PathVariable Long id, @PathVariable String attachmentId) {
         long userId = StpUtil.getLoginIdAsLong();
-        chatSessionService.ensureOwnedByUser(id, userId);
+        chatSessionService.ensurePlatformOwnedByUser(id, userId);
         chatSessionService.removeSessionAttachment(id, attachmentId);
         return Result.ok();
     }
@@ -228,6 +272,7 @@ public class ChatSessionController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "markdown") String format) {
         long userId = StpUtil.getLoginIdAsLong();
+        ensureReadable(id);
         String content = chatSessionService.exportSession(userId, id, format);
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
 
@@ -238,5 +283,12 @@ public class ChatSessionController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(bytes.length)
                 .body(bytes);
+    }
+
+    /**
+     * 可读校验：平台会话须归属本人；API / 自动化会话任意建设者可排障只读
+     */
+    private void ensureReadable(Long sessionId) {
+        chatSessionService.ensureReadableByUser(sessionId, StpUtil.getLoginIdAsLong());
     }
 }

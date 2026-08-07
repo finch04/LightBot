@@ -88,7 +88,7 @@
             :title="getNodeMeta(type).title"
             :desc="getNodeMeta(type).desc"
             :color="getNodeMeta(type).color"
-            draggable="true"
+            :draggable="true"
             @dragstart="(e, t) => $emit('drag-start', e, t)"
           />
         </div>

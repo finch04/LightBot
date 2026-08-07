@@ -34,6 +34,14 @@
       </div>
     </div>
     <div class="chat-topbar-right">
+      <ChatSimRoleControl
+        v-if="showSimRole"
+        :user-id="simRoleUserId"
+        :session-has-messages="sessionHasMessages"
+        :disabled="simRoleDisabled"
+        @change="$emit('sim-role-change', $event)"
+        @request-new-session="$emit('sim-role-new-session')"
+      />
       <a-tooltip v-if="showRuntimePanel" :title="runtimePanelOpen ? '关闭协作状态' : '打开协作状态'">
         <button class="btn-topbar-file" :class="{ 'is-active': runtimePanelOpen }" @click="$emit('toggle-runtime-panel')">
           <DashboardOutlined />
@@ -58,6 +66,7 @@
 <script setup>
 import { ref } from 'vue'
 import { EditOutlined, CloseOutlined, DashboardOutlined, FolderOpenOutlined, RobotOutlined } from '@ant-design/icons-vue'
+import ChatSimRoleControl from './ChatSimRoleControl.vue'
 
 defineProps({
   sessionTitle: { type: String, default: '' },
@@ -69,6 +78,10 @@ defineProps({
   showSubagentDrawer: { type: Boolean, default: false },
   subagentRunningCount: { type: Number, default: 0 },
   titleEditable: { type: Boolean, default: true },
+  showSimRole: { type: Boolean, default: true },
+  simRoleUserId: { type: [String, Number], default: null },
+  sessionHasMessages: { type: Boolean, default: false },
+  simRoleDisabled: { type: Boolean, default: false },
 })
 
 defineEmits([
@@ -79,6 +92,8 @@ defineEmits([
   'open-file-drawer',
   'toggle-runtime-panel',
   'open-subagent-drawer',
+  'sim-role-change',
+  'sim-role-new-session',
 ])
 
 const titleInputRef = ref(null)

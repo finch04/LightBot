@@ -141,7 +141,7 @@ export const FIELD_HINTS = {
     instruction: '补充意图识别约束，如行业术语、分类边界',
   },
   condition: {
-    conditionGroups: '按顺序匹配条件组，命中后走对应出口（上/下/右）；均未命中走「否则」出口',
+    conditionGroups: '按顺序匹配条件组，命中后走右侧对应出口；均未命中走「都未命中」默认出口',
   },
   retrieval: {
     inputVariable: '用于检索的查询文本，常用 {{query}}',
@@ -219,6 +219,12 @@ export const FIELD_HINTS = {
     outputMappings: '子流程出参写入父流程：key 为父流程变量名，value 引用子流程结果如 {{result}}',
     streamSwitch: '子流程输出是否流式追加到对话',
   },
+  sub_agent: {
+    subAgentId: '选择已启用的 SubAgent（节点级选择，无需绑定到主 Agent）',
+    task: '任务描述模板，支持 {{query}} / {{上游节点.字段}}',
+    outputMappings: '将 SubAgent 结果写入流程变量：value 可引用 {{reply}} / {{threadId}}',
+    streamSwitch: '是否将 SubAgent 回复追加到对话流',
+  },
 }
 
 /** 节点示例配置（点击节点详情 ? 展示） */
@@ -238,20 +244,20 @@ export const NODE_EXAMPLES = {
   },
   condition: {
     title: '条件判断节点',
-    summary: '按条件组顺序匹配，分别走上方/下方/右侧出口；否则走默认分支。',
+    summary: '按条件组顺序匹配，右侧每组一个出口；均未命中走「都未命中」默认口。',
     example: {
       label: '意图路由',
       conditionGroups: [
         {
-          label: '如果',
+          id: 'cg_price',
+          label: '价格咨询',
           relation: 'and',
-          sourceHandle: 'out_a',
           rules: [{ variable: '{{query}}', operator: 'contains', value: '价格' }],
         },
         {
-          label: '否则如果',
+          id: 'cg_aftersale',
+          label: '售后咨询',
           relation: 'and',
-          sourceHandle: 'out_b',
           rules: [{ variable: '{{query}}', operator: 'contains', value: '售后' }],
         },
       ],
@@ -437,6 +443,18 @@ export const NODE_EXAMPLES = {
       streamSwitch: false,
     },
   },
+  sub_agent: {
+    title: 'SubAgent 节点',
+    summary: '委派子智能体执行任务，可使用工具循环；模型优先用 SubAgent 自带配置，否则继承工作流 Agent。',
+    example: {
+      label: '调研助手',
+      subAgentId: '1',
+      subAgentName: 'researcher',
+      task: '请调研并总结：{{query}}',
+      streamSwitch: false,
+      outputMappings: [{ key: 'reply', value: '{{reply}}' }],
+    },
+  },
   start: {
     title: '开始节点',
     summary: '工作流入口，每个画布有且仅有一个；所有执行从此出发。',
@@ -481,6 +499,7 @@ const NODE_TYPES_DISABLE_APPLY = new Set([
   'classifier',
   'parameter_extractor',
   'app_component',
+  'sub_agent',
 ])
 
 /**

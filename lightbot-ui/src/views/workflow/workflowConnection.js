@@ -194,7 +194,10 @@ export function isValidWorkflowConnection(connection, ctx) {
 export function getHandleDisplayName(handleId) {
   if (!handleId || handleId === HANDLE_IN) return '入'
   if (handleId === HANDLE_OUT) return '出'
+  if (String(handleId).endsWith('_default')) return '出（都未命中）'
   if (handleId.startsWith(HANDLE_OUT_PREFIX)) return `出(${handleId.slice(4)})`
+  const parts = String(handleId).split('_')
+  if (parts.length > 1) return `出（${parts.slice(1).join('_')}）`
   return `出(${handleId})`
 }
 

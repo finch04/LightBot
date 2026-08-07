@@ -10,7 +10,6 @@ import com.lightbot.dto.ChatAttachmentDTO;
 import com.lightbot.dto.ChatMentionDTO;
 import com.lightbot.dto.ChatMentionDTO;
 import com.lightbot.dto.ChatRequestDTO;
-import com.lightbot.vo.UserPreferenceVO;
 import com.lightbot.enums.ErrorCode;
 import com.lightbot.dto.AgentChatCapabilitiesDTO;
 import com.lightbot.util.AgentChatCapabilitiesUtil;
@@ -31,8 +30,9 @@ import com.lightbot.service.ChatAttachmentParsedService;
 import com.lightbot.service.AgentService;
 import com.lightbot.service.ChatSessionService;
 import com.lightbot.service.SessionTodoService;
+import com.lightbot.service.LongMemoryPolicyService;
 import com.lightbot.service.UserMemoryService;
-import com.lightbot.service.UserPreferenceService;
+import com.lightbot.vo.LongMemoryPolicyVO;
 import com.lightbot.vo.TodoItemVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,8 +73,8 @@ public class MessageMiddleware implements ChatMiddleware {
     private final MinioUtil minioUtil;
     private final ObjectMapper objectMapper;
     private final ChatAttachmentParsedService chatAttachmentParsedService;
-    private final UserPreferenceService userPreferenceService;
     private final UserMemoryService userMemoryService;
+    private final LongMemoryPolicyService longMemoryPolicyService;
     /** 用于把当前会话 todos 快照注入 system prompt，避免 AI 在长调研中漏传导致丢项 */
     private final SessionTodoService sessionTodoService;
     /** 用于生成 SSE 状态事件 JSON（context_compression 等） */
@@ -143,7 +143,7 @@ public class MessageMiddleware implements ChatMiddleware {
             """;
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
-            你是 LightBot 智能助手。请根据用户的提问，利用可用的工具来提供准确、清晰的回答。
+            你是智元智能助手。请根据用户的提问，利用可用的工具来提供准确、清晰的回答。
 
             ## 工具使用原则
             - 当工具返回了检索结果时，必须基于这些结果回答，但须**总结归纳**，不要原文复述
@@ -163,7 +163,7 @@ public class MessageMiddleware implements ChatMiddleware {
             """;
 
     private static final String DEFAULT_SYSTEM_PROMPT_NO_TOOLS = """
-            你是 LightBot 智能助手。请根据用户的提问提供准确、清晰的回答。
+            你是智元智能助手。请根据用户的提问提供准确、清晰的回答。
 
             ## 回答规范
             - 使用中文回答
@@ -633,25 +633,52 @@ public class MessageMiddleware implements ChatMiddleware {
     }
 
     private String appendUserMemoryPrompt(String systemPrompt, ChatContext ctx, Agent agent, String userMessage) {
-        if (ctx == null || ctx.getUserId() == null) {
+        if (ctx == null || ctx.getRequest() == null) {
+            return systemPrompt;
+        }
+        // 自动化调度：不注入长期记忆
+        if (ctx.getRequest().getActorUserId() != null && ctx.getRequest().getApiKeyId() == null) {
             return systemPrompt;
         }
         try {
-            UserPreferenceVO preferences = userPreferenceService.getPreferences(ctx.getUserId());
-            if (!Boolean.TRUE.equals(preferences.getLongMemoryEnabled())) {
+            Long apiKeyId = ctx.getRequest().getApiKeyId();
+            LongMemoryPolicyVO policy = longMemoryPolicyService.resolveEffective(apiKeyId);
+            if (!Boolean.TRUE.equals(policy.getEnabled())) {
                 return systemPrompt;
             }
-            Long memoryAgentId = "agent".equalsIgnoreCase(preferences.getLongMemoryScope()) && agent != null
-                    ? agent.getId() : null;
-            String memoryPrompt = userMemoryService.buildMemoryPrompt(
-                    ctx.getUserId(), memoryAgentId, userMessage,
-                    preferences.getLongMemoryInjectLimit() != null ? preferences.getLongMemoryInjectLimit() : 6);
+            com.lightbot.dto.MemoryScope scope = resolveMemoryScope(ctx);
+            if (scope == null || !scope.isValid()) {
+                return systemPrompt;
+            }
+            Long memoryAgentId = null;
+            if ("agent".equalsIgnoreCase(policy.getScope()) && agent != null) {
+                memoryAgentId = agent.getId();
+            }
+            int injectLimit = policy.getInjectLimit() != null ? policy.getInjectLimit() : 6;
+            String memoryPrompt = userMemoryService.buildMemoryPrompt(scope, memoryAgentId, userMessage, injectLimit);
             return memoryPrompt.isBlank() ? systemPrompt : systemPrompt + memoryPrompt;
         } catch (Exception e) {
-            log.warn("[MessageMiddleware] 加载用户长期记忆失败: userId={}, error={}",
-                    ctx.getUserId(), e.getMessage());
+            log.warn("[MessageMiddleware] 加载长期记忆失败: apiKeyId={}, userId={}, error={}",
+                    ctx.getRequest().getApiKeyId(), ctx.getUserId(), e.getMessage());
             return systemPrompt;
         }
+    }
+
+    /**
+     * 开放 API：Key + externalUserId；控制台：debug_user_{登录用户ID}
+     */
+    private com.lightbot.dto.MemoryScope resolveMemoryScope(ChatContext ctx) {
+        if (ctx.getRequest().getApiKeyId() != null) {
+            String externalUserId = ctx.getRequest().getExternalUserId();
+            if (externalUserId == null || externalUserId.isBlank()) {
+                return null;
+            }
+            return com.lightbot.dto.MemoryScope.external(ctx.getRequest().getApiKeyId(), externalUserId);
+        }
+        if (ctx.getUserId() == null) {
+            return null;
+        }
+        return com.lightbot.dto.MemoryScope.consoleDebug(ctx.getUserId());
     }
 
     /**

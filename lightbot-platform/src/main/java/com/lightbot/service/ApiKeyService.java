@@ -31,9 +31,9 @@ public interface ApiKeyService extends IService<ApiKey> {
                                      Integer rateLimit, Integer dailyQuota);
 
     /**
-     * 查询用户的 API Key 列表
+     * 查询企业全部 API Key（管理员管理用）
      */
-    List<ApiKey> listByUserId(Long userId);
+    List<ApiKey> listAll();
 
     /**
      * 启用/禁用 API Key

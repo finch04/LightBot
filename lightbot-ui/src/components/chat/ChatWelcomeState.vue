@@ -1,6 +1,6 @@
 <template>
   <div class="empty-state">
-    <img src="/lightbot-logo-single.png" alt="LightBot" class="empty-logo" />
+    <img src="/lightbot-logo-single.png" alt="智元" class="empty-logo" />
     <template v-if="loading">
       <!-- Agent 加载中：欢迎语与推荐问题区显示骨架屏，避免先显示默认文案再闪烁切换 -->
       <div class="welcome-skeleton">

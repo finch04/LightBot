@@ -153,6 +153,7 @@ export function getNodeTypeName(type) {
     script: '脚本', mcp: 'MCP', input: '输入', confirm: '人工确认', output: '输出',
     variable_handle: '变量处理', parameter_extractor: '参数提取',
     app_component: '应用组件',
+    sub_agent: 'SubAgent',
     loop_start: '迭代开始', loop_end: '迭代结束',
     batch_start: '并行处理', batch_end: '并行结束',
   }

@@ -1,6 +1,7 @@
 package com.lightbot.model;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.lightbot.constant.ConfigKeys;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
@@ -117,6 +118,24 @@ public final class DashScopeModelSupport {
         if (configMap.containsKey("repetitionPenalty")) {
             builder.withRepetitionPenalty(toDouble(configMap.get("repetitionPenalty")));
         }
+        // 始终显式传 true/false：部分模型（如 qwen3.5-plus）默认开启思考，未配置/关闭时必须传 false
+        builder.withEnableThinking(isEnabled(configMap.get(ConfigKeys.Agent.ENABLE_REASONING)));
+    }
+
+    /**
+     * 解析 Agent 配置中的布尔开关（兼容 Boolean / 字符串）
+     *
+     * @param val 配置值
+     * @return 是否开启
+     */
+    public static boolean isEnabled(Object val) {
+        if (val instanceof Boolean b) {
+            return b;
+        }
+        if (val == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(val.toString());
     }
 
     private static double toDouble(Object val) {

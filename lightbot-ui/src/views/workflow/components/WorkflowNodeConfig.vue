@@ -155,6 +155,7 @@
           v-model="node.data.conditionGroups"
           :disabled="readonly"
           @change="onConditionGroupsChange"
+          @remove-group="onRemoveConditionGroup"
         />
       </a-form-item>
     </template>
@@ -477,6 +478,70 @@
       </a-form-item>
     </template>
 
+    <!-- SubAgent -->
+    <template v-if="node.type === 'sub_agent'">
+      <a-form-item label="SubAgent" required>
+        <ConfigReadonlyValue v-if="readonly" :text="subAgentDisplayText" />
+        <a-select
+          v-else
+          v-model:value="node.data.subAgentId"
+          show-search
+          allow-clear
+          placeholder="选择已启用的 SubAgent"
+          option-label-prop="label"
+          dropdown-class-name="workflow-resource-dropdown"
+          :filter-option="filterSubAgentOption"
+          :loading="subAgentsLoading"
+          @change="onSubAgentChange"
+        >
+          <a-select-option
+            v-for="sa in enabledSubAgents"
+            :key="String(sa.id)"
+            :value="String(sa.id)"
+            :label="sa.displayName || sa.name"
+          >
+            <EntitySelectOption
+              type="subagent"
+              :name="sa.displayName || sa.name"
+              :icon="sa.icon"
+              :tag="sa.name"
+              :desc="sa.description"
+            />
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="任务描述" :tip="hint('sub_agent', 'task')" />
+        </template>
+        <VariablePickerInput
+          v-model="node.data.task"
+          :node-id="node.id"
+          :nodes="nodes"
+          :edges="edges"
+          placeholder="请处理：{{query}}"
+          :disabled="readonly"
+          @update:model-value="emitSync"
+        />
+      </a-form-item>
+      <a-form-item>
+        <template #label>
+          <ConfigFieldLabel label="输出参数映射" :tip="hint('sub_agent', 'outputMappings')" />
+        </template>
+        <div v-for="(row, idx) in subAgentOutputMappings" :key="'sa-out-' + idx" class="param-row">
+          <a-input v-model:value="row.key" placeholder="写入流程变量名" :disabled="readonly" @change="emitSync" />
+          <VariablePickerInput v-model="row.value" :node-id="node.id" :nodes="nodes" :edges="edges" placeholder="{{reply}}" :disabled="readonly" @update:model-value="emitSync" />
+          <a-button v-if="!readonly" type="text" danger @click="removeSubAgentOutputMapping(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <a-button v-if="!readonly" type="dashed" block size="small" class="param-add-btn" @click="addSubAgentOutputMapping">
+          <PlusOutlined /> 添加出参
+        </a-button>
+      </a-form-item>
+      <a-form-item label="流式输出">
+        <a-switch v-model:checked="node.data.streamSwitch" :disabled="readonly" @change="emitSync" />
+      </a-form-item>
+    </template>
+
     <!-- API -->
     <template v-if="node.type === 'api'">
       <a-form-item label="URL" required><a-input v-model:value="node.data.url" @change="emitSync" /></a-form-item>
@@ -777,6 +842,7 @@ import { DeleteOutlined, PlusOutlined, CopyOutlined, SyncOutlined } from '@ant-d
 import { getAgents } from '../../../api/agent'
 import { getToolIoSchema } from '../../../api/tool'
 import { getWorkflowIoSchema } from '../../../api/workflow'
+import { getEnabledSubAgents } from '../../../api/subagent'
 import { getMcpServers, getMcpServerTools, refreshMcpServerTools } from '../../../api/mcp'
 import { getProvidersWithModels } from '../../../api/modelProvider'
 import ShortMemoryForm from './ShortMemoryForm.vue'
@@ -796,13 +862,14 @@ import {
   resolveMcpServerName,
   resolveMcpToolName,
   resolveSubWorkflowName,
+  resolveSubAgentName,
 } from '../workflowNodeDisplayLabels.js'
 import { getToolTypeLabel } from '../../../utils/bindingTheme'
 import { createConditionId } from '../nodeMeta'
 import { BUILTIN_VARIABLES, getFieldHint, getScriptExampleConfig } from '../nodeConfigMeta'
 import { supportsNodeResilience } from '../nodeResilienceMeta.js'
 import { truncateText } from '../../../utils/format'
-import { syncConditionBranches, ensureConditionGroups } from '../conditionUtils'
+import { syncConditionBranches, ensureConditionGroups, conditionGroupHandleId } from '../conditionUtils'
 import NodeResilienceConfig from './NodeResilienceConfig.vue'
 
 const props = defineProps({
@@ -824,11 +891,14 @@ const emit = defineEmits([
   'sync',
   'knowledge-change',
   'tool-change',
+  'remove-source-handles',
 ])
 
 const route = useRoute()
 const publishedWorkflowAgents = ref([])
 const subWorkflowAgentsLoading = ref(false)
+const enabledSubAgents = ref([])
+const subAgentsLoading = ref(false)
 
 function ensureAppComponentMappings() {
   if (props.node?.type !== 'app_component' || !props.node?.data) return
@@ -997,6 +1067,63 @@ function removeAppOutputMapping(idx) {
   emitSync()
 }
 
+function ensureSubAgentMappings() {
+  if (props.node?.type !== 'sub_agent' || !props.node?.data) return
+  if (!props.node.data.task) {
+    props.node.data.task = '{{query}}'
+  }
+  if (!Array.isArray(props.node.data.outputMappings) || !props.node.data.outputMappings.length) {
+    props.node.data.outputMappings = [{ key: 'reply', value: '{{reply}}' }]
+  }
+}
+
+const subAgentOutputMappings = computed(() => {
+  ensureSubAgentMappings()
+  return props.node?.data?.outputMappings || []
+})
+
+async function loadEnabledSubAgents() {
+  subAgentsLoading.value = true
+  try {
+    const res = await getEnabledSubAgents()
+    enabledSubAgents.value = res.data || []
+  } catch {
+    enabledSubAgents.value = []
+  } finally {
+    subAgentsLoading.value = false
+  }
+}
+
+function filterSubAgentOption(input, option) {
+  const label = option.label ?? option.children ?? ''
+  return String(label).toLowerCase().includes(String(input).toLowerCase())
+}
+
+function onSubAgentChange(subAgentId) {
+  if (!subAgentId) {
+    props.node.data.subAgentName = ''
+    emitSync()
+    return
+  }
+  const sa = enabledSubAgents.value.find(x => String(x.id) === String(subAgentId))
+  if (sa) {
+    props.node.data.subAgentName = sa.displayName || sa.name || ''
+  }
+  ensureSubAgentMappings()
+  emitSync()
+}
+
+function addSubAgentOutputMapping() {
+  ensureSubAgentMappings()
+  props.node.data.outputMappings.push({ key: '', value: '{{reply}}' })
+  emitSync()
+}
+
+function removeSubAgentOutputMapping(idx) {
+  props.node.data.outputMappings.splice(idx, 1)
+  emitSync()
+}
+
 const mcpServers = ref([])
 const mcpServersLoading = ref(false)
 const mcpTools = ref([])
@@ -1014,6 +1141,9 @@ const mcpServerDisplayText = computed(() => resolveMcpServerName(props.node?.dat
 const mcpToolDisplayText = computed(() => resolveMcpToolName(props.node?.data))
 const subWorkflowDisplayText = computed(() =>
   resolveSubWorkflowName(props.node?.data, publishedWorkflowAgents.value),
+)
+const subAgentDisplayText = computed(() =>
+  resolveSubAgentName(props.node?.data, enabledSubAgents.value),
 )
 
 const scrollableReadonly = computed(() => props.readonly && props.readonlyScrollable)
@@ -1226,6 +1356,15 @@ function onConditionGroupsChange() {
   emitSync()
 }
 
+/** 删除条件组时同步摘掉对应出口的连线，避免幽灵边 */
+function onRemoveConditionGroup(groupId) {
+  if (!groupId || !props.node?.id) return
+  emit('remove-source-handles', {
+    nodeId: props.node.id,
+    handles: [conditionGroupHandleId(props.node.id, groupId)],
+  })
+}
+
 const SCRIPT_CONTENT_CACHE_KEY = '__scriptContentCache'
 
 function getScriptContentCache(data) {
@@ -1400,6 +1539,10 @@ onMounted(async () => {
     await loadPublishedWorkflowAgents()
     ensureAppComponentMappings()
   }
+  if (props.node?.type === 'sub_agent') {
+    await loadEnabledSubAgents()
+    ensureSubAgentMappings()
+  }
   if (props.node?.type === 'tool') {
     ensureToolMappings()
   }
@@ -1432,6 +1575,10 @@ watch(
     if (props.node?.type === 'app_component') {
       await loadPublishedWorkflowAgents()
       ensureAppComponentMappings()
+    }
+    if (props.node?.type === 'sub_agent') {
+      await loadEnabledSubAgents()
+      ensureSubAgentMappings()
     }
     if (props.node?.type === 'tool') {
       ensureToolMappings()

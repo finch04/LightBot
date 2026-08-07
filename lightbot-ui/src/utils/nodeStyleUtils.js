@@ -10,7 +10,7 @@ const ICON_TEXT_MAP = {
   llm: '🤖', retrieval: '🔍', classifier: '🏷️', condition: '🔀',
   variable: '📝', variable_handle: '🔧', script: '📜', code: '💻',
   api: '🌐', mcp: '🔌', tool: '🛠️', parameter_extractor: '📋',
-  batch: '📦', loop: '🔄', app_component: '🧩',
+  batch: '📦', loop: '🔄', app_component: '🧩', sub_agent: '👥',
   loop_start: '🔄', loop_end: '🔄', batch_start: '📦', batch_end: '📦',
 }
 

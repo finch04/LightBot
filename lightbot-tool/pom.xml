@@ -23,6 +23,12 @@
             <artifactId>lightbot-knowledge</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- 自动化定时任务 Tool 直接依赖 platform Service 接口 -->
+        <dependency>
+            <groupId>com.lightbot</groupId>
+            <artifactId>lightbot-platform</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

@@ -14,7 +14,7 @@
     :bodyStyle="{ padding: '16px' }"
   >
     <div class="drawer-desc">
-      这些能力由 Agent 绑定资源、个人配置或模型能力在运行时注入，不占用手动绑定工具名额。
+      这些能力由 Agent 绑定资源、开放 API 运行时条件或模型能力注入，不占用手动绑定工具名额。
     </div>
     <a-spin :spinning="loading">
       <div class="group-list">
@@ -53,7 +53,6 @@
 import { computed, ref } from 'vue'
 import { SettingOutlined } from '@ant-design/icons-vue'
 import { getTools } from '../api/tool'
-import { getUserPreferences } from '../api/userPreference'
 
 const props = defineProps({
   placement: { type: String, default: 'top' },
@@ -68,7 +67,6 @@ const props = defineProps({
 const drawerVisible = ref(false)
 const loading = ref(false)
 const knowledgeTools = ref([])
-const longMemoryEnabled = ref(false)
 
 defineExpose({ open })
 
@@ -80,12 +78,8 @@ async function open() {
 async function loadDynamicToolMeta() {
   loading.value = true
   try {
-    const [toolRes, preferenceRes] = await Promise.all([
-      getTools({ pageNum: 1, pageSize: 100, toolType: 'knowledge' }),
-      getUserPreferences().catch(() => ({ data: {} })),
-    ])
+    const toolRes = await getTools({ pageNum: 1, pageSize: 100, toolType: 'knowledge' })
     knowledgeTools.value = toolRes.data?.records || []
-    longMemoryEnabled.value = !!preferenceRes.data?.longMemoryEnabled
   } finally {
     loading.value = false
   }
@@ -126,9 +120,9 @@ const groups = computed(() => {
     {
       key: 'memory',
       title: '长期记忆工具',
-      enabled: longMemoryEnabled.value,
-      triggerText: '触发条件：个人配置开启长期记忆',
-      reason: longMemoryEnabled.value ? '' : '可在个人配置中开启长期记忆。',
+      enabled: true,
+      triggerText: '触发条件：策略启用后，控制台用 debug_user_{用户ID}；开放 API 传 externalUserId',
+      reason: '策略在「系统管理 → 长期记忆」配置企业默认，各 Key 可单独覆盖；正式记忆与控制台调试命名空间互不共享。',
       tools: [
         { name: 'memory_save', displayName: '保存长期记忆' },
         { name: 'memory_search', displayName: '查询长期记忆' },

@@ -201,7 +201,7 @@ public class ModelProviderServiceImpl extends ServiceImpl<ModelProviderMapper, M
                         "https://api.siliconflow.cn/v1/models?sub_type=chat", EMPTY_JSON, EMPTY_JSON),
                 preset("openrouter", "OpenRouter", "OpenRouter 聚合平台 OpenAI 兼容接口预设，可按需补充 HTTP-Referer 与 X-Title", OPENROUTER_LOGO,
                         "https://openrouter.ai/api/v1", "", null,
-                        "https://openrouter.ai/api/v1/models", "{\"HTTP-Referer\":\"\",\"X-Title\":\"LightBot\"}", EMPTY_JSON),
+                        "https://openrouter.ai/api/v1/models", "{\"HTTP-Referer\":\"\",\"X-Title\":\"智元\"}", EMPTY_JSON),
                 preset("modelscope", "ModelScope", "魔搭社区推理聚合 OpenAI 兼容接口预设", MODELSCOPE_LOGO,
                         "https://api-inference.modelscope.cn/v1", "", null,
                         "https://api-inference.modelscope.cn/v1/models", EMPTY_JSON, EMPTY_JSON),

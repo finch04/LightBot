@@ -142,7 +142,7 @@ public final class BuiltInSkillDefinitions {
                     ### 技能：精确数值计算（calculator-precise）
                     **触发条件**：用户明确要求加、减、乘、除、比例、金额或单位换算的精确计算时使用；纯事实问答、估算讨论或没有运算的数字描述不调用。
 
-                    **LightBot 工具约束**：`calculator` 一次只接受 `a`、`b` 和 `operation`，其中 `operation` 只能是 `add`、`subtract`、`multiply`、`divide`。
+                    **智元工具约束**：`calculator` 一次只接受 `a`、`b` 和 `operation`，其中 `operation` 只能是 `add`、`subtract`、`multiply`、`divide`。
 
                     **执行规则**：
                     1. 先识别单位和计算口径；百分比先转换为小数（如 15% 为 0.15），再用 `calculator` 运算。单位不能相加时先说明无法直接计算。
@@ -157,7 +157,7 @@ public final class BuiltInSkillDefinitions {
                     "image-create",
                     "图片创作",
                     "PictureOutlined",
-                    "面向需要生成插画、海报、示意图等场景，基于明确的画面要求调用 LightBot 图像生成工具。",
+                    "面向需要生成插画、海报、示意图等场景，基于明确的画面要求调用智元图像生成工具。",
                     List.of("image_generation", "ask_user"),
                     List.of(),
                     """
@@ -165,7 +165,7 @@ public final class BuiltInSkillDefinitions {
                     当用户要求生成图片、海报、插画、示意图、封面或创意图像时使用此技能。
 
                     ## 可用工具
-                    - `image_generation(prompt, negativePrompt?)`：LightBot 内置文生图工具，底层已封装 SiliconFlow / Qwen-Image，会把生成图片保存到本会话输出区并返回真实 `image_url`。不支持参考图编辑、尺寸选择或批量生成。
+                    - `image_generation(prompt, negativePrompt?)`：智元内置文生图工具，底层已封装 SiliconFlow / Qwen-Image，会把生成图片保存到本会话输出区并返回真实 `image_url`。不支持参考图编辑、尺寸选择或批量生成。
                     - `ask_user`：以 `questions` 一次提出 1~3 个独立澄清问题；调用后必须等待用户回答。
                     - **禁止**：调用或提及 Yuxi 沙盒 Python 脚本、`SILICONFLOW_API_KEY`、`present_artifacts`（图片工具已自动完成产物登记）、临时外部 URL 等旧流程；也不要猜测未在工具列表中出现的名称。
 
@@ -192,7 +192,7 @@ public final class BuiltInSkillDefinitions {
                     List.of(),
                     """
                     ### 技能：数据库探查与报表（db-introspect）
-                    根据用户的指令，通过内置只读工具访问 LightBot 的 PostgreSQL 业务库，并结合图表工具（若已绑定）构建 SQL 查询报告。
+                    根据用户的指令，通过内置只读工具访问智元的 PostgreSQL 业务库，并结合图表工具（若已绑定）构建 SQL 查询报告。
 
                     ## 可用工具（仅调用当前实际存在于工具列表中的）
                     - `pg_list_tables`：列出可访问的业务表。

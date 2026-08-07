@@ -184,6 +184,7 @@
           @sync="syncNodes"
           @knowledge-change="onKnowledgeChange"
           @tool-change="onToolChange"
+          @remove-source-handles="onRemoveSourceHandles"
           @delete="deleteSelectedNode"
         />
       </ResizableSidePanel>
@@ -450,7 +451,7 @@ const {
   screenToFlowCoordinate,
   updateNodeInternals,
   updateNode,
-} = useVueFlow({ id: WORKFLOW_FLOW_ID })
+} = useVueFlow(WORKFLOW_FLOW_ID)
 
 const workflowCanvasRef = ref(null)
 /** 子组件 defineExpose 的 ref 在父组件访问时会自动解包，勿再 .value */
@@ -1098,15 +1099,23 @@ function undoAction() {
   showWorkflowUndoToast(lastState.label)
 }
 
-// 初始化加载
-onMounted(async () => {
+/** 加载序号：避免快速切换 agent / HMR 重跑 setup 时旧请求回写状态 */
+let workflowLoadSeq = 0
+
+async function loadWorkflowPage() {
+  const seq = ++workflowLoadSeq
+  const currentAgentId = route.params.agentId
+  workflowLoaded.value = false
   try {
     agentStatusLabels.value = await loadAgentStatusLabels()
-    // 加载 Agent 数据
-    const res = await getAgentDetail(agentId)
+    if (seq !== workflowLoadSeq) return
+
+    const res = await getAgentDetail(currentAgentId)
+    if (seq !== workflowLoadSeq) return
     agent.value = res.data.agent
 
-    const wfRes = await getWorkflowConfig(agentId)
+    const wfRes = await getWorkflowConfig(currentAgentId)
+    if (seq !== workflowLoadSeq) return
     workflowStatus.value = wfRes.data.status || 'draft'
     publishedVersion.value = wfRes.data.publishedVersion || 0
     const draftGraph = wfRes.data.draft
@@ -1128,21 +1137,35 @@ onMounted(async () => {
       triggerRef(nodes)
     }
 
-    // 加载资源列表
     const [knowledgeRes, toolRes] = await Promise.all([
       getKnowledgeList({ pageNum: 1, pageSize: 100 }),
       getTools({ pageNum: 1, pageSize: 100 })
     ])
+    if (seq !== workflowLoadSeq) return
     knowledgeList.value = knowledgeRes.data.records || []
     tools.value = toolRes.data.records || []
 
     await nextTick()
     await finalizeWorkflowGraphAfterLoad()
-    workflowLoaded.value = true
+    if (seq !== workflowLoadSeq) return
     scheduleFitView(true)
-        } catch (e) {
-    notification.error({ message: '加载失败', description: e.message })
+  } catch (e) {
+    if (seq === workflowLoadSeq) {
+      notification.error({ message: '加载失败', description: e.message })
+    }
+  } finally {
+    if (seq === workflowLoadSeq) {
+      workflowLoaded.value = true
+    }
   }
+}
+
+// immediate：HMR 重跑 setup 时也会重新加载；纯 onMounted 在热更新后不会再执行
+watch(() => route.params.agentId, () => {
+  loadWorkflowPage()
+}, { immediate: true })
+
+onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   nextTick(() => {
     if (canvasAreaRef.value) {
@@ -2278,14 +2301,17 @@ const edgeSourceHandleOptions = computed(() => {
   const node = nodes.value.find(n => n.id === edge.source)
   if (!node) return [{ id: HANDLE_OUT, label: '出（默认）' }]
   if (node.type === 'condition') {
-    return [
-      { id: 'out_a', label: '出（上分支）' },
-      { id: 'out_b', label: '出（下分支）' },
-      { id: 'out_c', label: '出（右分支）' },
-    ]
+    const opts = []
+    ;(node.data?.conditionGroups || []).forEach((g, i) => {
+      if (g?.id) {
+        opts.push({ id: `${node.id}_${g.id}`, label: `出（${g.label || `条件 ${i + 1}`}）` })
+      }
+    })
+    opts.push({ id: `${node.id}_default`, label: '出（都未命中）' })
+    return opts
   }
   if (node.type === 'classifier') {
-    const opts = [{ id: HANDLE_OUT, label: '出（默认）' }]
+    const opts = []
     ;(node.data?.conditions || []).forEach(c => {
       if (c.id && c.id !== 'default') {
         opts.push({ id: `${node.id}_${c.id}`, label: `出（${c.subject || c.id}）` })
@@ -2350,6 +2376,17 @@ function syncNodes() {
   syncSelectedNodeToStore()
   ensureNodePanelEditHistory()
   triggerRef(nodes)
+  scheduleAutoSave()
+}
+
+/** 删除条件组/意图等动态出口后，移除对应 sourceHandle 的边 */
+function onRemoveSourceHandles({ nodeId, handles }) {
+  if (!nodeId || !handles?.length || isVersionPreview.value) return
+  const handleSet = new Set(handles)
+  const next = edges.value.filter(e => !(e.source === nodeId && handleSet.has(e.sourceHandle)))
+  if (next.length === edges.value.length) return
+  recordHistory('删除分支连线')
+  edges.value = next
   scheduleAutoSave()
 }
 
@@ -2591,9 +2628,14 @@ function validateWorkflow(showToast = true) {
       }
     }
     if (n.type === 'condition') {
-      const hasDefaultEdge = edges.value.some(e => e.source === n.id && e.sourceHandle === 'out_c')
+      const groups = (n.data?.conditionGroups || []).filter(g => g?.id && Array.isArray(g.rules) && g.rules.length)
+      if (!groups.length) {
+        errors.push({ nodeId: n.id, field: 'conditionGroups', message: '请配置至少一个条件组' })
+      }
+      const defaultHandle = `${n.id}_default`
+      const hasDefaultEdge = edges.value.some(e => e.source === n.id && e.sourceHandle === defaultHandle)
       if (!hasDefaultEdge) {
-        errors.push({ nodeId: n.id, field: 'defaultBranch', message: '条件分支节点缺少默认路径（否则分支）' })
+        errors.push({ nodeId: n.id, field: 'defaultBranch', message: '条件分支节点缺少「都未命中」默认路径' })
       }
     }
     if (n.type === 'api' && !n.data.url) {
@@ -2609,6 +2651,14 @@ function validateWorkflow(showToast = true) {
     }
     if (n.type === 'app_component' && !n.data.componentCode?.trim()) {
       errors.push({ nodeId: n.id, field: 'componentCode', message: '请选择子工作流' })
+    }
+    if (n.type === 'sub_agent') {
+      if (n.data.subAgentId == null || n.data.subAgentId === '') {
+        errors.push({ nodeId: n.id, field: 'subAgentId', message: '请选择 SubAgent' })
+      }
+      if (!n.data.task?.trim()) {
+        errors.push({ nodeId: n.id, field: 'task', message: '请填写任务描述' })
+      }
     }
   })
 
@@ -3377,7 +3427,7 @@ function goBack() {
 
 <style scoped>
 .workflow-edit-page {
-  height: 100vh;
+  height: var(--app-content-height);
   display: flex;
   flex-direction: column;
   background: var(--color-canvas-soft-2);
