@@ -412,7 +412,7 @@ const searchText = ref('')
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const form = reactive({ id: null, name: '', icon: '', description: '', installType: 'npx', transport: 'stdio', host: '' })
-const deployForm = reactive({ packageName: '', args: '', env: '', headers: '' })
+const deployForm = reactive({ packageName: '', args: '', env: '', headers: '{}' })
 const testingId = ref(null)
 const toolsDrawerVisible = ref(false)
 const toolsList = ref([])
@@ -527,13 +527,17 @@ watch(searchText, () => {
 })
 
 function parseDeployConfig(configStr) {
+  deployForm.packageName = ''
+  deployForm.args = ''
+  deployForm.env = ''
+  deployForm.headers = '{}'
   if (!configStr) return
   try {
     const cfg = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     deployForm.packageName = cfg.packageName || ''
     deployForm.args = Array.isArray(cfg.args) ? cfg.args.join('\n') : (cfg.args || '')
     deployForm.env = cfg.env ? Object.entries(cfg.env).map(([k, v]) => `${k}=${v}`).join('\n') : ''
-    deployForm.headers = cfg.headers ? JSON.stringify(cfg.headers, null, 2) : ''
+    deployForm.headers = cfg.headers ? JSON.stringify(cfg.headers, null, 2) : '{}'
   } catch { /* ignore */ }
 }
 
@@ -564,7 +568,7 @@ function onInstallTypeChange() {
   deployForm.packageName = ''
   deployForm.args = ''
   deployForm.env = ''
-  deployForm.headers = ''
+  deployForm.headers = '{}'
   form.host = ''
   form.transport = form.installType === 'sse' ? 'sse' : 'stdio'
 }
@@ -574,6 +578,14 @@ function openDialog(row) {
     const transport = row.transport?.code || row.transport || (row.installType === 'sse' ? 'sse' : 'stdio')
     Object.assign(form, { ...row, installType: row.installType?.code || row.installType, transport })
     parseDeployConfig(row.deployConfig)
+    // Headers are stored separately; only fall back to legacy deployConfig headers if absent.
+    if (row.headers !== undefined) {
+      if (typeof row.headers === 'string') {
+        deployForm.headers = row.headers.trim() ? row.headers : '{}'
+      } else {
+        deployForm.headers = row.headers ? JSON.stringify(row.headers, null, 2) : '{}'
+      }
+    }
   } else {
     Object.assign(form, { id: null, name: '', icon: '', description: '', installType: 'npx', transport: 'stdio', host: '' })
     onInstallTypeChange()
