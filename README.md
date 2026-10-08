@@ -77,6 +77,8 @@ LightBot 是一个 Java First 的 AI Agent 平台，服务于需要将大模型�
 | Dashboard | 平台资源与运行指标聚合（Agent、知识库、任务、调用量等）。 |
 | 个人中心 | 个人资料与偏好、会话导出；角色权限、API Key 作用域与Token配额。 |
 
+内置 MCP 中的 `parallel-search` 可提供无需 Parallel API Key 的网页搜索与抓取，默认禁用；启用步骤和额度说明见 [Parallel Search MCP 接入](docs/specs/parallel-search/spec.md#使用)。
+
 ## 技术栈
 
 | 层级 | 技术选型 |

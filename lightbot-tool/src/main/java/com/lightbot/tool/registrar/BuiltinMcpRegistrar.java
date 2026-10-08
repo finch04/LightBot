@@ -39,6 +39,7 @@ public class BuiltinMcpRegistrar {
                     McpInstallType.SSE,
                     McpTransportType.STREAMABLE_HTTP,
                     "https://remote.mcpservers.org/sequentialthinking/mcp",
+                    null,
                     null
             ),
             new BuiltInMcp(
@@ -48,7 +49,18 @@ public class BuiltinMcpRegistrar {
                     McpInstallType.NPX,
                     McpTransportType.STDIO,
                     null,
-                    Map.of("packageName", "@antv/mcp-server-chart")
+                    Map.of("packageName", "@antv/mcp-server-chart"),
+                    null
+            ),
+            new BuiltInMcp(
+                    "parallel-search",
+                    "Parallel 网页搜索与内容抓取，无需 API Key，匿名免费额度有速率限制",
+                    "SearchOutlined",
+                    McpInstallType.SSE,
+                    McpTransportType.STREAMABLE_HTTP,
+                    "https://search.parallel.ai/mcp",
+                    null,
+                    Map.of("User-Agent", "LightBot/2.1.0")
             )
     );
 
@@ -75,6 +87,9 @@ public class BuiltinMcpRegistrar {
                     server.setIsBuiltin(1);
                     server.setDeployConfig(def.deployConfig != null
                             ? objectMapper.writeValueAsString(def.deployConfig) : null);
+                    // 远端服务可声明自己的请求头，复用现有 MCP 客户端的 headers 配置。
+                    server.setHeaders(def.headers != null
+                            ? objectMapper.writeValueAsString(def.headers) : null);
                     server.setStatus(CommonStatus.DISABLED);
                     mcpServerService.save(server);
                     imported++;
@@ -104,6 +119,7 @@ public class BuiltinMcpRegistrar {
             McpInstallType installType,
             McpTransportType transport,
             String host,
-            Map<String, Object> deployConfig
+            Map<String, Object> deployConfig,
+            Map<String, String> headers
     ) {}
 }

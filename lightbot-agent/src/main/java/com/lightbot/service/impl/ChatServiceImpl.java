@@ -1917,7 +1917,8 @@ public class ChatServiceImpl implements ChatService {
                                      String toolName, String args, int contentOffset) {
         // 按需推送 skill_active（工具属于某个 Skill 时）
         Flux<String> skillFlux = emitSkillActiveIfNeeded(ctx, toolName, toolEventsList, contentOffset);
-        if (skillFlux != null) {
+        // 非流式 chat 没有 SSE 收集容器，仍由 emitSkillActiveIfNeeded 记录事件。
+        if (skillFlux != null && statusFluxes != null) {
             statusFluxes.add(skillFlux);
         }
 
